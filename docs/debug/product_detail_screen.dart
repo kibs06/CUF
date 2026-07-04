@@ -1,0 +1,777 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:shimmer/shimmer.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../constants/app_constants.dart';
+import '../../providers/cart_provider.dart';
+import '../../widgets/sole_badge.dart';
+import '../../widgets/sole_ar_pill.dart';
+import 'ar_fitting_screen.dart';
+import '../../widgets/cart_icon_button.dart';
+import '../../widgets/fly_to_cart_animation.dart';
+
+class ProductDetailScreen extends StatefulWidget {
+  final Map<String, dynamic> product;
+
+  const ProductDetailScreen({
+    super.key,
+    required this.product,
+  });
+
+  @override
+  State<ProductDetailScreen> createState() => _ProductDetailScreenState();
+}
+
+class _ProductDetailScreenState extends State<ProductDetailScreen>
+    with SingleTickerProviderStateMixin {
+  String? _selectedSize;
+  String _selectedColor = 'Burnished Clay';
+  bool _isDescriptionExpanded = false;
+  bool _isLoadingSizes = false;
+  bool _isAddingToCart = false;
+
+  // Image carousel state
+  final PageController _imagePageController = PageController();
+  int _currentImageIndex = 0;
+
+  // Button press animation (scale down/up on tap)
+  late final AnimationController _buttonPressController;
+  late final Animation<double> _buttonScaleAnimation;
+
+  // GlobalKeys for fly-to-cart overlay animation
+  final GlobalKey _productImageKey = GlobalKey();
+  final GlobalKey _cartIconKey = GlobalKey();
+
+  final List<String> _colors = ['Burnished Clay', 'Carob Dark', 'Off-White Suede', 'Saddle Brown'];
+  final List<Color> _colorValues = [
+    AppConstants.primary,
+    AppConstants.secondary,
+    AppConstants.surfaceLight,
+    const Color(0xFFB8860B),
+  ];
+
+  /// Build a map of {size: stock} from both inventory and product_variants.
+  /// If a size exists in both tables, the higher stock value wins.
+  /// Sizes are sorted numerically (EU sizing).
+  Map<String, int> _buildSizesMap() {
+    final Map<String, int> sizes = {};
+
+    // From inventory table
+    final inventory = widget.product['inventory'] as List<dynamic>? ?? [];
+    for (final row in inventory) {
+      final size = row['size']?.toString();
+      final stock = row['stock'] as int? ?? 0;
+      if (size != null && size.isNotEmpty) {
+        sizes[size] = (sizes[size] ?? 0) + stock;
+      }
+    }
+
+    // From product_variants table
+    final variants = widget.product['product_variants'] as List<dynamic>? ?? [];
+    for (final row in variants) {
+      final size = row['size']?.toString();
+      final stock = row['stock'] as int? ?? 0;
+      if (size != null && size.isNotEmpty) {
+        // Take the higher stock value if size already exists from inventory
+        sizes[size] = ((sizes[size] ?? 0) < stock) ? stock : (sizes[size] ?? 0);
+      }
+    }
+
+    // Sort numerically by EU size
+    final sorted = Map.fromEntries(
+      sizes.entries.toList()
+        ..sort((a, b) =>
+            (int.tryParse(a.key) ?? 0).compareTo(int.tryParse(b.key) ?? 0)),
+    );
+
+    return sorted;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Button press animation (scale down then back up)
+    _buttonPressController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 120),
+      reverseDuration: const Duration(milliseconds: 100),
+    );
+    _buttonScaleAnimation = Tween<double>(begin: 1.0, end: 0.92).animate(
+      CurvedAnimation(parent: _buttonPressController, curve: Curves.easeInOut),
+    );
+
+    // Use _buildSizesMap() — reads from inventory and product_variants,
+    // not the non-existent widget.product['sizes'] key
+    final sizesMap = _buildSizesMap();
+    if (sizesMap.isNotEmpty) {
+      for (final entry in sizesMap.entries) {
+        if (entry.value > 0) {
+          _selectedSize = entry.key;
+          break;
+        }
+      }
+    } else {
+      // Inventory data missing — fetch it from Supabase
+      _fetchInventory();
+    }
+  }
+
+  /// Fetch inventory and variant data if the parent screen didn't include it.
+  Future<void> _fetchInventory() async {
+    if (!mounted) return;
+    setState(() => _isLoadingSizes = true);
+
+    try {
+      final productId = widget.product['id'].toString();
+      final data = await Supabase.instance.client
+          .from('products')
+          .select('inventory(*), product_variants(*)')
+          .eq('id', productId)
+          .single();
+
+      if (!mounted) return;
+
+      setState(() {
+        widget.product['inventory'] = data['inventory'];
+        widget.product['product_variants'] = data['product_variants'];
+        _isLoadingSizes = false;
+      });
+
+      // Auto-select first available size after data loads
+      final sizesMap = _buildSizesMap();
+      for (final entry in sizesMap.entries) {
+        if (entry.value > 0) {
+          _selectedSize = entry.key;
+          break;
+        }
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingSizes = false);
+    }
+  }
+
+  void _addToCart() {
+    if (_selectedSize == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select an available size.'),
+          backgroundColor: AppConstants.error,
+        ),
+      );
+      return;
+    }
+
+    // Button press scale animation (guard against rapid taps)
+    if (_buttonPressController.status != AnimationStatus.forward) {
+      _buttonPressController.forward().then((_) {
+        if (mounted) _buttonPressController.reverse();
+      });
+    }
+
+    // Show success checkmark state on button
+    setState(() => _isAddingToCart = true);
+
+    // Get product image URL for the flying thumbnail
+    final List<String> imageUrls = _sortedImageUrls;
+    final String? imageUrl = imageUrls.isNotEmpty ? imageUrls.first : null;
+
+    // Add to cart (existing logic — unchanged)
+    final cart = Provider.of<CartProvider>(context, listen: false);
+    final double price = (widget.product['price'] is int)
+        ? (widget.product['price'] as int).toDouble()
+        : (widget.product['price'] ?? 0.0);
+
+    cart.addToCart(
+      productId: widget.product['id'].toString(),
+      productName: widget.product['name'],
+      imageUrl: imageUrl ?? '',
+      price: price,
+      size: _selectedSize!,
+      color: _selectedColor,
+      storeId: widget.product['store_id']?.toString(),
+      storeName: widget.product['store_name']?.toString(),
+    );
+
+    // Fly-to-cart overlay animation
+    FlyToCartAnimation.show(
+      context: context,
+      sourceKey: _productImageKey,
+      targetKey: _cartIconKey,
+      imageUrl: imageUrl,
+    );
+
+
+
+    // Revert button to normal "Add to Cart" label after 800 ms
+    Future.delayed(const Duration(milliseconds: 800), () {
+      if (mounted) setState(() => _isAddingToCart = false);
+    });
+  }
+
+  void _buyNow() {
+    _addToCart();
+    // Delay checkout snackbar to avoid overlapping with add-to-cart animation
+    Future.delayed(const Duration(milliseconds: 1200), () {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Processing checkout...'),
+          backgroundColor: AppConstants.primary,
+        ),
+      );
+    });
+  }
+
+  // ─── IMAGE CAROUSEL ────────────────────────────────────────────
+
+  /// Sorted product images for the carousel.
+  /// Reads from `product_images` (list of maps) or falls back to `images` (list of strings).
+  List<String> get _sortedImageUrls {
+    // Try product_images first (list of {image_url, display_order} maps)
+    final raw = widget.product['product_images'] as List? ?? [];
+    if (raw.isNotEmpty && raw.first is Map) {
+      final images = List<Map<String, dynamic>>.from(raw);
+      images.sort((a, b) =>
+          (a['display_order'] as int? ?? 0).compareTo(b['display_order'] as int? ?? 0));
+      return images.map((e) => e['image_url'].toString()).toList();
+    }
+
+    // Fall back to flat 'images' list (from SupabaseService._mapProduct)
+    final images = widget.product['images'] as List? ?? [];
+    return images.map((e) => e.toString()).toList();
+  }
+
+  @override
+  void dispose() {
+    _buttonPressController.dispose();
+    _imagePageController.dispose();
+    super.dispose();
+  }
+
+  void _openFullScreenViewer(String imageUrl) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            backgroundColor: Colors.black,
+            iconTheme: const IconThemeData(color: Colors.white),
+            elevation: 0,
+          ),
+          body: Center(
+            child: InteractiveViewer(
+              minScale: 0.8,
+              maxScale: 4.0,
+              child: CachedNetworkImage(
+                imageUrl: imageUrl,
+                fit: BoxFit.contain,
+                placeholder: (context, url) => const CircularProgressIndicator(
+                  color: Colors.white,
+                ),
+                errorWidget: (context, url, error) => const Icon(
+                  Icons.broken_image,
+                  color: Colors.white54,
+                  size: 48,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildImageCarousel() {
+    final imageUrls = _sortedImageUrls;
+
+    if (imageUrls.isEmpty) {
+      return KeyedSubtree(
+        key: _productImageKey,
+        child: _buildImagePlaceholder(),
+      );
+    }
+
+    return KeyedSubtree(
+      key: _productImageKey,
+      child: Stack(
+      children: [
+        // Main swipeable image area
+        AspectRatio(
+          aspectRatio: 1.0,
+          child: PageView.builder(
+            controller: _imagePageController,
+            itemCount: imageUrls.length,
+            onPageChanged: (index) {
+              setState(() => _currentImageIndex = index);
+            },
+            itemBuilder: (context, index) {
+              final url = imageUrls[index];
+              return GestureDetector(
+                onTap: () => _openFullScreenViewer(url),
+                child: CachedNetworkImage(
+                  imageUrl: url,
+                  fit: BoxFit.cover,
+                  placeholder: (context, url) => _buildShimmerPlaceholder(),
+                  errorWidget: (context, url, error) => _buildImagePlaceholder(),
+                ),
+              );
+            },
+          ),
+        ),
+
+        // Image counter badge — top right
+        if (imageUrls.length > 1)
+          Positioned(
+            top: 12,
+            right: 12,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.55),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                '${_currentImageIndex + 1} / ${imageUrls.length}',
+                style: AppConstants.monoStyle().copyWith(
+                  color: Colors.white,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+          ),
+
+        // Dot indicators — bottom center
+        if (imageUrls.length > 1)
+          Positioned(
+            bottom: 12,
+            left: 0,
+            right: 0,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(imageUrls.length, (index) {
+                final isActive = index == _currentImageIndex;
+                return AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeInOut,
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                  width: isActive ? 20 : 7,
+                  height: 7,
+                  decoration: BoxDecoration(
+                    color: isActive
+                        ? AppConstants.primary
+                        : AppConstants.borderGray,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                );
+              }),
+            ),
+          ),
+      ],
+      ),
+    );
+  }
+
+  Widget _buildShimmerPlaceholder() {
+    return Shimmer.fromColors(
+      baseColor: AppConstants.borderGray.withOpacity(0.4),
+      highlightColor: AppConstants.borderGray.withOpacity(0.1),
+      child: Container(color: Colors.white),
+    );
+  }
+
+  Widget _buildImagePlaceholder() {
+    return Container(
+      color: AppConstants.surfaceLight,
+      child: Center(
+        child: Icon(
+          Icons.storefront_outlined,
+          size: 64,
+          color: AppConstants.borderGray,
+        ),
+      ),
+    );
+  }
+
+  // ─── SIZE SKELETON ───────────────────────────────────────────────
+
+  /// Shimmer skeleton placeholders for the size selector row.
+  Widget _buildSizeSkeleton() {
+    return Shimmer.fromColors(
+      baseColor: AppConstants.borderGray.withOpacity(0.3),
+      highlightColor: AppConstants.borderGray.withOpacity(0.1),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: List.generate(
+            5,
+            (_) => Container(
+              width: 48,
+              height: 48,
+              margin: const EdgeInsets.only(right: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sizesMap = _buildSizesMap();
+    final double price = (widget.product['price'] is int)
+        ? (widget.product['price'] as int).toDouble()
+        : (widget.product['price'] ?? 0.0);
+    final String description = widget.product['description'] ?? 'No description available.';
+
+    return Scaffold(
+      backgroundColor: AppConstants.surfaceLight,
+      body: Stack(
+        children: [
+          AppConstants.noiseOverlay(opacity: 0.02),
+          CustomScrollView(
+            slivers: [
+              // Expandable sliver image header (NO APP BAR)
+              SliverAppBar(
+                expandedHeight: 380,
+                pinned: true,
+                backgroundColor: AppConstants.secondary,
+                elevation: 0,
+                leading: Container(
+                  margin: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.3),
+                    shape: BoxShape.circle,
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ),
+                actions: [
+                  CartIconButton(iconKey: _cartIconKey),
+                ],
+                flexibleSpace: FlexibleSpaceBar(
+                  background: _buildImageCarousel(),
+                ),
+              ),
+
+              // Detail content
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 160), // High bottom padding for floating pill
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Product Name & Category
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              widget.product['name'] ?? 'Carcar Footwear',
+                              style: AppConstants.headlineStyle(fontSize: 26),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          SoleBadge(
+                            label: widget.product['category'] ?? 'Artisan',
+                            backgroundColor: AppConstants.primary.withOpacity(0.15),
+                            textColor: AppConstants.primary,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+
+                      // Price tag
+                      Text(
+                        '₱${price.toStringAsFixed(2)}',
+                        style: AppConstants.monoStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: AppConstants.primary,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Size Selector Label
+                      Text(
+                        'Select Size (EU)',
+                        style: AppConstants.bodyStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                      ),
+                      const SizedBox(height: 8),
+                      // Size Selector row
+                      if (_isLoadingSizes)
+                        _buildSizeSkeleton()
+                      else
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: sizesMap.entries.map((entry) {
+                              final size = entry.key;
+                              final stock = entry.value as int;
+                              final isAvailable = stock > 0;
+                              final isSelected = _selectedSize == size;
+
+                              return GestureDetector(
+                                onTap: isAvailable
+                                    ? () {
+                                        setState(() {
+                                          _selectedSize = size;
+                                        });
+                                      }
+                                    : null,
+                                child: Container(
+                                  width: 48,
+                                  height: 48,
+                                  margin: const EdgeInsets.only(right: 8),
+                                  decoration: BoxDecoration(
+                                    color: isSelected
+                                        ? AppConstants.primary
+                                        : (isAvailable ? Colors.white : AppConstants.borderGray.withOpacity(0.2)),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: isSelected
+                                          ? AppConstants.primary
+                                          : AppConstants.borderGray.withOpacity(0.5),
+                                      width: 1.5,
+                                    ),
+                                  ),
+                                  child: Center(
+                                    child: Stack(
+                                      alignment: Alignment.center,
+                                      children: [
+                                        Text(
+                                          size,
+                                          style: AppConstants.monoStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold,
+                                            color: isSelected
+                                                ? AppConstants.surfaceLight
+                                                : (isAvailable
+                                                    ? AppConstants.secondary
+                                                    : AppConstants.secondary.withOpacity(0.3)),
+                                          ),
+                                        ),
+                                        if (!isAvailable)
+                                          // Strikethrough for unavailable sizes
+                                          Transform.rotate(
+                                            angle: -0.5,
+                                            child: Container(
+                                              width: 32,
+                                              height: 2,
+                                              color: AppConstants.error.withOpacity(0.5),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      const SizedBox(height: 24),
+
+                      // Color variant swatches
+                      Text(
+                        'Select Color / Leather',
+                        style: AppConstants.bodyStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: List.generate(_colors.length, (index) {
+                          final colorName = _colors[index];
+                          final colorVal = _colorValues[index];
+                          final isSelected = _selectedColor == colorName;
+
+                          return GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _selectedColor = colorName;
+                              });
+                            },
+                            child: Container(
+                              margin: const EdgeInsets.only(right: 12),
+                              padding: const EdgeInsets.all(3),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: isSelected ? AppConstants.primary : Colors.transparent,
+                                  width: 2,
+                                ),
+                              ),
+                              child: CircleAvatar(
+                                radius: 14,
+                                backgroundColor: colorVal,
+                                child: isSelected
+                                    ? Icon(
+                                        Icons.check,
+                                        size: 14,
+                                        color: colorVal == AppConstants.surfaceLight
+                                            ? AppConstants.secondary
+                                            : Colors.white,
+                                      )
+                                    : null,
+                              ),
+                            ),
+                          );
+                        }),
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Description section
+                      Text(
+                        'The Craftsmanship',
+                        style: AppConstants.bodyStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                      ),
+                      const SizedBox(height: 8),
+                      GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _isDescriptionExpanded = !_isDescriptionExpanded;
+                          });
+                        },
+                        child: Text(
+                          description,
+                          maxLines: _isDescriptionExpanded ? 100 : 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppConstants.bodyStyle(
+                            fontSize: 14,
+                            color: AppConstants.secondary.withOpacity(0.8),
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _isDescriptionExpanded = !_isDescriptionExpanded;
+                          });
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 6.0),
+                          child: Text(
+                            _isDescriptionExpanded ? 'Read less' : 'Read more',
+                            style: AppConstants.bodyStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: AppConstants.primary,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            ],
+          ),
+
+          // Pinned AR Floating Try-On Pill (stands out, accent teal)
+          Positioned(
+            left: 20,
+            right: 20,
+            bottom: 84, // position above buy now buttons
+            child: SoleARPill(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => ARVirtualFitScreen(preselectedProduct: widget.product),
+                  ),
+                );
+              },
+            ),
+          ),
+
+          // Outlined Add to Cart / Solid Buy Now bar at bottom
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Container(
+              color: Colors.white,
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+              child: Row(
+                children: [
+                  // Add to cart outlined
+                  Expanded(
+                    flex: 1,
+                    child: AnimatedBuilder(
+                      animation: _buttonScaleAnimation,
+                      builder: (context, child) {
+                        return Transform.scale(
+                          scale: _buttonScaleAnimation.value,
+                          child: child,
+                        );
+                      },
+                      child: OutlinedButton(
+                        onPressed: _isAddingToCart ? null : _addToCart,
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(
+                            color: _isAddingToCart
+                                ? AppConstants.success
+                                : AppConstants.primary,
+                            width: 1.5,
+                          ),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: AppConstants.buttonRadius),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 200),
+                          child: _isAddingToCart
+                              ? const Icon(
+                                  Icons.check_circle,
+                                  color: AppConstants.success,
+                                  key: ValueKey('success'),
+                                )
+                              : Text(
+                                  'Add to Cart',
+                                  key: const ValueKey('label'),
+                                  style: AppConstants.bodyStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: AppConstants.primary,
+                                  ),
+                                ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  // Buy Now filled
+                  Expanded(
+                    flex: 2,
+                    child: ElevatedButton(
+                      onPressed: _buyNow,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppConstants.primary,
+                        shape: RoundedRectangleBorder(borderRadius: AppConstants.buttonRadius),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        elevation: 0,
+                      ),
+                      child: Text(
+                        'Buy Now',
+                        style: AppConstants.bodyStyle(
+                          fontWeight: FontWeight.bold,
+                          color: AppConstants.surfaceLight,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

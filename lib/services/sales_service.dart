@@ -1,0 +1,546 @@
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../models/seller_report_data.dart';
+
+class SalesService {
+  final SupabaseClient _client;
+
+  SalesService({SupabaseClient? client})
+    : _client = client ?? Supabase.instance.client;
+
+  /// Helper: get order IDs for a store via products → order_items chain.
+  Future<List<dynamic>> _getOrderIds(String storeId) async {
+    final productRows = await _client
+        .from('products')
+        .select('id')
+        .eq('store_id', storeId);
+    final productIds = (productRows as List)
+        .map((r) => (r as Map)['id'])
+        .toList();
+    if (productIds.isEmpty) return [];
+
+    final itemRows = await _client
+        .from('order_items')
+        .select('order_id')
+        .inFilter('product_id', productIds);
+    return (itemRows as List)
+        .map((r) => (r as Map)['order_id'])
+        .toSet()
+        .toList();
+  }
+
+  Future<String> recordSale(Map<String, dynamic> dto) async {
+    final transaction = await _client
+        .from('sales_transactions')
+        .insert({
+          'store_id': dto['store_id'],
+          'seller_id': dto['seller_id'],
+          'total_amount': dto['total_amount'],
+          'payment_method': dto['payment_method'],
+          'amount_tendered': dto['amount_tendered'],
+          'change_amount': dto['change_amount'],
+        })
+        .select()
+        .single();
+
+    final transactionId = transaction['id'].toString();
+
+    // Batch-fetch inventory for all products to resolve sizes that
+    // match what the decrement_inventory_on_sale trigger expects.
+    final productIds = (dto['items'] as List? ?? [])
+        .map((item) => (item as Map)['product_id']?.toString() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+    final Map<String, List<String>> invSizesByProduct = {};
+    if (productIds.isNotEmpty) {
+      final invRows = await _client
+          .from('inventory')
+          .select('product_id, size')
+          .inFilter('product_id', productIds)
+          .gt('stock', 0);
+      for (final row in (invRows as List)) {
+        final pid = row['product_id'].toString();
+        invSizesByProduct.putIfAbsent(pid, () => [])
+            .add(row['size']?.toString() ?? '');
+      }
+    }
+
+    final items = (dto['items'] as List? ?? []).map((item) {
+      final map = Map<String, dynamic>.from(item as Map);
+      final productId = map['product_id']?.toString() ?? '';
+      final cartSize = map['size']?.toString() ?? '';
+
+      // Resolve size from inventory (same logic as createOrder)
+      String size = cartSize;
+      final invSizes = invSizesByProduct[productId] ?? [];
+      if (invSizes.isNotEmpty) {
+        // 1) Exact match
+        if (!invSizes.contains(cartSize)) {
+          // 2) Numeric match (strip prefix)
+          final numeric = cartSize.replaceAll(RegExp(r'^[A-Za-z]+'), '');
+          if (invSizes.contains(numeric)) {
+            size = numeric;
+          } else {
+            // 3) Fallback: first available
+            size = invSizes.first;
+          }
+        }
+      }
+
+      return {
+        'transaction_id': transactionId,
+        'product_id': productId,
+        'size': size,
+        'quantity': map['quantity'],
+        'unit_price': map['unit_price'],
+      };
+    }).toList();
+
+    if (items.isNotEmpty) {
+      await _client.from('sales_transaction_items').insert(items);
+    }
+    return transactionId;
+  }
+
+  // ─── POS SALES (sales_transactions table) ─────────────────────
+
+  Future<double> fetchTodaySales(String storeId) async {
+    final now = DateTime.now();
+    final start = DateTime(now.year, now.month, now.day).toIso8601String();
+    final data = await _client
+        .from('sales_transactions')
+        .select('total_amount')
+        .eq('store_id', storeId)
+        .gte('created_at', start);
+
+    return (data as List).fold<double>(
+      0,
+      (sum, row) => sum + ((row['total_amount'] as num?)?.toDouble() ?? 0),
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> fetchWeeklySales(String storeId) async {
+    final from = DateTime.now()
+        .subtract(const Duration(days: 6))
+        .toIso8601String();
+    // Filters before .order()
+    final data = await _client
+        .from('sales_transactions')
+        .select()
+        .eq('store_id', storeId)
+        .gte('created_at', from)
+        .order('created_at');
+    return (data as List)
+        .map((row) => Map<String, dynamic>.from(row as Map))
+        .toList();
+  }
+
+  Future<List<Map<String, dynamic>>> fetchTransactions(
+    String storeId, {
+    DateTime? from,
+    DateTime? to,
+  }) async {
+    var query = _client
+        .from('sales_transactions')
+        .select()
+        .eq('store_id', storeId);
+    if (from != null) query = query.gte('created_at', from.toIso8601String());
+    if (to != null) query = query.lte('created_at', to.toIso8601String());
+    // Filters before .order()
+    final data = await query.order('created_at', ascending: false);
+    return (data as List)
+        .map((row) => Map<String, dynamic>.from(row as Map))
+        .toList();
+  }
+
+  // ─── ONLINE ORDERS REVENUE ────────────────────────────────────
+
+  Future<double> getOnlineTodayRevenue(String storeId) async {
+    final now = DateTime.now();
+    final startOfDay = DateTime(now.year, now.month, now.day)
+        .toIso8601String();
+
+    final orderIds = await _getOrderIds(storeId);
+    if (orderIds.isEmpty) return 0;
+
+    final data = await _client
+        .from('orders')
+        .select('total_amount')
+        .inFilter('id', orderIds)
+        .neq('status', 'cancelled')
+        .gte('created_at', startOfDay);
+
+    return (data as List).fold<double>(
+      0,
+      (sum, row) => sum + ((row['total_amount'] as num?)?.toDouble() ?? 0),
+    );
+  }
+
+  Future<double> getTodayRevenue(String storeId) async {
+    final results = await Future.wait([
+      getOnlineTodayRevenue(storeId),
+      fetchTodaySales(storeId),
+    ]);
+    return results[0] + results[1];
+  }
+
+  Future<List<Map<String, dynamic>>> getOnlineWeeklySales(
+    String storeId,
+  ) async {
+    final sevenDaysAgo = DateTime.now().subtract(const Duration(days: 6));
+    final orderIds = await _getOrderIds(storeId);
+    if (orderIds.isEmpty) return [];
+
+    // Filters before .order()
+    final data = await _client
+        .from('orders')
+        .select('total_amount, created_at')
+        .inFilter('id', orderIds)
+        .neq('status', 'cancelled')
+        .gte('created_at', sevenDaysAgo.toIso8601String())
+        .order('created_at');
+
+    return (data as List)
+        .map((row) => Map<String, dynamic>.from(row as Map))
+        .toList();
+  }
+
+  Future<List<double>> getWeeklyRevenue(String storeId) async {
+    final results = await Future.wait([
+      getOnlineWeeklySales(storeId),
+      fetchWeeklySales(storeId),
+    ]);
+    final onlineOrders = results[0];
+    final posTransactions = results[1];
+
+    final dailyRevenue = List<double>.filled(7, 0);
+
+    for (final row in onlineOrders) {
+      final createdAt = DateTime.parse(row['created_at'] as String);
+      final weekIndex = createdAt.weekday - 1;
+      dailyRevenue[weekIndex] +=
+          ((row['total_amount'] as num?)?.toDouble() ?? 0);
+    }
+
+    for (final row in posTransactions) {
+      final createdAt = DateTime.parse(row['created_at'] as String);
+      final weekIndex = createdAt.weekday - 1;
+      dailyRevenue[weekIndex] +=
+          ((row['total_amount'] as num?)?.toDouble() ?? 0);
+    }
+
+    return dailyRevenue;
+  }
+
+  Future<double> getMonthlyRevenue(String storeId) async {
+    final now = DateTime.now();
+    final startOfMonth = DateTime(now.year, now.month, 1).toIso8601String();
+    final orderIds = await _getOrderIds(storeId);
+
+    final futures = <Future<List>>[
+      _client
+          .from('sales_transactions')
+          .select('total_amount')
+          .eq('store_id', storeId)
+          .gte('created_at', startOfMonth)
+          .then((d) => List.from(d as List)),
+    ];
+
+    if (orderIds.isNotEmpty) {
+      futures.insert(
+        0,
+        _client
+            .from('orders')
+            .select('total_amount')
+            .inFilter('id', orderIds)
+            .neq('status', 'cancelled')
+            .gte('created_at', startOfMonth)
+            .then((d) => List.from(d as List)),
+      );
+    } else {
+      futures.insert(0, Future.value([]));
+    }
+
+    final results = await Future.wait(futures);
+
+    double total = 0;
+    for (final row in results[0]) {
+      total += ((row['total_amount'] as num?)?.toDouble() ?? 0);
+    }
+    for (final row in results[1]) {
+      total += ((row['total_amount'] as num?)?.toDouble() ?? 0);
+    }
+    return total;
+  }
+
+  /// Monthly revenue trend for the past 6 months.
+  /// Returns a list of 6 doubles (index 0 = 5 months ago, index 5 = current month)
+  /// combining online orders + POS sales_transactions.
+  Future<List<double>> getMonthlyRevenueTrend(String storeId) async {
+    final now = DateTime.now();
+    final sixMonthsAgo = DateTime(now.year, now.month - 5, 1);
+    final orderIds = await _getOrderIds(storeId);
+
+    // Fetch online orders in range
+    final futures = <Future<List>>[
+      orderIds.isNotEmpty
+          ? _client
+              .from('orders')
+              .select('total_amount, created_at')
+              .inFilter('id', orderIds)
+              .neq('status', 'cancelled')
+              .gte('created_at', sixMonthsAgo.toIso8601String())
+              .then((d) => List.from(d as List))
+          : Future.value([]),
+      _client
+          .from('sales_transactions')
+          .select('total_amount, created_at')
+          .eq('store_id', storeId)
+          .gte('created_at', sixMonthsAgo.toIso8601String())
+          .then((d) => List.from(d as List)),
+    ];
+
+    final results = await Future.wait(futures);
+
+    // Aggregate by month index (0 = 5 months ago … 5 = current month)
+    final monthlyRevenue = List<double>.filled(6, 0);
+    for (final source in results) {
+      for (final row in source) {
+        final createdAt = DateTime.parse(row['created_at'] as String);
+        final monthDiff =
+            (now.year - createdAt.year) * 12 + (now.month - createdAt.month);
+        final index = 5 - monthDiff;
+        if (index >= 0 && index < 6) {
+          monthlyRevenue[index] +=
+              ((row['total_amount'] as num?)?.toDouble() ?? 0);
+        }
+      }
+    }
+
+    return monthlyRevenue;
+  }
+
+  /// Generates month labels for the trend chart (e.g. ['Jan','Feb',…]).
+  static List<String> monthlyLabels() {
+    final now = DateTime.now();
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return List.generate(6, (i) => months[(now.month - 5 + i - 1) % 12]);
+  }
+
+  /// Combined report: online orders + POS sales for a date range.
+  /// When [monthly] is true, aggregates revenue by day-of-month (1-indexed)
+  /// instead of weekday. The returned [SellerReportData.dailyRevenue] list
+  /// length will match the number of days in the range.
+  Future<SellerReportData> getWeeklyReport(
+    String storeId, {
+    DateTime? weekStart,
+    DateTime? weekEnd,
+    bool monthly = false,
+  }) async {
+    final now = DateTime.now();
+    final start = weekStart ??
+        DateTime(now.year, now.month, now.day - (now.weekday - 1));
+    final end = weekEnd ?? start.add(const Duration(days: 7));
+    final startStr = start.toIso8601String();
+    final endStr = end.toIso8601String();
+
+    // Compute previous period range
+    final duration = end.difference(start);
+    final prevStart = start.subtract(duration);
+    final prevEnd = start;
+    final prevStartStr = prevStart.toIso8601String();
+    final prevEndStr = prevEnd.toIso8601String();
+
+    // Fetch online orders in range (via products→order_items chain)
+    final orderIds = await _getOrderIds(storeId);
+    final futures = <Future<List>>[
+      orderIds.isNotEmpty
+          ? _client
+              .from('orders')
+              .select('id, total_amount, created_at')
+              .inFilter('id', orderIds)
+              .neq('status', 'cancelled')
+              .eq('payment_status', 'paid')
+              .gte('created_at', startStr)
+              .lt('created_at', endStr)
+              .then((d) => List.from(d as List))
+          : Future.value([]),
+      // POS transactions in range
+      _client
+          .from('sales_transactions')
+          .select('id, total_amount, created_at')
+          .eq('store_id', storeId)
+          .gte('created_at', startStr)
+          .lt('created_at', endStr)
+          .then((d) => List.from(d as List)),
+    ];
+
+    // Fetch previous period totals (online + POS) in parallel
+    final prevFutures = <Future<double>>[
+      orderIds.isNotEmpty
+          ? _client
+              .from('orders')
+              .select('total_amount')
+              .inFilter('id', orderIds)
+              .neq('status', 'cancelled')
+              .eq('payment_status', 'paid')
+              .gte('created_at', prevStartStr)
+              .lt('created_at', prevEndStr)
+              .then((d) => (d as List).fold<double>(0, (s, r) => s + ((r['total_amount'] as num?)?.toDouble() ?? 0)))
+          : Future.value(0.0),
+      _client
+          .from('sales_transactions')
+          .select('total_amount')
+          .eq('store_id', storeId)
+          .gte('created_at', prevStartStr)
+          .lt('created_at', prevEndStr)
+          .then((d) => (d as List).fold<double>(0, (s, r) => s + ((r['total_amount'] as num?)?.toDouble() ?? 0))),
+    ];
+
+    final results = await Future.wait(futures);
+    final prevResults = await Future.wait(prevFutures);
+    final onlineOrders = results[0];
+    final posTransactions = results[1];
+    final previousPeriodTotal = prevResults[0] + prevResults[1];
+
+    // Aggregate daily revenue
+    // Weekly: 7 slots indexed by weekday (Mon=0 Sun=6)
+    // Monthly: one slot per day-of-month (index 0 = day 1)
+    final slotCount = monthly
+        ? DateTime(now.year, now.month + 1, 0).day
+        : 7;
+    final dailyRevenue = List<double>.filled(slotCount, 0);
+    double weeklyTotal = 0;
+    for (final row in onlineOrders) {
+      final amount = (row['total_amount'] as num?)?.toDouble() ?? 0;
+      weeklyTotal += amount;
+      final createdAt = DateTime.parse(row['created_at'] as String);
+      if (monthly) {
+        dailyRevenue[createdAt.day - 1] += amount;
+      } else {
+        dailyRevenue[createdAt.weekday - 1] += amount;
+      }
+    }
+    for (final row in posTransactions) {
+      final amount = (row['total_amount'] as num?)?.toDouble() ?? 0;
+      weeklyTotal += amount;
+      final createdAt = DateTime.parse(row['created_at'] as String);
+      if (monthly) {
+        dailyRevenue[createdAt.day - 1] += amount;
+      } else {
+        dailyRevenue[createdAt.weekday - 1] += amount;
+      }
+    }
+
+    // Aggregate top products from order_items + sales_transaction_items
+    final productTotals = <String, Map<String, dynamic>>{};
+
+    void addItem(String productId, int quantity, double unitPrice) {
+      productTotals.putIfAbsent(
+        productId,
+        () => {'units': 0, 'revenue': 0.0},
+      );
+      productTotals[productId]!['units'] += quantity;
+      productTotals[productId]!['revenue'] += quantity * unitPrice;
+    }
+
+    // Fetch online order items
+    if (onlineOrders.isNotEmpty) {
+      final onlineOrderIds = onlineOrders
+          .map((o) => o['id'])
+          .toList();
+      final onlineItems = await _client
+          .from('order_items')
+          .select('product_id, quantity, unit_price')
+          .inFilter('order_id', onlineOrderIds);
+      for (final item in onlineItems as List) {
+        addItem(
+          item['product_id'] as String,
+          (item['quantity'] as num?)?.toInt() ?? 0,
+          (item['unit_price'] as num?)?.toDouble() ?? 0,
+        );
+      }
+    }
+
+    // Fetch POS transaction items
+    if (posTransactions.isNotEmpty) {
+      final posTxIds = posTransactions
+          .map((t) => t['id'])
+          .toList();
+      final posItems = await _client
+          .from('sales_transaction_items')
+          .select('product_id, quantity, unit_price')
+          .inFilter('transaction_id', posTxIds);
+      for (final item in posItems as List) {
+        addItem(
+          item['product_id'] as String,
+          (item['quantity'] as num?)?.toInt() ?? 0,
+          (item['unit_price'] as num?)?.toDouble() ?? 0,
+        );
+      }
+    }
+
+    // Sort by units sold, take top 5
+    final sorted = productTotals.entries.toList()
+      ..sort((a, b) =>
+          (b.value['units'] as int).compareTo(a.value['units'] as int));
+    final top5 = sorted.take(5).toList();
+
+    // Fetch product names
+    List<Map<String, dynamic>> topProducts = [];
+    if (top5.isNotEmpty) {
+      final productIds = top5.map((e) => e.key).toList();
+      final productData = await _client
+          .from('products')
+          .select('id, name')
+          .inFilter('id', productIds);
+      final nameMap = <String, String>{};
+      for (final p in productData as List) {
+        nameMap[p['id'] as String] = p['name'] as String? ?? 'Unknown';
+      }
+      topProducts = top5
+          .map((entry) => {
+                'name': nameMap[entry.key] ?? 'Unknown Product',
+                'units': entry.value['units'] as int,
+                'revenue': entry.value['revenue'] as double,
+              })
+          .toList();
+    }
+
+    return SellerReportData(
+      weeklyTotal: weeklyTotal,
+      previousPeriodTotal: previousPeriodTotal,
+      dailyRevenue: dailyRevenue,
+      topProducts: topProducts,
+      weekStart: start,
+      weekEnd: end,
+    );
+  }
+
+  Future<int> getTotalOrderCount(String storeId) async {
+    final orderIds = await _getOrderIds(storeId);
+    if (orderIds.isEmpty) return 0;
+
+    final data = await _client
+        .from('orders')
+        .select('id')
+        .inFilter('id', orderIds)
+        .neq('status', 'cancelled');
+    return (data as List).length;
+  }
+
+  Future<int> getPendingOrderCount(String storeId) async {
+    final orderIds = await _getOrderIds(storeId);
+    if (orderIds.isEmpty) return 0;
+
+    final data = await _client
+        .from('orders')
+        .select('id')
+        .inFilter('id', orderIds)
+        .inFilter('status', ['placed', 'preparing']);
+    return (data as List).length;
+  }
+}
