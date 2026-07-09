@@ -1,6 +1,5 @@
 plugins {
     id "com.android.application"
-    id "kotlin-android"
     id "dev.flutter.flutter-gradle-plugin"
 }
 
@@ -23,18 +22,14 @@ if (flutterVersionName == null) {
 }
 
 android {
-    namespace 'com.example.app'
+    namespace 'com.solevision.app'
     compileSdkVersion 36
     ndkVersion flutter.ndkVersion
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_11
-        targetCompatibility JavaVersion.VERSION_11
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
         coreLibraryDesugaringEnabled true
-    }
-
-    kotlinOptions {
-        jvmTarget = '11'
     }
 
     sourceSets {
@@ -42,7 +37,7 @@ android {
     }
 
     defaultConfig {
-        applicationId 'com.example.app'
+        applicationId 'com.solevision.app'
         minSdkVersion flutter.minSdkVersion
         targetSdkVersion 36
         versionCode flutterVersionCode.toInteger()

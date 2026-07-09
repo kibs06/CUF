@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../exceptions/stock_unavailable_exception.dart';
+import '../services/order_service.dart';
 import '../services/supabase_service.dart';
 
 class OrderProvider extends ChangeNotifier {
@@ -12,12 +13,25 @@ class OrderProvider extends ChangeNotifier {
   String? _errorMessage;
   StockUnavailableException? _stockError;
 
+  // ── My Orders (customer-facing) ─────────────────────────────
+  final OrderService _orderService = OrderService();
+  List<Map<String, dynamic>> _myOrders = [];
+  List<Map<String, dynamic>> _filteredMyOrders = [];
+  String _myOrdersFilter = 'all';
+  bool _isLoadingMyOrders = false;
+  String? _myOrdersError;
+
   List<Map<String, dynamic>> get orders => _orders;
   List<Map<String, dynamic>> get customizations => _customizations;
   List<Map<String, dynamic>> get profiles => _profiles;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   StockUnavailableException? get stockError => _stockError;
+
+  List<Map<String, dynamic>> get myOrders => _filteredMyOrders;
+  bool get isLoadingMyOrders => _isLoadingMyOrders;
+  String? get myOrdersError => _myOrdersError;
+  String get myOrdersFilter => _myOrdersFilter;
 
   // Load Orders (UC019, UC023, UC025)
   Future<void> loadOrders() async {
@@ -42,6 +56,7 @@ class OrderProvider extends ChangeNotifier {
     required double totalAmount,
     required String deliveryAddress,
     required String paymentMethod,
+    Map<String, dynamic>? shippingAddress,
   }) async {
     _isLoading = true;
     notifyListeners();
@@ -55,6 +70,7 @@ class OrderProvider extends ChangeNotifier {
         'total_amount': totalAmount,
         'delivery_address': deliveryAddress,
         'payment_method': paymentMethod,
+        if (shippingAddress != null) 'shipping_address': shippingAddress,
       });
       await loadOrders();
       _isLoading = false;
@@ -131,6 +147,62 @@ class OrderProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     }
+  }
+
+  // ── My Orders (customer-facing) ──────────────────────────────
+
+  /// Load all orders for the current customer.
+  Future<void> loadMyOrders() async {
+    _isLoadingMyOrders = true;
+    _myOrdersError = null;
+    notifyListeners();
+
+    try {
+      _myOrders = await _orderService.fetchMyOrders();
+      _applyMyOrdersFilter();
+    } catch (e) {
+      debugPrint('OrderProvider.loadMyOrders error: $e');
+      _myOrdersError = 'Unable to load orders. Please try again.';
+      _myOrders = [];
+      _filteredMyOrders = [];
+    }
+
+    _isLoadingMyOrders = false;
+    notifyListeners();
+  }
+
+  /// Set the active filter tab and re-filter the loaded orders.
+  void setMyOrdersFilter(String filter) {
+    _myOrdersFilter = filter;
+    _applyMyOrdersFilter();
+    notifyListeners();
+  }
+
+  void _applyMyOrdersFilter() {
+    if (_myOrdersFilter == 'all') {
+      _filteredMyOrders = List.from(_myOrders);
+      return;
+    }
+
+    _filteredMyOrders = _myOrders.where((order) {
+      final status = (order['status'] ?? '').toString().toLowerCase();
+      final paymentStatus = (order['payment_status'] ?? '').toString().toLowerCase();
+
+      switch (_myOrdersFilter) {
+        case 'unpaid':
+          return paymentStatus == 'unpaid' && status != 'cancelled';
+        case 'processing':
+          return status == 'pending' || status == 'placed' || status == 'preparing';
+        case 'shipped':
+          return status == 'ready';
+        case 'review':
+          return status == 'received';
+        case 'returns':
+          return status == 'cancelled';
+        default:
+          return true;
+      }
+    }).toList();
   }
 
   // --- ADMIN ACTIONS (UC004, UC005) ---

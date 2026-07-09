@@ -15,9 +15,7 @@ class OrderService {
     return order['id'].toString();
   }
 
-  Future<List<Map<String, dynamic>>> fetchMyOrders() {
-    return _db.fetchOrders();
-  }
+
 
   /// Get order IDs for a store via products → order_items chain.
   /// Optionally limit the number of IDs returned (applied at DB level).
@@ -73,7 +71,7 @@ class OrderService {
         .from('orders')
         .select(
           'id, customer_id, status, total_amount, payment_method, '
-          'created_at, size, color, quantity',
+          'created_at',
         )
         .inFilter('id', orderIds)
         .order('created_at', ascending: false);
@@ -158,8 +156,7 @@ class OrderService {
     final data = await _client
         .from('orders')
         .select(
-          'id, customer_id, total_amount, status, created_at, '
-          'size, color, quantity',
+          'id, customer_id, total_amount, status, created_at',
         )
         .inFilter('id', orderIds)
         .order('created_at', ascending: false);
@@ -188,7 +185,7 @@ class OrderService {
 
     final itemsData = await _client
         .from('order_items')
-        .select('order_id, product_id')
+        .select('order_id, product_id, quantity')
         .inFilter('order_id', orderIds);
 
     final productIds = itemsData
@@ -210,17 +207,21 @@ class OrderService {
     }
 
     Map<dynamic, String> orderProductNames = {};
+    Map<dynamic, int> orderQuantities = {};
     for (final item in itemsData as List) {
       final map = Map<String, dynamic>.from(item);
       final orderId = map['order_id'];
       if (!orderProductNames.containsKey(orderId)) {
         orderProductNames[orderId] = productNames[map['product_id']] ?? '';
       }
+      orderQuantities[orderId] = (orderQuantities[orderId] ?? 0) +
+          ((map['quantity'] as num?)?.toInt() ?? 0);
     }
 
     for (final order in orders) {
       order['customer_name'] = nameMap[order['customer_id']] ?? 'Customer';
       order['product_name'] = orderProductNames[order['id']] ?? '';
+      order['quantity'] = orderQuantities[order['id']] ?? 0;
     }
 
     return orders;
@@ -247,5 +248,23 @@ class OrderService {
 
   Future<void> updateOrderStatus(String orderId, String newStatus) async {
     await _db.updateOrderStatus(orderId, newStatus);
+  }
+
+  /// Fetch all orders for the currently logged-in customer.
+  /// Returns orders with their items (product name, size, quantity) joined.
+  Future<List<Map<String, dynamic>>> fetchMyOrders() async {
+    final data = await _client
+        .from('orders')
+        .select(
+          'id, customer_id, status, total_amount, payment_method, '
+          'payment_status, created_at, store_id, '
+          'order_items(id, product_id, size, quantity, unit_price, '
+          'products(name, category, product_images(image_url, display_order)))',
+        )
+        .order('created_at', ascending: false);
+
+    return (data as List)
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
   }
 }

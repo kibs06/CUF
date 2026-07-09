@@ -1,4 +1,4 @@
-package com.example.app
+package com.solevision.app
 
 import io.flutter.embedding.android.FlutterActivity
 

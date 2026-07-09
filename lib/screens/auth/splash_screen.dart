@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import '../../constants/app_constants.dart';
 import '../auth_gate.dart';
 
@@ -15,19 +14,6 @@ class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
-
-  // Minimal shoe sole SVG logo (Crafted Ground concept)
-  static const String _shoeSoleSvg = '''
-<svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M50,12 C62,12 68,26 64,40 C60,54 66,74 62,84 C58,89 42,89 38,84 C34,74 40,54 36,40 C32,26 38,12 50,12 Z" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
-  <line x1="43" y1="24" x2="57" y2="24" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
-  <line x1="41" y1="34" x2="59" y2="34" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
-  <line x1="42" y1="44" x2="58" y2="44" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
-  <line x1="43" y1="54" x2="57" y2="54" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
-  <line x1="45" y1="70" x2="55" y2="70" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
-  <line x1="46" y1="78" x2="54" y2="78" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
-</svg>
-''';
 
   @override
   void initState() {
@@ -81,17 +67,11 @@ class _SplashScreenState extends State<SplashScreen>
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Centered Shoe Sole SVG Logo
-                  SizedBox(
-                    width: 100,
-                    height: 100,
-                    child: SvgPicture.string(
-                      _shoeSoleSvg,
-                      colorFilter: const ColorFilter.mode(
-                        AppConstants.primary,
-                        BlendMode.srcIn,
-                      ),
-                    ),
+                  // Centered Shoe Sole Icon (replaces SVG for reliability)
+                  const Icon(
+                    Icons.directions_run,
+                    size: 100,
+                    color: AppConstants.primary,
                   ),
                   const SizedBox(height: 24),
                   // Wordmark

@@ -54,16 +54,20 @@ class OrderDetailScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        'Order #$id',
-                        style: AppConstants.monoStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: AppConstants.secondary,
+                      Flexible(
+                        child: Text(
+                          'Order #${id.toString().length >= 8 ? id.toString().substring(0, 8) : id}',
+                          style: AppConstants.monoStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: AppConstants.secondary,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
                         ),
                       ),
+                      const SizedBox(width: 8),
                       SellerStatusChip(status: status),
                     ],
                   ),

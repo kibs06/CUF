@@ -10,7 +10,7 @@ import '../../services/store_service.dart';
 import '../../widgets/sole_badge.dart';
 import '../../widgets/sole_card.dart';
 import '../../widgets/sole_status_chip.dart';
-import '../notifications_screen.dart';
+import '../customer/my_orders_screen.dart';
 import '../seller/create_store_screen.dart';
 import '../seller/store_profile_screen.dart';
 
@@ -471,11 +471,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final counts = notifProvider.unreadCounts;
 
     final items = <_NotifItem>[
-      _NotifItem(NotificationCategory.unpaid, Icons.credit_card_outlined, 'Unpaid'),
-      _NotifItem(NotificationCategory.processing, Icons.inventory_2_outlined, 'Processing'),
-      _NotifItem(NotificationCategory.shipped, Icons.local_shipping_outlined, 'Shipped'),
-      _NotifItem(NotificationCategory.review, Icons.chat_bubble_outline, 'Review'),
-      _NotifItem(NotificationCategory.returns, Icons.assignment_return_outlined, 'Returns'),
+      _NotifItem(NotificationCategory.unpaid, Icons.credit_card_outlined, 'Unpaid', 'unpaid'),
+      _NotifItem(NotificationCategory.processing, Icons.inventory_2_outlined, 'Processing', 'processing'),
+      _NotifItem(NotificationCategory.shipped, Icons.local_shipping_outlined, 'Shipped', 'shipped'),
+      _NotifItem(NotificationCategory.review, Icons.chat_bubble_outline, 'Review', 'review'),
+      _NotifItem(NotificationCategory.returns, Icons.assignment_return_outlined, 'Returns', 'returns'),
     ];
 
     return Column(
@@ -495,7 +495,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onPressed: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (_) => const NotificationsScreen(),
+                    builder: (_) => const MyOrdersScreen(),
                   ),
                 );
               },
@@ -528,8 +528,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (_) => NotificationsScreen(
-                          initialCategory: item.category,
+                        builder: (_) => MyOrdersScreen(
+                          initialFilter: item.filter,
                         ),
                       ),
                     );
@@ -643,7 +643,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               final storeName = _storeName(store);
               return Column(
                 children: [
-                  ListTile(
+                  Material(
+                    color: Colors.transparent,
+                    child: ListTile(
                     dense: true,
                     title: Text(
                       'Store',
@@ -684,8 +686,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       }
                     },
                   ),
+                  ),
                   const Divider(height: 1, color: Color(0xFFE5E7EB)),
-                  ListTile(
+                  Material(
+                    color: Colors.transparent,
+                    child: ListTile(
                     dense: true,
                     title: Text(
                       'Seller Status',
@@ -693,8 +698,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     trailing: SoleStatusChip(status: auth.sellerStatus),
                   ),
+                  ),
                   const Divider(height: 1, color: Color(0xFFE5E7EB)),
-                  ListTile(
+                  Material(
+                    color: Colors.transparent,
+                    child: ListTile(
                     dense: true,
                     title: Text(
                       'Member Since',
@@ -707,6 +715,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         color: Colors.grey.shade600,
                       ),
                     ),
+                  ),
                   ),
                 ],
               );
@@ -794,12 +803,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     required String title,
     required VoidCallback onTap,
   }) {
-    return ListTile(
+    return Material(
+      color: Colors.transparent,
+      child: ListTile(
       dense: true,
       leading: Icon(icon, color: AppConstants.primary, size: 22),
       title: Text(title, style: AppConstants.bodyStyle(fontSize: 14)),
       trailing: const Icon(Icons.chevron_right, color: AppConstants.borderGray),
       onTap: onTap,
+    ),
     );
   }
 
@@ -868,5 +880,6 @@ class _NotifItem {
   final NotificationCategory category;
   final IconData icon;
   final String label;
-  const _NotifItem(this.category, this.icon, this.label);
+  final String filter;
+  const _NotifItem(this.category, this.icon, this.label, this.filter);
 }

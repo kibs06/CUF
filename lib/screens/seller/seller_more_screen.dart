@@ -116,7 +116,9 @@ class SellerMoreScreen extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         boxShadow: AppConstants.sellerShadow,
       ),
-      child: ListTile(
+      child: Material(
+        color: Colors.transparent,
+        child: ListTile(
         leading: Icon(icon, color: iconColor),
         title: Text(
           title,
@@ -140,6 +142,7 @@ class SellerMoreScreen extends StatelessWidget {
         ),
         onTap: onTap,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
       ),
     );
   }

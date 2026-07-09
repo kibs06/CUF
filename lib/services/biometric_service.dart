@@ -35,10 +35,8 @@ class BiometricService {
     try {
       return await _auth.authenticate(
         localizedReason: 'Verify your identity to sign in to SoleVision',
-        options: const AuthenticationOptions(
-          biometricOnly: true,
-          stickyAuth: true,
-        ),
+        biometricOnly: true,
+        persistAcrossBackgrounding: true,
       );
     } catch (_) {
       return false;

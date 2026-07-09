@@ -27,6 +27,8 @@ class StoreService {
   }
 
   /// Create a new store with optional logo and banner uploads.
+  ///
+  /// Enforces one store per seller — throws if the seller already owns a store.
   Future<Map<String, dynamic>> createStore({
     required String name,
     required String tagline,
@@ -36,6 +38,13 @@ class StoreService {
     XFile? bannerImage,
   }) async {
     final sellerId = _client.auth.currentUser!.id;
+
+    // Guard: one store per seller
+    final existing = await getMyStore();
+    if (existing != null) {
+      throw Exception(
+          'You already have a store. Each seller can only manage one store.');
+    }
 
     final store = await _client
         .from('stores')

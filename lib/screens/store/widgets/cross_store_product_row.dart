@@ -1,16 +1,29 @@
 import 'package:flutter/material.dart';
 import '../../../constants/app_constants.dart';
 import '../../customer/product_detail_screen.dart';
+import '../../customer/ar_fitting_screen.dart';
+import '../../../widgets/sole_product_card.dart';
 
-/// "Top Picks from all stores" horizontal scrollable product row.
-/// Each card shows product info plus a store attribution tag.
+/// "Top Picks from a store" section.
+/// Shows products from a single store in a 2-column layout using Wrap.
+/// No shrinkWrap overhead — cards are laid out naturally.
 class CrossStoreProductRow extends StatelessWidget {
   final List<Map<String, dynamic>> products;
+  final String storeName;
 
   const CrossStoreProductRow({
     super.key,
     required this.products,
+    this.storeName = 'all stores',
   });
+
+  /// Deterministic image aspect ratio per card keyed off product id.
+  double _imageAspectRatioFor(dynamic product) {
+    const ratios = [1.0, 0.78, 1.22, 0.95];
+    final id = product['id']?.toString() ?? '';
+    final key = id.isEmpty ? 0 : id.hashCode;
+    return ratios[key.abs() % ratios.length];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -42,11 +55,14 @@ class CrossStoreProductRow extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 6),
-              Text(
-                'from all stores',
-                style: AppConstants.bodyStyle(
-                  fontSize: 11,
-                  color: AppConstants.secondary.withAlpha(127),
+              Flexible(
+                child: Text(
+                  'from $storeName',
+                  style: AppConstants.bodyStyle(
+                    fontSize: 11,
+                    color: AppConstants.secondary.withAlpha(127),
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
@@ -54,103 +70,43 @@ class CrossStoreProductRow extends StatelessWidget {
         ),
         const SizedBox(height: 10),
 
-        // Horizontal product row
-        SizedBox(
-          height: 230,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            itemCount: products.length,
-            itemBuilder: (context, index) {
-              final product = products[index];
-              final images = product['images'] as List? ?? [];
-              final imageUrl = images.isNotEmpty ? images[0] as String : '';
+        // 2-column grid using Wrap — no shrinkWrap, no height estimation.
+        // Each child takes ~50% width minus spacing.
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final spacing = 14.0;
+            final cardWidth = (constraints.maxWidth - spacing) / 2;
 
-              return GestureDetector(
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => ProductDetailScreen(product: product),
-                    ),
-                  );
-                },
-                child: Container(
-                  width: 160,
-                  margin: const EdgeInsets.only(right: 14),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: AppConstants.cardRadius,
-                    boxShadow: AppConstants.warmShadow,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Product image
-                      ClipRRect(
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(16),
+            return Wrap(
+              spacing: spacing,
+              runSpacing: spacing,
+              children: products.map((product) {
+                return SizedBox(
+                  width: cardWidth,
+                  child: SoleProductCard(
+                    product: product,
+                    imageAspectRatio: _imageAspectRatioFor(product),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => ProductDetailScreen(product: product),
                         ),
-                        child: Image.network(
-                          imageUrl,
-                          height: 120,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
-                            height: 120,
-                            color: AppConstants.borderGray.withAlpha(76),
-                            child: const Icon(
-                              Icons.image_not_supported_outlined,
-                              color: AppConstants.borderGray,
-                            ),
+                      );
+                    },
+                    onTryOnTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => ARVirtualFitScreen(
+                            preselectedProduct: product,
                           ),
                         ),
-                      ),
-
-                      // Product info
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              product['name'] ?? '',
-                              style: AppConstants.bodyStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: AppConstants.secondary,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 2),
-                            // Store attribution
-                            Text(
-                              product['store_name'] ?? '',
-                              style: AppConstants.bodyStyle(
-                                fontSize: 10,
-                                color: AppConstants.secondary.withAlpha(127),
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              '₱${(product['price'] as double).toStringAsFixed(0)}',
-                              style: AppConstants.monoStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                color: AppConstants.primary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                      );
+                    },
                   ),
-                ),
-              );
-            },
-          ),
+                );
+              }).toList(),
+            );
+          },
         ),
       ],
     );

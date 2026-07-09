@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../constants/app_constants.dart';
+import '../../models/address_model.dart';
+import '../../providers/address_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/cart_provider.dart';
 import '../../providers/order_provider.dart';
 import '../../widgets/sole_card.dart';
-import '../../widgets/sole_text_field.dart';
 import '../../widgets/sole_primary_button.dart';
+import 'address_book_screen.dart';
 import 'tracking_screen.dart';
 
 class CheckoutScreen extends StatefulWidget {
@@ -21,9 +23,8 @@ class _CheckoutScreenState extends State<CheckoutScreen>
   int _checkoutStep = 0; // 0: Details/Payment, 1: Confirmation
 
   final _formKey = GlobalKey<FormState>();
-  final _addressController = TextEditingController();
-  final _phoneController = TextEditingController();
   String _paymentMethod = 'GCash';
+  Address? _selectedAddress;
 
   // Confirmed order data (populated after successful placement)
   String? _placedOrderId;
@@ -41,9 +42,6 @@ class _CheckoutScreenState extends State<CheckoutScreen>
   @override
   void initState() {
     super.initState();
-    _addressController.text = 'V. Rama Ave, Cebu City, Cebu';
-    _phoneController.text = '+63 917 123 4567';
-
     _checkController = AnimationController(
       duration: const Duration(milliseconds: 600),
       vsync: this,
@@ -52,16 +50,62 @@ class _CheckoutScreenState extends State<CheckoutScreen>
       CurvedAnimation(parent: _checkController, curve: Curves.elasticOut),
     );
 
-    // Validate cart on load (shows warnings, does NOT remove items)
-    WidgetsBinding.instance.addPostFrameCallback((_) => _validateCart());
+    // Load address book and validate cart on load
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadAddress();
+      _validateCart();
+    });
   }
 
   @override
   void dispose() {
-    _addressController.dispose();
-    _phoneController.dispose();
     _checkController.dispose();
     super.dispose();
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // LOAD ADDRESS — fetch default/saved address on init
+  // ═══════════════════════════════════════════════════════════════
+
+  void _loadAddress() {
+    final auth = context.read<AuthProvider>();
+    final userId = auth.profile?['id'] ?? auth.currentUser?['id'];
+    if (userId == null) return;
+
+    final addressProvider = context.read<AddressProvider>();
+    addressProvider.loadAddresses(userId).then((_) {
+      if (mounted && _selectedAddress == null) {
+        // Auto-select the default address
+        final addr = addressProvider.defaultAddress;
+        if (addr != null) {
+          setState(() => _selectedAddress = addr);
+          addressProvider.setSelectedAddress(addr);
+        }
+      }
+    });
+  }
+
+  Future<void> _pickAddress() async {
+    final auth = context.read<AuthProvider>();
+    final userId = auth.profile?['id'] ?? auth.currentUser?['id'];
+    if (userId == null) return;
+
+    // Ensure addresses are loaded
+    final addressProvider = context.read<AddressProvider>();
+    if (addressProvider.addresses.isEmpty) {
+      await addressProvider.loadAddresses(userId);
+    }
+
+    final result = await Navigator.of(context).push<Address>(
+      MaterialPageRoute(
+        builder: (_) => const AddressBookScreen(selectionMode: true),
+      ),
+    );
+
+    if (result != null && mounted) {
+      setState(() => _selectedAddress = result);
+      addressProvider.setSelectedAddress(result);
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -72,16 +116,12 @@ class _CheckoutScreenState extends State<CheckoutScreen>
     final cart = Provider.of<CartProvider>(context, listen: false);
     debugPrint('[CHECKOUT-SCREEN] _validateCart() called — items: ${cart.items.length}, selected: ${cart.selectedCount}');
     if (cart.items.isEmpty) {
-      // Cart is empty — clear any stale validation state
       if (_itemValidations.isNotEmpty) {
         setState(() => _itemValidations = []);
       }
       return;
     }
 
-    // Clear stale validation results before re-running. This prevents
-    // leftover entries from previously-removed items from falsely
-    // blocking the order button (Bug 1 fix).
     setState(() {
       _isValidatingCart = true;
       _itemValidations = [];
@@ -91,8 +131,6 @@ class _CheckoutScreenState extends State<CheckoutScreen>
       final results = await cart.validateForCheckout();
       if (!mounted) return;
 
-      // Map validation results to UI validation objects.
-      // No stale-filter needed since _itemValidations was cleared above.
       final validations = results.map((r) {
         return _CartItemValidation(
           productName: r.productName,
@@ -118,14 +156,13 @@ class _CheckoutScreenState extends State<CheckoutScreen>
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // STOCK GATE — blocks Place Order when items are unavailable
+  // STOCK + ADDRESS GATE — blocks Place Order
   // ═══════════════════════════════════════════════════════════════
 
-  /// Returns true only when every selected item has enough stock.
   bool _canSubmitOrder(CartProvider cart) {
     if (cart.selectedItems.isEmpty) return false;
     if (_isValidatingCart) return false;
-    // Block if any validated item is out of stock or has insufficient stock
+    if (_selectedAddress == null) return false; // Must have an address
     for (final v in _itemValidations) {
       if (!v.isAvailable || v.insufficientStock) return false;
     }
@@ -133,18 +170,29 @@ class _CheckoutScreenState extends State<CheckoutScreen>
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // SUBMIT — creates order with ALL selected items
+  // SUBMIT — creates order with ALL selected items + address snapshot
   // ═══════════════════════════════════════════════════════════════
 
   Future<void> _submitCheckout() async {
-    if (_isValidatingCart) return; // Don't submit while validation is running
+    if (_isValidatingCart) return;
     if (!_formKey.currentState!.validate()) return;
 
-    // Re-validate stock immediately before submission (race-condition guard)
+    // Block if no address selected
+    if (_selectedAddress == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a delivery address before placing your order.'),
+          backgroundColor: AppConstants.error,
+        ),
+      );
+      return;
+    }
+
+    // Re-validate stock immediately before submission
     await _validateCart();
     if (!mounted) return;
     final cart = Provider.of<CartProvider>(context, listen: false);
-    if (!_canSubmitOrder(cart)) return; // Stock changed — don't proceed
+    if (!_canSubmitOrder(cart)) return;
 
     final auth = Provider.of<AuthProvider>(context, listen: false);
     final orderProvider = Provider.of<OrderProvider>(context, listen: false);
@@ -173,30 +221,23 @@ class _CheckoutScreenState extends State<CheckoutScreen>
       customerId: auth.profile?['id'] ?? '',
       items: orderItems,
       totalAmount: orderTotal,
-      deliveryAddress: _addressController.text.trim(),
+      deliveryAddress: _selectedAddress!.formattedAddress,
       paymentMethod: _paymentMethod,
+      shippingAddress: _selectedAddress!.toSnapshot(),
     );
 
     if (order != null && mounted) {
-      // Clear ordered items from the server AND local state.
-      // Only remove items from this order, not the entire cart, so
-      // unselected items (e.g. from other stores) are preserved.
+      // Clear ordered items from the server AND local state
       final orderedServerIds = items
           .map((item) => item['server_id'] as String?)
           .where((id) => id != null)
           .cast<String>()
           .toList();
       if (orderedServerIds.isNotEmpty) {
-        // Await server deletion to ensure DB rows are gone before
-        // navigating away (same pattern that fixed product deletion bug).
         await cart.removeServerItems(orderedServerIds);
       } else {
-        // Fallback: some items had no server_id (background sync hadn't
-        // completed). Clear entire server cart to prevent orphaned rows
-        // from reappearing on next login/device switch.
         await cart.clearCartFromServer();
       }
-      // Clear locally via the provider (only the ordered items)
       for (final item in items) {
         final key = item['id'] as String;
         cart.removeFromCart(key);
@@ -234,7 +275,7 @@ class _CheckoutScreenState extends State<CheckoutScreen>
                 TextButton(
                   onPressed: () {
                     ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                    Navigator.of(context).pop(); // Go back to cart
+                    Navigator.of(context).pop();
                   },
                   child: const Text(
                     'Go to Cart',
@@ -369,43 +410,11 @@ class _CheckoutScreenState extends State<CheckoutScreen>
             ),
             const SizedBox(height: 24),
 
-            // ── Section 2: Delivery Details ───────────────────
-            Text('Delivery Details',
+            // ── Section 2: Deliver To ─────────────────────────
+            Text('Deliver To',
                 style: AppConstants.headlineStyle(fontSize: 16)),
             const SizedBox(height: 12),
-            SoleCard(
-              color: Colors.white,
-              child: Column(
-                children: [
-                  SoleTextField(
-                    labelText: 'Delivery Address',
-                    hintText: 'Enter street, brgy, city...',
-                    controller: _addressController,
-                    prefixIcon: Icons.location_on_outlined,
-                    validator: (val) {
-                      if (val == null || val.trim().isEmpty) {
-                        return 'Address is required';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  SoleTextField(
-                    labelText: 'Contact Number',
-                    hintText: '+63 9XX XXX XXXX',
-                    controller: _phoneController,
-                    keyboardType: TextInputType.phone,
-                    prefixIcon: Icons.phone_android_outlined,
-                    validator: (val) {
-                      if (val == null || val.trim().isEmpty) {
-                        return 'Contact number is required';
-                      }
-                      return null;
-                    },
-                  ),
-                ],
-              ),
-            ),
+            _buildDeliveryCard(),
             const SizedBox(height: 24),
 
             // ── Section 3: Payment ────────────────────────────
@@ -456,6 +465,143 @@ class _CheckoutScreenState extends State<CheckoutScreen>
             const SizedBox(height: 40),
           ],
         ),
+      ),
+    );
+  }
+
+  // ── Delivery Card ───────────────────────────────────────────
+
+  Widget _buildDeliveryCard() {
+    // No addresses saved at all
+    if (_selectedAddress == null) {
+      return SoleCard(
+        color: Colors.white,
+        child: GestureDetector(
+          onTap: _pickAddress,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: AppConstants.primary.withValues(alpha: 0.08),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.add_location_alt_outlined,
+                    size: 20,
+                    color: AppConstants.primary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Add a delivery address',
+                        style: AppConstants.bodyStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Required to place your order',
+                        style: AppConstants.bodyStyle(
+                          fontSize: 12,
+                          color: AppConstants.secondary.withValues(alpha: 0.5),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.chevron_right,
+                  color: AppConstants.primary,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Has a selected address
+    return SoleCard(
+      color: Colors.white,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppConstants.primary.withValues(alpha: 0.08),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.location_on_outlined,
+                  size: 20,
+                  color: AppConstants.primary,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          _selectedAddress!.recipientName,
+                          style: AppConstants.bodyStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _selectedAddress!.recipientPhone,
+                          style: AppConstants.bodyStyle(
+                            fontSize: 12,
+                            color: AppConstants.secondary.withValues(alpha: 0.5),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _selectedAddress!.formattedAddress,
+                      style: AppConstants.bodyStyle(
+                        fontSize: 12,
+                        color: AppConstants.secondary.withValues(alpha: 0.6),
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          GestureDetector(
+            onTap: _pickAddress,
+            child: Text(
+              'Change',
+              style: AppConstants.bodyStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: AppConstants.primary,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

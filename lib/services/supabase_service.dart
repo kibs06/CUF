@@ -269,22 +269,27 @@ class SupabaseService {
     }
 
     final method = _normalizePaymentMethod(orderData['payment_method']);
+    final shippingAddress = orderData['shipping_address'];
 
     // STEP 1: Create the orders row (committed immediately — no transaction wrapper).
     Map<String, dynamic> orderMap;
     try {
+      final insertData = <String, dynamic>{
+        'customer_id': userId,
+        'store_id': productMap['store_id'],
+        'status': 'pending',
+        'fulfillment': 'pickup',
+        'total_amount': orderData['total_amount'],
+        'payment_method': method,
+        'payment_status': method == 'cash' ? 'unpaid' : 'paid',
+        'notes': orderData['delivery_address'],
+      };
+      if (shippingAddress != null) {
+        insertData['shipping_address'] = shippingAddress;
+      }
       final order = await _client
           .from('orders')
-          .insert({
-            'customer_id': userId,
-            'store_id': productMap['store_id'],
-            'status': 'pending',
-            'fulfillment': 'pickup',
-            'total_amount': orderData['total_amount'],
-            'payment_method': method,
-            'payment_status': method == 'cash' ? 'unpaid' : 'paid',
-            'notes': orderData['delivery_address'],
-          })
+          .insert(insertData)
           .select()
           .single();
       orderMap = Map<String, dynamic>.from(order);

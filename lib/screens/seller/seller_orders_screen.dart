@@ -116,16 +116,20 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text(
-                                  'Order #$id',
-                                  style: AppConstants.monoStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppConstants.primary,
+                                Flexible(
+                                  child: Text(
+                                    'Order #${id.toString().length >= 8 ? id.toString().substring(0, 8) : id}',
+                                    style: AppConstants.monoStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppConstants.primary,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
                                   ),
                                 ),
+                                const SizedBox(width: 8),
                                 SoleStatusChip(status: status),
                               ],
                             ),

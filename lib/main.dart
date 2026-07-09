@@ -8,30 +8,47 @@ import 'providers/auth_provider.dart';
 import 'providers/product_provider.dart';
 import 'providers/cart_provider.dart';
 import 'providers/order_provider.dart';
+import 'providers/address_provider.dart';
 import 'providers/notification_provider.dart';
 import 'screens/auth/splash_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Prevent google_fonts 8.x from hanging on network font fetches.
+  // Fonts are resolved at build time; runtime fetching can block the
+  // first frame indefinitely on emulators or slow networks.
+  GoogleFonts.config.allowRuntimeFetching = false;
+
   // Global Flutter error handler — prevents black screen on crash
   FlutterError.onError = (FlutterErrorDetails details) {
     FlutterError.presentError(details);
-    debugPrint('Flutter error: ${details.exception}');
+    if (kDebugMode) debugPrint('Flutter error: ${details.exception}');
   };
 
   // Global async/platform error handler
   PlatformDispatcher.instance.onError = (error, stack) {
-    debugPrint('Platform error: $error');
+    if (kDebugMode) debugPrint('Platform error: $error');
     return true;
   };
 
-  await Supabase.initialize(
-    url: AppConstants.url,
-    anonKey: AppConstants.anonKey,
-  );
-
-  runApp(const SoleVisionApp());
+  // Initialize Supabase — with a timeout to prevent indefinite hang.
+  // If this fails or times out, show an error screen instead of a black screen.
+  bool supabaseReady = false;
+  try {
+    await Supabase.initialize(
+      url: AppConstants.url,
+      anonKey: AppConstants.anonKey,
+    ).timeout(const Duration(seconds: 10));
+    supabaseReady = true;
+  } catch (e) {
+    if (kDebugMode) debugPrint('Supabase init failed: $e');
+  }
+  if (supabaseReady) {
+    runApp(const SoleVisionApp());
+  } else {
+    runApp(_SupabaseErrorApp());
+  }
 }
 
 class SoleVisionApp extends StatelessWidget {
@@ -45,6 +62,7 @@ class SoleVisionApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ProductProvider()),
         ChangeNotifierProvider(create: (_) => CartProvider()),
         ChangeNotifierProvider(create: (_) => OrderProvider()),
+        ChangeNotifierProvider(create: (_) => AddressProvider()),
         ChangeNotifierProvider(create: (_) => NotificationProvider()),
       ],
       child: MaterialApp(
@@ -132,6 +150,89 @@ class SoleVisionApp extends StatelessWidget {
 
         // Start screen is Splash, which auto-navigates to AuthGate
         home: const SplashScreen(),
+      ),
+    );
+  }
+}
+
+/// Fallback app shown when Supabase fails to initialize.
+/// Prevents a black screen by showing a clear error with retry.
+class _SupabaseErrorApp extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'SoleVision',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: AppConstants.primary,
+          brightness: Brightness.light,
+        ),
+      ),
+      home: Scaffold(
+        backgroundColor: AppConstants.surfaceLight,
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: AppConstants.error.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.cloud_off_rounded,
+                    size: 32,
+                    color: AppConstants.error,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'Unable to connect',
+                  style: GoogleFonts.playfairDisplay(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: AppConstants.secondary,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'SoleVision could not reach its servers.\nPlease check your internet connection and try again.',
+                  style: GoogleFonts.dmSans(
+                    fontSize: 14,
+                    color: AppConstants.secondary.withValues(alpha: 0.6),
+                    height: 1.5,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 28),
+                FilledButton.icon(
+                  onPressed: () {
+                    // Re-launch the app — restarts main()
+                    main();
+                  },
+                  icon: const Icon(Icons.refresh, size: 18),
+                  label: const Text('Retry'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppConstants.primary,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 32,
+                      vertical: 14,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

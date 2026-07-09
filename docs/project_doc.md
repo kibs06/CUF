@@ -174,7 +174,7 @@ Two Postgres trigger functions automatically decrement inventory on order/sale:
 - **`decrement_inventory_on_order()`** — fires on `order_items` INSERT
 - **`decrement_inventory_on_sale()`** — fires on `sales_transaction_items` INSERT
 
-Both normalize size via `regexp_replace(size, '\D', '', 'g')` before comparing against `inventory.size` (to handle "EU40" vs "40" format mismatch). This fix was deployed live on July 3, 2026.
+Both normalize size via `regexp_replace(size, '\D', '', 'g')` before comparing against `inventory.size` (to handle "EU40" vs "40" format mismatch). Size normalization fix deployed July 3, 2026. **SECURITY DEFINER fix deployed July 4, 2026** — without it, the trigger's UPDATE is blocked by RLS when called by a customer.
 
 ### 4.5 Seed Data
 
@@ -568,7 +568,7 @@ recordSale (sales_service.dart)
 | **Duplicate product_variants rows** | ✅ Verified + cleanup script ready | Classic Derby Oxford confirmed to have duplicate rows. Cleanup script in `CHECKOUT_HARD_FIX_CLEANUP.sql` Step 2. |
 | **Orphaned inventory rows** | ⚠️ UNVERIFIED (backfill script ready) | Backfill script in `CHECKOUT_HARD_FIX_CLEANUP.sql` Step 4. |
 | **Order creation non-atomic → orphaned 0-item orders** | ✅ Root cause identified + fix deployed | `createOrder()` inserts `orders` row first, then `order_items` in separate calls. If `order_items` insert fails (e.g., DB trigger P0001), the `orders` row is orphaned with 0 items. Fix: `_cleanupOrphanedOrder()` deletes orphaned rows on failure. Requires DELETE RLS policy (migration `20260704_add_orders_delete_policy.sql`). |
-| **False "is no longer available" error was actually order_items insert failure** | ✅ Confirmed | Three prior fix attempts targeted `validateCartForCheckout()` and inventory logic. The real source was the DB trigger `decrement_inventory_on_order()` rejecting the `order_items` insert. The `StockUnavailableException` from this rejection was shown as "is no longer available" — a real stock error, not a false positive. The app-level validation was a red herring. |
+| **False "is no longer available" error = RLS blocks trigger UPDATE** | ✅ Fixed (migration ready) | The `decrement_inventory_on_order()` trigger runs without `SECURITY DEFINER`, so it executes as the customer. RLS on `inventory` only allows sellers/admins to UPDATE — the customer's UPDATE is silently blocked, matching 0 rows, raising 'Insufficient stock'. App's SELECT works ("viewable by everyone" policy) but UPDATE fails. Fix: `SECURITY DEFINER` on both trigger functions (`20260704_fix_trigger_security_definer.sql`). |
 
 ### 🟡 Medium Priority
 
@@ -627,7 +627,8 @@ recordSale (sales_service.dart)
 
 ### July 4, 2026
 - **Order creation atomicity fix** — `createOrder()` was non-atomic: `orders` row inserted first, then `order_items` in separate calls. When `order_items` insert failed (DB trigger P0001), the `orders` row was orphaned with 0 items. Fix: added `_cleanupOrphanedOrder()` that deletes the orphaned `orders` row on failure, with batch rollback of successfully inserted `order_items`. Comprehensive logging now captures exact payloads and raw PostgrestException details (code, message, details, hint).
-- **Root cause of false "is no longer available" error identified** — Three prior fix attempts targeted `validateCartForCheckout()` and app-layer inventory logic. The real source was the DB trigger `decrement_inventory_on_order()` rejecting `order_items` inserts. The `StockUnavailableException` from this rejection was surfaced as "is no longer available" — this was a real stock error from the DB level, not a false positive from the app validation. The app-level validation was a red herring.
+- **⚠️ TRUE ROOT CAUSE IDENTIFIED: RLS blocks trigger UPDATE on inventory** — The `decrement_inventory_on_order()` trigger function runs WITHOUT `SECURITY DEFINER`, meaning it executes as the calling user (the customer). The `inventory` table has RLS policies that only allow sellers and admins to UPDATE rows. When a customer places an order, the trigger's UPDATE on inventory is silently blocked by RLS (matching 0 rows), causing the function to raise 'Insufficient stock' — even when the app correctly sees stock=46. The app's SELECT succeeds because there's a "viewable by everyone" SELECT policy, but the customer has no UPDATE policy. **Fix: add `SECURITY DEFINER` to both `decrement_inventory_on_order()` and `decrement_inventory_on_sale()`** (migration `20260704_fix_trigger_security_definer.sql`).
+- **Why prior fixes missed this** — Five prior fix attempts targeted `validateCartForCheckout()`, app-layer inventory logic, size normalization, and order creation atomicity. All were red herrings: the app's stock validation was always correct. The error came from the database trigger, which appeared to be a stock problem but was actually an RLS permission problem. The trigger's UPDATE was blocked by RLS, not by actual insufficient stock.
 - **DELETE RLS policy added to orders table** — Migration `20260704_add_orders_delete_policy.sql` adds `DELETE USING (auth.uid() = customer_id AND status = 'pending')` so orphaned pending orders can be cleaned up.
 - **Diagnostic elimination test infrastructure** — Added and reverted diagnostic instrumentation (forced `isAvailable: true` in validation, P0001 catch-without-throw in `createOrder()`) to prove the validation logic was not the source. All diagnostic artifacts removed.
 

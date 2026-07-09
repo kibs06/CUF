@@ -60,17 +60,22 @@ class SellerOrderCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Order #$id',
-                style: AppConstants.monoStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: AppConstants.secondary,
+              Flexible(
+                child: Text(
+                  'Order #${id.toString().length >= 8 ? id.toString().substring(0, 8) : id}',
+                  style: AppConstants.monoStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: AppConstants.secondary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
               ),
+              const SizedBox(width: 8),
               Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   SellerStatusChip(status: status),
                   const SizedBox(width: 8),

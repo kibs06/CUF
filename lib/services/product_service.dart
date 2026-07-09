@@ -263,14 +263,22 @@ class ProductService {
 
   // ─── READ ───────────────────────────────────────────────────────
 
-  /// Get all products belonging to the current seller, with all relations.
+  /// Get all products belonging to the current seller's store, with all relations.
+  ///
+  /// Filters by both seller_id and store_id for defense-in-depth scoping,
+  /// even though the one-store-per-seller constraint should make store_id
+  /// redundant in practice.
   Future<List<Map<String, dynamic>>> getSellerProducts() async {
     final sellerId = _client.auth.currentUser!.id;
+    final storeId = await getSellerStoreId();
+    if (storeId == null) return [];
+
     final data = await _client
         .from('products')
         .select(
             '*, product_images(*), product_variants(*), product_customizations(*), inventory(*)')
         .eq('seller_id', sellerId)
+        .eq('store_id', storeId)
         .order('created_at', ascending: false);
     return List<Map<String, dynamic>>.from(data);
   }
@@ -285,7 +293,10 @@ class ProductService {
         .single();
   }
 
-  /// Get the seller's store ID. Returns null if no store is linked.
+  /// Get the seller's store ID. Returns null if no store exists.
+  ///
+  /// Uses maybeSingle() without .limit(1) so it throws if the
+  /// one-store-per-seller constraint is ever violated (multiple rows).
   Future<String?> getSellerStoreId() async {
     final sellerId = _client.auth.currentUser!.id;
     final store = await _client
@@ -293,7 +304,6 @@ class ProductService {
         .select('id')
         .eq('owner_id', sellerId)
         .eq('is_active', true)
-        .limit(1)
         .maybeSingle();
     return store?['id']?.toString();
   }
