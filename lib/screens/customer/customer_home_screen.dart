@@ -3,9 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/message_provider.dart';
 import '../../providers/product_provider.dart';
+import '../../services/connectivity_service.dart';
+import '../../widgets/floating_message_button.dart';
+import '../../widgets/no_internet_view.dart';
 import '../../widgets/sole_product_card.dart';
 import '../../widgets/cart_icon_button.dart';
 import '../store/store_profile_screen.dart';
@@ -25,6 +30,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   int _bannerIndex = 0;
   Timer? _bannerTimer;
   String _searchKeyword = '';
+  StreamSubscription? _connectivitySub;
+  bool _wasOffline = false;
 
   // Resume browsing state (Change 6b)
   String? _lastStoreId;
@@ -55,6 +62,17 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     _loadLastVisitedStore();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<ProductProvider>(context, listen: false).loadProducts();
+      // Load conversations for the floating message button badge
+      _loadConversations();
+    });
+
+    // Auto-refresh products when connection is restored after being offline
+    _wasOffline = !ConnectivityService.instance.isOnline;
+    _connectivitySub = ConnectivityService.instance.isOnlineStream.listen((isOnline) {
+      if (isOnline && _wasOffline && mounted) {
+        Provider.of<ProductProvider>(context, listen: false).loadProducts();
+      }
+      _wasOffline = !isOnline;
     });
 
     // Auto-scroll PageView banner every 4 seconds
@@ -86,6 +104,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
 
   @override
   void dispose() {
+    _connectivitySub?.cancel();
     _searchController.dispose();
     _bannerController.dispose();
     _bannerTimer?.cancel();
@@ -99,6 +118,20 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     final id = product['id']?.toString() ?? '';
     final key = id.isEmpty ? 0 : id.hashCode;
     return ratios[key.abs() % ratios.length];
+  }
+
+  Future<void> _loadConversations() async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null || !mounted) return;
+    final msgProvider = context.read<MessageProvider>();
+    // Always set up the realtime subscription first, even if the initial
+    // load fails — so the badge updates when messages arrive.
+    msgProvider.subscribeToInbox(customerId: userId);
+    try {
+      await msgProvider.loadConversationsForCustomer(userId);
+    } catch (e) {
+      debugPrint('[CustomerHome] Failed to load conversations: $e');
+    }
   }
 
   @override
@@ -430,9 +463,13 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
 
                 // Catalog Grid
                 if (productProvider.isLoading)
-                  const SliverFillRemaining(
+                  SliverFillRemaining(
                     child: Center(
-                      child: CircularProgressIndicator(color: AppConstants.primary),
+                      child: ConnectivityService.instance.isOnline
+                          ? const CircularProgressIndicator(color: AppConstants.primary)
+                          : NoInternetView(
+                              onRetry: () => Provider.of<ProductProvider>(context, listen: false).loadProducts(),
+                            ),
                     ),
                   )
                 else if (filteredProducts.isEmpty)
@@ -489,6 +526,9 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
             ),
             ),
           ),
+
+          // Floating chat button — only on Home tab
+          const FloatingMessageButton(),
         ],
       ),
     );

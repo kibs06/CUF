@@ -264,7 +264,14 @@ class _FloatingMessageButtonState extends State<FloatingMessageButton>
 
   // ── Quick preview sheet ───────────────────────────────────────
 
-  void _showQuickPreview() {
+  Future<void> _showQuickPreview() async {
+    // Force a fresh fetch of conversations/unread counts before showing
+    // the sheet, so the count and list are guaranteed current even if
+    // a Realtime event was missed (e.g. brief connectivity drop).
+    final provider = context.read<MessageProvider>();
+    await provider.refreshInbox();
+    if (!mounted) return;
+    if (!context.mounted) return;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
