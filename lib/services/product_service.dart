@@ -3,6 +3,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/product_models.dart';
+import 'seller_notification_service.dart';
 
 /// Service handling all product-related Supabase operations for sellers.
 ///
@@ -467,6 +468,35 @@ class ProductService {
         'updated_at': DateTime.now().toIso8601String(),
       }).toList(),
     );
+
+    // ── Notification: low_stock ──────────────────────────────────
+    // Fire-and-forget: notify seller about low stock after inventory sync.
+    try {
+      final storeId = await getSellerStoreId();
+      if (storeId != null) {
+        // Get product name for the notification
+        final product = await _client
+            .from('products')
+            .select('name')
+            .eq('id', productId)
+            .maybeSingle();
+        final productName = product?['name']?.toString() ?? 'Product';
+
+        for (final entry in stockBySize.entries) {
+          if (entry.value <= 5) {
+            SellerNotificationService.instance.createLowStock(
+              storeId: storeId,
+              productId: productId,
+              productName: productName,
+              size: entry.key,
+              currentStock: entry.value,
+            ); // intentionally not awaited
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[ProductService] low_stock notification failed: $e');
+    }
   }
 
   /// Best-effort removal of a file from storage by its public URL.

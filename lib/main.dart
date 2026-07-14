@@ -10,15 +10,19 @@ import 'providers/cart_provider.dart';
 import 'providers/order_provider.dart';
 import 'providers/address_provider.dart';
 import 'providers/notification_provider.dart';
+import 'providers/seller_notification_provider.dart';
+import 'providers/message_provider.dart';
+import 'providers/chat_attachment_provider.dart';
 import 'screens/auth/splash_screen.dart';
+import 'services/connectivity_service.dart';
+import 'widgets/connectivity_banner.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Prevent google_fonts 8.x from hanging on network font fetches.
-  // Fonts are resolved at build time; runtime fetching can block the
-  // first frame indefinitely on emulators or slow networks.
-  GoogleFonts.config.allowRuntimeFetching = false;
+  // Allow google_fonts to fetch fonts at runtime if not bundled locally.
+  // This ensures fonts load correctly even if assets are missing.
+  GoogleFonts.config.allowRuntimeFetching = true;
 
   // Global Flutter error handler — prevents black screen on crash
   FlutterError.onError = (FlutterErrorDetails details) {
@@ -45,6 +49,8 @@ Future<void> main() async {
     if (kDebugMode) debugPrint('Supabase init failed: $e');
   }
   if (supabaseReady) {
+    // Start the connectivity service after Supabase is ready
+    ConnectivityService.instance.start();
     runApp(const SoleVisionApp());
   } else {
     runApp(_SupabaseErrorApp());
@@ -64,6 +70,9 @@ class SoleVisionApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => OrderProvider()),
         ChangeNotifierProvider(create: (_) => AddressProvider()),
         ChangeNotifierProvider(create: (_) => NotificationProvider()),
+        ChangeNotifierProvider(create: (_) => SellerNotificationProvider()),
+        ChangeNotifierProvider(create: (_) => MessageProvider()),
+        ChangeNotifierProvider(create: (_) => ChatAttachmentProvider()),
       ],
       child: MaterialApp(
         title: 'SoleVision',
@@ -84,7 +93,8 @@ class SoleVisionApp extends StatelessWidget {
               ),
             );
           };
-          return child ?? const SizedBox.shrink();
+          // Wrap with ConnectivityBanner for mid-session connection loss
+          return ConnectivityBanner(child: child ?? const SizedBox.shrink());
         },
         theme: ThemeData(
           useMaterial3: true,

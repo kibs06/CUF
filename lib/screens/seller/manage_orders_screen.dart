@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/order_provider.dart';
+import '../../services/connectivity_service.dart';
 import '../../widgets/seller/seller_order_card.dart';
+import '../../widgets/seller/seller_status_chip.dart';
 import 'order_detail_screen.dart';
 
 class ManageOrdersScreen extends StatefulWidget {
@@ -18,6 +22,7 @@ class _ManageOrdersScreenState extends State<ManageOrdersScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   int _tabIndex = 0;
+  final Set<dynamic> _updatingOrderIds = {};
 
   final List<String> _tabs = [
     'All',
@@ -27,10 +32,19 @@ class _ManageOrdersScreenState extends State<ManageOrdersScreen>
     'Delivered',
     'Cancelled',
   ];
+  StreamSubscription<bool>? _connectivitySub;
+  bool _wasOffline = false;
 
   @override
   void initState() {
     super.initState();
+    _wasOffline = !ConnectivityService.instance.isOnline;
+    _connectivitySub = ConnectivityService.instance.isOnlineStream.listen((isOnline) {
+      if (isOnline && _wasOffline && mounted) {
+        Provider.of<OrderProvider>(context, listen: false).loadOrders();
+      }
+      _wasOffline = !isOnline;
+    });
     final startIndex = widget.initialFilter != null
         ? _tabs
               .indexWhere(
@@ -56,6 +70,7 @@ class _ManageOrdersScreenState extends State<ManageOrdersScreen>
 
   @override
   void dispose() {
+    _connectivitySub?.cancel();
     _tabController.dispose();
     super.dispose();
   }
@@ -68,7 +83,13 @@ class _ManageOrdersScreenState extends State<ManageOrdersScreen>
     'cancelled': AppConstants.statusCancelledColor,
   };
 
-  void _updateStatus(int orderId, String currentStatus) async {
+  Future<void> _updateStatus(dynamic orderId, String currentStatus, {Map<String, dynamic>? orderData}) async {
+    // Guard: null orderId or already in flight
+    if (orderId == null) return;
+    if (_updatingOrderIds.contains(orderId)) return;
+    if (!mounted) return;
+
+    // Determine next status
     String nextStatus;
     switch (currentStatus.toLowerCase()) {
       case 'pending':
@@ -86,17 +107,166 @@ class _ManageOrdersScreenState extends State<ManageOrdersScreen>
       default:
         return;
     }
-    final success = await Provider.of<OrderProvider>(
-      context,
-      listen: false,
-    ).updateOrderStatus(orderId, nextStatus);
-    if (success && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Order #$orderId moved to $nextStatus'),
-          backgroundColor: AppConstants.success,
+
+    // Build short order ID for display (first 8 chars)
+    final shortId = orderId.toString().length >= 8
+        ? orderId.toString().substring(0, 8)
+        : orderId.toString();
+
+    // Extract order context for dialog (prefer enriched data passed in)
+    final o = orderData ??
+        Provider.of<OrderProvider>(context, listen: false).orders.firstWhere(
+          (o) => o['id'] == orderId,
+          orElse: () => {},
+        );
+    String customerName = 'Customer';
+    if (o['profiles'] != null) {
+      final profile = o['profiles'];
+      customerName = profile['full_name'] ?? profile['email'] ?? 'Customer';
+    } else if (o['customer_name'] != null) {
+      customerName = o['customer_name'];
+    }
+    final itemCount = (o['quantity'] as num?)?.toInt() ?? 0;
+    final totalAmount = (o['total_amount'] is double)
+        ? o['total_amount'] as double
+        : (o['total_amount'] ?? 0).toDouble();
+
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: AppConstants.sellerCardBg,
+        contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Status transition chips
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SellerStatusChip(status: currentStatus),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Icon(
+                    Icons.arrow_forward_rounded,
+                    size: 18,
+                    color: Colors.grey.shade400,
+                  ),
+                ),
+                SellerStatusChip(status: nextStatus),
+              ],
+            ),
+            const SizedBox(height: 16),
+            // Title with icon
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.check_circle_outline,
+                  size: 22,
+                  color: AppConstants.statusConfirmedColor,
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    'Confirm Order #$shortId?',
+                    style: AppConstants.bodyStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // Compact order context
+            Text(
+              '$customerName · $itemCount item${itemCount == 1 ? '' : 's'} · ₱${totalAmount.toStringAsFixed(0)}',
+              style: AppConstants.bodyStyle(
+                fontSize: 13,
+                color: Colors.grey.shade600,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            // Notification note
+            Text(
+              'The customer will be notified.',
+              style: AppConstants.bodyStyle(
+                fontSize: 12,
+                color: Colors.grey.shade500,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
         ),
-      );
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(
+              'Cancel',
+              style: AppConstants.bodyStyle(color: AppConstants.secondary),
+            ),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppConstants.statusConfirmedColor,
+            ),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(
+              'Confirm',
+              style: AppConstants.bodyStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    // Set loading state
+    setState(() => _updatingOrderIds.add(orderId));
+
+    try {
+      final success = await Provider.of<OrderProvider>(
+        context,
+        listen: false,
+      ).updateOrderStatus(orderId, nextStatus);
+
+      if (mounted) {
+        setState(() => _updatingOrderIds.remove(orderId));
+
+        if (success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Order #$orderId updated to $nextStatus'),
+              backgroundColor: AppConstants.success,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to update Order #$orderId. Please try again.'),
+              backgroundColor: AppConstants.error,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _updatingOrderIds.remove(orderId));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error updating Order #$orderId: $e'),
+            backgroundColor: AppConstants.error,
+          ),
+        );
+      }
     }
   }
 
@@ -232,13 +402,21 @@ class _ManageOrdersScreenState extends State<ManageOrdersScreen>
 
                       return SellerOrderCard(
                         order: order,
-                        onPrimaryAction: () => _updateStatus(id, status),
+                        isUpdating: _updatingOrderIds.contains(id),
+                        onPrimaryAction: () => _updateStatus(id, status, orderData: order),
                         onViewDetails: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => OrderDetailScreen(order: order),
-                            ),
-                          );
+                          Navigator.of(context)
+                              .push<bool>(
+                                MaterialPageRoute(
+                                  builder: (_) => OrderDetailScreen(order: order),
+                                ),
+                              )
+                              .then((result) {
+                            if (result == true && mounted) {
+                              Provider.of<OrderProvider>(context, listen: false)
+                                  .loadOrders();
+                            }
+                          });
                         },
                       );
                     },

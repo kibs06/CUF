@@ -6,12 +6,19 @@ class SellerOrderCard extends StatelessWidget {
   final Map<String, dynamic> order;
   final VoidCallback onPrimaryAction;
   final VoidCallback onViewDetails;
+  final bool isUpdating;
+  /// When false, the primary action button is hidden and View Details
+  /// expands to full width. Used on the Dashboard where status changes
+  /// should only happen from the Orders tab / Order Detail screen.
+  final bool showPrimaryAction;
 
   const SellerOrderCard({
     super.key,
     required this.order,
     required this.onPrimaryAction,
     required this.onViewDetails,
+    this.isUpdating = false,
+    this.showPrimaryAction = true,
   });
 
   @override
@@ -28,24 +35,31 @@ class SellerOrderCard extends StatelessWidget {
     final timeAgo = order['time_ago'] ?? '';
 
     String primaryLabel;
+    Color primaryColor;
     switch (status.toLowerCase()) {
       case 'pending':
         primaryLabel = 'Confirm Order';
+        primaryColor = AppConstants.statusConfirmedColor;
         break;
       case 'confirmed':
         primaryLabel = 'Mark Ready';
+        primaryColor = AppConstants.statusReadyColor;
         break;
       case 'ready':
         primaryLabel = 'Mark Delivered';
+        primaryColor = AppConstants.statusDeliveredColor;
         break;
       case 'delivered':
         primaryLabel = '';
+        primaryColor = AppConstants.accent;
         break;
       case 'cancelled':
         primaryLabel = 'Restore';
+        primaryColor = AppConstants.statusPendingColor;
         break;
       default:
         primaryLabel = 'Confirm Order';
+        primaryColor = AppConstants.statusConfirmedColor;
     }
 
     return Container(
@@ -113,28 +127,38 @@ class SellerOrderCard extends StatelessWidget {
             style: AppConstants.bodyStyle(fontSize: 12, color: Colors.grey.shade600),
           ),
           const SizedBox(height: 12),
-          if (primaryLabel.isNotEmpty)
+          if (primaryLabel.isNotEmpty && showPrimaryAction)
             Row(
               children: [
                 Expanded(
                   child: SizedBox(
                     height: 36,
                     child: FilledButton(
-                      onPressed: onPrimaryAction,
+                      onPressed: isUpdating ? null : onPrimaryAction,
                       style: FilledButton.styleFrom(
-                        backgroundColor: AppConstants.accent,
+                        backgroundColor: primaryColor,
+                        disabledBackgroundColor: primaryColor.withValues(alpha: 0.6),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),
                       ),
-                      child: Text(
-                        primaryLabel,
-                        style: AppConstants.bodyStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                      ),
+                      child: isUpdating
+                          ? SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Text(
+                              primaryLabel,
+                              style: AppConstants.bodyStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
                     ),
                   ),
                 ),
@@ -163,6 +187,28 @@ class SellerOrderCard extends StatelessWidget {
                 ),
               ],
             ),
+          if (primaryLabel.isEmpty || !showPrimaryAction)
+              SizedBox(
+                height: 36,
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: onViewDetails,
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppConstants.borderGray),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: Text(
+                    'View Details',
+                    style: AppConstants.bodyStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppConstants.secondary,
+                    ),
+                  ),
+                ),
+              ),
         ],
       ),
     );

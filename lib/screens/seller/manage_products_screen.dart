@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../constants/app_constants.dart';
+import '../../services/connectivity_service.dart';
 import '../../services/product_service.dart';
 import '../../services/store_service.dart';
 import 'add_edit_product_screen.dart';
@@ -29,15 +32,25 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
   String _search = '';
   bool _isSearching = false;
   String? _deletingProductId;
+  StreamSubscription<bool>? _connectivitySub;
+  bool _wasOffline = false;
 
   @override
   void initState() {
     super.initState();
+    _wasOffline = !ConnectivityService.instance.isOnline;
+    _connectivitySub = ConnectivityService.instance.isOnlineStream.listen((isOnline) {
+      if (isOnline && _wasOffline && mounted) {
+        _loadProducts();
+      }
+      _wasOffline = !isOnline;
+    });
     _loadProducts();
   }
 
   @override
   void dispose() {
+    _connectivitySub?.cancel();
     _searchController.dispose();
     super.dispose();
   }

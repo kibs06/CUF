@@ -1,10 +1,14 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../constants/app_constants.dart';
 import '../../providers/order_provider.dart';
+import '../../services/connectivity_service.dart';
 import '../../widgets/empty_state_widget.dart';
+import '../../widgets/no_internet_view.dart';
 import '../../widgets/shimmer_box.dart';
 import '../../widgets/sole_card.dart';
 import '../../widgets/sole_status_chip.dart';
@@ -31,6 +35,8 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   bool _bannerDismissed = false;
+  StreamSubscription? _connectivitySub;
+  bool _wasOffline = false;
 
   static const _tabs = <_OrderTab>[
     _OrderTab('All orders', 'all'),
@@ -61,6 +67,15 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
       );
       provider.loadMyOrders();
     });
+
+    // Auto-refresh orders when connection is restored after being offline
+    _wasOffline = !ConnectivityService.instance.isOnline;
+    _connectivitySub = ConnectivityService.instance.isOnlineStream.listen((isOnline) {
+      if (isOnline && _wasOffline && mounted) {
+        context.read<OrderProvider>().loadMyOrders();
+      }
+      _wasOffline = !isOnline;
+    });
   }
 
   void _onTabChanged() {
@@ -72,6 +87,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
 
   @override
   void dispose() {
+    _connectivitySub?.cancel();
     _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     super.dispose();
@@ -145,7 +161,11 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
     return Consumer<OrderProvider>(
       builder: (context, provider, _) {
         if (provider.isLoadingMyOrders) {
-          return _buildLoading();
+          return ConnectivityService.instance.isOnline
+              ? _buildLoading()
+              : NoInternetView(
+                  onRetry: () => provider.loadMyOrders(),
+                );
         }
 
         if (provider.myOrdersError != null) {

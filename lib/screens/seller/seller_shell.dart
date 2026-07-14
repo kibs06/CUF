@@ -4,6 +4,7 @@ import 'seller_dashboard_screen.dart';
 import 'pos_screen.dart';
 import 'manage_products_screen.dart';
 import 'manage_orders_screen.dart';
+import 'seller_inbox_screen.dart';
 import '../shared/profile_screen.dart';
 
 /// Seller shell with 5-tab bottom navigation:

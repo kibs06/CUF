@@ -1,12 +1,17 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/message_provider.dart';
 import '../../providers/order_provider.dart';
 import '../../providers/product_provider.dart';
+import '../../providers/seller_notification_provider.dart';
+import '../../services/connectivity_service.dart';
 import '../../services/order_service.dart';
-import '../../services/product_service.dart';
 import '../../services/sales_service.dart';
+import '../../services/seller_notification_service.dart';
 import '../../services/store_service.dart';
 import '../../widgets/error_retry_widget.dart';
 import '../../widgets/shimmer_box.dart';
@@ -21,6 +26,8 @@ import 'custom_orders_screen.dart';
 import 'pos_screen.dart';
 import 'reports_screen.dart';
 import 'order_detail_screen.dart';
+import 'seller_notification_center_screen.dart';
+import 'seller_inbox_screen.dart';
 
 /// Dashboard data model — holds all real data fetched from Supabase.
 class _DashboardData {
@@ -64,13 +71,28 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
   late Future<_DashboardData> _dashboardFuture;
   _DashboardData? _cachedData;
   String? _storeId;
+  StreamSubscription<bool>? _connectivitySub;
+  bool _wasOffline = false;
 
   @override
   void initState() {
     super.initState();
+    _wasOffline = !ConnectivityService.instance.isOnline;
+    _connectivitySub = ConnectivityService.instance.isOnlineStream.listen((isOnline) {
+      if (isOnline && _wasOffline && mounted) {
+        _loadDashboard();
+      }
+      _wasOffline = !isOnline;
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadDashboard();
     });
+  }
+
+  @override
+  void dispose() {
+    _connectivitySub?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadDashboard() async {
@@ -85,6 +107,15 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     _dashboardFuture.then((data) {
       if (mounted) setState(() => _cachedData = data);
     });
+    // Initialize seller notifications for this store
+    // Set up subscription first (init is idempotent for same storeId)
+    final notifProv = context.read<SellerNotificationProvider>();
+    notifProv.init(id);
+    // Initialize message provider for inbox badge
+    // Set up subscription before load so it catches events if load fails
+    final msgProv = context.read<MessageProvider>();
+    msgProv.subscribeToInbox(storeId: id);
+    msgProv.loadConversationsForStore(id);
   }
 
   Future<_DashboardData> _fetchDashboardData(
@@ -125,6 +156,21 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
         .where((o) => (o['status'] ?? '').toLowerCase() == 'placed')
         .take(2)
         .toList();
+
+    // ── Notification: stale_order ─────────────────────────────────
+    // Fire-and-forget: notify seller about stale pending orders.
+    for (final order in staleOrders) {
+      final orderId = order['id']?.toString();
+      final createdAt = DateTime.tryParse(order['created_at']?.toString() ?? '');
+      if (orderId != null && createdAt != null) {
+        final hoursPending = DateTime.now().difference(createdAt).inHours;
+        SellerNotificationService.instance.createStaleOrder(
+          storeId: storeId,
+          orderId: orderId,
+          hoursPending: hoursPending,
+        ); // intentionally not awaited
+      }
+    }
 
     return _DashboardData(
       todayRevenue: results[0] as double,
@@ -239,10 +285,8 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
           ],
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_outlined, color: Colors.white),
-            onPressed: () {},
-          ),
+          _buildMessageIcon(),
+          _buildNotificationBell(),
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: CircleAvatar(
@@ -698,13 +742,12 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
           enriched['time_ago'] = _timeAgo(order['created_at'] as String?);
           enriched['fulfillment_type'] = 'Walk-in';
 
+          // Dashboard is a glanceable summary — status changes should
+          // happen from the Orders tab / Order Detail screen where the
+          // seller has full context, not as a reflexive tap here.
           return SellerOrderCard(
             order: enriched,
-            onPrimaryAction: () {
-              final id = order['id'];
-              final status = order['status'] ?? 'placed';
-              _updateOrderStatus(id, status);
-            },
+            onPrimaryAction: () {},
             onViewDetails: () {
               Navigator.of(context).push(
                 MaterialPageRoute(
@@ -712,6 +755,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                 ),
               );
             },
+            showPrimaryAction: false,
           );
         }),
         Align(
@@ -875,59 +919,100 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
   // Chart labels match SellerWeeklyBar's weekday-index convention
   static const _weekDayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-  // ─── Order status update ────────────────────────────────────────
-  void _updateOrderStatus(dynamic orderId, String currentStatus) async {
-    String nextStatus;
-    switch (currentStatus.toLowerCase()) {
-      case 'placed':
-        nextStatus = 'preparing';
-        break;
-      case 'preparing':
-        nextStatus = 'ready';
-        break;
-      case 'ready':
-        nextStatus = 'received';
-        break;
-      case 'cancelled':
-        nextStatus = 'placed';
-        break;
-      default:
-        return;
-    }
-    final success = await Provider.of<OrderProvider>(
-      context,
-      listen: false,
-    ).updateOrderStatus(orderId, nextStatus);
-    if (success && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Order #$orderId → $nextStatus'),
-          backgroundColor: AppConstants.success,
+  // ─── Message Icon with Badge ──────────────────────────────────
+  Widget _buildMessageIcon() {
+    final msgProvider = context.watch<MessageProvider>();
+    final badge = msgProvider.unreadBadge;
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        IconButton(
+          icon: const Icon(Icons.chat_bubble_outline, color: Colors.white),
+          onPressed: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const SellerInboxScreen(),
+              ),
+            );
+          },
         ),
-      );
-      // Auto-sync product active status when order is fulfilled
-      if (nextStatus == 'received') {
-        final orders = context.read<OrderProvider>().orders;
-        final matches = orders.where((o) => o['id'] == orderId).toList();
-        if (matches.isNotEmpty) {
-          final order = matches.first;
-          final productId = order['product_id']?.toString();
-          if (productId != null) {
-            try {
-              await ProductService.instance.syncProductActiveStatus(productId);
-            } catch (_) {
-              // Silently fail — status will self-correct on next update
-            }
-          }
-        }
-      }
-      // Refresh dashboard after status change
-      setState(() {
-        _dashboardFuture = _fetchDashboardData(
-          context.read<AuthProvider>(),
-          _storeId!,
-        );
-      });
-    }
+        if (badge.isNotEmpty)
+          Positioned(
+            top: 6,
+            right: 6,
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: const BoxDecoration(
+                color: AppConstants.statusConfirmedColor,
+                shape: BoxShape.circle,
+              ),
+              constraints: const BoxConstraints(
+                minWidth: 18,
+                minHeight: 18,
+              ),
+              child: Text(
+                badge,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  // ─── Notification Bell with Badge ──────────────────────────────
+  Widget _buildNotificationBell() {
+    final notifProvider = context.watch<SellerNotificationProvider>();
+    final badge = notifProvider.unreadBadge;
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        IconButton(
+          icon: const Icon(Icons.notifications_outlined, color: Colors.white),
+          onPressed: () async {
+            // Force-refresh unread count before navigating, as a safety net
+            await notifProvider.refreshNotifications();
+            if (!mounted || !context.mounted) return;
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const SellerNotificationCenterScreen(),
+              ),
+            );
+          },
+        ),
+        if (badge.isNotEmpty)
+          Positioned(
+            top: 6,
+            right: 6,
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: const BoxDecoration(
+                color: AppConstants.statusConfirmedColor,
+                shape: BoxShape.circle,
+              ),
+              constraints: const BoxConstraints(
+                minWidth: 18,
+                minHeight: 18,
+              ),
+              child: Text(
+                badge,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+      ],
+    );
   }
 }

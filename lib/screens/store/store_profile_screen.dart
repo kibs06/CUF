@@ -3,10 +3,13 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../constants/app_constants.dart';
 import '../../models/store.dart';
 import '../../providers/product_provider.dart';
+import '../../services/message_service.dart';
 import '../../services/store_service.dart';
+import '../../widgets/chat/chat_view.dart';
 import '../../widgets/cart_icon_button.dart';
 import '../../widgets/sole_product_card.dart';
 import '../customer/product_detail_screen.dart';
@@ -105,6 +108,29 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
   void initState() {
     super.initState();
     _loadData();
+  }
+
+  Future<void> _messageSeller() async {
+    final customerId = Supabase.instance.client.auth.currentUser?.id;
+    if (customerId == null) return;
+
+    // Get or create conversation
+    final conversation = await MessageService.instance.getOrCreateConversation(
+      storeId: widget.storeId,
+      customerId: customerId,
+    );
+
+    if (!mounted) return;
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ChatView(
+          conversationId: conversation.id,
+          viewerRole: 'customer',
+          otherPartyName: _store?.name ?? 'Store',
+        ),
+      ),
+    );
   }
 
   @override
@@ -269,6 +295,30 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                               ),
                             ),
                             const Spacer(),
+                            // Message Seller button
+                            GestureDetector(
+                              onTap: () => _messageSeller(),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.transparent,
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: AppConstants.surfaceLight,
+                                    width: 1.5,
+                                  ),
+                                ),
+                                child: Icon(
+                                  Icons.chat_bubble_outline,
+                                  color: AppConstants.surfaceLight,
+                                  size: 16,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
                             // Follow button
                             GestureDetector(
                               onTap: () {

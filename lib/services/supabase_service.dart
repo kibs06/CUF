@@ -1,9 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../constants/app_constants.dart';
 import '../exceptions/stock_unavailable_exception.dart';
 import '../utils/cart_helpers.dart';
+import 'seller_notification_service.dart';
+
+/// Default timeout for all Supabase network calls.
+const _defaultTimeout = Duration(seconds: 15);
 
 class SupabaseService {
   static final SupabaseService instance = SupabaseService._internal();
@@ -12,6 +18,12 @@ class SupabaseService {
   SupabaseClient get _client => Supabase.instance.client;
 
   User? get currentUser => _client.auth.currentUser;
+
+  /// Lightweight reachability check — pings Supabase with a minimal query.
+  Future<void> ping() async {
+    await _client.from('profiles').select('id').limit(1)
+        .timeout(_defaultTimeout);
+  }
 
   String? _currentUserId() => _client.auth.currentUser?.id;
 
@@ -28,7 +40,8 @@ class SupabaseService {
         .from('profiles')
         .select()
         .eq('id', userId)
-        .maybeSingle();
+        .maybeSingle()
+        .timeout(_defaultTimeout);
     return data == null ? null : Map<String, dynamic>.from(data);
   }
 
@@ -123,7 +136,8 @@ class SupabaseService {
         .select(
           '*, stores(name), product_images(image_url, display_order), inventory(size, stock), product_variants(size, stock)',
         )
-        .order('created_at', ascending: false);
+        .order('created_at', ascending: false)
+        .timeout(_defaultTimeout);
 
     return (data as List)
         .map((row) => _mapProduct(Map<String, dynamic>.from(row)))
@@ -226,7 +240,8 @@ class SupabaseService {
         .select(
           '*, profiles!orders_customer_id_fkey(full_name, email), order_items(*, products(name))',
         )
-        .order('created_at', ascending: false);
+        .order('created_at', ascending: false)
+        .timeout(_defaultTimeout);
 
     return (data as List)
         .map((row) => _mapOrder(Map<String, dynamic>.from(row)))
@@ -249,6 +264,8 @@ class SupabaseService {
   Future<Map<String, dynamic>> createOrder(
     Map<String, dynamic> orderData,
   ) async {
+    // Note: createOrder has its own internal try/catch with rollback logic,
+    // so we add timeout at the individual query level below.
     final userId = _requiredUserId();
     final items = orderData['items'] as List<Map<String, dynamic>>? ?? [];
     if (items.isEmpty) throw Exception('No items to order.');
@@ -407,6 +424,19 @@ class SupabaseService {
     }
 
     debugPrint('[ORDER-CREATE] Order created successfully: id=$orderId, items=${items.length}');
+
+    // ── Notification: new_order ────────────────────────────────────
+    // Fire-and-forget: notify the seller that a new order was placed.
+    final storeId = productMap['store_id']?.toString();
+    final totalAmount = (orderData['total_amount'] as num?)?.toDouble() ?? 0.0;
+    if (storeId != null) {
+      SellerNotificationService.instance.createNewOrder(
+        storeId: storeId,
+        orderId: orderId.toString(),
+        totalAmount: totalAmount,
+      ); // intentionally not awaited — don't block order creation
+    }
+
     return _mapOrder({
       ...orderMap,
       'order_items': items
@@ -429,7 +459,8 @@ class SupabaseService {
         .update({'status': newStatus.toLowerCase()})
         .eq('id', orderId.toString())
         .select()
-        .single();
+        .single()
+        .timeout(_defaultTimeout);
     return _mapOrder(Map<String, dynamic>.from(data));
   }
 
@@ -437,7 +468,8 @@ class SupabaseService {
     final data = await _client
         .from('customization_requests')
         .select()
-        .order('created_at', ascending: false);
+        .order('created_at', ascending: false)
+        .timeout(_defaultTimeout);
     return (data as List).map((row) {
       final map = Map<String, dynamic>.from(row);
       return {
@@ -472,15 +504,34 @@ class SupabaseService {
           'status': 'pending',
         })
         .select()
-        .single();
-    return Map<String, dynamic>.from(inserted);
+        .single()
+        .timeout(_defaultTimeout);
+    final result = Map<String, dynamic>.from(inserted);
+
+    // ── Notification: custom_order_request ──────────────────────────
+    // Fire-and-forget: notify the seller about a new custom order request.
+    // storeId is guaranteed non-null (checked + thrown above).
+    final customerName = await _client
+        .from('profiles')
+        .select('full_name')
+        .eq('id', userId)
+        .maybeSingle()
+        .then<String>((p) => p?['full_name']?.toString() ?? 'Customer');
+    SellerNotificationService.instance.createCustomOrderRequest(
+      storeId: storeId,
+      requestId: result['id'].toString(),
+      customerName: customerName,
+    ); // intentionally not awaited
+
+    return result;
   }
 
   Future<List<Map<String, dynamic>>> fetchProfiles() async {
     final data = await _client
         .from('profiles')
         .select()
-        .order('created_at', ascending: false);
+        .order('created_at', ascending: false)
+        .timeout(_defaultTimeout);
     return (data as List).map((row) => Map<String, dynamic>.from(row)).toList();
   }
 

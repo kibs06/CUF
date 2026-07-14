@@ -43,7 +43,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
   bool _isReverseGeocoding = false;
   bool _isLocating = true; // true while GPS fix is being obtained on open
   String? _locationMessage; // friendly status/error message shown on map
-  final _maptilerKey = const String.fromEnvironment('MAPTILER_API_KEY');
+  final _maptilerKey = AppConstants.maptilerKey;
 
   // ── Address search state ──────────────────────────────────────
   final TextEditingController _searchController = TextEditingController();
@@ -506,31 +506,6 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
   // ── Step A: Map Pin-Drop ──────────────────────────────────────
 
   Widget _buildMapStep() {
-    // Guard: show clear error if API key is missing from build
-    if (_maptilerKey.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.map_outlined, size: 48, color: AppConstants.error),
-              const SizedBox(height: 16),
-              Text(
-                'Map configuration missing',
-                style: AppConstants.bodyStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Please rebuild with:\nflutter run --dart-define=MAPTILER_API_KEY=your_key',
-                textAlign: TextAlign.center,
-                style: AppConstants.bodyStyle(fontSize: 12, color: AppConstants.secondary.withValues(alpha: 0.6)),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
     return Stack(
       children: [
         // MapTiler tiles via flutter_map
@@ -547,7 +522,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
               ),
           children: [
             TileLayer(
-              urlTemplate: 'https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=${const String.fromEnvironment('MAPTILER_API_KEY')}',
+              urlTemplate: 'https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=${AppConstants.maptilerKey}',
               userAgentPackageName: 'com.solevision.app',
             ),
             // MapTiler attribution (required by usage policy)
