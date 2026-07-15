@@ -135,11 +135,10 @@ class _CustomerInboxScreenState extends State<CustomerInboxScreen> {
     final unreadCount = provider.unreadCountFor(conv.id);
     final hasUnread = unreadCount > 0;
 
-    return Container(
-      color: hasUnread
+    return ListTile(
+      tileColor: hasUnread
           ? AppConstants.primary.withValues(alpha: 0.05)
           : Colors.white,
-      child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         leading: CircleAvatar(
           radius: 24,
@@ -211,7 +210,6 @@ class _CustomerInboxScreenState extends State<CustomerInboxScreen> {
             ),
           );
         },
-      ),
     );
   }
 }

@@ -7,6 +7,7 @@ import '../models/app_notification.dart';
 import '../models/notification_category.dart';
 import '../providers/notification_provider.dart';
 import '../widgets/sole_card.dart';
+import '../widgets/chat/chat_view.dart';
 import 'customer/tracking_screen.dart';
 
 /// Notifications feed screen — the primary entry point via the bottom nav
@@ -169,7 +170,23 @@ class _NotificationsScreenState extends State<NotificationsScreen>
       provider.markAsRead(notif.id);
     }
 
-    // Fetch full order data before navigating to tracking
+    // ── Message notification: deep-link to ChatView ──────────────
+    if (notif.isMessageNotification && notif.conversationId != null) {
+      if (mounted) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => ChatView(
+              conversationId: notif.conversationId!,
+              viewerRole: 'customer',
+              otherPartyName: notif.storeName ?? 'Store',
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
+    // ── Order notification: fetch full order data → tracking ──────
     if (notif.orderId != null) {
       try {
         final data = await Supabase.instance.client
@@ -341,6 +358,8 @@ class _NotificationCard extends StatelessWidget {
         return Icons.chat_bubble_outline;
       case NotificationCategory.returns:
         return Icons.assignment_return_outlined;
+      case NotificationCategory.message:
+        return Icons.chat_bubble_outline;
     }
   }
 
@@ -356,6 +375,8 @@ class _NotificationCard extends StatelessWidget {
         return const Color(0xFF6B8F47); // green
       case NotificationCategory.returns:
         return AppConstants.error; // red
+      case NotificationCategory.message:
+        return const Color(0xFF4ECDC4); // celadon teal
     }
   }
 }

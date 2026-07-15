@@ -155,11 +155,10 @@ class _SellerInboxScreenState extends State<SellerInboxScreen> {
   Widget _buildConversationTile(dynamic conv) {
     final hasUnread = conv.unreadCount > 0;
 
-    return Container(
-      color: hasUnread
+    return ListTile(
+      tileColor: hasUnread
           ? AppConstants.primary.withValues(alpha: 0.05)
           : Colors.white,
-      child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         leading: CircleAvatar(
           radius: 24,
@@ -230,7 +229,6 @@ class _SellerInboxScreenState extends State<SellerInboxScreen> {
             ),
           );
         },
-      ),
     );
   }
 }

@@ -9,10 +9,12 @@ import '../../providers/auth_provider.dart';
 import '../../providers/message_provider.dart';
 import '../../providers/product_provider.dart';
 import '../../services/connectivity_service.dart';
+import '../../services/push_notification_service.dart';
 import '../../widgets/floating_message_button.dart';
 import '../../widgets/no_internet_view.dart';
 import '../../widgets/sole_product_card.dart';
 import '../../widgets/cart_icon_button.dart';
+import '../../widgets/chat/chat_view.dart';
 import '../store/store_profile_screen.dart';
 import 'product_detail_screen.dart';
 import 'ar_fitting_screen.dart';
@@ -64,6 +66,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       Provider.of<ProductProvider>(context, listen: false).loadProducts();
       // Load conversations for the floating message button badge
       _loadConversations();
+      // Set up push notification deep link handler
+      _initPushNotifications();
     });
 
     // Auto-refresh products when connection is restored after being offline
@@ -132,6 +136,24 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     } catch (e) {
       debugPrint('[CustomerHome] Failed to load conversations: $e');
     }
+  }
+
+  /// Set up the push notification deep-link handler.
+  /// When a user taps a push notification, PushNotificationService will
+  /// call this callback to navigate directly into ChatView.
+  void _initPushNotifications() {
+    PushNotificationService.instance.onNavigateToChat = (conversationId, storeName) {
+      if (!mounted) return;
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ChatView(
+            conversationId: conversationId,
+            viewerRole: 'customer',
+            otherPartyName: storeName,
+          ),
+        ),
+      );
+    };
   }
 
   @override

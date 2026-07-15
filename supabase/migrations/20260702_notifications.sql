@@ -39,6 +39,18 @@ CREATE INDEX IF NOT EXISTS idx_notifications_user_unread
   ON public.notifications(user_id, category)
   WHERE is_read = false;
 
+-- Add order_type column if it doesn't exist (some live DBs may be missing it)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'notifications' AND column_name = 'order_type'
+  ) THEN
+    ALTER TABLE public.notifications ADD COLUMN order_type TEXT NOT NULL DEFAULT 'catalog';
+  END IF;
+END
+$$;
+
 CREATE INDEX IF NOT EXISTS idx_notifications_user_order_type
   ON public.notifications(user_id, order_type, created_at DESC);
 
@@ -47,11 +59,13 @@ CREATE INDEX IF NOT EXISTS idx_notifications_user_order_type
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 
 -- Users can view their own notifications
+DROP POLICY IF EXISTS "Users can view own notifications" ON public.notifications;
 CREATE POLICY "Users can view own notifications"
   ON public.notifications FOR SELECT
   USING (auth.uid() = user_id);
 
 -- Users can mark their own notifications as read
+DROP POLICY IF EXISTS "Users can update own notifications" ON public.notifications;
 CREATE POLICY "Users can update own notifications"
   ON public.notifications FOR UPDATE
   USING (auth.uid() = user_id);

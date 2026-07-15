@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../constants/app_constants.dart';
+import '../../services/push_notification_service.dart';
+import '../../widgets/chat/chat_view.dart';
 import 'seller_dashboard_screen.dart';
 import 'pos_screen.dart';
 import 'manage_products_screen.dart';
 import 'manage_orders_screen.dart';
-import 'seller_inbox_screen.dart';
 import '../shared/profile_screen.dart';
 
 /// Seller shell with 5-tab bottom navigation:
@@ -26,6 +27,25 @@ class _SellerShellState extends State<SellerShell> {
     const ManageOrdersScreen(),
     const ProfileScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    // Wire up push notification deep-link for sellers
+    PushNotificationService.instance.onNavigateToChat = (conversationId, storeName) {
+      if (!mounted) return;
+      // Switch to inbox tab (index 4 is Profile, but we navigate directly)
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ChatView(
+            conversationId: conversationId,
+            viewerRole: 'seller',
+            otherPartyName: storeName,
+          ),
+        ),
+      );
+    };
+  }
 
   @override
   Widget build(BuildContext context) {

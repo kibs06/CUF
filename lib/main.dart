@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'firebase_options.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -15,7 +18,21 @@ import 'providers/message_provider.dart';
 import 'providers/chat_attachment_provider.dart';
 import 'screens/auth/splash_screen.dart';
 import 'services/connectivity_service.dart';
+import 'services/push_notification_service.dart';
 import 'widgets/connectivity_banner.dart';
+
+/// Top-level background message handler for Firebase Cloud Messaging.
+/// Required by firebase_messaging — must be a top-level function, not a method.
+/// Handles messages when the app is fully terminated.
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  // Background handlers run in a separate isolate — no UI access.
+  // Just log for debugging. The actual notification is handled by the OS.
+  if (kDebugMode) {
+    debugPrint('[Push] Background message: ${message.messageId}');
+    debugPrint('[Push] Data: ${message.data}');
+  }
+}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -51,6 +68,20 @@ Future<void> main() async {
   if (supabaseReady) {
     // Start the connectivity service after Supabase is ready
     ConnectivityService.instance.start();
+
+    // Initialize Firebase for push notifications
+    try {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+      // Register background message handler (must be called before runApp)
+      FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+      // Initialize push notification service (after Firebase is ready)
+      PushNotificationService.instance.init();
+    } catch (e) {
+      if (kDebugMode) debugPrint('Firebase init failed (push notifications disabled): $e');
+    }
+
     runApp(const SoleVisionApp());
   } else {
     runApp(_SupabaseErrorApp());

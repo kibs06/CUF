@@ -631,6 +631,7 @@ class MessageService {
   // ─── NOTIFICATION INTEGRATION ─────────────────────────────────
 
   /// Create a notification for the recipient of a new message.
+  /// For seller→customer messages, also triggers the FCM push via Edge Function.
   Future<void> _createMessageNotification({
     required String conversationId,
     required String senderId,
@@ -666,19 +667,64 @@ class MessageService {
           senderName: senderName,
           body: body,
         ); // intentionally not awaited
+        // Also trigger FCM push to notify the seller on their device
+        _triggerPushNotification(
+          conversationId: conversationId,
+          senderId: senderId,
+          senderType: senderType,
+          body: body,
+        );
       } else {
-        // Notify the customer — use notifications table
-        await _client.from('notifications').insert({
-          'user_id': customerId,
-          'category': 'message',
-          'title': 'New message from store',
-          'message': body.length > 80 ? '${body.substring(0, 80)}...' : body,
-          'is_read': false,
-        });
+        // Notify the customer — the DB trigger `notify_on_new_message`
+        // handles inserting the notification record into the `notifications`
+        // table. Here we only trigger the FCM push via Edge Function.
+        _triggerPushNotification(
+          conversationId: conversationId,
+          senderId: senderId,
+          senderType: senderType,
+          body: body,
+        );
       }
     } catch (e) {
       debugPrint('[MessageService] Notification creation failed: $e');
       // Don't fail the message send if notification fails
+    }
+  }
+
+  /// Trigger an FCM push notification via the Supabase Edge Function.
+  /// This is fire-and-forget — a push failure doesn't block the message send.
+  void _triggerPushNotification({
+    required String conversationId,
+    required String senderId,
+    required String senderType,
+    required String body,
+  }) {
+    try {
+      // Single join query: conversation → store name
+      _client
+          .from('conversations')
+          .select('store_id, stores(name)')
+          .eq('id', conversationId)
+          .maybeSingle()
+          .then((conv) async {
+        if (conv == null) return;
+        final storeName = conv['stores'] is Map
+            ? (conv['stores']['name']?.toString() ?? 'Store')
+            : 'Store';
+
+        // Call the Edge Function (fire-and-forget)
+        await _client.functions.invoke('send-message-push', body: {
+          'conversation_id': conversationId,
+          'sender_id': senderId,
+          'sender_type': senderType,
+          'body': body,
+          'store_name': storeName,
+        });
+      }).catchError((e) {
+        debugPrint('[MessageService] Push notification trigger failed: $e');
+      });
+    } catch (e) {
+      debugPrint('[MessageService] Push notification trigger failed: $e');
     }
   }
 }

@@ -30,8 +30,9 @@ class MessageProvider extends ChangeNotifier {
   StreamSubscription<List<Map<String, dynamic>>>? _inboxSub;
   StreamSubscription<List<Map<String, dynamic>>>? _conversationSub;
 
-  /// Stored customer ID for refreshInbox() — set by loadConversationsForCustomer.
+  /// Stored IDs for refreshInbox() — set by load methods.
   String? _customerId;
+  String? _storeId;
 
   // ── Public getters ─────────────────────────────────────────────
 
@@ -52,7 +53,8 @@ class MessageProvider extends ChangeNotifier {
       _perConversationUnreadCounts.values.fold<int>(0, (sum, c) => sum + c);
 
   /// Unread badge text (capped at 9+).
-  String get unreadBadge => _unreadCount > 9 ? '9+' : (_unreadCount > 0 ? '$_unreadCount' : '');
+  /// Uses totalUnreadCount (sum of all unread messages across conversations).
+  String get unreadBadge => totalUnreadCount > 9 ? '9+' : (totalUnreadCount > 0 ? '$totalUnreadCount' : '');
 
   /// Get unread count for a specific conversation.
   int unreadCountFor(String conversationId) =>
@@ -61,6 +63,7 @@ class MessageProvider extends ChangeNotifier {
   // ── Load conversations ─────────────────────────────────────────
 
   Future<void> loadConversationsForStore(String storeId) async {
+    _storeId = storeId;
     _isLoadingConversations = true;
     notifyListeners();
 
@@ -122,12 +125,17 @@ class MessageProvider extends ChangeNotifier {
   }
 
   /// Force-refresh conversations and unread counts from the database.
-  /// Called on tap (before opening quick-preview sheet) as a safety net
-  /// to guarantee the badge and sheet reflect the true current state,
+  /// Called on tap (before opening inbox/sheet) as a safety net
+  /// to guarantee the badge and list reflect the true current state,
   /// even if a Realtime event was missed.
+  /// Works for both customer and seller sides.
   Future<void> refreshInbox() async {
-    if (_customerId == null || _isLoadingConversations) return;
-    await loadConversationsForCustomer(_customerId!);
+    if (_isLoadingConversations) return;
+    if (_customerId != null) {
+      await loadConversationsForCustomer(_customerId!);
+    } else if (_storeId != null) {
+      await loadConversationsForStore(_storeId!);
+    }
   }
 
   // ── Optimistic mark-as-read ─────────────────────────────────
@@ -298,6 +306,7 @@ class MessageProvider extends ChangeNotifier {
     _optimisticallyReadConversations.clear();
     _activeConversationId = null;
     _customerId = null;
+    _storeId = null;
     _inboxSub?.cancel();
     _conversationSub?.cancel();
     notifyListeners();

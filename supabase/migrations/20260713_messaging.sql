@@ -45,11 +45,13 @@ ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
 
 -- Conversations: customer can read their own conversations
+DROP POLICY IF EXISTS "customer_read_own_conversations" ON conversations;
 CREATE POLICY "customer_read_own_conversations"
   ON conversations FOR SELECT
   USING (customer_id = auth.uid());
 
 -- Conversations: seller can read conversations for their stores
+DROP POLICY IF EXISTS "seller_read_store_conversations" ON conversations;
 CREATE POLICY "seller_read_store_conversations"
   ON conversations FOR SELECT
   USING (
@@ -59,6 +61,7 @@ CREATE POLICY "seller_read_store_conversations"
   );
 
 -- Conversations: only customers can create new conversations
+DROP POLICY IF EXISTS "customer_insert_conversations" ON conversations;
 CREATE POLICY "customer_insert_conversations"
   ON conversations FOR INSERT
   WITH CHECK (customer_id = auth.uid());
@@ -70,6 +73,7 @@ CREATE POLICY "customer_insert_conversations"
 -- if messages from both sides land close together.
 
 -- Messages: customer can read messages in their own conversations
+DROP POLICY IF EXISTS "customer_read_own_messages" ON messages;
 CREATE POLICY "customer_read_own_messages"
   ON messages FOR SELECT
   USING (
@@ -79,6 +83,7 @@ CREATE POLICY "customer_read_own_messages"
   );
 
 -- Messages: seller can read messages in their store's conversations
+DROP POLICY IF EXISTS "seller_read_store_messages" ON messages;
 CREATE POLICY "seller_read_store_messages"
   ON messages FOR SELECT
   USING (
@@ -90,6 +95,7 @@ CREATE POLICY "seller_read_store_messages"
   );
 
 -- Messages: customer can send messages in their own conversations
+DROP POLICY IF EXISTS "customer_insert_messages" ON messages;
 CREATE POLICY "customer_insert_messages"
   ON messages FOR INSERT
   WITH CHECK (
@@ -101,6 +107,7 @@ CREATE POLICY "customer_insert_messages"
   );
 
 -- Messages: seller can send messages in their store's conversations
+DROP POLICY IF EXISTS "seller_insert_messages" ON messages;
 CREATE POLICY "seller_insert_messages"
   ON messages FOR INSERT
   WITH CHECK (
@@ -206,5 +213,19 @@ $$;
 -- Realtime publication
 -- ============================================================
 
-ALTER PUBLICATION supabase_realtime ADD TABLE conversations;
-ALTER PUBLICATION supabase_realtime ADD TABLE messages;
+-- Add to realtime publication (idempotent: check first)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND tablename = 'conversations'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE conversations;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND tablename = 'messages'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE messages;
+  END IF;
+END $$;

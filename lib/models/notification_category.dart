@@ -1,8 +1,8 @@
-/// Shared notification categories for the order-status notification feed.
+/// Shared notification categories for the notification feed.
 ///
-/// These map 1:1 to order lifecycle events and match the
-/// `notification_category` Postgres enum in the migrations.
-enum NotificationCategory { unpaid, processing, shipped, review, returns }
+/// These match the `notification_category` Postgres enum in the migrations.
+/// 'message' was added for push notification support (seller → customer messages).
+enum NotificationCategory { unpaid, processing, shipped, review, returns, message }
 
 /// Returns a display-friendly label for each category.
 String notificationCategoryLabel(NotificationCategory cat) {
@@ -17,5 +17,7 @@ String notificationCategoryLabel(NotificationCategory cat) {
       return 'Review';
     case NotificationCategory.returns:
       return 'Returns';
+    case NotificationCategory.message:
+      return 'Message';
   }
 }

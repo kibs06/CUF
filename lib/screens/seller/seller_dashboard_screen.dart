@@ -929,7 +929,10 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
       children: [
         IconButton(
           icon: const Icon(Icons.chat_bubble_outline, color: Colors.white),
-          onPressed: () {
+          onPressed: () async {
+            // Force-refresh before navigating so badge & list are current
+            await msgProvider.refreshInbox();
+            if (!mounted || !context.mounted) return;
             Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (_) => const SellerInboxScreen(),
