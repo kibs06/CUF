@@ -162,18 +162,15 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
     } else {
       // Per-product review (legacy)
       if (_isEditing) {
-        final reviewId = widget.existingReview!['id'];
+        final reviewId = widget.existingReview!['id'].toString();
         success = await reviewProvider.updateReview(
-          reviewId: reviewId is int ? reviewId : int.parse(reviewId.toString()),
+          reviewId: reviewId,
           productId: widget.productId,
           rating: _rating,
           title: '',
           body: _bodyController.text.trim(),
           newImages: _newImages.isNotEmpty ? _newImages : null,
-          removedImageIds: _removedImageIds
-              .map((id) => int.tryParse(id) ?? 0)
-              .where((id) => id > 0)
-              .toList(),
+          removedImageIds: _removedImageIds.isNotEmpty ? _removedImageIds : null,
         );
       } else {
         success = await reviewProvider.submitReview(
