@@ -15,6 +15,7 @@ import '../../providers/chat_attachment_provider.dart';
 import '../../providers/message_provider.dart';
 import '../../services/connectivity_service.dart';
 import '../../services/message_service.dart';
+import '../order_change_request_sheet.dart';
 
 /// Shared chat screen used by both Customer and Seller sides.
 ///
@@ -25,6 +26,9 @@ class ChatView extends StatefulWidget {
   final String viewerRole; // 'seller' | 'customer'
   final String otherPartyName;
   final String? orderReferenceId;
+  final String? initialMessage; // Pre-filled message to send on open
+  final bool showChangeRequest; // Open Request a Change flow on open
+  final bool focusInput; // Focus the text input on open
 
   const ChatView({
     super.key,
@@ -32,6 +36,9 @@ class ChatView extends StatefulWidget {
     required this.viewerRole,
     required this.otherPartyName,
     this.orderReferenceId,
+    this.initialMessage,
+    this.showChangeRequest = false,
+    this.focusInput = false,
   });
 
   @override
@@ -87,6 +94,18 @@ class _ChatViewState extends State<ChatView> with SingleTickerProviderStateMixin
     _subscribeToMessages();
     _subscribeToTyping();
     _markAsRead();
+    
+    // Handle initial actions after first frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (widget.showChangeRequest && mounted) {
+        _showChangeRequest();
+      } else if (widget.initialMessage != null && mounted) {
+        _messageController.text = widget.initialMessage!;
+        _sendMessage();
+      } else if (widget.focusInput && mounted) {
+        _focusNode.requestFocus();
+      }
+    });
   }
 
   @override
@@ -850,21 +869,74 @@ class _ChatViewState extends State<ChatView> with SingleTickerProviderStateMixin
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       color: AppConstants.primary.withValues(alpha: 0.08),
-      child: Row(
+      child: Column(
         children: [
-          Icon(Icons.receipt_long, size: 16, color: AppConstants.primary),
-          const SizedBox(width: 8),
-          Text(
-            'Regarding Order #${widget.orderReferenceId!.substring(0, 8)}',
-            style: AppConstants.bodyStyle(
-              fontSize: 12,
-              color: AppConstants.primary,
-              fontWeight: FontWeight.w500,
-            ),
+          Row(
+            children: [
+              Icon(Icons.receipt_long, size: 16, color: AppConstants.primary),
+              const SizedBox(width: 8),
+              Text(
+                'Regarding Order #${widget.orderReferenceId!.substring(0, 8)}',
+                style: AppConstants.bodyStyle(
+                  fontSize: 12,
+                  color: AppConstants.primary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
           ),
+          // Quick action: Request a Change (only for customer, non-cancelled/delivered)
+          if (_isCustomer && _canRequestChange) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _showChangeRequest,
+                icon: const Icon(Icons.swap_horiz, size: 16),
+                label: Text(
+                  'Request a Change',
+                  style: AppConstants.bodyStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppConstants.primary,
+                  side: BorderSide(color: AppConstants.primary.withValues(alpha: 0.3)),
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
+  }
+
+  /// Whether the customer can request a change (not for cancelled/delivered orders).
+  bool get _canRequestChange {
+    // Default to allowing changes; order status would need to be passed
+    // or fetched for proper filtering. For MVP, always allow.
+    return true;
+  }
+
+  void _showChangeRequest() async {
+    final result = await showChangeRequestSheet(context);
+    if (result == null || _currentUserId == null) return;
+
+    // Format the change request as a structured message
+    final changeType = changeRequestTypes.firstWhere(
+      (t) => t.id == result.type,
+      orElse: () => changeRequestTypes.last,
+    );
+    final messageBody = '📋 Change Request: ${changeType.label}\n${result.toValue}';
+
+    // Send as a regular message with the formatted body
+    _messageController.text = messageBody;
+    _sendMessage();
   }
 
   Widget _buildEmptyState() {

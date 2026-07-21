@@ -140,6 +140,27 @@ class AppConstants {
     ),
   ];
 
+  // --- ORDER CANCELLATION CONFIG ---
+  /// Maximum time (in hours) after entering 'preparing' status
+  /// during which the customer can request cancellation.
+  static const int processingCancelWindowHours = 2;
+
+  /// Upper-bound alternate for the processing cancellation window.
+  static const int processingCancelWindowMaxHours = 5;
+
+  // --- ORDER CANCELLATION REASONS ---
+  static const List<String> cancellationReasons = [
+    'Changed my mind',
+    'Found a better price or deal elsewhere',
+    'Ordered by mistake (wrong item, size, color, or quantity)',
+    'Need to change delivery address',
+    'Want to modify the order (variant, quantity, voucher, etc.)',
+    'Shipping/processing is taking too long',
+    'Seller is not responding to my inquiries',
+    'Payment issue or want to change payment method',
+    'Other',
+  ];
+
   // --- APP CONSTANTS & STATUSES ---
   static const String roleCustomer = 'customer';
   static const String roleSeller = 'seller';
@@ -149,6 +170,7 @@ class AppConstants {
   static const String statusPreparing = 'preparing';
   static const String statusReady = 'ready';
   static const String statusReceived = 'received';
+  static const String statusCancellationRequested = 'cancellation_requested';
 
   static const String statusPending = 'pending';
   static const String statusApproved = 'approved';

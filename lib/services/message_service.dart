@@ -256,6 +256,17 @@ class MessageService {
     return (data as List).length;
   }
 
+  /// Check if a conversation has any messages.
+  Future<bool> hasMessages(String conversationId) async {
+    final data = await _client
+        .from('messages')
+        .select('id')
+        .eq('conversation_id', conversationId)
+        .limit(1);
+
+    return (data as List).isNotEmpty;
+  }
+
   // ─── MESSAGES ─────────────────────────────────────────────────
 
   /// Get messages for a conversation, oldest first for display.

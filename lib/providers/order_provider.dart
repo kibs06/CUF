@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../exceptions/stock_unavailable_exception.dart';
 import '../services/order_service.dart';
 import '../services/supabase_service.dart';
@@ -99,6 +100,43 @@ class OrderProvider extends ChangeNotifier {
       await loadOrders();
       return true;
     } catch (_) {
+      return false;
+    }
+  }
+
+  // ── Order Cancellation ──────────────────────────────────────────
+
+  /// Cancel an order or submit a cancellation request.
+  ///
+  /// For pending/placed orders, sets status directly to 'cancelled'.
+  /// For preparing orders, sets status to 'cancellation_requested'.
+  /// Stores the cancellation reason and optional details on the order record.
+  Future<bool> cancelOrder({
+    required dynamic orderId,
+    required String newStatus,
+    required String reason,
+    String? details,
+  }) async {
+    try {
+      // Update the order status
+      await _db.updateOrderStatus(orderId, newStatus);
+
+      // Store cancellation reason and details on the order
+      await Supabase.instance.client
+          .from('orders')
+          .update({
+            'cancellation_reason': reason,
+            'cancellation_details': details,
+            'cancelled_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', orderId);
+
+      // Reload orders to reflect changes
+      await loadOrders();
+      await loadMyOrders();
+      return true;
+    } catch (e) {
+      debugPrint('OrderProvider.cancelOrder error: $e');
       return false;
     }
   }

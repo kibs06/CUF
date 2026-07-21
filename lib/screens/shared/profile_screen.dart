@@ -753,7 +753,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // HELPERS
   // ════════════════════════════════════════════════════════════════
   // ════════════════════════════════════════════════════════════════
-  // FOLLOWING STAT
+  // FOLLOWING STAT (lightweight inline style)
   // ════════════════════════════════════════════════════════════════
   Widget _buildFollowingStat(AuthProvider auth) {
     final followProvider = context.watch<FollowProvider>();
@@ -770,39 +770,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
             builder: (_) => const FollowingListDialog(),
           );
         },
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          decoration: BoxDecoration(
-            color: AppConstants.primary.withValues(alpha: 0.06),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: AppConstants.primary.withValues(alpha: 0.15),
-            ),
-          ),
+        behavior: HitTestBehavior.opaque,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
           child: isLoaded
               ? Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    // Shop/storefront icon
+                    Icon(
+                      Icons.storefront_outlined,
+                      size: 18,
+                      color: AppConstants.primary,
+                    ),
+                    const SizedBox(width: 6),
+                    // Count (bold) + label (regular)
                     Text(
                       '$count ',
                       style: AppConstants.bodyStyle(
-                        fontSize: 16,
+                        fontSize: 15,
                         fontWeight: FontWeight.bold,
-                        color: AppConstants.primary,
+                        color: AppConstants.secondary,
                       ),
                     ),
                     Text(
                       'Following',
                       style: AppConstants.bodyStyle(
-                        fontSize: 14,
+                        fontSize: 15,
                         color: AppConstants.secondary,
                       ),
                     ),
                     const SizedBox(width: 4),
+                    // Chevron
                     Icon(
                       Icons.chevron_right,
                       size: 18,
-                      color: AppConstants.primary,
+                      color: AppConstants.secondary.withValues(alpha: 0.4),
                     ),
                   ],
                 )

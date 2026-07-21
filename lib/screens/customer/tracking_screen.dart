@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../constants/app_constants.dart';
 import '../../providers/order_provider.dart';
+import '../../widgets/order_cancellation_sheet.dart';
 import '../../widgets/sole_card.dart';
 import '../../widgets/sole_primary_button.dart';
 import '../../widgets/sole_status_chip.dart';
@@ -30,6 +33,10 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   // Status history timestamps (fetched from order_status_history)
   final Map<String, DateTime> _statusTimestamps = {};
 
+  // Timer for processing cancellation countdown
+  Timer? _countdownTimer;
+  Duration _remainingTime = Duration.zero;
+
   // Order status → timeline step index (5 steps with Part D's 'delivered')
   static const _statusToStep = <String, int>{
     'pending': 0,
@@ -46,6 +53,13 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     super.initState();
     _order = Map<String, dynamic>.from(widget.order);
     _loadStatusHistory();
+    _startCountdownIfNeeded();
+  }
+
+  @override
+  void dispose() {
+    _countdownTimer?.cancel();
+    super.dispose();
   }
 
   /// Fetch order_status_history rows to populate real timestamps.
@@ -68,9 +82,149 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
           }
         }
       });
+      _startCountdownIfNeeded();
     } catch (e) {
       // Status history may not exist yet — not fatal, timeline still renders
       debugPrint('[Tracking] Could not load status history: $e');
+    }
+  }
+
+  // ─── Cancellation Eligibility ──────────────────────────────────
+
+  /// Whether the customer can currently request cancellation.
+  bool get _canCancel {
+    final status = _currentStatus;
+    return status == 'pending' || status == 'placed' || status == 'preparing';
+  }
+
+  /// Whether the order is in 'preparing' status (requires time window check).
+  bool get _isPreparing => _currentStatus == 'preparing';
+
+  /// Whether the cancellation request has already been submitted.
+  bool get _hasCancellationRequested =>
+      _currentStatus == AppConstants.statusCancellationRequested ||
+      (_order['cancellation_reason']?.toString().isNotEmpty ?? false);
+
+  /// Start countdown timer if order is in 'preparing' status.
+  void _startCountdownIfNeeded() {
+    _countdownTimer?.cancel();
+    if (!_isPreparing || _hasCancellationRequested) return;
+
+    // Find when the order entered 'preparing' status
+    final preparingAt = _statusTimestamps['preparing'];
+    if (preparingAt == null) return;
+
+    final window = Duration(hours: AppConstants.processingCancelWindowHours);
+    final deadline = preparingAt.add(window);
+    final now = DateTime.now();
+
+    if (now.isAfter(deadline)) {
+      // Window has expired
+      _remainingTime = Duration.zero;
+      return;
+    }
+
+    _remainingTime = deadline.difference(now);
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      final now = DateTime.now();
+      if (now.isAfter(deadline)) {
+        setState(() => _remainingTime = Duration.zero);
+        _countdownTimer?.cancel();
+      } else {
+        setState(() => _remainingTime = deadline.difference(now));
+      }
+    });
+  }
+
+  /// Format duration as 'Xh Ym' or 'Ym Zs'.
+  String _formatDuration(Duration d) {
+    if (d.inHours > 0) {
+      return '${d.inHours}h ${d.inMinutes % 60}m';
+    }
+    return '${d.inMinutes}m ${d.inSeconds % 60}s';
+  }
+
+  // ─── Cancel Order ──────────────────────────────────────────────
+
+  Future<void> _requestCancellation() async {
+    // Show reason selection sheet
+    final result = await showCancellationSheet(context);
+    if (result == null || !mounted) return;
+
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Confirm Cancellation'),
+        content: const Text(
+          'Are you sure you want to cancel this order? This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep Order'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: AppConstants.error),
+            child: const Text('Cancel Order'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isUpdating = true);
+
+    try {
+      final provider = context.read<OrderProvider>();
+
+      // For 'pending'/'placed' → instant cancel
+      // For 'preparing' → cancellation request (needs seller approval)
+      final newStatus = _isPreparing
+          ? AppConstants.statusCancellationRequested
+          : 'cancelled';
+
+      final success = await provider.cancelOrder(
+        orderId: _order['id'],
+        newStatus: newStatus,
+        reason: result.reason,
+        details: result.details,
+      );
+
+      if (mounted) {
+        setState(() {
+          _isUpdating = false;
+          _order['status'] = newStatus;
+          _order['cancellation_reason'] = result.reason;
+          _order['cancellation_details'] = result.details;
+        });
+        _countdownTimer?.cancel();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              _isPreparing
+                  ? 'Cancellation request submitted. Waiting for seller approval.'
+                  : 'Order has been cancelled successfully.',
+            ),
+            backgroundColor: AppConstants.success,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isUpdating = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to cancel order: $e'),
+            backgroundColor: AppConstants.error,
+          ),
+        );
+      }
     }
   }
 
@@ -202,33 +356,21 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
               children: [
                 // ── Cancelled banner ────────────────────────────
                 if (status == 'cancelled') ...[
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppConstants.error.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: AppConstants.error.withValues(alpha: 0.2),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.cancel_outlined,
-                            color: AppConstants.error, size: 20),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            'This order was cancelled.',
-                            style: AppConstants.bodyStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: AppConstants.error,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                  _buildCancellationBanner(
+                    icon: Icons.cancel_outlined,
+                    color: AppConstants.error,
+                    message: 'This order was cancelled.',
+                  ),
+                  const SizedBox(height: 20),
+                ],
+
+                // ── Cancellation Requested banner ──────────────
+                if (status == AppConstants.statusCancellationRequested) ...[
+                  _buildCancellationBanner(
+                    icon: Icons.pending_outlined,
+                    color: AppConstants.statusPendingColor,
+                    message: 'Cancellation request pending seller approval.',
+                    details: _order['cancellation_reason']?.toString(),
                   ),
                   const SizedBox(height: 20),
                 ],
@@ -473,6 +615,151 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     return '${months[dt.month - 1]} ${dt.day}, $hour:$minute $amPm';
   }
 
+  // ─── Cancellation Banner ──────────────────────────────────────
+
+  Widget _buildCancellationBanner({
+    required IconData icon,
+    required Color color,
+    required String message,
+    String? details,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: color, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  message,
+                  style: AppConstants.bodyStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: color,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (details != null && details.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Reason: $details',
+              style: AppConstants.bodyStyle(
+                fontSize: 12,
+                color: AppConstants.secondary.withValues(alpha: 0.6),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ─── Cancel Button Builder ────────────────────────────────────
+
+  Widget? _buildCancelButton() {
+    if (!_canCancel || _hasCancellationRequested || _isUpdating) return null;
+
+    final children = <Widget>[];
+
+    // Processing countdown banner
+    if (_isPreparing && _remainingTime > Duration.zero) {
+      children.addAll([
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: AppConstants.statusPendingColor.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.timer_outlined,
+                size: 16,
+                color: AppConstants.statusPendingColor,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'You can cancel within ${_formatDuration(_remainingTime)}',
+                style: AppConstants.bodyStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppConstants.statusPendingColor,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+      ]);
+    } else if (_isPreparing && _remainingTime == Duration.zero) {
+      // Window expired
+      children.addAll([
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: AppConstants.secondary.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            'Cancellation window has closed. Contact the seller for help.',
+            textAlign: TextAlign.center,
+            style: AppConstants.bodyStyle(
+              fontSize: 12,
+              color: AppConstants.secondary.withValues(alpha: 0.5),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+      ]);
+    }
+
+    // Cancel button (only show if within window for preparing, or always for pending/placed)
+    final canTap = !_isPreparing || _remainingTime > Duration.zero;
+    if (canTap) {
+      children.add(
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _requestCancellation,
+            icon: const Icon(Icons.cancel_outlined, size: 18),
+            label: Text(
+              _isPreparing ? 'Request Cancellation' : 'Cancel Order',
+              style: AppConstants.bodyStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppConstants.error,
+              side: BorderSide(color: AppConstants.error.withValues(alpha: 0.4)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (children.isEmpty) return null;
+    return Column(children: children);
+  }
+
   // ─── Status-specific section + CTA ─────────────────────────────
 
   Widget _buildStatusSection() {
@@ -488,7 +775,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
           color: AppConstants.statusPendingColor,
           title: 'Waiting for seller to confirm',
           subtitle: 'Your order is pending seller confirmation.',
-          child: null,
+          child: _buildCancelButton(),
         );
 
       case 'preparing':
@@ -497,7 +784,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
           color: AppConstants.statusConfirmedColor,
           title: 'Your order is being prepared',
           subtitle: 'The artisan is crafting your shoes.',
-          child: null,
+          child: _buildCancelButton(),
         );
 
       case 'ready':

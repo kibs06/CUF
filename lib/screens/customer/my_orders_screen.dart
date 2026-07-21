@@ -3,15 +3,19 @@ import 'dart:async';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../constants/app_constants.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/order_provider.dart';
 import '../../services/connectivity_service.dart';
+import '../../services/message_service.dart';
+import '../../widgets/chat/chat_view.dart';
 import '../../widgets/empty_state_widget.dart';
 import '../../widgets/no_internet_view.dart';
 import '../../widgets/shimmer_box.dart';
+import '../../widgets/order_quick_message_sheet.dart';
 import '../../widgets/sole_card.dart';
-import '../../widgets/sole_status_chip.dart';
 import 'tracking_screen.dart';
 
 /// Customer-facing "My Orders" screen with tab-based status filtering.
@@ -126,7 +130,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
   }
 
   // ════════════════════════════════════════════════════════════════
-  // TAB BAR
+  // TAB BAR — scrollable with padding to prevent clipping
   // ════════════════════════════════════════════════════════════════
 
   Widget _buildTabBar() {
@@ -148,6 +152,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
           fontWeight: FontWeight.normal,
         ),
         tabAlignment: TabAlignment.start,
+        labelPadding: const EdgeInsets.symmetric(horizontal: 16),
         tabs: _tabs.map((t) => Tab(text: t.label)).toList(),
       ),
     );
@@ -316,6 +321,13 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
           child: SoleCard(
             color: Colors.white,
             padding: const EdgeInsets.all(16),
+            shadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -327,9 +339,36 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
                   ],
                 ),
                 const SizedBox(height: 12),
-                const ShimmerBox(width: double.infinity, height: 14),
-                const SizedBox(height: 8),
-                const ShimmerBox(width: 120, height: 12),
+                Row(
+                  children: [
+                    const ShimmerBox(width: 60, height: 60),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const ShimmerBox(width: double.infinity, height: 14),
+                          const SizedBox(height: 6),
+                          const ShimmerBox(width: 100, height: 12),
+                          const SizedBox(height: 8),
+                          const ShimmerBox(width: 150, height: 10),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    const ShimmerBox(width: 80, height: 12),
+                    const Spacer(),
+                    const ShimmerBox(width: 60, height: 8),
+                    const SizedBox(width: 4),
+                    const ShimmerBox(width: 60, height: 8),
+                    const SizedBox(width: 4),
+                    const ShimmerBox(width: 60, height: 8),
+                  ],
+                ),
                 const SizedBox(height: 12),
                 Row(
                   children: [
@@ -444,7 +483,7 @@ class _OrderTab {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// Order Card
+// Order Card — Redesigned
 // ══════════════════════════════════════════════════════════════════
 
 class _OrderCard extends StatelessWidget {
@@ -455,7 +494,7 @@ class _OrderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final status = (order['status'] ?? '').toString();
+    final status = (order['status'] ?? '').toString().toLowerCase();
     final orderId = order['id'] ?? '';
     final totalAmount = (order['total_amount'] as num?)?.toDouble() ?? 0.0;
     final createdAt = order['created_at']?.toString() ?? '';
@@ -488,6 +527,9 @@ class _OrderCard extends StatelessWidget {
       quantity = (firstItem['quantity'] as num?)?.toInt() ?? 0;
     }
 
+    // Determine progress step index (0-3: pending, processing, shipped, delivered)
+    final progressIndex = _getProgressIndex(status);
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       child: GestureDetector(
@@ -495,86 +537,108 @@ class _OrderCard extends StatelessWidget {
         child: SoleCard(
           color: Colors.white,
           padding: const EdgeInsets.all(14),
-          child: Column(
+          shadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+          child: Stack(
+            children: [
+              Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Row 1: Order ID + Status chip ──────────────
+              // ── Row 1: Order ID + Status chip ─
               Row(
                 children: [
                   Flexible(
                     child: Text(
                       'Order #${orderId.length >= 8 ? orderId.substring(0, 8) : orderId}',
-                      style: AppConstants.monoStyle(
+                      style: AppConstants.bodyStyle(
                         fontSize: 12,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w500,
+                        color: AppConstants.secondary.withValues(alpha: 0.5),
                       ),
                       overflow: TextOverflow.ellipsis,
                       maxLines: 1,
                     ),
                   ),
                   const SizedBox(width: 8),
-                  SoleStatusChip(status: status),
+                  _StatusPill(status: status),
                 ],
               ),
 
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
 
-              // ── Row 2: Product name + size ─────────────────
+              // ── Row 2: Product thumbnail + details ─────────
               Row(
                 children: [
-                  // Product thumbnail
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: imageUrl != null
-                        ? CachedNetworkImage(
-                            imageUrl: imageUrl,
-                            width: 48,
-                            height: 48,
-                            fit: BoxFit.cover,
-                            placeholder: (context, url) => Container(
-                              width: 48,
-                              height: 48,
-                              color: AppConstants.primary.withValues(alpha: 0.08),
-                              child: const Center(
-                                child: SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation(
-                                      AppConstants.primary,
+                  // Product thumbnail (larger, rounded, subtle border)
+                  Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: AppConstants.borderGray.withValues(alpha: 0.3),
+                        width: 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.06),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(11),
+                      child: imageUrl != null
+                          ? CachedNetworkImage(
+                              imageUrl: imageUrl,
+                              width: 64,
+                              height: 64,
+                              fit: BoxFit.cover,
+                              placeholder: (context, url) => Container(
+                                width: 64,
+                                height: 64,
+                                color: AppConstants.primary.withValues(alpha: 0.08),
+                                child: const Center(
+                                  child: SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation(
+                                        AppConstants.primary,
+                                      ),
                                     ),
                                   ),
                                 ),
                               ),
-                            ),
-                            errorWidget: (context, url, error) => Container(
-                              width: 48,
-                              height: 48,
-                              decoration: BoxDecoration(
+                              errorWidget: (context, url, error) => Container(
+                                width: 64,
+                                height: 64,
                                 color: AppConstants.primary.withValues(alpha: 0.08),
-                                borderRadius: BorderRadius.circular(10),
+                                child: const Icon(
+                                  Icons.shopping_bag_outlined,
+                                  size: 24,
+                                  color: AppConstants.primary,
+                                ),
                               ),
+                            )
+                          : Container(
+                              width: 64,
+                              height: 64,
+                              color: AppConstants.primary.withValues(alpha: 0.08),
                               child: const Icon(
                                 Icons.shopping_bag_outlined,
-                                size: 22,
+                                size: 24,
                                 color: AppConstants.primary,
                               ),
                             ),
-                          )
-                        : Container(
-                            width: 48,
-                            height: 48,
-                            decoration: BoxDecoration(
-                              color: AppConstants.primary.withValues(alpha: 0.08),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: const Icon(
-                              Icons.shopping_bag_outlined,
-                              size: 22,
-                              color: AppConstants.primary,
-                            ),
-                          ),
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -607,34 +671,103 @@ class _OrderCard extends StatelessWidget {
                 ],
               ),
 
-              const SizedBox(height: 10),
+              // ── Progress indicator ─────────────────────────
+              if (status != 'cancelled') ...[
+                const SizedBox(height: 12),
+                _OrderProgressStepper(currentIndex: progressIndex),
+              ],
 
-              // ── Row 3: Date + Total ────────────────────────
+              const SizedBox(height: 12),
+
+              // ── Bottom row: Date + Price + Action buttons ─
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
+                  // Date
                   Text(
                     _formatDate(createdAt),
                     style: AppConstants.bodyStyle(
-                      fontSize: 12,
+                      fontSize: 11,
                       color: AppConstants.secondary.withValues(alpha: 0.4),
                     ),
                   ),
+                  const Spacer(),
+                  // Price
                   Text(
                     '₱${totalAmount.toStringAsFixed(2)}',
-                    style: AppConstants.monoStyle(
-                      fontSize: 14,
+                    style: AppConstants.bodyStyle(
+                      fontSize: 15,
                       fontWeight: FontWeight.bold,
                       color: AppConstants.primary,
                     ),
                   ),
+                  // Action button
+                  if (_getActionLabel(status) != null) ...[
+                    const SizedBox(width: 8),
+                    _OrderActionButton(
+                      label: _getActionLabel(status)!,
+                      status: status,
+                      onTap: onTap,
+                    ),
+                  ],
                 ],
+              ),
+            ],
+          ),
+              // ── Chat icon (upper right corner) ─
+              Positioned(
+                top: 0,
+                right: 0,
+                child: _ChatIconButton(
+                  orderId: orderId.toString(),
+                  productName: productName,
+                  imageUrl: imageUrl,
+                  status: status,
+                ),
               ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  /// Map order status to progress step index (0-3).
+  int _getProgressIndex(String status) {
+    switch (status) {
+      case 'pending':
+      case 'placed':
+        return 0;
+      case 'preparing':
+        return 1;
+      case 'ready':
+        return 2;
+      case 'delivered':
+      case 'received':
+        return 3;
+      case 'cancelled':
+        return -1;
+      default:
+        return 0;
+    }
+  }
+
+  /// Get action button label based on status, or null for no button.
+  String? _getActionLabel(String status) {
+    switch (status) {
+      case 'pending':
+      case 'placed':
+        return 'Cancel';
+      case 'preparing':
+        return 'Cancel';
+      case 'ready':
+        return 'Track';
+      case 'delivered':
+        return 'Review';
+      case 'received':
+        return 'Review';
+      default:
+        return null;
+    }
   }
 
   String _formatDate(String iso) {
@@ -645,5 +778,389 @@ class _OrderCard extends StatelessWidget {
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
     ];
     return '${months[date.month - 1]} ${date.day}, ${date.year}';
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Status Pill with Icon
+// ══════════════════════════════════════════════════════════════════
+
+class _StatusPill extends StatelessWidget {
+  final String status;
+
+  const _StatusPill({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final data = _getStatusData(status);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: data.color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            data.icon,
+            size: 12,
+            color: data.color,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            data.label.toUpperCase(),
+            style: AppConstants.bodyStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              color: data.color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  _StatusData _getStatusData(String status) {
+    switch (status) {
+      case 'pending':
+      case 'placed':
+        return _StatusData(
+          label: 'Pending',
+          color: AppConstants.statusPendingColor,
+          icon: Icons.schedule,
+        );
+      case 'preparing':
+        return _StatusData(
+          label: 'Processing',
+          color: AppConstants.statusConfirmedColor,
+          icon: Icons.inventory_2_outlined,
+        );
+      case 'ready':
+        return _StatusData(
+          label: 'Ready',
+          color: AppConstants.success,
+          icon: Icons.check_circle_outline,
+        );
+      case 'delivered':
+      case 'received':
+        return _StatusData(
+          label: 'Delivered',
+          color: AppConstants.statusDeliveredColor,
+          icon: Icons.home_outlined,
+        );
+      case 'cancelled':
+        return _StatusData(
+          label: 'Cancelled',
+          color: AppConstants.error,
+          icon: Icons.cancel_outlined,
+        );
+      default:
+        return _StatusData(
+          label: status,
+          color: AppConstants.secondary,
+          icon: Icons.help_outline,
+        );
+    }
+  }
+}
+
+class _StatusData {
+  final String label;
+  final Color color;
+  final IconData icon;
+
+  const _StatusData({
+    required this.label,
+    required this.color,
+    required this.icon,
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Order Progress Stepper — thin horizontal stepper
+// ══════════════════════════════════════════════════════════════════
+
+class _OrderProgressStepper extends StatelessWidget {
+  final int currentIndex; // 0-3, or -1 for cancelled
+
+  const _OrderProgressStepper({required this.currentIndex});
+
+  static const _steps = ['Pending', 'Processing', 'Shipped', 'Delivered'];
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: List.generate(_steps.length * 2 - 1, (index) {
+        // Odd indices are lines, even are dots
+        if (index.isOdd) {
+          // Line between dots
+          final lineIndex = index ~/ 2;
+          final isCompleted = lineIndex < currentIndex;
+          return Expanded(
+            child: Container(
+              height: 2,
+              margin: const EdgeInsets.symmetric(horizontal: 2),
+              decoration: BoxDecoration(
+                color: isCompleted
+                    ? AppConstants.primary
+                    : AppConstants.borderGray.withValues(alpha: 0.4),
+                borderRadius: BorderRadius.circular(1),
+              ),
+            ),
+          );
+        } else {
+          // Dot
+          final dotIndex = index ~/ 2;
+          final isActive = dotIndex == currentIndex;
+          final isCompleted = dotIndex < currentIndex;
+          return Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: isActive || isCompleted
+                  ? AppConstants.primary
+                  : AppConstants.borderGray.withValues(alpha: 0.4),
+              border: isActive
+                  ? Border.all(color: AppConstants.primary.withValues(alpha: 0.3), width: 2)
+                  : null,
+            ),
+            child: isCompleted
+                ? Icon(Icons.check, size: 6, color: Colors.white)
+                : null,
+          );
+        }
+      }),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Order Action Button — compact, status-aware
+// ══════════════════════════════════════════════════════════════════
+
+class _OrderActionButton extends StatelessWidget {
+  final String label;
+  final String status;
+  final VoidCallback onTap;
+
+  const _OrderActionButton({
+    required this.label,
+    required this.status,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDestructive = status == 'pending' || status == 'placed' || status == 'preparing';
+    final isPrimary = status == 'ready' || status == 'delivered' || status == 'received';
+
+    return SizedBox(
+      height: 28,
+      child: isPrimary
+          ? FilledButton(
+              onPressed: onTap,
+              style: FilledButton.styleFrom(
+                backgroundColor: AppConstants.primary,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6),
+                ),
+              ),
+              child: Text(
+                label,
+                style: AppConstants.bodyStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            )
+          : OutlinedButton(
+              onPressed: onTap,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: isDestructive ? AppConstants.error : AppConstants.secondary,
+                side: BorderSide(
+                  color: isDestructive
+                      ? AppConstants.error.withValues(alpha: 0.4)
+                      : AppConstants.borderGray,
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6),
+                ),
+              ),
+              child: Text(
+                label,
+                style: AppConstants.bodyStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Chat Icon Button — opens order-specific chat
+// ══════════════════════════════════════════════════════════════════
+
+class _ChatIconButton extends StatelessWidget {
+  final String orderId;
+  final String productName;
+  final String? imageUrl;
+  final String status;
+
+  const _ChatIconButton({
+    required this.orderId,
+    required this.productName,
+    this.imageUrl,
+    required this.status,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Message seller',
+      child: SizedBox(
+        width: 36,
+        height: 36,
+        child: IconButton(
+          padding: EdgeInsets.zero,
+          icon: Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: AppConstants.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              Icons.chat_bubble_outline,
+              color: AppConstants.primary,
+              size: 18,
+            ),
+          ),
+          onPressed: () => _openOrderChat(context),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openOrderChat(BuildContext context) async {
+    final auth = context.read<AuthProvider>();
+    final customerId = auth.currentUser?['id']?.toString();
+    if (customerId == null) return;
+
+    // Get order details to find the storeId and store name
+    try {
+      final orderData = await Supabase.instance.client
+          .from('orders')
+          .select('store_id, stores(name)')
+          .eq('id', int.tryParse(orderId) ?? orderId)
+          .maybeSingle();
+
+      if (orderData == null || !context.mounted) return;
+      final storeId = orderData['store_id']?.toString();
+      if (storeId == null) return;
+
+      // Extract store name from joined data
+      final storeData = orderData['stores'];
+      final storeName = (storeData is Map) 
+          ? (storeData['name']?.toString() ?? 'Seller') 
+          : 'Seller';
+
+      // Get or create conversation
+      final conversation = await MessageService.instance.getOrCreateConversation(
+        storeId: storeId,
+        customerId: customerId,
+      );
+
+      if (!context.mounted) return;
+
+      // Check if conversation has messages
+      final hasMessages = await MessageService.instance.hasMessages(conversation.id);
+
+      if (!context.mounted) return;
+
+      if (!hasMessages) {
+        // No messages yet - show quick message options sheet
+        final result = await showQuickMessageSheet(
+          context: context,
+          orderId: orderId,
+          productName: productName,
+          imageUrl: imageUrl,
+          storeName: storeName,
+          orderStatus: status,
+        );
+
+        if (result == null || !context.mounted) return;
+
+        // Handle the result
+        switch (result.action) {
+          case QuickMessageAction.sendMessage:
+            // Open chat and send the message
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => ChatView(
+                  conversationId: conversation.id,
+                  viewerRole: 'customer',
+                  otherPartyName: storeName,
+                  orderReferenceId: orderId,
+                  initialMessage: result.message,
+                ),
+              ),
+            );
+            break;
+          case QuickMessageAction.requestChange:
+            // Open chat with Request a Change flow
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => ChatView(
+                  conversationId: conversation.id,
+                  viewerRole: 'customer',
+                  otherPartyName: storeName,
+                  orderReferenceId: orderId,
+                  showChangeRequest: true,
+                ),
+              ),
+            );
+            break;
+          case QuickMessageAction.typeCustom:
+            // Open empty thread for custom message
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => ChatView(
+                  conversationId: conversation.id,
+                  viewerRole: 'customer',
+                  otherPartyName: storeName,
+                  orderReferenceId: orderId,
+                  focusInput: true,
+                ),
+              ),
+            );
+            break;
+        }
+      } else {
+        // Messages exist - go straight to chat
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => ChatView(
+              conversationId: conversation.id,
+              viewerRole: 'customer',
+              otherPartyName: storeName,
+              orderReferenceId: orderId,
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[ChatIconButton] Failed to open order chat: $e');
+    }
   }
 }
