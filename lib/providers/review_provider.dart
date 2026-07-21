@@ -143,13 +143,13 @@ class ReviewProvider extends ChangeNotifier {
 
   /// Update an existing per-product review.
   Future<bool> updateReview({
-    required int reviewId,
+    required String reviewId,
     required String productId,
     required int rating,
     String? title,
     String? body,
     List<XFile>? newImages,
-    List<int>? removedImageIds,
+    List<String>? removedImageIds,
   }) async {
     _errorMessage = null;
     notifyListeners();
@@ -176,7 +176,7 @@ class ReviewProvider extends ChangeNotifier {
 
   /// Delete a per-product review.
   Future<bool> deleteReview({
-    required int reviewId,
+    required String reviewId,
     required String productId,
   }) async {
     _errorMessage = null;
