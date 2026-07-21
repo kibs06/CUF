@@ -14,6 +14,14 @@ class ReviewService {
 
   SupabaseClient get _client => Supabase.instance.client;
 
+  // ── Safe parsing helpers ──────────────────────────────────────
+  static int _asInt(dynamic v) {
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    if (v != null) return int.parse(v.toString());
+    return 0;
+  }
+
   /// Fetch all reviews for a product, joined with reviewer profile + images.
   Future<List<Map<String, dynamic>>> getReviews(String productId) async {
     try {
@@ -87,7 +95,7 @@ class ReviewService {
 
     if (orders.isEmpty) return false;
 
-    final orderIds = (orders as List).map((o) => (o["id"] as num).toInt()).toList();
+    final orderIds = (orders as List).map((o) => o["id"].toString()).toList();
     final orderItem = await _client
         .from('order_items')
         .select('id')
@@ -107,7 +115,7 @@ class ReviewService {
     final breakdown = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0};
 
     for (final review in reviews) {
-      final rating = (review['rating'] as num?)?.toInt() ?? 0;
+      final rating = _asInt(review['rating']);
       if (rating >= 1 && rating <= 5) {
         totalRating += rating;
         breakdown[rating] = (breakdown[rating] ?? 0) + 1;
@@ -121,6 +129,57 @@ class ReviewService {
       'avg_rating': avgRating,
       'review_count': count,
       'breakdown': breakdown,
+    };
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  //  TYPED REVIEW PAYLOAD
+  // ═══════════════════════════════════════════════════════════════
+
+  /// Typed payload for review submission. Enforces correct types matching
+  /// the real DB schema (see SCHEMA_REFERENCE.md).
+  ///
+  /// All UUID fields are [String] — never parsed as int.
+  /// [productId] is TEXT (not UUID).
+  /// [rating] is INT (1–5).
+  static Map<String, dynamic> _buildReviewPayload({
+    required String orderId,
+    required String orderItemId,
+    required String productId,
+    required String customerId,
+    required String storeId,
+    required int rating,
+    String? comment,
+  }) {
+    // ── Validate every required UUID is non-empty ────────────────
+    final fields = <String, String>{
+      'orderId': orderId,
+      'orderItemId': orderItemId,
+      'productId': productId,
+      'customerId': customerId,
+      'storeId': storeId,
+    };
+    for (final entry in fields.entries) {
+      if (entry.value.isEmpty) {
+        throw Exception(
+          'submitReview: ${entry.key} is empty — cannot submit review. '
+          'orderId=$orderId, orderItemId=$orderItemId, productId=$productId, '
+          'storeId=$storeId',
+        );
+      }
+    }
+    if (rating < 1 || rating > 5) {
+      throw Exception('submitReview: rating must be 1–5, got $rating');
+    }
+
+    return {
+      'order_id': orderId,
+      'order_item_id': orderItemId,
+      'product_id': productId,
+      'customer_id': customerId,
+      'store_id': storeId,
+      'rating': rating,
+      'comment': comment?.trim().isNotEmpty == true ? comment!.trim() : null,
     };
   }
 
@@ -190,7 +249,7 @@ class ReviewService {
           final sorted = List<Map<String, dynamic>>.from(
             productImages.map((e) => Map<String, dynamic>.from(e as Map)),
           )..sort((a, b) =>
-              (a['display_order'] as int? ?? 0).compareTo(b['display_order'] as int? ?? 0));
+              _asInt(a['display_order']).compareTo(_asInt(b['display_order'])));
           item['product_image_url'] = sorted.first['image_url']?.toString();
         }
       }
@@ -211,17 +270,19 @@ class ReviewService {
   }) async {
     final userId = _client.auth.currentUser!.id;
 
+    final payload = _buildReviewPayload(
+      orderId: orderId,
+      orderItemId: orderItemId,
+      productId: productId,
+      customerId: userId,
+      storeId: storeId,
+      rating: rating,
+      comment: comment,
+    );
+
     final review = await _client
         .from('reviews')
-        .insert({
-          'order_id': orderId,
-          'order_item_id': orderItemId,
-          'product_id': productId,
-          'customer_id': userId,
-          'store_id': storeId,
-          'rating': rating,
-          'comment': comment?.trim().isNotEmpty == true ? comment!.trim() : null,
-        })
+        .insert(payload)
         .select()
         .single();
 
@@ -331,14 +392,18 @@ class ReviewService {
     final userId = _client.auth.currentUser!.id;
     final trimmedProductId = productId.trim();
 
+    if (trimmedProductId.isEmpty) {
+      throw Exception(
+        'submitReview: productId is empty — cannot submit review without a product.',
+      );
+    }
+
     // Find a relevant order_id and order_item_id for this product
     String? orderId;
     String? orderItemId;
     String? storeId;
 
     // Step 1: Fetch all orders for this customer in reviewable statuses.
-    // Use .select() without specific columns to get the full row, then
-    // extract IDs with explicit int casting to avoid type mismatches.
     final orders = await _client
         .from('orders')
         .select()
@@ -347,9 +412,9 @@ class ReviewService {
         .order('created_at', ascending: false);
 
     if (orders.isNotEmpty) {
-      // Explicitly cast order IDs to int — Supabase returns BIGINT as int.
+      // orders.id is UUID — keep as string, don't parse as int.
       final orderIds = (orders as List)
-          .map((o) => (o['id'] as num).toInt())
+          .map((o) => o['id'].toString())
           .toList();
 
       // Step 2: Find the order_items row for this product within those orders.
@@ -394,21 +459,32 @@ class ReviewService {
       }
     }
 
-    if (orderItemId == null) {
-      throw Exception('Could not find a valid order item to review. Make sure you have a completed order containing this product.');
+    if (orderItemId == null || orderId == null) {
+      throw Exception(
+        'Could not find a valid order item to review. '
+        'Make sure you have a completed order containing this product.',
+      );
     }
+
+    if (storeId == null || storeId.isEmpty) {
+      throw Exception(
+        'submitReview: storeId is missing for order $orderId — cannot submit review.',
+      );
+    }
+
+    final payload = _buildReviewPayload(
+      orderId: orderId,
+      orderItemId: orderItemId,
+      productId: trimmedProductId,
+      customerId: userId,
+      storeId: storeId,
+      rating: rating,
+      comment: body,
+    );
 
     final review = await _client
         .from('reviews')
-        .insert({
-          'product_id': productId,
-          'customer_id': userId,
-          'order_id': orderId,
-          'order_item_id': orderItemId,
-          'store_id': storeId,
-          'rating': rating,
-          'comment': body?.trim().isNotEmpty == true ? body!.trim() : null,
-        })
+        .insert(payload)
         .select()
         .single();
 
@@ -504,7 +580,7 @@ class ReviewService {
           .map((img) => Map<String, dynamic>.from(img as Map))
           .toList()
         ..sort((a, b) =>
-            (a['display_order'] as int? ?? 0).compareTo(b['display_order'] as int? ?? 0));
+            _asInt(a['display_order']).compareTo(_asInt(b['display_order'])));
     } else {
       map['review_images'] = <Map<String, dynamic>>[];
     }

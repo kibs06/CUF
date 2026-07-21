@@ -8,7 +8,7 @@ import '../../widgets/sole_card.dart';
 import '../../widgets/sole_primary_button.dart';
 import '../../widgets/sole_status_chip.dart';
 import '../../widgets/sole_timeline.dart';
-import 'write_review_screen.dart';
+import 'order_review_screen.dart';
 
 /// Unified Order Detail / Tracking screen — content driven by order status.
 ///
@@ -544,18 +544,13 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
             padding: const EdgeInsets.only(top: 16),
             child: SizedBox(
               width: double.infinity,
-              child: OutlinedButton.icon(
+              child:               OutlinedButton.icon(
                 onPressed: () {
-                  final orderId = _order['id']?.toString() ?? '';
-                  final storeId = _order['store_id']?.toString() ?? '';
+                  // Navigate to order review screen which properly handles
+                  // per-order-item reviews with all required IDs.
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) => WriteReviewScreen(
-                        productId: '', // will use order items instead
-                        productName: 'Order #${_shortId}',
-                        orderId: orderId,
-                        storeId: storeId,
-                      ),
+                      builder: (_) => OrderReviewScreen(order: _order),
                     ),
                   );
                 },

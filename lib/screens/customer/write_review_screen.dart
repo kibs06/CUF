@@ -59,7 +59,8 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
     super.initState();
     if (_isEditing) {
       final review = widget.existingReview!;
-      _rating = (review['rating'] as num?)?.toInt() ?? 0;
+      final rawRating = review['rating'];
+      _rating = rawRating is int ? rawRating : (rawRating is num ? rawRating.toInt() : int.tryParse(rawRating?.toString() ?? '') ?? 0);
       _bodyController.text = review['comment']?.toString() ??
           review['body']?.toString() ??
           '';

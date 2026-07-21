@@ -158,12 +158,12 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       if (!mounted || referenceId == null) return;
       switch (screen) {
         case 'order_tracking':
-          final orderId = int.tryParse(referenceId);
-          if (orderId == null) return;
+          // orders.id is UUID — use string directly, with int fallback for legacy data.
+          final orderIdValue = int.tryParse(referenceId) ?? referenceId;
           Supabase.instance.client
               .from('orders')
               .select('*, order_items(*, products(name))')
-              .eq('id', orderId)
+              .eq('id', orderIdValue)
               .single()
               .then((data) {
             if (mounted) {

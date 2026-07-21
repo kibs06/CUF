@@ -11,6 +11,20 @@ import '../services/review_service.dart';
 class ReviewProvider extends ChangeNotifier {
   final ReviewService _reviewService = ReviewService.instance;
 
+  static int _asInt(dynamic v) {
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    if (v != null) return int.parse(v.toString());
+    return 0;
+  }
+
+  static double _asDouble(dynamic v) {
+    if (v is double) return v;
+    if (v is num) return v.toDouble();
+    if (v != null) return double.parse(v.toString());
+    return 0.0;
+  }
+
   // ── Per-product state ────────────────────────────────────────
   List<Map<String, dynamic>> _reviews = [];
   Map<String, dynamic>? _myReview;
@@ -44,12 +58,12 @@ class ReviewProvider extends ChangeNotifier {
 
   double get avgRating {
     if (_ratingSummary == null) return 0.0;
-    return (_ratingSummary!['avg_rating'] as num?)?.toDouble() ?? 0.0;
+    return _asDouble(_ratingSummary!['avg_rating']);
   }
 
   int get reviewCount {
     if (_ratingSummary == null) return 0;
-    return (_ratingSummary!['review_count'] as num?)?.toInt() ?? 0;
+    return _asInt(_ratingSummary!['review_count']);
   }
 
   Map<int, int> get breakdown {
@@ -57,7 +71,7 @@ class ReviewProvider extends ChangeNotifier {
     final raw = _ratingSummary!['breakdown'] as Map? ?? {};
     return {
       for (var entry in raw.entries)
-        int.parse(entry.key.toString()): (entry.value as num?)?.toInt() ?? 0,
+        int.parse(entry.key.toString()): _asInt(entry.value),
     };
   }
 

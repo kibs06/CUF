@@ -191,6 +191,17 @@ class _OrderReviewScreenState extends State<OrderReviewScreen> {
 
   Future<void> _navigateToReview(Map<String, dynamic> item) async {
     final orderId = widget.order['id'].toString();
+    final storeId = widget.order['store_id']?.toString();
+    if (storeId == null || storeId.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('This order is missing store information. Cannot submit review.'),
+          ),
+        );
+      }
+      return;
+    }
     final result = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (_) => WriteReviewScreen(
@@ -198,7 +209,7 @@ class _OrderReviewScreenState extends State<OrderReviewScreen> {
           productName: item['product_name']?.toString() ?? 'Product',
           orderItemId: item['id'].toString(),
           orderId: orderId,
-          storeId: widget.order['store_id'].toString(),
+          storeId: storeId,
           existingReview: item['review'],
         ),
       ),
