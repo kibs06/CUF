@@ -3,9 +3,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Service handling all review Supabase operations.
 ///
-/// Supports two review models:
-/// 1. **Per-product reviews** (`product_reviews` table) — legacy from initial implementation
-/// 2. **Per-order-item reviews** (`reviews` table) — Shopee/Lazada-style (primary going forward)
+/// Uses the `reviews` table (Shopee/Lazada-style per-order-item reviews)
+/// and `review_images` table for photo attachments.
 ///
 /// Screens should call this service — never Supabase directly.
 class ReviewService {
@@ -14,67 +13,9 @@ class ReviewService {
 
   SupabaseClient get _client => Supabase.instance.client;
 
-  /// Cached flag: set to false after first 404 on product_reviews table.
-  /// Prevents wasteful HTTP requests to a table that doesn't exist.
-  static bool _productReviewsExists = true;
-
-  // ═══════════════════════════════════════════════════════════════
-  //  PER-PRODUCT REVIEWS (product_reviews table — legacy)
-  // ═══════════════════════════════════════════════════════════════
-
   /// Fetch all reviews for a product, joined with reviewer profile + images.
-  /// Reads from BOTH `product_reviews` (legacy) and `reviews` (new) tables.
   Future<List<Map<String, dynamic>>> getReviews(String productId) async {
-    // Fetch from both tables in parallel
-    final results = await Future.wait([
-      _fetchProductReviews(productId),
-      _fetchOrderItemReviews(productId),
-    ]);
-
-    final allReviews = [...results[0], ...results[1]];
-    // Sort by created_at DESC (most recent first)
-    allReviews.sort((a, b) {
-      final aDate = a['created_at']?.toString() ?? '';
-      final bDate = b['created_at']?.toString() ?? '';
-      return bDate.compareTo(aDate);
-    });
-
-    return allReviews;
-  }
-
-  Future<List<Map<String, dynamic>>> _fetchProductReviews(String productId) async {
-    // product_reviews is a legacy table that may not exist in all environments.
-    // Return empty list if the table is missing — all reviews live in the
-    // 'reviews' table (Shopee/Lazada-style) going forward.
-    if (!_productReviewsExists) return [];
-
     try {
-      final data = await _client
-          .from('product_reviews')
-          .select('''
-            *,
-            profiles!customer_id(full_name, avatar_url),
-            product_review_images(id, image_url, display_order)
-          ''')
-          .eq('product_id', productId)
-          .order('created_at', ascending: false);
-
-      return (data as List).map((row) {
-        final map = _normalizeProductReview(row);
-        map['_source'] = 'product_reviews';
-        return map;
-      }).toList();
-    } catch (e) {
-      // Table doesn't exist — cache this fact and skip future queries.
-      _productReviewsExists = false;
-      return [];
-    }
-  }
-
-  Future<List<Map<String, dynamic>>> _fetchOrderItemReviews(String productId) async {
-    try {
-      // reviews.product_id is UUID; products.id is TEXT in some environments.
-      // Ensure we pass a clean string UUID for the filter to match.
       final data = await _client
           .from('reviews')
           .select('''
@@ -87,7 +28,6 @@ class ReviewService {
 
       return (data as List).map((row) {
         final map = _normalizeOrderItemReview(row);
-        map['_source'] = 'reviews';
         return map;
       }).toList();
     } catch (e) {
@@ -96,14 +36,12 @@ class ReviewService {
   }
 
   /// Fetch the current user's review for a product (or null).
-  /// Checks both tables.
   Future<Map<String, dynamic>?> getMyReview(String productId) async {
     final userId = _client.auth.currentUser?.id;
     if (userId == null) return null;
 
     final trimmedId = productId.trim();
 
-    // Check reviews table first (Shopee/Lazada-style)
     try {
       final data = await _client
           .from('reviews')
@@ -118,25 +56,6 @@ class ReviewService {
       if (data != null) return _normalizeOrderItemReview(data);
     } catch (_) {}
 
-    // Fall back to product_reviews (legacy, may not exist)
-    if (_productReviewsExists) {
-      try {
-        final data = await _client
-            .from('product_reviews')
-            .select('''
-              *,
-              product_review_images(id, image_url, display_order)
-            ''')
-            .eq('product_id', trimmedId)
-            .eq('customer_id', userId)
-            .maybeSingle();
-
-        if (data != null) return _normalizeProductReview(data);
-      } catch (_) {
-        _productReviewsExists = false;
-      }
-    }
-
     return null;
   }
 
@@ -147,31 +66,16 @@ class ReviewService {
 
     final trimmedId = productId.trim();
 
-    // Check if already reviewed in reviews table
+    // Check if already reviewed
     try {
-      final existingNew = await _client
+      final existing = await _client
           .from('reviews')
           .select('id')
           .eq('product_id', trimmedId)
           .eq('customer_id', userId)
           .maybeSingle();
-      if (existingNew != null) return false;
+      if (existing != null) return false;
     } catch (_) {}
-
-    // Check if already reviewed in product_reviews (legacy, may not exist)
-    if (_productReviewsExists) {
-      try {
-        final existingLegacy = await _client
-            .from('product_reviews')
-            .select('id')
-            .eq('product_id', trimmedId)
-            .eq('customer_id', userId)
-            .maybeSingle();
-        if (existingLegacy != null) return false;
-      } catch (_) {
-        _productReviewsExists = false;
-      }
-    }
 
     // Check if user has a completed order containing this product
     final orders = await _client
@@ -413,7 +317,7 @@ class ReviewService {
   }
 
   // ═══════════════════════════════════════════════════════════════
-  //  LEGACY SUBMIT (product_reviews table)
+  //  SUBMIT / UPDATE / DELETE (reviews table)
   // ═══════════════════════════════════════════════════════════════
 
   Future<void> submitReview({
@@ -425,60 +329,75 @@ class ReviewService {
   }) async {
     final userId = _client.auth.currentUser!.id;
 
-    // Find a relevant order_id for this product
+    // Find a relevant order_id and order_item_id for this product
     String? orderId;
+    String? orderItemId;
+    String? storeId;
     try {
       final orders = await _client
           .from('orders')
-          .select('id')
+          .select('id, store_id')
           .eq('customer_id', userId)
-          .inFilter('status', ['ready', 'received']);
+          .inFilter('status', ['ready', 'received', 'delivered']);
       if (orders.isNotEmpty) {
         final orderIds = (orders as List).map((o) => o['id']).toList();
         final orderItem = await _client
             .from('order_items')
-            .select('order_id')
+            .select('id, order_id')
             .eq('product_id', productId)
             .inFilter('order_id', orderIds)
             .limit(1)
             .maybeSingle();
-        orderId = orderItem?['order_id']?.toString();
+        if (orderItem != null) {
+          orderId = orderItem['order_id']?.toString();
+          orderItemId = orderItem['id']?.toString();
+        }
+        // Get store_id from the order
+        final order = (orders as List).firstWhere(
+          (o) => o['id'].toString() == orderId,
+          orElse: () => orders.first,
+        );
+        storeId = order['store_id']?.toString();
       }
     } catch (_) {}
 
+    if (orderItemId == null) {
+      throw Exception('Could not find a valid order item to review.');
+    }
+
     final review = await _client
-        .from('product_reviews')
+        .from('reviews')
         .insert({
           'product_id': productId,
           'customer_id': userId,
           'order_id': orderId,
+          'order_item_id': orderItemId,
+          'store_id': storeId,
           'rating': rating,
-          'title': title?.trim().isNotEmpty == true ? title!.trim() : null,
-          'body': body?.trim().isNotEmpty == true ? body!.trim() : null,
-          'is_verified': true,
+          'comment': body?.trim().isNotEmpty == true ? body!.trim() : null,
         })
         .select()
         .single();
 
-    final reviewId = review['id'] as int;
+    final reviewId = review['id'].toString();
 
     if (images != null && images.isNotEmpty) {
-      await _uploadReviewImages(reviewId: reviewId, images: images);
+      await _uploadReviewImagesNew(reviewId: reviewId, images: images);
     }
   }
 
   Future<void> updateReview({
-    required int reviewId,
+    required String reviewId,
     required int rating,
     String? title,
     String? body,
     List<XFile>? newImages,
-    List<int>? removedImageIds,
+    List<String>? removedImageIds,
   }) async {
     final userId = _client.auth.currentUser!.id;
 
     final existing = await _client
-        .from('product_reviews')
+        .from('reviews')
         .select('customer_id')
         .eq('id', reviewId)
         .single();
@@ -486,34 +405,33 @@ class ReviewService {
       throw Exception('You can only edit your own reviews.');
     }
 
-    await _client.from('product_reviews').update({
+    await _client.from('reviews').update({
       'rating': rating,
-      'title': title?.trim().isNotEmpty == true ? title!.trim() : null,
-      'body': body?.trim().isNotEmpty == true ? body!.trim() : null,
+      'comment': body?.trim().isNotEmpty == true ? body!.trim() : null,
     }).eq('id', reviewId);
 
     if (removedImageIds != null && removedImageIds.isNotEmpty) {
       for (final imageId in removedImageIds) {
         final img = await _client
-            .from('product_review_images')
+            .from('review_images')
             .select('image_url')
             .eq('id', imageId)
             .maybeSingle();
         if (img != null) await _removeStorageFile(img['image_url'] as String);
-        await _client.from('product_review_images').delete().eq('id', imageId);
+        await _client.from('review_images').delete().eq('id', imageId);
       }
     }
 
     if (newImages != null && newImages.isNotEmpty) {
-      await _uploadReviewImages(reviewId: reviewId, images: newImages);
+      await _uploadReviewImagesNew(reviewId: reviewId, images: newImages);
     }
   }
 
-  Future<void> deleteReview(int reviewId) async {
+  Future<void> deleteReview(String reviewId) async {
     final userId = _client.auth.currentUser!.id;
 
     final existing = await _client
-        .from('product_reviews')
+        .from('reviews')
         .select('customer_id')
         .eq('id', reviewId)
         .single();
@@ -522,7 +440,7 @@ class ReviewService {
     }
 
     final images = await _client
-        .from('product_review_images')
+        .from('review_images')
         .select('image_url')
         .eq('review_id', reviewId);
 
@@ -530,39 +448,12 @@ class ReviewService {
       await _removeStorageFile(img['image_url'] as String);
     }
 
-    await _client.from('product_reviews').delete().eq('id', reviewId);
+    await _client.from('reviews').delete().eq('id', reviewId);
   }
 
   // ═══════════════════════════════════════════════════════════════
   //  NORMALIZATION HELPERS
   // ═══════════════════════════════════════════════════════════════
-
-  Map<String, dynamic> _normalizeProductReview(dynamic row) {
-    final map = Map<String, dynamic>.from(row as Map);
-    final profile = map['profiles'];
-    if (profile is Map) {
-      map['reviewer_name'] = profile['full_name'] ?? 'Customer';
-      map['reviewer_avatar'] = profile['avatar_url'];
-    } else {
-      map['reviewer_name'] = 'Customer';
-      map['reviewer_avatar'] = null;
-    }
-    final images = map['product_review_images'];
-    if (images is List) {
-      map['review_images'] = images
-          .map((img) => Map<String, dynamic>.from(img as Map))
-          .toList()
-        ..sort((a, b) =>
-            (a['display_order'] as int? ?? 0).compareTo(b['display_order'] as int? ?? 0));
-    } else {
-      map['review_images'] = <Map<String, dynamic>>[];
-    }
-    // Ensure both 'body' and 'comment' are set for downstream consumers.
-    // product_reviews table uses 'body'; reviews table uses 'comment'.
-    map['comment'] ??= map['body'];
-    map['body'] ??= map['comment'];
-    return map;
-  }
 
   Map<String, dynamic> _normalizeOrderItemReview(dynamic row) {
     final map = Map<String, dynamic>.from(row as Map);
@@ -584,9 +475,7 @@ class ReviewService {
     } else {
       map['review_images'] = <Map<String, dynamic>>[];
     }
-    // Ensure both 'body' and 'comment' are set for downstream consumers.
-    // reviews table uses 'comment'; product_reviews table uses 'body'.
-    map['comment'] ??= map['body'];
+    // Ensure 'body' alias exists for downstream consumers.
     map['body'] ??= map['comment'];
     // Extract product name from nested join
     final items = map['order_items'];
@@ -651,51 +540,7 @@ class ReviewService {
     }
   }
 
-  /// Upload images for the legacy `product_reviews` table.
-  Future<void> _uploadReviewImages({
-    required int reviewId,
-    required List<XFile> images,
-  }) async {
-    const bucketName = 'review-images';
-    final customerId = _client.auth.currentUser!.id;
-    final rows = <Map<String, dynamic>>[];
 
-    for (int i = 0; i < images.length; i++) {
-      try {
-        final file = images[i];
-        final bytes = await file.readAsBytes();
-        if (bytes.isEmpty) continue;
-
-        final ext = file.path.split('.').last.toLowerCase();
-        final safeExt = ext == 'jpg' ? 'jpeg' : ext;
-        final timestamp = DateTime.now().millisecondsSinceEpoch;
-        final path = '$customerId/$reviewId/${timestamp}_$i.$ext';
-
-        await _client.storage.from(bucketName).uploadBinary(
-              path,
-              bytes,
-              fileOptions: FileOptions(
-                contentType: 'image/$safeExt',
-                upsert: true,
-              ),
-            );
-
-        final url = _client.storage.from(bucketName).getPublicUrl(path);
-        if (url.isNotEmpty) {
-          rows.add({
-            'review_id': reviewId,
-            'image_url': url,
-            'display_order': i,
-          });
-        }
-      } catch (e) {
-      }
-    }
-
-    if (rows.isNotEmpty) {
-      await _client.from('product_review_images').insert(rows);
-    }
-  }
 
   /// Best-effort removal of a file from storage by its public URL.
   Future<void> _removeStorageFile(String url) async {
