@@ -12,6 +12,7 @@ import '../../widgets/sole_ar_pill.dart';
 import '../../widgets/sole_review_card.dart';
 import '../../widgets/sole_star_rating.dart';
 import 'ar_fitting_screen.dart';
+import 'checkout_screen.dart';
 import 'write_review_screen.dart';
 import '../../widgets/cart_icon_button.dart';
 import '../../widgets/fly_to_cart_animation.dart';
@@ -451,13 +452,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
 
   void _buyNow() {
     _addToCart();
-    // Delay checkout snackbar to avoid overlapping with add-to-cart animation
-    Future.delayed(const Duration(milliseconds: 1200), () {
+    // Navigate to checkout after add-to-cart animation completes
+    Future.delayed(const Duration(milliseconds: 1000), () {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Processing checkout...'),
-          backgroundColor: AppConstants.primary,
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => const CheckoutScreen(),
         ),
       );
     });
