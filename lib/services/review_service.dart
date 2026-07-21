@@ -87,7 +87,7 @@ class ReviewService {
 
     if (orders.isEmpty) return false;
 
-    final orderIds = (orders as List).map((o) => o['id']).toList();
+    final orderIds = (orders as List).map((o) => (o["id"] as num).toInt()).toList();
     final orderItem = await _client
         .from('order_items')
         .select('id')
