@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../constants/app_constants.dart';
 import '../../services/push_notification_service.dart';
 import '../../widgets/chat/chat_view.dart';
@@ -6,6 +7,8 @@ import 'seller_dashboard_screen.dart';
 import 'pos_screen.dart';
 import 'manage_products_screen.dart';
 import 'manage_orders_screen.dart';
+import 'order_detail_screen.dart';
+import 'custom_orders_screen.dart';
 import '../shared/profile_screen.dart';
 
 /// Seller shell with 5-tab bottom navigation:
@@ -34,7 +37,6 @@ class _SellerShellState extends State<SellerShell> {
     // Wire up push notification deep-link for sellers
     PushNotificationService.instance.onNavigateToChat = (conversationId, storeName) {
       if (!mounted) return;
-      // Switch to inbox tab (index 4 is Profile, but we navigate directly)
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => ChatView(
@@ -44,6 +46,40 @@ class _SellerShellState extends State<SellerShell> {
           ),
         ),
       );
+    };
+
+    PushNotificationService.instance.onNavigateToScreen = (screen, referenceId) {
+      if (!mounted) return;
+      switch (screen) {
+        case 'seller_order_detail':
+          if (referenceId != null) {
+            Supabase.instance.client
+                .from('orders')
+                .select('*, profiles!orders_customer_id_fkey(full_name, email), order_items(*, products(name))')
+                .eq('id', referenceId)
+                .single()
+                .then((data) {
+              if (mounted) {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => OrderDetailScreen(order: data),
+                  ),
+                );
+              }
+            }).catchError((e) {
+              debugPrint('[Push] Failed to fetch order for deep-link: $e');
+            });
+          }
+          break;
+        case 'seller_product_detail':
+          setState(() => _currentIndex = 2); // Products tab
+          break;
+        case 'seller_custom_order':
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const CustomOrdersScreen()),
+          );
+          break;
+      }
     };
   }
 

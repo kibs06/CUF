@@ -1,0 +1,40 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Flutter (Emulator)",
+      "request": "launch",
+      "type": "dart",
+      "args": [
+        "--dart-define-from-file=dart_defines.json"
+      ]
+    },
+    {
+      "name": "Flutter (Release)",
+      "request": "launch",
+      "type": "dart",
+      "args": [
+        "--dart-define-from-file=dart_defines.json",
+        "--release"
+      ]
+    },
+    {
+      "name": "Flutter (Profile)",
+      "request": "launch",
+      "type": "dart",
+      "args": [
+        "--dart-define-from-file=dart_defines.json",
+        "--profile"
+      ]
+    },
+    {
+      "name": "Flutter (Web)",
+      "request": "launch",
+      "type": "dart",
+      "args": [
+        "--dart-define-from-file=dart_defines.json"
+      ],
+      "deviceType": "web-server"
+    }
+  ]
+}

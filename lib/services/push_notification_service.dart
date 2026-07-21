@@ -3,8 +3,11 @@ import 'dart:convert';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_app_badger/flutter_app_badger.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../utils/notification_formatters.dart';
 
 /// Handles all FCM push notification logic:
 /// - Token registration & refresh
@@ -24,12 +27,21 @@ class PushNotificationService {
   StreamSubscription? _foregroundSub;
   StreamSubscription? _tokenRefreshSub;
 
-  /// Navigation callback — set by main.dart or the root widget.
+  /// Navigation callback for message notifications — set by shell widgets.
   /// Signature: (String conversationId, String storeName)
   void Function(String conversationId, String storeName)? onNavigateToChat;
 
+  /// Generic navigation callback for all non-message notification types.
+  /// Signature: (String screen, String? referenceId)
+  /// The shell widget wires this to route by screen name.
+  void Function(String screen, String? referenceId)? onNavigateToScreen;
+
   /// Buffer for initial message from cold start (before callback is set)
   RemoteMessage? _pendingInitialMessage;
+  /// Buffer for initial non-message notification from cold start
+  // TODO: If seller shell sets onNavigateToScreen while customer shell is active,
+  // the callback could route to the wrong screen. Acceptable for v1.
+  RemoteMessage? _pendingInitialNotification;
 
   // ── Initialization ──────────────────────────────────────────────
 
@@ -90,8 +102,12 @@ class PushNotificationService {
       // 7. Handle notification tap from cold start (app was terminated)
       final initialMessage = await _messaging.getInitialMessage();
       if (initialMessage != null) {
-        // Buffer the message — will be consumed when callback is set
-        _pendingInitialMessage = initialMessage;
+        final type = initialMessage.data['type'] as String?;
+        if (type == 'new_message') {
+          _pendingInitialMessage = initialMessage;
+        } else {
+          _pendingInitialNotification = initialMessage;
+        }
         _tryConsumePendingMessage();
       }
 
@@ -101,12 +117,17 @@ class PushNotificationService {
     }
   }
 
-  /// Called when the navigation callback is set (e.g. from CustomerHomeScreen).
+  /// Called when navigation callbacks are set (e.g. from shell widgets).
   /// If there's a buffered cold-start message, handle it now.
   void _tryConsumePendingMessage() {
     if (_pendingInitialMessage != null && onNavigateToChat != null) {
       final msg = _pendingInitialMessage!;
       _pendingInitialMessage = null;
+      _handleNotificationTap(msg);
+    }
+    if (_pendingInitialNotification != null && onNavigateToScreen != null) {
+      final msg = _pendingInitialNotification!;
+      _pendingInitialNotification = null;
       _handleNotificationTap(msg);
     }
   }
@@ -131,11 +152,19 @@ class PushNotificationService {
         if (response.payload != null) {
           try {
             final data = jsonDecode(response.payload!) as Map<String, dynamic>;
-            final conversationId = data['conversation_id'] as String?;
-            // Use sender_name for navigation label (dynamic per direction)
-            final senderName = data['sender_name'] as String? ?? data['store_name'] as String? ?? 'Store';
-            if (conversationId != null) {
-              onNavigateToChat?.call(conversationId, senderName);
+            final type = data['type'] as String?;
+            if (type == 'new_message') {
+              final conversationId = data['conversation_id'] as String?;
+              final senderName = data['sender_name'] as String? ?? data['store_name'] as String? ?? 'Store';
+              if (conversationId != null) {
+                onNavigateToChat?.call(conversationId, senderName);
+              }
+            } else {
+              final screen = data['screen'] as String?;
+              final referenceId = data['referenceId'] as String?;
+              if (screen != null) {
+                onNavigateToScreen?.call(screen, referenceId);
+              }
             }
           } catch (_) {}
         }
@@ -150,7 +179,7 @@ class PushNotificationService {
     required Map<String, dynamic> data,
   }) async {
     try {
-      print('[Push] Creating notification channel if needed...');
+      if (kDebugMode) print('[Push] Creating notification channel if needed...');
       // Explicitly create the notification channel (required for Android 8+)
       final androidPlugin = _localNotifications.resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>();
@@ -163,7 +192,7 @@ class PushNotificationService {
             importance: Importance.high,
           ),
         );
-        print('[Push] Notification channel created/verified');
+        if (kDebugMode) print('[Push] Notification channel created/verified');
       }
 
       const androidDetails = AndroidNotificationDetails(
@@ -181,7 +210,7 @@ class PushNotificationService {
       );
 
       final notificationId = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-      print('[Push] Showing local notification (id=$notificationId)...');
+      if (kDebugMode) print('[Push] Showing local notification (id=$notificationId)...');
       await _localNotifications.show(
         id: notificationId,
         title: title,
@@ -192,10 +221,12 @@ class PushNotificationService {
         ),
         payload: jsonEncode(data),
       );
-      print('[Push] ✅ Local notification shown successfully');
+      if (kDebugMode) print('[Push] ✅ Local notification shown successfully');
     } catch (e, st) {
-      print('[Push] ❌ Failed to show local notification: $e');
-      print('[Push] Stack trace: $st');
+      if (kDebugMode) {
+        print('[Push] ❌ Failed to show local notification: $e');
+        print('[Push] Stack trace: $st');
+      }
     }
   }
 
@@ -203,39 +234,24 @@ class PushNotificationService {
 
   /// Called when a message arrives while the app is in the foreground.
   void _handleForegroundMessage(RemoteMessage message) {
-    // Use print() not debugPrint() so it shows in release builds too
-    print('[Push] ═══════════════════════════════════════');
-    print('[Push] FOREGROUND MESSAGE RECEIVED');
-    print('[Push] ID: ${message.messageId}');
-    print('[Push] Notification title: ${message.notification?.title}');
-    print('[Push] Notification body: ${message.notification?.body}');
-    print('[Push] Data: ${message.data}');
-    print('[Push] ═══════════════════════════════════════');
+    if (kDebugMode) {
+      print('[Push] ═══════════════════════════════════════');
+      print('[Push] FOREGROUND MESSAGE RECEIVED');
+      print('[Push] ID: ${message.messageId}');
+      print('[Push] Notification title: ${message.notification?.title}');
+      print('[Push] Notification body: ${message.notification?.body}');
+      print('[Push] Data: ${message.data}');
+      print('[Push] ═══════════════════════════════════════');
+    }
 
     final data = message.data;
-    final type = data['type'] as String?;
+    final notificationTitle = message.notification?.title ?? data['title'] as String? ?? 'Notification';
+    final notificationBody = message.notification?.body ?? data['body'] as String? ?? '';
 
-    // Only handle new_message notifications
-    if (type != 'new_message') {
-      print('[Push] Skipping: type is "$type" (not new_message)');
-      return;
-    }
-
-    final conversationId = data['conversation_id'] as String?;
-    // Use sender_name for the title (dynamic: store name for customer, customer name for seller)
-    final senderName = data['sender_name'] as String? ?? data['store_name'] as String? ?? 'Store';
-    final body = data['body'] as String? ?? 'New message';
-
-    if (conversationId == null) {
-      print('[Push] Skipping: conversation_id is null');
-      return;
-    }
-
-    print('[Push] Showing foreground notification: title=$senderName, body=$body');
-    // Show local notification banner
+    // Show local notification banner for all types
     _showForegroundNotification(
-      title: senderName,
-      body: body,
+      title: notificationTitle,
+      body: notificationBody,
       data: data,
     );
   }
@@ -247,11 +263,44 @@ class PushNotificationService {
     }
 
     final data = message.data;
-    final conversationId = data['conversation_id'] as String?;
-    final storeName = data['store_name'] as String? ?? 'Store';
+    final type = data['type'] as String?;
 
-    if (conversationId != null) {
-      onNavigateToChat?.call(conversationId, storeName);
+    // Message notifications → route via onNavigateToChat
+    if (type == 'new_message') {
+      final conversationId = data['conversation_id'] as String?;
+      final storeName = data['store_name'] as String? ?? 'Store';
+      if (conversationId != null) {
+        onNavigateToChat?.call(conversationId, storeName);
+      }
+      return;
+    }
+
+    // All other notification types → route via onNavigateToScreen
+    final screen = data['screen'] as String?;
+    final referenceId = data['referenceId'] as String?;
+    if (screen != null && onNavigateToScreen != null) {
+      onNavigateToScreen!.call(screen, referenceId);
+    }
+  }
+
+  // ── OS App Badge ────────────────────────────────────────────────
+
+  /// Update the OS app icon badge to reflect the current unread count.
+  /// Called whenever the in-app unread count changes (new realtime row,
+  /// mark-as-read, delete, etc.) so the badge doesn't lag until the
+  /// next push arrives.
+  Future<void> updateAppBadge(int unreadCount) async {
+    try {
+      if (unreadCount > 0) {
+        await FlutterAppBadger.updateBadgeCount(unreadCount);
+      } else {
+        await FlutterAppBadger.removeBadge();
+      }
+      if (kDebugMode) {
+        print('[Push] App badge updated: ${formatBadgeCount(unreadCount)}');
+      }
+    } catch (e) {
+      if (kDebugMode) print('[Push] Failed to update app badge: $e');
     }
   }
 
@@ -268,17 +317,19 @@ class PushNotificationService {
     final platform = defaultTargetPlatform == TargetPlatform.iOS ? 'ios' : 'android';
 
     try {
-      // 1. Insert the fresh token first — this is the critical write.
-      await Supabase.instance.client.from('device_tokens').insert(
+      // Upsert — if the same (customer_id, fcm_token) row exists, update it
+      // instead of throwing a duplicate key error (23505).
+      await Supabase.instance.client.from('device_tokens').upsert(
         {
           'customer_id': userId,
           'fcm_token': token,
           'platform': platform,
           'updated_at': DateTime.now().toIso8601String(),
         },
+        onConflict: 'customer_id,fcm_token',
       );
-      // 2. Best-effort cleanup: delete any OTHER stale tokens for this user.
-      //    If this fails, we still have the fresh token stored.
+      // Best-effort cleanup: delete any OTHER stale tokens for this user.
+      // If this fails, we still have the fresh token stored.
       await Supabase.instance.client
           .from('device_tokens')
           .delete()

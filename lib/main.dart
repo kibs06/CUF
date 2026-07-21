@@ -16,6 +16,9 @@ import 'providers/notification_provider.dart';
 import 'providers/seller_notification_provider.dart';
 import 'providers/message_provider.dart';
 import 'providers/chat_attachment_provider.dart';
+import 'providers/follow_provider.dart';
+import 'providers/review_provider.dart';
+import 'services/store_service.dart';
 import 'screens/auth/splash_screen.dart';
 import 'services/connectivity_service.dart';
 import 'services/push_notification_service.dart';
@@ -104,6 +107,8 @@ class SoleVisionApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => SellerNotificationProvider()),
         ChangeNotifierProvider(create: (_) => MessageProvider()),
         ChangeNotifierProvider(create: (_) => ChatAttachmentProvider()),
+        ChangeNotifierProvider(create: (_) => FollowProvider(StoreService.instance)),
+        ChangeNotifierProvider(create: (_) => ReviewProvider()),
       ],
       child: MaterialApp(
         title: 'SoleVision',

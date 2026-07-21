@@ -18,6 +18,7 @@ import '../../widgets/chat/chat_view.dart';
 import '../store/store_profile_screen.dart';
 import 'product_detail_screen.dart';
 import 'ar_fitting_screen.dart';
+import 'tracking_screen.dart';
 
 class CustomerHomeScreen extends StatefulWidget {
   const CustomerHomeScreen({super.key});
@@ -138,9 +139,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     }
   }
 
-  /// Set up the push notification deep-link handler.
-  /// When a user taps a push notification, PushNotificationService will
-  /// call this callback to navigate directly into ChatView.
+  /// Set up the push notification deep-link handlers.
   void _initPushNotifications() {
     PushNotificationService.instance.onNavigateToChat = (conversationId, storeName) {
       if (!mounted) return;
@@ -153,6 +152,32 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           ),
         ),
       );
+    };
+
+    PushNotificationService.instance.onNavigateToScreen = (screen, referenceId) {
+      if (!mounted || referenceId == null) return;
+      switch (screen) {
+        case 'order_tracking':
+          final orderId = int.tryParse(referenceId);
+          if (orderId == null) return;
+          Supabase.instance.client
+              .from('orders')
+              .select('*, order_items(*, products(name))')
+              .eq('id', orderId)
+              .single()
+              .then((data) {
+            if (mounted) {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => OrderTrackingScreen(order: data),
+                ),
+              );
+            }
+          }).catchError((e) {
+            debugPrint('[Push] Failed to fetch order for deep-link: $e');
+          });
+          break;
+      }
     };
   }
 

@@ -437,6 +437,20 @@ class SupabaseService {
       ); // intentionally not awaited — don't block order creation
     }
 
+    // ── Push: unpaid ──────────────────────────────────────────────
+    // Fire-and-forget: push to the customer about their new order.
+    final shortId = orderId.toString().length >= 8
+        ? orderId.toString().substring(0, 8)
+        : orderId.toString();
+    _triggerCustomerPush(
+      recipientUserId: userId,
+      type: 'unpaid',
+      title: 'Order placed',
+      body: 'Order #$shortId is awaiting payment',
+      referenceId: orderId.toString(),
+      screen: 'order_tracking',
+    );
+
     return _mapOrder({
       ...orderMap,
       'order_items': items
@@ -454,14 +468,160 @@ class SupabaseService {
     dynamic orderId,
     String newStatus,
   ) async {
+    final dbStatus = _mapUiStatusToDb(newStatus);
     final data = await _client
         .from('orders')
-        .update({'status': newStatus.toLowerCase()})
+        .update({'status': dbStatus})
         .eq('id', orderId.toString())
         .select()
         .single()
         .timeout(_defaultTimeout);
-    return _mapOrder(Map<String, dynamic>.from(data));
+    final mapped = _mapOrder(Map<String, dynamic>.from(data));
+
+    // ── Write order_status_history row ──────────────────────────
+    // order_status_history.order_id is BIGINT, so parse from string.
+    final orderIdInt = int.tryParse(orderId.toString());
+    if (orderIdInt != null) {
+      try {
+        await _client.from('order_status_history').insert({
+          'order_id': orderIdInt,
+          'status': dbStatus,
+          'changed_at': DateTime.now().toIso8601String(),
+        });
+      } catch (e) {
+        debugPrint('[ORDER-STATUS] Could not write status history: $e');
+      }
+    }
+
+    // ── DB notification + push for customer ────────────────────
+    final customerId = data['customer_id']?.toString();
+    if (customerId != null) {
+      final shortId = orderId.toString().length >= 8
+          ? orderId.toString().substring(0, 8)
+          : orderId.toString();
+      if (dbStatus == 'delivered') {
+        _createCustomerNotification(
+          userId: customerId,
+          category: 'review',
+          title: 'Order delivered',
+          body: 'Order #$shortId has arrived. Tap to confirm receipt.',
+          orderId: orderId.toString(),
+        );
+      } else if (dbStatus == 'received') {
+        _createCustomerNotification(
+          userId: customerId,
+          category: 'review',
+          title: 'Order received',
+          body: 'Order #$shortId was confirmed. Tap to rate your purchase.',
+          orderId: orderId.toString(),
+        );
+      }
+      switch (dbStatus) {
+        case 'preparing':
+          _triggerCustomerPush(
+            recipientUserId: customerId,
+            type: 'processing',
+            title: 'Order update',
+            body: 'Order #$shortId is being prepared',
+            referenceId: orderId.toString(),
+            screen: 'order_tracking',
+          );
+          break;
+        case 'ready':
+          _triggerCustomerPush(
+            recipientUserId: customerId,
+            type: 'shipped',
+            title: 'Order shipped',
+            body: 'Order #$shortId is ready',
+            referenceId: orderId.toString(),
+            screen: 'order_tracking',
+          );
+          break;
+        case 'received':
+          _triggerCustomerPush(
+            recipientUserId: customerId,
+            type: 'review',
+            title: 'How was it?',
+            body: 'Order #$shortId was delivered — leave a review',
+            referenceId: orderId.toString(),
+            screen: 'order_tracking',
+          );
+          break;
+      }
+    }
+
+    return mapped;
+  }
+
+  /// Maps UI-facing status labels to the DB-level values that the
+  /// orders_status_check constraint allows.
+  String _mapUiStatusToDb(String status) {
+    // Maps seller UI labels → DB-legal values.
+    // 'delivered' now maps to itself (Part D: customer must confirm → 'received').
+    switch (status.toLowerCase()) {
+      case 'confirmed':
+        return 'preparing';
+      default:
+        // 'pending', 'placed', 'ready', 'delivered', 'received', 'cancelled'
+        // all pass through unchanged — they're already DB-legal.
+        return status.toLowerCase();
+    }
+  }
+
+  // ─── DB NOTIFICATION HELPER ──────────────────────────────────
+
+  /// Insert a row into the `notifications` table (customer-facing).
+  /// Fire-and-forget — failures are caught and logged.
+  void _createCustomerNotification({
+    required String userId,
+    required String category,
+    required String title,
+    required String body,
+    String? orderId,
+  }) {
+    try {
+      _client.from('notifications').insert({
+        'user_id': userId,
+        'category': category,
+        'title': title,
+        'message': body,
+        'order_id': orderId,
+        'is_read': false,
+        'is_deleted': false,
+      }).catchError((e) {
+        debugPrint('[SupabaseService] Customer notification insert failed: $e');
+      });
+    } catch (e) {
+      debugPrint('[SupabaseService] Customer notification insert failed: $e');
+    }
+  }
+
+  // ─── PUSH NOTIFICATION HELPERS ─────────────────────────────────
+
+  /// Fire-and-forget push to a customer device via the send-notification-push
+  /// edge function. Failures are caught and logged, never propagated.
+  void _triggerCustomerPush({
+    required String recipientUserId,
+    required String type,
+    required String title,
+    required String body,
+    String? referenceId,
+    String? screen,
+  }) {
+    try {
+      _client.functions.invoke('send-notification-push', body: {
+        'recipientUserId': recipientUserId,
+        'title': title,
+        'body': body,
+        'type': type,
+        if (referenceId != null) 'referenceId': referenceId,
+        if (screen != null) 'screen': screen,
+      }).catchError((e) {
+        debugPrint('[SupabaseService] Customer push trigger failed: $e');
+      });
+    } catch (e) {
+      debugPrint('[SupabaseService] Customer push trigger failed: $e');
+    }
   }
 
   Future<List<Map<String, dynamic>>> fetchCustomizations() async {

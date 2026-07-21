@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../constants/app_constants.dart';
+import 'sole_star_rating.dart';
 
 class SoleProductCard extends StatelessWidget {
   final dynamic product; // Can be a map or a model
@@ -80,6 +81,27 @@ class SoleProductCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 4),
+                  // Star rating (hide if no reviews)
+                  if ((product['review_count'] as int? ?? 0) > 0) ...[
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        SoleStarRating(
+                          rating: ((product['avg_rating'] as num?)?.toDouble() ?? 0.0).round(),
+                          size: 13,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '(${product['review_count']})',
+                          style: AppConstants.bodyStyle(
+                            fontSize: 10,
+                            color: AppConstants.secondary.withOpacity(0.5),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 2),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [

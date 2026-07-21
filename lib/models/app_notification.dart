@@ -2,6 +2,28 @@ import 'dart:convert';
 
 import 'notification_category.dart';
 
+/// A single message preview within a batched message notification.
+class MessagePreview {
+  final String sender;
+  final String text;
+  final DateTime timestamp;
+
+  const MessagePreview({
+    required this.sender,
+    required this.text,
+    required this.timestamp,
+  });
+
+  factory MessagePreview.fromMap(Map<String, dynamic> map) {
+    return MessagePreview(
+      sender: map['sender']?.toString() ?? '',
+      text: map['text']?.toString() ?? '',
+      timestamp: DateTime.tryParse(map['timestamp']?.toString() ?? '') ??
+          DateTime.now(),
+    );
+  }
+}
+
 /// Data model for a single notification row from the `notifications` table.
 class AppNotification {
   final String id;
@@ -37,6 +59,30 @@ class AppNotification {
 
   /// Whether this is a message notification.
   bool get isMessageNotification => category == NotificationCategory.message;
+
+  /// The order type ('catalog', 'custom', or null).
+  String? get orderType => metadata?['order_type']?.toString();
+
+  // ── Batched message getters ─────────────────────────────────────
+
+  /// Number of messages folded into this unread batch.
+  /// Returns 0 if metadata.previews is absent (legacy row).
+  int get messageCount =>
+      (metadata?['message_count'] as num?)?.toInt() ?? 0;
+
+  /// Typed list of message previews (newest first, max 3).
+  /// Empty for legacy rows that predate batching.
+  List<MessagePreview> get previews {
+    final raw = metadata?['previews'];
+    if (raw is! List) return const [];
+    return raw
+        .map((e) => MessagePreview.fromMap(
+            Map<String, dynamic>.from(e as Map)))
+        .toList();
+  }
+
+  /// Whether this card represents a batch (>1 message folded in).
+  bool get isBatched => messageCount > 1;
 
   factory AppNotification.fromMap(Map<String, dynamic> map) {
     // Parse metadata — may come as JSON string or Map

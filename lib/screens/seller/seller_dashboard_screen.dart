@@ -19,7 +19,8 @@ import '../../widgets/seller/seller_metric_card.dart';
 import '../../widgets/seller/seller_alert_chip.dart';
 import '../../widgets/seller/seller_order_card.dart';
 import '../../widgets/seller/seller_sparkline.dart';
-import '../../widgets/seller/seller_weekly_bar.dart';
+import '../../models/revenue_point.dart';
+import '../../widgets/seller/seller_revenue_line_chart.dart';
 import 'manage_orders_screen.dart';
 import 'manage_inventory_screen.dart';
 import 'custom_orders_screen.dart';
@@ -32,9 +33,14 @@ import 'seller_inbox_screen.dart';
 /// Dashboard data model — holds all real data fetched from Supabase.
 class _DashboardData {
   final double todayRevenue;
-  final int pendingOrders;
   final List<double> weeklySalesChart;
   final List<double> monthlySalesChart;
+  // Online-only breakdowns
+  final List<double> onlineWeeklyChart;
+  final List<double> onlineMonthlyChart;
+  // POS-only breakdowns
+  final List<double> posWeeklyChart;
+  final List<double> posMonthlyChart;
   final List<Map<String, dynamic>> recentOrders;
   final Map<String, int> ordersByStatus;
   final Map<String, dynamic>? store;
@@ -45,9 +51,12 @@ class _DashboardData {
 
   const _DashboardData({
     required this.todayRevenue,
-    required this.pendingOrders,
     required this.weeklySalesChart,
     required this.monthlySalesChart,
+    required this.onlineWeeklyChart,
+    required this.onlineMonthlyChart,
+    required this.posWeeklyChart,
+    required this.posMonthlyChart,
     required this.recentOrders,
     required this.ordersByStatus,
     this.store,
@@ -67,12 +76,16 @@ class SellerDashboardScreen extends StatefulWidget {
   State<SellerDashboardScreen> createState() => _SellerDashboardScreenState();
 }
 
+/// Sales channel filter for chart toggle.
+enum SalesFilter { all, online, pos }
+
 class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
   late Future<_DashboardData> _dashboardFuture;
   _DashboardData? _cachedData;
   String? _storeId;
   StreamSubscription<bool>? _connectivitySub;
   bool _wasOffline = false;
+  SalesFilter _salesFilter = SalesFilter.all;
 
   @override
   void initState() {
@@ -127,12 +140,13 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
 
     final results = await Future.wait([
       salesService.getTodayRevenue(storeId),
-      salesService.getWeeklyRevenue(storeId),
-      salesService.getPendingOrderCount(storeId),
       orderService.getRecentOrders(storeId, limit: 5),
       orderService.getOrderCountByStatus(storeId),
       StoreService.instance.getMyStore(),
-      salesService.getMonthlyRevenueTrend(storeId),
+      salesService.getOnlineWeeklyRevenue(storeId),
+      salesService.getPosWeeklyRevenue(storeId),
+      salesService.getOnlineMonthlyRevenueTrend(storeId),
+      salesService.getPosMonthlyRevenueTrend(storeId),
       // Load products & orders for low stock / pending customs / alerts
       context.read<ProductProvider>().loadProducts(),
       context.read<OrderProvider>().loadOrders(),
@@ -172,14 +186,28 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
       }
     }
 
+    // Compute combined charts from online + POS parts
+    // Future.wait indices: 0=todayRevenue, 1=recentOrders, 2=ordersByStatus,
+    // 3=store, 4=onlineWeekly, 5=posWeekly, 6=onlineMonthly, 7=posMonthly,
+    // 8=loadProducts, 9=loadOrders
+    final onlineWeekly = results[4] as List<double>;
+    final posWeekly = results[5] as List<double>;
+    final weeklySalesChart = List.generate(7, (i) => onlineWeekly[i] + posWeekly[i]);
+    final onlineMonthly = results[6] as List<double>;
+    final posMonthly = results[7] as List<double>;
+    final monthlySalesChart = List.generate(6, (i) => onlineMonthly[i] + posMonthly[i]);
+
     return _DashboardData(
       todayRevenue: results[0] as double,
-      weeklySalesChart: results[1] as List<double>,
-      pendingOrders: results[2] as int,
-      recentOrders: results[3] as List<Map<String, dynamic>>,
-      ordersByStatus: results[4] as Map<String, int>,
-      store: results[5] as Map<String, dynamic>?,
-      monthlySalesChart: results[6] as List<double>,
+      recentOrders: results[1] as List<Map<String, dynamic>>,
+      ordersByStatus: results[2] as Map<String, int>,
+      store: results[3] as Map<String, dynamic>?,
+      weeklySalesChart: weeklySalesChart,
+      monthlySalesChart: monthlySalesChart,
+      onlineWeeklyChart: onlineWeekly,
+      posWeeklyChart: posWeekly,
+      onlineMonthlyChart: onlineMonthly,
+      posMonthlyChart: posMonthly,
       lowStockCount: lowStockCount,
       pendingCustoms: pendingCustoms,
       lowStockItems: lowStockItems,
@@ -189,9 +217,12 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
 
   static _DashboardData _emptyDashboard() => const _DashboardData(
     todayRevenue: 0,
-    pendingOrders: 0,
     weeklySalesChart: [0, 0, 0, 0, 0, 0, 0],
     monthlySalesChart: [0, 0, 0, 0, 0, 0],
+    onlineWeeklyChart: [0, 0, 0, 0, 0, 0, 0],
+    posWeeklyChart: [0, 0, 0, 0, 0, 0, 0],
+    onlineMonthlyChart: [0, 0, 0, 0, 0, 0],
+    posMonthlyChart: [0, 0, 0, 0, 0, 0],
     recentOrders: [],
     ordersByStatus: {},
     lowStockCount: 0,
@@ -226,6 +257,29 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
       (m) => '${m[1]},',
     );
     return '₱$formatted';
+  }
+
+  /// Resolves the chart data for the current [SalesFilter].
+  List<double> _filteredWeekly(_DashboardData data) {
+    switch (_salesFilter) {
+      case SalesFilter.online:
+        return data.onlineWeeklyChart;
+      case SalesFilter.pos:
+        return data.posWeeklyChart;
+      case SalesFilter.all:
+        return data.weeklySalesChart;
+    }
+  }
+
+  List<double> _filteredMonthly(_DashboardData data) {
+    switch (_salesFilter) {
+      case SalesFilter.online:
+        return data.onlineMonthlyChart;
+      case SalesFilter.pos:
+        return data.posMonthlyChart;
+      case SalesFilter.all:
+        return data.monthlySalesChart;
+    }
   }
 
   String _timeAgo(String? isoString) {
@@ -441,6 +495,8 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                 color: Colors.grey.shade500,
               ),
             ),
+            const SizedBox(height: 10),
+            _buildSalesFilterToggle(),
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(16),
@@ -449,9 +505,17 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: AppConstants.sellerShadow,
               ),
-              child: SellerWeeklyBar(
-                dailySales: data.weeklySalesChart,
-                dayLabels: _weekDayLabels,
+              child: SellerRevenueLineChart(
+                data: List.generate(
+                  7,
+                  (i) => RevenuePoint(
+                    label: _weekDayLabels[i],
+                    revenue: i < _filteredWeekly(data).length
+                        ? _filteredWeekly(data)[i]
+                        : 0,
+                  ),
+                ),
+                isWeekly: true,
               ),
             ),
 
@@ -465,9 +529,16 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: AppConstants.sellerShadow,
               ),
-              child: SellerWeeklyBar(
-                dailySales: data.monthlySalesChart,
-                dayLabels: SalesService.monthlyLabels(),
+              child: SellerRevenueLineChart(
+                data: List.generate(
+                  _filteredMonthly(data).length,
+                  (i) => RevenuePoint(
+                    label: SalesService.monthlyLabels()[i],
+                    tooltipLabel: SalesService.monthlyFullLabels()[i],
+                    revenue: _filteredMonthly(data)[i],
+                  ),
+                ),
+                isWeekly: false,
               ),
             ),
 
@@ -484,6 +555,9 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     final ratingStr = storeRating != null
         ? '${(storeRating as num).toDouble().toStringAsFixed(1)} ★'
         : null;
+
+    // Compute weekly total for the metrics card
+    final weeklyTotal = data.weeklySalesChart.fold<double>(0, (a, b) => a + b);
 
     return Column(
       children: [
@@ -504,20 +578,24 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
               ),
             ),
             const SizedBox(width: 8),
-            // Pending Orders (small, right)
+            // Weekly Sales (small, right)
             Expanded(
               flex: 42,
               child: SellerMetricCard(
-                label: 'PENDING ORDERS',
-                value: '${data.pendingOrders}',
-                valueColor: AppConstants.statusPendingColor,
-                subtitle: 'awaiting action',
+                label: 'THIS WEEK',
+                value: _formatCurrency(weeklyTotal),
+                valueColor: AppConstants.primary,
+                subtitle: _getWeekDateRange(),
+                trailing: Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: SellerSparkline(
+                    values: data.weeklySalesChart,
+                    color: AppConstants.primary,
+                  ),
+                ),
                 onTap: () {
                   Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          const ManageOrdersScreen(initialFilter: 'pending'),
-                    ),
+                    MaterialPageRoute(builder: (_) => const ReportsScreen()),
                   );
                 },
               ),
@@ -549,7 +627,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
               ),
             ),
             const SizedBox(width: 8),
-            // Custom Orders (large, right)
+            // Custom Orders (small, right)
             Expanded(
               flex: 58,
               child: SellerMetricCard(
@@ -901,6 +979,51 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
         const SizedBox(width: 10),
         Expanded(child: Divider(color: Colors.grey.shade300, height: 1)),
       ],
+    );
+  }
+
+  // ─── Sales Filter Toggle ──────────────────────────────────────
+  Widget _buildSalesFilterToggle() {
+    return Container(
+      height: 32,
+      decoration: BoxDecoration(
+        color: Colors.grey.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: SalesFilter.values.map((filter) {
+          final isSelected = _salesFilter == filter;
+          final label = switch (filter) {
+            SalesFilter.all => 'All',
+            SalesFilter.online => 'Online',
+            SalesFilter.pos => 'In-Store',
+          };
+          return Expanded(
+            child: GestureDetector(
+              onTap: () {
+                if (!isSelected) setState(() => _salesFilter = filter);
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                margin: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  color: isSelected ? AppConstants.primary : Colors.transparent,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  label,
+                  style: AppConstants.bodyStyle(
+                    fontSize: 11,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                    color: isSelected ? Colors.white : Colors.grey.shade600,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
     );
   }
 

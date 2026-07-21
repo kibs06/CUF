@@ -3,14 +3,19 @@ import '../../constants/app_constants.dart';
 
 class SellerSparkline extends StatelessWidget {
   final List<double> values;
+  final Color color;
 
-  const SellerSparkline({super.key, required this.values});
+  const SellerSparkline({
+    super.key,
+    required this.values,
+    this.color = AppConstants.accent,
+  });
 
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
       size: const Size(double.infinity, 28),
-      painter: _SparklinePainter(values: values, color: AppConstants.accent),
+      painter: _SparklinePainter(values: values, color: color),
     );
   }
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:provider/provider.dart';
@@ -6,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../constants/app_constants.dart';
 import '../../models/store.dart';
+import '../../providers/follow_provider.dart';
 import '../../providers/product_provider.dart';
 import '../../services/message_service.dart';
 import '../../services/store_service.dart';
@@ -34,9 +36,9 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
   Store? _store;
   List<Map<String, dynamic>> _storeProducts = [];
   List<Map<String, dynamic>> _storyEntries = [];
-  bool _isFollowing = false;
   bool _isLoading = true;
   String _sortMode = 'Newest';
+  int _followerCount = 0;
 
   /// Deterministic image aspect ratio per card keyed off product id.
   double _imageAspectRatioFor(dynamic product) {
@@ -144,7 +146,8 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
     await Provider.of<ProductProvider>(context, listen: false).loadProducts();
     final store = await _storeService.fetchStoreById(widget.storeId);
     final stories = await _storeService.getStoryEntriesForStore(widget.storeId);
-    final isFollowing = await _storeService.isFollowingAsync(widget.storeId);
+    // Fetch the DB-truth follower count
+    final followerCount = await _storeService.getFollowerCount(widget.storeId);
     if (!mounted) return;
     final allProducts = Provider.of<ProductProvider>(
       context,
@@ -158,7 +161,7 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
       _store = store;
       _storeProducts = storeProducts;
       _storyEntries = stories;
-      _isFollowing = isFollowing;
+      _followerCount = followerCount;
       _isLoading = false;
     });
 
@@ -268,95 +271,11 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                             ),
                           ),
                         const SizedBox(height: 12),
-                        // Stat row + follow button
-                        Row(
-                          children: [
-                            Text(
-                              '${_storeProducts.length} Products',
-                              style: AppConstants.monoStyle(
-                                fontSize: 11,
-                                color: Colors.white.withAlpha(200),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Text(
-                              '⭐ ${store.rating}',
-                              style: AppConstants.monoStyle(
-                                fontSize: 11,
-                                color: Colors.white.withAlpha(200),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Text(
-                              '📍 ${store.location.split(',').first}',
-                              style: AppConstants.monoStyle(
-                                fontSize: 11,
-                                color: Colors.white.withAlpha(200),
-                              ),
-                            ),
-                            const Spacer(),
-                            // Message Seller button
-                            GestureDetector(
-                              onTap: () => _messageSeller(),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.transparent,
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(
-                                    color: AppConstants.surfaceLight,
-                                    width: 1.5,
-                                  ),
-                                ),
-                                child: Icon(
-                                  Icons.chat_bubble_outline,
-                                  color: AppConstants.surfaceLight,
-                                  size: 16,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            // Follow button
-                            GestureDetector(
-                              onTap: () {
-                                _storeService.toggleFollow(widget.storeId);
-                                setState(() {
-                                  _isFollowing = !_isFollowing;
-                                });
-                              },
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 200),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: _isFollowing
-                                      ? AppConstants.surfaceLight
-                                      : Colors.transparent,
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(
-                                    color: AppConstants.surfaceLight,
-                                    width: 1.5,
-                                  ),
-                                ),
-                                child: Text(
-                                  _isFollowing ? 'Following ✓' : 'Follow',
-                                  style: AppConstants.bodyStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: _isFollowing
-                                        ? store.color
-                                        : AppConstants.surfaceLight,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+                        // Stats row — horizontally scrollable, never overflows
+                        _buildStatsRow(store),
+                        const SizedBox(height: 10),
+                        // Actions row — Message Seller + Follow, always visible
+                        _buildActionsRow(store),
                       ],
                     ),
                   ),
@@ -741,6 +660,226 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
 
           const SliverToBoxAdapter(child: SizedBox(height: 100)),
           ],
+        ),
+      ),
+    );
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  // STORE BANNER — Stats + Actions rows
+  // ════════════════════════════════════════════════════════════════
+
+  /// Horizontally scrollable stats row — never overflows.
+  Widget _buildStatsRow(Store store) {
+    final followProvider = context.watch<FollowProvider>();
+    final displayCount = followProvider.followerCountFor(
+      widget.storeId,
+      fallback: _followerCount,
+    );
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          _statChip('$displayCount ${displayCount == 1 ? 'follower' : 'followers'}'),
+          _statDivider(),
+          _statChip('${_storeProducts.length} products'),
+          _statDivider(),
+          _statChip('★ ${store.rating}'),
+          _statDivider(),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 140),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.location_on, size: 14, color: AppConstants.surfaceLight),
+                const SizedBox(width: 2),
+                Flexible(
+                  child: Text(
+                    store.location,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                    style: AppConstants.monoStyle(
+                      fontSize: 11,
+                      color: Colors.white.withAlpha(200),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Actions row — Message Seller + Follow button, always fully visible.
+  Widget _buildActionsRow(Store store) {
+    return Row(
+      children: [
+        GestureDetector(
+          onTap: () => _messageSeller(),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: AppConstants.surfaceLight, width: 1.5),
+            ),
+            child: const Icon(
+              Icons.chat_bubble_outline,
+              color: AppConstants.surfaceLight,
+              size: 16,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        _FollowButton(
+          storeId: widget.storeId,
+          brandColor: AppConstants.parseBrandColor(store.color),
+          onFollowChanged: (isFollowing) {
+            // Issue 2: count is now owned by FollowProvider.toggle()
+            // — just read the reconciled value from the provider.
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _statChip(String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Text(
+        text,
+        style: AppConstants.monoStyle(
+          fontSize: 11,
+          color: Colors.white.withAlpha(200),
+        ),
+      ),
+    );
+  }
+
+  Widget _statDivider() {
+    return Text(
+      '·',
+      style: AppConstants.monoStyle(
+        fontSize: 14,
+        color: Colors.white.withAlpha(120),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Animated Follow Button
+// ══════════════════════════════════════════════════════════════════
+
+class _FollowButton extends StatefulWidget {
+  final String storeId;
+  final Color brandColor;
+  final void Function(bool isFollowing) onFollowChanged;
+
+  const _FollowButton({
+    required this.storeId,
+    required this.brandColor,
+    required this.onFollowChanged,
+  });
+
+  @override
+  State<_FollowButton> createState() => _FollowButtonState();
+}
+
+class _FollowButtonState extends State<_FollowButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 220),
+    lowerBound: 0.0,
+    upperBound: 0.12,
+  );
+  bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleTap(FollowProvider followProvider) async {
+    if (_isLoading) return;
+    HapticFeedback.lightImpact();
+
+    // Bounce: scale up then settle back down
+    await _controller.forward();
+    _controller.reverse();
+
+    final wasFollowing = followProvider.isFollowing(widget.storeId);
+    setState(() => _isLoading = true);
+    try {
+      await followProvider.toggle(widget.storeId);
+      if (mounted) widget.onFollowChanged(!wasFollowing);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to update follow status'),
+            backgroundColor: AppConstants.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final followProvider = context.watch<FollowProvider>();
+    final isFollowing = followProvider.isFollowing(widget.storeId);
+
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final scale = 1.0 + _controller.value;
+        return Transform.scale(scale: scale, child: child);
+      },
+      child: GestureDetector(
+        onTap: () => _handleTap(followProvider),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: isFollowing ? AppConstants.surfaceLight : Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppConstants.surfaceLight, width: 1.5),
+          ),
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 180),
+            transitionBuilder: (child, animation) => FadeTransition(
+              opacity: animation,
+              child: ScaleTransition(scale: animation, child: child),
+            ),
+            child: Row(
+              key: ValueKey(isFollowing),
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isFollowing) ...[
+                  Icon(Icons.check, size: 13, color: widget.brandColor),
+                  const SizedBox(width: 4),
+                ],
+                Text(
+                  isFollowing ? 'Following' : 'Follow',
+                  style: AppConstants.bodyStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: isFollowing
+                        ? widget.brandColor
+                        : AppConstants.surfaceLight,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

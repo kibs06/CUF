@@ -1,8 +1,10 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../models/followed_store.dart';
 import '../models/store.dart';
 
 class StoreService {
@@ -230,13 +232,23 @@ class StoreService {
 
   Future<void> followStore(String storeId) async {
     final userId = _client.auth.currentUser?.id;
+    debugPrint('[Follow] followStore: userId=$userId storeId=$storeId');
     if (userId == null) {
       throw Exception('You must be logged in to follow a store.');
     }
-    await _client.from('store_follows').upsert({
-      'user_id': userId,
-      'store_id': storeId,
-    });
+    try {
+      // Upsert: idempotent — safe for rapid double-taps.
+      // If the row already exists, this is a harmless no-op.
+      await _client.from('store_follows').upsert(
+        {'user_id': userId, 'store_id': storeId},
+        onConflict: 'user_id,store_id',
+      );
+      debugPrint('[Follow] Upsert succeeded');
+    } catch (e, st) {
+      debugPrint('[Follow] UPSERT FAILED: $e');
+      debugPrint('[Follow] Stack: $st');
+      rethrow;
+    }
   }
 
   Future<void> unfollowStore(String storeId) async {
@@ -263,17 +275,145 @@ class StoreService {
     return data != null;
   }
 
-  void toggleFollow(String storeId) {
+  String? get currentUserId => _client.auth.currentUser?.id;
+
+  Future<void> toggleFollow(String storeId) async {
     final userId = _client.auth.currentUser?.id;
-    if (userId == null) return;
-    isFollowingAsync(storeId).then((following) {
-      if (following) {
-        unfollowStore(storeId);
-      } else {
-        followStore(storeId);
-      }
-    });
+    if (userId == null) {
+      throw Exception('You must be logged in to follow a store.');
+    }
+    final following = await isFollowingAsync(storeId);
+    debugPrint('[Follow] toggleFollow: isFollowing=$following → toggling');
+    if (following) {
+      await unfollowStore(storeId);
+    } else {
+      await followStore(storeId);
+    }
   }
 
-  bool isFollowing(String storeId) => false;
+  /// Full list of stores a user follows, with store details.
+  /// Tries the join query first; falls back to separate queries if the
+  /// foreign key relationship between store_follows and stores is missing.
+  Future<List<FollowedStore>> getFollowedStores(String userId) async {
+    debugPrint('[StoreService] getFollowedStores called: userId=$userId');
+    try {
+      // Try the join query (requires FK from store_follows.store_id → stores.id)
+      final data = await _client
+          .from('store_follows')
+          .select('created_at, stores(id, name, logo_url, tagline, brand_color)')
+          .eq('user_id', userId)
+          .order('created_at', ascending: false);
+
+      debugPrint('[StoreService] Join query returned ${data.length} rows');
+
+      if (data.isEmpty) {
+        debugPrint('[StoreService] No follows found for user');
+        return [];
+      }
+
+      // Check if the join actually returned store data
+      final hasStoreData =
+          data.every((r) => r['stores'] != null && r['stores'] is Map);
+      debugPrint('[StoreService] hasStoreData=$hasStoreData');
+
+      if (hasStoreData) {
+        final storeIds = data.map((r) => r['stores']['id'] as String).toList();
+        final counts = await getFollowerCounts(storeIds);
+
+        return data.map((r) {
+          final store = r['stores'];
+          return FollowedStore(
+            storeId: store['id'],
+            name: store['name'],
+            logoUrl: store['logo_url'],
+            tagline: store['tagline'],
+            color: store['brand_color'],
+            followedAt: DateTime.parse(r['created_at']),
+            followerCount: counts[store['id']] ?? 0,
+          );
+        }).toList();
+      }
+
+      // Fallback: no FK — do two separate queries
+      debugPrint('[StoreService] Join data missing store info, using fallback');
+      return _getFollowedStoresFallback(userId);
+    } catch (e) {
+      debugPrint('[StoreService] getFollowedStores ERROR: $e');
+      // Fallback: no FK — do two separate queries
+      return _getFollowedStoresFallback(userId);
+    }
+  }
+
+  /// Fallback: fetch follows and stores separately (no FK required).
+  Future<List<FollowedStore>> _getFollowedStoresFallback(String userId) async {
+    final follows = await _client
+        .from('store_follows')
+        .select('store_id, created_at')
+        .eq('user_id', userId)
+        .order('created_at', ascending: false);
+
+    if (follows.isEmpty) return [];
+
+    final storeIds = follows.map((r) => r['store_id'] as String).toList();
+    final storeData = await _client
+        .from('stores')
+        .select('id, name, logo_url, tagline, brand_color')
+        .inFilter('id', storeIds);
+
+    final storeMap = <String, Map<String, dynamic>>{};
+    for (final s in storeData) {
+      storeMap[s['id'] as String] = s;
+    }
+
+    final counts = await getFollowerCounts(storeIds);
+
+    return follows.map((r) {
+      final storeId = r['store_id'] as String;
+      final store = storeMap[storeId];
+      return FollowedStore(
+        storeId: storeId,
+        name: store?['name'] as String? ?? 'Unknown Store',
+        logoUrl: store?['logo_url'] as String?,
+        tagline: store?['tagline'] as String?,
+        color: store?['brand_color'] as String?,
+        followedAt: DateTime.parse(r['created_at']),
+        followerCount: counts[storeId] ?? 0,
+      );
+    }).toList();
+  }
+
+  /// Batched follower counts for a list of store IDs (single query).
+  Future<Map<String, int>> getFollowerCounts(List<String> storeIds) async {
+    if (storeIds.isEmpty) return {};
+    final data = await _client
+        .from('store_follows')
+        .select('store_id')
+        .inFilter('store_id', storeIds);
+    final counts = <String, int>{};
+    for (final row in data) {
+      final id = row['store_id'] as String;
+      counts[id] = (counts[id] ?? 0) + 1;
+    }
+    return counts;
+  }
+
+  /// Total number of stores the given user follows (source of truth).
+  Future<int> getFollowingCount(String userId) async {
+    final response = await _client
+        .from('store_follows')
+        .select('store_id')
+        .eq('user_id', userId)
+        .count(CountOption.exact);
+    return response.count;
+  }
+
+  /// Single-store follower count.
+  Future<int> getFollowerCount(String storeId) async {
+    final response = await _client
+        .from('store_follows')
+        .select('user_id')
+        .eq('store_id', storeId)
+        .count(CountOption.exact);
+    return response.count;
+  }
 }

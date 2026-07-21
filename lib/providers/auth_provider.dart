@@ -13,6 +13,10 @@ class AuthProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _errorMessage;
 
+  /// Hooks set by the app root after construction.
+  void Function(String userId)? onLoginHook;
+  VoidCallback? onLogoutHook;
+
   Map<String, dynamic>? get currentUser => _currentUser;
   Map<String, dynamic>? get profile => _profile;
   bool get isLoading => _isLoading;
@@ -70,6 +74,7 @@ class AuthProvider extends ChangeNotifier {
       final res = await _auth.signIn(email: email, password: password);
       _currentUser = res['user'];
       _profile = res['profile'];
+      onLoginHook?.call(_currentUser!['id'] as String);
       return true;
     } catch (e) {
       _errorMessage = e.toString().replaceAll('Exception: ', '');
@@ -102,6 +107,7 @@ class AuthProvider extends ChangeNotifier {
       // Auto login after sign up
       _currentUser = res['user'];
       _profile = res['profile'];
+      onLoginHook?.call(_currentUser!['id'] as String);
       return true;
     } catch (e) {
       _errorMessage = e.toString().replaceAll('Exception: ', '');
@@ -163,6 +169,7 @@ class AuthProvider extends ChangeNotifier {
     _profile = null;
     _errorMessage = null;
     _isLoading = false;
+    onLogoutHook?.call();
     notifyListeners();
 
     try {

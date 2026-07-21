@@ -4,7 +4,9 @@ import 'package:provider/provider.dart';
 import '../../constants/app_constants.dart';
 import '../../models/notification_category.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/follow_provider.dart';
 import '../../providers/notification_provider.dart';
+import 'following_list_dialog.dart';
 import '../../services/profile_service.dart';
 import '../../services/store_service.dart';
 import '../../widgets/sole_badge.dart';
@@ -357,6 +359,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           backgroundColor: roleColor.withValues(alpha: 0.14),
           textColor: roleColor,
         ),
+        const SizedBox(height: 12),
+        _buildFollowingStat(auth),
       ],
     );
   }
@@ -748,6 +752,73 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // ════════════════════════════════════════════════════════════════
   // HELPERS
   // ════════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════
+  // FOLLOWING STAT
+  // ════════════════════════════════════════════════════════════════
+  Widget _buildFollowingStat(AuthProvider auth) {
+    final followProvider = context.watch<FollowProvider>();
+    final count = followProvider.followingCount;
+    final isLoaded = followProvider.isLoaded;
+
+    return Semantics(
+      label: isLoaded ? 'Following, $count, opens list of followed stores' : 'Loading following count',
+      button: true,
+      child: GestureDetector(
+        onTap: () {
+          showDialog(
+            context: context,
+            builder: (_) => const FollowingListDialog(),
+          );
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: AppConstants.primary.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: AppConstants.primary.withValues(alpha: 0.15),
+            ),
+          ),
+          child: isLoaded
+              ? Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '$count ',
+                      style: AppConstants.bodyStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: AppConstants.primary,
+                      ),
+                    ),
+                    Text(
+                      'Following',
+                      style: AppConstants.bodyStyle(
+                        fontSize: 14,
+                        color: AppConstants.secondary,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.chevron_right,
+                      size: 18,
+                      color: AppConstants.primary,
+                    ),
+                  ],
+                )
+              : const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: AppConstants.primary,
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+
   String _initials(String fullName) {
     final parts = fullName
         .trim()

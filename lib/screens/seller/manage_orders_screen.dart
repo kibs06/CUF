@@ -24,6 +24,11 @@ class _ManageOrdersScreenState extends State<ManageOrdersScreen>
   int _tabIndex = 0;
   final Set<dynamic> _updatingOrderIds = {};
 
+  // No 'received' tab — received orders show in 'Delivered' tab
+  // but the DB value is 'received' (customer confirmed).
+  // The 'Delivered' tab shows DB status='delivered' (seller handed off,
+  // awaiting customer confirmation).
+
   final List<String> _tabs = [
     'All',
     'Pending',
@@ -95,7 +100,7 @@ class _ManageOrdersScreenState extends State<ManageOrdersScreen>
       case 'pending':
         nextStatus = 'confirmed';
         break;
-      case 'confirmed':
+      case 'preparing':
         nextStatus = 'ready';
         break;
       case 'ready':
@@ -279,9 +284,15 @@ class _ManageOrdersScreenState extends State<ManageOrdersScreen>
     if (_tabIndex == 0) {
       filteredOrders = allOrders;
     } else {
+      // Map UI tab labels to actual DB status values
+      const uiToDbFilter = <String, String>{
+        'confirmed': 'preparing',
+        'delivered': 'delivered',
+      };
       final statusFilter = _tabs[_tabIndex].toLowerCase();
+      final dbFilter = uiToDbFilter[statusFilter] ?? statusFilter;
       filteredOrders = allOrders
-          .where((o) => (o['status'] ?? '').toLowerCase() == statusFilter)
+          .where((o) => (o['status'] ?? '').toLowerCase() == dbFilter)
           .toList();
     }
 
@@ -318,13 +329,18 @@ class _ManageOrdersScreenState extends State<ManageOrdersScreen>
               ),
               unselectedLabelStyle: AppConstants.bodyStyle(fontSize: 12),
               tabs: _tabs.map((tab) {
+                // Map UI tab labels to DB status values for counting
+                const uiToDbCount = <String, String>{
+                  'confirmed': 'preparing',
+                  'delivered': 'delivered',
+                };
+                final dbTab = uiToDbCount[tab.toLowerCase()] ?? tab.toLowerCase();
                 final count = tab == 'All'
                     ? allOrders.length
                     : allOrders
                           .where(
                             (o) =>
-                                (o['status'] ?? '').toLowerCase() ==
-                                tab.toLowerCase(),
+                                (o['status'] ?? '').toLowerCase() == dbTab,
                           )
                           .length;
                 final color =

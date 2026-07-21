@@ -207,29 +207,34 @@ class SalesService {
 
   Future<List<double>> getWeeklyRevenue(String storeId) async {
     final results = await Future.wait([
-      getOnlineWeeklySales(storeId),
-      fetchWeeklySales(storeId),
+      getOnlineWeeklyRevenue(storeId),
+      getPosWeeklyRevenue(storeId),
     ]);
-    final onlineOrders = results[0];
-    final posTransactions = results[1];
+    return List.generate(7, (i) => results[0][i] + results[1][i]);
+  }
 
-    final dailyRevenue = List<double>.filled(7, 0);
-
-    for (final row in onlineOrders) {
+  /// Online-only weekly revenue per day (Mon=0 … Sun=6).
+  Future<List<double>> getOnlineWeeklyRevenue(String storeId) async {
+    final rows = await getOnlineWeeklySales(storeId);
+    final daily = List<double>.filled(7, 0);
+    for (final row in rows) {
       final createdAt = DateTime.parse(row['created_at'] as String);
-      final weekIndex = createdAt.weekday - 1;
-      dailyRevenue[weekIndex] +=
+      daily[createdAt.weekday - 1] +=
           ((row['total_amount'] as num?)?.toDouble() ?? 0);
     }
+    return daily;
+  }
 
-    for (final row in posTransactions) {
+  /// POS-only weekly revenue per day (Mon=0 … Sun=6).
+  Future<List<double>> getPosWeeklyRevenue(String storeId) async {
+    final rows = await fetchWeeklySales(storeId);
+    final daily = List<double>.filled(7, 0);
+    for (final row in rows) {
       final createdAt = DateTime.parse(row['created_at'] as String);
-      final weekIndex = createdAt.weekday - 1;
-      dailyRevenue[weekIndex] +=
+      daily[createdAt.weekday - 1] +=
           ((row['total_amount'] as num?)?.toDouble() ?? 0);
     }
-
-    return dailyRevenue;
+    return daily;
   }
 
   Future<double> getMonthlyRevenue(String storeId) async {
@@ -273,61 +278,90 @@ class SalesService {
     return total;
   }
 
-  /// Monthly revenue trend for the past 6 months.
-  /// Returns a list of 6 doubles (index 0 = 5 months ago, index 5 = current month)
-  /// combining online orders + POS sales_transactions.
+  /// Monthly revenue trend for the past 6 months (combined).
+  /// Returns a list of 6 doubles (index 0 = 5 months ago, index 5 = current month).
   Future<List<double>> getMonthlyRevenueTrend(String storeId) async {
+    final results = await Future.wait([
+      getOnlineMonthlyRevenueTrend(storeId),
+      getPosMonthlyRevenueTrend(storeId),
+    ]);
+    return List.generate(6, (i) => results[0][i] + results[1][i]);
+  }
+
+  /// Online-only monthly revenue trend (6 months).
+  Future<List<double>> getOnlineMonthlyRevenueTrend(String storeId) async {
     final now = DateTime.now();
     final sixMonthsAgo = DateTime(now.year, now.month - 5, 1);
     final orderIds = await _getOrderIds(storeId);
+    if (orderIds.isEmpty) return List<double>.filled(6, 0);
 
-    // Fetch online orders in range
-    final futures = <Future<List>>[
-      orderIds.isNotEmpty
-          ? _client
-              .from('orders')
-              .select('total_amount, created_at')
-              .inFilter('id', orderIds)
-              .neq('status', 'cancelled')
-              .gte('created_at', sixMonthsAgo.toIso8601String())
-              .then((d) => List.from(d as List))
-          : Future.value([]),
-      _client
-          .from('sales_transactions')
-          .select('total_amount, created_at')
-          .eq('store_id', storeId)
-          .gte('created_at', sixMonthsAgo.toIso8601String())
-          .then((d) => List.from(d as List)),
-    ];
+    final rows = await _client
+        .from('orders')
+        .select('total_amount, created_at')
+        .inFilter('id', orderIds)
+        .neq('status', 'cancelled')
+        .gte('created_at', sixMonthsAgo.toIso8601String());
 
-    final results = await Future.wait(futures);
-
-    // Aggregate by month index (0 = 5 months ago … 5 = current month)
-    final monthlyRevenue = List<double>.filled(6, 0);
-    for (final source in results) {
-      for (final row in source) {
-        final createdAt = DateTime.parse(row['created_at'] as String);
-        final monthDiff =
-            (now.year - createdAt.year) * 12 + (now.month - createdAt.month);
-        final index = 5 - monthDiff;
-        if (index >= 0 && index < 6) {
-          monthlyRevenue[index] +=
-              ((row['total_amount'] as num?)?.toDouble() ?? 0);
-        }
-      }
-    }
-
-    return monthlyRevenue;
+    return _aggregateMonthly(rows as List, now);
   }
 
-  /// Generates month labels for the trend chart (e.g. ['Jan','Feb',…]).
+  /// POS-only monthly revenue trend (6 months).
+  Future<List<double>> getPosMonthlyRevenueTrend(String storeId) async {
+    final now = DateTime.now();
+    final sixMonthsAgo = DateTime(now.year, now.month - 5, 1);
+
+    final rows = await _client
+        .from('sales_transactions')
+        .select('total_amount, created_at')
+        .eq('store_id', storeId)
+        .gte('created_at', sixMonthsAgo.toIso8601String());
+
+    return _aggregateMonthly(rows as List, now);
+  }
+
+  /// Shared helper: aggregate rows into a 6-month revenue list.
+  List<double> _aggregateMonthly(List rows, DateTime now) {
+    final monthly = List<double>.filled(6, 0);
+    for (final row in rows) {
+      final createdAt = DateTime.parse(row['created_at'] as String);
+      final monthDiff =
+          (now.year - createdAt.year) * 12 + (now.month - createdAt.month);
+      final index = 5 - monthDiff;
+      if (index >= 0 && index < 6) {
+        monthly[index] += ((row['total_amount'] as num?)?.toDouble() ?? 0);
+      }
+    }
+    return monthly;
+  }
+
+  /// Generates abbreviated month labels for the trend chart (e.g. ['Jan','Feb',…]).
   static List<String> monthlyLabels() {
     final now = DateTime.now();
     const months = [
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
     ];
-    return List.generate(6, (i) => months[(now.month - 5 + i - 1) % 12]);
+    return List.generate(6, (i) {
+      // Safe double-modulo to handle negative values in Dart
+      final idx = ((now.month - 6 + i) % 12 + 12) % 12;
+      return months[idx];
+    });
+  }
+
+  /// Full month labels with year for chart tooltips
+  /// (e.g. ['February 2026', …, 'July 2026']).
+  static List<String> monthlyFullLabels() {
+    final now = DateTime.now();
+    const names = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December',
+    ];
+    return List.generate(6, (i) {
+      final offset = now.month - 6 + i;
+      final month = ((offset % 12) + 12) % 12 + 1;
+      final year = now.year + (offset ~/ 12);
+      return '${names[month - 1]} $year';
+    });
   }
 
   /// Combined report: online orders + POS sales for a date range.

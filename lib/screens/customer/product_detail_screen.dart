@@ -5,10 +5,14 @@ import 'package:shimmer/shimmer.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/cart_provider.dart';
+import '../../providers/review_provider.dart';
 import '../../utils/cart_helpers.dart';
 import '../../widgets/sole_badge.dart';
 import '../../widgets/sole_ar_pill.dart';
+import '../../widgets/sole_review_card.dart';
+import '../../widgets/sole_star_rating.dart';
 import 'ar_fitting_screen.dart';
+import 'write_review_screen.dart';
 import '../../widgets/cart_icon_button.dart';
 import '../../widgets/fly_to_cart_animation.dart';
 
@@ -22,6 +26,226 @@ class ProductDetailScreen extends StatefulWidget {
 
   @override
   State<ProductDetailScreen> createState() => _ProductDetailScreenState();
+}
+
+/// Reviews section for the product detail screen.
+class _ReviewsSection extends StatefulWidget {
+  final String productId;
+  final String productName;
+  const _ReviewsSection({required this.productId, required this.productName});
+
+  @override
+  State<_ReviewsSection> createState() => _ReviewsSectionState();
+}
+
+class _ReviewsSectionState extends State<_ReviewsSection> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<ReviewProvider>().loadReviews(widget.productId);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<ReviewProvider>();
+
+    final reviewCount = provider.reviewCount;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Header with aggregate + Write button ────────────
+        Row(
+          children: [
+            Text(
+              'Reviews',
+              style: AppConstants.bodyStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            ),
+            const Spacer(),
+            if (provider.canReview)
+              TextButton.icon(
+                onPressed: () async {
+                  final result = await Navigator.of(context).push<bool>(
+                    MaterialPageRoute(
+                      builder: (_) => WriteReviewScreen(
+                        productId: widget.productId,
+                        productName: widget.productName,
+                      ),
+                    ),
+                  );
+                  if (result == true && mounted) {
+                    provider.loadReviews(widget.productId);
+                  }
+                },
+                icon: const Icon(Icons.edit_outlined, size: 16),
+                label: Text(
+                  provider.myReview != null ? 'Edit Review' : 'Write a Review',
+                  style: AppConstants.bodyStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: AppConstants.primary,
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 10),
+
+        // ── Rating summary bar (only if reviews exist) ─────
+        if (reviewCount > 0) ...[
+          _buildRatingSummary(provider),
+          const SizedBox(height: 16),
+        ],
+
+        // ── Reviews list or empty state ─────────────────────
+        if (provider.isLoading)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 20),
+            child: Center(
+              child: SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: AppConstants.primary,
+                ),
+              ),
+            ),
+          )
+        else if (provider.reviews.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            decoration: BoxDecoration(
+              color: AppConstants.borderGray.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.rate_review_outlined,
+                  size: 36,
+                  color: AppConstants.borderGray,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'No reviews yet — be the first!',
+                  style: AppConstants.bodyStyle(
+                    fontSize: 13,
+                    color: AppConstants.secondary.withValues(alpha: 0.5),
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          ...provider.reviews.map((review) => SoleReviewCard(review: review)),
+      ],
+    );
+  }
+
+  Widget _buildRatingSummary(ReviewProvider provider) {
+    final breakdown = provider.breakdown;
+    final total = provider.reviewCount;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Left: avg rating big number
+          Column(
+            children: [
+              Text(
+                provider.avgRating.toStringAsFixed(1),
+                style: AppConstants.headlineStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                  color: AppConstants.secondary,
+                ),
+              ),
+              const SizedBox(height: 2),
+              SoleStarRating(
+                rating: provider.avgRating.round(),
+                size: 16,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '$total ${total == 1 ? "review" : "reviews"}',
+                style: AppConstants.bodyStyle(
+                  fontSize: 11,
+                  color: AppConstants.secondary.withValues(alpha: 0.5),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(width: 20),
+          // Right: breakdown bars
+          Expanded(
+            child: Column(
+              children: List.generate(5, (i) {
+                final star = 5 - i;
+                final count = breakdown[star] ?? 0;
+                final fraction = total > 0 ? count / total : 0.0;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(
+                    children: [
+                      Text(
+                        '$star',
+                        style: AppConstants.monoStyle(
+                          fontSize: 11,
+                          color: AppConstants.secondary.withValues(alpha: 0.6),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(Icons.star_rounded, size: 12, color: AppConstants.accent),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(2),
+                          child: LinearProgressIndicator(
+                            value: fraction,
+                            backgroundColor: AppConstants.borderGray.withValues(alpha: 0.3),
+                            valueColor: const AlwaysStoppedAnimation(AppConstants.accent),
+                            minHeight: 6,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      SizedBox(
+                        width: 20,
+                        child: Text(
+                          '$count',
+                          style: AppConstants.monoStyle(
+                            fontSize: 10,
+                            color: AppConstants.secondary.withValues(alpha: 0.5),
+                          ),
+                          textAlign: TextAlign.right,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _ProductDetailScreenState extends State<ProductDetailScreen>
@@ -553,10 +777,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                       else
                         SingleChildScrollView(
                           scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: sizesMap.entries.map((entry) {
-                              final size = entry.key;
-                              final stock = entry.value as int;
+                          child:                      Row(
+                        children: sizesMap.entries.map((entry) {
+                          final size = entry.key;
+                          final stock = entry.value;
                               final isAvailable = stock > 0;
                               final isSelected = _selectedSize == size;
 
@@ -727,6 +951,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                             ),
                           ),
                         ),
+                      ),
+                      const SizedBox(height: 24),
+
+                      // ── Reviews Section ──────────────────────
+                      _ReviewsSection(
+                        productId: widget.product['id'].toString(),
+                        productName: widget.product['name'] ?? '',
                       ),
                     ],
                   ),

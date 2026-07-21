@@ -1,0 +1,31 @@
+-- ============================================================
+-- Fix: PostgREST FK join syntax
+-- ============================================================
+-- The previous code used named FK constraint joins like:
+--   profiles!conversations_customer_id_fkey(full_name)
+--   profiles!orders_customer_id_fkey(full_name, email)
+--
+-- These broke because PostgreSQL auto-generates constraint names
+-- as {table}_{column}_{ref_table}_{ref_column}_fkey, e.g.:
+--   conversations_customer_id_profiles_id_fkey
+--   orders_customer_id_profiles_id_fkey
+--
+-- The code was missing the _profiles_id suffix.
+--
+-- FIX: Switch to PostgREST's column-based join syntax which
+-- doesn't depend on constraint names:
+--   profiles!customer_id(full_name)
+--
+-- This is more robust and doesn't break if constraints are
+-- renamed or migrations are regenerated.
+-- ============================================================
+
+-- No schema changes needed — this is a Dart-side fix only.
+-- This migration exists as documentation of the change.
+
+-- Verify the FK constraints exist (informational query):
+-- SELECT conname, conrelid::regclass AS table_name,
+--        confrelid::regclass AS references_table
+-- FROM pg_constraint
+-- WHERE contype = 'f'
+--   AND (conrelid = 'conversations'::regclass OR conrelid = 'orders'::regclass);

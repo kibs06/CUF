@@ -8,6 +8,16 @@ class SellerStatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Map DB status values to seller-friendly display labels and colors.
+    // DB stores 'preparing' (shown as 'Confirmed') and 'received' (shown as 'Delivered').
+    const dbToUiLabel = <String, String>{
+      'pending': 'Pending',
+      'preparing': 'Confirmed',
+      'ready': 'Ready',
+      'received': 'Delivered',
+      'cancelled': 'Cancelled',
+    };
+
     Color bg;
     Color text;
 
@@ -16,7 +26,7 @@ class SellerStatusChip extends StatelessWidget {
         bg = AppConstants.statusPendingColor.withOpacity(0.12);
         text = AppConstants.statusPendingColor;
         break;
-      case 'confirmed':
+      case 'preparing':
         bg = AppConstants.statusConfirmedColor.withOpacity(0.12);
         text = AppConstants.statusConfirmedColor;
         break;
@@ -24,7 +34,7 @@ class SellerStatusChip extends StatelessWidget {
         bg = AppConstants.statusReadyColor.withOpacity(0.12);
         text = AppConstants.statusReadyColor;
         break;
-      case 'delivered':
+      case 'received':
         bg = AppConstants.statusDeliveredColor.withOpacity(0.12);
         text = AppConstants.statusDeliveredColor;
         break;
@@ -37,6 +47,8 @@ class SellerStatusChip extends StatelessWidget {
         text = AppConstants.secondary;
     }
 
+    final displayLabel = dbToUiLabel[status.toLowerCase()] ?? status;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
@@ -44,7 +56,7 @@ class SellerStatusChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
-        status.toUpperCase(),
+        displayLabel.toUpperCase(),
         style: AppConstants.monoStyle(
           fontSize: 10,
           fontWeight: FontWeight.bold,

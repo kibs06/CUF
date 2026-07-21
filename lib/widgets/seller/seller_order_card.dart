@@ -41,7 +41,7 @@ class SellerOrderCard extends StatelessWidget {
         primaryLabel = 'Confirm Order';
         primaryColor = AppConstants.statusConfirmedColor;
         break;
-      case 'confirmed':
+      case 'preparing':
         primaryLabel = 'Mark Ready';
         primaryColor = AppConstants.statusReadyColor;
         break;
@@ -49,7 +49,7 @@ class SellerOrderCard extends StatelessWidget {
         primaryLabel = 'Mark Delivered';
         primaryColor = AppConstants.statusDeliveredColor;
         break;
-      case 'delivered':
+      case 'received':
         primaryLabel = '';
         primaryColor = AppConstants.accent;
         break;

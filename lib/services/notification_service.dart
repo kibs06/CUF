@@ -33,7 +33,9 @@ class NotificationService {
       query = query.eq('order_type', orderTypeFilter);
     }
 
-    final data = await query.order('created_at', ascending: false);
+    final data = await query
+        .eq('is_deleted', false)
+        .order('created_at', ascending: false);
 
     return (data as List)
         .map((row) => AppNotification.fromMap(Map<String, dynamic>.from(row)))
@@ -50,7 +52,8 @@ class NotificationService {
         .from('notifications')
         .select('category')
         .eq('user_id', userId)
-        .eq('is_read', false);
+        .eq('is_read', false)
+        .eq('is_deleted', false);
 
     final counts = <NotificationCategory, int>{
       for (final cat in NotificationCategory.values) cat: 0,
@@ -87,7 +90,8 @@ class NotificationService {
         .from('notifications')
         .update({'is_read': true})
         .eq('user_id', userId)
-        .eq('is_read', false);
+        .eq('is_read', false)
+        .eq('is_deleted', false);
 
     if (categoryFilter != null) {
       query = query.eq('category', categoryFilter.name);
@@ -96,4 +100,67 @@ class NotificationService {
     await query;
   }
 
+  // ─── SOFT DELETE ───────────────────────────────────────────────
+
+  /// Soft-delete a notification (hide from feed, allow undo).
+  Future<void> deleteNotification(String notificationId) async {
+    await _client
+        .from('notifications')
+        .update({'is_deleted': true})
+        .eq('id', notificationId);
+  }
+
+  /// Restore a soft-deleted notification (used by Undo snackbar).
+  Future<void> restoreNotification(String notificationId) async {
+    await _client
+        .from('notifications')
+        .update({'is_deleted': false})
+        .eq('id', notificationId);
+  }
+
+  /// Mark a notification as unread.
+  Future<void> markAsUnread(String notificationId) async {
+    await _client
+        .from('notifications')
+        .update({'is_read': false})
+        .eq('id', notificationId);
+  }
+
+  // ─── BULK OPERATIONS (Selection Mode) ──────────────────────────
+
+  /// Soft-delete multiple notifications at once (selection mode).
+  Future<void> deleteNotifications(List<String> ids) async {
+    if (ids.isEmpty) return;
+    await _client
+        .from('notifications')
+        .update({'is_deleted': true})
+        .inFilter('id', ids);
+  }
+
+  /// Restore multiple soft-deleted notifications (undo from selection mode).
+  Future<void> restoreNotifications(List<String> ids) async {
+    if (ids.isEmpty) return;
+    await _client
+        .from('notifications')
+        .update({'is_deleted': false})
+        .inFilter('id', ids);
+  }
+
+  /// Mark multiple notifications as read (bulk selection mode).
+  Future<void> markAsReadBulk(List<String> ids) async {
+    if (ids.isEmpty) return;
+    await _client
+        .from('notifications')
+        .update({'is_read': true})
+        .inFilter('id', ids);
+  }
+
+  /// Mark multiple notifications as unread (bulk selection mode).
+  Future<void> markAsUnreadBulk(List<String> ids) async {
+    if (ids.isEmpty) return;
+    await _client
+        .from('notifications')
+        .update({'is_read': false})
+        .inFilter('id', ids);
+  }
 }

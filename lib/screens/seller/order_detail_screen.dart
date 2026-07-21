@@ -24,13 +24,15 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   String get _currentStatus => (order['status'] ?? 'pending').toString();
 
   String? get _nextStatus {
+    // Maps seller-facing status → the value sent to SupabaseService.updateOrderStatus().
+    // SupabaseService._mapUiStatusToDb() then translates to DB-legal values.
     switch (_currentStatus.toLowerCase()) {
       case 'pending':
-        return 'confirmed';
-      case 'confirmed':
-        return 'ready';
+        return 'confirmed';    // → DB: preparing
+      case 'preparing':
+        return 'ready';        // → DB: ready
       case 'ready':
-        return 'delivered';
+        return 'delivered';    // → DB: delivered (Part D)
       case 'cancelled':
         return 'pending';
       default:
@@ -42,7 +44,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     switch (_currentStatus.toLowerCase()) {
       case 'pending':
         return 'Confirm Order';
-      case 'confirmed':
+      case 'preparing':
         return 'Mark Ready';
       case 'ready':
         return 'Mark Delivered';
@@ -57,7 +59,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     switch (_currentStatus.toLowerCase()) {
       case 'pending':
         return AppConstants.statusConfirmedColor;
-      case 'confirmed':
+      case 'preparing':
         return AppConstants.statusReadyColor;
       case 'ready':
         return AppConstants.statusDeliveredColor;
@@ -67,6 +69,16 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         return AppConstants.accent;
     }
   }
+
+  /// Maps DB status to seller-facing display label.
+  static const _dbToUiLabel = <String, String>{
+    'pending': 'Pending',
+    'preparing': 'Confirmed',
+    'ready': 'Ready',
+    'delivered': 'Delivered',
+    'received': 'Received',
+    'cancelled': 'Cancelled',
+  };
 
   Future<void> _performStatusUpdate() async {
     final orderId = order['id'];
@@ -425,8 +437,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 children: [
                   _timelineStep('Order Placed', true),
                   _timelineStep('Confirmed', status != 'pending'),
-                  _timelineStep('Ready', status == 'ready' || status == 'delivered'),
-                  _timelineStep('Delivered', status == 'delivered'),
+                  _timelineStep('Ready', status == 'ready' || status == 'delivered' || status == 'received'),
+                  _timelineStep('Delivered', status == 'delivered' || status == 'received'),
+                  _timelineStep('Received', status == 'received'),
                 ],
               ),
             ),

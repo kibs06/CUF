@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../constants/app_constants.dart';
 import '../providers/auth_provider.dart';
+import '../providers/follow_provider.dart';
 import '../services/auth_service.dart';
 import '../widgets/error_retry_widget.dart';
 import 'admin/admin_shell.dart';
@@ -32,8 +33,28 @@ class _AuthGateState extends State<AuthGate> {
   /// Used to detect session expiry mid-use.
   bool _wasAuthenticated = false;
 
+  /// Whether we've set up the auth hooks (login/logout) already.
+  bool _hooksWired = false;
+
   /// Maximum time to wait for a profile fetch before showing a retry screen.
   static const _profileTimeout = Duration(seconds: 12);
+
+  /// Wire up auth hooks so FollowProvider loads on login and resets on logout.
+  void _wireAuthHooks() {
+    if (_hooksWired) return;
+    _hooksWired = true;
+    final auth = context.read<AuthProvider>();
+    final follow = context.read<FollowProvider>();
+    auth.onLoginHook = (userId) => follow.loadForUser(userId);
+    auth.onLogoutHook = () => follow.reset();
+
+    // Also load for an existing session (app restart) — the hook only
+    // fires on explicit login/signup, not on a persisted session.
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId != null && !follow.isLoaded) {
+      follow.loadForUser(userId);
+    }
+  }
 
   Future<Map<String, dynamic>?> _profileFor(User user) {
     if (_profileFuture == null || _profileUserId != user.id) {
@@ -148,6 +169,9 @@ class _AuthGateState extends State<AuthGate> {
 
   @override
   Widget build(BuildContext context) {
+    // Ensure hooks are wired once per widget lifecycle.
+    _wireAuthHooks();
+
     return StreamBuilder<AuthState>(
       stream: _authService.authStateChanges,
       builder: (context, snapshot) {
@@ -205,6 +229,15 @@ class _AuthGateState extends State<AuthGate> {
         }
 
         _wasAuthenticated = true;
+
+        // Ensure FollowProvider is loaded for this session.
+        // The hook covers explicit login; this covers persisted sessions.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          final follow = context.read<FollowProvider>();
+          if (!follow.isLoaded) {
+            follow.loadForUser(user.id);
+          }
+        });
 
         return FutureBuilder<Map<String, dynamic>?>(
           future: _profileFor(user),
