@@ -169,7 +169,7 @@ class _ReviewsSectionState extends State<_ReviewsSection> {
           Column(
             children: [
               Text(
-                provider.avgRating.toStringAsFixed(1),
+                provider.avgRating.toStringAsFixed(2),
                 style: AppConstants.headlineStyle(
                   fontSize: 32,
                   fontWeight: FontWeight.bold,

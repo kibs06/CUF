@@ -123,7 +123,7 @@ class ReviewService {
     }
 
     final count = reviews.length;
-    final avgRating = count > 0 ? (totalRating / count).roundToDouble() : 0.0;
+    final avgRating = count > 0 ? (totalRating / count * 100).roundToDouble() / 100 : 0.0;
 
     return {
       'avg_rating': avgRating,

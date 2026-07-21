@@ -129,7 +129,7 @@ class _SellerReviewsScreenState extends State<SellerReviewsScreen> {
                       Column(
                         children: [
                           Text(
-                            avgRating.toStringAsFixed(1),
+                            avgRating.toStringAsFixed(2),
                             style: AppConstants.monoStyle(
                               fontSize: 32,
                               fontWeight: FontWeight.bold,

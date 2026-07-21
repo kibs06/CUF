@@ -290,6 +290,7 @@ class SoleReviewCard extends StatelessWidget {
       if (diff.inDays > 30) return '${(diff.inDays / 30).floor()}mo ago';
       if (diff.inDays > 0) return '${diff.inDays}d ago';
       if (diff.inHours > 0) return '${diff.inHours}h ago';
+      if (diff.inMinutes > 0) return '${diff.inMinutes}m ago';
       return 'Just now';
     } catch (_) {
       return '';
