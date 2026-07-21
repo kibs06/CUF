@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -328,41 +329,73 @@ class ReviewService {
     List<XFile>? images,
   }) async {
     final userId = _client.auth.currentUser!.id;
+    final trimmedProductId = productId.trim();
 
     // Find a relevant order_id and order_item_id for this product
     String? orderId;
     String? orderItemId;
     String? storeId;
-    try {
-      final orders = await _client
-          .from('orders')
-          .select('id, store_id')
-          .eq('customer_id', userId)
-          .inFilter('status', ['ready', 'received', 'delivered']);
-      if (orders.isNotEmpty) {
-        final orderIds = (orders as List).map((o) => o['id']).toList();
-        final orderItem = await _client
-            .from('order_items')
-            .select('id, order_id')
-            .eq('product_id', productId)
-            .inFilter('order_id', orderIds)
-            .limit(1)
-            .maybeSingle();
-        if (orderItem != null) {
-          orderId = orderItem['order_id']?.toString();
-          orderItemId = orderItem['id']?.toString();
+
+    // Step 1: Fetch all orders for this customer in reviewable statuses.
+    // Use .select() without specific columns to get the full row, then
+    // extract IDs with explicit int casting to avoid type mismatches.
+    final orders = await _client
+        .from('orders')
+        .select()
+        .eq('customer_id', userId)
+        .inFilter('status', ['ready', 'received', 'delivered'])
+        .order('created_at', ascending: false);
+
+    if (orders.isNotEmpty) {
+      // Explicitly cast order IDs to int — Supabase returns BIGINT as int.
+      final orderIds = (orders as List)
+          .map((o) => (o['id'] as num).toInt())
+          .toList();
+
+      // Step 2: Find the order_items row for this product within those orders.
+      // The product_id column in order_items references products.id (TEXT).
+      final orderItem = await _client
+          .from('order_items')
+          .select('id, order_id')
+          .eq('product_id', trimmedProductId)
+          .inFilter('order_id', orderIds)
+          .limit(1)
+          .maybeSingle();
+
+      if (orderItem != null) {
+        orderId = orderItem['order_id'].toString();
+        orderItemId = orderItem['id'].toString();
+      } else {
+        // Debug: log what we searched for to help diagnose mismatches
+        debugPrint('[ReviewService] submitReview: no order_item found for productId=$trimmedProductId in orders=$orderIds');
+        // Second attempt: try without trim in case the original had no whitespace
+        if (trimmedProductId != productId) {
+          final orderItemRetry = await _client
+              .from('order_items')
+              .select('id, order_id')
+              .eq('product_id', productId)
+              .inFilter('order_id', orderIds)
+              .limit(1)
+              .maybeSingle();
+          if (orderItemRetry != null) {
+            orderId = orderItemRetry['order_id'].toString();
+            orderItemId = orderItemRetry['id'].toString();
+          }
         }
-        // Get store_id from the order
+      }
+
+      // Get store_id from the matched order
+      if (orderId != null) {
         final order = (orders as List).firstWhere(
           (o) => o['id'].toString() == orderId,
           orElse: () => orders.first,
         );
         storeId = order['store_id']?.toString();
       }
-    } catch (_) {}
+    }
 
     if (orderItemId == null) {
-      throw Exception('Could not find a valid order item to review.');
+      throw Exception('Could not find a valid order item to review. Make sure you have a completed order containing this product.');
     }
 
     final review = await _client
