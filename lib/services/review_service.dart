@@ -82,7 +82,7 @@ class ReviewService {
         .from('orders')
         .select('id')
         .eq('customer_id', userId)
-        .inFilter('status', ['ready', 'received']);
+        .inFilter('status', ['ready', 'received', 'delivered']);
 
     if (orders.isEmpty) return false;
 
@@ -98,7 +98,7 @@ class ReviewService {
     return orderItem != null;
   }
 
-  /// Get rating summary for a product (combines both tables).
+  /// Get rating summary for a product.
   Future<Map<String, dynamic>> getRatingSummary(String productId) async {
     final reviews = await getReviews(productId);
 
@@ -475,8 +475,9 @@ class ReviewService {
     } else {
       map['review_images'] = <Map<String, dynamic>>[];
     }
-    // Ensure 'body' alias exists for downstream consumers.
+    // Ensure both 'body' and 'comment' aliases exist for downstream consumers.
     map['body'] ??= map['comment'];
+    map['comment'] ??= map['body'];
     // Extract product name from nested join
     final items = map['order_items'];
     if (items is Map) {
