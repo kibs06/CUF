@@ -19,6 +19,7 @@ import '../store/store_profile_screen.dart';
 import 'product_detail_screen.dart';
 import 'ar_fitting_screen.dart';
 import 'tracking_screen.dart';
+import 'my_reports_screen.dart';
 
 class CustomerHomeScreen extends StatefulWidget {
   const CustomerHomeScreen({super.key});
@@ -155,9 +156,10 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     };
 
     PushNotificationService.instance.onNavigateToScreen = (screen, referenceId) {
-      if (!mounted || referenceId == null) return;
+      if (!mounted) return;
       switch (screen) {
         case 'order_tracking':
+          if (referenceId == null) return;
           // orders.id is UUID — use string directly, with int fallback for legacy data.
           final orderIdValue = int.tryParse(referenceId) ?? referenceId;
           Supabase.instance.client
@@ -176,6 +178,13 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           }).catchError((e) {
             debugPrint('[Push] Failed to fetch order for deep-link: $e');
           });
+          break;
+        case 'my_reports':
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const MyReportsScreen(),
+            ),
+          );
           break;
       }
     };

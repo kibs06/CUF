@@ -11,6 +11,7 @@ import '../providers/notification_provider.dart';
 import '../widgets/sole_card.dart';
 import '../widgets/chat/chat_view.dart';
 import 'customer/tracking_screen.dart';
+import 'customer/my_reports_screen.dart';
 
 /// Notifications feed screen — the primary entry point via the bottom nav
 /// "Notifications" tab. Also reachable from the profile screen's icon row.
@@ -184,6 +185,18 @@ class _NotificationsScreenState extends State<NotificationsScreen>
               viewerRole: 'customer',
               otherPartyName: notif.storeName ?? 'Store',
             ),
+          ),
+        );
+      }
+      return;
+    }
+
+    // ── Support/report notification: deep-link to MyReportsScreen ──
+    if (notif.isSupportNotification) {
+      if (mounted) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => const MyReportsScreen(),
           ),
         );
       }
@@ -689,6 +702,8 @@ class _NotificationCardContent extends StatelessWidget {
         return Icons.assignment_return_outlined;
       case NotificationCategory.message:
         return Icons.chat_bubble_outline;
+      case NotificationCategory.support:
+        return Icons.support_agent_outlined;
     }
   }
 
@@ -742,6 +757,8 @@ class _NotificationCardContent extends StatelessWidget {
         return AppConstants.error; // red
       case NotificationCategory.message:
         return const Color(0xFF4ECDC4); // celadon teal
+      case NotificationCategory.support:
+        return const Color(0xFF2E7D32); // dark green for support
     }
   }
 }

@@ -2,7 +2,8 @@
 ///
 /// These match the `notification_category` Postgres enum in the migrations.
 /// 'message' was added for push notification support (seller → customer messages).
-enum NotificationCategory { unpaid, processing, shipped, review, returns, message }
+/// 'support' was added for admin report response notifications.
+enum NotificationCategory { unpaid, processing, shipped, review, returns, message, support }
 
 /// Returns a display-friendly label for each category.
 String notificationCategoryLabel(NotificationCategory cat) {
@@ -19,5 +20,7 @@ String notificationCategoryLabel(NotificationCategory cat) {
       return 'Returns';
     case NotificationCategory.message:
       return 'Message';
+    case NotificationCategory.support:
+      return 'Support';
   }
 }

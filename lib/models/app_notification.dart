@@ -60,6 +60,12 @@ class AppNotification {
   /// Whether this is a message notification.
   bool get isMessageNotification => category == NotificationCategory.message;
 
+  /// The report ID (only present for support/report notifications).
+  String? get reportId => metadata?['report_id']?.toString();
+
+  /// Whether this is a support/report notification.
+  bool get isSupportNotification => category == NotificationCategory.support;
+
   /// The order type ('catalog', 'custom', or null).
   String? get orderType => metadata?['order_type']?.toString();
 
@@ -134,6 +140,8 @@ class AppNotification {
         return NotificationCategory.returns;
       case 'message':
         return NotificationCategory.message;
+      case 'support':
+        return NotificationCategory.support;
       default:
         return NotificationCategory.unpaid;
     }

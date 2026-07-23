@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Service for submitting and fetching user reports (messages, products, sellers, general).
@@ -64,6 +66,22 @@ class ReportService {
         "We've reviewed your report and didn't find a violation of our policies. Thanks for flagging it — feel free to reach out if anything else comes up.",
     'needs_more_info':
         "We're looking into your report and may reach out if we need more details. Thanks for your patience.",
+  };
+
+  /// Human-readable status labels for notification messages.
+  static const Map<String, String> statusLabels = {
+    'pending': 'Pending',
+    'under_review': 'Under Review',
+    'resolved': 'Resolved',
+    'dismissed': 'Dismissed',
+  };
+
+  /// Human-readable report type labels for notification messages.
+  static const Map<String, String> typeLabels = {
+    'message': 'Message Report',
+    'product': 'Product Report',
+    'seller': 'Seller Report',
+    'other': 'General Report',
   };
 
   /// Get display label for a machine key within a report type.
@@ -141,7 +159,7 @@ class ReportService {
         .eq('reporter_id', userId)
         .order('created_at', ascending: false);
 
-    return (response as List<dynamic>).cast<Map<String, dynamic>>();
+    return response;
   }
 
   // ── Fetch a single report by ID (for detail view) ───────────────
@@ -183,7 +201,7 @@ class ReportService {
         .order('created_at', ascending: false)
         .range(offset, offset + limit - 1);
 
-    return (response as List<dynamic>).cast<Map<String, dynamic>>();
+    return response;
   }
 
   // ── Admin: Update report status/action ───────────────────────────
@@ -194,14 +212,29 @@ class ReportService {
     String? actionTaken,
     String? adminNotes,
   }) async {
-    // Validate: resolving requires action_taken
-    if (status == 'resolved' && actionTaken == null) {
+    // 1. Only fetch if we need to check status change or validate resolve
+    String? oldStatus;
+    String? reporterId;
+    bool statusChanged = false;
+    String reportType = 'other'; // default; set inside the block below
+
+    if (status != null) {
       final existing = await getReportById(reportId);
-      if (existing != null && (existing['action_taken'] == null || existing['action_taken'] == 'none')) {
-        throw Exception('action_required_to_resolve');
+      if (existing == null) throw Exception('Report not found');
+      oldStatus = existing['status']?.toString() ?? 'pending';
+      reportType = existing['type']?.toString() ?? 'other';
+      reporterId = existing['reporter_id']?.toString();
+      statusChanged = status != oldStatus;
+
+      // Validate: resolving requires action_taken
+      if (status == 'resolved' && actionTaken == null) {
+        if (existing['action_taken'] == null || existing['action_taken'] == 'none') {
+          throw Exception('action_required_to_resolve');
+        }
       }
     }
 
+    // 2. Perform the update
     final updates = <String, dynamic>{
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     };
@@ -210,10 +243,67 @@ class ReportService {
     if (adminNotes != null) updates['admin_notes'] = adminNotes;
 
     await _client.from('reports').update(updates).eq('id', reportId);
+
+    // 3. If status actually changed, fire notification + push (fire-and-forget)
+    // status is guaranteed non-null here because statusChanged can only be true
+    // when status != oldStatus, which requires status != null.
+    if (statusChanged && reporterId != null && reporterId.isNotEmpty && status != null) {
+      final statusLabel = statusLabels[status] ?? status;
+      final typeLabel = typeLabels[reportType] ?? 'Report';
+
+      _fireStatusChangeNotification(
+        reportId: reportId,
+        reporterId: reporterId,
+        reportType: reportType,
+        typeLabel: typeLabel,
+        newStatus: status,
+        statusLabel: statusLabel,
+      );
+    }
+  }
+
+  /// Fires a status-change notification + push to the reporter.
+  void _fireStatusChangeNotification({
+    required String reportId,
+    required String reporterId,
+    required String reportType,
+    required String typeLabel,
+    required String newStatus,
+    required String statusLabel,
+  }) {
+    final title = 'Report Update';
+    final body = 'Your $typeLabel is now $statusLabel.';
+
+    _insertNotificationAndPush(
+      userId: reporterId,
+      title: title,
+      body: body,
+      metadata: {
+        'report_id': reportId,
+        'report_type': reportType,
+        'notification_type': 'report_status_update',
+        'new_status': newStatus,
+        'order_type': 'custom',
+      },
+      pushType: 'report_update',
+      pushReferenceId: reportId,
+      pushScreen: 'my_reports',
+    );
   }
 
   // ── Admin: Notify reporter ───────────────────────────────────────
 
+  /// Notifies the reporter of a report outcome (support response).
+  ///
+  /// This method performs three steps:
+  /// 1. Inserts a row into the `notifications` table (so it appears in the
+  ///    reporter's notification feed under the "Custom" tab)
+  /// 2. Updates the report row with reporter_notified + reporter_notification_text
+  ///    (set AFTER notification insert so the flag reflects delivery attempt)
+  /// 3. Triggers a push notification via the send-notification-push edge function
+  ///
+  /// Push delivery is fire-and-forget — failures are logged but never thrown,
+  /// because the DB notification + report update are the critical path.
   Future<void> notifyReporter({
     required String reportId,
     String? templateKey,
@@ -228,11 +318,109 @@ class ReportService {
       throw Exception('Either templateKey or customText must be provided');
     }
 
+    // 1. Fetch the report to get the reporter_id
+    final report = await getReportById(reportId);
+    if (report == null) throw Exception('Report not found');
+
+    final reporterId = report['reporter_id']?.toString();
+    if (reporterId == null || reporterId.isEmpty) {
+      throw Exception('Report has no reporter_id');
+    }
+
+    // 2. Insert into notifications table (appears in the reporter's feed under Custom tab)
+    _insertNotificationAndPush(
+      userId: reporterId,
+      title: 'Support Responded',
+      body: messageText.length > 100 ? '${messageText.substring(0, 100)}...' : messageText,
+      metadata: {
+        'report_id': reportId,
+        'report_type': report['type']?.toString() ?? 'other',
+        'notification_type': 'report_support_response',
+        'order_type': 'custom',
+      },
+      pushType: 'report_update',
+      pushTitle: 'Support Responded',
+      pushBody: messageText.length > 100 ? '${messageText.substring(0, 100)}...' : messageText,
+      pushReferenceId: reportId,
+      pushScreen: 'my_reports',
+    );
+
+    // 3. Update the report row (set reporter_notified AFTER notification insert
+    // so the flag accurately reflects delivery attempt)
     await _client.from('reports').update({
       'reporter_notified': true,
       'reporter_notification_text': messageText,
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', reportId);
+  }
+
+  // ── Shared notification + push helper ────────────────────────────
+
+  /// Inserts an in-app notification row and triggers a push notification.
+  /// Both are fire-and-forget — failures are logged but never thrown.
+  void _insertNotificationAndPush({
+    required String userId,
+    required String title,
+    required String body,
+    required Map<String, dynamic> metadata,
+    required String pushType,
+    String? pushTitle,
+    String? pushBody,
+    String? pushReferenceId,
+    String? pushScreen,
+  }) {
+    // Insert in-app notification (fire-and-forget)
+    // order_type: 'custom' ensures it appears in the Custom tab
+    _client.from('notifications').insert({
+      'user_id': userId,
+      'category': 'support',
+      'title': title,
+      'message': body,
+      'order_type': 'custom',
+      'is_read': false,
+      'metadata': metadata,
+    }).catchError((e) {
+      _log('Failed to insert notification: $e');
+    });
+
+    // Trigger push notification
+    _triggerPush(
+      recipientUserId: userId,
+      type: pushType,
+      title: pushTitle ?? title,
+      body: pushBody ?? body,
+      referenceId: pushReferenceId,
+      screen: pushScreen,
+    );
+  }
+
+  /// Fire-and-forget push to a user device via the send-notification-push edge function.
+  void _triggerPush({
+    required String recipientUserId,
+    required String type,
+    required String title,
+    required String body,
+    String? referenceId,
+    String? screen,
+  }) {
+    final payload = <String, dynamic>{
+      'recipientUserId': recipientUserId,
+      'title': title,
+      'body': body,
+      'type': type,
+    };
+    if (referenceId != null) payload['referenceId'] = referenceId;
+    if (screen != null) payload['screen'] = screen;
+    unawaited(_client.functions.invoke('send-notification-push', body: payload).then(
+      (_) {},
+      onError: (Object e) {
+        _log('Push trigger failed: $e');
+      },
+    ));
+  }
+
+  void _log(String message) {
+    debugPrint('[ReportService] $message');
   }
 
   // ── Admin: Get report counts by status ───────────────────────────
