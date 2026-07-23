@@ -13,6 +13,7 @@ import '../../widgets/sole_badge.dart';
 import '../../widgets/sole_card.dart';
 import '../../widgets/sole_status_chip.dart';
 import '../customer/my_orders_screen.dart';
+import 'help_menu_screen.dart';
 import '../seller/create_store_screen.dart';
 import '../seller/store_profile_screen.dart';
 
@@ -616,6 +617,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
             icon: Icons.description_outlined,
             title: 'Terms & Privacy',
             onTap: () => _openPlaceholder('Terms & Privacy'),
+          ),
+          const Divider(height: 1, color: Color(0xFFE5E7EB)),
+          _settingsRow(
+            icon: Icons.headset_mic_outlined,
+            title: 'Help & Support',
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const HelpMenuScreen(),
+                ),
+              );
+            },
           ),
           const Divider(height: 1, color: Color(0xFFE5E7EB)),
           _settingsRow(

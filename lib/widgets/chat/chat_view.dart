@@ -20,6 +20,7 @@ import '../../services/supabase_service.dart';
 
 import '../order_change_request_sheet.dart';
 import '../custom_popup_menu.dart';
+import '../report_modal.dart';
 
 /// Shared chat screen used by both Customer and Seller sides.
 ///
@@ -1317,30 +1318,25 @@ class _ChatViewState extends State<ChatView> with SingleTickerProviderStateMixin
   }
 
   void _showReportDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Report Seller'),
-        content: const Text('Are you sure you want to report this seller? We\'ll review the report and take appropriate action.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Report submitted. Thank you.'),
-                  duration: Duration(seconds: 2),
-                ),
-              );
-            },
-            child: const Text('Report', style: TextStyle(color: AppConstants.error)),
-          ),
-        ],
-      ),
+    showReportModal(
+      context,
+      reportType: 'seller',
+      reporterRole: _isCustomer ? 'customer' : 'seller',
+      title: 'Report ${widget.otherPartyName}',
+      targetSellerId: null, // TODO: wire seller ID from conversation
+      conversationId: widget.conversationId,
+    );
+  }
+
+  void _showReportMessageDialog(Message message) {
+    showReportModal(
+      context,
+      reportType: 'message',
+      reporterRole: _isCustomer ? 'customer' : 'seller',
+      contextPreview: message.body ?? 'Attachment',
+      targetMessageId: message.id,
+      targetSellerId: null,
+      conversationId: widget.conversationId,
     );
   }
 
@@ -1584,7 +1580,7 @@ class _ChatViewState extends State<ChatView> with SingleTickerProviderStateMixin
       alignment: isOwnMessage ? Alignment.centerRight : Alignment.centerLeft,
       child: GestureDetector(
         onTap: message.sendFailed ? tapHandler : null,
-        onLongPress: message.sendFailed ? null : () => _showMessageDetails(message),
+        onLongPress: message.sendFailed ? null : () => _showMessageContextMenu(message),
         child: Container(
           margin: const EdgeInsets.only(bottom: 8),
           constraints: BoxConstraints(
@@ -2083,26 +2079,25 @@ class _ChatViewState extends State<ChatView> with SingleTickerProviderStateMixin
     );
   }
 
-  void _showMessageDetails(Message message) {
+  void _showMessageContextMenu(Message message) {
     showModalBottomSheet(
       context: context,
       builder: (context) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ListTile(
-              leading: const Icon(Icons.info_outline),
-              title: const Text('Message Details'),
-              subtitle: Text(
-                'Sent ${_formatTimestamp(message.createdAt)}\n'
-                '${message.hasBody ? 'Text: ${message.body}' : ''}'
-                '${message.hasAttachment ? '\nAttachment: ${message.attachmentType}' : ''}'
-                '${message.attachmentSizeBytes != null ? '\nSize: ${_formatFileSize(message.attachmentSizeBytes!)}' : ''}',
+            if (message.hasBody)
+              ListTile(
+                leading: const Icon(Icons.copy, size: 20),
+                title: const Text('Copy Text'),
+                onTap: () {
+                  Navigator.pop(context);
+                  // Copy to clipboard
+                },
               ),
-            ),
             if (message.hasAttachment)
               ListTile(
-                leading: const Icon(Icons.open_in_new),
+                leading: const Icon(Icons.open_in_new, size: 20),
                 title: const Text('Open Attachment'),
                 onTap: () {
                   Navigator.pop(context);
@@ -2113,6 +2108,23 @@ class _ChatViewState extends State<ChatView> with SingleTickerProviderStateMixin
                   }
                 },
               ),
+            ListTile(
+              leading: const Icon(Icons.info_outline, size: 20),
+              title: const Text('Message Details'),
+              onTap: () {
+                Navigator.pop(context);
+                _showMessageDetails(message);
+              },
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: Icon(Icons.flag_outlined, size: 20, color: AppConstants.error),
+              title: Text('Report Message', style: TextStyle(color: AppConstants.error)),
+              onTap: () {
+                Navigator.pop(context);
+                _showReportMessageDialog(message);
+              },
+            ),
           ],
         ),
       ),
@@ -2340,6 +2352,42 @@ class _ChatViewState extends State<ChatView> with SingleTickerProviderStateMixin
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
     return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+
+  void _showMessageDetails(Message message) {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.info_outline),
+              title: const Text('Message Details'),
+              subtitle: Text(
+                'Sent ${_formatTimestamp(message.createdAt)}\n'
+                '${message.hasBody ? 'Text: ${message.body}' : ''}'
+                '${message.hasAttachment ? '\nAttachment: ${message.attachmentType}' : ''}'
+                '${message.attachmentSizeBytes != null ? '\nSize: ${_formatFileSize(message.attachmentSizeBytes!)}' : ''}',
+              ),
+            ),
+            if (message.hasAttachment)
+              ListTile(
+                leading: const Icon(Icons.open_in_new),
+                title: const Text('Open Attachment'),
+                onTap: () {
+                  Navigator.pop(context);
+                  if (message.isImageMessage) {
+                    _openFullScreenImage(message.attachmentUrl!);
+                  } else if (message.isVideoMessage) {
+                    _openFullScreenVideo(message.attachmentUrl!);
+                  }
+                },
+              ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
