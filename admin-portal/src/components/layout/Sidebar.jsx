@@ -2,12 +2,15 @@ import { NavLink } from 'react-router-dom'
 import { SHOE_SOLE_SVG } from '../../lib/constants'
 import { useAuth } from '../../hooks/useAuth.jsx'
 import AvatarInitials from '../ui/AvatarInitials.jsx'
+import { useEffect, useState } from 'react'
+import { supabase } from '../../lib/supabase'
 import {
   LayoutDashboard,
   Users,
   Store,
   Package,
   ShoppingCart,
+  Flag,
   BarChart2,
   Settings,
   LogOut,
@@ -19,12 +22,33 @@ const NAV_ITEMS = [
   { to: '/seller-applications', label: 'Seller Applications', icon: Store },
   { to: '/products', label: 'Products', icon: Package },
   { to: '/orders', label: 'Orders', icon: ShoppingCart },
+  { to: '/reports', label: 'Reports', icon: Flag },
   { to: '/analytics', label: 'Analytics', icon: BarChart2 },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
 
 export default function Sidebar({ open, onClose }) {
   const { profile, signOut } = useAuth()
+  const [highPriorityCount, setHighPriorityCount] = useState(0)
+
+  useEffect(() => {
+    const fetchCount = async () => {
+      try {
+        const { count } = await supabase
+          .from('reports')
+          .select('*', { count: 'exact', head: true })
+          .eq('priority', 'high')
+          .in('status', ['pending', 'under_review'])
+        setHighPriorityCount(count ?? 0)
+      } catch (_) {
+        // silently fail — badge is optional
+      }
+    }
+    fetchCount()
+    // Refresh every 60 seconds
+    const interval = setInterval(fetchCount, 60000)
+    return () => clearInterval(interval)
+  }, [])
 
   return (
     <>
@@ -73,7 +97,12 @@ export default function Sidebar({ open, onClose }) {
                 }
               >
                 <Icon size={18} />
-                {item.label}
+                <span className="flex-1">{item.label}</span>
+                {item.to === '/reports' && highPriorityCount > 0 && (
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#D64545] px-1.5 text-[10px] font-bold text-white">
+                    {highPriorityCount > 9 ? '9+' : highPriorityCount}
+                  </span>
+                )}
               </NavLink>
             )
           })}

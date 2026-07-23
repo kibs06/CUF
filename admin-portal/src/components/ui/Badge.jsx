@@ -16,6 +16,9 @@ const VARIANTS = {
   delivered: 'bg-teal-50 text-teal-700 border border-teal-200',
   cancelled: 'bg-red-50 text-red-700 border border-red-200',
   suspended: 'bg-red-50 text-red-700 border border-red-200',
+  under_review: 'bg-blue-50 text-blue-700 border border-blue-200',
+  dismissed: 'bg-gray-50 text-gray-500 border border-gray-200',
+  resolved: 'bg-teal-50 text-teal-700 border border-teal-200',
   none: 'bg-gray-50 text-gray-500 border border-gray-200',
 }
 
