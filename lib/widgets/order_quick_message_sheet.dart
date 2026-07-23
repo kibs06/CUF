@@ -195,7 +195,7 @@ class _QuickMessageSheet extends StatelessWidget {
                 child: ListView.builder(
                   controller: scrollController,
                   padding: const EdgeInsets.symmetric(horizontal: 20),
-                  itemCount: options.length + 2, // +2 for "Request a Change" and "Other question"
+                  itemCount: options.length + 2, // +2 for "Other question" and "Request a Change"
                   itemBuilder: (context, index) {
                     if (index < options.length) {
                       // Regular quick message option
@@ -212,21 +212,6 @@ class _QuickMessageSheet extends StatelessWidget {
                         },
                       );
                     } else if (index == options.length) {
-                      // "Request a Change" option
-                      return _QuickOptionTile(
-                        option: const QuickMessageOption(
-                          message: "I'd like to request a change to my order",
-                          icon: Icons.edit_note,
-                        ),
-                        onTap: () {
-                          Navigator.of(context).pop(
-                            const QuickMessageResult(
-                              action: QuickMessageAction.requestChange,
-                            ),
-                          );
-                        },
-                      );
-                    } else {
                       // "I have another question" option
                       return _QuickOptionTile(
                         option: const QuickMessageOption(
@@ -237,6 +222,21 @@ class _QuickMessageSheet extends StatelessWidget {
                           Navigator.of(context).pop(
                             const QuickMessageResult(
                               action: QuickMessageAction.typeCustom,
+                            ),
+                          );
+                        },
+                      );
+                    } else {
+                      // "Request a Change" option (at the bottom)
+                      return _QuickOptionTile(
+                        option: const QuickMessageOption(
+                          message: "I'd like to request a change to my order",
+                          icon: Icons.edit_note,
+                        ),
+                        onTap: () {
+                          Navigator.of(context).pop(
+                            const QuickMessageResult(
+                              action: QuickMessageAction.requestChange,
                             ),
                           );
                         },

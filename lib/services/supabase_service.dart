@@ -234,6 +234,17 @@ class SupabaseService {
         .eq('id', id.toString());
   }
 
+  /// Fetch a single order by ID (for status summary in chat).
+  Future<Map<String, dynamic>?> fetchOrderById(dynamic orderId) async {
+    final data = await _client
+        .from('orders')
+        .select('id, status, updated_at, created_at')
+        .eq('id', orderId.toString())
+        .maybeSingle()
+        .timeout(_defaultTimeout);
+    return data == null ? null : Map<String, dynamic>.from(data);
+  }
+
   Future<List<Map<String, dynamic>>> fetchOrders() async {
     final data = await _client
         .from('orders')

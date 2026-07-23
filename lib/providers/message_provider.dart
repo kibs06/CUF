@@ -297,6 +297,19 @@ class MessageProvider extends ChangeNotifier {
     super.dispose();
   }
 
+  // ── Delete conversation ───────────────────────────────────────
+
+  /// Remove a conversation from the local list after deletion.
+  void removeConversation(String conversationId) {
+    _conversations.removeWhere((c) => c.id == conversationId);
+    _perConversationUnreadCounts.remove(conversationId);
+    _optimisticallyReadConversations.remove(conversationId);
+    // Recalculate total unread count
+    _unreadCount = _perConversationUnreadCounts.values
+        .fold<int>(0, (sum, c) => sum + c);
+    notifyListeners();
+  }
+
   /// Reset state (for logout).
   void reset() {
     _conversations = [];

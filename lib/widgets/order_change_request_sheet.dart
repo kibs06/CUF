@@ -104,160 +104,249 @@ class _ChangeRequestSheetState extends State<_ChangeRequestSheet> {
     );
   }
 
+  void _clearDraft() {
+    _detailsController.clear();
+    setState(() {});
+  }
+
+  void _resetForm() {
+    setState(() {
+      _selectedType = null;
+      _detailsController.clear();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    return DraggableScrollableSheet(
-      initialChildSize: 0.75,
-      minChildSize: 0.5,
-      maxChildSize: 0.95,
-      builder: (context, scrollController) {
-        return Container(
-          decoration: const BoxDecoration(
-            color: AppConstants.surfaceLight,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.85,
+      decoration: const BoxDecoration(
+        color: AppConstants.surfaceLight,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        children: [
+          // Handle bar
+          Container(
+            margin: const EdgeInsets.only(top: 12),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: AppConstants.borderGray,
+              borderRadius: BorderRadius.circular(2),
+            ),
           ),
-          child: Column(
-            children: [
-              // Handle bar
-              Container(
-                margin: const EdgeInsets.only(top: 12),
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppConstants.borderGray,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
 
-              // Header
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Request a Change',
-                        style: AppConstants.headlineStyle(fontSize: 20),
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close, size: 22),
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
-                  ],
+          // ─── FIXED HEADER ─────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 12, 12, 0),
+            child: Row(
+              children: [
+                // Back button
+                IconButton(
+                  icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+                  onPressed: () => Navigator.of(context).pop(),
+                  color: AppConstants.secondary,
                 ),
-              ),
-
-              // Subtitle
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Text(
-                  'Select what you\'d like to change. The seller will review your request.',
-                  style: AppConstants.bodyStyle(
-                    fontSize: 13,
-                    color: AppConstants.secondary.withValues(alpha: 0.6),
+                // Title
+                Expanded(
+                  child: Text(
+                    'Request a Change',
+                    style: AppConstants.headlineStyle(fontSize: 18),
                   ),
                 ),
-              ),
-
-              const SizedBox(height: 12),
-
-              // Type options
-              Expanded(
-                child: ListView.builder(
-                  controller: scrollController,
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  itemCount: changeRequestTypes.length,
-                  itemBuilder: (context, index) {
-                    final type = changeRequestTypes[index];
-                    final isSelected = _selectedType?.id == type.id;
-
-                    return Column(
-                      children: [
-                        _TypeOption(
-                          type: type,
-                          isSelected: isSelected,
-                          onTap: () {
-                            setState(() {
-                              _selectedType = type;
-                              _detailsController.clear();
-                            });
-                          },
-                        ),
-                        // Show details field when type is selected
-                        if (isSelected) ...[
-                          const SizedBox(height: 8),
-                          TextField(
-                            controller: _detailsController,
-                            maxLines: 3,
-                            minLines: 2,
-                            decoration: InputDecoration(
-                              hintText: type.hint,
-                              hintStyle: AppConstants.bodyStyle(
-                                fontSize: 13,
-                                color: AppConstants.secondary.withValues(alpha: 0.4),
-                              ),
-                              filled: true,
-                              fillColor: Colors.white,
-                              contentPadding: const EdgeInsets.all(12),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide: BorderSide(
-                                  color: AppConstants.borderGray.withValues(alpha: 0.5),
-                                ),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide: BorderSide(
-                                  color: AppConstants.borderGray.withValues(alpha: 0.5),
-                                ),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide: const BorderSide(
-                                  color: AppConstants.primary,
-                                  width: 1.5,
-                                ),
-                              ),
-                            ),
-                            onChanged: (_) => setState(() {}),
+                // Overflow menu
+                PopupMenuButton<String>(
+                  icon: Icon(
+                    Icons.more_vert,
+                    size: 22,
+                    color: AppConstants.secondary,
+                  ),
+                  onSelected: (value) {
+                    switch (value) {
+                      case 'cancel':
+                        _resetForm();
+                        break;
+                      case 'clear':
+                        _clearDraft();
+                        break;
+                      case 'view_order':
+                        Navigator.of(context).pop();
+                        // TODO: Navigate to order details screen
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Order details coming soon'),
+                            duration: Duration(seconds: 1),
                           ),
-                          const SizedBox(height: 4),
-                        ],
-                        const SizedBox(height: 4),
-                      ],
-                    );
+                        );
+                        break;
+                      case 'support':
+                        Navigator.of(context).pop();
+                        // TODO: Open support chat
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Support chat coming soon'),
+                            duration: Duration(seconds: 1),
+                          ),
+                        );
+                        break;
+                    }
                   },
-                ),
-              ),
-
-              // Submit button
-              Container(
-                padding: EdgeInsets.fromLTRB(
-                  20,
-                  12,
-                  20,
-                  12 + MediaQuery.of(context).padding.bottom,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.06),
-                      blurRadius: 12,
-                      offset: const Offset(0, -4),
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: 'cancel',
+                      child: Row(
+                        children: [
+                          Icon(Icons.refresh, size: 18, color: AppConstants.secondary),
+                          SizedBox(width: 12),
+                          Text('Reset Form'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'clear',
+                      child: Row(
+                        children: [
+                          Icon(Icons.backspace_outlined, size: 18, color: AppConstants.secondary),
+                          SizedBox(width: 12),
+                          Text('Clear Draft'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuDivider(),
+                    const PopupMenuItem(
+                      value: 'view_order',
+                      child: Row(
+                        children: [
+                          Icon(Icons.receipt_long, size: 18, color: AppConstants.secondary),
+                          SizedBox(width: 12),
+                          Text('View Order Details'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'support',
+                      child: Row(
+                        children: [
+                          Icon(Icons.help_outline, size: 18, color: AppConstants.secondary),
+                          SizedBox(width: 12),
+                          Text('Contact Support'),
+                        ],
+                      ),
                     ),
                   ],
                 ),
-                child: SolePrimaryButton(
-                  label: 'Send Request',
-                  onPressed: _canSubmit ? _submit : null,
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
-        );
-      },
+
+          // Subtitle
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Text(
+              'Select what you\'d like to change. The seller will review your request.',
+              style: AppConstants.bodyStyle(
+                fontSize: 13,
+                color: AppConstants.secondary.withValues(alpha: 0.6),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // ─── SCROLLABLE BODY ──────────────────────────────
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              itemCount: changeRequestTypes.length,
+              itemBuilder: (context, index) {
+                final type = changeRequestTypes[index];
+                final isSelected = _selectedType?.id == type.id;
+
+                return Column(
+                  children: [
+                    _TypeOption(
+                      type: type,
+                      isSelected: isSelected,
+                      onTap: () {
+                        setState(() {
+                          _selectedType = type;
+                          _detailsController.clear();
+                        });
+                      },
+                    ),
+                    // Show details field when type is selected
+                    if (isSelected) ...[
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _detailsController,
+                        maxLines: 3,
+                        minLines: 2,
+                        decoration: InputDecoration(
+                          hintText: type.hint,
+                          hintStyle: AppConstants.bodyStyle(
+                            fontSize: 13,
+                            color: AppConstants.secondary.withValues(alpha: 0.4),
+                          ),
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding: const EdgeInsets.all(12),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(
+                              color: AppConstants.borderGray.withValues(alpha: 0.5),
+                            ),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(
+                              color: AppConstants.borderGray.withValues(alpha: 0.5),
+                            ),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(
+                              color: AppConstants.primary,
+                              width: 1.5,
+                            ),
+                          ),
+                        ),
+                        onChanged: (_) => setState(() {}),
+                      ),
+                      const SizedBox(height: 4),
+                    ],
+                    const SizedBox(height: 4),
+                  ],
+                );
+              },
+            ),
+          ),
+
+          // ─── FIXED FOOTER ─────────────────────────────────
+          Container(
+            padding: EdgeInsets.fromLTRB(
+              20,
+              12,
+              20,
+              12 + MediaQuery.of(context).padding.bottom,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 12,
+                  offset: const Offset(0, -4),
+                ),
+              ],
+            ),
+            child: SolePrimaryButton(
+              label: 'Send Request',
+              onPressed: _canSubmit ? _submit : null,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

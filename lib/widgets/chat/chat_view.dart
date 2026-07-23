@@ -15,7 +15,11 @@ import '../../providers/chat_attachment_provider.dart';
 import '../../providers/message_provider.dart';
 import '../../services/connectivity_service.dart';
 import '../../services/message_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../services/supabase_service.dart';
+
 import '../order_change_request_sheet.dart';
+import '../custom_popup_menu.dart';
 
 /// Shared chat screen used by both Customer and Seller sides.
 ///
@@ -68,6 +72,20 @@ class _ChatViewState extends State<ChatView> with SingleTickerProviderStateMixin
   int? _pendingVideoDuration;
   bool _isUploading = false;
 
+  // Order status summary
+  String? _orderStatus;
+  DateTime? _orderUpdatedAt;
+
+  // Mute state
+  bool _isMuted = false;
+
+  // Search state
+  bool _isSearching = false;
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
+  int _currentMatchIndex = 0;
+  int _totalMatches = 0;
+
 
 
   // Scroll tracking for "New message ↓" pill
@@ -91,6 +109,8 @@ class _ChatViewState extends State<ChatView> with SingleTickerProviderStateMixin
     _setupScrollListener();
     _setupConnectivityListener();
     _loadMessages();
+    _loadOrderStatus();
+    _loadMuteState();
     _subscribeToMessages();
     _subscribeToTyping();
     _markAsRead();
@@ -128,6 +148,7 @@ class _ChatViewState extends State<ChatView> with SingleTickerProviderStateMixin
     _messageController.dispose();
     _scrollController.dispose();
     _focusNode.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -264,6 +285,22 @@ class _ChatViewState extends State<ChatView> with SingleTickerProviderStateMixin
       conversationId: widget.conversationId,
       readerType: widget.viewerRole,
     );
+  }
+
+  Future<void> _loadOrderStatus() async {
+    if (widget.orderReferenceId == null) return;
+    try {
+      final order = await SupabaseService.instance.fetchOrderById(widget.orderReferenceId);
+      if (mounted && order != null) {
+        setState(() {
+          _orderStatus = order['status']?.toString();
+          final updatedAt = order['updated_at']?.toString();
+          if (updatedAt != null) {
+            _orderUpdatedAt = DateTime.tryParse(updatedAt);
+          }
+        });
+      }
+    } catch (_) {}
   }
 
   void _scrollToBottom() {
@@ -700,6 +737,10 @@ class _ChatViewState extends State<ChatView> with SingleTickerProviderStateMixin
       appBar: AppBar(
         backgroundColor: AppConstants.secondary,
         elevation: 0,
+        iconTheme: const IconThemeData(
+          color: Color(0xFFF5EDE4), // Cream/off-white for visibility
+          size: 24,
+        ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -708,18 +749,156 @@ class _ChatViewState extends State<ChatView> with SingleTickerProviderStateMixin
               style: AppConstants.bodyStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
-                color: Colors.white,
+                color: const Color(0xFFF5EDE4),
               ),
             ),
             Text(
               _isCustomer ? 'Seller' : 'Customer',
               style: AppConstants.bodyStyle(
                 fontSize: 11,
-                color: Colors.white.withAlpha(180),
+                color: const Color(0xFFF5EDE4).withValues(alpha: 0.7),
               ),
             ),
           ],
         ),
+        actions: _isSearching
+            ? [
+                // Search bar when in search mode
+                Expanded(
+                  child: Container(
+                    height: 40,
+                    margin: const EdgeInsets.only(right: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      children: [
+                        const SizedBox(width: 12),
+                        const Icon(Icons.search, size: 18, color: Color(0xFFF5EDE4)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: _searchController,
+                            style: const TextStyle(color: Color(0xFFF5EDE4), fontSize: 14),
+                            decoration: InputDecoration(
+                              hintText: 'Search messages...',
+                              hintStyle: TextStyle(
+                                color: const Color(0xFFF5EDE4).withValues(alpha: 0.5),
+                                fontSize: 14,
+                              ),
+                              border: InputBorder.none,
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                            onChanged: (_) => _performSearch(),
+                            autofocus: true,
+                          ),
+                        ),
+                        if (_totalMatches > 0)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 4),
+                            child: Text(
+                              '$_currentMatchIndex/$_totalMatches',
+                              style: const TextStyle(
+                                color: Color(0xFFF5EDE4),
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        if (_totalMatches > 1) ...[
+                          IconButton(
+                            icon: const Icon(Icons.keyboard_arrow_up, size: 20),
+                            color: const Color(0xFFF5EDE4),
+                            onPressed: _previousMatch,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.keyboard_arrow_down, size: 20),
+                            color: const Color(0xFFF5EDE4),
+                            onPressed: _nextMatch,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                        ],
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 20),
+                          color: const Color(0xFFF5EDE4),
+                          onPressed: () {
+                            setState(() {
+                              _isSearching = false;
+                              _searchController.clear();
+                              _searchQuery = '';
+                              _totalMatches = 0;
+                              _currentMatchIndex = 0;
+                            });
+                          },
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                    ),
+                  ),
+                ),
+              ]
+            : [
+                Builder(
+                  builder: (context) => IconButton(
+                    icon: const Icon(
+                      Icons.more_vert,
+                      color: Color(0xFFF5EDE4),
+                      size: 24,
+                    ),
+                    onPressed: () {
+                      showCustomPopupMenu(
+                        context: context,
+                        items: [
+                          CustomPopupMenuItem(
+                            label: 'View Seller Profile',
+                            icon: Icons.storefront_outlined,
+                            onTap: () => _handleHeaderMenuAction('profile'),
+                          ),
+                          CustomPopupMenuItem(
+                            label: 'Search in Conversation',
+                            icon: Icons.search,
+                            onTap: () => _handleHeaderMenuAction('search'),
+                          ),
+                          CustomPopupMenuItem(
+                            label: _isMuted ? 'Unmute Notifications' : 'Mute Notifications',
+                            icon: _isMuted ? Icons.notifications_outlined : Icons.notifications_off_outlined,
+                            onTap: () => _handleHeaderMenuAction('mute'),
+                            showDividerBefore: true,
+                          ),
+                          CustomPopupMenuItem(
+                            label: 'Report Seller',
+                            icon: Icons.flag_outlined,
+                            iconColor: AppConstants.error,
+                            textColor: AppConstants.error,
+                            onTap: () => _handleHeaderMenuAction('report'),
+                            showDividerBefore: true,
+                          ),
+                          CustomPopupMenuItem(
+                            label: 'Block Seller',
+                            icon: Icons.block,
+                            iconColor: AppConstants.error,
+                            textColor: AppConstants.error,
+                            onTap: () => _handleHeaderMenuAction('block'),
+                          ),
+                          CustomPopupMenuItem(
+                            label: 'Delete Conversation',
+                            icon: Icons.delete_outline,
+                            iconColor: AppConstants.error,
+                            textColor: AppConstants.error,
+                            onTap: () => _handleHeaderMenuAction('delete'),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(width: 4),
+              ],
       ),
       body: Column(
         children: [
@@ -792,6 +971,9 @@ class _ChatViewState extends State<ChatView> with SingleTickerProviderStateMixin
                       ),
           ),
           if (_isOtherPartyTyping) _buildTypingIndicator(),
+          // Order status summary + Request a Change (anchored above input bar)
+          if (widget.orderReferenceId != null)
+            _buildOrderStatusSummary(),
           _buildInputBar(),
         ],
       ),
@@ -885,32 +1067,7 @@ class _ChatViewState extends State<ChatView> with SingleTickerProviderStateMixin
               ),
             ],
           ),
-          // Quick action: Request a Change (only for customer, non-cancelled/delivered)
-          if (_isCustomer && _canRequestChange) ...[
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: _showChangeRequest,
-                icon: const Icon(Icons.swap_horiz, size: 16),
-                label: Text(
-                  'Request a Change',
-                  style: AppConstants.bodyStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppConstants.primary,
-                  side: BorderSide(color: AppConstants.primary.withValues(alpha: 0.3)),
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-            ),
-          ],
+
         ],
       ),
     );
@@ -918,9 +1075,412 @@ class _ChatViewState extends State<ChatView> with SingleTickerProviderStateMixin
 
   /// Whether the customer can request a change (not for cancelled/delivered orders).
   bool get _canRequestChange {
-    // Default to allowing changes; order status would need to be passed
-    // or fetched for proper filtering. For MVP, always allow.
-    return true;
+    if (_orderStatus == null) return true; // still loading, allow by default
+    return _orderStatus != 'cancelled' &&
+        _orderStatus != 'delivered' &&
+        _orderStatus != 'received';
+  }
+
+  Widget _buildOrderStatusSummary() {
+    if (_orderStatus == null) return const SizedBox.shrink();
+
+    final (statusLabel, statusColor, statusIcon) = _resolveStatusDisplay(_orderStatus!);
+    final updatedText = _orderUpdatedAt != null ? _formatRelativeTime(_orderUpdatedAt!) : '';
+    // Light background tint matching the status color
+    final bgColor = statusColor.withValues(alpha: 0.08);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: bgColor,
+        border: Border(
+          top: BorderSide(color: statusColor.withValues(alpha: 0.2)),
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          children: [
+            // Status summary row with badge-style pill
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: statusColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(statusIcon, size: 14, color: statusColor),
+                  const SizedBox(width: 6),
+                  Text(
+                    statusLabel,
+                    style: AppConstants.bodyStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: statusColor,
+                    ),
+                  ),
+                  if (updatedText.isNotEmpty) ...[
+                    const SizedBox(width: 6),
+                    Text(
+                      '· $updatedText',
+                      style: AppConstants.bodyStyle(
+                        fontSize: 11,
+                        color: statusColor.withValues(alpha: 0.7),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            // Request a Change button (only for eligible statuses)
+            if (_isCustomer && _canRequestChange) ...[
+              const SizedBox(height: 6),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _showChangeRequest,
+                  icon: const Icon(Icons.swap_horiz, size: 14),
+                  label: Text(
+                    'Request a Change',
+                    style: AppConstants.bodyStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppConstants.primary,
+                    side: BorderSide(color: AppConstants.primary.withValues(alpha: 0.4)),
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Map raw DB status to display label, color, and icon.
+  (String, Color, IconData) _resolveStatusDisplay(String status) {
+    switch (status.toLowerCase()) {
+      case 'pending':
+      case 'placed':
+        return ('Pending', const Color(0xFFC47D00), Icons.schedule);
+      case 'preparing':
+      case 'processing':
+        return ('Processing', const Color(0xFFC47D00), Icons.inventory_2_outlined);
+      case 'ready':
+        return ('Ready for Pickup', AppConstants.success, Icons.check_circle_outline);
+      case 'shipped':
+        return ('Shipped', AppConstants.primary, Icons.local_shipping_outlined);
+      case 'delivered':
+        return ('Delivered', AppConstants.success, Icons.home_outlined);
+      case 'received':
+        return ('Received', AppConstants.success, Icons.check_circle);
+      case 'cancelled':
+        return ('Cancelled', AppConstants.error, Icons.cancel_outlined);
+      default:
+        return (status[0].toUpperCase() + status.substring(1), AppConstants.secondary, Icons.info_outline);
+    }
+  }
+
+  /// Format a DateTime as a relative time string (e.g. "2h ago", "3d ago").
+  String _formatRelativeTime(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inDays > 0) return '${diff.inDays}d ago';
+    if (diff.inHours > 0) return '${diff.inHours}h ago';
+    if (diff.inMinutes > 0) return '${diff.inMinutes}m ago';
+    return 'Just now';
+  }
+
+  Future<void> _loadMuteState() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _isMuted = prefs.getBool('muted_${widget.conversationId}') ?? false;
+      });
+    }
+  }
+
+  Future<void> _toggleMute() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _isMuted = !_isMuted;
+    });
+    await prefs.setBool('muted_${widget.conversationId}', _isMuted);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_isMuted ? 'Notifications muted' : 'Notifications unmuted'),
+          duration: const Duration(seconds: 1),
+        ),
+      );
+    }
+  }
+
+  void _handleHeaderMenuAction(String action) {
+    switch (action) {
+      case 'profile':
+        _navigateToSellerProfile();
+        break;
+      case 'search':
+        setState(() {
+          _isSearching = true;
+        });
+        break;
+      case 'mute':
+        _toggleMute();
+        break;
+      case 'report':
+        _showReportDialog();
+        break;
+      case 'block':
+        _showBlockDialog();
+        break;
+      case 'delete':
+        _showDeleteConversationDialog();
+        break;
+    }
+  }
+
+  void _navigateToSellerProfile() {
+    // TODO: Get the store ID from the conversation and navigate
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Opening seller profile...'),
+        duration: Duration(seconds: 1),
+      ),
+    );
+  }
+
+  void _performSearch() {
+    final query = _searchController.text.trim().toLowerCase();
+    if (query.isEmpty) {
+      setState(() {
+        _searchQuery = '';
+        _totalMatches = 0;
+        _currentMatchIndex = 0;
+      });
+      return;
+    }
+    int matches = 0;
+    for (final msg in _messages) {
+      if (msg.body?.toLowerCase().contains(query) == true) {
+        matches++;
+      }
+    }
+    setState(() {
+      _searchQuery = query;
+      _totalMatches = matches;
+      _currentMatchIndex = matches > 0 ? 1 : 0;
+    });
+  }
+
+  void _nextMatch() {
+    if (_totalMatches == 0) return;
+    setState(() {
+      _currentMatchIndex = (_currentMatchIndex % _totalMatches) + 1;
+    });
+    // Scroll to the next matching message
+    final query = _searchQuery.toLowerCase();
+    int matchCount = 0;
+    for (int i = 0; i < _messages.length; i++) {
+      if (_messages[i].body?.toLowerCase().contains(query) == true) {
+        matchCount++;
+        if (matchCount == _currentMatchIndex) {
+          // Scroll to this message
+          final targetOffset = (i * 80.0).clamp(0.0, _scrollController.position.maxScrollExtent);
+          _scrollController.animateTo(
+            targetOffset,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+          break;
+        }
+      }
+    }
+  }
+
+  void _previousMatch() {
+    if (_totalMatches == 0) return;
+    setState(() {
+      _currentMatchIndex = _currentMatchIndex > 1 ? _currentMatchIndex - 1 : _totalMatches;
+    });
+    _nextMatch();
+  }
+
+  void _showReportDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Report Seller'),
+        content: const Text('Are you sure you want to report this seller? We\'ll review the report and take appropriate action.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Report submitted. Thank you.'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
+            child: const Text('Report', style: TextStyle(color: AppConstants.error)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showBlockDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Block Seller'),
+        content: const Text('Are you sure you want to block this seller? You won\'t receive messages from them anymore.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Seller blocked.'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
+            child: const Text('Block', style: TextStyle(color: AppConstants.error)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDeleteConversationDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Conversation'),
+        content: const Text(
+          'Are you sure you want to delete this conversation? This action cannot be undone and all messages will be permanently removed.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _deleteConversation();
+            },
+            child: const Text('Delete', style: TextStyle(color: AppConstants.error)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _deleteConversation() async {
+    try {
+      // Delete all messages in the conversation from Supabase
+      await Supabase.instance.client
+          .from('messages')
+          .delete()
+          .eq('conversation_id', widget.conversationId);
+
+      // Delete the conversation itself
+      await Supabase.instance.client
+          .from('conversations')
+          .delete()
+          .eq('id', widget.conversationId);
+
+      // Clear local state
+      if (mounted) {
+        context.read<MessageProvider>().removeConversation(widget.conversationId);
+        setState(() {
+          _messages.clear();
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Conversation deleted'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete conversation: $e'),
+            backgroundColor: AppConstants.error,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Builds a RichText widget with search query matches highlighted.
+  Widget _buildHighlightedText(String text, Color baseColor) {
+    final query = _searchQuery.toLowerCase();
+    final textLower = text.toLowerCase();
+    final List<TextSpan> spans = [];
+    int start = 0;
+
+    while (start < text.length) {
+      final index = textLower.indexOf(query, start);
+      if (index == -1) {
+        // No more matches — add the remaining text
+        spans.add(TextSpan(
+          text: text.substring(start),
+          style: AppConstants.bodyStyle(fontSize: 14, color: baseColor),
+        ));
+        break;
+      }
+
+      // Add text before the match
+      if (index > start) {
+        spans.add(TextSpan(
+          text: text.substring(start, index),
+          style: AppConstants.bodyStyle(fontSize: 14, color: baseColor),
+        ));
+      }
+
+      // Add highlighted match
+      final matchEnd = index + query.length;
+      spans.add(TextSpan(
+        text: text.substring(index, matchEnd),
+        style: AppConstants.bodyStyle(
+          fontSize: 14,
+          color: baseColor,
+          fontWeight: FontWeight.w700,
+        ).copyWith(
+          backgroundColor: const Color(0xFFFFF176).withValues(alpha: 0.6),
+        ),
+      ));
+
+      start = matchEnd;
+    }
+
+    return RichText(text: TextSpan(children: spans));
   }
 
   void _showChangeRequest() async {
@@ -1088,15 +1648,20 @@ class _ChatViewState extends State<ChatView> with SingleTickerProviderStateMixin
                   ),
                 ),
 
-              // Message body (caption)
+              // Message body (caption) with optional search highlighting
               if (message.hasBody)
-                Text(
-                  message.body!,
-                  style: AppConstants.bodyStyle(
-                    fontSize: 14,
-                    color: isOwnMessage ? Colors.white : AppConstants.secondary,
-                  ),
-                ),
+                _searchQuery.isNotEmpty
+                    ? _buildHighlightedText(
+                        message.body!,
+                        isOwnMessage ? Colors.white : AppConstants.secondary,
+                      )
+                    : Text(
+                        message.body!,
+                        style: AppConstants.bodyStyle(
+                          fontSize: 14,
+                          color: isOwnMessage ? Colors.white : AppConstants.secondary,
+                        ),
+                      ),
 
               // Sending/failed indicator for text messages
               if (message.isSending && message.hasBody && !message.hasAttachment)
