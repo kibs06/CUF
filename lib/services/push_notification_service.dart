@@ -3,7 +3,7 @@ import 'dart:convert';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_app_badger/flutter_app_badger.dart';
+import 'package:app_badge_plus/app_badge_plus.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -292,9 +292,9 @@ class PushNotificationService {
   Future<void> updateAppBadge(int unreadCount) async {
     try {
       if (unreadCount > 0) {
-        await FlutterAppBadger.updateBadgeCount(unreadCount);
+        await AppBadgePlus.updateBadge(unreadCount);
       } else {
-        await FlutterAppBadger.removeBadge();
+        await AppBadgePlus.updateBadge(0);
       }
       if (kDebugMode) {
         print('[Push] App badge updated: ${formatBadgeCount(unreadCount)}');
