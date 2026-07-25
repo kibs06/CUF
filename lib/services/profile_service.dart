@@ -33,11 +33,18 @@ class ProfileService {
       upsert: true,
     );
 
+    // Cache-bust: the Storage path is always {userId}/avatar.jpg (upsert),
+    // so the raw public URL never changes between uploads. Appending a
+    // timestamp query param forces Image widgets to treat it as a new
+    // image instead of serving the stale cached one.
+    final cacheBustedUrl =
+        '$publicUrl?t=${DateTime.now().millisecondsSinceEpoch}';
+
     await _client
         .from('profiles')
-        .update({'avatar_url': publicUrl})
+        .update({'avatar_url': cacheBustedUrl})
         .eq('id', userId);
 
-    return publicUrl;
+    return cacheBustedUrl;
   }
 }
