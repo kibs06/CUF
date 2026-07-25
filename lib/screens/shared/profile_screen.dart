@@ -148,10 +148,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       );
     } catch (e) {
+      debugPrint('[ProfileScreen] Avatar upload failed: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.toString().replaceAll('Exception: ', '')),
+        const SnackBar(
+          content: Text('Photo upload failed — please try again.'),
           backgroundColor: AppConstants.error,
         ),
       );
