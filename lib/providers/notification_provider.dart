@@ -435,21 +435,24 @@ class NotificationProvider extends ChangeNotifier {
     _realtimeSub?.cancel();
     if (_userId == null) return;
 
+    // NOTE: .order() and .limit() are NOT supported by Supabase Realtime
+    // streams — sorting and capping are done client-side below.
     _realtimeSub = Supabase.instance.client
         .from('notifications')
         .stream(primaryKey: ['id'])
         .eq('user_id', _userId!)
-        .order('created_at', ascending: false)
-        .limit(100)
         .listen(
       (data) {
-        // Client-side filter: not soft-deleted
+        // Client-side filter: not soft-deleted, sort newest-first, cap at 50
         _notifications = data
             .where((row) => row['is_deleted'] != true)
-            .take(50)
             .map((row) =>
                 AppNotification.fromMap(Map<String, dynamic>.from(row)))
-            .toList();
+            .toList()
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        if (_notifications.length > 50) {
+          _notifications = _notifications.sublist(0, 50);
+        }
         _recomputeUnreadCounts();
         notifyListeners();
       },

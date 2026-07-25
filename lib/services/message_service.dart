@@ -510,16 +510,17 @@ class MessageService {
     String conversationId,
     void Function(List<Message> messages) onMessagesChanged,
   ) {
+    // NOTE: .order() is NOT supported by Supabase Realtime streams —
+    // sorting is done client-side below.
     return _client
         .from('messages')
         .stream(primaryKey: ['id'])
         .eq('conversation_id', conversationId)
-        .order('created_at', ascending: true)
         .listen((data) {
           final messages = data
               .map((row) => Message.fromMap(Map<String, dynamic>.from(row)))
               .toList();
-          // Explicitly sort oldest-first to guarantee correct chat order
+          // Client-side sort oldest-first to guarantee correct chat order
           messages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
           onMessagesChanged(messages);
         });
@@ -540,12 +541,11 @@ class MessageService {
     final filterColumn = storeId != null ? 'store_id' : 'customer_id';
     final filterValue = storeId ?? customerId!;
 
+    // NOTE: .order() is NOT supported by Supabase Realtime streams.
     return _client
         .from('conversations')
         .stream(primaryKey: ['id'])
         .eq(filterColumn, filterValue)
-        .order('last_message_at', ascending: false)
-        .order('created_at', ascending: false)
         .listen((_) {
           onUpdate();
         });

@@ -249,20 +249,24 @@ class SellerNotificationProvider extends ChangeNotifier {
     _realtimeSub?.cancel();
     if (_storeId == null) return;
 
+    // NOTE: .order() and .limit() are NOT supported by Supabase Realtime
+    // streams — sorting and capping are done client-side below.
     _realtimeSub = _client
         .from('seller_notifications')
         .stream(primaryKey: ['id'])
-        .order('created_at', ascending: false)
-        .limit(100)
         .listen((data) {
           // Client-side filter: only this store, not soft-deleted
+          // Sort newest-first and cap at 50
           _notifications = data
               .where((row) =>
                   row['store_id'] == _storeId &&
                   row['is_deleted'] != true)
-              .take(50)
               .map((row) => SellerNotification.fromMap(Map<String, dynamic>.from(row)))
-              .toList();
+              .toList()
+            ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          if (_notifications.length > 50) {
+            _notifications = _notifications.sublist(0, 50);
+          }
           _unreadCount = _notifications.where((n) => !n.isRead).length;
           notifyListeners();
         });
