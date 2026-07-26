@@ -130,12 +130,23 @@ class SupabaseService {
     await _client.auth.signOut();
   }
 
-  Future<List<Map<String, dynamic>>> fetchProducts() async {
-    final data = await _client
+  /// Fetch products, optionally scoped to a specific store.
+  ///
+  /// When [storeId] is provided, only products belonging to that store are
+  /// returned (seller/POS context). When null, all active products are
+  /// returned (customer/admin context).
+  Future<List<Map<String, dynamic>>> fetchProducts({String? storeId}) async {
+    var query = _client
         .from('products')
         .select(
           '*, stores(name), product_images(image_url, display_order), inventory(size, stock), product_variants(size, stock)',
-        )
+        );
+
+    if (storeId != null) {
+      query = query.eq('store_id', storeId);
+    }
+
+    final data = await query
         .order('created_at', ascending: false)
         .timeout(_defaultTimeout);
 
@@ -281,7 +292,12 @@ class SupabaseService {
     final items = orderData['items'] as List<Map<String, dynamic>>? ?? [];
     if (items.isEmpty) throw Exception('No items to order.');
 
-    debugPrint('[ORDER-CREATE] Starting order creation for user: $userId, items: ${items.length}');
+    // Determine order source: 'pos' for in-person sales, 'online' for customer orders.
+    // POS orders skip the pending→preparing→ready pipeline and land in 'received' directly.
+    final source = orderData['source']?.toString() ?? 'online';
+    final isPos = source == 'pos';
+
+    debugPrint('[ORDER-CREATE] Starting order creation for user: $userId, items: ${items.length}, source: $source');
 
     // Look up store_id from the first product
     Map<String, dynamic> productMap;
@@ -300,18 +316,29 @@ class SupabaseService {
     final shippingAddress = orderData['shipping_address'];
 
     // STEP 1: Create the orders row (committed immediately — no transaction wrapper).
+    // POS orders: status='received', payment_status='paid' (transaction is complete at checkout).
+    // Online orders: status='pending', payment_status depends on method.
     Map<String, dynamic> orderMap;
     try {
       final insertData = <String, dynamic>{
         'customer_id': userId,
         'store_id': productMap['store_id'],
-        'status': 'pending',
+        'status': isPos ? 'received' : 'pending',
         'fulfillment': 'pickup',
         'total_amount': orderData['total_amount'],
         'payment_method': method,
-        'payment_status': method == 'cash' ? 'unpaid' : 'paid',
+        'payment_status': isPos ? 'paid' : (method == 'cash' ? 'unpaid' : 'paid'),
         'notes': orderData['delivery_address'],
+        'source': source,
       };
+      // Persist tendered/change for POS cash transactions
+      if (isPos && method == 'cash') {
+        final tendered = (orderData['amount_tendered'] as num?)?.toDouble();
+        if (tendered != null) {
+          insertData['amount_tendered'] = tendered;
+          insertData['change_amount'] = (tendered - ((orderData['total_amount'] as num?)?.toDouble() ?? 0)).clamp(0, double.infinity);
+        }
+      }
       if (shippingAddress != null) {
         insertData['shipping_address'] = shippingAddress;
       }
@@ -434,7 +461,26 @@ class SupabaseService {
       rethrow;
     }
 
-    debugPrint('[ORDER-CREATE] Order created successfully: id=$orderId, items=${items.length}');
+    debugPrint('[ORDER-CREATE] Order created successfully: id=$orderId, items=${items.length}, source=$source');
+
+    // ── Status history for POS orders ──────────────────────────────
+    // POS orders are inserted directly with status='received' (terminal),
+    // so the trg_record_order_status_change trigger (AFTER UPDATE) never fires.
+    // Write the initial history row explicitly so POS orders have an audit trail.
+    if (isPos) {
+      final orderIdInt = int.tryParse(orderId.toString());
+      if (orderIdInt != null) {
+        try {
+          await _client.from('order_status_history').insert({
+            'order_id': orderIdInt,
+            'status': 'received',
+            'changed_at': DateTime.now().toIso8601String(),
+          });
+        } catch (e) {
+          debugPrint('[ORDER-CREATE] Could not write POS status history: $e');
+        }
+      }
+    }
 
     // ── Notification: new_order ────────────────────────────────────
     // Fire-and-forget: notify the seller that a new order was placed.
@@ -836,6 +882,8 @@ class SupabaseService {
       'total_amount': (row['total_amount'] as num?)?.toDouble() ?? 0.0,
       'payment_method': row['payment_method'] ?? '',
       'delivery_address': row['notes'] ?? '',
+      'amount_tendered': row['amount_tendered'],
+      'change_amount': row['change_amount'],
       'profiles': profile,
       'items_count': items.fold<int>(
         0,

@@ -250,6 +250,86 @@ class OrderService {
     await _db.updateOrderStatus(orderId, newStatus);
   }
 
+  /// Fetch POS transaction history for a store.
+  ///
+  /// Returns only orders with `source='pos'` (in-person sales),
+  /// scoped to the given [storeId], ordered most-recent-first.
+  /// Each order includes its line items with product names.
+  ///
+  /// Queries orders directly by store_id + source (no 3-step chain needed)
+  /// since orders.store_id is reliably set during order creation.
+  Future<List<Map<String, dynamic>>> fetchPosHistory(String storeId) async {
+    // Fetch POS-only orders directly (store_id + source filter)
+    final data = await _client
+        .from('orders')
+        .select(
+          'id, customer_id, status, total_amount, payment_method, '
+          'payment_status, notes, created_at, source, '
+          'amount_tendered, change_amount',
+        )
+        .eq('store_id', storeId)
+        .eq('source', 'pos')
+        .order('created_at', ascending: false);
+
+    final orders = (data as List)
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+
+    if (orders.isEmpty) return [];
+
+    // 2. Fetch order items with product names and images
+    final allOrderIds = orders.map((o) => o['id']).toList();
+    final itemsData = await _client
+        .from('order_items')
+        .select('order_id, product_id, size, quantity, unit_price')
+        .inFilter('order_id', allOrderIds);
+
+    // 3. Fetch product names and images
+    final productIds = itemsData
+        .map((i) => (i as Map)['product_id'])
+        .where((id) => id != null)
+        .toSet()
+        .toList();
+
+    Map<dynamic, String> productNames = {};
+    Map<dynamic, String> productImages = {};
+    if (productIds.isNotEmpty) {
+      final products = await _client
+          .from('products')
+          .select('id, name, product_images(image_url, display_order)')
+          .inFilter('id', productIds);
+      for (final row in products as List) {
+        final map = Map<String, dynamic>.from(row);
+        productNames[map['id']] = map['name'] ?? '';
+        // Get first image URL
+        final images = map['product_images'] as List? ?? [];
+        if (images.isNotEmpty) {
+          final sorted = List<Map<String, dynamic>>.from(images)
+            ..sort((a, b) => ((a['display_order'] ?? 0) as int)
+                .compareTo(((b['display_order'] ?? 0) as int)));
+          productImages[map['id']] = sorted.first['image_url']?.toString() ?? '';
+        }
+      }
+    }
+
+    // 4. Group items by order and enrich with product names and images
+    final itemsByOrder = <dynamic, List<Map<String, dynamic>>>{};
+    for (final item in itemsData as List) {
+      final map = Map<String, dynamic>.from(item);
+      map['product_name'] = productNames[map['product_id']] ?? '';
+      map['product_image'] = productImages[map['product_id']] ?? '';
+      itemsByOrder.putIfAbsent(map['order_id'], () => []).add(map);
+    }
+
+    for (final order in orders) {
+      order['order_items'] = itemsByOrder[order['id']] ?? [];
+      order['items_count'] = (order['order_items'] as List)
+          .fold<int>(0, (sum, item) => sum + ((item['quantity'] as num?)?.toInt() ?? 0));
+    }
+
+    return orders;
+  }
+
   /// Fetch all orders for the currently logged-in customer.
   /// Returns orders with their items (product name, size, quantity) joined.
   Future<List<Map<String, dynamic>>> fetchMyOrders() async {

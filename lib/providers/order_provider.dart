@@ -51,6 +51,8 @@ class OrderProvider extends ChangeNotifier {
 
   // Place Order (UC013, UC014)
   // [items] is a list of maps, each with: product_id, size, color, quantity, unit_price
+  // [source] indicates order origin: 'online' (default) or 'pos' (in-person).
+  // POS orders skip the pending→preparing→ready pipeline and land in 'received' directly.
   Future<Map<String, dynamic>?> placeOrder({
     required String customerId,
     required List<Map<String, dynamic>> items,
@@ -58,6 +60,8 @@ class OrderProvider extends ChangeNotifier {
     required String deliveryAddress,
     required String paymentMethod,
     Map<String, dynamic>? shippingAddress,
+    String source = 'online',
+    double? amountTendered,
   }) async {
     _isLoading = true;
     notifyListeners();
@@ -72,6 +76,8 @@ class OrderProvider extends ChangeNotifier {
         'delivery_address': deliveryAddress,
         'payment_method': paymentMethod,
         if (shippingAddress != null) 'shipping_address': shippingAddress,
+        'source': source,
+        if (amountTendered != null) 'amount_tendered': amountTendered,
       });
       await loadOrders();
       _isLoading = false;

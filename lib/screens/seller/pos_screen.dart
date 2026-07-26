@@ -9,6 +9,7 @@ import '../../providers/order_provider.dart';
 import '../../providers/product_provider.dart';
 import '../../services/product_service.dart';
 import '../../widgets/seller/payment_method_pill.dart';
+import 'pos_history_screen.dart';
 
 class POSScreen extends StatefulWidget {
   final bool isStandalonePage;
@@ -33,7 +34,7 @@ class _POSScreenState extends State<POSScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<ProductProvider>(context, listen: false).loadProducts();
+      Provider.of<ProductProvider>(context, listen: false).loadSellerProducts();
     });
   }
 
@@ -342,6 +343,8 @@ class _POSScreenState extends State<POSScreen> {
       totalAmount: _subtotal,
       deliveryAddress: 'In-store POS',
       paymentMethod: paymentMethod,
+      source: 'pos',
+      amountTendered: paymentMethod == 'Cash' ? cashTendered : null,
     );
 
     // Auto-sync active status for each product after POS sale
@@ -414,7 +417,13 @@ class _POSScreenState extends State<POSScreen> {
         actions: [
           IconButton(
             tooltip: 'History',
-            onPressed: () {},
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const PosHistoryScreen(),
+                ),
+              );
+            },
             icon: const Icon(Icons.history, color: Colors.white),
           ),
         ],
