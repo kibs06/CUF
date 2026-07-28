@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:provider/provider.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/order_provider.dart';
@@ -23,6 +25,9 @@ class _ManageOrdersScreenState extends State<ManageOrdersScreen>
   late TabController _tabController;
   int _tabIndex = 0;
   final Set<dynamic> _updatingOrderIds = {};
+  // Track orders pending deletion (orderId -> Timer for 5s undo)
+  final Map<dynamic, Timer> _pendingDeletes = {};
+  final Set<dynamic> _deletedOrderIds = {};
 
   // No 'received' tab — received orders show in 'Delivered' tab
   // but the DB value is 'received' (customer confirmed).
@@ -77,6 +82,11 @@ class _ManageOrdersScreenState extends State<ManageOrdersScreen>
   void dispose() {
     _connectivitySub?.cancel();
     _tabController.dispose();
+    // Cancel all pending delete timers
+    for (final timer in _pendingDeletes.values) {
+      timer.cancel();
+    }
+    _pendingDeletes.clear();
     super.dispose();
   }
 
@@ -90,6 +100,134 @@ class _ManageOrdersScreenState extends State<ManageOrdersScreen>
     if (diff.inHours < 24) return '${diff.inHours}h ago';
     if (diff.inDays < 30) return '${diff.inDays}d ago';
     return '${(diff.inDays / 30).floor()}mo ago';
+  }
+
+  // ── Swipe-to-delete for cancelled orders ─────────────────────
+
+  void _confirmDeleteOrder(dynamic orderId, Map<String, dynamic> orderData) {
+    if (_pendingDeletes.containsKey(orderId) || _deletedOrderIds.contains(orderId)) return;
+    HapticFeedback.mediumImpact();
+
+    final shortId = orderId.toString().length >= 8
+        ? orderId.toString().substring(0, 8)
+        : orderId.toString();
+
+    String customerName = 'Customer';
+    if (orderData['profiles'] != null) {
+      final profile = orderData['profiles'];
+      customerName = profile['full_name'] ?? profile['email'] ?? 'Customer';
+    } else if (orderData['customer_name'] != null) {
+      customerName = orderData['customer_name'];
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: AppConstants.sellerCardBg,
+        contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.delete_outline, size: 32, color: AppConstants.error),
+            const SizedBox(height: 12),
+            Text(
+              'Delete Order #$shortId?',
+              style: AppConstants.bodyStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '$customerName\nThis action can be undone within 5 seconds.',
+              style: AppConstants.bodyStyle(
+                fontSize: 13,
+                color: Colors.grey.shade600,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(
+              'Cancel',
+              style: AppConstants.bodyStyle(color: AppConstants.secondary),
+            ),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppConstants.error),
+            onPressed: () {
+              Navigator.of(context).pop();
+              _swipeDeleteOrder(orderId, orderData);
+            },
+            child: Text(
+              'Delete',
+              style: AppConstants.bodyStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _swipeDeleteOrder(dynamic orderId, Map<String, dynamic> orderData) {
+    if (_pendingDeletes.containsKey(orderId) || _deletedOrderIds.contains(orderId)) return;
+
+    HapticFeedback.mediumImpact();
+
+    final provider = Provider.of<OrderProvider>(context, listen: false);
+    final deletedData = provider.deleteOrder(orderId);
+    if (deletedData == null) return;
+
+    _deletedOrderIds.add(orderId);
+    setState(() {});
+
+    // 5-second undo window
+    final timer = Timer(const Duration(seconds: 5), () {
+      // Undo window expired — permanently delete from database
+      _pendingDeletes.remove(orderId);
+      _deletedOrderIds.remove(orderId);
+      provider.permanentlyDeleteOrder(orderId);
+    });
+    _pendingDeletes[orderId] = timer;
+
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Order deleted — undo available for 5s'),
+        duration: const Duration(seconds: 5),
+        backgroundColor: AppConstants.secondary,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        action: SnackBarAction(
+          label: 'UNDO',
+          textColor: AppConstants.primary,
+          onPressed: () {
+            timer.cancel();
+            _pendingDeletes.remove(orderId);
+            _deletedOrderIds.remove(orderId);
+            provider.restoreOrder(deletedData);
+            setState(() {});
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text('Order restored'),
+                backgroundColor: AppConstants.success,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            );
+          },
+        ),
+      ),
+    );
   }
 
   Map<String, Color> get _statusColors => {
@@ -461,6 +599,70 @@ class _ManageOrdersScreenState extends State<ManageOrdersScreen>
     }
   }
 
+  // ── Build order card, wrapped in Slidable for cancelled orders ──
+
+  Widget _buildSlidableOrderCard(
+      Map<String, dynamic> order, dynamic id, String status) {
+    final isCancelled = status.toLowerCase() == 'cancelled';
+    final isPendingDelete = _deletedOrderIds.contains(id);
+
+    final card = SellerOrderCard(
+      order: order,
+      isUpdating: _updatingOrderIds.contains(id),
+      onPrimaryAction: () => _updateStatus(id, status, orderData: order),
+      onReject: status.toLowerCase() == 'pending'
+          ? () => _showRejectDialog(id, order)
+          : null,
+      onViewDetails: () {
+        Navigator.of(context)
+            .push<bool>(
+              MaterialPageRoute(
+                builder: (_) => OrderDetailScreen(order: order),
+              ),
+            )
+            .then((result) {
+          if (result == true && mounted) {
+            Provider.of<OrderProvider>(context, listen: false).loadOrders();
+          }
+        });
+      },
+    );
+
+    // Wrap all cards with fade animation for smooth deletion
+    Widget animatedCard = AnimatedOpacity(
+      opacity: isPendingDelete ? 0.0 : 1.0,
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeOut,
+      child: AnimatedSlide(
+        offset: isPendingDelete ? const Offset(0.15, 0) : Offset.zero,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOut,
+        child: card,
+      ),
+    );
+
+    // Only cancelled orders are swipeable
+    if (!isCancelled) return animatedCard;
+
+    return Slidable(
+      key: ValueKey(id),
+      startActionPane: ActionPane(
+        motion: const BehindMotion(),
+        extentRatio: 0.25,
+        children: [
+          SlidableAction(
+            onPressed: (_) => _confirmDeleteOrder(id, order),
+            backgroundColor: Colors.red.shade400,
+            foregroundColor: Colors.white,
+            icon: Icons.delete_outline,
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ],
+      ),
+      child: animatedCard,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final orderProvider = context.watch<OrderProvider>();
@@ -602,28 +804,7 @@ class _ManageOrdersScreenState extends State<ManageOrdersScreen>
                       order['time_ago'] = _timeAgo(order['created_at'] as String?);
                       order['fulfillment_type'] = 'Walk-in';
 
-                      return SellerOrderCard(
-                        order: order,
-                        isUpdating: _updatingOrderIds.contains(id),
-                        onPrimaryAction: () => _updateStatus(id, status, orderData: order),
-                        onReject: status.toLowerCase() == 'pending' 
-                            ? () => _showRejectDialog(id, order)
-                            : null,
-                        onViewDetails: () {
-                          Navigator.of(context)
-                              .push<bool>(
-                                MaterialPageRoute(
-                                  builder: (_) => OrderDetailScreen(order: order),
-                                ),
-                              )
-                              .then((result) {
-                            if (result == true && mounted) {
-                              Provider.of<OrderProvider>(context, listen: false)
-                                  .loadOrders();
-                            }
-                          });
-                        },
-                      );
+                      return _buildSlidableOrderCard(order, id, status);
                     },
                   ),
           ),

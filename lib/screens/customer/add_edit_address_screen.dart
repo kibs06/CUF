@@ -17,6 +17,7 @@ import '../../providers/auth_provider.dart';
 import '../../widgets/sole_card.dart';
 import '../../widgets/sole_primary_button.dart';
 import '../../widgets/sole_text_field.dart';
+import '../../widgets/sole_switch.dart';
 
 /// Add or Edit Address screen.
 ///
@@ -1109,11 +1110,10 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
                           'Set as default address',
                           style: AppConstants.bodyStyle(fontSize: 14),
                         ),
-                        Switch(
+                        SoleSwitch(
                           value: _isDefault,
                           onChanged: (val) =>
                               setState(() => _isDefault = val),
-                          activeThumbColor: AppConstants.primary,
                         ),
                       ],
                     ),

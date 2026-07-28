@@ -7,6 +7,7 @@ import '../../services/product_service.dart';
 import '../../widgets/sole_card.dart';
 import '../../widgets/sole_text_field.dart';
 import '../../widgets/sole_primary_button.dart';
+import '../../widgets/sole_switch.dart';
 
 /// Full add/edit product form for sellers.
 ///
@@ -686,7 +687,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                         Text('Required',
                             style: AppConstants.bodyStyle(
                                 fontWeight: FontWeight.bold, fontSize: 14)),
-                        Switch(
+                        SoleSwitch(
                           value: isRequired,
                           onChanged: (val) {
                             setSheetState(() => isRequired = val);
@@ -1613,6 +1614,10 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
             ),
             value: _isActive,
             onChanged: (val) => setState(() => _isActive = val),
+            activeColor: SoleSwitch.onColor,
+            activeThumbColor: SoleSwitch.thumbColor,
+            inactiveThumbColor: SoleSwitch.thumbColor,
+            inactiveTrackColor: SoleSwitch.offColor,
           ),
           const Divider(height: 1),
           SwitchListTile(
@@ -1631,6 +1636,10 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
             ),
             value: _isFeatured,
             onChanged: (val) => setState(() => _isFeatured = val),
+            activeColor: SoleSwitch.onColor,
+            activeThumbColor: SoleSwitch.thumbColor,
+            inactiveThumbColor: SoleSwitch.thumbColor,
+            inactiveTrackColor: SoleSwitch.offColor,
           ),
         ],
       ),

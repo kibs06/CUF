@@ -12,6 +12,7 @@ import '../../services/store_service.dart';
 import '../../widgets/sole_badge.dart';
 import '../../widgets/sole_card.dart';
 import '../../widgets/sole_status_chip.dart';
+import '../../widgets/sole_switch.dart';
 import '../customer/my_orders_screen.dart';
 import 'help_menu_screen.dart';
 import '../seller/create_store_screen.dart';
@@ -758,10 +759,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               onChanged: _isTogglingStore
                                   ? null
                                   : (_) => _toggleStoreOpen(),
-                              activeColor: AppConstants.success,
-                              activeThumbColor: AppConstants.success,
-                              inactiveTrackColor: AppConstants.error.withValues(alpha: 0.3),
-                              inactiveThumbColor: AppConstants.error,
+                              activeColor: SoleSwitch.onColor,
+                              activeThumbColor: SoleSwitch.thumbColor,
+                              inactiveTrackColor: SoleSwitch.offColor,
+                              inactiveThumbColor: SoleSwitch.thumbColor,
                               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             ),
                           ),
@@ -775,10 +776,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               color: AppConstants.error,
                             ),
                           ),
-                        const Icon(
-                          Icons.chevron_right,
-                          color: AppConstants.borderGray,
-                        ),
                       ],
                     ),
                     onTap: () {

@@ -250,6 +250,33 @@ class OrderProvider extends ChangeNotifier {
     }).toList();
   }
 
+  // ── Delete cancelled order ────────────────────────────────────
+
+  /// Optimistically remove a cancelled order from the local list.
+  /// Returns the deleted order data so it can be restored if the user undoes.
+  Map<String, dynamic>? deleteOrder(dynamic orderId) {
+    final index = _orders.indexWhere((o) => o['id'] == orderId);
+    if (index == -1) return null;
+    final orderData = Map<String, dynamic>.from(_orders[index]);
+    _orders.removeAt(index);
+    notifyListeners();
+    return orderData;
+  }
+
+  /// Restore a previously deleted order back into the local list.
+  void restoreOrder(Map<String, dynamic> orderData) {
+    _orders.insert(0, orderData);
+    notifyListeners();
+  }
+
+  /// Permanently delete a cancelled order from the database.
+  Future<void> permanentlyDeleteOrder(dynamic orderId) async {
+    await Supabase.instance.client
+        .from('orders')
+        .delete()
+        .eq('id', orderId);
+  }
+
   // --- ADMIN ACTIONS (UC004, UC005) ---
   Future<void> loadProfiles() async {
     _isLoading = true;

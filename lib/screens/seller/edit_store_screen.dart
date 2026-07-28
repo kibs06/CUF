@@ -6,6 +6,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../constants/app_constants.dart';
 import '../../services/store_service.dart';
 import '../../widgets/sole_primary_button.dart';
+import '../../widgets/sole_switch.dart';
 
 /// Edit store screen — same layout as [CreateStoreScreen] but pre-fills
 /// all existing store data and allows toggling store open/closed.
@@ -590,6 +591,10 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
         ),
         value: _isOpen,
         onChanged: (val) => setState(() => _isOpen = val),
+        activeColor: SoleSwitch.onColor,
+        activeThumbColor: SoleSwitch.thumbColor,
+        inactiveThumbColor: SoleSwitch.thumbColor,
+        inactiveTrackColor: SoleSwitch.offColor,
       ),
     );
   }

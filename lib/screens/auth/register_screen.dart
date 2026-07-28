@@ -5,6 +5,7 @@ import '../../providers/auth_provider.dart';
 import '../../widgets/sole_card.dart';
 import '../../widgets/sole_text_field.dart';
 import '../../widgets/sole_primary_button.dart';
+import '../../widgets/sole_switch.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -209,7 +210,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               ),
                             ),
                             child: SwitchListTile(
-                              activeThumbColor: AppConstants.primary,
+                              activeThumbColor: SoleSwitch.onColor,
                               title: Row(
                                 children: [
                                   const Icon(

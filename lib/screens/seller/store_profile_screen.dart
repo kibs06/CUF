@@ -5,6 +5,7 @@ import '../../constants/app_constants.dart';
 import '../../services/product_service.dart';
 import '../../services/store_service.dart';
 import '../../widgets/sole_primary_button.dart';
+import '../../widgets/sole_switch.dart';
 import 'edit_store_screen.dart';
 
 /// Seller-facing store profile screen.
@@ -418,10 +419,10 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
               Switch(
                 value: _isOpen,
                 onChanged: (_) => _toggleOpen(),
-                activeColor: AppConstants.success,
-                activeThumbColor: AppConstants.success,
-                inactiveTrackColor: AppConstants.error.withValues(alpha: 0.3),
-                inactiveThumbColor: AppConstants.error,
+                activeColor: SoleSwitch.onColor,
+                activeThumbColor: SoleSwitch.thumbColor,
+                inactiveTrackColor: SoleSwitch.offColor,
+                inactiveThumbColor: SoleSwitch.thumbColor,
               ),
             ],
           ),
