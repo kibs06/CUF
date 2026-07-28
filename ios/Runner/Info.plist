@@ -59,6 +59,8 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>SoleVision needs camera access to scan product barcodes for quick POS checkout.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>SoleVision uses your location to help set your delivery address accurately.</string>
 	<key>UISupportedInterfaceOrientations~ipad</key>

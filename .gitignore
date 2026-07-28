@@ -47,3 +47,5 @@ app.*.map.json
 # API keys and secrets (never commit!)
 dart_defines.json
 *.env
+nul
+android/build/

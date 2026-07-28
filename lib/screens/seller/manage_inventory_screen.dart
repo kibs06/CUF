@@ -21,7 +21,7 @@ class _ManageInventoryScreenState extends State<ManageInventoryScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<ProductProvider>(context, listen: false).loadProducts();
+      Provider.of<ProductProvider>(context, listen: false).loadSellerProducts();
     });
   }
 

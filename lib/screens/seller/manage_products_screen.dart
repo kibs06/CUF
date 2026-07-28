@@ -515,6 +515,14 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
 
   // ─── PRODUCT CARD ───────────────────────────────────────────────
 
+  /// Compact badge label for stock count — abbreviates large values
+  /// so the badge width stays bounded and doesn't crowd other elements.
+  String _stockBadgeLabel(int stock) {
+    if (stock == 0) return 'OUT';
+    if (stock > 99) return '99+';
+    return '$stock';
+  }
+
   Widget _buildProductCard(Map<String, dynamic> product, int index) {
     final imageUrl = _primaryImageUrl(product);
     final stock = _totalStock(product);
@@ -584,53 +592,23 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
                               ),
                         ),
                       ),
-                      // Status badges
-                      Positioned(
-                        top: 6,
-                        left: 6,
-                        child: Row(
-                          children: [
-                            // Active / Inactive badge
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: active
-                                    ? const Color(0xFF4ECDC4).withValues(alpha: 0.15)
-                                    : AppConstants.error.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Text(
-                                active ? 'Active' : 'Out of Stock',
-                                style: AppConstants.bodyStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: active
-                                      ? const Color(0xFF4ECDC4)
-                                      : AppConstants.error,
-                                ),
-                              ),
+                      // Featured star badge (compact icon only, top-left)
+                      if (_isFeatured(product))
+                        Positioned(
+                          top: 6,
+                          left: 6,
+                          child: Container(
+                            width: 24,
+                            height: 24,
+                            decoration: const BoxDecoration(
+                              color: AppConstants.statusPendingColor,
+                              shape: BoxShape.circle,
                             ),
-                            if (_isFeatured(product)) ...[
-                              const SizedBox(width: 4),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: AppConstants.statusPendingColor,
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text('★ FEATURED',
-                                    style: AppConstants.bodyStyle(
-                                        fontSize: 8,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.white)),
-                              ),
-                            ],
-                          ],
+                            child: const Icon(Icons.star,
+                                size: 14, color: Colors.white),
+                          ),
                         ),
-                      ),
-                      // Stock badge
+                      // Stock badge (abbreviated for large values, top-right)
                       Positioned(
                         top: 6,
                         right: 6,
@@ -646,7 +624,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
-                            stock == 0 ? 'OUT' : '$stock in stock',
+                            _stockBadgeLabel(stock),
                             style: AppConstants.monoStyle(
                                 fontSize: 9,
                                 fontWeight: FontWeight.bold,
@@ -664,15 +642,39 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Opacity(
-                        opacity: active ? 1.0 : 0.5,
-                        child: Text(
-                          product['name'] ?? 'Unnamed',
-                          style: AppConstants.bodyStyle(
-                              fontSize: 13, fontWeight: FontWeight.bold),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                      // Active / Inactive status dot + label
+                      Row(
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: active
+                                  ? AppConstants.success
+                                  : AppConstants.error,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            active ? 'Active' : 'Inactive',
+                            style: AppConstants.bodyStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w500,
+                              color: active
+                                  ? AppConstants.success
+                                  : AppConstants.error,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        product['name'] ?? 'Unnamed',
+                        style: AppConstants.bodyStyle(
+                            fontSize: 13, fontWeight: FontWeight.bold),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 6),
                       Text(
@@ -736,9 +738,10 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
           final selected = _activeFilter == filter;
           final count = _countFor(filter);
 
-          return ChoiceChip(
+          return FilterChip(
             label: Text('$filter ($count)'),
             selected: selected,
+            showCheckmark: false,
             selectedColor: AppConstants.primary,
             backgroundColor: AppConstants.sellerSurface,
             labelStyle: AppConstants.bodyStyle(

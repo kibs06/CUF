@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:provider/provider.dart';
 
 import '../../constants/app_constants.dart';
@@ -9,6 +11,7 @@ import '../../providers/order_provider.dart';
 import '../../providers/product_provider.dart';
 import '../../services/product_service.dart';
 import '../../widgets/seller/payment_method_pill.dart';
+import 'pos_barcode_scanner.dart';
 import 'pos_history_screen.dart';
 
 class POSScreen extends StatefulWidget {
@@ -29,6 +32,10 @@ class _POSScreenState extends State<POSScreen> {
   bool _showSuccessOverlay = false;
   double _lastChange = 0;
   Timer? _successTimer;
+
+  /// Recent barcode scans — most recent first. Max 10 entries.
+  final List<_ScanHistoryEntry> _scanHistory = [];
+  static const int _maxScanHistory = 10;
 
   @override
   void initState() {
@@ -89,6 +96,7 @@ class _POSScreenState extends State<POSScreen> {
       _panelIndex = 1;
     });
 
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Added to order'),
@@ -142,6 +150,79 @@ class _POSScreenState extends State<POSScreen> {
     }
   }
 
+  void _openBarcodeScanner() async {
+    final barcode = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => const PosBarcodeScanner()),
+    );
+    if (barcode == null || !mounted) return;
+
+    // Search against seller-scoped product list (already loaded)
+    // Priority: product barcode > variant SKUs > product-level SKU
+    final products = context.read<ProductProvider>().products;
+    final codeLower = barcode.toLowerCase();
+    final match = products.where((p) {
+      // 1. Product-level barcode field (preferred match)
+      final productBarcode = '${p['barcode'] ?? ''}'.toLowerCase();
+      if (productBarcode.isNotEmpty && productBarcode == codeLower) return true;
+      // 2. Top-level sku field
+      final topSku = '${p['sku'] ?? ''}'.toLowerCase();
+      if (topSku == codeLower) return true;
+      // 3. Variants' SKUs
+      final variants = p['product_variants'];
+      if (variants is List) {
+        return variants.any((v) {
+          final vSku = '${v['sku'] ?? ''}'.toLowerCase();
+          return vSku == codeLower;
+        });
+      }
+      return false;
+    }).toList();
+
+    if (match.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No product found for barcode: $barcode'),
+          backgroundColor: AppConstants.error,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+    final product = match.first;
+    final sizes = _availableSizes(product);
+    if (sizes.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${product['name'] ?? 'Product'} is out of stock'),
+          backgroundColor: AppConstants.error,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+    // Haptic + audio feedback on successful scan
+    HapticFeedback.lightImpact();
+    SystemSound.play(SystemSoundType.click);
+
+    // Add to scan history
+    setState(() {
+      _scanHistory.removeWhere((e) => e.barcode == barcode);
+      _scanHistory.insert(0, _ScanHistoryEntry(
+        barcode: barcode,
+        productName: product['name'] ?? 'Product',
+        productId: product['id'].toString(),
+      ));
+      if (_scanHistory.length > _maxScanHistory) {
+        _scanHistory.removeLast();
+      }
+    });
+
+    // Open the Size/Qty sheet for the matched product
+    _openProductSheet(product);
+  }
+
   void _openProductSheet(Map<String, dynamic> product) {
     final sizes = _availableSizes(product);
     if (sizes.isEmpty) return;
@@ -154,30 +235,37 @@ class _POSScreenState extends State<POSScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.35,
-          minChildSize: 0.32,
-          maxChildSize: 0.62,
-          expand: false,
-          builder: (context, scrollController) {
-            return StatefulBuilder(
-              builder: (context, setSheetState) {
-                final total = _productPrice(product) * quantity;
-                return Container(
+        final bottomSafe = MediaQuery.of(context).viewPadding.bottom;
+        final maxSheetHeight =
+            MediaQuery.of(context).size.height * 0.85;
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final total = _productPrice(product) * quantity;
+            return Container(
+              constraints: BoxConstraints(
+                maxHeight: maxSheetHeight,
+              ),
+
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(
+                  top: Radius.circular(20),
+                ),
+              ),
+              child: ClipRRect(
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(20),
+                ),
+                child: SingleChildScrollView(
                   padding: EdgeInsets.fromLTRB(
                     20,
                     16,
                     20,
-                    MediaQuery.of(context).viewInsets.bottom + 20,
+                    bottomSafe + 16,
                   ),
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.vertical(
-                      top: Radius.circular(20),
-                    ),
-                  ),
-                  child: ListView(
-                    controller: scrollController,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Row(
                         children: [
@@ -292,8 +380,8 @@ class _POSScreenState extends State<POSScreen> {
                       ),
                     ],
                   ),
-                );
-              },
+                ),
+              ),
             );
           },
         );
@@ -435,6 +523,7 @@ class _POSScreenState extends State<POSScreen> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                 child: SegmentedButton<int>(
+                  showSelectedIcon: false,
                   segments: const [
                     ButtonSegment(
                       value: 0,
@@ -508,37 +597,47 @@ class _POSScreenState extends State<POSScreen> {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
-          child: TextField(
-            controller: _searchController,
-            onChanged: (value) => setState(() => _searchKeyword = value),
-            style: AppConstants.bodyStyle(fontSize: 14),
-            decoration: InputDecoration(
-              hintText: 'Search product or scan barcode...',
-              hintStyle: AppConstants.bodyStyle(
-                fontSize: 13,
-                color: Colors.grey.shade500,
-              ),
-              prefixIcon: const Icon(Icons.search, color: AppConstants.primary),
-              suffixIcon: _searchKeyword.isEmpty
-                  ? const Icon(
-                      Icons.qr_code_scanner,
-                      color: AppConstants.secondary,
-                    )
-                  : IconButton(
-                      onPressed: () {
-                        _searchController.clear();
-                        setState(() => _searchKeyword = '');
-                      },
-                      icon: const Icon(
-                        Icons.close,
-                        color: AppConstants.secondary,
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: AppConstants.sellerShadow,
+            ),
+            child: TextField(
+              controller: _searchController,
+              onChanged: (value) => setState(() => _searchKeyword = value),
+              style: AppConstants.bodyStyle(fontSize: 14),
+              decoration: InputDecoration(
+                hintText: 'Search product or scan barcode...',
+                hintStyle: AppConstants.bodyStyle(
+                  fontSize: 13,
+                  color: Colors.grey.shade500,
+                ),
+                prefixIcon: const Icon(Icons.search, color: AppConstants.primary),
+                suffixIcon: _searchKeyword.isEmpty
+                    ? IconButton(
+                        onPressed: _openBarcodeScanner,
+                        icon: const Icon(
+                          Icons.qr_code_scanner,
+                          color: AppConstants.secondary,
+                        ),
+                      )
+                    : IconButton(
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _searchKeyword = '');
+                        },
+                        icon: const Icon(
+                          Icons.close,
+                          color: AppConstants.secondary,
+                        ),
                       ),
-                    ),
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
               ),
             ),
           ),
@@ -554,6 +653,7 @@ class _POSScreenState extends State<POSScreen> {
               return ChoiceChip(
                 label: Text(category),
                 selected: selected,
+                showCheckmark: false,
                 selectedColor: AppConstants.primary,
                 backgroundColor: Colors.white,
                 labelStyle: AppConstants.bodyStyle(
@@ -568,6 +668,9 @@ class _POSScreenState extends State<POSScreen> {
             itemCount: categories.length,
           ),
         ),
+        if (_scanHistory.isNotEmpty && _searchKeyword.isEmpty) ...[
+          _buildScanHistoryBar(),
+        ],
         Expanded(
           child: products.isEmpty
               ? Center(
@@ -576,14 +679,11 @@ class _POSScreenState extends State<POSScreen> {
                     style: AppConstants.bodyStyle(color: Colors.grey.shade500),
                   ),
                 )
-              : GridView.builder(
+              : MasonryGridView.count(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3,
-                    childAspectRatio: 0.72,
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 8,
-                  ),
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 10,
+                  mainAxisSpacing: 10,
                   itemCount: products.length,
                   itemBuilder: (context, index) =>
                       _buildProductTile(products[index]),
@@ -600,111 +700,176 @@ class _POSScreenState extends State<POSScreen> {
     final out = stock <= 0;
     final low = stock > 0 && stock <= 5;
 
+    // ── Stock badge colors ──
+    final Color badgeBg = out
+        ? Colors.grey.shade200
+        : low
+            ? AppConstants.lowStockColor.withValues(alpha: 0.12)
+            : AppConstants.okStockColor.withValues(alpha: 0.12);
+    final Color badgeFg = out
+        ? Colors.grey.shade600
+        : low
+            ? AppConstants.lowStockColor
+            : AppConstants.okStockColor;
+    final String badgeText = out
+        ? 'Out'
+        : low
+            ? 'Low ($stock)'
+            : 'In Stock';
+
     return Opacity(
       opacity: out ? 0.48 : 1,
-      child: Material(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: AppConstants.cardRadius,
+          boxShadow: AppConstants.warmShadow,
+        ),
         clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: out ? null : () => _openProductSheet(product),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                flex: 65,
-                child: Container(
-                  width: double.infinity,
-                  color: Colors.grey.shade100,
-                  child: imageUrl.isEmpty
-                      ? Icon(
-                          Icons.inventory_2_outlined,
-                          color: Colors.grey.shade400,
-                        )
-                      : Image.network(
-                          imageUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) => Icon(
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: out ? null : () => _openProductSheet(product),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // ── Image — fixed height so card is content-driven ──
+                AspectRatio(
+                  aspectRatio: 1.0,
+                  child: Container(
+                    width: double.infinity,
+                    color: Colors.grey.shade100,
+                    child: imageUrl.isEmpty
+                        ? Icon(
                             Icons.inventory_2_outlined,
-                            color: Colors.grey.shade400,
+                            color: Colors.grey.shade300,
+                            size: 36,
+                          )
+                        : Image.network(
+                            imageUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => Icon(
+                              Icons.inventory_2_outlined,
+                              color: Colors.grey.shade300,
+                              size: 36,
+                            ),
                           ),
-                        ),
+                  ),
                 ),
-              ),
-              Expanded(
-                flex: 35,
-                child: Padding(
-                  padding: const EdgeInsets.all(7),
-                  child: Stack(
+                // ── Info block — content-driven height ──
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(6, 6, 6, 6),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            product['name'] ?? 'Product',
-                            style: AppConstants.bodyStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '₱${_productPrice(product).toStringAsFixed(0)}',
-                            style: AppConstants.monoStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: AppConstants.primary,
-                            ),
-                          ),
-                        ],
+                      // Product name
+                      Text(
+                        product['name'] ?? 'Product',
+                        style: AppConstants.bodyStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      Positioned(
-                        right: 0,
-                        bottom: 0,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 5,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: out
-                                ? Colors.grey.shade200
-                                : low
-                                ? AppConstants.lowStockColor.withValues(
-                                    alpha: 0.12,
-                                  )
-                                : AppConstants.okStockColor.withValues(
-                                    alpha: 0.12,
-                                  ),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            out
-                                ? 'Out'
-                                : low
-                                ? 'Low ($stock)'
-                                : 'In Stock',
-                            style: AppConstants.bodyStyle(
-                              fontSize: 9,
-                              fontWeight: FontWeight.w700,
-                              color: out
-                                  ? Colors.grey.shade600
-                                  : low
-                                  ? AppConstants.lowStockColor
-                                  : AppConstants.okStockColor,
-                            ),
+                      const SizedBox(height: 3),
+                      // Price
+                      Text(
+                        '₱${_productPrice(product).toStringAsFixed(0)}',
+                        style: AppConstants.monoStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: AppConstants.primary,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      // Stock badge — flows naturally below price
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: badgeBg,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          badgeText,
+                          style: AppConstants.bodyStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            color: badgeFg,
                           ),
                         ),
                       ),
                     ],
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildScanHistoryBar() {
+    return Container(
+      height: 40,
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: _scanHistory.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final entry = _scanHistory[index];
+          final products = context.read<ProductProvider>().products;
+          final match = products.where((p) => p['id'].toString() == entry.productId).toList();
+          final product = match.isNotEmpty ? match.first : null;
+          final hasStock = product != null && _availableSizes(product).isNotEmpty;
+
+          return GestureDetector(
+            onTap: hasStock && product != null ? () => _openProductSheet(product) : null,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: hasStock
+                      ? AppConstants.primary.withValues(alpha: 0.3)
+                      : Colors.grey.shade300,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.qr_code_scanner,
+                    size: 14,
+                    color: hasStock ? AppConstants.primary : Colors.grey.shade400,
+                  ),
+                  const SizedBox(width: 6),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 120),
+                    child: Text(
+                      entry.productName,
+                      style: AppConstants.bodyStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: hasStock ? AppConstants.secondary : Colors.grey.shade500,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -955,50 +1120,79 @@ class _POSScreenState extends State<POSScreen> {
   }
 
   Widget _buildCheckoutStrip() {
+    final hasItems = _orderItems.isNotEmpty;
     return Container(
       padding: EdgeInsets.fromLTRB(
         16,
-        10,
+        12,
         16,
-        MediaQuery.of(context).padding.bottom + 10,
+        MediaQuery.of(context).padding.bottom + 12,
       ),
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 14,
-            offset: const Offset(0, -3),
+            color: Colors.black.withValues(alpha: 0.12),
+            blurRadius: 18,
+            spreadRadius: -2,
+            offset: const Offset(0, -4),
           ),
         ],
       ),
       child: Row(
         children: [
           Expanded(
-            child: Text(
-              '$_itemCount items · ₱${_subtotal.toStringAsFixed(0)}',
-              style: AppConstants.monoStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: AppConstants.secondary,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '$_itemCount item${_itemCount == 1 ? '' : 's'}',
+                  style: AppConstants.bodyStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: hasItems
+                        ? AppConstants.secondary
+                        : Colors.grey.shade400,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '₱${_subtotal.toStringAsFixed(0)}',
+                  style: AppConstants.monoStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: hasItems
+                        ? AppConstants.primary
+                        : Colors.grey.shade400,
+                  ),
+                ),
+              ],
             ),
           ),
           FilledButton.icon(
             style: FilledButton.styleFrom(
-              backgroundColor: AppConstants.accent,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              backgroundColor:
+                  hasItems ? AppConstants.accent : Colors.grey.shade300,
+              disabledBackgroundColor: Colors.grey.shade300,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(14),
               ),
+              elevation: hasItems ? 2 : 0,
             ),
-            onPressed: _orderItems.isEmpty ? null : _openCheckoutSheet,
-            icon: const Icon(Icons.arrow_forward, size: 18),
+            onPressed: hasItems ? _openCheckoutSheet : null,
+            icon: Icon(
+              Icons.arrow_forward,
+              size: 18,
+              color: hasItems ? Colors.white : Colors.grey.shade500,
+            ),
             label: Text(
               'Checkout',
               style: AppConstants.bodyStyle(
-                color: Colors.white,
+                color: hasItems ? Colors.white : Colors.grey.shade500,
                 fontWeight: FontWeight.bold,
+                fontSize: 15,
               ),
             ),
           ),
@@ -1289,5 +1483,17 @@ class _POSLineItem {
     required this.product,
     required this.size,
     required this.quantity,
+  });
+}
+
+class _ScanHistoryEntry {
+  final String barcode;
+  final String productName;
+  final String productId;
+
+  const _ScanHistoryEntry({
+    required this.barcode,
+    required this.productName,
+    required this.productId,
   });
 }

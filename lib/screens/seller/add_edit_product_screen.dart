@@ -30,6 +30,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
   final _productService = ProductService.instance;
   final _imagePicker = ImagePicker();
 
+  final _barcodeController = TextEditingController();
   String _category = 'Casual';
   bool _isActive = true;
   bool _isFeatured = false;
@@ -86,6 +87,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
     _nameController.text = p['name'] ?? '';
     _priceController.text = (p['price'] ?? '').toString();
     _descController.text = p['description'] ?? '';
+    _barcodeController.text = p['barcode'] ?? '';
     _category = p['category'] ?? 'Casual';
     _isActive = p['is_active'] ?? true;
     _isFeatured = p['is_featured'] ?? false;
@@ -131,6 +133,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
     _priceController.dispose();
     _descController.dispose();
     _tagController.dispose();
+    _barcodeController.dispose();
     super.dispose();
   }
 
@@ -521,6 +524,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
           customizations: _customizations,
           isActive: _isActive,
           isFeatured: _isFeatured,
+          barcode: _barcodeController.text,
         );
         // Sync active status after variant changes
         try {
@@ -545,6 +549,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
           customizations: _customizations,
           isActive: _isActive,
           isFeatured: _isFeatured,
+          barcode: _barcodeController.text,
         );
         // Sync active status for new product
         try {
@@ -639,14 +644,21 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
 
                   const SizedBox(height: 24),
 
-                  // ─── SECTION 3: TAGS ────────────────────────
+                  // ─── SECTION 3: BARCODE ─────────────────────
+                  _buildSectionHeader('Barcode', Icons.qr_code),
+                  const SizedBox(height: 8),
+                  _buildBarcodeSection(),
+
+                  const SizedBox(height: 24),
+
+                  // ─── SECTION 4: TAGS ────────────────────────
                   _buildSectionHeader('Tags', Icons.label_outline),
                   const SizedBox(height: 8),
                   _buildTagsSection(),
 
                   const SizedBox(height: 24),
 
-                  // ─── SECTION 4: VARIANTS ────────────────────
+                  // ─── SECTION 5: VARIANTS ────────────────────
                   _buildSectionHeader(
                       'Sizes & Variants', Icons.straighten_outlined),
                   const SizedBox(height: 8),
@@ -654,7 +666,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
 
                   const SizedBox(height: 24),
 
-                  // ─── SECTION 5: CUSTOMIZATIONS ──────────────
+                  // ─── SECTION 6: CUSTOMIZATIONS ──────────────
                   _buildSectionHeader(
                       'Customization Options', Icons.tune_outlined),
                   const SizedBox(height: 8),
@@ -662,7 +674,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
 
                   const SizedBox(height: 24),
 
-                  // ─── SECTION 6: VISIBILITY ──────────────────
+                  // ─── SECTION 7: VISIBILITY ──────────────────
                   _buildSectionHeader('Visibility', Icons.visibility_outlined),
                   const SizedBox(height: 8),
                   _buildVisibilitySection(),
@@ -1002,6 +1014,38 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                   color: AppConstants.secondary.withValues(alpha: 0.5),
                 ),
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Barcode ──
+
+  Widget _buildBarcodeSection() {
+    return SoleCard(
+      color: Colors.white,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SoleTextField(
+            labelText: 'Barcode (optional)',
+            hintText: 'e.g. EAN-13, UPC-A, or QR code value',
+            controller: _barcodeController,
+            validator: (val) {
+              if (val != null && val.length > 50) {
+                return 'Barcode must be under 50 characters';
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Scanned at POS for quick product lookup.',
+            style: AppConstants.bodyStyle(
+              fontSize: 12,
+              color: AppConstants.secondary.withValues(alpha: 0.5),
             ),
           ),
         ],

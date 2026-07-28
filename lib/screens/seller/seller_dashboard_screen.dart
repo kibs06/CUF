@@ -148,7 +148,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
       salesService.getOnlineMonthlyRevenueTrend(storeId),
       salesService.getPosMonthlyRevenueTrend(storeId),
       // Load products & orders for low stock / pending customs / alerts
-      context.read<ProductProvider>().loadProducts(),
+      context.read<ProductProvider>().loadSellerProducts(),
       context.read<OrderProvider>().loadOrders(),
     ]);
 

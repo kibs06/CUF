@@ -31,6 +31,7 @@ class ProductService {
     required List<ProductCustomization> customizations,
     bool isActive = true,
     bool isFeatured = false,
+    String? barcode,
   }) async {
     final sellerId = _client.auth.currentUser!.id;
 
@@ -47,6 +48,7 @@ class ProductService {
           'tags': tags,
           'is_active': isActive,
           'is_featured': isFeatured,
+          if (barcode != null && barcode.isNotEmpty) 'barcode': barcode.trim(),
         })
         .select()
         .single();
@@ -118,6 +120,7 @@ class ProductService {
     required List<ProductCustomization> customizations,
     required bool isActive,
     required bool isFeatured,
+    String? barcode,
   }) async {
     final sellerId = _client.auth.currentUser!.id;
 
@@ -132,6 +135,7 @@ class ProductService {
           'tags': tags,
           'is_active': isActive,
           'is_featured': isFeatured,
+          'barcode': (barcode != null && barcode.isNotEmpty) ? barcode.trim() : null,
           'updated_at': DateTime.now().toIso8601String(),
         })
         .eq('id', productId);
