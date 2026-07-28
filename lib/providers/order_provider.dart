@@ -124,10 +124,8 @@ class OrderProvider extends ChangeNotifier {
     String? details,
   }) async {
     try {
-      // Update the order status
-      await _db.updateOrderStatus(orderId, newStatus);
-
-      // Store cancellation reason and details on the order
+      // Store cancellation reason FIRST so that updateOrderStatus()
+      // can fetch it for the push notification.
       await Supabase.instance.client
           .from('orders')
           .update({
@@ -136,6 +134,9 @@ class OrderProvider extends ChangeNotifier {
             'cancelled_at': DateTime.now().toIso8601String(),
           })
           .eq('id', orderId);
+
+      // Update the order status (triggers notification + push)
+      await _db.updateOrderStatus(orderId, newStatus);
 
       // Reload orders to reflect changes
       await loadOrders();

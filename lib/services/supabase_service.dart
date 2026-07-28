@@ -604,6 +604,34 @@ class SupabaseService {
             screen: 'order_tracking',
           );
           break;
+        case 'cancelled':
+          // Fetch the cancellation reason from the order row
+          final orderRow = await _client
+              .from('orders')
+              .select('cancellation_reason')
+              .eq('id', orderId.toString())
+              .maybeSingle()
+              .timeout(_defaultTimeout);
+          final reason = orderRow?['cancellation_reason']?.toString();
+          final reasonText = (reason != null && reason.isNotEmpty)
+              ? ' Reason: $reason'
+              : '';
+          _createCustomerNotification(
+            userId: customerId,
+            category: 'returns',
+            title: 'Order cancelled',
+            body: 'Order #$shortId has been cancelled.$reasonText',
+            orderId: orderId.toString(),
+          );
+          _triggerCustomerPush(
+            recipientUserId: customerId,
+            type: 'returns',
+            title: 'Order cancelled',
+            body: 'Order #$shortId has been cancelled.$reasonText',
+            referenceId: orderId.toString(),
+            screen: 'order_tracking',
+          );
+          break;
       }
     }
 
