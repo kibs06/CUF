@@ -192,8 +192,75 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
 
   // ─── VARIANT ACTIONS ────────────────────────────────────────────
 
+  /// Sizing systems and their size lists.
+  static const Map<String, List<String>> _sizingSystems = {
+    'US': [
+      '3', '3.5', '4', '4.5', '5', '5.5', '6', '6.5',
+      '7', '7.5', '8', '8.5', '9', '9.5', '10', '10.5',
+      '11', '11.5', '12', '13', '14', '15',
+    ],
+    'EU': [
+      '35', '35.5', '36', '36.5', '37', '37.5', '38', '38.5',
+      '39', '39.5', '40', '40.5', '41', '41.5', '42', '42.5',
+      '43', '43.5', '44', '44.5', '45', '45.5', '46', '47',
+    ],
+    'UK': [
+      '2', '2.5', '3', '3.5', '4', '4.5', '5', '5.5',
+      '6', '6.5', '7', '7.5', '8', '8.5', '9', '9.5',
+      '10', '10.5', '11', '12', '13', '14', '15',
+    ],
+  };
+
+  /// Detect the sizing system from an existing size string.
+  /// Returns the system key (e.g. 'EU', 'US') or 'Other' if unrecognized.
+  String _detectSizingSystem(String size) {
+    for (final system in _sizingSystems.keys) {
+      if (size.toUpperCase().startsWith('$system ')) return system;
+    }
+    // Check if the numeric part matches a known system
+    final numeric = size.replaceAll(RegExp(r'[^0-9.]'), '');
+    for (final entry in _sizingSystems.entries) {
+      if (entry.value.contains(numeric)) return entry.key;
+    }
+    return 'Other';
+  }
+
+  /// Extract the numeric size value from a size string with a known system prefix.
+  String _extractSizeValue(String size, String system) {
+    if (system == 'Other') return size;
+    // Strip the prefix (e.g. 'EU 40' -> '40', 'US 8' -> '8')
+    final prefix = '$system ';
+    if (size.toUpperCase().startsWith(prefix.toUpperCase())) {
+      return size.substring(prefix.length).trim();
+    }
+    // Try to extract just the numeric part
+    return size.replaceAll(RegExp(r'[^0-9.]'), '');
+  }
+
   void _showVariantSheet({ProductVariant? existing, int? editIndex}) {
-    final sizeCtrl = TextEditingController(text: existing?.size ?? '');
+    // Determine initial sizing system and size from existing variant
+    final existingSize = existing?.size ?? '';
+    String selectedSystem = _detectSizingSystem(existingSize);
+    String selectedSizePreset = '';
+    bool showCustomSize = false;
+    bool showCustomSystem = selectedSystem == 'Other';
+    final customSizeCtrl = TextEditingController();
+    final customSystemCtrl = TextEditingController();
+
+    if (selectedSystem != 'Other' && existingSize.isNotEmpty) {
+      final extracted = _extractSizeValue(existingSize, selectedSystem);
+      final systemSizes = _sizingSystems[selectedSystem] ?? [];
+      if (systemSizes.contains(extracted)) {
+        selectedSizePreset = extracted;
+      } else {
+        showCustomSize = true;
+        customSizeCtrl.text = extracted;
+      }
+    } else if (existingSize.isNotEmpty) {
+      showCustomSize = true;
+      customSizeCtrl.text = existingSize;
+    }
+
     final colorCtrl = TextEditingController(text: existing?.color ?? '');
     final stockCtrl =
         TextEditingController(text: existing?.stock.toString() ?? '0');
@@ -208,88 +275,230 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.fromLTRB(
-            24, 20, 24, MediaQuery.of(ctx).viewInsets.bottom + 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              editIndex != null ? 'Edit Variant' : 'Add Variant',
-              style: AppConstants.headlineStyle(fontSize: 20),
-            ),
-            const SizedBox(height: 16),
-            SoleTextField(
-              labelText: 'Size *',
-              hintText: 'e.g. 8, 9, 10, or EU 42',
-              controller: sizeCtrl,
-            ),
-            const SizedBox(height: 12),
-            SoleTextField(
-              labelText: 'Color (optional)',
-              hintText: 'e.g. Black, Brown',
-              controller: colorCtrl,
-            ),
-            const SizedBox(height: 12),
-            Row(
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Padding(
+          padding: EdgeInsets.fromLTRB(
+              24, 20, 24, MediaQuery.of(ctx).viewInsets.bottom + 24),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: SoleTextField(
-                    labelText: 'Stock *',
-                    hintText: '0',
-                    controller: stockCtrl,
-                    keyboardType: TextInputType.number,
-                  ),
+                Text(
+                  editIndex != null ? 'Edit Variant' : 'Add Variant',
+                  style: AppConstants.headlineStyle(fontSize: 20),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: SoleTextField(
-                    labelText: 'Extra Price (₱)',
-                    hintText: '0',
-                    controller: priceCtrl,
-                    keyboardType: TextInputType.number,
+                const SizedBox(height: 16),
+                // Size selector: dropdown + Other fallback
+                // Sizing System selector
+                Text(
+                  'Sizing System *',
+                  style: AppConstants.bodyStyle(
+                      fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+                const SizedBox(height: 6),
+                DropdownButtonFormField<String>(
+                  value: showCustomSystem ? '__other__' : (selectedSystem.isEmpty ? null : selectedSystem),
+                  hint: Text('Select sizing system', style: AppConstants.bodyStyle(fontSize: 14)),
+                  style: AppConstants.bodyStyle(fontSize: 15),
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    border: OutlineInputBorder(
+                      borderRadius: AppConstants.buttonRadius,
+                      borderSide: const BorderSide(color: AppConstants.borderGray),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: AppConstants.buttonRadius,
+                      borderSide: BorderSide(color: AppConstants.borderGray.withValues(alpha: 0.5), width: 1.5),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: AppConstants.buttonRadius,
+                      borderSide: const BorderSide(color: AppConstants.primary, width: 1.5),
+                    ),
                   ),
+                  items: const [
+                    DropdownMenuItem(value: 'US', child: Text('US (American)')),
+                    DropdownMenuItem(value: 'EU', child: Text('EU (European)')),
+                    DropdownMenuItem(value: 'UK', child: Text('UK (British)')),
+                    DropdownMenuItem(
+                      value: '__other__',
+                      child: Text('Other (custom system)'),
+                    ),
+                  ],
+                  onChanged: (val) {
+                    setSheetState(() {
+                      if (val == '__other__') {
+                        showCustomSystem = true;
+                        selectedSystem = '';
+                        selectedSizePreset = '';
+                        showCustomSize = false;
+                        customSizeCtrl.clear();
+                      } else {
+                        showCustomSystem = false;
+                        selectedSystem = val ?? '';
+                        selectedSizePreset = '';
+                        showCustomSize = false;
+                        customSizeCtrl.clear();
+                      }
+                    });
+                  },
+                ),
+                if (showCustomSystem) ...[
+                  const SizedBox(height: 10),
+                  SoleTextField(
+                    labelText: 'Custom Sizing System',
+                    hintText: 'e.g. JP, CHN, AUS',
+                    controller: customSystemCtrl,
+                  ),
+                ],
+                const SizedBox(height: 12),
+                // Size value selector (only shown when a system is selected)
+                if (!showCustomSystem && selectedSystem.isNotEmpty) ...[
+                  Text(
+                    'Size *',
+                    style: AppConstants.bodyStyle(
+                        fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                  const SizedBox(height: 6),
+                  DropdownButtonFormField<String>(
+                    value: showCustomSize ? '__other__' : (selectedSizePreset.isEmpty ? null : selectedSizePreset),
+                    hint: Text('Select a size', style: AppConstants.bodyStyle(fontSize: 14)),
+                    style: AppConstants.bodyStyle(fontSize: 15),
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: Colors.white,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      border: OutlineInputBorder(
+                        borderRadius: AppConstants.buttonRadius,
+                        borderSide: const BorderSide(color: AppConstants.borderGray),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: AppConstants.buttonRadius,
+                        borderSide: BorderSide(color: AppConstants.borderGray.withValues(alpha: 0.5), width: 1.5),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: AppConstants.buttonRadius,
+                        borderSide: const BorderSide(color: AppConstants.primary, width: 1.5),
+                      ),
+                    ),
+                    items: [
+                      ...(_sizingSystems[selectedSystem] ?? []).map((s) => DropdownMenuItem(
+                        value: s,
+                        child: Text(s),
+                      )),
+                      const DropdownMenuItem(
+                        value: '__other__',
+                        child: Text('Other (custom size)'),
+                      ),
+                    ],
+                    onChanged: (val) {
+                      setSheetState(() {
+                        if (val == '__other__') {
+                          showCustomSize = true;
+                          selectedSizePreset = '';
+                        } else {
+                          showCustomSize = false;
+                          selectedSizePreset = val ?? '';
+                          customSizeCtrl.clear();
+                        }
+                      });
+                    },
+                  ),
+                ],
+                if (showCustomSize) ...[
+                  const SizedBox(height: 10),
+                  SoleTextField(
+                    labelText: 'Custom Size',
+                    hintText: 'e.g. 48, Kids 12',
+                    controller: customSizeCtrl,
+                  ),
+                ],
+                const SizedBox(height: 12),
+                SoleTextField(
+                  labelText: 'Color (optional)',
+                  hintText: 'e.g. Black, Brown',
+                  controller: colorCtrl,
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: SoleTextField(
+                        labelText: 'Stock *',
+                        hintText: '0',
+                        controller: stockCtrl,
+                        keyboardType: TextInputType.number,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: SoleTextField(
+                        labelText: 'Extra Price (₱)',
+                        hintText: '0',
+                        controller: priceCtrl,
+                        keyboardType: TextInputType.number,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                SoleTextField(
+                  labelText: 'SKU (optional)',
+                  hintText: 'e.g. SV-OXF-BLK-42',
+                  controller: skuCtrl,
+                ),
+                const SizedBox(height: 20),
+                SolePrimaryButton(
+                  label: editIndex != null ? 'Update Variant' : 'Add Variant',
+                  onPressed: () {
+                    // Resolve sizing system
+                    final system = showCustomSystem
+                        ? customSystemCtrl.text.trim()
+                        : selectedSystem;
+                    if (system.isEmpty) {
+                      _showSnackBar('Sizing system is required.', isError: true);
+                      return;
+                    }
+                    // Resolve size value
+                    String sizeValue;
+                    if (showCustomSystem || showCustomSize) {
+                      sizeValue = customSizeCtrl.text.trim();
+                    } else {
+                      sizeValue = selectedSizePreset;
+                    }
+                    if (sizeValue.isEmpty) {
+                      _showSnackBar('Size is required.', isError: true);
+                      return;
+                    }
+                    // Format as 'SYSTEM SIZE' (e.g. 'EU 40', 'US 8')
+                    final fullSize = '$system $sizeValue';
+                    final variant = ProductVariant(
+                      size: fullSize,
+                      color: colorCtrl.text.trim().isNotEmpty
+                          ? colorCtrl.text.trim()
+                          : null,
+                      stock: int.tryParse(stockCtrl.text) ?? 0,
+                      additionalPrice: double.tryParse(priceCtrl.text) ?? 0,
+                      sku: skuCtrl.text.trim().isNotEmpty
+                          ? skuCtrl.text.trim()
+                          : null,
+                    );
+
+                    setState(() {
+                      if (editIndex != null) {
+                        _variants[editIndex] = variant;
+                      } else {
+                        _variants.add(variant);
+                      }
+                    });
+                    Navigator.of(ctx).pop();
+                  },
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            SoleTextField(
-              labelText: 'SKU (optional)',
-              hintText: 'e.g. SV-OXF-BLK-42',
-              controller: skuCtrl,
-            ),
-            const SizedBox(height: 20),
-            SolePrimaryButton(
-              label: editIndex != null ? 'Update Variant' : 'Add Variant',
-              onPressed: () {
-                if (sizeCtrl.text.trim().isEmpty) {
-                  _showSnackBar('Size is required.', isError: true);
-                  return;
-                }
-                final variant = ProductVariant(
-                  size: sizeCtrl.text.trim(),
-                  color: colorCtrl.text.trim().isNotEmpty
-                      ? colorCtrl.text.trim()
-                      : null,
-                  stock: int.tryParse(stockCtrl.text) ?? 0,
-                  additionalPrice: double.tryParse(priceCtrl.text) ?? 0,
-                  sku: skuCtrl.text.trim().isNotEmpty
-                      ? skuCtrl.text.trim()
-                      : null,
-                );
-
-                setState(() {
-                  if (editIndex != null) {
-                    _variants[editIndex] = variant;
-                  } else {
-                    _variants.add(variant);
-                  }
-                });
-                Navigator.of(ctx).pop();
-              },
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -297,11 +506,21 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
 
   // ─── CUSTOMIZATION ACTIONS ──────────────────────────────────────
 
+  /// Built-in customization type values.
+  static const List<String> _builtinCustomizationTypes = ['text', 'select', 'color'];
+
   void _showCustomizationSheet(
       {ProductCustomization? existing, int? editIndex}) {
     final nameCtrl =
         TextEditingController(text: existing?.optionName ?? '');
-    String type = existing?.optionType ?? 'text';
+    // Determine initial type: check if it's one of the built-in types
+    final existingType = existing?.optionType ?? 'text';
+    final isBuiltinType = _builtinCustomizationTypes.contains(existingType);
+    String selectedTypePreset = isBuiltinType ? existingType : '';
+    final customTypeCtrl = TextEditingController(
+        text: isBuiltinType ? '' : existingType);
+    bool showCustomType = !isBuiltinType && existingType.isNotEmpty;
+
     final choices = List<String>.from(existing?.options ?? []);
     final choiceCtrl = TextEditingController();
     bool isRequired = existing?.isRequired ?? false;
@@ -337,30 +556,67 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                   controller: nameCtrl,
                 ),
                 const SizedBox(height: 12),
+                // Type selector: dropdown + Other fallback
                 Text(
-                  'Type',
+                  'Type *',
                   style: AppConstants.bodyStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 14,
                   ),
                 ),
                 const SizedBox(height: 6),
-                SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(value: 'text', label: Text('Text')),
-                    ButtonSegment(value: 'select', label: Text('Select')),
-                    ButtonSegment(value: 'color', label: Text('Color')),
-                  ],
-                  selected: {type},
-                  onSelectionChanged: (val) {
-                    setSheetState(() => type = val.first);
-                  },
-                  style: SegmentedButton.styleFrom(
-                    selectedBackgroundColor: AppConstants.primary,
-                    selectedForegroundColor: Colors.white,
+                DropdownButtonFormField<String>(
+                  value: showCustomType ? '__other__' : (selectedTypePreset.isEmpty ? null : selectedTypePreset),
+                  hint: Text('Select a type', style: AppConstants.bodyStyle(fontSize: 14)),
+                  style: AppConstants.bodyStyle(fontSize: 15),
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    border: OutlineInputBorder(
+                      borderRadius: AppConstants.buttonRadius,
+                      borderSide: const BorderSide(color: AppConstants.borderGray),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: AppConstants.buttonRadius,
+                      borderSide: BorderSide(color: AppConstants.borderGray.withValues(alpha: 0.5), width: 1.5),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: AppConstants.buttonRadius,
+                      borderSide: const BorderSide(color: AppConstants.primary, width: 1.5),
+                    ),
                   ),
+                  items: const [
+                    DropdownMenuItem(value: 'text', child: Text('Text')),
+                    DropdownMenuItem(value: 'select', child: Text('Select')),
+                    DropdownMenuItem(value: 'color', child: Text('Color')),
+                    DropdownMenuItem(
+                      value: '__other__',
+                      child: Text('Other (custom type)'),
+                    ),
+                  ],
+                  onChanged: (val) {
+                    setSheetState(() {
+                      if (val == '__other__') {
+                        showCustomType = true;
+                        selectedTypePreset = '';
+                      } else {
+                        showCustomType = false;
+                        selectedTypePreset = val ?? '';
+                        customTypeCtrl.clear();
+                      }
+                    });
+                  },
                 ),
-                if (type == 'select' || type == 'color') ...[
+                if (showCustomType) ...[
+                  const SizedBox(height: 10),
+                  SoleTextField(
+                    labelText: 'Custom Type',
+                    hintText: 'e.g. number, date, file upload',
+                    controller: customTypeCtrl,
+                  ),
+                ],
+                if (selectedTypePreset == 'select' || selectedTypePreset == 'color') ...[
                   const SizedBox(height: 12),
                   Text(
                     'Choices',
@@ -371,6 +627,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                   ),
                   const SizedBox(height: 6),
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Expanded(
                         child: SoleTextField(
@@ -450,9 +707,17 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                           isError: true);
                       return;
                     }
+                    // Resolve type from dropdown or custom input
+                    final typeValue = showCustomType
+                        ? customTypeCtrl.text.trim()
+                        : selectedTypePreset;
+                    if (typeValue.isEmpty) {
+                      _showSnackBar('Type is required.', isError: true);
+                      return;
+                    }
                     final customization = ProductCustomization(
                       optionName: nameCtrl.text.trim(),
-                      optionType: type,
+                      optionType: typeValue,
                       options: choices,
                       isRequired: isRequired,
                       additionalPrice:
@@ -723,9 +988,24 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
   Widget _buildSectionHeader(String title, IconData icon) {
     return Row(
       children: [
-        Icon(icon, size: 18, color: AppConstants.primary),
-        const SizedBox(width: 8),
-        Text(title, style: AppConstants.headlineStyle(fontSize: 16)),
+        Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: AppConstants.primary.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 16, color: AppConstants.primary),
+        ),
+        const SizedBox(width: 10),
+        Text(
+          title,
+          style: AppConstants.bodyStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+            color: AppConstants.secondary,
+          ),
+        ),
       ],
     );
   }
@@ -1062,6 +1342,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Expanded(
                 child: SoleTextField(
@@ -1320,7 +1601,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
             contentPadding: EdgeInsets.zero,
             title: Text('Active',
                 style:
-                    AppConstants.bodyStyle(fontWeight: FontWeight.bold)),
+                    AppConstants.bodyStyle(fontWeight: FontWeight.bold, fontSize: 14)),
             subtitle: Text(
               _isActive
                   ? 'Product is visible to customers'
@@ -1338,7 +1619,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
             contentPadding: EdgeInsets.zero,
             title: Text('Featured',
                 style:
-                    AppConstants.bodyStyle(fontWeight: FontWeight.bold)),
+                    AppConstants.bodyStyle(fontWeight: FontWeight.bold, fontSize: 14)),
             subtitle: Text(
               _isFeatured
                   ? 'Appears in the featured section'

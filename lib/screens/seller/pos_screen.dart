@@ -80,6 +80,23 @@ class _POSScreenState extends State<POSScreen> {
         .toList();
   }
 
+  /// Detect the sizing system from a list of size strings.
+  /// Returns the most common system prefix, or null if mixed/unknown.
+  String? _detectSizeSystem(List<String> sizes) {
+    if (sizes.isEmpty) return null;
+    final systems = <String, int>{};
+    for (final size in sizes) {
+      for (final sys in ['EU', 'US', 'UK']) {
+        if (size.toUpperCase().startsWith('$sys ')) {
+          systems[sys] = (systems[sys] ?? 0) + 1;
+        }
+      }
+    }
+    if (systems.isEmpty) return null;
+    // Return the most common system
+    return systems.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
+  }
+
   void _addLineItem(Map<String, dynamic> product, String size, int quantity) {
     final key = '${product['id']}_$size';
     setState(() {
@@ -296,7 +313,9 @@ class _POSScreenState extends State<POSScreen> {
                       ),
                       const SizedBox(height: 18),
                       Text(
-                        'Size',
+                        _detectSizeSystem(sizes) != null
+                            ? 'Size (${_detectSizeSystem(sizes)})'
+                            : 'Size',
                         style: AppConstants.bodyStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
@@ -831,7 +850,7 @@ class _POSScreenState extends State<POSScreen> {
           final hasStock = product != null && _availableSizes(product).isNotEmpty;
 
           return GestureDetector(
-            onTap: hasStock && product != null ? () => _openProductSheet(product) : null,
+            onTap: hasStock ? () => _openProductSheet(product as Map<String, dynamic>) : null,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
@@ -997,7 +1016,7 @@ class _POSScreenState extends State<POSScreen> {
                 Row(
                   children: [
                     Text(
-                      'Size ${item.size}',
+                      item.size,
                       style: AppConstants.bodyStyle(
                         fontSize: 12,
                         color: Colors.grey.shade500,
