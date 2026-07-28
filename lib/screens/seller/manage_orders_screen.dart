@@ -275,6 +275,180 @@ class _ManageOrdersScreenState extends State<ManageOrdersScreen>
     }
   }
 
+  Future<void> _showRejectDialog(dynamic orderId, Map<String, dynamic> orderData) async {
+    if (orderId == null || !mounted) return;
+
+    final shortId = orderId.toString().length >= 8
+        ? orderId.toString().substring(0, 8)
+        : orderId.toString();
+
+    String customerName = 'Customer';
+    if (orderData['profiles'] != null) {
+      final profile = orderData['profiles'];
+      customerName = profile['full_name'] ?? profile['email'] ?? 'Customer';
+    } else if (orderData['customer_name'] != null) {
+      customerName = orderData['customer_name'];
+    }
+
+    final reasonController = TextEditingController();
+    
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: AppConstants.sellerCardBg,
+        contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SellerStatusChip(status: 'pending'),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Icon(
+                    Icons.arrow_forward_rounded,
+                    size: 18,
+                    color: Colors.grey.shade400,
+                  ),
+                ),
+                SellerStatusChip(status: 'cancelled'),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.cancel_outlined,
+                  size: 22,
+                  color: AppConstants.error,
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    'Reject Order #$shortId?',
+                    style: AppConstants.bodyStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '$customerName',
+              style: AppConstants.bodyStyle(
+                fontSize: 13,
+                color: Colors.grey.shade600,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: reasonController,
+              decoration: InputDecoration(
+                hintText: 'Reason for rejection (optional)',
+                hintStyle: AppConstants.bodyStyle(
+                  fontSize: 13,
+                  color: Colors.grey.shade400,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: AppConstants.borderGray),
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              ),
+              style: AppConstants.bodyStyle(fontSize: 13),
+              maxLines: 2,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'The customer will be notified.',
+              style: AppConstants.bodyStyle(
+                fontSize: 12,
+                color: Colors.grey.shade500,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(
+              'Cancel',
+              style: AppConstants.bodyStyle(color: AppConstants.secondary),
+            ),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppConstants.error,
+            ),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(
+              'Reject',
+              style: AppConstants.bodyStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _updatingOrderIds.add(orderId));
+
+    try {
+      final success = await Provider.of<OrderProvider>(
+        context,
+        listen: false,
+      ).cancelOrder(
+        orderId: orderId,
+        newStatus: 'cancelled',
+        reason: reasonController.text.trim().isEmpty 
+            ? 'Rejected by seller' 
+            : reasonController.text.trim(),
+      );
+
+      if (mounted) {
+        setState(() => _updatingOrderIds.remove(orderId));
+
+        if (success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Order #$orderId has been rejected'),
+              backgroundColor: AppConstants.success,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to reject Order #$orderId. Please try again.'),
+              backgroundColor: AppConstants.error,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _updatingOrderIds.remove(orderId));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error rejecting Order #$orderId: $e'),
+            backgroundColor: AppConstants.error,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final orderProvider = context.watch<OrderProvider>();
@@ -420,6 +594,9 @@ class _ManageOrdersScreenState extends State<ManageOrdersScreen>
                         order: order,
                         isUpdating: _updatingOrderIds.contains(id),
                         onPrimaryAction: () => _updateStatus(id, status, orderData: order),
+                        onReject: status.toLowerCase() == 'pending' 
+                            ? () => _showRejectDialog(id, order)
+                            : null,
                         onViewDetails: () {
                           Navigator.of(context)
                               .push<bool>(

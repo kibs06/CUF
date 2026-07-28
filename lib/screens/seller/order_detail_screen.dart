@@ -43,7 +43,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   String get _actionLabel {
     switch (_currentStatus.toLowerCase()) {
       case 'pending':
-        return 'Confirm Order';
+        return '';
       case 'preparing':
         return 'Mark Ready';
       case 'ready':
@@ -70,15 +70,176 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     }
   }
 
-  /// Maps DB status to seller-facing display label.
-  static const _dbToUiLabel = <String, String>{
-    'pending': 'Pending',
-    'preparing': 'Confirmed',
-    'ready': 'Ready',
-    'delivered': 'Delivered',
-    'received': 'Received',
-    'cancelled': 'Cancelled',
-  };
+  bool get _canReject => _currentStatus.toLowerCase() == 'pending';
+
+  Future<void> _performReject() async {
+    final orderId = order['id'];
+    if (orderId == null || _isUpdating) return;
+
+    final shortId = orderId.toString().length >= 8
+        ? orderId.toString().substring(0, 8)
+        : orderId.toString();
+
+    final customerName = order['customer_name'] ?? 'Customer';
+    final reasonController = TextEditingController();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: AppConstants.sellerCardBg,
+        contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SellerStatusChip(status: _currentStatus),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Icon(
+                    Icons.arrow_forward_rounded,
+                    size: 18,
+                    color: Colors.grey.shade400,
+                  ),
+                ),
+                SellerStatusChip(status: 'cancelled'),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.cancel_outlined,
+                  size: 22,
+                  color: AppConstants.error,
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    'Reject Order #$shortId?',
+                    style: AppConstants.bodyStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              customerName,
+              style: AppConstants.bodyStyle(
+                fontSize: 13,
+                color: Colors.grey.shade600,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: reasonController,
+              decoration: InputDecoration(
+                hintText: 'Reason for rejection (optional)',
+                hintStyle: AppConstants.bodyStyle(
+                  fontSize: 13,
+                  color: Colors.grey.shade400,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: AppConstants.borderGray),
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              ),
+              style: AppConstants.bodyStyle(fontSize: 13),
+              maxLines: 2,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'The customer will be notified.',
+              style: AppConstants.bodyStyle(
+                fontSize: 12,
+                color: Colors.grey.shade500,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(
+              'Cancel',
+              style: AppConstants.bodyStyle(color: AppConstants.secondary),
+            ),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppConstants.error,
+            ),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(
+              'Reject',
+              style: AppConstants.bodyStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isUpdating = true);
+
+    try {
+      final success = await Provider.of<OrderProvider>(
+        context,
+        listen: false,
+      ).cancelOrder(
+        orderId: orderId,
+        newStatus: 'cancelled',
+        reason: reasonController.text.trim().isEmpty 
+            ? 'Rejected by seller' 
+            : reasonController.text.trim(),
+      );
+
+      if (mounted) {
+        setState(() => _isUpdating = false);
+
+        if (success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Order #$orderId has been rejected'),
+              backgroundColor: AppConstants.success,
+            ),
+          );
+          Navigator.of(context).pop(true);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to reject order. Please try again.'),
+              backgroundColor: AppConstants.error,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isUpdating = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error rejecting order: $e'),
+            backgroundColor: AppConstants.error,
+          ),
+        );
+      }
+    }
+  }
 
   Future<void> _performStatusUpdate() async {
     final orderId = order['id'];
@@ -440,14 +601,18 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   _timelineStep('Ready', status == 'ready' || status == 'delivered' || status == 'received'),
                   _timelineStep('Delivered', status == 'delivered' || status == 'received'),
                   _timelineStep('Received', status == 'received'),
+                  if (status == 'cancelled') ...[
+                    const Divider(height: 16, color: AppConstants.borderGray),
+                    _buildCancellationReason(),
+                  ],
                 ],
               ),
             ),
           ],
         ),
       ),
-      // Action button at bottom
-      bottomNavigationBar: _actionLabel.isNotEmpty
+      // Action buttons at bottom
+      bottomNavigationBar: (_actionLabel.isNotEmpty || _canReject)
           ? Container(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
               decoration: BoxDecoration(
@@ -461,36 +626,105 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 ],
               ),
               child: SafeArea(
-                child: SizedBox(
-                  height: 48,
-                  child: FilledButton(
-                    onPressed: _isUpdating ? null : _performStatusUpdate,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: _actionColor,
-                      disabledBackgroundColor: _actionColor.withValues(alpha: 0.6),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: _isUpdating
-                        ? SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : Text(
-                            _actionLabel,
-                            style: AppConstants.bodyStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
+                child: _canReject
+                    ? Row(
+                        children: [
+                          Expanded(
+                            child: SizedBox(
+                              height: 48,
+                              child: OutlinedButton(
+                                onPressed: _isUpdating ? null : _performReject,
+                                style: OutlinedButton.styleFrom(
+                                  side: const BorderSide(color: AppConstants.error),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                child: _isUpdating
+                                    ? SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: AppConstants.error,
+                                        ),
+                                      )
+                                    : Text(
+                                        'Reject',
+                                        style: AppConstants.bodyStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppConstants.error,
+                                        ),
+                                      ),
+                              ),
                             ),
                           ),
-                  ),
-                ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: SizedBox(
+                              height: 48,
+                              child: FilledButton(
+                                onPressed: _isUpdating ? null : _performStatusUpdate,
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: _actionColor,
+                                  disabledBackgroundColor: _actionColor.withValues(alpha: 0.6),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                child: _isUpdating
+                                    ? SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : Text(
+                                        'Confirm',
+                                        style: AppConstants.bodyStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    : SizedBox(
+                        height: 48,
+                        child: FilledButton(
+                          onPressed: _isUpdating ? null : _performStatusUpdate,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: _actionColor,
+                            disabledBackgroundColor: _actionColor.withValues(alpha: 0.6),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: _isUpdating
+                              ? SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : Text(
+                                  _actionLabel,
+                                  style: AppConstants.bodyStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                        ),
+                      ),
               ),
             )
           : null,
@@ -519,6 +753,134 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildCancellationReason() {
+    final reason = order['cancellation_reason']?.toString();
+    final details = order['cancellation_details']?.toString();
+    final cancelledAt = order['cancelled_at']?.toString();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 24,
+            height: 24,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppConstants.error.withValues(alpha: 0.15),
+            ),
+            child: Icon(
+              Icons.cancel_outlined,
+              size: 14,
+              color: AppConstants.error,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Cancelled',
+                  style: AppConstants.bodyStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppConstants.error,
+                  ),
+                ),
+                if (reason != null && reason.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppConstants.error.withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Reason:',
+                          style: AppConstants.bodyStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          reason,
+                          style: AppConstants.bodyStyle(
+                            fontSize: 12,
+                            color: AppConstants.secondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                if (details != null && details.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Details:',
+                          style: AppConstants.bodyStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          details,
+                          style: AppConstants.bodyStyle(
+                            fontSize: 12,
+                            color: AppConstants.secondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                if (cancelledAt != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Cancelled ${_formatTimestamp(cancelledAt)}',
+                    style: AppConstants.bodyStyle(
+                      fontSize: 11,
+                      color: Colors.grey.shade500,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatTimestamp(String timestamp) {
+    final dt = DateTime.tryParse(timestamp);
+    if (dt == null) return '';
+    final now = DateTime.now();
+    final diff = now.difference(dt);
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
   }
 
   Widget _timelineStep(String label, bool isComplete) {

@@ -241,8 +241,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(height: 8),
                 _buildEditPanel(auth),
                 const Divider(height: 32),
-                _buildNotificationsPanel(),
-                const SizedBox(height: 16),
+                if (auth.userRole != AppConstants.roleSeller) ...[
+                  _buildNotificationsPanel(),
+                  const SizedBox(height: 16),
+                ],
                 _buildSettingsCard(auth),
                 if (auth.userRole == AppConstants.roleSeller) ...[
                   const SizedBox(height: 16),
@@ -362,7 +364,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           textColor: roleColor,
         ),
         const SizedBox(height: 12),
-        _buildFollowingStat(auth),
+        if (auth.userRole != AppConstants.roleSeller)
+          _buildFollowingStat(auth),
       ],
     );
   }

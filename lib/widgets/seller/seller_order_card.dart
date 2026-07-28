@@ -6,6 +6,7 @@ class SellerOrderCard extends StatelessWidget {
   final Map<String, dynamic> order;
   final VoidCallback onPrimaryAction;
   final VoidCallback onViewDetails;
+  final VoidCallback? onReject;
   final bool isUpdating;
   /// When false, the primary action button is hidden and View Details
   /// expands to full width. Used on the Dashboard where status changes
@@ -17,6 +18,7 @@ class SellerOrderCard extends StatelessWidget {
     required this.order,
     required this.onPrimaryAction,
     required this.onViewDetails,
+    this.onReject,
     this.isUpdating = false,
     this.showPrimaryAction = true,
   });
@@ -38,7 +40,7 @@ class SellerOrderCard extends StatelessWidget {
     Color primaryColor;
     switch (status.toLowerCase()) {
       case 'pending':
-        primaryLabel = 'Confirm Order';
+        primaryLabel = '';
         primaryColor = AppConstants.statusConfirmedColor;
         break;
       case 'preparing':
@@ -58,7 +60,7 @@ class SellerOrderCard extends StatelessWidget {
         primaryColor = AppConstants.statusPendingColor;
         break;
       default:
-        primaryLabel = 'Confirm Order';
+        primaryLabel = '';
         primaryColor = AppConstants.statusConfirmedColor;
     }
 
@@ -162,29 +164,54 @@ class SellerOrderCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: SizedBox(
-                    height: 36,
-                    child: OutlinedButton(
-                      onPressed: onViewDetails,
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: AppConstants.borderGray),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
+                const SizedBox(width: 8),
+                // Show Reject button for pending orders
+                if (onReject != null && status.toLowerCase() == 'pending')
+                  Expanded(
+                    child: SizedBox(
+                      height: 36,
+                      child: OutlinedButton(
+                        onPressed: isUpdating ? null : onReject,
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: AppConstants.error),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                         ),
-                      ),
-                      child: Text(
-                        'View Details',
-                        style: AppConstants.bodyStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: AppConstants.secondary,
+                        child: Text(
+                          'Reject',
+                          style: AppConstants.bodyStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppConstants.error,
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
+                if (onReject == null || status.toLowerCase() != 'pending')
+                  Expanded(
+                    child: SizedBox(
+                      height: 36,
+                      child: OutlinedButton(
+                        onPressed: onViewDetails,
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: AppConstants.borderGray),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: Text(
+                          'View Details',
+                          style: AppConstants.bodyStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppConstants.secondary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             ),
           if (primaryLabel.isEmpty || !showPrimaryAction)
