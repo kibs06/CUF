@@ -102,15 +102,29 @@ class SalesService {
     return transactionId;
   }
 
-  // ─── POS SALES (sales_transactions table) ─────────────────────
+  // ─── POS SALES (orders table WHERE source='pos') ─────────────
+
+  /// Helper: get POS order IDs for a store (orders with source='pos').
+  Future<List<dynamic>> _getPosOrderIds(String storeId) async {
+    final data = await _client
+        .from('orders')
+        .select('id')
+        .eq('store_id', storeId)
+        .eq('source', 'pos')
+        .neq('status', 'cancelled');
+    return (data as List).map((r) => (r as Map)['id']).toList();
+  }
 
   Future<double> fetchTodaySales(String storeId) async {
     final now = DateTime.now();
     final start = DateTime(now.year, now.month, now.day).toIso8601String();
+    final posOrderIds = await _getPosOrderIds(storeId);
+    if (posOrderIds.isEmpty) return 0;
+
     final data = await _client
-        .from('sales_transactions')
+        .from('orders')
         .select('total_amount')
-        .eq('store_id', storeId)
+        .inFilter('id', posOrderIds)
         .gte('created_at', start);
 
     return (data as List).fold<double>(
@@ -123,11 +137,13 @@ class SalesService {
     final from = DateTime.now()
         .subtract(const Duration(days: 6))
         .toIso8601String();
-    // Filters before .order()
+    final posOrderIds = await _getPosOrderIds(storeId);
+    if (posOrderIds.isEmpty) return [];
+
     final data = await _client
-        .from('sales_transactions')
-        .select()
-        .eq('store_id', storeId)
+        .from('orders')
+        .select('total_amount, created_at')
+        .inFilter('id', posOrderIds)
         .gte('created_at', from)
         .order('created_at');
     return (data as List)
@@ -309,11 +325,13 @@ class SalesService {
   Future<List<double>> getPosMonthlyRevenueTrend(String storeId) async {
     final now = DateTime.now();
     final sixMonthsAgo = DateTime(now.year, now.month - 5, 1);
+    final posOrderIds = await _getPosOrderIds(storeId);
+    if (posOrderIds.isEmpty) return List<double>.filled(6, 0);
 
     final rows = await _client
-        .from('sales_transactions')
+        .from('orders')
         .select('total_amount, created_at')
-        .eq('store_id', storeId)
+        .inFilter('id', posOrderIds)
         .gte('created_at', sixMonthsAgo.toIso8601String());
 
     return _aggregateMonthly(rows as List, now);

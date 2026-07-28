@@ -80,6 +80,18 @@ class _ManageOrdersScreenState extends State<ManageOrdersScreen>
     super.dispose();
   }
 
+  String _timeAgo(String? isoString) {
+    if (isoString == null) return '';
+    final dt = DateTime.tryParse(isoString);
+    if (dt == null) return '';
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 1) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays < 30) return '${diff.inDays}d ago';
+    return '${(diff.inDays / 30).floor()}mo ago';
+  }
+
   Map<String, Color> get _statusColors => {
     'pending': AppConstants.statusPendingColor,
     'confirmed': AppConstants.statusConfirmedColor,
@@ -587,7 +599,7 @@ class _ManageOrdersScreenState extends State<ManageOrdersScreen>
                       }
 
                       order['customer_name'] = customerName;
-                      order['time_ago'] = '${(index + 1) * 5} min ago';
+                      order['time_ago'] = _timeAgo(order['created_at'] as String?);
                       order['fulfillment_type'] = 'Walk-in';
 
                       return SellerOrderCard(

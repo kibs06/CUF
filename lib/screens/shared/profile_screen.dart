@@ -36,6 +36,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   // ── Seller state ──────────────────────────────────────────────
   Future<Map<String, dynamic>?>? _sellerStoreFuture;
+  Map<String, dynamic>? _sellerStore;
+  bool _isTogglingStore = false;
 
   @override
   void initState() {
@@ -61,9 +63,52 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _phoneController.text = auth.displayPhone;
 
     if (auth.userRole == AppConstants.roleSeller) {
-      _sellerStoreFuture = StoreService.instance.getMyStore();
+      _sellerStoreFuture = StoreService.instance.getMyStore().then((store) {
+        if (mounted) {
+          setState(() => _sellerStore = store);
+        }
+        return store;
+      });
     } else {
       _sellerStoreFuture = null;
+    }
+  }
+
+  // ── Store Open/Closed toggle ─────────────────────────────────
+  Future<void> _toggleStoreOpen() async {
+    if (_sellerStore == null || _isTogglingStore) return;
+    final storeId = _sellerStore!['id']?.toString();
+    if (storeId == null) return;
+
+    final currentOpen = _sellerStore!['is_open'] ?? true;
+    final newOpen = !currentOpen;
+
+    setState(() => _isTogglingStore = true);
+
+    try {
+      await StoreService.instance.toggleStoreOpen(storeId, newOpen);
+      if (mounted) {
+        setState(() {
+          _sellerStore!['is_open'] = newOpen;
+          _isTogglingStore = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(newOpen ? 'Store is now open' : 'Store is now closed'),
+            backgroundColor: AppConstants.success,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isTogglingStore = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString().replaceAll('Exception: ', '')}'),
+            backgroundColor: AppConstants.error,
+          ),
+        );
+      }
     }
   }
 
@@ -241,15 +286,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(height: 8),
                 _buildEditPanel(auth),
                 const Divider(height: 32),
+                if (auth.userRole == AppConstants.roleSeller) ...[
+                  _buildSellerSection(auth),
+                  const SizedBox(height: 16),
+                ],
                 if (auth.userRole != AppConstants.roleSeller) ...[
                   _buildNotificationsPanel(),
                   const SizedBox(height: 16),
                 ],
                 _buildSettingsCard(auth),
-                if (auth.userRole == AppConstants.roleSeller) ...[
-                  const SizedBox(height: 16),
-                  _buildSellerSection(auth),
-                ],
                 const SizedBox(height: 32),
                 _buildLogoutButton(auth),
               ],
@@ -675,16 +720,61 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          storeName ?? 'No store linked',
-                          style: AppConstants.bodyStyle(
-                            fontSize: 13,
-                            color: storeName != null
-                                ? AppConstants.secondary
-                                : AppConstants.error,
+                        if (storeName != null) ...[
+                          // Open/Closed pill
+                          Builder(
+                            builder: (context) {
+                              final isOpen = _sellerStore?['is_open'] ?? store?['is_open'] ?? true;
+                              return AnimatedContainer(
+                                duration: const Duration(milliseconds: 300),
+                                curve: Curves.easeInOut,
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: isOpen
+                                      ? AppConstants.success.withValues(alpha: 0.12)
+                                      : AppConstants.error.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: AnimatedDefaultTextStyle(
+                                  duration: const Duration(milliseconds: 300),
+                                  style: AppConstants.bodyStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: isOpen
+                                        ? AppConstants.success
+                                        : AppConstants.error,
+                                  ),
+                                  child: Text(isOpen ? 'Open' : 'Closed'),
+                                ),
+                              );
+                            },
                           ),
-                        ),
-                        const SizedBox(width: 4),
+                          const SizedBox(width: 8),
+                          // Open/Closed toggle
+                          SizedBox(
+                            height: 24,
+                            child: Switch(
+                              value: _sellerStore?['is_open'] ?? store?['is_open'] ?? true,
+                              onChanged: _isTogglingStore
+                                  ? null
+                                  : (_) => _toggleStoreOpen(),
+                              activeColor: AppConstants.success,
+                              activeThumbColor: AppConstants.success,
+                              inactiveTrackColor: AppConstants.error.withValues(alpha: 0.3),
+                              inactiveThumbColor: AppConstants.error,
+                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                        ],
+                        if (storeName == null)
+                          Text(
+                            'No store linked',
+                            style: AppConstants.bodyStyle(
+                              fontSize: 13,
+                              color: AppConstants.error,
+                            ),
+                          ),
                         const Icon(
                           Icons.chevron_right,
                           color: AppConstants.borderGray,

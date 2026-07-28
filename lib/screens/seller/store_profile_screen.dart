@@ -274,7 +274,9 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        Container(
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeInOut,
                           width: 8,
                           height: 8,
                           decoration: BoxDecoration(
@@ -285,13 +287,14 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                           ),
                         ),
                         const SizedBox(width: 6),
-                        Text(
-                          _isOpen ? 'Open' : 'Closed',
+                        AnimatedDefaultTextStyle(
+                          duration: const Duration(milliseconds: 300),
                           style: AppConstants.bodyStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
                             color: Colors.white.withValues(alpha: 0.9),
                           ),
+                          child: Text(_isOpen ? 'Open' : 'Closed'),
                         ),
                       ],
                     ),
@@ -389,10 +392,36 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                 style: AppConstants.bodyStyle(fontSize: 13),
               ),
               const Spacer(),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: _isOpen
+                      ? AppConstants.success.withValues(alpha: 0.12)
+                      : AppConstants.error.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: AnimatedDefaultTextStyle(
+                  duration: const Duration(milliseconds: 300),
+                  style: AppConstants.bodyStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: _isOpen
+                        ? AppConstants.success
+                        : AppConstants.error,
+                  ),
+                  child: Text(_isOpen ? 'Open' : 'Closed'),
+                ),
+              ),
+              const SizedBox(width: 8),
               Switch(
                 value: _isOpen,
                 onChanged: (_) => _toggleOpen(),
+                activeColor: AppConstants.success,
                 activeThumbColor: AppConstants.success,
+                inactiveTrackColor: AppConstants.error.withValues(alpha: 0.3),
+                inactiveThumbColor: AppConstants.error,
               ),
             ],
           ),
