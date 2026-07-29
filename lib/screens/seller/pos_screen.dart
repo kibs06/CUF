@@ -1,9 +1,11 @@
 import 'dart:async';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../constants/app_constants.dart';
 import '../../providers/auth_provider.dart';
@@ -418,9 +420,9 @@ class _POSScreenState extends State<POSScreen> {
       builder: (context) {
         return _CheckoutSheet(
           total: _subtotal,
-          onConfirm: (method, tendered) {
+          onConfirm: (method, tendered, {String? gcashRef}) {
             Navigator.of(context).pop();
-            _completePOSTransaction(method, tendered);
+            _completePOSTransaction(method, tendered, gcashReference: gcashRef);
           },
         );
       },
@@ -429,8 +431,9 @@ class _POSScreenState extends State<POSScreen> {
 
   Future<void> _completePOSTransaction(
     String paymentMethod,
-    double cashTendered,
-  ) async {
+    double cashTendered, {
+    String? gcashReference,
+  }) async {
     final orderProvider = Provider.of<OrderProvider>(context, listen: false);
     final auth = Provider.of<AuthProvider>(context, listen: false);
     final items = List<_POSLineItem>.from(_orderItems.values);
@@ -452,6 +455,7 @@ class _POSScreenState extends State<POSScreen> {
       paymentMethod: paymentMethod,
       source: 'pos',
       amountTendered: paymentMethod == 'Cash' ? cashTendered : null,
+      gcashReference: gcashReference,
     );
 
     // Auto-sync active status for each product after POS sale
@@ -1295,7 +1299,7 @@ class _POSScreenState extends State<POSScreen> {
 
 class _CheckoutSheet extends StatefulWidget {
   final double total;
-  final void Function(String method, double tendered) onConfirm;
+  final void Function(String method, double tendered, {String? gcashRef}) onConfirm;
 
   const _CheckoutSheet({required this.total, required this.onConfirm});
 
@@ -1305,23 +1309,214 @@ class _CheckoutSheet extends StatefulWidget {
 
 class _CheckoutSheetState extends State<_CheckoutSheet> {
   final TextEditingController _tenderedController = TextEditingController();
+  final TextEditingController _gcashRefController = TextEditingController();
   String _method = 'Cash';
+  Map<String, dynamic>? _storeData;
+  bool _storeLoading = true;
 
   double get _tendered => double.tryParse(_tenderedController.text) ?? 0;
   double get _change => (_tendered - widget.total).clamp(0, double.infinity);
 
+  /// GCash reference number validation: non-empty, at least 6 characters.
+  bool get _gcashRefValid {
+    final ref = _gcashRefController.text.trim();
+    return ref.length >= 6;
+  }
+
+  bool get _hasGcashConfig {
+    if (_storeData == null) return false;
+    final hasQr = (_storeData!['gcash_qr_url']?.toString().isNotEmpty ?? false);
+    final hasNumber = (_storeData!['gcash_number']?.toString().isNotEmpty ?? false);
+    return hasQr || hasNumber;
+  }
+
+  bool get _canConfirm {
+    if (_method == 'Cash') return true; // validated on press
+    if (_method == 'GCash') return _gcashRefValid;
+    return false; // Card disabled
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStoreData();
+  }
+
+  List<Widget> _buildGcashPaymentSection() {
+    final qrUrl = _storeData?['gcash_qr_url']?.toString();
+    final gcashNumber = _storeData?['gcash_number']?.toString() ?? '';
+    final gcashName = _storeData?['gcash_account_name']?.toString() ?? '';
+
+    return [
+      // ── GCash QR code display ──
+      if (qrUrl != null && qrUrl.isNotEmpty) ...[
+        Center(
+          child: Container(
+            width: 200,
+            height: 200,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: AppConstants.borderGray.withValues(alpha: 0.5),
+              ),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: CachedNetworkImage(
+                imageUrl: qrUrl,
+                fit: BoxFit.contain,
+                placeholder: (context, url) => const Center(
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                errorWidget: (context, url, error) => Icon(
+                  Icons.qr_code_2,
+                  size: 60,
+                  color: AppConstants.primary.withValues(alpha: 0.3),
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+      ],
+      // ── GCash number/name fallback ──
+      if (gcashNumber.isNotEmpty) ...[
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppConstants.sellerSurface,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (gcashName.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text(
+                    gcashName,
+                    style: AppConstants.bodyStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppConstants.secondary,
+                    ),
+                  ),
+                ),
+              Row(
+                children: [
+                  const Icon(Icons.phone_android, size: 14, color: AppConstants.primary),
+                  const SizedBox(width: 6),
+                  Text(
+                    gcashNumber,
+                    style: AppConstants.monoStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Spacer(),
+                  GestureDetector(
+                    onTap: () {
+                      Clipboard.setData(ClipboardData(text: gcashNumber));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Number copied'),
+                          duration: Duration(milliseconds: 900),
+                        ),
+                      );
+                    },
+                    child: const Icon(
+                      Icons.copy,
+                      size: 16,
+                      color: AppConstants.primary,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+      ],
+      // ── Reference number input ──
+      Text(
+        'GCash Reference Number *',
+        style: AppConstants.bodyStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      const SizedBox(height: 6),
+      TextField(
+        controller: _gcashRefController,
+        textCapitalization: TextCapitalization.characters,
+        onChanged: (_) => setState(() {}),
+        style: AppConstants.monoStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.bold,
+        ),
+        decoration: InputDecoration(
+          hintText: 'e.g. ABC1234567890',
+          hintStyle: AppConstants.bodyStyle(
+            fontSize: 13,
+            color: AppConstants.secondary.withValues(alpha: 0.3),
+          ),
+          filled: true,
+          fillColor: AppConstants.sellerSurface,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          errorText: _gcashRefController.text.isNotEmpty && !_gcashRefValid
+              ? 'Reference number must be at least 6 characters'
+              : null,
+        ),
+      ),
+      const SizedBox(height: 6),
+      Text(
+        'Ask the customer for the reference number from their GCash confirmation screen.',
+        style: AppConstants.bodyStyle(
+          fontSize: 11,
+          color: AppConstants.secondary.withValues(alpha: 0.45),
+        ),
+      ),
+    ];
+  }
+
+  Future<void> _loadStoreData() async {
+    try {
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId == null) return;
+      final store = await Supabase.instance.client
+          .from('stores')
+          .select()
+          .eq('owner_id', userId)
+          .eq('is_active', true)
+          .maybeSingle();
+      if (mounted) {
+        setState(() {
+          _storeData = store != null ? Map<String, dynamic>.from(store) : null;
+          _storeLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _storeLoading = false);
+    }
+  }
+
   @override
   void dispose() {
     _tenderedController.dispose();
+    _gcashRefController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return DraggableScrollableSheet(
-      initialChildSize: 0.55,
+      initialChildSize: _method == 'GCash' ? 0.82 : 0.55,
       minChildSize: 0.45,
-      maxChildSize: 0.86,
+      maxChildSize: 0.90,
       expand: false,
       builder: (context, scrollController) {
         return Container(
@@ -1329,159 +1524,234 @@ class _CheckoutSheetState extends State<_CheckoutSheet> {
             color: Colors.white,
             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
-          child: ListView(
-            controller: scrollController,
-            padding: EdgeInsets.fromLTRB(
-              20,
-              18,
-              20,
-              MediaQuery.of(context).viewInsets.bottom + 22,
-            ),
+          child: Column(
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Payment',
-                      style: AppConstants.bodyStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
-              ),
-              const Divider(),
-              const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Total:',
-                    style: AppConstants.bodyStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  Text(
-                    '₱${widget.total.toStringAsFixed(0)}',
-                    style: AppConstants.monoStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              Text(
-                'Method:',
-                style: AppConstants.bodyStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  PaymentMethodPill(
-                    label: 'Cash',
-                    isSelected: _method == 'Cash',
-                    onTap: () => setState(() => _method = 'Cash'),
-                  ),
-                  const SizedBox(width: 8),
-                  PaymentMethodPill(
-                    label: 'GCash',
-                    isSelected: _method == 'GCash',
-                    onTap: () => setState(() => _method = 'GCash'),
-                  ),
-                  const SizedBox(width: 8),
-                  const PaymentMethodPill(
-                    label: 'Card',
-                    isSelected: false,
-                    isDisabled: true,
-                    disabledTooltip: 'Coming soon',
-                  ),
-                ],
-              ),
-              if (_method == 'Cash') ...[
-                const SizedBox(height: 20),
-                Text(
-                  'Tendered:',
-                  style: AppConstants.bodyStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _tenderedController,
-                  keyboardType: TextInputType.number,
-                  onChanged: (_) => setState(() {}),
-                  style: AppConstants.monoStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  decoration: InputDecoration(
-                    prefixText: '₱ ',
-                    filled: true,
-                    fillColor: AppConstants.sellerSurface,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              // ── Header (fixed, not scrollable) ──
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
+                child: Row(
                   children: [
-                    Text(
-                      'Change:',
-                      style: AppConstants.bodyStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
+                    Expanded(
+                      child: Text(
+                        'Payment',
+                        style: AppConstants.bodyStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
-                    Text(
-                      '₱${_change.toStringAsFixed(0)}',
-                      style: AppConstants.monoStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: AppConstants.accent,
-                      ),
+                    IconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close),
                     ),
                   ],
                 ),
-              ],
-              const SizedBox(height: 24),
-              FilledButton(
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppConstants.accent,
-                  padding: const EdgeInsets.symmetric(vertical: 15),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+              ),
+              const Divider(),
+              // ── Scrollable content area ──
+              Expanded(
+                child: SingleChildScrollView(
+                  controller: scrollController,
+                  padding: EdgeInsets.fromLTRB(
+                    20,
+                    12,
+                    20,
+                    MediaQuery.of(context).viewInsets.bottom + 8,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Total:',
+                            style: AppConstants.bodyStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          Text(
+                            '₱${widget.total.toStringAsFixed(0)}',
+                            style: AppConstants.monoStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      Text(
+                        'Method:',
+                        style: AppConstants.bodyStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          PaymentMethodPill(
+                            label: 'Cash',
+                            isSelected: _method == 'Cash',
+                            onTap: () => setState(() => _method = 'Cash'),
+                          ),
+                          const SizedBox(width: 8),
+                          PaymentMethodPill(
+                            label: 'GCash',
+                            isSelected: _method == 'GCash',
+                            onTap: () => setState(() => _method = 'GCash'),
+                          ),
+
+                        ],
+                      ),
+                      if (_method == 'Cash') ...[
+                        const SizedBox(height: 20),
+                        Text(
+                          'Tendered:',
+                          style: AppConstants.bodyStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _tenderedController,
+                          keyboardType: TextInputType.number,
+                          onChanged: (_) => setState(() {}),
+                          style: AppConstants.monoStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          decoration: InputDecoration(
+                            prefixText: '₱ ',
+                            filled: true,
+                            fillColor: AppConstants.sellerSurface,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Change:',
+                              style: AppConstants.bodyStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            Text(
+                              '₱${_change.toStringAsFixed(0)}',
+                              style: AppConstants.monoStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: AppConstants.accent,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                      if (_method == 'GCash') ...[
+                        const SizedBox(height: 16),
+                        if (_storeLoading)
+                          const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(20),
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          )
+                        else if (!_hasGcashConfig)
+                          // ── No GCash configured ──
+                          Container(
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: AppConstants.error.withValues(alpha: 0.06),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: AppConstants.error.withValues(alpha: 0.25),
+                              ),
+                            ),
+                            child: Column(
+                              children: [
+                                Icon(
+                                  Icons.warning_amber_rounded,
+                                  color: AppConstants.error,
+                                  size: 32,
+                                ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  'GCash not configured',
+                                  style: AppConstants.bodyStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  'Please set up your GCash QR code and/or number in Store Settings before accepting GCash payments.',
+                                  textAlign: TextAlign.center,
+                                  style: AppConstants.bodyStyle(
+                                    fontSize: 12,
+                                    color: AppConstants.secondary.withValues(alpha: 0.6),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        else ..._buildGcashPaymentSection(),
+                      ],
+                      const SizedBox(height: 16),
+                    ],
                   ),
                 ),
-                onPressed: () {
-                  if (_method == 'Cash' && _tendered < widget.total) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Tendered amount is insufficient.'),
-                        backgroundColor: AppConstants.error,
+              ),
+              // ── Fixed footer — Confirm button pinned at bottom ──
+              SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _canConfirm ? AppConstants.accent : Colors.grey.shade300,
+                        disabledBackgroundColor: Colors.grey.shade300,
+                        padding: const EdgeInsets.symmetric(vertical: 15),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
-                    );
-                    return;
-                  }
-                  widget.onConfirm(_method, _tendered);
-                },
-                child: Text(
-                  'Confirm Payment  ₱${widget.total.toStringAsFixed(0)}',
-                  style: AppConstants.bodyStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
+                      onPressed: !_canConfirm
+                          ? null
+                          : () {
+                              if (_method == 'Cash' && _tendered < widget.total) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Tendered amount is insufficient.'),
+                                    backgroundColor: AppConstants.error,
+                                  ),
+                                );
+                                return;
+                              }
+                              widget.onConfirm(
+                                _method,
+                                _tendered,
+                                gcashRef: _method == 'GCash'
+                                    ? _gcashRefController.text.trim()
+                                    : null,
+                              );
+                            },
+                      child: Text(
+                        'Confirm Payment  ₱${widget.total.toStringAsFixed(0)}',
+                        style: AppConstants.bodyStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),

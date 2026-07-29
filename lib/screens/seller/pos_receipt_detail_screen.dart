@@ -382,6 +382,17 @@ class PosReceiptDetailScreen extends StatelessWidget {
                         '₱${((order['change_amount'] as num?)?.toDouble() ?? 0).toStringAsFixed(0)}',
                       ),
                     ],
+                    // ── GCash Reference Number ──
+                    if (paymentMethod.toLowerCase() == 'gcash' &&
+                        (order['gcash_reference_number']?.toString().isNotEmpty ?? false)) ...[
+                      const SizedBox(height: 12),
+                      _buildDashedDivider(),
+                      const SizedBox(height: 12),
+                      _buildReceiptInfoRow(
+                        'GCash Ref #',
+                        order['gcash_reference_number'].toString(),
+                      ),
+                    ],
 
                     const SizedBox(height: 20),
 

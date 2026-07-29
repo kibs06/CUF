@@ -62,6 +62,7 @@ class OrderProvider extends ChangeNotifier {
     Map<String, dynamic>? shippingAddress,
     String source = 'online',
     double? amountTendered,
+    String? gcashReference,
   }) async {
     _isLoading = true;
     notifyListeners();
@@ -78,6 +79,7 @@ class OrderProvider extends ChangeNotifier {
         if (shippingAddress != null) 'shipping_address': shippingAddress,
         'source': source,
         if (amountTendered != null) 'amount_tendered': amountTendered,
+        if (gcashReference != null) 'gcash_reference_number': gcashReference,
       });
       await loadOrders();
       _isLoading = false;

@@ -339,6 +339,11 @@ class SupabaseService {
           insertData['change_amount'] = (tendered - ((orderData['total_amount'] as num?)?.toDouble() ?? 0)).clamp(0, double.infinity);
         }
       }
+      // Persist GCash reference number for manual verification
+      final gcashRef = orderData['gcash_reference_number']?.toString();
+      if (gcashRef != null && gcashRef.isNotEmpty) {
+        insertData['gcash_reference_number'] = gcashRef;
+      }
       if (shippingAddress != null) {
         insertData['shipping_address'] = shippingAddress;
       }

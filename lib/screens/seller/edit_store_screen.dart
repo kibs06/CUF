@@ -57,6 +57,8 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
     _locationController.text = s['location'] ?? '';
     _brandColor = s['brand_color'] ?? '#8B5A2B';
     _isOpen = s['is_open'] ?? true;
+    _gcashNumberController.text = s['gcash_number'] ?? '';
+    _gcashAccountNameController.text = s['gcash_account_name'] ?? '';
   }
 
   @override
@@ -73,6 +75,7 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
     setState(() => _isSaving = true);
 
     try {
+      // Save store basics (name, logo, banner, etc.)
       await _storeService.updateStoreSeller(
         storeId: widget.store['id'].toString(),
         name: _nameController.text,
@@ -84,6 +87,15 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
         newBannerImage: _newBannerImage,
         removeLogo: _removeLogo,
         removeBanner: _removeBanner,
+      );
+
+      // Save GCash settings separately
+      await _storeService.updateGcashSettings(
+        storeId: widget.store['id'].toString(),
+        gcashNumber: _gcashNumberController.text,
+        gcashAccountName: _gcashAccountNameController.text,
+        newQrImage: _newGcashQr,
+        removeQr: _removeGcashQr,
       );
 
       if (mounted) {
@@ -157,6 +169,12 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
 
                   // ── Section 4: Store Open Toggle ──
                   _buildOpenToggle(),
+                  const SizedBox(height: 28),
+
+                  // ── Section 5: GCash Payment Settings ──
+                  _buildSectionHeader('GCash Settings', Icons.phone_android),
+                  const SizedBox(height: 12),
+                  _buildGcashSection(),
                   const SizedBox(height: 32),
 
                   // ── Save Button ──
@@ -562,6 +580,166 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
         ],
       ),
     );
+  }
+
+  // ── GCash Payment Settings ──
+
+  final _gcashNumberController = TextEditingController();
+  final _gcashAccountNameController = TextEditingController();
+  XFile? _newGcashQr;
+  bool _removeGcashQr = false;
+
+  Widget _buildGcashSection() {
+    final existingQrUrl = widget.store['gcash_qr_url']?.toString();
+    final hasQr = _newGcashQr != null ||
+        (existingQrUrl != null && !_removeGcashQr);
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: AppConstants.cardRadius,
+        boxShadow: AppConstants.warmShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // QR Code Image
+          Text(
+            'GCash QR Code',
+            style: AppConstants.bodyStyle(
+              fontWeight: FontWeight.bold, fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Shown to customers during POS checkout for scanning.',
+            style: AppConstants.bodyStyle(
+              fontSize: 12, color: AppConstants.secondary.withValues(alpha: 0.5),
+            ),
+          ),
+          const SizedBox(height: 10),
+          GestureDetector(
+            onTap: _pickGcashQr,
+            child: Container(
+              height: 160,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                borderRadius: AppConstants.cardRadius,
+                color: AppConstants.borderGray.withValues(alpha: 0.3),
+              ),
+              child: _newGcashQr != null
+                  ? ClipRRect(
+                      borderRadius: AppConstants.cardRadius,
+                      child: Image.file(
+                        File(_newGcashQr!.path),
+                        fit: BoxFit.contain,
+                      ),
+                    )
+                  : hasQr && existingQrUrl != null
+                      ? ClipRRect(
+                          borderRadius: AppConstants.cardRadius,
+                          child: CachedNetworkImage(
+                            imageUrl: existingQrUrl,
+                            fit: BoxFit.contain,
+                            placeholder: (_, _) => const Center(
+                              child: SizedBox(
+                                width: 20, height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: AppConstants.primary,
+                                ),
+                              ),
+                            ),
+                          ),
+                        )
+                      : Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.qr_code_2,
+                              size: 36,
+                              color: AppConstants.primary.withValues(alpha: 0.5),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Tap to upload GCash QR code',
+                              style: AppConstants.bodyStyle(
+                                fontSize: 12,
+                                color: AppConstants.secondary.withValues(alpha: 0.5),
+                              ),
+                            ),
+                          ],
+                        ),
+            ),
+          ),
+          if (hasQr) ...[
+            const SizedBox(height: 6),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _newGcashQr = null;
+                    _removeGcashQr = true;
+                  });
+                },
+                icon: const Icon(Icons.close, size: 14),
+                label: const Text('Remove QR'),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppConstants.error,
+                  textStyle: AppConstants.bodyStyle(fontSize: 12),
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 16),
+
+          // GCash Number
+          Text(
+            'GCash Number',
+            style: AppConstants.bodyStyle(
+              fontWeight: FontWeight.bold, fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 6),
+          TextFormField(
+            controller: _gcashNumberController,
+            keyboardType: TextInputType.phone,
+            style: AppConstants.bodyStyle(fontSize: 15),
+            decoration: _inputDecoration('e.g. 09171234567'),
+          ),
+          const SizedBox(height: 16),
+
+          // Account Name
+          Text(
+            'GCash Account Name',
+            style: AppConstants.bodyStyle(
+              fontWeight: FontWeight.bold, fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 6),
+          TextFormField(
+            controller: _gcashAccountNameController,
+            style: AppConstants.bodyStyle(fontSize: 15),
+            decoration: _inputDecoration('e.g. Juan Dela Cruz'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickGcashQr() async {
+    final picked = await _imagePicker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 800,
+      maxHeight: 800,
+      imageQuality: 85,
+    );
+    if (picked != null) {
+      setState(() {
+        _newGcashQr = picked;
+        _removeGcashQr = false;
+      });
+    }
   }
 
   // ── Open Toggle ──

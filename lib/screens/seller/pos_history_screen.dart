@@ -616,6 +616,26 @@ class _PosHistoryScreenState extends State<PosHistoryScreen> {
                     ],
                   ),
                 ),
+                // GCash reference number (if present)
+                if (paymentMethod.toLowerCase() == 'gcash' &&
+                    (order['gcash_reference_number']?.toString().isNotEmpty ?? false)) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppConstants.statusConfirmedColor.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      'Ref: ${order['gcash_reference_number']}',
+                      style: AppConstants.monoStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w600,
+                        color: AppConstants.statusConfirmedColor,
+                      ),
+                    ),
+                  ),
+                ],
                 const Spacer(),
                 // Total — the hero number
                 Text(
