@@ -16,6 +16,11 @@ class Store {
   final bool isActive;
   final String? ownerId;
   final DateTime createdAt;
+  // Auto-schedule fields
+  final bool autoScheduleEnabled;
+  final String? openTime;   // 'HH:MM:SS' local wall-clock, null if not set
+  final String? closeTime;  // 'HH:MM:SS' local wall-clock, null if not set
+  final bool manualOverride;
 
   const Store({
     required this.id,
@@ -30,6 +35,10 @@ class Store {
     this.isActive = true,
     this.ownerId,
     required this.createdAt,
+    this.autoScheduleEnabled = false,
+    this.openTime,
+    this.closeTime,
+    this.manualOverride = false,
   });
 
   /// Parse brandColor hex into a Flutter Color.
@@ -68,6 +77,10 @@ class Store {
       isOpen: map['is_open'] ?? true,
       isActive: map['is_active'] ?? true,
       ownerId: map['owner_id'],
+      autoScheduleEnabled: map['auto_schedule_enabled'] ?? false,
+      openTime: map['open_time']?.toString(),
+      closeTime: map['close_time']?.toString(),
+      manualOverride: map['manual_override'] ?? false,
       createdAt: map['created_at'] is DateTime
           ? map['created_at']
           : DateTime.tryParse(map['created_at']?.toString() ?? '') ??
@@ -89,6 +102,10 @@ class Store {
       'is_open': isOpen,
       'is_active': isActive,
       'owner_id': ownerId,
+      'auto_schedule_enabled': autoScheduleEnabled,
+      'open_time': openTime,
+      'close_time': closeTime,
+      'manual_override': manualOverride,
       'created_at': createdAt.toIso8601String(),
     };
   }

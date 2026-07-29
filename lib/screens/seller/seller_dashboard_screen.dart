@@ -19,8 +19,8 @@ import '../../widgets/seller/seller_metric_card.dart';
 import '../../widgets/seller/seller_alert_chip.dart';
 import '../../widgets/seller/seller_order_card.dart';
 import '../../widgets/seller/seller_sparkline.dart';
-import '../../models/revenue_point.dart';
-import '../../widgets/seller/seller_revenue_line_chart.dart';
+import '../../models/sales_trend_data.dart';
+import '../../widgets/seller/seller_stacked_area_chart.dart';
 import 'manage_orders_screen.dart';
 import 'manage_inventory_screen.dart';
 import 'custom_orders_screen.dart';
@@ -41,6 +41,9 @@ class _DashboardData {
   // POS-only breakdowns
   final List<double> posWeeklyChart;
   final List<double> posMonthlyChart;
+  // Trend data for comparison
+  final SalesTrendResult? weeklyTrend;
+  final SalesTrendResult? monthlyTrend;
   final List<Map<String, dynamic>> recentOrders;
   final Map<String, int> ordersByStatus;
   final Map<String, dynamic>? store;
@@ -57,6 +60,8 @@ class _DashboardData {
     required this.onlineMonthlyChart,
     required this.posWeeklyChart,
     required this.posMonthlyChart,
+    this.weeklyTrend,
+    this.monthlyTrend,
     required this.recentOrders,
     required this.ordersByStatus,
     this.store,
@@ -76,16 +81,12 @@ class SellerDashboardScreen extends StatefulWidget {
   State<SellerDashboardScreen> createState() => _SellerDashboardScreenState();
 }
 
-/// Sales channel filter for chart toggle.
-enum SalesFilter { all, online, pos }
-
 class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
   late Future<_DashboardData> _dashboardFuture;
   _DashboardData? _cachedData;
   String? _storeId;
   StreamSubscription<bool>? _connectivitySub;
   bool _wasOffline = false;
-  SalesFilter _salesFilter = SalesFilter.all;
 
   @override
   void initState() {
@@ -147,6 +148,8 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
       salesService.getPosWeeklyRevenue(storeId),
       salesService.getOnlineMonthlyRevenueTrend(storeId),
       salesService.getPosMonthlyRevenueTrend(storeId),
+      salesService.getWeeklyTrend(storeId: storeId, channel: SalesChannelFilter.all),
+      salesService.getMonthlyTrend(storeId: storeId, channel: SalesChannelFilter.all),
       // Load products & orders for low stock / pending customs / alerts
       context.read<ProductProvider>().loadSellerProducts(),
       context.read<OrderProvider>().loadOrders(),
@@ -165,6 +168,8 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
         .customizations
         .where((c) => c['status'] == 'pending')
         .length;
+
+    // Ensure lowStockItems and staleOrders are computed after products/orders are loaded
 
     final staleOrders = orders
         .where((o) => (o['status'] ?? '').toLowerCase() == 'placed')
@@ -189,7 +194,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     // Compute combined charts from online + POS parts
     // Future.wait indices: 0=todayRevenue, 1=recentOrders, 2=ordersByStatus,
     // 3=store, 4=onlineWeekly, 5=posWeekly, 6=onlineMonthly, 7=posMonthly,
-    // 8=loadProducts, 9=loadOrders
+    // 8=weeklyTrend, 9=monthlyTrend, 10=loadProducts, 11=loadOrders
     final onlineWeekly = results[4] as List<double>;
     final posWeekly = results[5] as List<double>;
     final weeklySalesChart = List.generate(7, (i) => onlineWeekly[i] + posWeekly[i]);
@@ -208,6 +213,8 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
       posWeeklyChart: posWeekly,
       onlineMonthlyChart: onlineMonthly,
       posMonthlyChart: posMonthly,
+      weeklyTrend: results[8] as SalesTrendResult?,
+      monthlyTrend: results[9] as SalesTrendResult?,
       lowStockCount: lowStockCount,
       pendingCustoms: pendingCustoms,
       lowStockItems: lowStockItems,
@@ -223,6 +230,8 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     posWeeklyChart: [0, 0, 0, 0, 0, 0, 0],
     onlineMonthlyChart: [0, 0, 0, 0, 0, 0],
     posMonthlyChart: [0, 0, 0, 0, 0, 0],
+    weeklyTrend: null,
+    monthlyTrend: null,
     recentOrders: [],
     ordersByStatus: {},
     lowStockCount: 0,
@@ -259,28 +268,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     return '₱$formatted';
   }
 
-  /// Resolves the chart data for the current [SalesFilter].
-  List<double> _filteredWeekly(_DashboardData data) {
-    switch (_salesFilter) {
-      case SalesFilter.online:
-        return data.onlineWeeklyChart;
-      case SalesFilter.pos:
-        return data.posWeeklyChart;
-      case SalesFilter.all:
-        return data.weeklySalesChart;
-    }
-  }
 
-  List<double> _filteredMonthly(_DashboardData data) {
-    switch (_salesFilter) {
-      case SalesFilter.online:
-        return data.onlineMonthlyChart;
-      case SalesFilter.pos:
-        return data.posMonthlyChart;
-      case SalesFilter.all:
-        return data.monthlySalesChart;
-    }
-  }
 
   String _timeAgo(String? isoString) {
     if (isoString == null) return '';
@@ -485,19 +473,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
             _buildQuickActions(),
             const SizedBox(height: 20),
 
-            // Block 6 — Weekly Sales Chart (real data)
-            _buildSectionLabel('THIS WEEK'),
-            const SizedBox(height: 4),
-            Text(
-              _getWeekDateRange(),
-              style: AppConstants.bodyStyle(
-                fontSize: 11,
-                color: Colors.grey.shade500,
-              ),
-            ),
-            const SizedBox(height: 10),
-            _buildSalesFilterToggle(),
-            const SizedBox(height: 12),
+            // Block 6 — Weekly Stacked Area Chart (Online + In-Store)
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -505,23 +481,17 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: AppConstants.sellerShadow,
               ),
-              child: SellerRevenueLineChart(
-                data: List.generate(
-                  7,
-                  (i) => RevenuePoint(
-                    label: _weekDayLabels[i],
-                    revenue: i < _filteredWeekly(data).length
-                        ? _filteredWeekly(data)[i]
-                        : 0,
-                  ),
-                ),
+              child: SellerStackedAreaChart(
+                title: 'Revenue — This Week',
+                subtitle: _getWeekDateRange(),
+                points: data.weeklyTrend?.points ?? [],
+                trendResult: data.weeklyTrend,
                 isWeekly: true,
               ),
             ),
+            const SizedBox(height: 20),
 
-            // Block 7 — Monthly Revenue Trend
-            _buildSectionLabel('MONTHLY TREND'),
-            const SizedBox(height: 12),
+            // Block 7 — Monthly Stacked Area Chart
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -529,15 +499,11 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: AppConstants.sellerShadow,
               ),
-              child: SellerRevenueLineChart(
-                data: List.generate(
-                  _filteredMonthly(data).length,
-                  (i) => RevenuePoint(
-                    label: SalesService.monthlyLabels()[i],
-                    tooltipLabel: SalesService.monthlyFullLabels()[i],
-                    revenue: _filteredMonthly(data)[i],
-                  ),
-                ),
+              child: SellerStackedAreaChart(
+                title: 'Revenue — Monthly Trend',
+                subtitle: SalesService.monthlyFullLabels().last,
+                points: data.monthlyTrend?.points ?? [],
+                trendResult: data.monthlyTrend,
                 isWeekly: false,
               ),
             ),
@@ -982,50 +948,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     );
   }
 
-  // ─── Sales Filter Toggle ──────────────────────────────────────
-  Widget _buildSalesFilterToggle() {
-    return Container(
-      height: 32,
-      decoration: BoxDecoration(
-        color: Colors.grey.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: SalesFilter.values.map((filter) {
-          final isSelected = _salesFilter == filter;
-          final label = switch (filter) {
-            SalesFilter.all => 'All',
-            SalesFilter.online => 'Online',
-            SalesFilter.pos => 'In-Store',
-          };
-          return Expanded(
-            child: GestureDetector(
-              onTap: () {
-                if (!isSelected) setState(() => _salesFilter = filter);
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                margin: const EdgeInsets.all(3),
-                decoration: BoxDecoration(
-                  color: isSelected ? AppConstants.primary : Colors.transparent,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  label,
-                  style: AppConstants.bodyStyle(
-                    fontSize: 11,
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                    color: isSelected ? Colors.white : Colors.grey.shade600,
-                  ),
-                ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
+
 
   // ─── Week helpers ───────────────────────────────────────────────
   String _getWeekDateRange() {
@@ -1039,8 +962,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     return '${months[startOfWeek.month - 1]} ${startOfWeek.day}–${endOfWeek.day}';
   }
 
-  // Chart labels match SellerWeeklyBar's weekday-index convention
-  static const _weekDayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
 
   // ─── Message Icon with Badge ──────────────────────────────────
   Widget _buildMessageIcon() {

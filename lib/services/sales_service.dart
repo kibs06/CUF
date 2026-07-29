@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/seller_report_data.dart';
+import '../models/sales_trend_data.dart';
 
 class SalesService {
   final SupabaseClient _client;
@@ -594,5 +595,224 @@ class SalesService {
         .inFilter('id', orderIds)
         .inFilter('status', ['placed', 'preparing']);
     return (data as List).length;
+  }
+
+  // ─── TREND DATA (for dashboard charts) ────────────────────────
+
+  /// Fetches daily revenue for the last 7 days, combined online + POS.
+  /// Returns a [SalesTrendResult] with points, totals, and comparison.
+  Future<SalesTrendResult> getWeeklyTrend({
+    required String storeId,
+    required SalesChannelFilter channel,
+    DateTime? weekStart,
+  }) async {
+    final now = DateTime.now();
+    final start = weekStart ?? DateTime(now.year, now.month, now.day - (now.weekday - 1));
+    final end = start.add(const Duration(days: 7));
+
+    // Previous period (same length, immediately prior)
+    final prevStart = start.subtract(const Duration(days: 7));
+    final prevEnd = start;
+
+    return _fetchTrend(
+      storeId: storeId,
+      channel: channel,
+      start: start,
+      end: end,
+      prevStart: prevStart,
+      prevEnd: prevEnd,
+      slotCount: 7,
+      slotByDate: (date) => date.weekday - 1, // Mon=0, Sun=6
+      labelBuilder: (i) => ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i],
+      periodLabel: 'This Week',
+    );
+  }
+
+  /// Fetches monthly revenue for the last 6 months, combined online + POS.
+  Future<SalesTrendResult> getMonthlyTrend({
+    required String storeId,
+    required SalesChannelFilter channel,
+    int monthsBack = 6,
+  }) async {
+    final now = DateTime.now();
+    final start = DateTime(now.year, now.month - (monthsBack - 1), 1);
+    final end = DateTime(now.year, now.month + 1, 1);
+
+    // Previous period
+    final prevStart = DateTime(now.year, now.month - (monthsBack * 2 - 1), 1);
+    final prevEnd = start;
+
+    return _fetchTrend(
+      storeId: storeId,
+      channel: channel,
+      start: start,
+      end: end,
+      prevStart: prevStart,
+      prevEnd: prevEnd,
+      slotCount: monthsBack,
+      slotByDate: (date) {
+        final monthDiff = (date.year - start.year) * 12 + (date.month - start.month);
+        return monthDiff.clamp(0, monthsBack - 1);
+      },
+      labelBuilder: (i) {
+        final offset = now.month - monthsBack + 1 + i;
+        final month = ((offset % 12) + 12) % 12;
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+          'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        return months[month];
+      },
+      fullLabelBuilder: (i) {
+        final offset = now.month - monthsBack + 1 + i;
+        final month = ((offset % 12) + 12) % 12;
+        final year = now.year + (offset ~/ 12);
+        const names = ['January', 'February', 'March', 'April', 'May', 'June',
+          'July', 'August', 'September', 'October', 'November', 'December'];
+        return '${names[month]} $year';
+      },
+      periodLabel: 'Last $monthsBack Months',
+    );
+  }
+
+  /// Internal: fetch trend data for any period.
+  Future<SalesTrendResult> _fetchTrend({
+    required String storeId,
+    required SalesChannelFilter channel,
+    required DateTime start,
+    required DateTime end,
+    required DateTime prevStart,
+    required DateTime prevEnd,
+    required int slotCount,
+    required int Function(DateTime) slotByDate,
+    required String Function(int) labelBuilder,
+    String Function(int)? fullLabelBuilder,
+    required String periodLabel,
+  }) async {
+    final startStr = start.toIso8601String();
+    final endStr = end.toIso8601String();
+    final prevStartStr = prevStart.toIso8601String();
+    final prevEndStr = prevEnd.toIso8601String();
+
+    // Fetch current period data
+    final orderIds = await _getOrderIds(storeId);
+    final futures = <Future<List>>[];
+
+    // Online orders
+    if (channel != SalesChannelFilter.inStore && orderIds.isNotEmpty) {
+      futures.add(_client
+          .from('orders')
+          .select('total_amount, created_at')
+          .inFilter('id', orderIds)
+          .neq('status', 'cancelled')
+          .gte('created_at', startStr)
+          .lt('created_at', endStr)
+          .then((d) => List.from(d as List)));
+    } else {
+      futures.add(Future.value([]));
+    }
+
+    // POS orders
+    if (channel != SalesChannelFilter.online) {
+      futures.add(_client
+          .from('orders')
+          .select('total_amount, created_at')
+          .eq('store_id', storeId)
+          .eq('source', 'pos')
+          .neq('status', 'cancelled')
+          .gte('created_at', startStr)
+          .lt('created_at', endStr)
+          .then((d) => List.from(d as List)));
+    } else {
+      futures.add(Future.value([]));
+    }
+
+    // Previous period data
+    final prevFutures = <Future<List>>[];
+    if (channel != SalesChannelFilter.inStore && orderIds.isNotEmpty) {
+      prevFutures.add(_client
+          .from('orders')
+          .select('total_amount')
+          .inFilter('id', orderIds)
+          .neq('status', 'cancelled')
+          .gte('created_at', prevStartStr)
+          .lt('created_at', prevEndStr)
+          .then((d) => List.from(d as List)));
+    } else {
+      prevFutures.add(Future.value([]));
+    }
+    if (channel != SalesChannelFilter.online) {
+      prevFutures.add(_client
+          .from('orders')
+          .select('total_amount')
+          .eq('store_id', storeId)
+          .eq('source', 'pos')
+          .neq('status', 'cancelled')
+          .gte('created_at', prevStartStr)
+          .lt('created_at', prevEndStr)
+          .then((d) => List.from(d as List)));
+    } else {
+      prevFutures.add(Future.value([]));
+    }
+
+    final results = await Future.wait(futures);
+    final prevResults = await Future.wait(prevFutures);
+
+    // Merge current period by date — separate online and inStore
+    final onlineDaily = List<double>.filled(slotCount, 0);
+    final inStoreDaily = List<double>.filled(slotCount, 0);
+    double totalRevenue = 0;
+
+    // Online orders (results[0])
+    for (final row in results[0]) {
+      final amount = (row['total_amount'] as num?)?.toDouble() ?? 0;
+      totalRevenue += amount;
+      final createdAt = DateTime.parse(row['created_at'] as String);
+      final slot = slotByDate(createdAt);
+      if (slot >= 0 && slot < slotCount) {
+        onlineDaily[slot] += amount;
+      }
+    }
+    // POS / in-store orders (results[1])
+    for (final row in results[1]) {
+      final amount = (row['total_amount'] as num?)?.toDouble() ?? 0;
+      totalRevenue += amount;
+      final createdAt = DateTime.parse(row['created_at'] as String);
+      final slot = slotByDate(createdAt);
+      if (slot >= 0 && slot < slotCount) {
+        inStoreDaily[slot] += amount;
+      }
+    }
+
+    // Previous period total
+    double previousPeriodRevenue = 0;
+    for (final row in [...prevResults[0], ...prevResults[1]]) {
+      previousPeriodRevenue += (row['total_amount'] as num?)?.toDouble() ?? 0;
+    }
+
+    // Percent change
+    final percentChange = previousPeriodRevenue > 0
+        ? ((totalRevenue - previousPeriodRevenue) / previousPeriodRevenue) * 100
+        : 0.0;
+
+    // Build points with channel-separated revenue
+    final now = DateTime.now();
+    final points = List.generate(slotCount, (i) {
+      final online = onlineDaily[i];
+      final inStore = inStoreDaily[i];
+      return SalesDataPoint(
+        date: start.add(Duration(days: i)),
+        onlineRevenue: online,
+        inStoreRevenue: inStore,
+        revenue: online + inStore,
+        isProjected: i == slotCount - 1 && now.hour < 18,
+      );
+    });
+
+    return SalesTrendResult(
+      points: points,
+      totalRevenue: totalRevenue,
+      previousPeriodRevenue: previousPeriodRevenue,
+      percentChange: percentChange,
+      periodLabel: periodLabel,
+    );
   }
 }

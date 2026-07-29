@@ -137,10 +137,42 @@ class StoreService {
   }
 
   /// Toggle store open/closed.
-  Future<void> toggleStoreOpen(String storeId, bool isOpen) async {
+  /// When auto-schedule is enabled:
+  /// - Closing (isOpen=false) sets manual_override = true (seller closing against schedule)
+  /// - Reopening (isOpen=true) clears manual_override = false (matches schedule)
+  Future<void> toggleStoreOpen(String storeId, bool isOpen, {bool autoScheduleEnabled = false}) async {
+    final updates = <String, dynamic>{'is_open': isOpen};
+    if (autoScheduleEnabled) {
+      // Closing manually = override; reopening manually = clear override
+      updates['manual_override'] = !isOpen;
+    }
+    await _client.from('stores').update(updates).eq('id', storeId);
+  }
+
+  /// Clear manual override and let the schedule resume.
+  Future<void> clearManualOverride(String storeId) async {
     await _client
         .from('stores')
-        .update({'is_open': isOpen}).eq('id', storeId);
+        .update({'manual_override': false}).eq('id', storeId);
+  }
+
+  /// Update store auto-schedule settings.
+  Future<void> updateStoreSchedule({
+    required String storeId,
+    required bool autoScheduleEnabled,
+    required String? openTime,
+    required String? closeTime,
+  }) async {
+    final updates = <String, dynamic>{
+      'auto_schedule_enabled': autoScheduleEnabled,
+      'open_time': openTime,
+      'close_time': closeTime,
+    };
+    // When enabling schedule, clear any manual override so schedule takes effect
+    if (autoScheduleEnabled) {
+      updates['manual_override'] = false;
+    }
+    await _client.from('stores').update(updates).eq('id', storeId);
   }
 
   /// Upload a store image (logo or banner) and return the public URL.

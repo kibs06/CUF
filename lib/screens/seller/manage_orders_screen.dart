@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:provider/provider.dart';
 import '../../constants/app_constants.dart';
+import '../../widgets/countdown_delete_button.dart';
 import '../../providers/order_provider.dart';
 import '../../services/connectivity_service.dart';
 import '../../widgets/seller/seller_order_card.dart';
@@ -141,7 +142,7 @@ class _ManageOrdersScreenState extends State<ManageOrdersScreen>
             ),
             const SizedBox(height: 8),
             Text(
-              '$customerName\nThis action can be undone within 5 seconds.',
+              '$customerName\nWait for the button to activate, then you have 5 seconds to undo.',
               style: AppConstants.bodyStyle(
                 fontSize: 13,
                 color: Colors.grey.shade600,
@@ -158,19 +159,11 @@ class _ManageOrdersScreenState extends State<ManageOrdersScreen>
               style: AppConstants.bodyStyle(color: AppConstants.secondary),
             ),
           ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppConstants.error),
-            onPressed: () {
+          CountdownDeleteButton(
+            onConfirm: () {
               Navigator.of(context).pop();
               _swipeDeleteOrder(orderId, orderData);
             },
-            child: Text(
-              'Delete',
-              style: AppConstants.bodyStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
           ),
         ],
       ),
@@ -648,14 +641,19 @@ class _ManageOrdersScreenState extends State<ManageOrdersScreen>
       key: ValueKey(id),
       startActionPane: ActionPane(
         motion: const BehindMotion(),
-        extentRatio: 0.25,
+        extentRatio: 0.28,
         children: [
-          SlidableAction(
+          CustomSlidableAction(
             onPressed: (_) => _confirmDeleteOrder(id, order),
             backgroundColor: Colors.red.shade400,
             foregroundColor: Colors.white,
-            icon: Icons.delete_outline,
             borderRadius: BorderRadius.circular(16),
+            padding: EdgeInsets.zero,
+            child: const Icon(
+              Icons.delete_outline,
+              color: Colors.white,
+              size: 32,
+            ),
           ),
         ],
       ),

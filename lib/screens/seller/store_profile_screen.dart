@@ -7,6 +7,7 @@ import '../../services/store_service.dart';
 import '../../widgets/sole_primary_button.dart';
 import '../../widgets/sole_switch.dart';
 import 'edit_store_screen.dart';
+import 'store_schedule_screen.dart';
 
 /// Seller-facing store profile screen.
 ///
@@ -66,8 +67,15 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
     final newOpen = !currentOpen;
     try {
       await _storeService.toggleStoreOpen(
-          _store!['id'].toString(), newOpen);
+        _store!['id'].toString(),
+        newOpen,
+        autoScheduleEnabled: _store!['auto_schedule_enabled'] ?? false,
+      );
       setState(() => _store!['is_open'] = newOpen);
+      // Update override state locally for immediate UI feedback
+      if (_autoScheduleEnabled) {
+        _store!['manual_override'] = !newOpen; // closing = override, reopening = clear
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -86,6 +94,21 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
             backgroundColor: AppConstants.error,
           ),
         );
+      }
+    }
+  }
+
+  Future<void> _navigateToSchedule() async {
+    if (_store == null) return;
+    final result = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => StoreScheduleScreen(store: _store!),
+      ),
+    );
+    if (result == true) {
+      final updatedStore = await _storeService.getMyStore();
+      if (mounted && updatedStore != null) {
+        setState(() => _store = updatedStore);
       }
     }
   }
@@ -115,6 +138,8 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
   String get _brandColorHex => _store?['brand_color'] ?? '#8B5A2B';
   double get _rating =>
       (_store?['rating'] as num?)?.toDouble() ?? 5.0;
+  bool get _autoScheduleEnabled => _store?['auto_schedule_enabled'] ?? false;
+  bool get _manualOverride => _store?['manual_override'] ?? false;
 
   Color get _brandColor => AppConstants.parseBrandColor(_brandColorHex);
 
@@ -381,8 +406,7 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          // Open/Closed Toggle
+          const SizedBox(height: 16),              // Open/Closed Toggle
           Row(
             children: [
               Icon(Icons.store_outlined,
@@ -425,6 +449,56 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                 inactiveThumbColor: SoleSwitch.thumbColor,
               ),
             ],
+          ),
+          // Override / schedule label
+          if (_autoScheduleEnabled) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(
+                  _manualOverride ? Icons.schedule : Icons.auto_awesome,
+                  size: 14,
+                  color: _manualOverride ? Colors.amber : AppConstants.primary,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    _manualOverride
+                        ? 'Manual override — resets automatically'
+                        : 'Auto-schedule active',
+                    style: AppConstants.bodyStyle(
+                      fontSize: 11,
+                      color: _manualOverride ? Colors.amber.shade700 : AppConstants.primary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          // Store Hours row
+          const SizedBox(height: 12),
+          GestureDetector(
+            onTap: _navigateToSchedule,
+            child: Row(
+              children: [
+                Icon(Icons.access_time, size: 16, color: AppConstants.primary),
+                const SizedBox(width: 8),
+                Text(
+                  'Store Hours',
+                  style: AppConstants.bodyStyle(fontSize: 13),
+                ),
+                const Spacer(),
+                Text(
+                  _autoScheduleEnabled ? 'Configured' : 'Off',
+                  style: AppConstants.bodyStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade500,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(Icons.chevron_right, size: 18, color: Colors.grey.shade400),
+              ],
+            ),
           ),
         ],
       ),
