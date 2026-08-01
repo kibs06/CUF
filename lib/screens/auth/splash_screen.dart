@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../constants/app_constants.dart';
+import '../../providers/update_provider.dart';
 import '../auth_gate.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -29,6 +31,14 @@ class _SplashScreenState extends State<SplashScreen>
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeIn));
 
     _controller.forward();
+
+    // Silent, non-blocking update check — never shows a popup. If a newer
+    // build exists, the Settings → "What's New" row shows a badge dot.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<UpdateProvider>().checkForUpdate();
+      }
+    });
 
     // Auto-navigates to AuthGate after 2 seconds
     Timer(const Duration(seconds: 2), () {

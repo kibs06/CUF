@@ -9,6 +9,7 @@ import '../../providers/notification_provider.dart';
 import 'following_list_dialog.dart';
 import '../../services/profile_service.dart';
 import '../../services/store_service.dart';
+import '../../providers/update_provider.dart';
 import '../../widgets/sole_badge.dart';
 import '../../widgets/sole_card.dart';
 import '../../widgets/sole_status_chip.dart';
@@ -17,6 +18,8 @@ import '../customer/my_orders_screen.dart';
 import 'help_menu_screen.dart';
 import '../seller/create_store_screen.dart';
 import '../seller/store_profile_screen.dart';
+import '../customer/foot_instructions_screen.dart';
+import 'whats_new_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -652,11 +655,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // SETTINGS CARD
   // ════════════════════════════════════════════════════════════════
   Widget _buildSettingsCard(AuthProvider auth) {
+    final updateProvider = context.watch<UpdateProvider>();
+    final installedVersion = updateProvider.installedVersion;
+    final hasUnviewedUpdate = updateProvider.hasUnviewedUpdate;
+
     return SoleCard(
       color: Colors.white,
       padding: EdgeInsets.zero,
       child: Column(
         children: [
+          _settingsRow(
+            icon: Icons.straighten_outlined,
+            title: 'Get Your Foot Size',
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const FootInstructionsScreen(),
+                ),
+              );
+            },
+          ),
+          const Divider(height: 1, color: Color(0xFFE5E7EB)),
           _settingsRow(
             icon: Icons.lock_outline,
             title: 'Change Password',
@@ -676,6 +695,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (_) => const HelpMenuScreen(),
+                ),
+              );
+            },
+          ),
+          const Divider(height: 1, color: Color(0xFFE5E7EB)),
+          _settingsRow(
+            icon: Icons.new_releases_outlined,
+            title: "What's New",
+            subtitle: installedVersion != null ? 'v$installedVersion' : null,
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (hasUnviewedUpdate) ...[
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: AppConstants.accent,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                const Icon(Icons.chevron_right, color: AppConstants.borderGray),
+              ],
+            ),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const WhatsNewScreen(),
                 ),
               );
             },
@@ -980,16 +1029,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
     required IconData icon,
     required String title,
     required VoidCallback onTap,
+    String? subtitle,
+    Widget? trailing,
   }) {
     return Material(
       color: Colors.transparent,
       child: ListTile(
-      dense: true,
-      leading: Icon(icon, color: AppConstants.primary, size: 22),
-      title: Text(title, style: AppConstants.bodyStyle(fontSize: 14)),
-      trailing: const Icon(Icons.chevron_right, color: AppConstants.borderGray),
-      onTap: onTap,
-    ),
+        dense: subtitle == null,
+        leading: Icon(icon, color: AppConstants.primary, size: 22),
+        title: Text(title, style: AppConstants.bodyStyle(fontSize: 14)),
+        subtitle: subtitle == null
+            ? null
+            : Text(
+                subtitle,
+                style: AppConstants.bodyStyle(
+                  fontSize: 12,
+                  color: AppConstants.secondary.withValues(alpha: 0.5),
+                ),
+              ),
+        trailing: trailing ??
+            const Icon(Icons.chevron_right, color: AppConstants.borderGray),
+        onTap: onTap,
+      ),
     );
   }
 

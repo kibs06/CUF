@@ -1,6 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
@@ -420,9 +420,11 @@ class _POSScreenState extends State<POSScreen> {
       builder: (context) {
         return _CheckoutSheet(
           total: _subtotal,
-          onConfirm: (method, tendered, {String? gcashRef}) {
+          items: _orderItems,
+          productPrice: _productPrice,
+          onConfirm: (method, tendered, {String? orderId}) {
             Navigator.of(context).pop();
-            _completePOSTransaction(method, tendered, gcashReference: gcashRef);
+            _completePOSTransaction(method, tendered, orderId: orderId);
           },
         );
       },
@@ -432,34 +434,36 @@ class _POSScreenState extends State<POSScreen> {
   Future<void> _completePOSTransaction(
     String paymentMethod,
     double cashTendered, {
-    String? gcashReference,
+    String? orderId,
   }) async {
-    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-    final auth = Provider.of<AuthProvider>(context, listen: false);
-    final items = List<_POSLineItem>.from(_orderItems.values);
+    // For GCash, the order was already created by _CheckoutSheet
+    // with payment_status='pending'. Only create for Cash flow.
+    if (paymentMethod == 'Cash') {
+      final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      final items = List<_POSLineItem>.from(_orderItems.values);
 
-    // Build items list for the order
-    final orderItems = items.map((item) => {
-      'product_id': item.product['id'],
-      'size': item.size,
-      'color': 'Standard',
-      'quantity': item.quantity,
-      'unit_price': _productPrice(item.product),
-    }).toList();
+      final orderItems = items.map((item) => {
+        'product_id': item.product['id'],
+        'size': item.size,
+        'color': 'Standard',
+        'quantity': item.quantity,
+        'unit_price': _productPrice(item.product),
+      }).toList();
 
-    await orderProvider.placeOrder(
-      customerId: auth.profile?['id'] ?? 'seller-pos',
-      items: orderItems,
-      totalAmount: _subtotal,
-      deliveryAddress: 'In-store POS',
-      paymentMethod: paymentMethod,
-      source: 'pos',
-      amountTendered: paymentMethod == 'Cash' ? cashTendered : null,
-      gcashReference: gcashReference,
-    );
+      await orderProvider.placeOrder(
+        customerId: auth.profile?['id'] ?? 'seller-pos',
+        items: orderItems,
+        totalAmount: _subtotal,
+        deliveryAddress: 'In-store POS',
+        paymentMethod: paymentMethod,
+        source: 'pos',
+        amountTendered: cashTendered,
+      );
+    }
 
     // Auto-sync active status for each product after POS sale
-    for (final item in items) {
+    for (final item in _orderItems.values) {
       try {
         await ProductService.instance
             .syncProductActiveStatus(item.product['id'].toString());
@@ -1299,9 +1303,16 @@ class _POSScreenState extends State<POSScreen> {
 
 class _CheckoutSheet extends StatefulWidget {
   final double total;
-  final void Function(String method, double tendered, {String? gcashRef}) onConfirm;
+  final Map<String, _POSLineItem> items;
+  final double Function(Map<String, dynamic> product) productPrice;
+  final void Function(String method, double tendered, {String? orderId}) onConfirm;
 
-  const _CheckoutSheet({required this.total, required this.onConfirm});
+  const _CheckoutSheet({
+    required this.total,
+    required this.items,
+    required this.productPrice,
+    required this.onConfirm,
+  });
 
   @override
   State<_CheckoutSheet> createState() => _CheckoutSheetState();
@@ -1309,206 +1320,254 @@ class _CheckoutSheet extends StatefulWidget {
 
 class _CheckoutSheetState extends State<_CheckoutSheet> {
   final TextEditingController _tenderedController = TextEditingController();
-  final TextEditingController _gcashRefController = TextEditingController();
   String _method = 'Cash';
-  Map<String, dynamic>? _storeData;
-  bool _storeLoading = true;
+
+  // PayMongo QR Ph GCash state
+  bool _gcashPaymentPending = false;
+  String? _gcashQrImageBase64; // PayMongo QR Ph image (base64)
+  String? _gcashOrderId;
+  bool _gcashCreatingPayment = false;
+  String? _gcashError;
+  Timer? _pollTimer;
 
   double get _tendered => double.tryParse(_tenderedController.text) ?? 0;
   double get _change => (_tendered - widget.total).clamp(0, double.infinity);
 
-  /// GCash reference number validation: non-empty, at least 6 characters.
-  bool get _gcashRefValid {
-    final ref = _gcashRefController.text.trim();
-    return ref.length >= 6;
-  }
-
-  bool get _hasGcashConfig {
-    if (_storeData == null) return false;
-    final hasQr = (_storeData!['gcash_qr_url']?.toString().isNotEmpty ?? false);
-    final hasNumber = (_storeData!['gcash_number']?.toString().isNotEmpty ?? false);
-    return hasQr || hasNumber;
-  }
-
   bool get _canConfirm {
     if (_method == 'Cash') return true; // validated on press
-    if (_method == 'GCash') return _gcashRefValid;
-    return false; // Card disabled
+    // GCash: only confirm if payment is already pending (waiting for webhook)
+    return false;
   }
 
-  @override
-  void initState() {
-    super.initState();
-    _loadStoreData();
-  }
-
-  List<Widget> _buildGcashPaymentSection() {
-    final qrUrl = _storeData?['gcash_qr_url']?.toString();
-    final gcashNumber = _storeData?['gcash_number']?.toString() ?? '';
-    final gcashName = _storeData?['gcash_account_name']?.toString() ?? '';
-
-    return [
-      // ── GCash QR code display ──
-      if (qrUrl != null && qrUrl.isNotEmpty) ...[
-        Center(
-          child: Container(
-            width: 200,
-            height: 200,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: AppConstants.borderGray.withValues(alpha: 0.5),
-              ),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: CachedNetworkImage(
-                imageUrl: qrUrl,
-                fit: BoxFit.contain,
-                placeholder: (context, url) => const Center(
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-                errorWidget: (context, url, error) => Icon(
-                  Icons.qr_code_2,
-                  size: 60,
-                  color: AppConstants.primary.withValues(alpha: 0.3),
-                ),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 10),
-      ],
-      // ── GCash number/name fallback ──
-      if (gcashNumber.isNotEmpty) ...[
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: AppConstants.sellerSurface,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (gcashName.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Text(
-                    gcashName,
-                    style: AppConstants.bodyStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: AppConstants.secondary,
-                    ),
-                  ),
-                ),
-              Row(
-                children: [
-                  const Icon(Icons.phone_android, size: 14, color: AppConstants.primary),
-                  const SizedBox(width: 6),
-                  Text(
-                    gcashNumber,
-                    style: AppConstants.monoStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const Spacer(),
-                  GestureDetector(
-                    onTap: () {
-                      Clipboard.setData(ClipboardData(text: gcashNumber));
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Number copied'),
-                          duration: Duration(milliseconds: 900),
-                        ),
-                      );
-                    },
-                    child: const Icon(
-                      Icons.copy,
-                      size: 16,
-                      color: AppConstants.primary,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-      ],
-      // ── Reference number input ──
-      Text(
-        'GCash Reference Number *',
-        style: AppConstants.bodyStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-      const SizedBox(height: 6),
-      TextField(
-        controller: _gcashRefController,
-        textCapitalization: TextCapitalization.characters,
-        onChanged: (_) => setState(() {}),
-        style: AppConstants.monoStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
-        ),
-        decoration: InputDecoration(
-          hintText: 'e.g. ABC1234567890',
-          hintStyle: AppConstants.bodyStyle(
-            fontSize: 13,
-            color: AppConstants.secondary.withValues(alpha: 0.3),
-          ),
-          filled: true,
-          fillColor: AppConstants.sellerSurface,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          errorText: _gcashRefController.text.isNotEmpty && !_gcashRefValid
-              ? 'Reference number must be at least 6 characters'
-              : null,
-        ),
-      ),
-      const SizedBox(height: 6),
-      Text(
-        'Ask the customer for the reference number from their GCash confirmation screen.',
-        style: AppConstants.bodyStyle(
-          fontSize: 11,
-          color: AppConstants.secondary.withValues(alpha: 0.45),
-        ),
-      ),
-    ];
-  }
-
-  Future<void> _loadStoreData() async {
-    try {
-      final userId = Supabase.instance.client.auth.currentUser?.id;
-      if (userId == null) return;
-      final store = await Supabase.instance.client
-          .from('stores')
-          .select()
-          .eq('owner_id', userId)
-          .eq('is_active', true)
-          .maybeSingle();
-      if (mounted) {
-        setState(() {
-          _storeData = store != null ? Map<String, dynamic>.from(store) : null;
-          _storeLoading = false;
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() => _storeLoading = false);
-    }
-  }
+  bool get _canStartGcash => !_gcashCreatingPayment && !_gcashPaymentPending;
 
   @override
   void dispose() {
     _tenderedController.dispose();
-    _gcashRefController.dispose();
+    _pollTimer?.cancel();
     super.dispose();
+  }
+
+  /// Create order upfront with payment_status='pending' for GCash.
+  Future<String?> _createPendingOrder() async {
+    final auth = Supabase.instance.client.auth.currentUser;
+    if (auth == null) return null;
+
+    // Look up store_id from first product
+    final firstItem = widget.items.values.first;
+    final storeData = await Supabase.instance.client
+        .from('products')
+        .select('store_id')
+        .eq('id', firstItem.product['id'].toString())
+        .single();
+
+    final items = widget.items.values.map((item) => {
+      'product_id': item.product['id'],
+      'size': item.size,
+      'quantity': item.quantity,
+      'unit_price': widget.productPrice(item.product),
+    }).toList();
+
+    // Insert order with payment_status='pending'
+    final order = await Supabase.instance.client
+        .from('orders')
+        .insert({
+          'customer_id': auth.id,
+          'store_id': storeData['store_id'],
+          'status': 'received',
+          'fulfillment': 'pickup',
+          'total_amount': widget.total,
+          'payment_method': 'gcash',
+          'payment_status': 'pending',
+          'notes': 'In-store POS',
+          'source': 'pos',
+        })
+        .select('id')
+        .single();
+
+    // Insert order items
+    for (final item in items) {
+      await Supabase.instance.client.from('order_items').insert({
+        'order_id': order['id'],
+        'product_id': item['product_id'],
+        'size': item['size'],
+        'quantity': item['quantity'],
+        'unit_price': item['unit_price'],
+      });
+    }
+
+    // Write status history
+    await Supabase.instance.client.from('order_status_history').insert({
+      'order_id': order['id'],
+      'status': 'received',
+      'changed_at': DateTime.now().toIso8601String(),
+    });
+
+    return order['id'].toString();
+  }
+
+  /// Start the GCash payment flow: create order + call PayMongo Edge Function.
+  Future<void> _startGcashPayment() async {
+    if (!_canStartGcash) return;
+
+    setState(() {
+      _gcashCreatingPayment = true;
+      _gcashError = null;
+    });
+
+    try {
+      // Step 1: Create the order with pending status
+      final orderId = await _createPendingOrder();
+      if (orderId == null) throw Exception('Failed to create order');
+
+      // Step 2: Call PayMongo Edge Function to create GCash source
+      final response = await Supabase.instance.client.functions.invoke(
+        'create-gcash-payment',
+        body: {
+          'orderId': int.tryParse(orderId) ?? orderId,
+          'amount': widget.total,
+        },
+      );
+
+      if (response.status != 200) {
+        final error = response.data['error'] ?? 'Payment creation failed';
+        throw Exception(error);
+      }
+
+      setState(() {
+        _gcashOrderId = orderId;
+        _gcashQrImageBase64 = response.data['qrImageBase64'];
+        _gcashPaymentPending = true;
+        _gcashCreatingPayment = false;
+      });
+
+      // Step 3: Start polling for payment status
+      _startPolling(orderId);
+    } catch (e) {
+      setState(() {
+        _gcashError = e.toString();
+        _gcashCreatingPayment = false;
+      });
+    }
+  }
+
+  /// Poll the order's payment_status every 3 seconds.
+  void _startPolling(String orderId) {
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
+      if (!mounted) {
+        _pollTimer?.cancel();
+        return;
+      }
+      try {
+        final order = await Supabase.instance.client
+            .from('orders')
+            .select('payment_status')
+            .eq('id', orderId)
+            .single();
+
+        if (order['payment_status'] == 'paid') {
+          _pollTimer?.cancel();
+          if (mounted) {
+            // Payment confirmed — auto-complete the transaction
+            widget.onConfirm('GCash', 0, orderId: orderId);
+          }
+        }
+      } catch (_) {
+        // Polling error — will retry on next tick
+      }
+    });
+  }
+
+  /// Cancel the pending GCash payment and clean up the order.
+  Future<void> _cancelGcashPayment() async {
+    _pollTimer?.cancel();
+
+    if (_gcashOrderId != null) {
+      try {
+        // Delete the order and its items
+        await Supabase.instance.client
+            .from('order_items')
+            .delete()
+            .eq('order_id', _gcashOrderId!);
+        await Supabase.instance.client
+            .from('orders')
+            .delete()
+            .eq('id', _gcashOrderId!);
+      } catch (_) {
+        // Best effort cleanup
+      }
+    }
+
+    setState(() {
+      _gcashPaymentPending = false;
+      _gcashQrImageBase64 = null;
+      _gcashOrderId = null;
+      _gcashError = null;
+    });
+  }
+
+  /// Build the QR Ph image from a base64-encoded string.
+  Widget _buildQrPhImage(String base64Data) {
+    try {
+      // Log the raw data for debugging
+      debugPrint('[QR-PH] Raw data length: ${base64Data.length}');
+      debugPrint('[QR-PH] Starts with: ${base64Data.substring(0, base64Data.length > 60 ? 60 : base64Data.length)}');
+      
+      // Strip data URI prefix if present (e.g. "data:image/png;base64,...")
+      String raw;
+      if (base64Data.contains(',')) {
+        raw = base64Data.split(',').last;
+        debugPrint('[QR-PH] Stripped data URI prefix, raw length: ${raw.length}');
+      } else {
+        raw = base64Data;
+        debugPrint('[QR-PH] No data URI prefix found, using raw data');
+      }
+      
+      final bytes = base64Decode(raw);
+      debugPrint('[QR-PH] Decoded bytes length: ${bytes.length}');
+      
+      if (bytes.isEmpty) {
+        debugPrint('[QR-PH] ERROR: Decoded bytes are empty!');
+        return const Center(
+          child: Text('QR image is empty'),
+        );
+      }
+      
+      return Image.memory(
+        bytes,
+        fit: BoxFit.contain,
+        width: 280,
+        height: 280,
+      );
+    } catch (e) {
+      debugPrint('[QR-PH] ERROR decoding QR image: $e');
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.error_outline, color: AppConstants.error, size: 32),
+            const SizedBox(height: 8),
+            Text(
+              'Failed to load QR image',
+              style: AppConstants.bodyStyle(
+                fontSize: 12,
+                color: AppConstants.error,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              e.toString(),
+              style: AppConstants.bodyStyle(
+                fontSize: 10,
+                color: AppConstants.error.withValues(alpha: 0.7),
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   @override
@@ -1656,17 +1715,10 @@ class _CheckoutSheetState extends State<_CheckoutSheet> {
                       ],
                       if (_method == 'GCash') ...[
                         const SizedBox(height: 16),
-                        if (_storeLoading)
-                          const Center(
-                            child: Padding(
-                              padding: EdgeInsets.all(20),
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          )
-                        else if (!_hasGcashConfig)
-                          // ── No GCash configured ──
+                        // ── GCash Error ──
+                        if (_gcashError != null) ...[
                           Container(
-                            padding: const EdgeInsets.all(20),
+                            padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
                               color: AppConstants.error.withValues(alpha: 0.06),
                               borderRadius: BorderRadius.circular(12),
@@ -1674,34 +1726,131 @@ class _CheckoutSheetState extends State<_CheckoutSheet> {
                                 color: AppConstants.error.withValues(alpha: 0.25),
                               ),
                             ),
-                            child: Column(
+                            child: Row(
                               children: [
-                                Icon(
-                                  Icons.warning_amber_rounded,
-                                  color: AppConstants.error,
-                                  size: 32,
-                                ),
-                                const SizedBox(height: 10),
-                                Text(
-                                  'GCash not configured',
-                                  style: AppConstants.bodyStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  'Please set up your GCash QR code and/or number in Store Settings before accepting GCash payments.',
-                                  textAlign: TextAlign.center,
-                                  style: AppConstants.bodyStyle(
-                                    fontSize: 12,
-                                    color: AppConstants.secondary.withValues(alpha: 0.6),
+                                Icon(Icons.error_outline, color: AppConstants.error, size: 20),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    _gcashError!,
+                                    style: AppConstants.bodyStyle(
+                                      fontSize: 12,
+                                      color: AppConstants.error,
+                                    ),
                                   ),
                                 ),
                               ],
                             ),
-                          )
-                        else ..._buildGcashPaymentSection(),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                        // ── GCash QR Ph Code (PayMongo) ──
+                        if (_gcashPaymentPending && _gcashQrImageBase64 != null) ...[
+                          Center(
+                            child: Container(
+                              width: 300,
+                              height: 300,
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: AppConstants.borderGray.withValues(alpha: 0.5),
+                                ),
+                                boxShadow: AppConstants.sellerShadow,
+                              ),
+                              child: _buildQrPhImage(_gcashQrImageBase64!),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          // Status indicator
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: AppConstants.primary,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Waiting for payment...',
+                                style: AppConstants.bodyStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppConstants.secondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Ask the customer to scan this QR with their GCash app',
+                            textAlign: TextAlign.center,
+                            style: AppConstants.bodyStyle(
+                              fontSize: 11,
+                              color: AppConstants.secondary.withValues(alpha: 0.5),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          // Cancel button
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton(
+                              onPressed: _cancelGcashPayment,
+                              style: OutlinedButton.styleFrom(
+                                side: BorderSide(color: AppConstants.error),
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: Text(
+                                'Cancel Payment',
+                                style: AppConstants.bodyStyle(
+                                  color: AppConstants.error,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ]
+                        // ── Start GCash Payment button ──
+                        else if (!_gcashPaymentPending) ...[
+                          SizedBox(
+                            width: double.infinity,
+                            child: FilledButton.icon(
+                              onPressed: _gcashCreatingPayment ? null : _startGcashPayment,
+                              style: FilledButton.styleFrom(
+                                backgroundColor: AppConstants.primary,
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              icon: _gcashCreatingPayment
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Icon(Icons.qr_code_2, color: Colors.white),
+                              label: Text(
+                                _gcashCreatingPayment ? 'Creating payment...' : 'Generate GCash QR',
+                                style: AppConstants.bodyStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
                       const SizedBox(height: 16),
                     ],
@@ -1739,9 +1888,7 @@ class _CheckoutSheetState extends State<_CheckoutSheet> {
                               widget.onConfirm(
                                 _method,
                                 _tendered,
-                                gcashRef: _method == 'GCash'
-                                    ? _gcashRefController.text.trim()
-                                    : null,
+                                // GCash now auto-confirms via polling — no manual ref needed
                               );
                             },
                       child: Text(

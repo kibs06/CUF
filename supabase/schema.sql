@@ -9,7 +9,7 @@
 -- roles:          'customer', 'seller', 'admin'
 -- seller_status:  'none', 'pending', 'approved', 'rejected'
 -- order status:   'placed', 'preparing', 'ready', 'received', 'cancelled', 'pending'
--- payment_status: 'paid', 'unpaid'
+-- payment_status: 'paid', 'unpaid', 'pending'
 -- fulfillment:    'pickup', 'delivery'
 
 -- ═══════════════════════════════════════════════════════════════════
@@ -81,6 +81,7 @@ CREATE TABLE IF NOT EXISTS public.stores (
     is_active       BOOLEAN DEFAULT true,
     owner_id        UUID REFERENCES public.profiles(id),
     created_at      TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+    -- gcash_qr_url, gcash_number, gcash_account_name removed (PayMongo replaces manual GCash)
 );
 
 ALTER TABLE public.stores ENABLE ROW LEVEL SECURITY;
@@ -354,7 +355,7 @@ CREATE TABLE IF NOT EXISTS public.orders (
     total_amount    NUMERIC NOT NULL CHECK (total_amount >= 0),
     payment_method  TEXT NOT NULL DEFAULT 'cash',
     payment_status  TEXT NOT NULL DEFAULT 'unpaid'
-                        CHECK (payment_status IN ('paid', 'unpaid')),
+                        CHECK (payment_status IN ('paid', 'unpaid', 'pending')),
     fulfillment     TEXT NOT NULL DEFAULT 'pickup'
                         CHECK (fulfillment IN ('pickup', 'delivery')),
     notes           TEXT,
@@ -363,6 +364,10 @@ CREATE TABLE IF NOT EXISTS public.orders (
     size            TEXT,
     color           TEXT,
     quantity        INTEGER,
+    -- PayMongo GCash integration columns
+    gcash_reference_number TEXT,
+    gcash_transaction_id   TEXT,
+    payment_verified_at    TIMESTAMPTZ,
     created_at      TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 

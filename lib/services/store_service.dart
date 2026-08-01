@@ -175,39 +175,7 @@ class StoreService {
     await _client.from('stores').update(updates).eq('id', storeId);
   }
 
-  /// Update GCash payment settings for the store.
-  ///
-  /// [newQrImage] is an optional XFile for a new QR code image upload.
-  /// [removeQr] clears the QR image.
-  /// [gcashNumber] and [gcashAccountName] are plain text fields.
-  Future<void> updateGcashSettings({
-    required String storeId,
-    String? gcashNumber,
-    String? gcashAccountName,
-    XFile? newQrImage,
-    bool removeQr = false,
-  }) async {
-    final sellerId = _client.auth.currentUser!.id;
-    final updates = <String, dynamic>{};
 
-    if (gcashNumber != null) updates['gcash_number'] = gcashNumber.trim();
-    if (gcashAccountName != null) updates['gcash_account_name'] = gcashAccountName.trim();
-
-    if (newQrImage != null) {
-      final ts = DateTime.now().millisecondsSinceEpoch;
-      updates['gcash_qr_url'] = await _uploadStoreImage(
-        bucket: 'store-assets',
-        path: '$sellerId/$storeId/gcash_qr_$ts.jpg',
-        file: newQrImage,
-      );
-    } else if (removeQr) {
-      updates['gcash_qr_url'] = null;
-    }
-
-    if (updates.isNotEmpty) {
-      await _client.from('stores').update(updates).eq('id', storeId);
-    }
-  }
 
   /// Upload a store image (logo or banner) and return the public URL.
   Future<String> _uploadStoreImage({

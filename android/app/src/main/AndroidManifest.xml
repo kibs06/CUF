@@ -2,7 +2,10 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- ARCore required: check Google Play for AR support -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- ARCore: the app requires ARCore (will be installed from Google Play if not present) -->
+    <uses-feature android:name="android.hardware.camera.ar" android:required="true" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <!-- Required for push notifications on Android 13+ -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -46,6 +49,8 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- ARCore: required for AR features. Placed inside <application> per ARCore docs. -->
+        <meta-data android:name="com.google.ar.core" android:value="required" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
@@ -53,6 +58,8 @@
 
          In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
     <queries>
+        <!-- Required for ARCore availability check on Android 11+ (package visibility) -->
+        <package android:name="com.google.ar.core" />
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>

@@ -1,0 +1,17 @@
+MARKER_START_$(date +%H%M%S)
+08-01 11:58:58.342 12924 12924 I ArFootSizingPlugin: registerWith called — registering 'ar_foot_scan' view factory and 'com.solevision/ar_foot_sizing' method channel
+08-01 12:00:10.999   688   800 I WindowManager: ANR in Window{9441a0 u0 com.solevision.app/com.solevision.app.MainActivity}. Reason:Input dispatching timed out (9441a0 com.solevision.app/com.solevision.app.MainActivity is not responding. Waited 5005ms for MotionEvent).
+08-01 12:00:11.199   688 13374 D ActivityManager: created ANR temporary file:/data/anr/temp_anr_1216874982870986989.txt
+08-01 12:00:11.201   688 13374 I ActivityManager: Collecting stacks for pid 12924 into temporary file temp_anr_1216874982870986989.txt
+08-01 12:00:11.291   688   710 W Looper  : Slow dispatch took 266ms android.fg app=system_server main=false group=FOREGROUND h=android.os.Handler c=com.android.server.wm.AnrController$$ExternalSyntheticLambda0@a8e68f m=0
+08-01 12:00:11.230   688   688 W AnrMainProcessD: type=1400 audit(0.0:86): avc:  denied  { read } for  name="transactions" dev="binder" ino=1048589 scontext=u:r:system_server:s0 tcontext=u:object_r:binderfs_logs_transactions:s0 tclass=file permissive=0
+08-01 12:00:11.586   688 13375 I ActivityManager: Dumping to /data/anr/anr_2026-08-01-12-00-11-572
+08-01 12:00:16.346   688   688 W AnrConsumer: type=1400 audit(0.0:87): avc:  denied  { read } for  name="transactions" dev="binder" ino=1048589 scontext=u:r:system_server:s0 tcontext=u:object_r:binderfs_logs_transactions:s0 tclass=file permissive=0
+08-01 12:00:28.470   688   688 W AnrConsumer: type=1400 audit(0.0:88): avc:  denied  { read } for  name="transactions" dev="binder" ino=1048589 scontext=u:r:system_server:s0 tcontext=u:object_r:binderfs_logs_transactions:s0 tclass=file permissive=0
+08-01 12:00:32.022   688   688 W AnrConsumer: type=1400 audit(0.0:89): avc:  denied  { read } for  name="transactions" dev="binder" ino=1048589 scontext=u:r:system_server:s0 tcontext=u:object_r:binderfs_logs_transactions:s0 tclass=file permissive=0
+08-01 12:00:36.566   688 13375 E ActivityManager: ANR in com.solevision.app (com.solevision.app/.MainActivity)
+08-01 12:00:36.566   688 13375 E ActivityManager:     51% 13376/AnrAuxiliaryTas: 3.2% user + 48% kernel
+08-01 12:00:36.566   688 13375 E ActivityManager:     5.1% 13374/AnrMainProcessD: 0% user + 5.1% kernel
+08-01 12:00:36.566   688 13375 E ActivityManager:     5.1% 13375/AnrConsumer: 0% user + 5.1% kernel
+08-01 12:00:36.619   688 13375 D ActivityManager: Completed ANR of com.solevision.app in 25589ms, latency 9ms
+08-01 12:00:36.705   688 13406 I DropBoxManagerService: add tag=data_app_anr isTagEnabled=true flags=0x6

@@ -10,6 +10,17 @@ class AppConstants {
   // --- MAPTILER ---
   static const String maptilerKey = 'ZsHghTkRWCoZDpjMxUir';
 
+  // --- UPDATE CHECKER (self-hosted) ---
+  // Hosted release manifest + changelog for the DIY in-app update checker.
+  // Served from the public GitHub repo `kibs06/CUF` via raw.githubusercontent
+  // (see README → "In-app update checker" for the JSON shape and release
+  // checklist). Commit updated releases/version.json + releases/changelog.json
+  // to that repo's `main` branch to publish a new build.
+  static const String updateManifestUrl =
+      'https://raw.githubusercontent.com/kibs06/CUF/main/releases/version.json';
+  static const String updateChangelogUrl =
+      'https://raw.githubusercontent.com/kibs06/CUF/main/releases/changelog.json';
+
   // --- COLOR PALETTE ---
   // Primary – Burnished Clay (aged leather)
   static const Color primary = Color(0xFF8B5A2B);
