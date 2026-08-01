@@ -87,12 +87,24 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "::notice::Release $TAG already exists — skipping creation."
           else
-            # Reuse the tag message as release notes if present, else auto-generate.
-            TAG_NOTES="$(git tag -l --format='%(contents)' "$TAG")"
+            # Copy the APK under the versioned name so the uploaded asset name
+            # matches the apk_url written into version.json exactly (gh's
+            # `path#displayname` rename proved unreliable on the runner).
+            cp "$APK" "build/app/outputs/flutter-apk/$ASSET"
+
+            # Read the annotated tag message. On tag-triggered runs checkout can
+            # leave a lightweight local ref where %(contents) dereferences to the
+            # commit message, so force-fetch the tag object and use git cat-file.
+            git fetch --force origin "refs/tags/$TAG:refs/tags/$TAG"
+            TAG_NOTES=""
+            if [[ "$(git cat-file -t "$TAG" 2>/dev/null)" == "tag" ]]; then
+              TAG_NOTES="$(git cat-file tag "$TAG" | sed '1,/^$/d')"
+            fi
+
             if [[ -n "$TAG_NOTES" ]]; then
-              gh release create "$TAG" "$APK#$ASSET" --title "$TAG" --notes "$TAG_NOTES"
+              gh release create "$TAG" "build/app/outputs/flutter-apk/$ASSET" --title "$TAG" --notes "$TAG_NOTES"
             else
-              gh release create "$TAG" "$APK#$ASSET" --title "$TAG" --generate-notes
+              gh release create "$TAG" "build/app/outputs/flutter-apk/$ASSET" --title "$TAG" --generate-notes
             fi
           fi
 
@@ -118,7 +130,13 @@ jobs:
           APK_URL="https://github.com/${{ github.repository }}/releases/download/$TAG/app-release-$VERSION.apk"
 
           # Release notes from the annotated tag message; each line = one bullet.
-          NOTES="$(git tag -l --format='%(contents)' "$TAG" | tr '\n' '|' | sed 's/||*/|/g; s/^|//; s/|$//')"
+          # Force-fetch the tag object first — on tag-triggered runs the local
+          # ref can be lightweight, where %(contents) yields the commit message.
+          git fetch --force origin "refs/tags/$TAG:refs/tags/$TAG"
+          NOTES=""
+          if [[ "$(git cat-file -t "$TAG" 2>/dev/null)" == "tag" ]]; then
+            NOTES="$(git cat-file tag "$TAG" | sed '1,/^$/d' | tr '\n' '|' | sed 's/||*/|/g; s/^|//; s/|$//')"
+          fi
 
           NOTES_ARGS=()
           if [[ -n "$NOTES" ]]; then
