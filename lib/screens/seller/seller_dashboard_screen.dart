@@ -309,7 +309,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'CUFMAI',
+              'SoleVision Studio',
               style: AppConstants.bodyStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,

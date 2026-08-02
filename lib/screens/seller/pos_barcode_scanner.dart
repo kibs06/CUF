@@ -315,7 +315,7 @@ class _PosBarcodeScannerState extends State<PosBarcodeScanner> {
               ),
               const SizedBox(height: 12),
               Text(
-                'CUFMAI needs camera access to scan product barcodes. '
+                'SoleVision needs camera access to scan product barcodes. '
                 'Please enable camera permission in your device settings.',
                 textAlign: TextAlign.center,
                 style: AppConstants.bodyStyle(

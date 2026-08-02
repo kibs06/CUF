@@ -86,21 +86,10 @@ class _SplashScreenState extends State<SplashScreen>
                   const SizedBox(height: 24),
                   // Wordmark
                   Text(
-                    'CUFMAI',
+                    'SoleVision',
                     style: AppConstants.headlineStyle(
                       fontSize: 36,
                       color: AppConstants.secondary,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  // Full association name
-                  Text(
-                    'Carcar United Footwear Manufacturers Association, Inc.',
-                    textAlign: TextAlign.center,
-                    style: AppConstants.bodyStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: AppConstants.secondary.withValues(alpha: 0.6),
                     ),
                   ),
                   const SizedBox(height: 8),

@@ -32,7 +32,7 @@ export default function Login() {
       <div className="w-full max-w-md rounded-2xl border border-border bg-surface p-8 shadow-sm">
         <div className="mx-auto mb-4 h-16 w-16 text-primary" dangerouslySetInnerHTML={{ __html: SHOE_SOLE_SVG }} />
         <h1 className="text-center font-display text-3xl font-bold text-secondary">Admin Portal</h1>
-        <p className="mb-8 text-center text-sm text-secondary/60">CUFMAI · Crafted Ground</p>
+        <p className="mb-8 text-center text-sm text-secondary/60">SoleVision · Crafted Ground</p>
 
         {(error || accessDenied) && (
           <div className="mb-4 rounded-xl border border-error/30 bg-error/10 px-4 py-3 text-sm text-error">
@@ -49,7 +49,7 @@ export default function Login() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-secondary outline-none focus:border-primary"
-              placeholder="admin@cufmai.ph"
+              placeholder="admin@solevision.ph"
             />
           </div>
           <div>

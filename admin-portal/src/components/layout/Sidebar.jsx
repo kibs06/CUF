@@ -72,7 +72,7 @@ export default function Sidebar({ open, onClose }) {
               dangerouslySetInnerHTML={{ __html: SHOE_SOLE_SVG }}
             />
             <div>
-              <p className="font-display text-lg font-bold leading-tight text-white">CUFMAI</p>
+              <p className="font-display text-lg font-bold leading-tight text-white">SoleVision</p>
               <p className="text-xs text-[#C4A882]/60">Admin Portal</p>
             </div>
           </div>

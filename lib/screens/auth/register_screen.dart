@@ -52,7 +52,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               content: Text(
                 _applyAsSeller
                     ? 'Account created! Application sent to Admins.'
-                    : 'Welcome to CUFMAI!',
+                    : 'Welcome to SoleVision!',
               ),
               backgroundColor: AppConstants.success,
             ),

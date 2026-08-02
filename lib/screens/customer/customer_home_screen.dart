@@ -200,7 +200,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       backgroundColor: AppConstants.surfaceLight,
       appBar: AppBar(
         title: Text(
-          'CUFMAI',
+          'SoleVision Studio',
           style: AppConstants.headlineStyle(fontSize: 20),
         ),
         backgroundColor: Colors.transparent,

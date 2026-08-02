@@ -34,7 +34,7 @@ class BiometricService {
   Future<bool> authenticate() async {
     try {
       return await _auth.authenticate(
-        localizedReason: 'Verify your identity to sign in to CUFMAI',
+        localizedReason: 'Verify your identity to sign in to SoleVision',
         biometricOnly: true,
         persistAcrossBackgrounding: true,
       );

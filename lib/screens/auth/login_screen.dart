@@ -285,7 +285,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'CUFMAI',
+                                'SoleVision',
                                 style: AppConstants.headlineStyle(
                                   fontSize: 36,
                                   color: AppConstants.surfaceLight,
@@ -293,7 +293,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                               const SizedBox(height: 6),
                               Text(
-                                'Carcar United Footwear Manufacturers Association, Inc.',
+                                'Carcar City Artisan Footwear',
                                 style: AppConstants.bodyStyle(
                                   fontSize: 14,
                                   color: AppConstants.surfaceLight.withValues(
