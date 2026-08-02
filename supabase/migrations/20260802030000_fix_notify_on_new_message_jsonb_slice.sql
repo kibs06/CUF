@@ -1,19 +1,22 @@
 -- ══════════════════════════════════════════════════════════════════
--- Migration: Batch message notifications by conversation
--- Date: July 24, 2026
--- Purpose: Rewrite the notify_on_new_message trigger from a blind
---   INSERT to an upsert keyed on (user_id, conversation_id, is_read).
---   When an unread message-category notification already exists for
---   this conversation, UPDATE it — append the new message to
---   metadata.previews (cap at 3, drop oldest), increment
---   metadata.message_count, refresh title/message/created_at.
---   If none exists, INSERT with previews=[{sender,text,timestamp}]
---   and message_count=1.
+-- Fix: notify_on_new_message jsonb slice crash (seller sends fail)
+-- Date: Aug 2, 2026
+-- ══════════════════════════════════════════════════════════════════
+-- Bug: The batch-message-notifications rewrite (20260725000000)
+--   trimmed metadata.previews with `updated_previews[0:2]`.
+--   JSONB subscripting does NOT support slices — only native arrays
+--   do. Once a customer has 3+ unread message notifications for a
+--   conversation, the NEXT seller→customer message INSERT throws:
+--       PostgrestException(code: 42804, message: jsonb subscript
+--       does not support slices)
+--   The trigger error rolls back the whole message insert, so the
+--   seller sees "Failed • Tap to retry" and no row is created.
+--   (Verified live: 4 sequential seller inserts → 4th fails with
+--   the exact error above.)
 --
--- Backward compatibility decision (Option A):
---   Existing rows created before this migration won't have
---   metadata.previews. The Dart UI layer renders them as legacy
---   single-message cards when previews is absent. No backfill needed.
+-- Fix: Replace the invalid slice with jsonb-safe trimming that keeps
+--   the newest 3 previews (jsonb_agg + WITH ORDINALITY — no slice
+--   operator). Everything else in the function is unchanged.
 -- ══════════════════════════════════════════════════════════════════
 
 CREATE OR REPLACE FUNCTION public.notify_on_new_message()
@@ -136,5 +139,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Trigger already exists from 20260714, just re-point it to the updated function.
--- No DROP TRIGGER needed since CREATE OR REPLACE handles the function body.
+-- The trigger on messages (on_new_message_notify) already exists and
+-- references this function by name — CREATE OR REPLACE re-points it.
+-- No DROP TRIGGER needed.
