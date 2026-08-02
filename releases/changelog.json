@@ -1,5 +1,16 @@
 [
   {
+    "latest_version": "1.0.3",
+    "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.3/app-release-1.0.3.apk",
+    "released_at": "2026-08-02",
+    "notes": [
+      "Show store open/close hours in customer store views",
+      "Shop by Collection redesigned to pure words",
+      "Offline changelog cache for What's New screen",
+      "Fixed release pipeline asset naming + tag notes"
+    ]
+  },
+  {
     "latest_version": "1.0.2",
     "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.2/app-release-1.0.2.apk",
     "released_at": "2026-08-02",
