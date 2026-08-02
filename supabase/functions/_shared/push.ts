@@ -104,7 +104,7 @@ async function sendFcmPush(
             android: {
               priority: "high",
               notification: {
-                channel_id: "solevision_messages",
+                channel_id: "cufmai_messages",
               },
             },
             apns: {

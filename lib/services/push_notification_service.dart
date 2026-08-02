@@ -74,6 +74,13 @@ class PushNotificationService {
       // 2. Initialize local notifications (for foreground display)
       await _initLocalNotifications();
 
+      // Ensure the message channel exists NOW, before any background push
+      // arrives. Android 8+ silently drops FCM notifications whose
+      // channel_id doesn't exist in the app — creating it lazily on first
+      // foreground message means a fresh install's background push would
+      // be dropped. Create eagerly so the channel is always present.
+      await _ensureMessageChannel();
+
       // 3. Get and store the initial FCM token
       final token = await _messaging.getToken();
       if (token != null) {
@@ -181,19 +188,8 @@ class PushNotificationService {
     try {
       if (kDebugMode) print('[Push] Creating notification channel if needed...');
       // Explicitly create the notification channel (required for Android 8+)
-      final androidPlugin = _localNotifications.resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>();
-      if (androidPlugin != null) {
-        await androidPlugin.createNotificationChannel(
-          const AndroidNotificationChannel(
-            'cufmai_messages',
-            'Messages',
-            description: 'New message notifications from stores',
-            importance: Importance.high,
-          ),
-        );
-        if (kDebugMode) print('[Push] Notification channel created/verified');
-      }
+      await _ensureMessageChannel();
+      if (kDebugMode) print('[Push] Notification channel created/verified');
 
       const androidDetails = AndroidNotificationDetails(
         'cufmai_messages',
@@ -227,6 +223,29 @@ class PushNotificationService {
         print('[Push] ❌ Failed to show local notification: $e');
         print('[Push] Stack trace: $st');
       }
+    }
+  }
+
+  // ── Notification Channels ───────────────────────────────────────
+
+  /// Ensure the message notification channel exists (Android 8+).
+  /// Idempotent — safe to call repeatedly.
+  Future<void> _ensureMessageChannel() async {
+    try {
+      final androidPlugin = _localNotifications.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+      if (androidPlugin != null) {
+        await androidPlugin.createNotificationChannel(
+          const AndroidNotificationChannel(
+            'cufmai_messages',
+            'Messages',
+            description: 'New message notifications from stores',
+            importance: Importance.high,
+          ),
+        );
+      }
+    } catch (e) {
+      if (kDebugMode) print('[Push] Failed to ensure notification channel: $e');
     }
   }
 
