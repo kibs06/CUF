@@ -1,5 +1,16 @@
 [
   {
+    "latest_version": "1.0.2",
+    "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.2/app-release-1.0.2.apk",
+    "released_at": "2026-08-02",
+    "notes": [
+      "Fixed release pipeline: APK asset naming + tag notes",
+      "What's New badge + offline changelog cache",
+      "AR foot sizing with ML Kit",
+      "GCash/PayMongo POS payments"
+    ]
+  },
+  {
     "latest_version": "1.0.1",
     "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.1/app-release.apk",
     "released_at": "2026-08-01",
