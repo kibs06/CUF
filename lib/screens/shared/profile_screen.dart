@@ -732,8 +732,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const Divider(height: 1, color: Color(0xFFE5E7EB)),
           _settingsRow(
             icon: Icons.info_outline,
-            title: 'About SoleVision',
-            onTap: () => _openPlaceholder('About SoleVision'),
+            title: 'About CUFMAI',
+            onTap: () => _openPlaceholder('About CUFMAI'),
           ),
         ],
       ),

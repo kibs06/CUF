@@ -186,7 +186,7 @@ class PushNotificationService {
       if (androidPlugin != null) {
         await androidPlugin.createNotificationChannel(
           const AndroidNotificationChannel(
-            'solevision_messages',
+            'cufmai_messages',
             'Messages',
             description: 'New message notifications from stores',
             importance: Importance.high,
@@ -196,7 +196,7 @@ class PushNotificationService {
       }
 
       const androidDetails = AndroidNotificationDetails(
-        'solevision_messages',
+        'cufmai_messages',
         'Messages',
         channelDescription: 'New message notifications from stores',
         importance: Importance.high,
