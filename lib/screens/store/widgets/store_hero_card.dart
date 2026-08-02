@@ -49,10 +49,14 @@ class StoreHeroCard extends StatelessWidget {
                         imageUrl: store.bannerUrl!,
                         fit: BoxFit.cover,
                         placeholder: (context, url) => Container(
-                          decoration: BoxDecoration(gradient: store.cardGradient),
+                          decoration: BoxDecoration(
+                            gradient: store.cardGradient,
+                          ),
                         ),
                         errorWidget: (context, url, error) => Container(
-                          decoration: BoxDecoration(gradient: store.cardGradient),
+                          decoration: BoxDecoration(
+                            gradient: store.cardGradient,
+                          ),
                         ),
                       )
                     : Container(
@@ -78,9 +82,7 @@ class StoreHeroCard extends StatelessWidget {
 
               // Stitch texture overlay
               Positioned.fill(
-                child: CustomPaint(
-                  painter: const StitchPainter(),
-                ),
+                child: CustomPaint(painter: const StitchPainter()),
               ),
 
               // Card content
@@ -97,7 +99,8 @@ class StoreHeroCard extends StatelessWidget {
                         CircleAvatar(
                           radius: 28,
                           backgroundColor: AppConstants.surfaceLight,
-                          backgroundImage: store.logoUrl != null && store.logoUrl!.isNotEmpty
+                          backgroundImage:
+                              store.logoUrl != null && store.logoUrl!.isNotEmpty
                               ? CachedNetworkImageProvider(store.logoUrl!)
                               : null,
                           child: store.logoUrl == null || store.logoUrl!.isEmpty
@@ -161,6 +164,21 @@ class StoreHeroCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
 
+                    // Store hours
+                    if (store.hoursLabel != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          '🕘 ${store.hoursLabel}',
+                          style: AppConstants.bodyStyle(
+                            fontSize: 12,
+                            color: Colors.white.withAlpha(210),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+
                     const SizedBox(height: 14),
 
                     // Stat pills row
@@ -192,10 +210,7 @@ class StoreHeroCard extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: Colors.white.withAlpha(70),
-          width: 1,
-        ),
+        border: Border.all(color: Colors.white.withAlpha(70), width: 1),
       ),
       child: Text(
         text,

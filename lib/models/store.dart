@@ -18,8 +18,8 @@ class Store {
   final DateTime createdAt;
   // Auto-schedule fields
   final bool autoScheduleEnabled;
-  final String? openTime;   // 'HH:MM:SS' local wall-clock, null if not set
-  final String? closeTime;  // 'HH:MM:SS' local wall-clock, null if not set
+  final String? openTime; // 'HH:MM:SS' local wall-clock, null if not set
+  final String? closeTime; // 'HH:MM:SS' local wall-clock, null if not set
   final bool manualOverride;
 
   const Store({
@@ -55,13 +55,32 @@ class Store {
 
   /// Gradient using the brand color for card backgrounds.
   LinearGradient get cardGradient => LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          color,
-          Color.lerp(color, const Color(0xFF1A1208), 0.55)!,
-        ],
-      );
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [color, Color.lerp(color, const Color(0xFF1A1208), 0.55)!],
+  );
+
+  /// Formatted open–close hours, e.g. '9:00 AM – 5:00 PM'.
+  /// Returns null when either time isn't configured.
+  String? get hoursLabel {
+    final open = _formatTime(openTime);
+    final close = _formatTime(closeTime);
+    if (open == null || close == null) return null;
+    return '$open – $close';
+  }
+
+  /// 'HH:MM:SS' → '9:00 AM' (12-hour clock, matches seller schedule UI).
+  String? _formatTime(String? time) {
+    if (time == null) return null;
+    final parts = time.split(':');
+    if (parts.length < 2) return null;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) return null;
+    final period = hour >= 12 ? 'PM' : 'AM';
+    final h = hour % 12 == 0 ? 12 : hour % 12;
+    return '$h:${minute.toString().padLeft(2, '0')} $period';
+  }
 
   /// Factory constructor from Map (Supabase row or mock data).
   factory Store.fromMap(Map<String, dynamic> map) {
@@ -84,7 +103,7 @@ class Store {
       createdAt: map['created_at'] is DateTime
           ? map['created_at']
           : DateTime.tryParse(map['created_at']?.toString() ?? '') ??
-              DateTime.now(),
+                DateTime.now(),
     );
   }
 

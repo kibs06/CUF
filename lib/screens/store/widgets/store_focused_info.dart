@@ -83,6 +83,17 @@ class StoreFocusedInfo extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 4),
+            // Store hours
+            if (store.hoursLabel != null) ...[
+              Text(
+                'Hours: ${store.hoursLabel}',
+                style: AppConstants.bodyStyle(
+                  fontSize: 12,
+                  color: AppConstants.secondary.withAlpha(127),
+                ),
+              ),
+              const SizedBox(height: 4),
+            ],
             // Rating + product count
             Text(
               '⭐ ${store.rating}  ·  $productCount products',
