@@ -706,8 +706,10 @@ class _ChatViewState extends State<ChatView> with SingleTickerProviderStateMixin
         });
         _scrollToBottom();
       }
-    } catch (e) {
-      // Mark the placeholder as failed with retry option
+    } catch (e, st) {
+      // Surface the real error during development — this catch used to
+      // swallow it, which made "Failed • Tap to retry" impossible to debug.
+      debugPrint('[ChatView] sendMessage failed: $e\n$st');
       if (mounted) {
         final failedMessage = Message(
           id: messageId,
@@ -727,6 +729,14 @@ class _ChatViewState extends State<ChatView> with SingleTickerProviderStateMixin
           }
           _isSending = false;
         });
+        // Show the raw error on-screen so the seller can read it without logcat
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Send failed: $e'),
+            backgroundColor: AppConstants.error,
+            duration: const Duration(seconds: 6),
+          ),
+        );
       }
     }
   }

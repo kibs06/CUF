@@ -185,7 +185,7 @@ class MessageService {
   // ─── CONVERSATIONS ────────────────────────────────────────────
 
   /// Get or create a conversation between a customer and a store.
-  /// Customer-side only — creates if none exists.
+  /// Creation is permitted for the customer or the store owner (seller).
   Future<Conversation> getOrCreateConversation({
     required String storeId,
     required String customerId,

@@ -435,23 +435,33 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     if (storeId == null) return;
 
     // Get or create conversation
-    final conversation = await MessageService.instance.getOrCreateConversation(
-      storeId: storeId,
-      customerId: customerId,
-    );
+    try {
+      final conversation = await MessageService.instance.getOrCreateConversation(
+        storeId: storeId,
+        customerId: customerId,
+      );
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ChatView(
-          conversationId: conversation.id,
-          viewerRole: 'seller',
-          otherPartyName: order['customer_name'] ?? 'Customer',
-          orderReferenceId: order['id']?.toString(),
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ChatView(
+            conversationId: conversation.id,
+            viewerRole: 'seller',
+            otherPartyName: order['customer_name'] ?? 'Customer',
+            orderReferenceId: order['id']?.toString(),
+          ),
         ),
-      ),
-    );
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not open chat with customer. Please try again.'),
+          backgroundColor: AppConstants.error,
+        ),
+      );
+    }
   }
 
   @override
