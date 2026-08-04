@@ -21,6 +21,7 @@ import '../seller/store_profile_screen.dart';
 import '../customer/foot_instructions_screen.dart';
 import 'whats_new_screen.dart';
 import 'terms_privacy_screen.dart';
+import 'about_cufmai_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -739,8 +740,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const Divider(height: 1, color: Color(0xFFE5E7EB)),
           _settingsRow(
             icon: Icons.info_outline,
-            title: 'About SoleVision',
-            onTap: () => _openPlaceholder('About SoleVision'),
+            title: 'About CUFMAI',
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const AboutCufmaiScreen(),
+                ),
+              );
+            },
           ),
         ],
       ),
@@ -1098,25 +1105,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  void _openPlaceholder(String title) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => Scaffold(
-          backgroundColor: AppConstants.surfaceLight,
-          appBar: AppBar(
-            title: Text(
-              title,
-              style: AppConstants.bodyStyle(fontWeight: FontWeight.bold),
-            ),
-            backgroundColor: AppConstants.surfaceLight,
-          ),
-          body: Center(
-            child: Text('Coming soon', style: AppConstants.bodyStyle()),
-          ),
-        ),
-      ),
-    );
-  }
+
 }
 
 // ══════════════════════════════════════════════════════════════════

@@ -254,18 +254,23 @@ class _MessagesQuickPreviewSheetState extends State<MessagesQuickPreviewSheet> {
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           child: Row(
             children: [
-              // Store avatar (initials circle)
+              // Store avatar (image or initials fallback)
               CircleAvatar(
                 radius: 22,
                 backgroundColor: AppConstants.primary.withValues(alpha: 0.12),
-                child: Text(
-                  storeInitial,
-                  style: AppConstants.bodyStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    color: AppConstants.primary,
-                  ),
-                ),
+                backgroundImage: conv.storeAvatarUrl != null
+                    ? NetworkImage(conv.storeAvatarUrl!)
+                    : null,
+                child: conv.storeAvatarUrl == null
+                    ? Text(
+                        storeInitial,
+                        style: AppConstants.bodyStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: AppConstants.primary,
+                        ),
+                      )
+                    : null,
               ),
               const SizedBox(width: 12),
 

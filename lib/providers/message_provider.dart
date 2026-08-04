@@ -222,7 +222,9 @@ class MessageProvider extends ChangeNotifier {
           lastMessagePreview: body.length > 100 ? '${body.substring(0, 100)}...' : body,
           createdAt: old.createdAt,
           customerName: old.customerName,
+          customerAvatarUrl: old.customerAvatarUrl,
           storeName: old.storeName,
+          storeAvatarUrl: old.storeAvatarUrl,
           unreadCount: 0,
         );
         // Move to top of list

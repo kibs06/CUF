@@ -163,14 +163,19 @@ class _SellerInboxScreenState extends State<SellerInboxScreen> {
         leading: CircleAvatar(
           radius: 24,
           backgroundColor: AppConstants.primary.withValues(alpha: 0.15),
-          child: Text(
-            (conv.customerName ?? 'C')[0].toUpperCase(),
-            style: AppConstants.bodyStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: AppConstants.primary,
-            ),
-          ),
+          backgroundImage: conv.customerAvatarUrl != null
+              ? NetworkImage(conv.customerAvatarUrl!)
+              : null,
+          child: conv.customerAvatarUrl == null
+              ? Text(
+                  (conv.customerName ?? 'C')[0].toUpperCase(),
+                  style: AppConstants.bodyStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: AppConstants.primary,
+                  ),
+                )
+              : null,
         ),
         title: Row(
           children: [

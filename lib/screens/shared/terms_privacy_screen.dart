@@ -136,7 +136,7 @@ class TermsPrivacyScreen extends StatelessWidget {
                       const SizedBox(height: 16),
                       _policySection(
                         'Contact',
-                        'For questions about this policy, contact us at support@solevision.ph or through the Help & Support section in the app.',
+                        'For questions about this policy, contact us at support@cufmai.ph or through the Help & Support section in the app.',
                       ),
                     ],
                   ),

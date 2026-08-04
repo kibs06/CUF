@@ -132,7 +132,9 @@ class Conversation {
 
   // Enriched fields (loaded via joins)
   final String? customerName;
+  final String? customerAvatarUrl;
   final String? storeName;
+  final String? storeAvatarUrl;
   final int unreadCount;
 
   const Conversation({
@@ -143,7 +145,9 @@ class Conversation {
     this.lastMessagePreview,
     required this.createdAt,
     this.customerName,
+    this.customerAvatarUrl,
     this.storeName,
+    this.storeAvatarUrl,
     this.unreadCount = 0,
   });
 
@@ -156,7 +160,9 @@ class Conversation {
       lastMessagePreview: map['last_message_preview']?.toString(),
       createdAt: DateTime.tryParse(map['created_at']?.toString() ?? '') ?? DateTime.now(),
       customerName: map['profiles'] is Map ? map['profiles']['full_name']?.toString() : null,
+      customerAvatarUrl: map['profiles'] is Map ? map['profiles']['avatar_url']?.toString() : null,
       storeName: map['stores'] is Map ? map['stores']['name']?.toString() : null,
+      storeAvatarUrl: map['stores'] is Map ? map['stores']['logo_url']?.toString() : null,
       unreadCount: (map['unread_count'] as num?)?.toInt() ?? 0,
     );
   }
@@ -219,7 +225,7 @@ class MessageService {
   Future<List<Conversation>> getConversationsForStore(String storeId) async {
     final data = await _client
         .from('conversations')
-        .select('*, profiles!conversations_customer_id_fkey(full_name)')
+        .select('*, profiles!conversations_customer_id_fkey(full_name, avatar_url)')
         .eq('store_id', storeId)
         .order('last_message_at', ascending: false, nullsFirst: true);
 
@@ -232,7 +238,7 @@ class MessageService {
   Future<List<Conversation>> getConversationsForCustomer(String customerId) async {
     final data = await _client
         .from('conversations')
-        .select('*, stores(name)')
+        .select('*, stores(name, logo_url)')
         .eq('customer_id', customerId)
         .order('last_message_at', ascending: false, nullsFirst: true);
 

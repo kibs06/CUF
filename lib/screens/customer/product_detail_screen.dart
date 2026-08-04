@@ -471,14 +471,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
 
   /// Share this product via the native share sheet.
   Future<void> _shareProduct() async {
-    final name = widget.product['name'] ?? 'SoleVision Footwear';
+    final name = widget.product['name'] ?? 'CUFMAI Footwear';
     final price = (widget.product['price'] is int)
         ? (widget.product['price'] as int).toDouble()
         : (widget.product['price'] ?? 0.0);
     final priceStr = '₱${price.toStringAsFixed(2)}';
-    final storeName = widget.product['store_name'] ?? 'SoleVision';
+    final storeName = widget.product['store_name'] ?? 'CUFMAI';
 
-    final text = 'Check out $name — only $priceStr at $storeName!\n\nBrowse more artisan footwear on the SoleVision app.';
+    final text = 'Check out $name — only $priceStr at $storeName!\n\nBrowse more artisan footwear on the CUFMAI app.';
 
     try {
       await SharePlus.instance.share(

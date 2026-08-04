@@ -237,7 +237,7 @@ class _InstalledVersionHeader extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            'SoleVision',
+            'CUFMAI',
             style: AppConstants.headlineStyle(fontSize: 20),
           ),
           const SizedBox(height: 4),

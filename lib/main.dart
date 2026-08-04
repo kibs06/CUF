@@ -87,14 +87,14 @@ Future<void> main() async {
       if (kDebugMode) debugPrint('Firebase init failed (push notifications disabled): $e');
     }
 
-    runApp(const SoleVisionApp());
+    runApp(const CUFMAIApp());
   } else {
     runApp(_SupabaseErrorApp());
   }
 }
 
-class SoleVisionApp extends StatelessWidget {
-  const SoleVisionApp({super.key});
+class CUFMAIApp extends StatelessWidget {
+  const CUFMAIApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -115,7 +115,7 @@ class SoleVisionApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => UpdateProvider()),
       ],
       child: MaterialApp(
-        title: 'SoleVision',
+        title: 'CUFMAI',
         debugShowCheckedModeBanner: false,
         builder: (context, child) {
           ErrorWidget.builder = (FlutterErrorDetails details) {
@@ -211,7 +211,7 @@ class _SupabaseErrorApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'SoleVision',
+      title: 'CUFMAI',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
@@ -252,7 +252,7 @@ class _SupabaseErrorApp extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'SoleVision could not reach its servers.\nPlease check your internet connection and try again.',
+                  'CUFMAI could not reach its servers.\nPlease check your internet connection and try again.',
                   style: GoogleFonts.dmSans(
                     fontSize: 14,
                     color: AppConstants.secondary.withValues(alpha: 0.6),

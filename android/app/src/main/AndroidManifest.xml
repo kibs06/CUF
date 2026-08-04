@@ -14,7 +14,7 @@
         android:maxSdkVersion="32" />
 
     <application
-        android:label="SoleVision"
+        android:label="CUFMAI"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
 

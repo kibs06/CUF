@@ -285,7 +285,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'SoleVision',
+                                'CUFMAI',
                                 style: AppConstants.headlineStyle(
                                   fontSize: 36,
                                   color: AppConstants.surfaceLight,

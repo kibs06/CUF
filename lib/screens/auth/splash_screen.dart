@@ -86,7 +86,7 @@ class _SplashScreenState extends State<SplashScreen>
                   const SizedBox(height: 24),
                   // Wordmark
                   Text(
-                    'SoleVision',
+                    'CUFMAI',
                     style: AppConstants.headlineStyle(
                       fontSize: 36,
                       color: AppConstants.secondary,

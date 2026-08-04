@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../utils/recently_viewed.dart';
 import '../../constants/app_constants.dart';
@@ -16,7 +15,6 @@ import '../../widgets/no_internet_view.dart';
 import '../../widgets/sole_product_card.dart';
 import '../../widgets/cart_icon_button.dart';
 import '../../widgets/chat/chat_view.dart';
-import '../store/store_profile_screen.dart';
 import 'product_detail_screen.dart';
 import 'ar_fitting_screen.dart';
 import 'tracking_screen.dart';
@@ -37,10 +35,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   String _searchKeyword = '';
   StreamSubscription? _connectivitySub;
   bool _wasOffline = false;
-
-  // Resume browsing state (Change 6b)
-  String? _lastStoreId;
-  String? _lastStoreName;
 
   // Recently viewed products
   List<Map<String, dynamic>> _recentlyViewed = [];
@@ -67,7 +61,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   @override
   void initState() {
     super.initState();
-    _loadLastVisitedStore();
     _loadRecentlyViewed();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<ProductProvider>(context, listen: false).loadProducts();
@@ -105,18 +98,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     final items = await RecentlyViewedService.instance.load();
     if (mounted) {
       setState(() => _recentlyViewed = items);
-    }
-  }
-
-  Future<void> _loadLastVisitedStore() async {
-    final prefs = await SharedPreferences.getInstance();
-    final storeId = prefs.getString('last_visited_store_id');
-    final storeName = prefs.getString('last_visited_store_name');
-    if (mounted && storeId != null && storeName != null) {
-      setState(() {
-        _lastStoreId = storeId;
-        _lastStoreName = storeName;
-      });
     }
   }
 
@@ -280,7 +261,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       backgroundColor: AppConstants.surfaceLight,
       appBar: AppBar(
         title: Text(
-          'SoleVision Studio',
+          'CUFMAI',
           style: AppConstants.headlineStyle(fontSize: 20),
         ),
         backgroundColor: Colors.transparent,
@@ -307,65 +288,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // Continue Browsing chip (Change 6b)
-                        if (_lastStoreId != null && _lastStoreName != null)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: GestureDetector(
-                              onTap: () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) => StoreProfileScreen(
-                                      storeId: _lastStoreId!,
-                                    ),
-                                  ),
-                                );
-                              },
-                              child: Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 10,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: AppConstants.primary.withValues(
-                                    alpha: 0.08,
-                                  ),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: AppConstants.primary.withValues(
-                                      alpha: 0.18,
-                                    ),
-                                  ),
-                                ),
-                                child: Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.storefront_outlined,
-                                      color: AppConstants.primary,
-                                      size: 18,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        'Pick up where you left off → $_lastStoreName',
-                                        style: AppConstants.bodyStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w600,
-                                          color: AppConstants.primary,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                    const Icon(
-                                      Icons.chevron_right,
-                                      color: AppConstants.primary,
-                                      size: 18,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
                         Text(
                           'Good morning, ${auth.displayName.split(" ").first} 👋',
                           style: AppConstants.bodyStyle(

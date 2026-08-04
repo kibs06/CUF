@@ -25,7 +25,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   static const List<_SlideData> _slides = [
     _SlideData(
       svg: _welcomeSvg,
-      headline: 'Welcome to SoleVision',
+      headline: 'Welcome to CUFMAI',
       body:
           'Discover handcrafted footwear from the heart of Carcar City, Cebu.',
     ),
