@@ -3,7 +3,10 @@ import '../services/product_service.dart';
 import '../services/supabase_service.dart';
 
 enum SortMode {
-  newest,
+  /// Default browse order — the catalog is shuffled once per
+  /// `loadProducts()` call, so this mode shows the shuffled "fresh feed"
+  /// rather than a chronological order. Explicit sorts below fully override it.
+  featured,
   priceLowToHigh,
   priceHighToLow,
   nameAZ,
@@ -12,8 +15,8 @@ enum SortMode {
 
 String sortModeLabel(SortMode mode) {
   switch (mode) {
-    case SortMode.newest:
-      return 'Newest';
+    case SortMode.featured:
+      return 'Featured';
     case SortMode.priceLowToHigh:
       return 'Price: Low to High';
     case SortMode.priceHighToLow:
@@ -31,7 +34,7 @@ class ProductProvider extends ChangeNotifier {
   List<Map<String, dynamic>> _products = [];
   bool _isLoading = false;
   String? _selectedCategory = 'All';
-  SortMode _sortMode = SortMode.newest;
+  SortMode _sortMode = SortMode.featured;
 
   List<Map<String, dynamic>> get products => _products;
   bool get isLoading => _isLoading;
@@ -50,12 +53,25 @@ class ProductProvider extends ChangeNotifier {
   }
 
   /// Load ALL products (customer / admin screens).
-  Future<void> loadProducts() async {
+  ///
+  /// The fetched list is shuffled once right after the fetch so the default
+  /// browse order (SortMode.featured) looks fresh each time — a "new
+  /// products" feel without any backend change. Filtering and explicit sort
+  /// modes still operate on this shuffled base list, so search/category/sort
+  /// behavior is unaffected.
+  ///
+  /// [reshuffle] defaults to true: every load (including pull-to-refresh)
+  /// produces a new order. Set to false if a caller wants to preserve the
+  /// current session's shuffled order.
+  Future<void> loadProducts({bool reshuffle = true}) async {
     _isLoading = true;
     notifyListeners();
 
     try {
       _products = await _db.fetchProducts();
+      if (reshuffle) {
+        _products.shuffle();
+      }
     } catch (_) {
       // Gracefully handle empty
     }
@@ -130,12 +146,10 @@ class ProductProvider extends ChangeNotifier {
     // Sort
     final sorted = List<Map<String, dynamic>>.from(filtered);
     switch (_sortMode) {
-      case SortMode.newest:
-        sorted.sort((a, b) {
-          final aTime = a['created_at']?.toString() ?? '';
-          final bTime = b['created_at']?.toString() ?? '';
-          return bTime.compareTo(aTime); // newest first
-        });
+      // Featured = the shuffled order from loadProducts(); no-op here so the
+      // session's shuffle is preserved (never re-sorted per keystroke).
+      case SortMode.featured:
+        break;
       case SortMode.priceLowToHigh:
         sorted.sort((a, b) => _extractPrice(a).compareTo(_extractPrice(b)));
       case SortMode.priceHighToLow:
