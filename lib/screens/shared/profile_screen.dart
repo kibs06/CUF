@@ -20,6 +20,7 @@ import '../seller/create_store_screen.dart';
 import '../seller/store_profile_screen.dart';
 import '../customer/foot_instructions_screen.dart';
 import 'whats_new_screen.dart';
+import 'terms_privacy_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -685,7 +686,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _settingsRow(
             icon: Icons.description_outlined,
             title: 'Terms & Privacy',
-            onTap: () => _openPlaceholder('Terms & Privacy'),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const TermsPrivacyScreen(),
+                ),
+              );
+            },
           ),
           const Divider(height: 1, color: Color(0xFFE5E7EB)),
           _settingsRow(

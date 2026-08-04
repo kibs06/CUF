@@ -16,6 +16,37 @@ class CartScreen extends StatefulWidget {
 }
 
 class _CartScreenState extends State<CartScreen> {
+  Map<String, int> _itemMaxStock = {};
+  bool _isValidating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _validateStock());
+  }
+
+  Future<void> _validateStock() async {
+    if (_isValidating) return;
+    setState(() => _isValidating = true);
+    try {
+      final cart = context.read<CartProvider>();
+      final results = await cart.validateForCheckout();
+      if (!mounted) return;
+      final maxStock = <String, int>{};
+      for (final r in results) {
+        if (r.isAvailable && r.currentStock > 0) {
+          maxStock[r.cartItemId] = r.currentStock;
+        }
+      }
+      setState(() {
+        _itemMaxStock = maxStock;
+        _isValidating = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _isValidating = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cart = context.watch<CartProvider>();
@@ -71,6 +102,7 @@ class _CartScreenState extends State<CartScreen> {
                             storeId: group['store_id'] as String,
                             storeName: group['store_name'] as String,
                             items: group['items'] as List<Map<String, dynamic>>,
+                            itemMaxStock: _itemMaxStock,
                           );
                         },
                       ),
@@ -104,11 +136,13 @@ class _StoreGroupCard extends StatelessWidget {
   final String storeId;
   final String storeName;
   final List<Map<String, dynamic>> items;
+  final Map<String, int> itemMaxStock;
 
   const _StoreGroupCard({
     required this.storeId,
     required this.storeName,
     required this.items,
+    required this.itemMaxStock,
   });
 
   @override
@@ -190,7 +224,10 @@ class _StoreGroupCard extends StatelessWidget {
 
           // ── Item Rows ─────────────────────────────────────
           for (int i = 0; i < items.length; i++) ...[
-            _CartItemRow(item: items[i]),
+            _CartItemRow(
+              item: items[i],
+              maxStock: itemMaxStock[items[i]['server_id']],
+            ),
             if (i < items.length - 1)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -212,8 +249,9 @@ class _StoreGroupCard extends StatelessWidget {
 
 class _CartItemRow extends StatelessWidget {
   final Map<String, dynamic> item;
+  final int? maxStock; // null = stock not yet validated
 
-  const _CartItemRow({required this.item});
+  const _CartItemRow({required this.item, this.maxStock});
 
   @override
   Widget build(BuildContext context) {
@@ -223,6 +261,7 @@ class _CartItemRow extends StatelessWidget {
     final quantity = item['quantity'] as int;
     final price = item['price'] as double;
     final lineTotal = price * quantity;
+    final atMax = maxStock != null && quantity >= maxStock!;
 
     return AnimatedSize(
       duration: const Duration(milliseconds: 250),
@@ -278,13 +317,38 @@ class _CartItemRow extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
 
-                  // Size · Color
-                  Text(
-                    'EU ${item['size']} · ${item['color']}',
-                    style: AppConstants.bodyStyle(
-                      fontSize: 11,
-                      color: AppConstants.secondary.withOpacity(0.5),
-                    ),
+                  // Size · Color · Max stock label
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'EU ${item['size']} · ${item['color']}',
+                          style: AppConstants.bodyStyle(
+                            fontSize: 11,
+                            color: AppConstants.secondary.withOpacity(0.5),
+                          ),
+                        ),
+                      ),
+                      if (maxStock != null && maxStock! <= 5)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 4),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppConstants.error.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              'Only $maxStock left',
+                              style: AppConstants.bodyStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                color: AppConstants.error,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                   const SizedBox(height: 6),
 
@@ -309,8 +373,22 @@ class _CartItemRow extends StatelessWidget {
                       ),
                       _QuantityButton(
                         icon: Icons.add,
-                        onTap: () => cart.incrementQuantity(itemKey),
+                        onTap: atMax ? null : () => cart.incrementQuantity(itemKey),
+                        disabled: atMax,
                       ),
+                      if (maxStock != null)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 6),
+                          child: Text(
+                            'Max: $maxStock',
+                            style: AppConstants.bodyStyle(
+                              fontSize: 10,
+                              color: atMax
+                                  ? AppConstants.error
+                                  : AppConstants.secondary.withOpacity(0.4),
+                            ),
+                          ),
+                        ),
                       const Spacer(),
                       // Delete button
                       GestureDetector(
@@ -448,22 +526,43 @@ class _CartItemRow extends StatelessWidget {
 
 class _QuantityButton extends StatelessWidget {
   final IconData icon;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
+  final bool disabled;
 
-  const _QuantityButton({required this.icon, required this.onTap});
+  const _QuantityButton({
+    required this.icon,
+    required this.onTap,
+    this.disabled = false,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final isDisabled = disabled || onTap == null;
     return GestureDetector(
-      onTap: onTap,
-      child: Container(
+      onTap: isDisabled ? null : onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
         width: 28,
         height: 28,
         decoration: BoxDecoration(
-          border: Border.all(color: AppConstants.borderGray, width: 1),
+          border: Border.all(
+            color: isDisabled
+                ? AppConstants.borderGray.withOpacity(0.3)
+                : AppConstants.borderGray,
+            width: 1,
+          ),
           borderRadius: BorderRadius.circular(6),
+          color: isDisabled
+              ? AppConstants.borderGray.withOpacity(0.08)
+              : Colors.transparent,
         ),
-        child: Icon(icon, size: 14, color: AppConstants.secondary),
+        child: Icon(
+          icon,
+          size: 14,
+          color: isDisabled
+              ? AppConstants.secondary.withOpacity(0.25)
+              : AppConstants.secondary,
+        ),
       ),
     );
   }

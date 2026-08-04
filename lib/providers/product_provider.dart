@@ -2,16 +2,41 @@ import 'package:flutter/material.dart';
 import '../services/product_service.dart';
 import '../services/supabase_service.dart';
 
+enum SortMode {
+  newest,
+  priceLowToHigh,
+  priceHighToLow,
+  nameAZ,
+  nameZA,
+}
+
+String sortModeLabel(SortMode mode) {
+  switch (mode) {
+    case SortMode.newest:
+      return 'Newest';
+    case SortMode.priceLowToHigh:
+      return 'Price: Low to High';
+    case SortMode.priceHighToLow:
+      return 'Price: High to Low';
+    case SortMode.nameAZ:
+      return 'Name: A to Z';
+    case SortMode.nameZA:
+      return 'Name: Z to A';
+  }
+}
+
 class ProductProvider extends ChangeNotifier {
   final SupabaseService _db = SupabaseService.instance;
 
   List<Map<String, dynamic>> _products = [];
   bool _isLoading = false;
   String? _selectedCategory = 'All';
+  SortMode _sortMode = SortMode.newest;
 
   List<Map<String, dynamic>> get products => _products;
   bool get isLoading => _isLoading;
   String? get selectedCategory => _selectedCategory;
+  SortMode get sortMode => _sortMode;
 
   // Fetch all categories present in the products list
   List<String> get categories {
@@ -66,16 +91,32 @@ class ProductProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Filtered products list
+  /// Set the sort mode and rebuild the UI.
+  void setSortMode(SortMode mode) {
+    _sortMode = mode;
+    notifyListeners();
+  }
+
+  /// Returns the price value from a product map, handling both int and double.
+  double _extractPrice(Map<String, dynamic> product) {
+    final price = product['price'];
+    if (price is int) return price.toDouble();
+    if (price is double) return price;
+    return 0.0;
+  }
+
+  /// Filtered + sorted products list.
   List<Map<String, dynamic>> getFilteredProducts(String searchKeyword) {
     List<Map<String, dynamic>> filtered = _products;
 
+    // Category filter
     if (_selectedCategory != 'All' && _selectedCategory != null) {
       filtered = filtered
           .where((p) => p['category'] == _selectedCategory)
           .toList();
     }
 
+    // Search keyword
     if (searchKeyword.isNotEmpty) {
       filtered = filtered
           .where(
@@ -86,7 +127,26 @@ class ProductProvider extends ChangeNotifier {
           .toList();
     }
 
-    return filtered;
+    // Sort
+    final sorted = List<Map<String, dynamic>>.from(filtered);
+    switch (_sortMode) {
+      case SortMode.newest:
+        sorted.sort((a, b) {
+          final aTime = a['created_at']?.toString() ?? '';
+          final bTime = b['created_at']?.toString() ?? '';
+          return bTime.compareTo(aTime); // newest first
+        });
+      case SortMode.priceLowToHigh:
+        sorted.sort((a, b) => _extractPrice(a).compareTo(_extractPrice(b)));
+      case SortMode.priceHighToLow:
+        sorted.sort((a, b) => _extractPrice(b).compareTo(_extractPrice(a)));
+      case SortMode.nameAZ:
+        sorted.sort((a, b) => (a['name'] ?? '').toString().compareTo((b['name'] ?? '').toString()));
+      case SortMode.nameZA:
+        sorted.sort((a, b) => (b['name'] ?? '').toString().compareTo((a['name'] ?? '').toString()));
+    }
+
+    return sorted;
   }
 
   void selectCategory(String category) {

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -603,33 +602,38 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
             else
               SliverPadding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
-                sliver: SliverMasonryGrid.count(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 16,
-                  childCount: sorted.length,
-                  itemBuilder: (context, index) {
-                    final prod = sorted[index];
-                    return SoleProductCard(
-                      product: prod,
-                      imageAspectRatio: _imageAspectRatioFor(prod),
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => ProductDetailScreen(product: prod),
-                          ),
-                        );
-                      },
-                      onTryOnTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                ARVirtualFitScreen(preselectedProduct: prod),
-                          ),
-                        );
-                      },
-                    );
-                  },
+                sliver: SliverGrid(
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 16,
+                    mainAxisSpacing: 16,
+                    childAspectRatio: 0.55,
+                  ),
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final prod = sorted[index];
+                      return SoleProductCard(
+                        product: prod,
+                        imageAspectRatio: _imageAspectRatioFor(prod),
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => ProductDetailScreen(product: prod),
+                            ),
+                          );
+                        },
+                        onTryOnTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  ARVirtualFitScreen(preselectedProduct: prod),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                    childCount: sorted.length,
+                  ),
                 ),
               ),
 

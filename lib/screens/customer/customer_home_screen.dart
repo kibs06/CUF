@@ -4,6 +4,7 @@ import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../utils/recently_viewed.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/message_provider.dart';
@@ -41,6 +42,9 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   String? _lastStoreId;
   String? _lastStoreName;
 
+  // Recently viewed products
+  List<Map<String, dynamic>> _recentlyViewed = [];
+
   // Featured items mock data for the banner PageView
   final List<Map<String, String>> _featuredArrivals = [
     {
@@ -64,6 +68,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   void initState() {
     super.initState();
     _loadLastVisitedStore();
+    _loadRecentlyViewed();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<ProductProvider>(context, listen: false).loadProducts();
       // Load conversations for the floating message button badge
@@ -94,6 +99,13 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         );
       }
     });
+  }
+
+  Future<void> _loadRecentlyViewed() async {
+    final items = await RecentlyViewedService.instance.load();
+    if (mounted) {
+      setState(() => _recentlyViewed = items);
+    }
   }
 
   Future<void> _loadLastVisitedStore() async {
@@ -188,6 +200,74 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           break;
       }
     };
+  }
+
+  void _showSortSheet(BuildContext context) {
+    final productProvider = context.read<ProductProvider>();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        margin: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Drag handle
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppConstants.borderGray,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Sort by',
+              style: AppConstants.headlineStyle(fontSize: 18),
+            ),
+            const SizedBox(height: 12),
+            ...SortMode.values.map((mode) {
+              final isActive = productProvider.sortMode == mode;
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Material(
+                  color: Colors.transparent,
+                  child: ListTile(
+                    dense: true,
+                    leading: Icon(
+                      isActive ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                      color: isActive ? AppConstants.primary : AppConstants.borderGray,
+                      size: 20,
+                    ),
+                    title: Text(
+                      sortModeLabel(mode),
+                      style: AppConstants.bodyStyle(
+                        fontSize: 14,
+                        fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                        color: isActive ? AppConstants.primary : AppConstants.secondary,
+                      ),
+                    ),
+                    onTap: () {
+                      productProvider.setSortMode(mode);
+                      Navigator.of(ctx).pop();
+                    },
+                  ),
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -383,7 +463,127 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                   ),
                 ),
 
+                // Recently viewed (only when search is empty)
+                if (_searchKeyword.isEmpty && _recentlyViewed.isNotEmpty)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 20, right: 20, bottom: 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Recently Viewed',
+                            style: AppConstants.bodyStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          SizedBox(
+                            height: 180,
+                            child: ListView.separated(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: _recentlyViewed.length,
+                              separatorBuilder: (_, __) => const SizedBox(width: 12),
+                              itemBuilder: (context, index) {
+                                final item = _recentlyViewed[index];
+                                return SizedBox(
+                                  width: 130,
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      // Use the full product from the loaded list
+                                      final productProvider = context.read<ProductProvider>();
+                                      final fullProduct = productProvider.products.cast<Map<String, dynamic>?>().firstWhere(
+                                        (p) => p?['id']?.toString() == item['id'],
+                                        orElse: () => null,
+                                      );
+                                      if (fullProduct != null) {
+                                        Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                            builder: (_) => ProductDetailScreen(product: fullProduct),
+                                          ),
+                                        );
+                                      }
+                                    },
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        // Thumbnail
+                                        ClipRRect(
+                                          borderRadius: BorderRadius.circular(12),
+                                          child: Image.network(
+                                            item['imageUrl'] ?? '',
+                                            width: 130,
+                                            height: 130,
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (_, __, ___) => Container(
+                                              width: 130,
+                                              height: 130,
+                                              color: AppConstants.borderGray.withValues(alpha: 0.2),
+                                              child: Icon(
+                                                Icons.image_outlined,
+                                                color: AppConstants.borderGray,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          item['name'] ?? '',
+                                          style: AppConstants.bodyStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          '₱${(item['price'] is num ? (item['price'] as num) : 0).toStringAsFixed(2)}',
+                                          style: AppConstants.monoStyle(
+                                            fontSize: 11,
+                                            color: AppConstants.primary,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
                 const SliverToBoxAdapter(child: SizedBox(height: 12)),
+
+                // Recently Viewed empty state (first-time users)
+                if (_searchKeyword.isEmpty && _recentlyViewed.isEmpty)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.history_outlined,
+                            size: 14,
+                            color: AppConstants.secondary.withValues(alpha: 0.3),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Products you view will show up here',
+                            style: AppConstants.bodyStyle(
+                              fontSize: 12,
+                              color: AppConstants.secondary.withValues(alpha: 0.35),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
 
                 // Featured PageView Banner (when search query is empty)
                 if (_searchKeyword.isEmpty)
@@ -497,17 +697,43 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20.0),
                     child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          _searchKeyword.isEmpty ? 'Artisan Catalog' : 'Search Results',
-                          style: AppConstants.headlineStyle(fontSize: 20),
+                        Expanded(
+                          child: Text(
+                            _searchKeyword.isEmpty ? 'Artisan Catalog' : 'Search Results',
+                            style: AppConstants.headlineStyle(fontSize: 20),
+                          ),
                         ),
-                        Text(
-                          '${filteredProducts.length} items',
-                          style: AppConstants.bodyStyle(
-                            fontSize: 12,
-                            color: AppConstants.secondary.withOpacity(0.6),
+                        GestureDetector(
+                          onTap: () => _showSortSheet(context),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: AppConstants.primary.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: AppConstants.primary.withValues(alpha: 0.15),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.sort_outlined,
+                                  size: 14,
+                                  color: AppConstants.primary,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  sortModeLabel(productProvider.sortMode),
+                                  style: AppConstants.bodyStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppConstants.primary,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ],

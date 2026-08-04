@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/cart_provider.dart';
 import '../../providers/review_provider.dart';
 import '../../utils/cart_helpers.dart';
+import '../../utils/recently_viewed.dart';
 import '../../widgets/sole_badge.dart';
 import '../../widgets/sole_ar_pill.dart';
 import '../../widgets/sole_review_card.dart';
@@ -16,6 +18,7 @@ import 'checkout_screen.dart';
 import 'write_review_screen.dart';
 import '../../widgets/cart_icon_button.dart';
 import '../../widgets/fly_to_cart_animation.dart';
+import '../../widgets/size_guide_modal.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   final Map<String, dynamic> product;
@@ -328,6 +331,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
       CurvedAnimation(parent: _buttonPressController, curve: Curves.easeInOut),
     );
 
+    // Track this product as recently viewed
+    RecentlyViewedService.instance.pushProduct(widget.product);
+
     // Use _buildSizesMap() — reads from inventory and product_variants,
     // not the non-existent widget.product['sizes'] key
     final sizesMap = _buildSizesMap();
@@ -461,6 +467,29 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
         ),
       );
     });
+  }
+
+  /// Share this product via the native share sheet.
+  Future<void> _shareProduct() async {
+    final name = widget.product['name'] ?? 'SoleVision Footwear';
+    final price = (widget.product['price'] is int)
+        ? (widget.product['price'] as int).toDouble()
+        : (widget.product['price'] ?? 0.0);
+    final priceStr = '₱${price.toStringAsFixed(2)}';
+    final storeName = widget.product['store_name'] ?? 'SoleVision';
+
+    final text = 'Check out $name — only $priceStr at $storeName!\n\nBrowse more artisan footwear on the SoleVision app.';
+
+    try {
+      await SharePlus.instance.share(
+        ShareParams(
+          text: text,
+          subject: name,
+        ),
+      );
+    } catch (e) {
+      debugPrint('[Share] Failed to share product: $e');
+    }
   }
 
   // ─── IMAGE CAROUSEL ────────────────────────────────────────────
@@ -694,6 +723,25 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                   ),
                 ),
                 actions: [
+                  // Share button
+                  IconButton(
+                    icon: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.3),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.share_outlined,
+                        color: Colors.white,
+                        size: 18,
+                      ),
+                    ),
+                    onPressed: () => _shareProduct(),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                  ),
+                  const SizedBox(width: 4),
                   CartIconButton(iconKey: _cartIconKey),
                 ],
                 flexibleSpace: FlexibleSpaceBar(
@@ -741,9 +789,39 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                       const SizedBox(height: 24),
 
                       // Size Selector Label
-                      Text(
-                        'Select Size (EU)',
-                        style: AppConstants.bodyStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                      Row(
+                        children: [
+                          Text(
+                            'Select Size (EU)',
+                            style: AppConstants.bodyStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                          ),
+                          const Spacer(),
+                          GestureDetector(
+                            onTap: () => SizeGuideModal.show(context),
+                            child: Padding(
+                              padding: const EdgeInsets.only(left: 8),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.straighten_outlined,
+                                    size: 14,
+                                    color: AppConstants.primary,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Size guide',
+                                    style: AppConstants.bodyStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppConstants.primary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 8),
                       // Size Selector row

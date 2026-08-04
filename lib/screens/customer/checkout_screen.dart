@@ -435,6 +435,31 @@ class _CheckoutScreenState extends State<CheckoutScreen>
                       'Credit/Debit Card',
                       'Visa/Mastercard payment',
                       Icons.credit_card_outlined),
+                  const SizedBox(height: 4),
+                  // Secure checkout indicator
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.lock_outline,
+                          size: 14,
+                          color: AppConstants.secondary.withValues(alpha: 0.4),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Your payment information is encrypted and secure',
+                            style: AppConstants.bodyStyle(
+                              fontSize: 12,
+                              color: AppConstants.secondary.withValues(alpha: 0.45),
+                              height: 1.3,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -448,6 +473,27 @@ class _CheckoutScreenState extends State<CheckoutScreen>
                   _priceRow('Subtotal', '₱${cart.selectedSubtotal.toStringAsFixed(2)}'),
                   const SizedBox(height: 6),
                   _priceRow('Delivery Fee', '₱${cart.selectedDeliveryFee.toStringAsFixed(2)}'),
+                  const SizedBox(height: 4),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.schedule_outlined,
+                          size: 13,
+                          color: AppConstants.secondary.withValues(alpha: 0.4),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          AppConstants.deliveryEstimateText,
+                          style: AppConstants.bodyStyle(
+                            fontSize: 11,
+                            color: AppConstants.secondary.withValues(alpha: 0.45),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                   const Divider(color: AppConstants.borderGray, height: 20),
                   _priceRow(
                     'Total Amount Due',
