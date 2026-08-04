@@ -239,6 +239,7 @@ class _PosHistoryScreenState extends State<PosHistoryScreen> {
                 child: ChoiceChip(
                   label: Text(label),
                   selected: selected,
+                  showCheckmark: false,
                   selectedColor: AppConstants.primary,
                   backgroundColor: AppConstants.sellerSurface,
                   labelStyle: AppConstants.bodyStyle(

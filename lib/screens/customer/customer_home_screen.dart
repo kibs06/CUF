@@ -366,6 +366,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                               ),
                             ),
                             selected: isSelected,
+                            showCheckmark: false,
                             onSelected: (selected) {
                               if (selected) {
                                 productProvider.selectCategory(cat);

@@ -332,6 +332,7 @@ class _POSScreenState extends State<POSScreen> {
                           return ChoiceChip(
                             label: Text(size),
                             selected: selected,
+                            showCheckmark: false,
                             selectedColor: AppConstants.primary,
                             labelStyle: AppConstants.monoStyle(
                               fontSize: 12,

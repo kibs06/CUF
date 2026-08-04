@@ -209,32 +209,35 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 width: 1,
                               ),
                             ),
-                            child: SwitchListTile(
-                              activeThumbColor: SoleSwitch.onColor,
-                              title: Row(
-                                children: [
-                                  const Icon(
-                                    Icons
-                                        .sell_outlined, // Leather tag/sell icon
-                                    color: AppConstants.primary,
-                                    size: 20,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    'Apply as a seller',
-                                    style: AppConstants.bodyStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14,
+                            child: Material(
+                              color: Colors.transparent,
+                              child: SwitchListTile(
+                                activeThumbColor: SoleSwitch.onColor,
+                                title: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons
+                                          .sell_outlined, // Leather tag/sell icon
+                                      color: AppConstants.primary,
+                                      size: 20,
                                     ),
-                                  ),
-                                ],
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Apply as a seller',
+                                      style: AppConstants.bodyStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                value: _applyAsSeller,
+                                onChanged: (bool value) {
+                                  setState(() {
+                                    _applyAsSeller = value;
+                                  });
+                                },
                               ),
-                              value: _applyAsSeller,
-                              onChanged: (bool value) {
-                                setState(() {
-                                  _applyAsSeller = value;
-                                });
-                              },
                             ),
                           ),
 

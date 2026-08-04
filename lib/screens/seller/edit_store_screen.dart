@@ -585,27 +585,30 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
         borderRadius: AppConstants.cardRadius,
         boxShadow: AppConstants.warmShadow,
       ),
-      child: SwitchListTile(
-        contentPadding: EdgeInsets.zero,
-        title: Text(
-          'Store is Open',
-          style: AppConstants.bodyStyle(fontWeight: FontWeight.bold),
-        ),
-        subtitle: Text(
-          _isOpen
-              ? 'Customers can browse and order'
-              : 'Store is closed to customers',
-          style: AppConstants.bodyStyle(
-            fontSize: 12,
-            color: AppConstants.secondary.withValues(alpha: 0.6),
+      child: Material(
+        color: Colors.transparent,
+        child: SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: Text(
+            'Store is Open',
+            style: AppConstants.bodyStyle(fontWeight: FontWeight.bold),
           ),
+          subtitle: Text(
+            _isOpen
+                ? 'Customers can browse and order'
+                : 'Store is closed to customers',
+            style: AppConstants.bodyStyle(
+              fontSize: 12,
+            color: AppConstants.secondary.withValues(alpha: 0.6),
+            ),
+          ),
+          value: _isOpen,
+          onChanged: (val) => setState(() => _isOpen = val),
+          activeColor: SoleSwitch.onColor,
+          activeThumbColor: SoleSwitch.thumbColor,
+          inactiveThumbColor: SoleSwitch.thumbColor,
+          inactiveTrackColor: SoleSwitch.offColor,
         ),
-        value: _isOpen,
-        onChanged: (val) => setState(() => _isOpen = val),
-        activeColor: SoleSwitch.onColor,
-        activeThumbColor: SoleSwitch.thumbColor,
-        inactiveThumbColor: SoleSwitch.thumbColor,
-        inactiveTrackColor: SoleSwitch.offColor,
       ),
     );
   }

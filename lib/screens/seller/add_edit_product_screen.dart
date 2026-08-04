@@ -1423,7 +1423,9 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
               borderRadius: AppConstants.cardRadius,
               boxShadow: AppConstants.warmShadow,
             ),
-            child: ListTile(
+            child: Material(
+              color: Colors.transparent,
+              child: ListTile(
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               leading: Container(
@@ -1473,6 +1475,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                 ],
               ),
             ),
+            ),
           );
         }),
         const SizedBox(height: 8),
@@ -1515,7 +1518,9 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
               borderRadius: AppConstants.cardRadius,
               boxShadow: AppConstants.warmShadow,
             ),
-            child: ListTile(
+            child: Material(
+              color: Colors.transparent,
+              child: ListTile(
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               leading: Container(
@@ -1564,6 +1569,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                 ],
               ),
             ),
+            ),
           );
         }),
         const SizedBox(height: 8),
@@ -1598,48 +1604,54 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
       color: Colors.white,
       child: Column(
         children: [
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text('Active',
-                style:
-                    AppConstants.bodyStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-            subtitle: Text(
-              _isActive
-                  ? 'Product is visible to customers'
-                  : 'Product is hidden from customers',
-              style: AppConstants.bodyStyle(
-                fontSize: 12,
-                color: AppConstants.secondary.withValues(alpha: 0.6),
+          Material(
+            color: Colors.transparent,
+            child: SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text('Active',
+                  style:
+                      AppConstants.bodyStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              subtitle: Text(
+                _isActive
+                    ? 'Product is visible to customers'
+                    : 'Product is hidden from customers',
+                style: AppConstants.bodyStyle(
+                  fontSize: 12,
+                  color: AppConstants.secondary.withValues(alpha: 0.6),
+                ),
               ),
+              value: _isActive,
+              onChanged: (val) => setState(() => _isActive = val),
+              activeColor: SoleSwitch.onColor,
+              activeThumbColor: SoleSwitch.thumbColor,
+              inactiveThumbColor: SoleSwitch.thumbColor,
+              inactiveTrackColor: SoleSwitch.offColor,
             ),
-            value: _isActive,
-            onChanged: (val) => setState(() => _isActive = val),
-            activeColor: SoleSwitch.onColor,
-            activeThumbColor: SoleSwitch.thumbColor,
-            inactiveThumbColor: SoleSwitch.thumbColor,
-            inactiveTrackColor: SoleSwitch.offColor,
           ),
           const Divider(height: 1),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text('Featured',
-                style:
-                    AppConstants.bodyStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-            subtitle: Text(
-              _isFeatured
-                  ? 'Appears in the featured section'
-                  : 'Not in featured section',
-              style: AppConstants.bodyStyle(
-                fontSize: 12,
-                color: AppConstants.secondary.withValues(alpha: 0.6),
+          Material(
+            color: Colors.transparent,
+            child: SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text('Featured',
+                  style:
+                      AppConstants.bodyStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              subtitle: Text(
+                _isFeatured
+                    ? 'Appears in the featured section'
+                    : 'Not in featured section',
+                style: AppConstants.bodyStyle(
+                  fontSize: 12,
+                  color: AppConstants.secondary.withValues(alpha: 0.6),
+                ),
               ),
+              value: _isFeatured,
+              onChanged: (val) => setState(() => _isFeatured = val),
+              activeColor: SoleSwitch.onColor,
+              activeThumbColor: SoleSwitch.thumbColor,
+              inactiveThumbColor: SoleSwitch.thumbColor,
+              inactiveTrackColor: SoleSwitch.offColor,
             ),
-            value: _isFeatured,
-            onChanged: (val) => setState(() => _isFeatured = val),
-            activeColor: SoleSwitch.onColor,
-            activeThumbColor: SoleSwitch.thumbColor,
-            inactiveThumbColor: SoleSwitch.thumbColor,
-            inactiveTrackColor: SoleSwitch.offColor,
           ),
         ],
       ),

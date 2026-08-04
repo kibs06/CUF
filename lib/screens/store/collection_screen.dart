@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:provider/provider.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/product_provider.dart';
@@ -86,15 +87,12 @@ class CollectionScreen extends StatelessWidget {
                       ),
                     ],
                   )
-                : GridView.builder(
+                : MasonryGridView.count(
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.all(20),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      crossAxisSpacing: 16,
-                      mainAxisSpacing: 16,
-                      childAspectRatio: 0.55,
-                    ),
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 16,
+                    mainAxisSpacing: 16,
                     itemCount: filtered.length,
                     itemBuilder: (context, index) {
                       final prod = filtered[index];

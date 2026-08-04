@@ -6,6 +6,7 @@ import '../../providers/address_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/cart_provider.dart';
 import '../../providers/order_provider.dart';
+import '../../utils/delivery_date.dart';
 import '../../widgets/sole_card.dart';
 import '../../widgets/sole_primary_button.dart';
 import 'address_book_screen.dart';
@@ -430,11 +431,6 @@ class _CheckoutScreenState extends State<CheckoutScreen>
                   const Divider(color: AppConstants.borderGray, height: 1),
                   _buildPaymentRadio('Cash on Pickup',
                       'Pay cash at Carcar studio', Icons.storefront_outlined),
-                  const Divider(color: AppConstants.borderGray, height: 1),
-                  _buildPaymentRadio(
-                      'Credit/Debit Card',
-                      'Visa/Mastercard payment',
-                      Icons.credit_card_outlined),
                   const SizedBox(height: 4),
                   // Secure checkout indicator
                   Padding(
@@ -477,18 +473,24 @@ class _CheckoutScreenState extends State<CheckoutScreen>
                   Padding(
                     padding: const EdgeInsets.only(left: 4),
                     child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(
-                          Icons.schedule_outlined,
-                          size: 13,
-                          color: AppConstants.secondary.withValues(alpha: 0.4),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 1),
+                          child: Icon(
+                            Icons.schedule_outlined,
+                            size: 13,
+                            color: AppConstants.secondary.withValues(alpha: 0.4),
+                          ),
                         ),
                         const SizedBox(width: 6),
-                        Text(
-                          AppConstants.deliveryEstimateText,
-                          style: AppConstants.bodyStyle(
-                            fontSize: 11,
-                            color: AppConstants.secondary.withValues(alpha: 0.45),
+                        Expanded(
+                          child: Text(
+                            'Estimated delivery: ${formatDeliveryDate(getEstimatedDeliveryDate(DateTime.now()))}',
+                            style: AppConstants.bodyStyle(
+                              fontSize: 11,
+                              color: AppConstants.secondary.withValues(alpha: 0.45),
+                            ),
                           ),
                         ),
                       ],
@@ -703,27 +705,32 @@ class _CheckoutScreenState extends State<CheckoutScreen>
 
   Widget _buildPaymentRadio(
       String method, String subtitle, IconData icon) {
-    return RadioListTile(
-      activeColor: AppConstants.primary,
-      value: method,
-      groupValue: _paymentMethod,
-      title: Row(
-        children: [
-          Icon(icon, color: AppConstants.primary, size: 20),
-          const SizedBox(width: 8),
-          Text(method,
-              style:
-                  AppConstants.bodyStyle(fontWeight: FontWeight.bold)),
-        ],
+    // Wrap in Material so the tap ripple/selection highlight paints on a
+    // Material ancestor instead of being hidden by SoleCard's DecoratedBox.
+    return Material(
+      color: Colors.transparent,
+      child: RadioListTile(
+        activeColor: AppConstants.primary,
+        value: method,
+        groupValue: _paymentMethod,
+        title: Row(
+          children: [
+            Icon(icon, color: AppConstants.primary, size: 20),
+            const SizedBox(width: 8),
+            Text(method,
+                style:
+                    AppConstants.bodyStyle(fontWeight: FontWeight.bold)),
+          ],
+        ),
+        subtitle: Text(subtitle,
+            style:
+                AppConstants.bodyStyle(fontSize: 12, color: Colors.black54)),
+        onChanged: (val) {
+          setState(() {
+            _paymentMethod = val as String;
+          });
+        },
       ),
-      subtitle: Text(subtitle,
-          style:
-              AppConstants.bodyStyle(fontSize: 12, color: Colors.black54)),
-      onChanged: (val) {
-        setState(() {
-          _paymentMethod = val as String;
-        });
-      },
     );
   }
 

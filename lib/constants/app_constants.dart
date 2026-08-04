@@ -151,10 +151,6 @@ class AppConstants {
     ),
   ];
 
-  // --- DELIVERY ESTIMATE ---
-  /// Hardcoded global delivery estimate (no per-store field yet).
-  static const String deliveryEstimateText = 'Estimated delivery: 3–5 business days after order confirmation';
-
   // --- ORDER CANCELLATION CONFIG ---
   /// Maximum time (in hours) after entering 'preparing' status
   /// during which the customer can request cancellation.
