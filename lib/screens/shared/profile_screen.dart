@@ -18,6 +18,7 @@ import '../customer/my_orders_screen.dart';
 import 'help_menu_screen.dart';
 import '../seller/create_store_screen.dart';
 import '../seller/store_profile_screen.dart';
+import '../seller/gcash_payment_settings_screen.dart';
 import '../customer/foot_instructions_screen.dart';
 import 'whats_new_screen.dart';
 import 'terms_privacy_screen.dart';
@@ -280,15 +281,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
         elevation: 0,
         automaticallyImplyLeading: false,
         actions: [
-          // Settings placeholder — same "coming soon" pattern as the
-          // seller More screen until a real Settings screen exists.
           IconButton(
+            // Sellers: the gear opens Payment Methods (GCash QR setup) — the
+            // most-used settings action. Other roles get the placeholder.
             onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Settings coming soon')),
-              );
+              if (auth.userRole == AppConstants.roleSeller) {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const GcashPaymentSettingsScreen(),
+                  ),
+                );
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Settings coming soon')),
+                );
+              }
             },
-            tooltip: 'Settings',
+            tooltip: auth.userRole == AppConstants.roleSeller
+                ? 'Payment Methods'
+                : 'Settings',
             icon: const Icon(
               Icons.settings_outlined,
               color: AppConstants.secondary,
@@ -682,6 +693,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
       padding: EdgeInsets.zero,
       child: Column(
         children: [
+          // Sellers set up their GCash static QR here (shown at POS checkout).
+          if (auth.userRole == AppConstants.roleSeller) ...[
+            _settingsRow(
+              icon: Icons.qr_code_2,
+              title: 'Payment Methods',
+              subtitle: 'Set up your GCash QR code',
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const GcashPaymentSettingsScreen(),
+                  ),
+                );
+              },
+            ),
+            const Divider(height: 1, color: Color(0xFFE5E7EB)),
+          ],
           _settingsRow(
             icon: Icons.straighten_outlined,
             title: 'Get Your Foot Size',

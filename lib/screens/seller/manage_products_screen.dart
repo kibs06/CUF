@@ -622,36 +622,51 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
       }
     }
 
-    final totalMax = sizes.values.fold<int>(0, (sum, q) => sum + q);
-    final maxStock = totalMax > 0 ? totalMax + 10 : 20;
+    // Flat, predictable cap shared with SellerInventoryRow — the `+` button
+    // disables at 99 and typed values above it are clamped, regardless of
+    // how much stock existed when the sheet opened.
+    const maxStock = kMaxStockPerSize;
 
-    // LIVE sizes map — mutated on every change and persisted as a whole.
-    // (Previously each row wrote a snapshot taken at sheet-open time, so
-    // adjusting size A then size B silently reverted A's change.)
+    // Snapshot captured when the sheet opens — the dirty-flag baseline and
+    // the reset target for "Discard Changes".
+    final originalSizes = Map<String, int>.from(sizes);
+
+    // LIVE sizes map — mutated by every local edit, written to Supabase as a
+    // whole exactly once when Confirm is tapped. (Previously each row wrote a
+    // snapshot taken at sheet-open time, so adjusting size A then size B
+    // silently reverted A's change.)
     final liveSizes = Map<String, int>.from(sizes);
 
-    // Serialize DB writes so rapid taps on the same row can never land out
-    // of order (each write persists the full map, so the last queued write
-    // always reflects the final state).
+    // Serialize DB writes so a fast double-tap on Confirm can never fire two
+    // overlapping upserts (the last queued write reflects the final state).
     Future<void> writeChain = Future.value();
 
-    Future<void> persistStock(String size, int newStock) async {
-      // The row fires this from its 800ms debounce — the screen may already
-      // be gone (user closed the sheet and left). Skip rather than throw on
-      // a deactivated context.
-      if (!mounted) return;
-      liveSizes[size] = newStock;
+    // Confirm button state — declared here and mutated via setSheetState so
+    // the StatefulBuilder re-runs with the latest values on every rebuild.
+    bool isSaving = false;
+    bool saveSucceeded = false;
+
+    /// True when any size's local value differs from the opening snapshot.
+    bool isDirty() {
+      if (liveSizes.length != originalSizes.length) return true;
+      for (final entry in originalSizes.entries) {
+        if ((liveSizes[entry.key] ?? -1) != entry.value) return true;
+      }
+      return false;
+    }
+
+    /// Write the full current map exactly once through the unchanged
+    /// [ProductProvider.updateProduct] → `_upsertInventory` →
+    /// `_syncVariantStock` → `syncProductActiveStatus` chain. Returns whether
+    /// the DB write succeeded (a status-sync hiccup is not a failure).
+    Future<bool> saveStock() {
       final snapshot = Map<String, int>.from(liveSizes);
-      final provider =
-          Provider.of<ProductProvider>(context, listen: false);
+      final provider = Provider.of<ProductProvider>(context, listen: false);
       final productId = product['id'].toString();
+      final completer = Completer<bool>();
       writeChain = writeChain.then((_) async {
-        // ProductProvider.updateProduct returns false when the DB write
-        // fails — always check it so a failed restock is never silent.
         final saved = await provider
             .updateProduct(product['id'], {'sizes': snapshot});
-        // Auto-sync active status (best-effort — a sync hiccup must not turn
-        // a successful stock write into a reported failure).
         try {
           await ProductService.instance.syncProductActiveStatus(productId);
         } catch (e) {
@@ -661,16 +676,93 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
           // Update the grid's stock badges/filters in place instead of a
           // full reload (which would tear down the still-open editor sheet).
           _applyStockToLocalProduct(productId, snapshot);
-        } else if (mounted) {
-          debugPrint('Adjust Stock save FAILED for size $size ($newStock)');
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Could not save stock. Please try again.'),
-              backgroundColor: AppConstants.error,
-            ),
-          );
         }
+        completer.complete(saved);
+      // Defensive: if anything in the chain ever throws, fail the write
+      // (→ the failure snackbar) instead of hanging the Confirm spinner.
+      }).catchError((Object _) {
+        completer.complete(false);
       });
+      return completer.future;
+    }
+
+    /// Confirm-to-save: one write for the whole map, then a brief success
+    /// state on the button and auto-close. On failure the sheet stays open
+    /// with the dirty flag intact so the seller can retry.
+    Future<void> confirmSave(
+      BuildContext sheetCtx,
+      StateSetter setSheetState,
+    ) async {
+      if (isSaving) return;
+      setSheetState(() => isSaving = true);
+      final saved = await saveStock();
+      if (!sheetCtx.mounted) return;
+      setSheetState(() {
+        isSaving = false;
+        saveSucceeded = saved;
+      });
+      if (saved) {
+        await Future.delayed(const Duration(milliseconds: 700));
+        if (sheetCtx.mounted) Navigator.of(sheetCtx).pop();
+      } else {
+        setSheetState(() => saveSucceeded = false);
+        ScaffoldMessenger.of(sheetCtx).showSnackBar(
+          const SnackBar(
+            content: Text('Could not save stock. Please try again.'),
+            backgroundColor: AppConstants.error,
+          ),
+        );
+      }
+    }
+
+    /// Close the sheet. With unsaved edits, ask first: "Discard Changes"
+    /// resets local values to the opening snapshot (pure in-memory, no
+    /// Supabase call) and closes; "Keep Editing" returns to the sheet.
+    Future<void> closeSheet(
+      BuildContext sheetCtx,
+      StateSetter setSheetState,
+    ) async {
+      if (!isDirty()) {
+        Navigator.of(sheetCtx).pop();
+        return;
+      }
+      final discard = await showDialog<bool>(
+        context: sheetCtx,
+        builder: (dctx) => AlertDialog(
+          title: Text(
+            'Discard changes?',
+            style: AppConstants.bodyStyle(
+                fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          content: Text(
+            'You have unsaved stock changes. Discard them?',
+            style: AppConstants.bodyStyle(),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dctx).pop(false),
+              child: Text('Keep Editing',
+                  style:
+                      AppConstants.bodyStyle(color: AppConstants.secondary)),
+            ),
+            FilledButton(
+              style:
+                  FilledButton.styleFrom(backgroundColor: AppConstants.error),
+              onPressed: () => Navigator.of(dctx).pop(true),
+              child: Text('Discard Changes',
+                  style: AppConstants.bodyStyle(
+                      color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+      if (discard != true || !sheetCtx.mounted) return;
+      setSheetState(() {
+        liveSizes
+          ..clear()
+          ..addAll(originalSizes);
+      });
+      Navigator.of(sheetCtx).pop();
     }
 
     showModalBottomSheet(
@@ -681,79 +773,201 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheetState) => SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+        builder: (ctx, setSheetState) {
+          // Fixed height independent of row count — header + Confirm stay
+          // pinned, only the size list scrolls when it overflows.
+          final sheetHeight = MediaQuery.of(ctx).size.height * 0.72;
+
+          return PopScope(
+            canPop: false,
+            onPopInvokedWithResult: (didPop, result) {
+              if (didPop) return;
+              closeSheet(ctx, setSheetState);
+            },
+            child: Container(
+              height: sheetHeight,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(
+                  top: Radius.circular(20),
+                ),
+              ),
+              child: SafeArea(
+                top: false,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Expanded(
-                      child: Text(
-                        'Adjust Stock',
-                        style: AppConstants.headlineStyle(fontSize: 18),
+                    // ── Header (pinned) ──
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 12, 0),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Adjust Stock',
+                              style: AppConstants.headlineStyle(fontSize: 18),
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () => closeSheet(ctx, setSheetState),
+                            icon: const Icon(Icons.close),
+                            color: AppConstants.primary,
+                            tooltip: 'Close',
+                          ),
+                        ],
                       ),
                     ),
-                    IconButton(
-                      onPressed: () => Navigator.of(ctx).pop(),
-                      icon: const Icon(Icons.close),
-                      color: AppConstants.primary,
-                      tooltip: 'Close',
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Text(
+                        product['name'] ?? 'Product',
+                        style: AppConstants.bodyStyle(
+                          fontSize: 13,
+                          color: AppConstants.secondary.withValues(alpha: 0.6),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Container(
+                        width: 40,
+                        height: 3,
+                        decoration: BoxDecoration(
+                          color: AppConstants.primary,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const Divider(height: 16),
+                    // ── Size rows (only this region scrolls) ──
+                    Expanded(
+                      child: liveSizes.isEmpty
+                          ? Center(
+                              child: Text(
+                                'No stock configured yet',
+                                style: AppConstants.bodyStyle(
+                                    color: Colors.grey.shade400),
+                              ),
+                            )
+                          : IgnorePointer(
+                              // Freeze the rows while the write is in
+                              // flight so the snapshot being saved always
+                              // matches what's on screen (an edit made mid-
+                              // save would be silently dropped otherwise).
+                              ignoring: isSaving,
+                              child: ListView(
+                                padding: const EdgeInsets.fromLTRB(
+                                    16, 0, 16, 12),
+                                children: liveSizes.entries.map((entry) {
+                                  return SellerInventoryRow(
+                                    productName:
+                                        product['name'] ?? 'Product',
+                                    size: entry.key,
+                                    currentStock: entry.value,
+                                    maxStock: maxStock,
+                                    onStockChanged: (newStock) {
+                                      // Local-only: stage the edit in the
+                                      // live map and let the dirty flag
+                                      // drive the Confirm button. No write
+                                      // happens here — Confirm owns that.
+                                      setSheetState(() {
+                                        liveSizes[entry.key] = newStock;
+                                      });
+                                    },
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                    ),
+                    const Divider(height: 1),
+                    // ── Footer (pinned) — Confirm-to-save ──
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: FilledButton(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: isSaving
+                                ? AppConstants.accent
+                                : saveSucceeded
+                                    ? AppConstants.okStockColor
+                                    : isDirty()
+                                        ? AppConstants.accent
+                                        : Colors.grey.shade300,
+                            disabledBackgroundColor: Colors.grey.shade300,
+                            padding:
+                                const EdgeInsets.symmetric(vertical: 15),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          onPressed: (isSaving || saveSucceeded || !isDirty())
+                              ? null
+                              : () => confirmSave(ctx, setSheetState),
+                          child: isSaving
+                              ? Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.center,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: const [
+                                    SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                    SizedBox(width: 10),
+                                    Text(
+                                      'Saving...',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              : saveSucceeded
+                                  ? Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: const [
+                                        Icon(
+                                          Icons.check_circle,
+                                          color: Colors.white,
+                                          size: 20,
+                                        ),
+                                        SizedBox(width: 8),
+                                        Text(
+                                          'Saved',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ],
+                                    )
+                                  : Text(
+                                      'Confirm Changes',
+                                      style: AppConstants.bodyStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                        ),
+                      ),
                     ),
                   ],
                 ),
-                Text(
-                  product['name'] ?? 'Product',
-                  style: AppConstants.bodyStyle(
-                    fontSize: 13,
-                    color: AppConstants.secondary.withValues(alpha: 0.6),
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 10),
-                Container(
-                  width: 40,
-                  height: 3,
-                  decoration: BoxDecoration(
-                    color: AppConstants.primary,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Flexible(
-                  child: liveSizes.isEmpty
-                      ? Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 24),
-                          child: Center(
-                            child: Text(
-                              'No stock configured yet',
-                              style: AppConstants.bodyStyle(
-                                  color: Colors.grey.shade400),
-                            ),
-                          ),
-                        )
-                      : ListView(
-                          shrinkWrap: true,
-                          children: liveSizes.entries.map((entry) {
-                            return SellerInventoryRow(
-                              productName: product['name'] ?? 'Product',
-                              size: entry.key,
-                              currentStock: entry.value,
-                              maxStock: maxStock,
-                              onStockChanged: (newStock) async {
-                                await persistStock(entry.key, newStock);
-                              },
-                            );
-                          }).toList(),
-                        ),
-                ),
-              ],
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }

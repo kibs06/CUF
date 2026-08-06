@@ -103,18 +103,42 @@ class ProductProvider extends ChangeNotifier {
   /// silently fetching all sellers' products.
   Future<void> loadSellerProducts() async {
     _isLoading = true;
+    // Clear any previously loaded catalog FIRST so a slow or failed seller
+    // fetch can never flash or keep another store's products. The provider
+    // is an app-root singleton shared across roles — a prior customer-browse
+    // `loadProducts()` may have left the full catalog in memory, and the old
+    // silent catch would have kept showing it if this fetch threw.
+    _products = [];
     notifyListeners();
 
     try {
       final storeId = await ProductService.instance.getSellerStoreId();
       if (storeId == null) {
-        // Seller has no store — return empty, don't leak all products
-        _products = [];
-      } else {
-        _products = await _db.fetchProducts(storeId: storeId);
+        // Seller has no store — keep empty, don't leak all products.
+        // MUST clear the loading flag here (no fall-through past the try).
+        _isLoading = false;
+        notifyListeners();
+        return;
       }
-    } catch (_) {
-      // Gracefully handle empty
+      final fetched = await _db.fetchProducts(storeId: storeId);
+      // Defense in depth: even if the query ever drifted, only keep products
+      // that actually belong to this seller's store. Other sellers' products
+      // can never appear (their store_id differs). Products in this store
+      // with a NULL seller_id (e.g. admin-seeded) stay visible; rows tagged
+      // with a DIFFERENT seller are dropped as not owned.
+      final mySellerId = _db.currentUser?.id;
+      _products = fetched.where((p) {
+        final belongsToStore = p['store_id']?.toString() == storeId;
+        if (!belongsToStore) return false;
+        if (mySellerId == null) return true; // no user context — store only
+        final ownerId = p['seller_id']?.toString();
+        return ownerId == null || ownerId == mySellerId;
+      }).toList();
+    } catch (e) {
+      // A failed seller fetch must NEVER leave another store's products on
+      // screen — the list was already cleared above.
+      debugPrint('[ProductProvider] loadSellerProducts failed: $e');
+      _products = [];
     }
 
     _isLoading = false;
@@ -195,6 +219,34 @@ class ProductProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Reload the product list after a write, scoped to the current user's
+  /// role.
+  ///
+  /// The provider is an app-root singleton shared across roles. A seller's
+  /// write (add / update / Adjust Stock) must NOT reload the full catalog:
+  /// `loadProducts()` fetches every store's products, and the POS/dashboard
+  /// render from this same provider — so after a stock adjustment the seller
+  /// would suddenly see products that don't belong to them. If the current
+  /// user owns a store, reload seller-scoped; otherwise (customer/admin
+  /// browsing context) fall back to the full catalog.
+  ///
+  /// Best-effort: errors are swallowed so a reload hiccup can never flip a
+  /// successful DB write into a reported failure — and on failure the
+  /// in-memory list simply stays as it was (already seller-scoped for
+  /// sellers, so nothing leaks).
+  Future<void> _reloadAfterWrite() async {
+    try {
+      final storeId = await ProductService.instance.getSellerStoreId();
+      if (storeId != null) {
+        await loadSellerProducts();
+      } else {
+        await loadProducts();
+      }
+    } catch (e) {
+      debugPrint('[ProductProvider] post-write reload failed: $e');
+    }
+  }
+
   // Add Product (UC015)
   Future<bool> addProduct(Map<String, dynamic> productData) async {
     _isLoading = true;
@@ -202,7 +254,7 @@ class ProductProvider extends ChangeNotifier {
 
     try {
       await _db.addProduct(productData);
-      await loadProducts();
+      await _reloadAfterWrite();
       _isLoading = false;
       notifyListeners();
       return true;
@@ -223,7 +275,7 @@ class ProductProvider extends ChangeNotifier {
 
     try {
       await _db.updateProduct(id, productData);
-      await loadProducts();
+      await _reloadAfterWrite();
       _isLoading = false;
       notifyListeners();
       return true;
@@ -241,7 +293,7 @@ class ProductProvider extends ChangeNotifier {
   Future<bool> deleteProduct(dynamic id) async {
     try {
       await _db.deleteProduct(id);
-      await loadProducts();
+      await _reloadAfterWrite();
       return true;
     } catch (_) {
       return false;

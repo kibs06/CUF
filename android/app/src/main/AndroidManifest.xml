@@ -22,6 +22,11 @@
         <meta-data
             android:name="io.flutter.embedding.android.EnableImpeller"
             android:value="false" />
+        <!-- Bundle the ML Kit OCR model so reference-number scanning works
+             offline (no runtime model download needed). -->
+        <meta-data
+            android:name="com.google.mlkit.vision.DEPENDENCIES"
+            android:value="ocr" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

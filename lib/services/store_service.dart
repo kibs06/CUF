@@ -136,6 +136,52 @@ class StoreService {
     await _client.from('stores').update(updates).eq('id', storeId);
   }
 
+  /// Update the store's static GCash QR settings (used at POS checkout).
+  ///
+  /// Uploads the QR image to the public `store-assets` bucket and stores the
+  /// public URL plus optional account name/number for display under the QR.
+  /// Pass [removeQr] to clear an existing QR without uploading a new one.
+  Future<void> updateGcashSettings({
+    required String storeId,
+    XFile? qrImage,
+    String? accountName,
+    String? gcashNumber,
+    bool removeQr = false,
+  }) async {
+    final sellerId = _client.auth.currentUser!.id;
+    final updates = <String, dynamic>{};
+
+    if (qrImage != null) {
+      // Stable path + upsert: replacing the QR overwrites the same object,
+      // so old files never orphan in the bucket.
+      updates['gcash_qr_url'] = await _uploadStoreImage(
+        bucket: 'store-assets',
+        path: '$sellerId/$storeId/gcash_qr.png',
+        file: qrImage,
+        contentType: 'image/png',
+      );
+    } else if (removeQr) {
+      updates['gcash_qr_url'] = null;
+      // Best-effort removal of the stored object (and any legacy timestamped
+      // file) so removing the QR doesn't leave files behind in the bucket.
+      await _removeStoreObject(
+        bucket: 'store-assets',
+        path: '$sellerId/$storeId/gcash_qr.png',
+      );
+    }
+
+    if (accountName != null) {
+      updates['gcash_account_name'] = accountName.trim();
+    }
+    if (gcashNumber != null) {
+      updates['gcash_number'] = gcashNumber.trim();
+    }
+
+    if (updates.isNotEmpty) {
+      await _client.from('stores').update(updates).eq('id', storeId);
+    }
+  }
+
   /// Toggle store open/closed.
   /// When auto-schedule is enabled:
   /// - Closing (isOpen=false) sets manual_override = true (seller closing against schedule)
@@ -177,18 +223,31 @@ class StoreService {
 
 
 
-  /// Upload a store image (logo or banner) and return the public URL.
+  /// Best-effort removal of a stored object. Ignores errors so removing an
+  /// already-gone object never fails the settings save.
+  Future<void> _removeStoreObject({
+    required String bucket,
+    required String path,
+  }) async {
+    try {
+      await _client.storage.from(bucket).remove([path]);
+    } catch (_) {
+      // Best effort — the DB column is the source of truth for availability.
+    }
+  }
+
+  /// Upload a store image (logo, banner, or GCash QR) and return the public URL.
   Future<String> _uploadStoreImage({
     required String bucket,
     required String path,
     required XFile file,
+    String contentType = 'image/jpeg',
   }) async {
     final bytes = await file.readAsBytes();
     await _client.storage.from(bucket).uploadBinary(
           path,
           bytes,
-          fileOptions:
-              const FileOptions(contentType: 'image/jpeg', upsert: true),
+          fileOptions: FileOptions(contentType: contentType, upsert: true),
         );
     return _client.storage.from(bucket).getPublicUrl(path);
   }

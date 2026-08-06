@@ -1,4 +1,28 @@
-import 'dart:async';
+﻿# POS "Add to Order" — Full Source Context
+
+> Bundled on request for AI agents working on the POS flow (Add to Order / checkout / inventory decrement).
+> **Last updated:** August 6, 2026
+> Files are reproduced verbatim from the repo.
+
+## What's inside
+
+| # | File | Why it matters |
+|---|------|----------------|
+| 1 | `lib/screens/seller/pos_screen.dart` (2118 lines) | The POS screen — product grid, "Add to Order" bottom sheet, `_orderItems` line-item map, Cash/GCash checkout (`_CheckoutSheet`), order creation via `placeOrder(source: 'pos')`. |
+| 2 | `lib/services/order_service.dart` | Order query/write helpers — `placeOrder` (delegates to `SupabaseService.createOrder`), `fetchPosHistory`, the 3-step store-order chain, status updates. |
+| 3 | `supabase/migrations/20260711_fix_trigger_security_definer.sql` | Defines `decrement_inventory_on_order` + `decrement_inventory_on_sale` as `SECURITY DEFINER`. Note: POS sales write `order_items` rows, so the trigger that actually decrements for POS is `decrement_inventory_on_order`; `decrement_inventory_on_sale` covers the legacy `sales_transaction_items` path. |
+
+## Key facts for agents
+
+- POS creates `orders` rows via `OrderProvider.placeOrder(source: 'pos')` → `SupabaseService.createOrder()` (status `received`, `payment_status 'paid'`). `sales_transactions` is legacy/dead.
+- Inventory decrement happens in the DB trigger on `order_items` INSERT — the app never decrements stock itself.
+- Product scoping is app-layer: `ProductProvider.loadSellerProducts()` → `fetchProducts(storeId:)`.
+
+---
+
+# 1. `lib/screens/seller/pos_screen.dart`
+
+```dartimport 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -13,7 +37,6 @@ import '../../providers/order_provider.dart';
 import '../../providers/product_provider.dart';
 import '../../services/product_service.dart';
 import '../../services/store_service.dart';
-import '../../widgets/seller/fly_to_order_animation.dart';
 import 'gcash_ref_scanner_screen.dart';
 import 'pos_barcode_scanner.dart';
 import 'pos_history_screen.dart';
@@ -27,8 +50,7 @@ class POSScreen extends StatefulWidget {
   State<POSScreen> createState() => _POSScreenState();
 }
 
-class _POSScreenState extends State<POSScreen>
-    with SingleTickerProviderStateMixin {
+class _POSScreenState extends State<POSScreen> {
   final TextEditingController _searchController = TextEditingController();
   final Map<String, _POSLineItem> _orderItems = {};
   String _searchKeyword = '';
@@ -42,32 +64,9 @@ class _POSScreenState extends State<POSScreen>
   final List<_ScanHistoryEntry> _scanHistory = [];
   static const int _maxScanHistory = 10;
 
-  /// Target of the fly-to-order flight — the Order segment of the top toggle.
-  /// Resolves while the flight fires; also anchors the landing pulse.
-  final GlobalKey _orderSegmentKey = GlobalKey();
-  late final AnimationController _orderPulseController;
-  late final Animation<double> _orderPulseScale;
-
   @override
   void initState() {
     super.initState();
-    _orderPulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 480),
-    );
-    // Landing pulse: a quick scale-up (with a back overshoot) then settle.
-    _orderPulseScale = TweenSequence<double>([
-      TweenSequenceItem(
-        tween: Tween<double>(begin: 0, end: 1)
-            .chain(CurveTween(curve: Curves.easeOutBack)),
-        weight: 40,
-      ),
-      TweenSequenceItem(
-        tween: Tween<double>(begin: 1, end: 0)
-            .chain(CurveTween(curve: Curves.easeInOut)),
-        weight: 60,
-      ),
-    ]).animate(_orderPulseController);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<ProductProvider>(context, listen: false).loadSellerProducts();
     });
@@ -76,7 +75,6 @@ class _POSScreenState extends State<POSScreen>
   @override
   void dispose() {
     _successTimer?.cancel();
-    _orderPulseController.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -126,12 +124,7 @@ class _POSScreenState extends State<POSScreen>
     return systems.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
   }
 
-  void _addLineItem(
-    Map<String, dynamic> product,
-    String size,
-    int quantity, {
-    Offset? source,
-  }) {
+  void _addLineItem(Map<String, dynamic> product, String size, int quantity) {
     final key = '${product['id']}_$size';
     setState(() {
       final existing = _orderItems[key];
@@ -144,31 +137,8 @@ class _POSScreenState extends State<POSScreen>
       } else {
         existing.quantity += quantity;
       }
-      // Deliberately do NOT switch to the Order panel here — the seller
-      // stays on Products and taps the Order segment when they're ready.
-      // The bottom strip and the fly-to-Order animation still show the
-      // updated count/total immediately.
+      _panelIndex = 1;
     });
-
-    // Fly-to-order animation — fired AFTER the real state update above, so
-    // the flight is purely cosmetic and can never gate or delay the order
-    // data. If the Add button's position wasn't captured (unlikely), fall
-    // back to screen center so the animation never crashes or misfires.
-    if (mounted) {
-      final images = product['images'] as List?;
-      final imageUrl = images?.isNotEmpty == true ? '${images!.first}' : null;
-      FlyToOrderAnimation.show(
-        context: context,
-        source: source ??
-            Offset(
-              MediaQuery.of(context).size.width / 2,
-              MediaQuery.of(context).size.height / 2,
-            ),
-        targetKey: _orderSegmentKey,
-        imageUrl: imageUrl,
-        onLanded: _pulseOrderSegment,
-      );
-    }
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -178,12 +148,6 @@ class _POSScreenState extends State<POSScreen>
         duration: Duration(milliseconds: 900),
       ),
     );
-  }
-
-  /// Brief bounce on the Order segment when a flight lands.
-  void _pulseOrderSegment() {
-    if (!mounted) return;
-    _orderPulseController.forward(from: 0);
   }
 
   Future<void> _confirmClearOrder() async {
@@ -309,10 +273,6 @@ class _POSScreenState extends State<POSScreen>
 
     var selectedSize = sizes.first;
     var quantity = 1;
-
-    // Captured synchronously in the Add button's onPressed — the sheet pops
-    // immediately after, so the button's global position must be read first.
-    final addButtonKey = GlobalKey();
 
     showModalBottomSheet(
       context: context,
@@ -445,7 +405,6 @@ class _POSScreenState extends State<POSScreen>
                       SizedBox(
                         width: double.infinity,
                         child: FilledButton(
-                          key: addButtonKey,
                           style: FilledButton.styleFrom(
                             backgroundColor: AppConstants.accent,
                             padding: const EdgeInsets.symmetric(vertical: 14),
@@ -454,26 +413,8 @@ class _POSScreenState extends State<POSScreen>
                             ),
                           ),
                           onPressed: () {
-                            // Read the button's global position BEFORE the
-                            // sheet pops — it is the flight's source point.
-                            final box = addButtonKey.currentContext
-                                ?.findRenderObject() as RenderBox?;
-                            Offset? source;
-                            if (box != null && box.hasSize) {
-                              source = box.localToGlobal(
-                                Offset(
-                                  box.size.width / 2,
-                                  box.size.height / 2,
-                                ),
-                              );
-                            }
                             Navigator.of(context).pop();
-                            _addLineItem(
-                              product,
-                              selectedSize,
-                              quantity,
-                              source: source,
-                            );
+                            _addLineItem(product, selectedSize, quantity);
                           },
                           child: Text(
                             'Add to Order  ₱${total.toStringAsFixed(0)}',
@@ -636,78 +577,16 @@ class _POSScreenState extends State<POSScreen>
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                 child: SegmentedButton<int>(
                   showSelectedIcon: false,
-                  segments: [
-                    ButtonSegment<int>(
+                  segments: const [
+                    ButtonSegment(
                       value: 0,
-                      label: const SizedBox(
-                        width: 96,
-                        child: Text(
-                          'Products',
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                      icon: const Icon(Icons.grid_view_outlined),
+                      label: Text('Products'),
+                      icon: Icon(Icons.grid_view_outlined),
                     ),
-                    ButtonSegment<int>(
+                    ButtonSegment(
                       value: 1,
-                      label: SizedBox(
-                        // Flight target + landing-pulse anchor. Lives on a
-                        // stable render widget so the GlobalKey always
-                        // resolves while the flight is running.
-                        key: _orderSegmentKey,
-                        width: 96,
-                        child: AnimatedBuilder(
-                          animation: _orderPulseScale,
-                          builder: (context, child) => Transform.scale(
-                            scale: 1 + _orderPulseScale.value * 0.35,
-                            child: child,
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Text('Order'),
-                              if (_itemCount > 0) ...[
-                                const SizedBox(width: 6),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 5,
-                                    vertical: 1,
-                                  ),
-                                  constraints:
-                                      const BoxConstraints(minWidth: 18),
-                                  decoration: BoxDecoration(
-                                    color: _panelIndex == 1
-                                        ? Colors.white
-                                        : AppConstants.primary,
-                                    borderRadius: BorderRadius.circular(9),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withValues(
-                                          alpha: 0.18,
-                                        ),
-                                        blurRadius: 4,
-                                        offset: const Offset(0, 1),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Text(
-                                    '$_itemCount',
-                                    textAlign: TextAlign.center,
-                                    style: AppConstants.monoStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                      color: _panelIndex == 1
-                                          ? AppConstants.primary
-                                          : Colors.white,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ),
-                      icon: const Icon(Icons.receipt_long_outlined),
+                      label: Text('Order'),
+                      icon: Icon(Icons.receipt_long_outlined),
                     ),
                   ],
                   selected: {_panelIndex},
@@ -1576,6 +1455,13 @@ class _CheckoutSheetState extends State<_CheckoutSheet> {
         .eq('id', firstItem.product['id'].toString())
         .single();
 
+    final items = widget.items.values.map((item) => {
+      'product_id': item.product['id'],
+      'size': item.size,
+      'quantity': item.quantity,
+      'unit_price': widget.productPrice(item.product),
+    }).toList();
+
     // Insert order with payment_status='pending'
     final order = await Supabase.instance.client
         .from('orders')
@@ -1593,10 +1479,24 @@ class _CheckoutSheetState extends State<_CheckoutSheet> {
         .select('id')
         .single();
 
-    // NOTE: order_items and order_status_history are intentionally NOT
-    // written here — the inventory-decrement trigger fires on order_items
-    // INSERT, so stock must not move until the seller confirms payment.
-    // Both are written in _confirmGcashPayment() at that exact point.
+    // Insert order items
+    for (final item in items) {
+      await Supabase.instance.client.from('order_items').insert({
+        'order_id': order['id'],
+        'product_id': item['product_id'],
+        'size': item['size'],
+        'quantity': item['quantity'],
+        'unit_price': item['unit_price'],
+      });
+    }
+
+    // Write status history
+    await Supabase.instance.client.from('order_status_history').insert({
+      'order_id': order['id'],
+      'status': 'received',
+      'changed_at': DateTime.now().toIso8601String(),
+    });
+
     return order['id'].toString();
   }
 
@@ -1639,39 +1539,11 @@ class _CheckoutSheetState extends State<_CheckoutSheet> {
 
     setState(() => _gcashConfirming = true);
     try {
-      // Mark the pending order paid first, then write the line items. The
-      // inventory-decrement trigger fires on order_items INSERT, so stock
-      // only moves at this confirmation point — never when the QR screen
-      // opens, and never for a cancelled attempt.
       await Supabase.instance.client.from('orders').update({
         'payment_status': 'paid',
         if (_gcashRefController.text.trim().isNotEmpty)
           'gcash_reference_number': _gcashRefController.text.trim(),
       }).eq('id', orderId);
-
-      // Write the line items — the only point stock is decremented for
-      // GCash sales. A failure here surfaces as _gcashError (below) and
-      // onConfirm is not called, so no partial transaction completes.
-      final items = widget.items.values.map((item) => {
-        'order_id': orderId,
-        'product_id': item.product['id'],
-        'size': item.size,
-        'quantity': item.quantity,
-        'unit_price': widget.productPrice(item.product),
-      }).toList();
-      // Single batched insert = one transaction: if any line fails the
-      // trigger (e.g. insufficient stock), the WHOLE batch rolls back — a
-      // paid order can never end up with partial items or partial stock,
-      // and a retry can't duplicate already-inserted rows.
-      await Supabase.instance.client.from('order_items').insert(items);
-
-      // Status history alongside the items so the order timeline is complete.
-      await Supabase.instance.client.from('order_status_history').insert({
-        'order_id': orderId,
-        'status': 'received',
-        'changed_at': DateTime.now().toIso8601String(),
-      });
-
       widget.onConfirm('GCash', 0, orderId: orderId);
     } catch (e) {
       if (!mounted) return;
@@ -1684,17 +1556,12 @@ class _CheckoutSheetState extends State<_CheckoutSheet> {
   /// Cancel the pending GCash payment and clean up the order.
   ///
   /// Also invoked when the sheet is closed (header X or system back) while a
-  /// pending order exists. A pending order holds no inventory — order_items
-  /// are only written at confirm time — so cancelling never touches stock;
-  /// it simply deletes the lightweight orders row.
+  /// pending order exists — with no webhook to ever confirm it, a stranded
+  /// pending order would permanently hold its inventory decrement.
   Future<void> _cancelGcashPayment() async {
     if (_gcashOrderId != null) {
       try {
-        // Safety net only: order_items are no longer written until payment
-        // is confirmed (see _confirmGcashPayment), so there are normally no
-        // items to delete here, and stock is never decremented until then —
-        // nothing to reverse on cancel. Kept defensive in case a future code
-        // path inserts items earlier again.
+        // Delete the order and its items
         await Supabase.instance.client
             .from('order_items')
             .delete()
@@ -2346,3 +2213,484 @@ class _ScanHistoryEntry {
     required this.productId,
   });
 }
+
+```
+
+---
+
+# 2. `lib/services/order_service.dart`
+
+```dartimport 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'supabase_service.dart';
+
+class OrderService {
+  final SupabaseService _db;
+  final SupabaseClient _client;
+
+  OrderService({SupabaseService? db, SupabaseClient? client})
+    : _db = db ?? SupabaseService.instance,
+      _client = client ?? Supabase.instance.client;
+
+  Future<String> placeOrder(Map<String, dynamic> dto) async {
+    final order = await _db.createOrder(dto);
+    return order['id'].toString();
+  }
+
+
+
+  /// Get order IDs for a store via products → order_items chain.
+  /// Optionally filter by a single [status] or a list of [statuses],
+  /// and optionally limit the number of IDs returned (applied at DB level).
+  Future<List<dynamic>> _getOrderIdsForStore(
+    String storeId, {
+    String? status,
+    List<String>? statuses,
+    int? limit,
+  }) async {
+    final productRows = await _client
+        .from('products')
+        .select('id')
+        .eq('store_id', storeId);
+    final productIds = (productRows as List)
+        .map((r) => (r as Map)['id'])
+        .toList();
+    if (productIds.isEmpty) return [];
+
+    final itemRows = await _client
+        .from('order_items')
+        .select('order_id')
+        .inFilter('product_id', productIds);
+    final orderIds = (itemRows as List)
+        .map((r) => (r as Map)['order_id'])
+        .toSet()
+        .toList();
+    if (orderIds.isEmpty) return [];
+
+    // Filters → order → limit (order before limit so DB sorts first)
+    var query = _client
+        .from('orders')
+        .select('id')
+        .inFilter('id', orderIds);
+    if (statuses != null) {
+      query = query.inFilter('status', statuses);
+    } else if (status != null) {
+      query = query.eq('status', status);
+    }
+    var ordered = query.order('created_at', ascending: false);
+    if (limit != null) {
+      ordered = ordered.limit(limit);
+    }
+    final rows = await ordered;
+    return (rows as List).map((r) => (r as Map)['id']).toList();
+  }
+
+  /// Fetch orders for a store, filtered server-side.
+  Future<List<Map<String, dynamic>>> fetchStoreOrders(
+    String storeId, {
+    String? status,
+  }) async {
+    final orderIds = await _getOrderIdsForStore(storeId, status: status);
+    if (orderIds.isEmpty) return [];
+
+    final data = await _client
+        .from('orders')
+        .select(
+          'id, customer_id, status, total_amount, payment_method, '
+          'created_at',
+        )
+        .inFilter('id', orderIds)
+        .order('created_at', ascending: false);
+
+    final orders = (data as List)
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+
+    final customerIds = orders
+        .map((o) => o['customer_id'] as dynamic)
+        .where((id) => id != null)
+        .toSet()
+        .toList();
+
+    Map<dynamic, Map<String, dynamic>> profilesMap = {};
+    if (customerIds.isNotEmpty) {
+      final profiles = await _client
+          .from('profiles')
+          .select('id, full_name, email')
+          .inFilter('id', customerIds);
+      for (final row in profiles as List) {
+        final map = Map<String, dynamic>.from(row);
+        profilesMap[map['id']] = map;
+      }
+    }
+
+    final itemsData = await _client
+        .from('order_items')
+        .select('order_id, product_id, size, quantity')
+        .inFilter('order_id', orderIds);
+
+    final productIds = itemsData
+        .map((i) => (i as Map)['product_id'])
+        .where((id) => id != null)
+        .toSet()
+        .toList();
+
+    Map<dynamic, String> productNameMap = {};
+    if (productIds.isNotEmpty) {
+      final products = await _client
+          .from('products')
+          .select('id, name')
+          .inFilter('id', productIds);
+      for (final row in products as List) {
+        final map = Map<String, dynamic>.from(row);
+        productNameMap[map['id']] = map['name'] ?? '';
+      }
+    }
+
+    final itemsByOrder = <dynamic, List<Map<String, dynamic>>>{};
+    for (final item in itemsData as List) {
+      final map = Map<String, dynamic>.from(item);
+      final orderId = map['order_id'];
+      map['product_name'] = productNameMap[map['product_id']] ?? '';
+      itemsByOrder.putIfAbsent(orderId, () => []).add(map);
+    }
+
+    for (final order in orders) {
+      final profile = profilesMap[order['customer_id']];
+      if (profile != null) {
+        order['profiles'] = profile;
+      }
+      final items = itemsByOrder[order['id']] ?? [];
+      order['order_items'] = items;
+      order['quantity'] = items.fold<int>(
+        0,
+        (sum, item) => sum + ((item['quantity'] as num?)?.toInt() ?? 0),
+      );
+    }
+
+    return orders;
+  }
+
+  /// Most recent N pending orders for a store with customer name and
+  /// product name. Only `pending`/`placed` orders are included.
+  Future<List<Map<String, dynamic>>> getRecentOrders(
+    String storeId, {
+    int limit = 5,
+  }) async {
+    final orderIds = await _getOrderIdsForStore(
+      storeId,
+      statuses: const ['pending', 'placed'],
+      limit: limit,
+    );
+    if (orderIds.isEmpty) return [];
+
+    final data = await _client
+        .from('orders')
+        .select(
+          'id, customer_id, total_amount, status, created_at',
+        )
+        .inFilter('id', orderIds)
+        .order('created_at', ascending: false);
+
+    final orders = (data as List)
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+
+    final customerIds = orders
+        .map((o) => o['customer_id'] as dynamic)
+        .where((id) => id != null)
+        .toSet()
+        .toList();
+
+    Map<dynamic, String> nameMap = {};
+    if (customerIds.isNotEmpty) {
+      final profiles = await _client
+          .from('profiles')
+          .select('id, full_name')
+          .inFilter('id', customerIds);
+      for (final row in profiles as List) {
+        final map = Map<String, dynamic>.from(row);
+        nameMap[map['id']] = map['full_name'] ?? 'Customer';
+      }
+    }
+
+    final itemsData = await _client
+        .from('order_items')
+        .select('order_id, product_id, quantity')
+        .inFilter('order_id', orderIds);
+
+    final productIds = itemsData
+        .map((i) => (i as Map)['product_id'])
+        .where((id) => id != null)
+        .toSet()
+        .toList();
+
+    Map<dynamic, String> productNames = {};
+    if (productIds.isNotEmpty) {
+      final products = await _client
+          .from('products')
+          .select('id, name')
+          .inFilter('id', productIds);
+      for (final row in products as List) {
+        final map = Map<String, dynamic>.from(row);
+        productNames[map['id']] = map['name'] ?? '';
+      }
+    }
+
+    Map<dynamic, String> orderProductNames = {};
+    Map<dynamic, int> orderQuantities = {};
+    for (final item in itemsData as List) {
+      final map = Map<String, dynamic>.from(item);
+      final orderId = map['order_id'];
+      if (!orderProductNames.containsKey(orderId)) {
+        orderProductNames[orderId] = productNames[map['product_id']] ?? '';
+      }
+      orderQuantities[orderId] = (orderQuantities[orderId] ?? 0) +
+          ((map['quantity'] as num?)?.toInt() ?? 0);
+    }
+
+    for (final order in orders) {
+      order['customer_name'] = nameMap[order['customer_id']] ?? 'Customer';
+      order['product_name'] = orderProductNames[order['id']] ?? '';
+      order['quantity'] = orderQuantities[order['id']] ?? 0;
+    }
+
+    return orders;
+  }
+
+  /// Count of orders grouped by status for a store.
+  Future<Map<String, int>> getOrderCountByStatus(String storeId) async {
+    final orderIds = await _getOrderIdsForStore(storeId);
+    if (orderIds.isEmpty) return {};
+
+    final data = await _client
+        .from('orders')
+        .select('id, status')
+        .inFilter('id', orderIds)
+        .neq('status', 'cancelled');
+
+    final counts = <String, int>{};
+    for (final row in data as List) {
+      final status = row['status'] as String? ?? 'unknown';
+      counts[status] = (counts[status] ?? 0) + 1;
+    }
+    return counts;
+  }
+
+  Future<void> updateOrderStatus(String orderId, String newStatus) async {
+    await _db.updateOrderStatus(orderId, newStatus);
+  }
+
+  /// Fetch POS transaction history for a store.
+  ///
+  /// Returns only orders with `source='pos'` (in-person sales),
+  /// scoped to the given [storeId], ordered most-recent-first.
+  /// Each order includes its line items with product names.
+  ///
+  /// Queries orders directly by store_id + source (no 3-step chain needed)
+  /// since orders.store_id is reliably set during order creation.
+  Future<List<Map<String, dynamic>>> fetchPosHistory(String storeId) async {
+    // Fetch POS-only orders directly (store_id + source filter)
+    final data = await _client
+        .from('orders')
+        .select(
+          'id, customer_id, status, total_amount, payment_method, '
+          'payment_status, notes, created_at, source, '
+          'amount_tendered, change_amount',
+        )
+        .eq('store_id', storeId)
+        .eq('source', 'pos')
+        .order('created_at', ascending: false);
+
+    final orders = (data as List)
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+
+    if (orders.isEmpty) return [];
+
+    // 2. Fetch order items with product names and images
+    final allOrderIds = orders.map((o) => o['id']).toList();
+    final itemsData = await _client
+        .from('order_items')
+        .select('order_id, product_id, size, quantity, unit_price')
+        .inFilter('order_id', allOrderIds);
+
+    // 3. Fetch product names and images
+    final productIds = itemsData
+        .map((i) => (i as Map)['product_id'])
+        .where((id) => id != null)
+        .toSet()
+        .toList();
+
+    Map<dynamic, String> productNames = {};
+    Map<dynamic, String> productImages = {};
+    if (productIds.isNotEmpty) {
+      final products = await _client
+          .from('products')
+          .select('id, name, product_images(image_url, display_order)')
+          .inFilter('id', productIds);
+      for (final row in products as List) {
+        final map = Map<String, dynamic>.from(row);
+        productNames[map['id']] = map['name'] ?? '';
+        // Get first image URL
+        final images = map['product_images'] as List? ?? [];
+        if (images.isNotEmpty) {
+          final sorted = List<Map<String, dynamic>>.from(images)
+            ..sort((a, b) => ((a['display_order'] ?? 0) as int)
+                .compareTo(((b['display_order'] ?? 0) as int)));
+          productImages[map['id']] = sorted.first['image_url']?.toString() ?? '';
+        }
+      }
+    }
+
+    // 4. Group items by order and enrich with product names and images
+    final itemsByOrder = <dynamic, List<Map<String, dynamic>>>{};
+    for (final item in itemsData as List) {
+      final map = Map<String, dynamic>.from(item);
+      map['product_name'] = productNames[map['product_id']] ?? '';
+      map['product_image'] = productImages[map['product_id']] ?? '';
+      itemsByOrder.putIfAbsent(map['order_id'], () => []).add(map);
+    }
+
+    for (final order in orders) {
+      order['order_items'] = itemsByOrder[order['id']] ?? [];
+      order['items_count'] = (order['order_items'] as List)
+          .fold<int>(0, (sum, item) => sum + ((item['quantity'] as num?)?.toInt() ?? 0));
+    }
+
+    return orders;
+  }
+
+  /// Fetch all orders for the currently logged-in customer.
+  /// Returns orders with their items (product name, size, quantity) joined.
+  Future<List<Map<String, dynamic>>> fetchMyOrders() async {
+    final data = await _client
+        .from('orders')
+        .select(
+          'id, customer_id, status, total_amount, payment_method, '
+          'payment_status, created_at, store_id, '
+          'order_items(id, product_id, size, quantity, unit_price, '
+          'products(name, category, product_images(image_url, display_order)))',
+        )
+        .order('created_at', ascending: false);
+
+    return (data as List)
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+  }
+
+  /// Permanently delete a cancelled order (customer-owned action).
+  ///
+  /// The `status = 'cancelled'` filter is a guardrail: non-cancelled orders
+  /// are never deletable through this call, even if invoked programmatically.
+  /// Child rows (order_items, order_status_history) cascade via
+  /// `ON DELETE CASCADE` on orders.id. RLS additionally scopes the delete
+  /// to `auth.uid() = customer_id`.
+  Future<void> deleteOrder(String orderId) async {
+    await _client
+        .from('orders')
+        .delete()
+        .eq('id', orderId)
+        .eq('status', 'cancelled');
+  }
+}
+
+```
+
+---
+
+# 3. `supabase/migrations/20260711_fix_trigger_security_definer.sql`
+
+```sql-- ══════════════════════════════════════════════════════════════════
+-- FIX: Add SECURITY DEFINER to inventory trigger functions
+-- Date: July 4, 2026
+--
+-- ROOT CAUSE:
+--   The `decrement_inventory_on_order` and `decrement_inventory_on_sale`
+--   trigger functions run WITHOUT SECURITY DEFINER, meaning they execute
+--   as the calling user (the authenticated customer). The `inventory`
+--   table has RLS policies that only allow sellers and admins to UPDATE
+--   rows. When a customer places an order, the trigger's UPDATE on
+--   inventory is silently blocked by RLS, matching 0 rows, which causes
+--   the function to raise 'Insufficient stock' — even when stock is 46.
+--
+--   The app's SELECT on inventory succeeds (there's a "viewable by
+--   everyone" policy), so the app correctly sees stock=46. But the
+--   trigger's UPDATE fails because the customer has no UPDATE policy.
+--
+-- FIX: Add SECURITY DEFINER so the functions run as the function owner
+-- (supabase_admin), bypassing RLS. This is safe because these functions
+-- only perform controlled stock decrements guarded by `stock >= quantity`.
+-- ══════════════════════════════════════════════════════════════════
+
+-- 1) Fix the ORDER trigger function
+CREATE OR REPLACE FUNCTION public.decrement_inventory_on_order()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $function$
+begin
+  update public.inventory
+  set stock = stock - new.quantity
+  where product_id = new.product_id
+    and regexp_replace(size, '\D', '', 'g') = regexp_replace(new.size, '\D', '', 'g')
+    and stock >= new.quantity;
+
+  if not found then
+    raise exception 'Insufficient stock for product % size %',
+      new.product_id, new.size;
+  end if;
+
+  return new;
+end;
+$function$;
+
+-- 2) Fix the SALE trigger function (POS sales have the same issue)
+CREATE OR REPLACE FUNCTION public.decrement_inventory_on_sale()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $function$
+begin
+  update public.inventory
+  set stock = stock - new.quantity
+  where product_id = new.product_id
+    and regexp_replace(size, '\D', '', 'g') = regexp_replace(new.size, '\D', '', 'g')
+    and stock >= new.quantity;
+
+  if not found then
+    raise exception 'Insufficient stock for product % size %',
+      new.product_id, new.size;
+  end if;
+
+  return new;
+end;
+$function$;
+
+-- ══════════════════════════════════════════════════════════════════
+-- VERIFICATION QUERIES (run after applying the migration)
+-- ══════════════════════════════════════════════════════════════════
+
+-- A) Confirm SECURITY DEFINER is set on both functions
+SELECT proname, proconfig
+FROM pg_proc
+WHERE proname IN ('decrement_inventory_on_order', 'decrement_inventory_on_sale');
+
+-- B) Confirm inventory has the correct row for the test product
+SELECT product_id, size, stock
+FROM public.inventory
+WHERE product_id = 'aaaaaaaa-0001-0001-0001-000000000001'
+ORDER BY size;
+
+-- C) Find and clean up orphaned orders (orders with 0 items)
+SELECT o.id, o.status, o.total_amount, o.created_at,
+       (SELECT COUNT(*) FROM order_items oi WHERE oi.order_id = o.id) AS item_count
+FROM orders o
+WHERE NOT EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = o.id)
+ORDER BY o.created_at DESC;
+
+-- D) Delete orphaned orders (uncomment after reviewing Step C results)
+-- DELETE FROM orders
+-- WHERE NOT EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = orders.id);
+
+```

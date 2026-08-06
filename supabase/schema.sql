@@ -80,8 +80,13 @@ CREATE TABLE IF NOT EXISTS public.stores (
     is_open         BOOLEAN DEFAULT true,
     is_active       BOOLEAN DEFAULT true,
     owner_id        UUID REFERENCES public.profiles(id),
-    created_at      TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-    -- gcash_qr_url, gcash_number, gcash_account_name removed (PayMongo replaces manual GCash)
+    created_at      TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    -- Static GCash QR for POS checkout (seller-uploaded, replaces PayMongo dynamic QR).
+    -- Re-added by 20260806000000_add_static_gcash_qr.sql after being dropped
+    -- by 20260730000000_add_paymongo_gcash_columns.sql.
+    gcash_qr_url        TEXT,
+    gcash_number        TEXT,
+    gcash_account_name  TEXT
 );
 
 ALTER TABLE public.stores ENABLE ROW LEVEL SECURITY;

@@ -1,22 +1,40 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../constants/app_constants.dart';
 
+/// Flat, universal stock cap per size. UI-layer only — a predictable limit
+/// for sellers; no DB CHECK constraint (the schema's `stock >= 0` guard is
+/// untouched). Shared by `_showStockEditor` and every row so the `+` button,
+/// the inline field, and the sheet all agree.
+const int kMaxStockPerSize = 99;
+
 /// Per-size stock stepper row inside the Adjust Stock bottom sheet.
 ///
-/// VISUAL REDESIGN NOTES (Aug 2026):
+/// REDESIGN NOTES (Aug 2026):
 /// - Filled warm-brown stepper buttons (44×44 hit targets) instead of thin
 ///   outlined circles.
 /// - Stock-state color coding matching the grid's badges: healthy = green,
-///   low (≤ [lowStockThreshold]) = amber, zero = urgent red.
-/// - Threshold-aware progress bar: an amber "danger zone" spans the low-stock
-///   cutoff so the seller sees at a glance which sizes need restocking.
-/// - Tap the number to type an exact value (clamped to [0, maxStock]).
-/// - Scale pulse on every +/- tap + a fading "saved" checkmark.
+///   low (≤ [lowStockThreshold]) = amber, zero = urgent red. The count text
+///   and number field carry the color (the old progress bar is gone).
+/// - Flat universal cap of [kMaxStockPerSize] per size — the `+` button
+///   disables at the cap and typed values above it are clamped with an
+///   inline "Max 99 per size" message (UI-layer clamp only; no DB constraint).
+/// - Tap the number to type an exact value inline (clamped to
+///   [0, kMaxStockPerSize]) — the field's controller is owned by this State
+///   (created once in [State.initState], disposed in [State.dispose]) so
+///   keyboard dismissal / sheet teardown can never touch a dead controller.
+/// - Scale pulse on every +/- tap for immediate feedback.
 ///
-/// THE WRITE CONTRACT IS UNCHANGED: every edit (stepper or typed) funnels
-/// through the same 800ms-debounced [onStockChanged] callback — the parent
-/// owns all Supabase writes. Do not add any DB call here.
+/// CONFIRM-TO-SAVE MODEL: edits are staged LOCALLY only. +/− taps and typed
+/// values update this row's [currentStock]-seeded local value and immediately
+/// notify the parent through [onStockChanged] — the parent owns the dirty
+/// flag and does the single Supabase write when the sheet's Confirm button is
+/// tapped. There is deliberately NO debounce and NO per-tap write here: the
+/// old 800ms autosave timer (which could fire after the row was disposed and
+/// was the crash source behind the "TextEditingController used after being
+/// disposed" bug) has been removed entirely.
 class SellerInventoryRow extends StatefulWidget {
   final String productName;
   final String size;
@@ -44,8 +62,17 @@ class _SellerInventoryRowState extends State<SellerInventoryRow>
   static const int lowStockThreshold = 5;
 
   late int _stock;
-  bool _isSaving = false;
-  bool _saved = false;
+
+  // Owned by this State for the row's full lifetime — created once in
+  // initState, disposed in dispose. A controller/focus recreated per-build
+  // (or owned by a dialog that pops while the exit animation still holds
+  // listeners) is what produced the "TextEditingController used after being
+  // disposed" crash; never reintroduce that pattern.
+  late final TextEditingController _stockController;
+  late final FocusNode _stockFocus;
+
+  Timer? _clampMessageTimer;
+  bool _showClampMessage = false;
 
   late final AnimationController _pulseController;
   late final Animation<double> _pulseScale;
@@ -54,12 +81,13 @@ class _SellerInventoryRowState extends State<SellerInventoryRow>
   void initState() {
     super.initState();
     _stock = widget.currentStock;
+    _stockController = TextEditingController(text: '$_stock');
+    _stockFocus = FocusNode();
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 160),
     );
-    // Quick dip-and-recover so a tap reads as immediate feedback before the
-    // debounced save fires.
+    // Quick dip-and-recover so a tap reads as immediate feedback.
     _pulseScale = TweenSequence<double>([
       TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.82), weight: 40),
       TweenSequenceItem(tween: Tween(begin: 0.82, end: 1.0), weight: 60),
@@ -70,8 +98,25 @@ class _SellerInventoryRowState extends State<SellerInventoryRow>
 
   @override
   void dispose() {
+    _clampMessageTimer?.cancel();
+    _stockController.dispose();
+    _stockFocus.dispose();
     _pulseController.dispose();
     super.dispose();
+  }
+
+  /// Keep the field in sync if the parent ever pushes a new stock value
+  /// (e.g. after Confirm succeeded and the sheet rebuilt). Only touches the
+  /// controller while this row is still alive.
+  @override
+  void didUpdateWidget(SellerInventoryRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.currentStock != widget.currentStock &&
+        widget.currentStock != _stock &&
+        !_stockFocus.hasFocus) {
+      _stock = widget.currentStock;
+      _stockController.text = '$_stock';
+    }
   }
 
   // ─── STOCK STATE ───────────────────────────────────────────────
@@ -89,36 +134,25 @@ class _SellerInventoryRowState extends State<SellerInventoryRow>
 
   // ─── MUTATIONS ─────────────────────────────────────────────────
 
-  /// Single mutation path shared by the +/− steppers and the tap-to-edit
-  /// field. Clamps to [0, maxStock] and schedules the SAME 800ms debounce —
-  /// write behavior is byte-for-byte identical to the previous inline logic.
+  /// Single local mutation path shared by the +/− steppers and the inline
+  /// field. Clamps to [0, widget.maxStock], updates local state, then
+  /// notifies the parent SYNCHRONOUSLY so the sheet can track dirty state.
+  /// No timer, no write — the sheet's Confirm button persists everything.
   void _setStock(int newStock) {
     final clamped = newStock.clamp(0, widget.maxStock);
     setState(() {
       _stock = clamped;
-      _isSaving = true;
-      _saved = false;
     });
+    // Keep the field's text in sync with the steppers, but never clobber a
+    // value the seller is actively typing.
+    if (!_stockFocus.hasFocus) {
+      _stockController.text = '$clamped';
+    }
 
-    Future.delayed(const Duration(milliseconds: 800), () {
-      if (mounted) {
-        setState(() {
-          _isSaving = false;
-          _saved = true;
-        });
-      }
-      // Fire the change even if this row was disposed (e.g. the sheet was
-      // closed right after tapping). Dropping it here would silently lose
-      // the seller's restock — the parent decides what to do with it.
-      widget.onStockChanged(_stock);
-      if (mounted) {
-        Future.delayed(const Duration(seconds: 1), () {
-          if (mounted) {
-            setState(() => _saved = false);
-          }
-        });
-      }
-    });
+    // Synchronous parent notification (ValueChanged<int>). Safe after
+    // dispose? This is only ever called from a live tap/submit handler while
+    // the sheet is mounted, so the parent is guaranteed alive here.
+    widget.onStockChanged(clamped);
   }
 
   void _changeStock(int delta) {
@@ -128,64 +162,33 @@ class _SellerInventoryRowState extends State<SellerInventoryRow>
 
   void _pulse() => _pulseController.forward(from: 0);
 
-  /// Tap-to-edit: type an exact count (clamped to [0, maxStock]) then
-  /// confirm — goes through the identical debounced [onStockChanged] path.
-  Future<void> _openDirectEditor() async {
-    final controller = TextEditingController(text: '$_stock');
-    final entered = await showDialog<int>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(
-          'Set stock — Size ${widget.size}',
-          style: AppConstants.bodyStyle(
-            fontSize: 17,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          keyboardType: TextInputType.number,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          style: AppConstants.monoStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
-          decoration: InputDecoration(
-            labelText: 'Units',
-            hintText: '0 – ${widget.maxStock}',
-            border: const OutlineInputBorder(),
-          ),
-          textInputAction: TextInputAction.done,
-          onSubmitted: (_) => Navigator.of(ctx)
-              .pop(int.tryParse(controller.text.trim())),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text(
-              'Cancel',
-              style: AppConstants.bodyStyle(color: AppConstants.secondary),
-            ),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppConstants.primary),
-            onPressed: () =>
-                Navigator.of(ctx).pop(int.tryParse(controller.text.trim())),
-            child: Text(
-              'Save',
-              style: AppConstants.bodyStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-    controller.dispose();
-    if (entered == null || !mounted) return;
-    _setStock(entered.clamp(0, widget.maxStock));
+  /// Commit what the seller typed in the inline field: parse → clamp to
+  /// [0, widget.maxStock] → surface "Max 99 per size" when the cap was hit →
+  /// go through the identical local-mutation path. Empty or unparseable
+  /// input just reverts the field to the current count.
+  void _commitField() {
+    final text = _stockController.text.trim();
+    if (text.isEmpty) {
+      _stockController.text = '$_stock';
+      return;
+    }
+    var value = int.tryParse(text) ?? _stock;
+    if (value > widget.maxStock) {
+      value = widget.maxStock;
+      _flashClampMessage();
+    }
+    _stockController.text = '$value';
+    if (value != _stock) {
+      _setStock(value);
+    }
+  }
+
+  void _flashClampMessage() {
+    _clampMessageTimer?.cancel();
+    if (mounted) setState(() => _showClampMessage = true);
+    _clampMessageTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _showClampMessage = false);
+    });
   }
 
   // ─── BUILD ─────────────────────────────────────────────────────
@@ -211,8 +214,6 @@ class _SellerInventoryRowState extends State<SellerInventoryRow>
               color: AppConstants.secondary,
             ),
           ),
-          const SizedBox(height: 8),
-          _buildProgressBar(),
           const SizedBox(height: 8),
           Row(
             children: [
@@ -247,7 +248,7 @@ class _SellerInventoryRowState extends State<SellerInventoryRow>
                 onTap: () => _changeStock(-1),
               ),
               const SizedBox(width: 6),
-              _buildNumberEditor(),
+              _buildStockField(),
               const SizedBox(width: 6),
               _buildStepperButton(
                 icon: Icons.add,
@@ -255,76 +256,83 @@ class _SellerInventoryRowState extends State<SellerInventoryRow>
                 label: 'Increase stock for size ${widget.size}',
                 onTap: () => _changeStock(1),
               ),
-              const SizedBox(width: 10),
-              _buildStatusIndicator(),
             ],
           ),
+          if (_showClampMessage) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Max ${widget.maxStock} per size',
+              style: AppConstants.bodyStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: AppConstants.statusPendingColor,
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 
-  /// Progress bar with an amber "danger zone" under the low-stock cutoff, a
-  /// stock-state-colored fill, and a tick at the threshold — communicates the
-  /// restock threshold at a glance instead of just a percentage.
-  Widget _buildProgressBar() {
-    final maxStock = widget.maxStock > 0 ? widget.maxStock : 1;
-    final stockFrac = (_stock / maxStock).clamp(0.0, 1.0);
-    final thresholdFrac = (lowStockThreshold / maxStock).clamp(0.0, 1.0);
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth;
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: SizedBox(
-            height: 8,
-            width: width,
-            child: Stack(
-              children: [
-                // Track
-                Positioned.fill(
-                  child: Container(
-                    color: AppConstants.borderGray.withValues(alpha: 0.3),
-                  ),
-                ),
-                // Amber danger zone (0 → low-stock threshold)
-                if (thresholdFrac > 0)
-                  Positioned(
-                    left: 0,
-                    top: 0,
-                    bottom: 0,
-                    width: width * thresholdFrac,
-                    child: Container(
-                      color: AppConstants.statusPendingColor
-                          .withValues(alpha: 0.18),
-                    ),
-                  ),
-                // Actual stock fill
-                Positioned(
-                  left: 0,
-                  top: 0,
-                  bottom: 0,
-                  width: width * stockFrac,
-                  child: Container(color: _stockColor),
-                ),
-                // Threshold tick marker
-                if (thresholdFrac > 0 && thresholdFrac < 1)
-                  Positioned(
-                    left: (width * thresholdFrac) - 1,
-                    top: 0,
-                    bottom: 0,
-                    width: 2,
-                    child: Container(
-                      color: AppConstants.statusPendingColor
-                          .withValues(alpha: 0.55),
-                    ),
-                  ),
-              ],
+  /// Inline number field — tap to type an exact count, commit on submit or
+  /// focus loss. Styled by stock state so the count itself communicates
+  /// health at a glance (the progress bar's job in the old design). The
+  /// controller/focus are State-owned (see initState/dispose) so keyboard
+  /// dismissal or sheet teardown can never hit a disposed controller.
+  Widget _buildStockField() {
+    return Semantics(
+      textField: true,
+      label: 'Stock for size ${widget.size}: $_stock. Tap to edit',
+      child: SizedBox(
+        width: 64,
+        child: TextField(
+          controller: _stockController,
+          focusNode: _stockFocus,
+          textAlign: TextAlign.center,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          textInputAction: TextInputAction.done,
+          style: AppConstants.monoStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.bold,
+            color: _stockColor,
+          ),
+          decoration: InputDecoration(
+            isDense: true,
+            filled: true,
+            fillColor: _stockColor.withValues(alpha: 0.08),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(
+                color: _stockColor.withValues(alpha: 0.35),
+              ),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(
+                color: _stockColor.withValues(alpha: 0.35),
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(
+                color: _stockColor,
+                width: 1.5,
+              ),
             ),
           ),
-        );
-      },
+          onSubmitted: (_) {
+            _commitField();
+            _stockFocus.unfocus();
+          },
+          onTapOutside: (_) {
+            _commitField();
+            _stockFocus.unfocus();
+          },
+        ),
+      ),
     );
   }
 
@@ -383,49 +391,6 @@ class _SellerInventoryRowState extends State<SellerInventoryRow>
     );
   }
 
-  /// Tappable number chip — opens the direct-entry dialog on tap. Colored by
-  /// stock state so the count itself communicates health at a glance.
-  Widget _buildNumberEditor() {
-    return Semantics(
-      button: true,
-      label: 'Stock for size ${widget.size}: $_stock. Tap to edit',
-      child: InkWell(
-        onTap: _openDirectEditor,
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          // Min-width so the tap area is comfortable; grows for large counts.
-          constraints: const BoxConstraints(minWidth: 52),
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-          decoration: BoxDecoration(
-            color: _stockColor.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: _stockColor.withValues(alpha: 0.35)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                '$_stock',
-                style: AppConstants.monoStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.bold,
-                  color: _stockColor,
-                ),
-              ),
-              Text(
-                'edit',
-                style: AppConstants.bodyStyle(
-                  fontSize: 8,
-                  color: AppConstants.secondary.withValues(alpha: 0.45),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildStateChip(String label, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -440,36 +405,6 @@ class _SellerInventoryRowState extends State<SellerInventoryRow>
           fontWeight: FontWeight.bold,
           color: color,
         ),
-      ),
-    );
-  }
-
-  /// Saving spinner → fading "saved" checkmark (same debounce-driven signal
-  /// as before, now animated). No new save path — purely visual feedback.
-  Widget _buildStatusIndicator() {
-    return SizedBox(
-      width: 18,
-      height: 18,
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 250),
-        child: _isSaving
-            ? const SizedBox(
-                key: ValueKey('saving'),
-                width: 14,
-                height: 14,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: AppConstants.accent,
-                ),
-              )
-            : _saved
-                ? const Icon(
-                    Icons.check_circle,
-                    key: ValueKey('saved'),
-                    size: 16,
-                    color: AppConstants.okStockColor,
-                  )
-                : const SizedBox.shrink(key: ValueKey('idle')),
       ),
     );
   }
