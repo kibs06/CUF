@@ -13,6 +13,8 @@ import '../../providers/order_provider.dart';
 import '../../providers/product_provider.dart';
 import '../../services/product_service.dart';
 import '../../services/store_service.dart';
+import '../../widgets/empty_state_widget.dart';
+import '../../widgets/shimmer_box.dart';
 import '../../widgets/seller/fly_to_order_animation.dart';
 import 'gcash_ref_scanner_screen.dart';
 import 'pos_barcode_scanner.dart';
@@ -28,7 +30,7 @@ class POSScreen extends StatefulWidget {
 }
 
 class _POSScreenState extends State<POSScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
   final Map<String, _POSLineItem> _orderItems = {};
   String _searchKeyword = '';
@@ -47,6 +49,11 @@ class _POSScreenState extends State<POSScreen>
   final GlobalKey _orderSegmentKey = GlobalKey();
   late final AnimationController _orderPulseController;
   late final Animation<double> _orderPulseScale;
+
+  /// Quick fade when switching Products ⇄ Order panels — consistent motion
+  /// language without losing each panel's state (IndexedStack stays mounted).
+  late final AnimationController _panelFadeController;
+  late final Animation<double> _panelFade;
 
   @override
   void initState() {
@@ -68,6 +75,14 @@ class _POSScreenState extends State<POSScreen>
         weight: 60,
       ),
     ]).animate(_orderPulseController);
+    _panelFadeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    )..value = 1; // start fully visible; fade in on each panel switch
+    _panelFade = CurvedAnimation(
+      parent: _panelFadeController,
+      curve: Curves.easeOut,
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<ProductProvider>(context, listen: false).loadSellerProducts();
     });
@@ -77,6 +92,7 @@ class _POSScreenState extends State<POSScreen>
   void dispose() {
     _successTimer?.cancel();
     _orderPulseController.dispose();
+    _panelFadeController.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -318,6 +334,10 @@ class _POSScreenState extends State<POSScreen>
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      sheetAnimationStyle: const AnimationStyle(
+        duration: Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic,
+      ),
       builder: (context) {
         final bottomSafe = MediaQuery.of(context).viewPadding.bottom;
         final maxSheetHeight =
@@ -454,6 +474,7 @@ class _POSScreenState extends State<POSScreen>
                             ),
                           ),
                           onPressed: () {
+                            HapticFeedback.lightImpact();
                             // Read the button's global position BEFORE the
                             // sheet pops — it is the flight's source point.
                             final box = addButtonKey.currentContext
@@ -502,6 +523,10 @@ class _POSScreenState extends State<POSScreen>
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      sheetAnimationStyle: const AnimationStyle(
+        duration: Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic,
+      ),
       builder: (context) {
         return _CheckoutSheet(
           total: _subtotal,
@@ -566,6 +591,7 @@ class _POSScreenState extends State<POSScreen>
       _panelIndex = 0;
       _showSuccessOverlay = true;
     });
+    HapticFeedback.mediumImpact();
 
     _successTimer?.cancel();
     _successTimer = Timer(const Duration(seconds: 3), () {
@@ -711,8 +737,10 @@ class _POSScreenState extends State<POSScreen>
                     ),
                   ],
                   selected: {_panelIndex},
-                  onSelectionChanged: (selection) =>
-                      setState(() => _panelIndex = selection.first),
+                  onSelectionChanged: (selection) {
+                    setState(() => _panelIndex = selection.first);
+                    _panelFadeController.forward(from: 0);
+                  },
                   style: ButtonStyle(
                     backgroundColor: WidgetStateProperty.resolveWith(
                       (states) => states.contains(WidgetState.selected)
@@ -728,16 +756,19 @@ class _POSScreenState extends State<POSScreen>
                 ),
               ),
               Expanded(
-                child: IndexedStack(
-                  index: _panelIndex,
-                  children: [
-                    _buildProductsPanel(
-                      productProvider.isLoading,
-                      products,
-                      categories,
-                    ),
-                    _buildOrderPanel(),
-                  ],
+                child: FadeTransition(
+                  opacity: _panelFade,
+                  child: IndexedStack(
+                    index: _panelIndex,
+                    children: [
+                      _buildProductsPanel(
+                        productProvider.isLoading,
+                        products,
+                        categories,
+                      ),
+                      _buildOrderPanel(),
+                    ],
+                  ),
                 ),
               ),
               _buildCheckoutStrip(),
@@ -762,8 +793,46 @@ class _POSScreenState extends State<POSScreen>
     List<String> categories,
   ) {
     if (isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppConstants.primary),
+      // Skeleton grid — reuse the shared ShimmerBox so the first paint feels
+      // instant instead of a bare spinner.
+      return MasonryGridView.count(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+        crossAxisCount: 2,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+        itemCount: 8,
+        itemBuilder: (context, index) => Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: AppConstants.cardRadius,
+            boxShadow: AppConstants.sellerShadow,
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const AspectRatio(
+                aspectRatio: 1.0,
+                child: ShimmerBox(
+                  width: double.infinity,
+                  height: double.infinity,
+                  borderRadius: 0,
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    ShimmerBox(width: 120, height: 12, borderRadius: 6),
+                    SizedBox(height: 8),
+                    ShimmerBox(width: 56, height: 12, borderRadius: 6),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       );
     }
 
@@ -848,9 +917,13 @@ class _POSScreenState extends State<POSScreen>
         Expanded(
           child: products.isEmpty
               ? Center(
-                  child: Text(
-                    'No matching products',
-                    style: AppConstants.bodyStyle(color: Colors.grey.shade500),
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: EmptyStateWidget(
+                      icon: Icons.search_off_rounded,
+                      title: 'No matching products',
+                      subtitle: 'Try a different keyword or category.',
+                    ),
                   ),
                 )
               : MasonryGridView.count(
@@ -893,17 +966,19 @@ class _POSScreenState extends State<POSScreen>
 
     return Opacity(
       opacity: out ? 0.48 : 1,
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: AppConstants.cardRadius,
-          boxShadow: AppConstants.warmShadow,
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: out ? null : () => _openProductSheet(product),
+      child: _PressScale(
+        enabled: !out,
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: AppConstants.cardRadius,
+            boxShadow: AppConstants.warmShadow,
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: out ? null : () => _openProductSheet(product),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
@@ -985,18 +1060,19 @@ class _POSScreenState extends State<POSScreen>
                       // Stock badge — flows naturally below price
                       Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
+                          horizontal: 8,
                           vertical: 3,
                         ),
                         decoration: BoxDecoration(
                           color: badgeBg,
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: AppConstants.stadiumRadius,
                         ),
                         child: Text(
                           badgeText,
                           style: AppConstants.bodyStyle(
                             fontSize: 9,
                             fontWeight: FontWeight.w700,
+                            letterSpacing: 0.3,
                             color: badgeFg,
                           ),
                         ),
@@ -1008,6 +1084,7 @@ class _POSScreenState extends State<POSScreen>
             ),
           ),
         ),
+      ),
       ),
     );
   }
@@ -1103,14 +1180,25 @@ class _POSScreenState extends State<POSScreen>
                 ],
               ),
             ),
-            TextButton(
+            OutlinedButton(
               onPressed: _confirmClearOrder,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppConstants.error,
+                side: BorderSide(
+                  color: AppConstants.error.withValues(alpha: 0.35),
+                ),
+                shape: const StadiumBorder(),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 6,
+                ),
+                visualDensity: VisualDensity.compact,
+              ),
               child: Text(
                 'Clear',
                 style: AppConstants.bodyStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: AppConstants.error,
                 ),
               ),
             ),
@@ -1152,28 +1240,34 @@ class _POSScreenState extends State<POSScreen>
 
   Widget _buildOrderLine(String key, _POSLineItem item) {
     final lineTotal = _productPrice(item.product) * item.quantity;
+    final images = item.product['images'] as List?;
+    final imageUrl = images?.isNotEmpty == true ? '${images!.first}' : '';
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppConstants.cardRadius,
         boxShadow: AppConstants.sellerShadow,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: AppConstants.primary.withValues(alpha: 0.14),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(
-              Icons.inventory_2_outlined,
-              size: 18,
-              color: AppConstants.primary,
+          // Product thumbnail — same source as the grid tiles; falls back to
+          // the stock icon when a product has no image.
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: SizedBox(
+              width: 38,
+              height: 38,
+              child: imageUrl.isEmpty
+                  ? _orderLineFallbackImage()
+                  : Image.network(
+                      imageUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stack) =>
+                          _orderLineFallbackImage(),
+                    ),
             ),
           ),
           const SizedBox(width: 10),
@@ -1246,21 +1340,59 @@ class _POSScreenState extends State<POSScreen>
     );
   }
 
+  /// Placeholder for an order line without an image — the same soft beige
+  /// tile + stock icon used by the product grid's image-less state.
+  Widget _orderLineFallbackImage() {
+    return Container(
+      color: AppConstants.primary.withValues(alpha: 0.14),
+      child: const Icon(
+        Icons.inventory_2_outlined,
+        size: 18,
+        color: AppConstants.primary,
+      ),
+    );
+  }
+
   Widget _quantityButton(IconData icon, bool enabled, VoidCallback onPressed) {
-    return IconButton(
-      visualDensity: VisualDensity.compact,
-      iconSize: 18,
-      onPressed: enabled ? onPressed : null,
-      icon: Icon(icon),
+    // Bordered stepper with a generous tap target — the wide horizontal
+    // padding keeps the − and + buttons clearly separated from the count so
+    // sellers don't mis-tap between them.
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      child: InkResponse(
+        radius: 24,
+        onTap: enabled ? onPressed : null,
+        child: Container(
+          width: 32,
+          height: 32,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: enabled
+                ? AppConstants.primary.withValues(alpha: 0.10)
+                : Colors.transparent,
+            border: Border.all(
+              color: enabled
+                  ? AppConstants.primary.withValues(alpha: 0.35)
+                  : Colors.grey.shade300,
+            ),
+          ),
+          child: Icon(
+            icon,
+            size: 16,
+            color: enabled ? AppConstants.primary : Colors.grey.shade400,
+          ),
+        ),
+      ),
     );
   }
 
   Widget _buildOrderSummary() {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppConstants.cardRadius,
         boxShadow: AppConstants.sellerShadow,
       ),
       child: Column(
@@ -1318,6 +1450,7 @@ class _POSScreenState extends State<POSScreen>
 
   Widget _buildCheckoutStrip() {
     final hasItems = _orderItems.isNotEmpty;
+    final showCheckout = _panelIndex == 1;
     return Container(
       padding: EdgeInsets.fromLTRB(
         16,
@@ -1367,29 +1500,49 @@ class _POSScreenState extends State<POSScreen>
               ],
             ),
           ),
-          FilledButton.icon(
-            style: FilledButton.styleFrom(
-              backgroundColor:
-                  hasItems ? AppConstants.accent : Colors.grey.shade300,
-              disabledBackgroundColor: Colors.grey.shade300,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-              elevation: hasItems ? 2 : 0,
-            ),
-            onPressed: hasItems ? _openCheckoutSheet : null,
-            icon: Icon(
-              Icons.arrow_forward,
-              size: 18,
-              color: hasItems ? Colors.white : Colors.grey.shade500,
-            ),
-            label: Text(
-              'Checkout',
-              style: AppConstants.bodyStyle(
-                color: hasItems ? Colors.white : Colors.grey.shade500,
-                fontWeight: FontWeight.bold,
-                fontSize: 15,
+          // Checkout button — Order tab only. Slides in from the right when
+          // the seller opens the Order panel and slides back out to the right
+          // on Products. Driven directly by _panelIndex (single source of
+          // truth) via implicit animations, so rapid tab switches retarget
+          // cleanly instead of queuing. The button keeps its layout slot, so
+          // the summary above never reflows — only the button moves.
+          IgnorePointer(
+            ignoring: !showCheckout,
+            child: AnimatedSlide(
+              offset: showCheckout ? Offset.zero : const Offset(1.25, 0),
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOutCubic,
+              child: AnimatedOpacity(
+                opacity: showCheckout ? 1 : 0,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOutCubic,
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor:
+                        hasItems ? AppConstants.accent : Colors.grey.shade300,
+                    disabledBackgroundColor: Colors.grey.shade300,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: AppConstants.buttonRadius,
+                    ),
+                    elevation: hasItems ? 2 : 0,
+                  ),
+                  onPressed: hasItems ? _openCheckoutSheet : null,
+                  icon: Icon(
+                    Icons.arrow_forward,
+                    size: 18,
+                    color: hasItems ? Colors.white : Colors.grey.shade500,
+                  ),
+                  label: Text(
+                    'Checkout',
+                    style: AppConstants.bodyStyle(
+                      color: hasItems ? Colors.white : Colors.grey.shade500,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
@@ -1406,19 +1559,47 @@ class _POSScreenState extends State<POSScreen>
           mainAxisSize: MainAxisSize.min,
           children: [
             TweenAnimationBuilder<double>(
-              tween: Tween(begin: 0.75, end: 1),
-              duration: const Duration(milliseconds: 420),
+              tween: Tween(begin: 0.6, end: 1),
+              duration: const Duration(milliseconds: 500),
               curve: Curves.easeOutBack,
               builder: (context, scale, child) =>
                   Transform.scale(scale: scale, child: child),
               child: Container(
-                width: 82,
-                height: 82,
+                width: 96,
+                height: 96,
                 decoration: BoxDecoration(
-                  color: AppConstants.accent,
-                  borderRadius: BorderRadius.circular(41),
+                  shape: BoxShape.circle,
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [AppConstants.accent, Color(0xFF3DBDB4)],
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppConstants.accent.withValues(alpha: 0.45),
+                      blurRadius: 24,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
                 ),
-                child: const Icon(Icons.check, color: Colors.white, size: 46),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Container(
+                      width: 64,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white.withValues(alpha: 0.18),
+                      ),
+                    ),
+                    const Icon(
+                      Icons.check_rounded,
+                      color: Colors.white,
+                      size: 44,
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 18),
@@ -1444,7 +1625,18 @@ class _POSScreenState extends State<POSScreen>
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                TextButton(
+                OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: BorderSide(
+                      color: Colors.white.withValues(alpha: 0.6),
+                    ),
+                    shape: const StadiumBorder(),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 10,
+                    ),
+                  ),
                   onPressed: () {},
                   child: Text(
                     'Receipt',
@@ -1455,6 +1647,11 @@ class _POSScreenState extends State<POSScreen>
                 FilledButton(
                   style: FilledButton.styleFrom(
                     backgroundColor: AppConstants.accent,
+                    shape: const StadiumBorder(),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
                   ),
                   onPressed: () => setState(() => _showSuccessOverlay = false),
                   child: Text(
@@ -2318,6 +2515,49 @@ class _CheckoutSheetState extends State<_CheckoutSheet> {
           ),
         );
       },
+      ),
+    );
+  }
+}
+
+/// Subtle press-scale micro-interaction: the child scales down briefly while
+/// pressed and springs back on release — the premium-feel tap feedback used
+/// across POS tappable cards. Sits outside the InkWell so both ripple and
+/// scale coexist.
+class _PressScale extends StatefulWidget {
+  final Widget child;
+  final bool enabled;
+
+  const _PressScale({required this.child, this.enabled = true});
+
+  @override
+  State<_PressScale> createState() => _PressScaleState();
+}
+
+class _PressScaleState extends State<_PressScale> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    // A raw Listener (not GestureDetector): pointer events bypass the gesture
+    // arena, so this reliably fires even though the inner InkWell owns the tap
+    // gesture. The InkWell still supplies the ripple + tap action.
+    return Listener(
+      behavior: HitTestBehavior.opaque,
+      onPointerDown: widget.enabled
+          ? (_) => setState(() => _pressed = true)
+          : null,
+      onPointerUp: widget.enabled
+          ? (_) => setState(() => _pressed = false)
+          : null,
+      onPointerCancel: widget.enabled
+          ? (_) => setState(() => _pressed = false)
+          : null,
+      child: AnimatedScale(
+        scale: _pressed ? 0.97 : 1.0,
+        duration: const Duration(milliseconds: 90),
+        curve: Curves.easeOut,
+        child: widget.child,
       ),
     );
   }

@@ -133,6 +133,9 @@ class AppConstants {
   static final BorderRadius cardRadius = BorderRadius.circular(16);
   static final BorderRadius buttonRadius = BorderRadius.circular(12);
 
+  // Full pill — chips, quantity steppers, small badges, destructive pills.
+  static const BorderRadius stadiumRadius = BorderRadius.all(Radius.circular(999));
+
   // Subtle warm shadow for surfaceLight cards
   static final List<BoxShadow> warmShadow = [
     BoxShadow(

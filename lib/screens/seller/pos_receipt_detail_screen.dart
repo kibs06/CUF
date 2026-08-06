@@ -318,7 +318,7 @@ class PosReceiptDetailScreen extends StatelessWidget {
                               Icon(
                                 paymentMethod.toLowerCase() == 'cash'
                                     ? Icons.payments_outlined
-                                    : Icons.phone_android,
+                                    : Icons.qr_code_2,
                                 size: 14,
                                 color: paymentMethod.toLowerCase() == 'cash'
                                     ? AppConstants.okStockColor

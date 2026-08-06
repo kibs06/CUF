@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../constants/app_constants.dart';
+import '../../widgets/shimmer_box.dart';
 import '../../services/order_service.dart';
 import '../../services/product_service.dart';
 import '../../services/connectivity_service.dart';
@@ -292,8 +293,43 @@ class _PosHistoryScreenState extends State<PosHistoryScreen> {
 
   Widget _buildBody() {
     if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppConstants.primary),
+      // Skeleton receipt cards while history loads.
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+        children: List.generate(
+          4,
+          (index) => Container(
+            margin: const EdgeInsets.only(bottom: 14),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: AppConstants.sellerShadow,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                ShimmerBox(width: 90, height: 10, borderRadius: 5),
+                SizedBox(height: 16),
+                ShimmerBox(
+                  width: double.infinity,
+                  height: 12,
+                  borderRadius: 5,
+                ),
+                SizedBox(height: 10),
+                ShimmerBox(width: 160, height: 12, borderRadius: 5),
+                SizedBox(height: 16),
+                Row(
+                  children: [
+                    ShimmerBox(width: 70, height: 16, borderRadius: 8),
+                    Spacer(),
+                    ShimmerBox(width: 70, height: 18, borderRadius: 5),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
       );
     }
 
@@ -589,7 +625,7 @@ class _PosHistoryScreenState extends State<PosHistoryScreen> {
                     color: paymentMethod.toLowerCase() == 'cash'
                         ? AppConstants.okStockColor.withValues(alpha: 0.10)
                         : AppConstants.statusConfirmedColor.withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -597,7 +633,7 @@ class _PosHistoryScreenState extends State<PosHistoryScreen> {
                       Icon(
                         paymentMethod.toLowerCase() == 'cash'
                             ? Icons.payments_outlined
-                            : Icons.phone_android,
+                            : Icons.qr_code_2,
                         size: 12,
                         color: paymentMethod.toLowerCase() == 'cash'
                             ? AppConstants.okStockColor
@@ -625,7 +661,7 @@ class _PosHistoryScreenState extends State<PosHistoryScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                     decoration: BoxDecoration(
                       color: AppConstants.statusConfirmedColor.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(4),
+                      borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
                       'Ref: ${order['gcash_reference_number']}',

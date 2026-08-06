@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../constants/app_constants.dart';
@@ -50,6 +51,10 @@ class _PosBarcodeScannerState extends State<PosBarcodeScanner> {
 
     final code = barcode.rawValue!;
     if (code.isEmpty) return;
+
+    // Tangible scan feedback before the screen pops with the result.
+    HapticFeedback.mediumImpact();
+    SystemSound.play(SystemSoundType.click);
 
     setState(() => _isProcessing = true);
     Navigator.of(context).pop(code);
@@ -189,6 +194,15 @@ class _PosBarcodeScannerState extends State<PosBarcodeScanner> {
               top: topOffset,
               left: (constraints.maxWidth - scanAreaSize) / 2,
               size: scanAreaSize,
+            ),
+
+            // Animated scanning line — sweeps the scan area continuously.
+            Positioned(
+              top: topOffset,
+              left: (constraints.maxWidth - scanAreaSize) / 2,
+              width: scanAreaSize,
+              height: scanAreaSize,
+              child: const _ScanningLineAnimation(),
             ),
           ],
         );
@@ -345,6 +359,99 @@ class _PosBarcodeScannerState extends State<PosBarcodeScanner> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Continuously sweeping teal line inside the scan area — the classic
+/// "this is scanning" affordance. Loops via a repeating controller; the
+/// ease-in-out curve makes the sweep feel like a smooth breath.
+class _ScanningLineAnimation extends StatefulWidget {
+  const _ScanningLineAnimation();
+
+  @override
+  State<_ScanningLineAnimation> createState() => _ScanningLineAnimationState();
+}
+
+class _ScanningLineAnimationState extends State<_ScanningLineAnimation>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _progress;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    )..repeat(reverse: true);
+    _progress = CurvedAnimation(parent: _controller, curve: Curves.easeInOut);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const lineHeight = 22.0;
+        return AnimatedBuilder(
+          animation: _progress,
+          builder: (context, _) {
+            final top = 2 +
+                _progress.value * (constraints.maxHeight - lineHeight - 4);
+            // Positioned must be a direct child of a Stack (ParentData rule) —
+            // neither LayoutBuilder nor AnimatedBuilder can host it directly.
+            return Stack(
+              children: [
+                Positioned(
+                  top: top,
+                  left: 8,
+                  right: 8,
+                  child: IgnorePointer(
+                    child: Container(
+                      height: lineHeight,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(11),
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            AppConstants.accent.withValues(alpha: 0),
+                            AppConstants.accent.withValues(alpha: 0.55),
+                            AppConstants.accent.withValues(alpha: 0),
+                          ],
+                        ),
+                      ),
+                      child: Center(
+                        child: Container(
+                          height: 2,
+                          margin: const EdgeInsets.symmetric(horizontal: 14),
+                          decoration: BoxDecoration(
+                            color: AppConstants.accent,
+                            borderRadius: BorderRadius.circular(2),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppConstants.accent
+                                    .withValues(alpha: 0.6),
+                                blurRadius: 8,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }
