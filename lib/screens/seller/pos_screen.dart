@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../constants/app_constants.dart';
+import '../../utils/sale_price.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/order_provider.dart';
 import '../../providers/product_provider.dart';
@@ -62,12 +63,12 @@ class _POSScreenState extends State<POSScreen> {
     (sum, item) => sum + (_productPrice(item.product) * item.quantity),
   );
 
-  double _productPrice(Map<String, dynamic> product) {
-    final value = product['price'];
-    if (value is int) return value.toDouble();
-    if (value is double) return value;
-    return double.tryParse('$value') ?? 0;
-  }
+  /// Effective (sale-aware) price.
+  ///
+  /// Product-sale decision #3: POS applies the active discount so the
+  /// register total matches the storefront price. All POS pricing (tile,
+  /// size sheet, line items, unit_price) flows through this one method.
+  double _productPrice(Map<String, dynamic> product) => effectivePrice(product);
 
   int _totalStock(Map<String, dynamic> product) {
     final sizes = Map<String, dynamic>.from(product['sizes'] ?? {});
@@ -803,14 +804,37 @@ class _POSScreenState extends State<POSScreen> {
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 3),
-                      // Price
-                      Text(
-                        '₱${_productPrice(product).toStringAsFixed(0)}',
-                        style: AppConstants.monoStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          color: AppConstants.primary,
-                        ),
+                      // Price (sale-aware) + SALE tag
+                      Row(
+                        children: [
+                          Text(
+                            '₱${_productPrice(product).toStringAsFixed(0)}',
+                            style: AppConstants.monoStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: AppConstants.primary,
+                            ),
+                          ),
+                          if (isOnSale(product)) ...[
+                            const SizedBox(width: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 4, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: AppConstants.error,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                'SALE',
+                                style: AppConstants.monoStyle(
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                       const SizedBox(height: 4),
                       // Stock badge — flows naturally below price

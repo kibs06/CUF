@@ -32,6 +32,9 @@ class ProductService {
     bool isActive = true,
     bool isFeatured = false,
     String? barcode,
+    double? salePrice,
+    DateTime? saleStartsAt,
+    DateTime? saleEndsAt,
   }) async {
     final sellerId = _client.auth.currentUser!.id;
 
@@ -49,6 +52,12 @@ class ProductService {
           'is_active': isActive,
           'is_featured': isFeatured,
           if (barcode != null && barcode.isNotEmpty) 'barcode': barcode.trim(),
+          // Sale fields — `price` stays the ORIGINAL price; sale_price is
+          // the discounted price (active-sale rules live in sale_price.dart).
+          if (salePrice != null) 'sale_price': salePrice,
+          if (saleStartsAt != null)
+            'sale_starts_at': saleStartsAt.toIso8601String(),
+          if (saleEndsAt != null) 'sale_ends_at': saleEndsAt.toIso8601String(),
         })
         .select()
         .single();
@@ -121,10 +130,15 @@ class ProductService {
     required bool isActive,
     required bool isFeatured,
     String? barcode,
+    double? salePrice,
+    DateTime? saleStartsAt,
+    DateTime? saleEndsAt,
   }) async {
     final sellerId = _client.auth.currentUser!.id;
 
     // 1. Update product row
+    //    Sale fields are ALWAYS sent (null clears an existing sale) so the
+    //    form can start/stop a sale by editing those fields.
     await _client
         .from('products')
         .update({
@@ -136,6 +150,9 @@ class ProductService {
           'is_active': isActive,
           'is_featured': isFeatured,
           'barcode': (barcode != null && barcode.isNotEmpty) ? barcode.trim() : null,
+          'sale_price': salePrice,
+          'sale_starts_at': saleStartsAt?.toIso8601String(),
+          'sale_ends_at': saleEndsAt?.toIso8601String(),
           'updated_at': DateTime.now().toIso8601String(),
         })
         .eq('id', productId);
@@ -327,6 +344,32 @@ class ProductService {
         .from('products')
         .update({'is_featured': isFeatured, 'updated_at': DateTime.now().toIso8601String()})
         .eq('id', productId);
+  }
+
+  /// Start (or update) a sale on a product.
+  ///
+  /// `price` is untouched — only the sale fields change. Passing null for
+  /// [salePrice] clears the sale entirely.
+  Future<void> setSale(
+    String productId, {
+    double? salePrice,
+    DateTime? saleStartsAt,
+    DateTime? saleEndsAt,
+  }) async {
+    await _client
+        .from('products')
+        .update({
+          'sale_price': salePrice,
+          'sale_starts_at': saleStartsAt?.toIso8601String(),
+          'sale_ends_at': saleEndsAt?.toIso8601String(),
+          'updated_at': DateTime.now().toIso8601String(),
+        })
+        .eq('id', productId);
+  }
+
+  /// End a product's sale (clears all sale fields — original price restored).
+  Future<void> clearSale(String productId) async {
+    await setSale(productId);
   }
 
   // ─── STOCK SYNC ─────────────────────────────────────────────────

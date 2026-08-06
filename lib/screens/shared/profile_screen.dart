@@ -279,6 +279,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
         backgroundColor: AppConstants.surfaceLight,
         elevation: 0,
         automaticallyImplyLeading: false,
+        actions: [
+          // Settings placeholder — same "coming soon" pattern as the
+          // seller More screen until a real Settings screen exists.
+          IconButton(
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Settings coming soon')),
+              );
+            },
+            tooltip: 'Settings',
+            icon: const Icon(
+              Icons.settings_outlined,
+              color: AppConstants.secondary,
+            ),
+          ),
+        ],
       ),
       body: Stack(
         children: [

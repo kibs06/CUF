@@ -1403,6 +1403,84 @@ class _ChatViewState extends State<ChatView> with SingleTickerProviderStateMixin
     );
   }
 
+  void _showDeleteMessageDialog(Message message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Message'),
+        content: const Text(
+          'This message will be permanently removed for both you and the other party. This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _deleteMessage(message);
+            },
+            child: const Text('Delete', style: TextStyle(color: AppConstants.error)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Permanently delete a single sent message for both parties.
+  ///
+  /// Only the sender can delete (enforced server-side by RLS); the menu
+  /// entry is only shown for the viewer's own messages anyway. The other
+  /// party sees the message disappear via the realtime subscription.
+  Future<void> _deleteMessage(Message message) async {
+    try {
+      await MessageService.instance.deleteMessage(message.id);
+    } catch (e) {
+      debugPrint('[ChatView] deleteMessage failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete message: $e'),
+            backgroundColor: AppConstants.error,
+          ),
+        );
+      }
+      return;
+    }
+
+    // Best-effort storage cleanup so image/video files aren't orphaned.
+    // Runs AFTER the row delete (which succeeded above); a storage failure
+    // only leaves an unreferenced file behind, so it must not block the
+    // message deletion UX.
+    if (message.hasAttachment) {
+      try {
+        await MessageService.instance.deleteMessageAttachmentFiles(
+          conversationId: widget.conversationId,
+          messageId: message.id,
+        );
+      } catch (e) {
+        debugPrint('[ChatView] attachment storage cleanup failed: $e');
+      }
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _messages.removeWhere((m) => m.id == message.id);
+    });
+
+    // Refresh match count in case a highlighted search match was deleted.
+    _performSearch();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Message deleted'),
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
   Future<void> _deleteConversation() async {
     try {
       // Delete all messages in the conversation from Supabase
@@ -2090,6 +2168,7 @@ class _ChatViewState extends State<ChatView> with SingleTickerProviderStateMixin
   }
 
   void _showMessageContextMenu(Message message) {
+    final isOwnMessage = message.senderType == widget.viewerRole;
     showModalBottomSheet(
       context: context,
       builder: (context) => SafeArea(
@@ -2126,6 +2205,18 @@ class _ChatViewState extends State<ChatView> with SingleTickerProviderStateMixin
                 _showMessageDetails(message);
               },
             ),
+            // Delete — only the sender can remove their own sent messages.
+            if (isOwnMessage && !message.isSending) ...[
+              const Divider(height: 1),
+              ListTile(
+                leading: Icon(Icons.delete_outline, size: 20, color: AppConstants.error),
+                title: Text('Delete Message', style: TextStyle(color: AppConstants.error)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showDeleteMessageDialog(message);
+                },
+              ),
+            ],
             const Divider(height: 1),
             ListTile(
               leading: Icon(Icons.flag_outlined, size: 20, color: AppConstants.error),

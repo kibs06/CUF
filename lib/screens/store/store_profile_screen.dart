@@ -124,7 +124,7 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
 
   Future<void> _loadData() async {
     // Refresh products from server so new/removed products appear on pull
-    await Provider.of<ProductProvider>(context, listen: false).loadProducts();
+    await Provider.of<ProductProvider>(context, listen: false).loadProducts(hideOutOfStock: true);
     final store = await _storeService.fetchStoreById(widget.storeId);
     final stories = await _storeService.getStoryEntriesForStore(widget.storeId);
     // Fetch the DB-truth follower count

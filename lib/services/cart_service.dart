@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/cart_item_with_details.dart';
 import '../utils/cart_helpers.dart';
+import '../utils/sale_price.dart';
 
 /// Service handling all cart-related Supabase operations.
 ///
@@ -26,7 +27,8 @@ class CartService {
         .select('''
           *,
           products!inner(
-            name, is_active, price, store_id,
+            name, is_active, price, sale_price, sale_starts_at,
+            sale_ends_at, store_id,
             product_images(image_url, display_order)
           ),
           product_variants(
@@ -129,7 +131,17 @@ class CartService {
         isActive: product['is_active'] as bool? ?? true,
         storeId: storeId,
         storeName: storeNames[storeId] ?? 'Unknown Store',
-        price: (product['price'] as num?)?.toDouble() ?? 0,
+        // Price is recomputed from the DB (cart_items does NOT persist a
+        // price snapshot) so an on-sale product restores at the effective
+        // (sale) price. Per product-sale decision #2, the in-memory cart
+        // does NOT revalidate against the DB at checkout — it honors the
+        // snapshot the customer saw when the item was added.
+        price: effectivePrice({
+          'price': product['price'],
+          'sale_price': product['sale_price'],
+          'sale_starts_at': product['sale_starts_at'],
+          'sale_ends_at': product['sale_ends_at'],
+        }),
         size: size,
         color: variant?['color']?.toString(),
         stock: stock,

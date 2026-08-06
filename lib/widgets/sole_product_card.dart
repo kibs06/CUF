@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../constants/app_constants.dart';
+import '../utils/sale_price.dart';
 import 'sole_star_rating.dart';
 
 class SoleProductCard extends StatelessWidget {
@@ -28,6 +29,9 @@ class SoleProductCard extends StatelessWidget {
     final double price = (product['price'] is int)
         ? (product['price'] as int).toDouble()
         : (product['price'] ?? 0.0);
+    // Sale-aware display values (single source of truth: sale_price.dart)
+    final bool onSale = isOnSale(product);
+    final double displayPrice = effectivePrice(product);
     final List<dynamic> images = product['images'] ?? [];
     final String imageUrl = images.isNotEmpty
         ? images.first
@@ -103,16 +107,42 @@ class SoleProductCard extends StatelessWidget {
                   ],
                   const SizedBox(height: 2),
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        '₱${price.toStringAsFixed(2)}',
-                        style: AppConstants.monoStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: AppConstants.primary,
+                      if (onSale) ...[
+                        // Sale price + strikethrough original
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '₱${displayPrice.toStringAsFixed(2)}',
+                              style: AppConstants.monoStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: AppConstants.primary,
+                              ),
+                            ),
+                            Text(
+                              '₱${price.toStringAsFixed(2)}',
+                              style: AppConstants.monoStyle(
+                                fontSize: 11,
+                                color: AppConstants.secondary.withOpacity(0.5),
+                              ).copyWith(
+                                  decoration: TextDecoration.lineThrough),
+                            ),
+                          ],
                         ),
-                      ),
+                      ] else
+                        Text(
+                          '₱${price.toStringAsFixed(2)}',
+                          style: AppConstants.monoStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: AppConstants.primary,
+                          ),
+                        ),
                       Text(
                         product['category'] ?? 'Artisan',
                         style: AppConstants.bodyStyle(
@@ -132,6 +162,8 @@ class SoleProductCard extends StatelessWidget {
   }
 
   Widget _buildImageSection(BuildContext context, String imageUrl) {
+    final bool onSale = isOnSale(product);
+    final int? salePct = salePercent(product);
     return Stack(
       children: [
         ClipRRect(
@@ -165,6 +197,46 @@ class SoleProductCard extends StatelessWidget {
             ),
           ),
         ),
+        // Sale badge on top-left (pure overlay — masonry sizing untouched)
+        if (onSale)
+          Positioned(
+            top: 8,
+            left: 8,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppConstants.error,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.15),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.local_offer,
+                    size: 11,
+                    color: Colors.white,
+                  ),
+                  const SizedBox(width: 3),
+                  Text(
+                    salePct != null ? 'SALE -$salePct%' : 'SALE',
+                    style: AppConstants.monoStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         // AR "Try On" sticker badge on top-right
         Positioned(
           top: 8,

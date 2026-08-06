@@ -9,6 +9,7 @@ import '../../providers/cart_provider.dart';
 import '../../providers/review_provider.dart';
 import '../../utils/cart_helpers.dart';
 import '../../utils/recently_viewed.dart';
+import '../../utils/sale_price.dart';
 import '../../widgets/sole_badge.dart';
 import '../../widgets/sole_ar_pill.dart';
 import '../../widgets/sole_review_card.dart';
@@ -421,11 +422,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
       color: _selectedColor,
     );
 
-    // Add to cart with variant + pricing info for Supabase persistence
+    // Add to cart with variant + pricing info for Supabase persistence.
+    // Uses the EFFECTIVE price so an on-sale product is charged the sale
+    // price (sale_price.dart is the single source of truth).
     final cart = Provider.of<CartProvider>(context, listen: false);
-    final double price = (widget.product['price'] is int)
-        ? (widget.product['price'] as int).toDouble()
-        : (widget.product['price'] ?? 0.0);
+    final double price = effectivePrice(widget.product);
 
     cart.addToCart(
       productId: widget.product['id'].toString(),
@@ -472,9 +473,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
   /// Share this product via the native share sheet.
   Future<void> _shareProduct() async {
     final name = widget.product['name'] ?? 'CUFMAI Footwear';
-    final price = (widget.product['price'] is int)
-        ? (widget.product['price'] as int).toDouble()
-        : (widget.product['price'] ?? 0.0);
+    final price = effectivePrice(widget.product);
     final priceStr = '₱${price.toStringAsFixed(2)}';
     final storeName = widget.product['store_name'] ?? 'CUFMAI';
 
@@ -690,6 +689,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
     );
   }
 
+  /// Compact "Ends Mon D" label for the sale end date (no intl package
+  /// — same manual month-name approach used elsewhere in the app).
+  String _formatSaleEnd(DateTime d) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${months[d.month - 1]} ${d.day}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final sizesMap = _buildSizesMap();
@@ -697,6 +706,17 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
         ? (widget.product['price'] as int).toDouble()
         : (widget.product['price'] ?? 0.0);
     final String description = widget.product['description'] ?? 'No description available.';
+
+    // Sale-aware display values (single source of truth: sale_price.dart)
+    final bool onSale = isOnSale(widget.product);
+    final double displayPrice = effectivePrice(widget.product);
+    final double saveAmount = price - displayPrice;
+    final DateTime? saleEndRaw =
+        DateTime.tryParse(widget.product['sale_ends_at']?.toString() ?? '');
+    final String saleEndLabel = onSale
+        ? 'You save ₱${saveAmount.toStringAsFixed(2)}'
+            '${saleEndRaw != null ? ' · Ends ${_formatSaleEnd(saleEndRaw.toLocal())}' : ''}'
+        : '';
 
     return Scaffold(
       backgroundColor: AppConstants.surfaceLight,
@@ -777,15 +797,58 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                       ),
                       const SizedBox(height: 10),
 
-                      // Price tag
-                      Text(
-                        '₱${price.toStringAsFixed(2)}',
-                        style: AppConstants.monoStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: AppConstants.primary,
+                      // Price tag — sale-aware: strikethrough original +
+                      // sale price + savings/end-date note.
+                      if (onSale) ...[
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              '₱${displayPrice.toStringAsFixed(2)}',
+                              style: AppConstants.monoStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                                color: AppConstants.primary,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              '₱${price.toStringAsFixed(2)}',
+                              style: AppConstants.monoStyle(
+                                fontSize: 14,
+                                color:
+                                    AppConstants.secondary.withOpacity(0.5),
+                              ).copyWith(
+                                  decoration: TextDecoration.lineThrough),
+                            ),
+                          ],
                         ),
-                      ),
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppConstants.error.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            saleEndLabel,
+                            style: AppConstants.bodyStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: AppConstants.error,
+                            ),
+                          ),
+                        ),
+                      ] else
+                        Text(
+                          '₱${price.toStringAsFixed(2)}',
+                          style: AppConstants.monoStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: AppConstants.primary,
+                          ),
+                        ),
                       const SizedBox(height: 24),
 
                       // Size Selector Label

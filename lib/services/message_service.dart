@@ -289,6 +289,40 @@ class MessageService {
         .toList();
   }
 
+  /// Permanently delete a message sent by the current user.
+  ///
+  /// RLS on the `messages` table only lets the sender delete their own
+  /// sent rows, so no ownership check is needed client-side. Deleting
+  /// removes the message for BOTH parties — the other party's chat
+  /// updates automatically via the realtime subscription.
+  Future<void> deleteMessage(String messageId) async {
+    await _client.from('messages').delete().eq('id', messageId);
+  }
+
+  /// Best-effort cleanup of every file uploaded for a message's
+  /// attachment (the file itself plus any video thumbnail).
+  ///
+  /// All uploads for a message live under
+  /// `message-attachments/{conversation_id}/{message_id}/`, so the whole
+  /// folder is listed and removed — no need to know the exact filename
+  /// (and no parsing of signed URLs). Requires the sender-only storage
+  /// DELETE policy added in the same migration as per-message delete;
+  /// failures are swallowed by the caller so cleanup never blocks the
+  /// message-row deletion.
+  Future<void> deleteMessageAttachmentFiles({
+    required String conversationId,
+    required String messageId,
+  }) async {
+    final folder = '$conversationId/$messageId';
+    final files = await _client.storage
+        .from('message-attachments')
+        .list(path: folder);
+    if (files.isEmpty) return;
+    await _client.storage
+        .from('message-attachments')
+        .remove(files.map((f) => '$folder/${f.name}').toList());
+  }
+
   /// Send a message and update conversation metadata.
   ///
   /// [body] is now nullable — a message can be attachment-only.

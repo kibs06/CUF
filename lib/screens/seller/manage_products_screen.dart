@@ -3,19 +3,29 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
+import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../constants/app_constants.dart';
+import '../../providers/product_provider.dart';
 import '../../services/connectivity_service.dart';
 import '../../services/product_service.dart';
 import '../../services/store_service.dart';
+import '../../utils/sale_price.dart';
+import '../../widgets/seller/seller_inventory_row.dart';
 import 'add_edit_product_screen.dart';
 import 'create_store_screen.dart';
 
 /// Seller's product list screen — wired to real Supabase data via [ProductService].
 ///
 /// Grid view of products with FAB for adding, tap to edit, long press for actions.
+/// Each product card's long-press menu also exposes an **Adjust Stock** editor
+/// (the standalone inventory screen was merged here).
 class ManageProductsScreen extends StatefulWidget {
-  const ManageProductsScreen({super.key});
+  /// Optional filter chip to preselect on open (e.g. 'Low Stock') — used by
+  /// the dashboard metric and low-stock notifications to deep-link here.
+  final String? initialFilter;
+
+  const ManageProductsScreen({super.key, this.initialFilter});
 
   @override
   State<ManageProductsScreen> createState() => _ManageProductsScreenState();
@@ -38,6 +48,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
   @override
   void initState() {
     super.initState();
+    _activeFilter = widget.initialFilter ?? 'All';
     _wasOffline = !ConnectivityService.instance.isOnline;
     _connectivitySub = ConnectivityService.instance.isOnlineStream.listen((isOnline) {
       if (isOnline && _wasOffline && mounted) {
@@ -82,6 +93,16 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
   // ─── HELPERS ────────────────────────────────────────────────────
 
   int _totalStock(Map<String, dynamic> product) {
+    // The `inventory` relation is the authoritative stock source for
+    // checkout AND for the Adjust Stock editor — prefer it so the grid's
+    // badges/filters reflect what the editor writes. Fall back to variants
+    // when no inventory rows exist.
+    final inventory =
+        product['inventory'] is List ? product['inventory'] as List : [];
+    if (inventory.isNotEmpty) {
+      return inventory.fold<int>(
+          0, (sum, v) => sum + ((v['stock'] as num?)?.toInt() ?? 0));
+    }
     final variants = product['product_variants'] is List
         ? product['product_variants'] as List
         : [];
@@ -112,11 +133,16 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
   bool _isFeatured(Map<String, dynamic> product) =>
       product['is_featured'] ?? false;
 
+  bool _isOnSale(Map<String, dynamic> product) => isOnSale(product);
+
   List<Map<String, dynamic>> get _filteredProducts {
     if (_products == null) return [];
     var filtered = List<Map<String, dynamic>>.from(_products!);
 
     switch (_activeFilter) {
+      case 'On Sale':
+        filtered = filtered.where((p) => _isOnSale(p)).toList();
+        break;
       case 'Low Stock':
         filtered = filtered.where((p) {
           final stock = _totalStock(p);
@@ -149,6 +175,8 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
   int _countFor(String filter) {
     if (_products == null) return 0;
     switch (filter) {
+      case 'On Sale':
+        return _products!.where((p) => _isOnSale(p)).length;
       case 'Low Stock':
         return _products!.where((p) {
           final stock = _totalStock(p);
@@ -310,6 +338,149 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
     } catch (_) {}
   }
 
+  /// Start or end a product's sale. Mirrors the _toggleFeatured pattern.
+  Future<void> _toggleSale(Map<String, dynamic> product) async {
+    if (_isOnSale(product)) {
+      try {
+        await _productService.clearSale(product['id'].toString());
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Sale ended — original price restored.'),
+              backgroundColor: AppConstants.success,
+            ),
+          );
+          _loadProducts();
+        }
+      } catch (_) {}
+    } else {
+      _showSaleDialog(product);
+    }
+  }
+
+  /// Dialog asking for the sale price + optional end date.
+  Future<void> _showSaleDialog(Map<String, dynamic> product) async {
+    final basePrice = (product['price'] as num?)?.toDouble() ?? 0;
+    final saleCtrl = TextEditingController();
+    DateTime? saleEnd;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          'Put on sale',
+          style: AppConstants.bodyStyle(
+              fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        content: StatefulBuilder(
+          builder: (ctx, setDialogState) => Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Original price: ₱${basePrice.toStringAsFixed(2)}',
+                style: AppConstants.bodyStyle(),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: saleCtrl,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  labelText: 'Sale price (₱)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  final picked = await showDatePicker(
+                    context: ctx,
+                    initialDate: DateTime.now(),
+                    firstDate: DateTime.now(),
+                    lastDate: DateTime(2036),
+                  );
+                  if (picked != null) {
+                    setDialogState(() => saleEnd = picked);
+                  }
+                },
+                icon: const Icon(Icons.event_outlined, size: 16),
+                label: Text(
+                  saleEnd != null
+                      ? 'Ends: ${saleEnd!.year}-${saleEnd!.month.toString().padLeft(2, '0')}-${saleEnd!.day.toString().padLeft(2, '0')}'
+                      : 'End date (optional)',
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('Cancel',
+                style: AppConstants.bodyStyle(color: AppConstants.secondary)),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppConstants.error),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text('Start Sale',
+                style: AppConstants.bodyStyle(
+                    color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (ok != true) {
+      saleCtrl.dispose();
+      return;
+    }
+
+    final salePrice = double.tryParse(saleCtrl.text.trim());
+    if (salePrice == null || salePrice <= 0) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Enter a valid sale price.'),
+            backgroundColor: AppConstants.error,
+          ),
+        );
+      }
+      saleCtrl.dispose();
+      return;
+    }
+    if (salePrice >= basePrice) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Sale price must be lower than the base price.'),
+            backgroundColor: AppConstants.error,
+          ),
+        );
+      }
+      saleCtrl.dispose();
+      return;
+    }
+
+    try {
+      await _productService.setSale(
+        product['id'].toString(),
+        salePrice: salePrice,
+        saleEndsAt: saleEnd,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Product is now on sale!'),
+            backgroundColor: AppConstants.success,
+          ),
+        );
+        _loadProducts();
+      }
+    } catch (_) {}
+    saleCtrl.dispose();
+  }
+
   void _showProductActions(Map<String, dynamic> product) {
     showModalBottomSheet(
       context: context,
@@ -339,6 +510,16 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
                 onTap: () {
                   Navigator.of(ctx).pop();
                   _navigateToAddEdit(product: product);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.inventory_2_outlined,
+                    color: AppConstants.statusReadyColor),
+                title: Text('Adjust Stock',
+                    style: AppConstants.bodyStyle()),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _showStockEditor(product);
                 },
               ),
               ListTile(
@@ -373,6 +554,24 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
                   _toggleFeatured(product);
                 },
               ),
+              ListTile(
+                leading: Icon(
+                  _isOnSale(product)
+                      ? Icons.local_offer
+                      : Icons.local_offer_outlined,
+                  color: _isOnSale(product)
+                      ? AppConstants.error
+                      : AppConstants.primary,
+                ),
+                title: Text(
+                  _isOnSale(product) ? 'End sale' : 'Put on sale',
+                  style: AppConstants.bodyStyle(),
+                ),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _toggleSale(product);
+                },
+              ),
               const Divider(),
               ListTile(
                 leading: const Icon(Icons.delete_outline, color: AppConstants.error),
@@ -389,6 +588,189 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
         ),
       ),
     );
+  }
+
+  /// Per-product stock editor — replaces the standalone inventory screen.
+  /// Shows one editable row per size; changes are persisted via
+  /// [ProductProvider.updateProduct] (upserts the `inventory` table AND
+  /// syncs `product_variants` so the two never drift), then auto-syncs the
+  /// product's active status, mirroring the old ManageInventoryScreen
+  /// behavior.
+  void _showStockEditor(Map<String, dynamic> product) {
+    // getSellerProducts() returns raw rows with an `inventory` relation
+    // (size/stock), not the mapped `sizes` map — build it the same way
+    // SupabaseService._mapProduct does so sizes stay the authoritative source.
+    // Fall back to product_variants (summed per size) when no inventory rows
+    // exist yet (legacy products) so Adjust Stock always has sizes to edit.
+    final sizes = <String, int>{};
+    final inventory =
+        product['inventory'] is List ? product['inventory'] as List : [];
+    for (final item in inventory) {
+      final map = Map<String, dynamic>.from(item as Map);
+      sizes[map['size'].toString()] =
+          (map['stock'] as num?)?.toInt() ?? 0;
+    }
+    if (sizes.isEmpty) {
+      final variants = product['product_variants'] is List
+          ? product['product_variants'] as List
+          : [];
+      for (final v in variants) {
+        final map = Map<String, dynamic>.from(v as Map);
+        final size = map['size'].toString();
+        sizes[size] =
+            (sizes[size] ?? 0) + ((map['stock'] as num?)?.toInt() ?? 0);
+      }
+    }
+
+    final totalMax = sizes.values.fold<int>(0, (sum, q) => sum + q);
+    final maxStock = totalMax > 0 ? totalMax + 10 : 20;
+
+    // LIVE sizes map — mutated on every change and persisted as a whole.
+    // (Previously each row wrote a snapshot taken at sheet-open time, so
+    // adjusting size A then size B silently reverted A's change.)
+    final liveSizes = Map<String, int>.from(sizes);
+
+    // Serialize DB writes so rapid taps on the same row can never land out
+    // of order (each write persists the full map, so the last queued write
+    // always reflects the final state).
+    Future<void> writeChain = Future.value();
+
+    Future<void> persistStock(String size, int newStock) async {
+      // The row fires this from its 800ms debounce — the screen may already
+      // be gone (user closed the sheet and left). Skip rather than throw on
+      // a deactivated context.
+      if (!mounted) return;
+      liveSizes[size] = newStock;
+      final snapshot = Map<String, int>.from(liveSizes);
+      final provider =
+          Provider.of<ProductProvider>(context, listen: false);
+      final productId = product['id'].toString();
+      writeChain = writeChain.then((_) async {
+        // ProductProvider.updateProduct returns false when the DB write
+        // fails — always check it so a failed restock is never silent.
+        final saved = await provider
+            .updateProduct(product['id'], {'sizes': snapshot});
+        // Auto-sync active status (best-effort — a sync hiccup must not turn
+        // a successful stock write into a reported failure).
+        try {
+          await ProductService.instance.syncProductActiveStatus(productId);
+        } catch (e) {
+          debugPrint('Adjust Stock status sync failed: $e');
+        }
+        if (saved) {
+          // Update the grid's stock badges/filters in place instead of a
+          // full reload (which would tear down the still-open editor sheet).
+          _applyStockToLocalProduct(productId, snapshot);
+        } else if (mounted) {
+          debugPrint('Adjust Stock save FAILED for size $size ($newStock)');
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Could not save stock. Please try again.'),
+              backgroundColor: AppConstants.error,
+            ),
+          );
+        }
+      });
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Adjust Stock',
+                        style: AppConstants.headlineStyle(fontSize: 18),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.of(ctx).pop(),
+                      icon: const Icon(Icons.close),
+                      color: AppConstants.primary,
+                      tooltip: 'Close',
+                    ),
+                  ],
+                ),
+                Text(
+                  product['name'] ?? 'Product',
+                  style: AppConstants.bodyStyle(
+                    fontSize: 13,
+                    color: AppConstants.secondary.withValues(alpha: 0.6),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  width: 40,
+                  height: 3,
+                  decoration: BoxDecoration(
+                    color: AppConstants.primary,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Flexible(
+                  child: liveSizes.isEmpty
+                      ? Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 24),
+                          child: Center(
+                            child: Text(
+                              'No stock configured yet',
+                              style: AppConstants.bodyStyle(
+                                  color: Colors.grey.shade400),
+                            ),
+                          ),
+                        )
+                      : ListView(
+                          shrinkWrap: true,
+                          children: liveSizes.entries.map((entry) {
+                            return SellerInventoryRow(
+                              productName: product['name'] ?? 'Product',
+                              size: entry.key,
+                              currentStock: entry.value,
+                              maxStock: maxStock,
+                              onStockChanged: (newStock) async {
+                                await persistStock(entry.key, newStock);
+                              },
+                            );
+                          }).toList(),
+                        ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Update the in-memory product's `inventory` relation in place so the
+  /// grid's stock badges and filters reflect Adjust Stock changes without a
+  /// full reload (which would tear down the still-open editor sheet).
+  void _applyStockToLocalProduct(String productId, Map<String, int> sizes) {
+    if (!mounted) return;
+    final index =
+        _products?.indexWhere((p) => p['id']?.toString() == productId) ?? -1;
+    if (index == -1) return;
+    final updated = Map<String, dynamic>.from(_products![index]);
+    updated['inventory'] = sizes.entries
+        .map((e) => {'size': e.key, 'stock': e.value})
+        .toList();
+    setState(() => _products![index] = updated);
   }
 
   // ─── BUILD ──────────────────────────────────────────────────────
@@ -528,6 +910,8 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
     final stock = _totalStock(product);
     final active = _isActive(product);
     final price = (product['price'] as num?)?.toDouble() ?? 0;
+    final onSale = _isOnSale(product);
+    final displayPrice = onSale ? effectivePrice(product) : price;
     final imageRatio = _imageAspectRatioFor(product);
 
     final isDeleting = _deletingProductId == product['id'];
@@ -677,13 +1061,30 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 6),
-                      Text(
-                        '₱${price.toStringAsFixed(2)}',
-                        style: AppConstants.monoStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: AppConstants.primary,
+                      if (onSale) ...[
+                        Text(
+                          '₱${displayPrice.toStringAsFixed(2)}',
+                          style: AppConstants.monoStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: AppConstants.error,
+                          ),
                         ),
+                        Text(
+                          '₱${price.toStringAsFixed(2)}',
+                          style: AppConstants.monoStyle(
+                            fontSize: 11,
+                            color: AppConstants.secondary.withValues(alpha: 0.5),
+                          ).copyWith(decoration: TextDecoration.lineThrough),
+                        ),
+                      ] else
+                        Text(
+                          '₱${price.toStringAsFixed(2)}',
+                          style: AppConstants.monoStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: AppConstants.primary,
+                          ),
                       ),
                       const SizedBox(height: 2),
                       Text(
@@ -724,7 +1125,14 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
   // ─── FILTER BAR ─────────────────────────────────────────────────
 
   Widget _buildFilterBar() {
-    const filters = ['All', 'Low Stock', 'Out of Stock', 'Featured', 'Inactive'];
+    const filters = [
+      'All',
+      'On Sale',
+      'Low Stock',
+      'Out of Stock',
+      'Featured',
+      'Inactive',
+    ];
     return Container(
       height: 54,
       color: Colors.white,

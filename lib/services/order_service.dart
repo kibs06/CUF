@@ -18,10 +18,12 @@ class OrderService {
 
 
   /// Get order IDs for a store via products → order_items chain.
-  /// Optionally limit the number of IDs returned (applied at DB level).
+  /// Optionally filter by a single [status] or a list of [statuses],
+  /// and optionally limit the number of IDs returned (applied at DB level).
   Future<List<dynamic>> _getOrderIdsForStore(
     String storeId, {
     String? status,
+    List<String>? statuses,
     int? limit,
   }) async {
     final productRows = await _client
@@ -48,7 +50,9 @@ class OrderService {
         .from('orders')
         .select('id')
         .inFilter('id', orderIds);
-    if (status != null) {
+    if (statuses != null) {
+      query = query.inFilter('status', statuses);
+    } else if (status != null) {
       query = query.eq('status', status);
     }
     var ordered = query.order('created_at', ascending: false);
@@ -145,12 +149,17 @@ class OrderService {
     return orders;
   }
 
-  /// Most recent N orders for a store with customer name and product name.
+  /// Most recent N pending orders for a store with customer name and
+  /// product name. Only `pending`/`placed` orders are included.
   Future<List<Map<String, dynamic>>> getRecentOrders(
     String storeId, {
     int limit = 5,
   }) async {
-    final orderIds = await _getOrderIdsForStore(storeId, limit: limit);
+    final orderIds = await _getOrderIdsForStore(
+      storeId,
+      statuses: const ['pending', 'placed'],
+      limit: limit,
+    );
     if (orderIds.isEmpty) return [];
 
     final data = await _client
@@ -346,5 +355,20 @@ class OrderService {
     return (data as List)
         .map((row) => Map<String, dynamic>.from(row))
         .toList();
+  }
+
+  /// Permanently delete a cancelled order (customer-owned action).
+  ///
+  /// The `status = 'cancelled'` filter is a guardrail: non-cancelled orders
+  /// are never deletable through this call, even if invoked programmatically.
+  /// Child rows (order_items, order_status_history) cascade via
+  /// `ON DELETE CASCADE` on orders.id. RLS additionally scopes the delete
+  /// to `auth.uid() = customer_id`.
+  Future<void> deleteOrder(String orderId) async {
+    await _client
+        .from('orders')
+        .delete()
+        .eq('id', orderId)
+        .eq('status', 'cancelled');
   }
 }

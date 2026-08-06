@@ -32,6 +32,9 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
   final _imagePicker = ImagePicker();
 
   final _barcodeController = TextEditingController();
+  final _salePriceController = TextEditingController();
+  DateTime? _saleStartsAt;
+  DateTime? _saleEndsAt;
   String _category = 'Casual';
   bool _isActive = true;
   bool _isFeatured = false;
@@ -92,6 +95,10 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
     _category = p['category'] ?? 'Casual';
     _isActive = p['is_active'] ?? true;
     _isFeatured = p['is_featured'] ?? false;
+    _salePriceController.text = (p['sale_price'] ?? '').toString();
+    _saleStartsAt =
+        DateTime.tryParse(p['sale_starts_at']?.toString() ?? '');
+    _saleEndsAt = DateTime.tryParse(p['sale_ends_at']?.toString() ?? '');
 
     // Tags
     if (p['tags'] is List) {
@@ -135,6 +142,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
     _descController.dispose();
     _tagController.dispose();
     _barcodeController.dispose();
+    _salePriceController.dispose();
     super.dispose();
   }
 
@@ -762,6 +770,19 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
       return;
     }
 
+    // Sale price validation — a sale only counts while it is strictly below
+    // the base price (enforced by the shared sale_price.dart helper; we
+    // surface a clear message here for better UX).
+    final double? salePrice =
+        double.tryParse(_salePriceController.text.trim());
+    if (salePrice != null &&
+        salePrice > 0 &&
+        salePrice >= double.parse(_priceController.text)) {
+      _showSnackBar('Sale price must be lower than the base price.',
+          isError: true);
+      return;
+    }
+
     setState(() {
       _isSaving = true;
       _isUploading = true;
@@ -791,6 +812,9 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
           isActive: _isActive,
           isFeatured: _isFeatured,
           barcode: _barcodeController.text,
+          salePrice: salePrice,
+          saleStartsAt: _saleStartsAt,
+          saleEndsAt: _saleEndsAt,
         );
         // Sync active status after variant changes
         try {
@@ -816,6 +840,9 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
           isActive: _isActive,
           isFeatured: _isFeatured,
           barcode: _barcodeController.text,
+          salePrice: salePrice,
+          saleStartsAt: _saleStartsAt,
+          saleEndsAt: _saleEndsAt,
         );
         // Sync active status for new product
         try {
@@ -910,6 +937,14 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
 
                   const SizedBox(height: 24),
 
+                  // ─── SALE (OPTIONAL) ────────────────────────
+                  _buildSectionHeader('Sale (Optional)',
+                      Icons.local_offer_outlined),
+                  const SizedBox(height: 8),
+                  _buildSaleSection(),
+
+                  const SizedBox(height: 24),
+
                   // ─── SECTION 3: BARCODE ─────────────────────
                   _buildSectionHeader('Barcode', Icons.qr_code),
                   const SizedBox(height: 8),
@@ -981,6 +1016,122 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  // ─── SALE SECTION ──────────────────────────────────────────────
+
+  String _formatSaleDate(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  Future<void> _pickSaleDate({required bool isEnd}) async {
+    final current = isEnd ? _saleEndsAt : _saleStartsAt;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: current ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2036),
+    );
+    if (picked != null) {
+      setState(() {
+        if (isEnd) {
+          _saleEndsAt = picked;
+        } else {
+          _saleStartsAt = picked;
+        }
+      });
+    }
+  }
+
+  Widget _buildSaleSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Discounted price (₱)',
+          style: AppConstants.bodyStyle(
+              fontWeight: FontWeight.bold, fontSize: 14),
+        ),
+        const SizedBox(height: 6),
+        TextFormField(
+          controller: _salePriceController,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          style: AppConstants.monoStyle(fontSize: 15),
+          decoration: InputDecoration(
+            prefixText: '₱ ',
+            prefixStyle: AppConstants.monoStyle(
+                fontSize: 15, fontWeight: FontWeight.bold),
+            hintText: 'Leave empty for no sale',
+            filled: true,
+            fillColor: Colors.white,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            border: OutlineInputBorder(
+              borderRadius: AppConstants.buttonRadius,
+              borderSide: const BorderSide(color: AppConstants.borderGray),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: AppConstants.buttonRadius,
+              borderSide: const BorderSide(color: AppConstants.borderGray),
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Original price is never changed — customers see the discounted '
+          'price with the original crossed out.',
+          style: AppConstants.bodyStyle(
+            fontSize: 11,
+            color: AppConstants.secondary.withValues(alpha: 0.6),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => _pickSaleDate(isEnd: false),
+                icon: const Icon(Icons.event_outlined, size: 16),
+                label: Text(
+                  _saleStartsAt != null
+                      ? 'Starts: ${_formatSaleDate(_saleStartsAt!)}'
+                      : 'Start date (optional)',
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppConstants.secondary,
+                  side: const BorderSide(color: AppConstants.borderGray),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => _pickSaleDate(isEnd: true),
+                icon: const Icon(Icons.event_outlined, size: 16),
+                label: Text(
+                  _saleEndsAt != null
+                      ? 'Ends: ${_formatSaleDate(_saleEndsAt!)}'
+                      : 'End date (optional)',
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppConstants.secondary,
+                  side: const BorderSide(color: AppConstants.borderGray),
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (_saleStartsAt != null || _saleEndsAt != null)
+          TextButton.icon(
+            onPressed: () => setState(() {
+              _saleStartsAt = null;
+              _saleEndsAt = null;
+            }),
+            icon: const Icon(Icons.close, size: 16),
+            label: const Text('Clear sale dates'),
+            style: TextButton.styleFrom(foregroundColor: AppConstants.error),
+          ),
+      ],
     );
   }
 

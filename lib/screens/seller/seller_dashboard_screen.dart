@@ -21,14 +21,14 @@ import '../../widgets/seller/seller_order_card.dart';
 import '../../widgets/seller/seller_sparkline.dart';
 import '../../models/sales_trend_data.dart';
 import '../../widgets/seller/seller_stacked_area_chart.dart';
+import '../../widgets/seller/seller_revenue_doughnut.dart';
 import 'manage_orders_screen.dart';
-import 'manage_inventory_screen.dart';
+import 'manage_products_screen.dart';
 import 'custom_orders_screen.dart';
-import 'pos_screen.dart';
-import 'reports_screen.dart';
 import 'order_detail_screen.dart';
 import 'seller_notification_center_screen.dart';
 import 'seller_inbox_screen.dart';
+import 'reports_screen.dart';
 
 /// Dashboard data model — holds all real data fetched from Supabase.
 class _DashboardData {
@@ -141,7 +141,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
 
     final results = await Future.wait([
       salesService.getTodayRevenue(storeId),
-      orderService.getRecentOrders(storeId, limit: 5),
+      orderService.getRecentOrders(storeId, limit: 3),
       orderService.getOrderCountByStatus(storeId),
       StoreService.instance.getMyStore(),
       salesService.getOnlineWeeklyRevenue(storeId),
@@ -303,6 +303,8 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
       appBar: AppBar(
         backgroundColor: AppConstants.secondary,
         elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
         automaticallyImplyLeading: false,
         toolbarHeight: 64,
         title: Column(
@@ -328,21 +330,11 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
         ),
         actions: [
           _buildMessageIcon(),
-          _buildNotificationBell(),
+          // Right padding lives on the last action now that the
+          // initials avatar is gone.
           Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: CircleAvatar(
-              radius: 16,
-              backgroundColor: Colors.white.withAlpha(30),
-              child: Text(
-                firstName.isNotEmpty ? firstName[0].toUpperCase() : 'S',
-                style: AppConstants.bodyStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-            ),
+            padding: const EdgeInsets.only(right: 4),
+            child: _buildNotificationBell(),
           ),
         ],
       ),
@@ -475,6 +467,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
 
             // Block 6 — Weekly Stacked Area Chart (Online + In-Store)
             Container(
+              clipBehavior: Clip.antiAlias,
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: AppConstants.sellerCardBg,
@@ -487,12 +480,16 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                 points: data.weeklyTrend?.points ?? [],
                 trendResult: data.weeklyTrend,
                 isWeekly: true,
+                labels: const [
+                  'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun',
+                ],
               ),
             ),
             const SizedBox(height: 20),
 
             // Block 7 — Monthly Stacked Area Chart
             Container(
+              clipBehavior: Clip.antiAlias,
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: AppConstants.sellerCardBg,
@@ -505,6 +502,23 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                 points: data.monthlyTrend?.points ?? [],
                 trendResult: data.monthlyTrend,
                 isWeekly: false,
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Block 7b — Revenue Breakdown Doughnut (online vs in-store)
+            Container(
+              clipBehavior: Clip.antiAlias,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppConstants.sellerCardBg,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: AppConstants.sellerShadow,
+              ),
+              child: SellerRevenueDoughnutChart(
+                title: 'Revenue breakdown',
+                periodLabel: SalesService.monthlyFullLabels().last,
+                trendResult: data.monthlyTrend,
               ),
             ),
 
@@ -586,7 +600,8 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                 onTap: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) => const ManageInventoryScreen(),
+                      builder: (_) =>
+                          const ManageProductsScreen(initialFilter: 'Low Stock'),
                     ),
                   );
                 },
@@ -634,7 +649,8 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (_) => const ManageInventoryScreen(),
+                        builder: (_) =>
+                            const ManageProductsScreen(initialFilter: 'Low Stock'),
                       ),
                     );
                   },
@@ -771,7 +787,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
         ),
         child: Center(
           child: Text(
-            'No recent orders.',
+            'No pending orders.',
             style: AppConstants.bodyStyle(color: Colors.grey.shade400),
           ),
         ),
@@ -828,63 +844,6 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
   Widget _buildQuickActions() {
     return Row(
       children: [
-        // POS — special treatment (dark primary bg)
-        Expanded(
-          child: GestureDetector(
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) =>
-                      const Scaffold(body: POSScreen(isStandalonePage: true)),
-                ),
-              );
-            },
-            child: Container(
-              height: 88,
-              decoration: BoxDecoration(
-                color: AppConstants.primary,
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: AppConstants.sellerShadow,
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(
-                    Icons.point_of_sale,
-                    size: 28,
-                    color: Colors.white,
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'POS',
-                    style: AppConstants.bodyStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        _quickAction(
-          icon: Icons.inventory_2_outlined,
-          label: 'Inventory',
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const ManageInventoryScreen()),
-          ),
-        ),
-        const SizedBox(width: 8),
-        _quickAction(
-          icon: Icons.receipt_long_outlined,
-          label: 'Orders',
-          onTap: () => Navigator.of(
-            context,
-          ).push(MaterialPageRoute(builder: (_) => const ManageOrdersScreen())),
-        ),
-        const SizedBox(width: 8),
         _quickAction(
           icon: Icons.bar_chart_outlined,
           label: 'Reports',

@@ -57,7 +57,7 @@ class CollectionScreen extends StatelessWidget {
       body: RefreshIndicator(
         color: AppConstants.primary,
         onRefresh: () async {
-          await Provider.of<ProductProvider>(context, listen: false).loadProducts();
+          await Provider.of<ProductProvider>(context, listen: false).loadProducts(hideOutOfStock: true);
         },
         child: Stack(
           children: [

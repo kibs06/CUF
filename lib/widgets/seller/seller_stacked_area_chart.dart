@@ -29,23 +29,34 @@ class SellerStackedAreaChart extends StatelessWidget {
     this.labels,
   });
 
-  // Chart colors matching shadcn/ui design tokens
-  static const Color _onlineColor = Color(0xFF2563EB);   // blue-600
-  static const Color _inStoreColor = Color(0xFFD97706);  // amber-600
+  // Chart colors matching shadcn/ui design tokens. Public so other
+  // revenue visuals (e.g. the doughnut card) reuse the same channel colors.
+  static const Color onlineColor = Color(0xFF2563EB);   // blue-600
+  static const Color inStoreColor = Color(0xFFD97706);  // amber-600
+
+  // Delta uses the app's brand success/error (olive / crimson) so the
+  // growth chip reads as part of the product, not a generic material color.
+  static const double _lowBaselineFloor = 500;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Header
+        // Header: title + legend, then headline number + delta line
         _buildHeader(),
         const SizedBox(height: 16),
         // Chart content
         _buildChartContent(),
         const SizedBox(height: 12),
-        // Footer with trend
-        _buildFooter(),
+        // Footer: scope note only (trend lives under the headline)
+        Text(
+          'Combined online + in-store revenue',
+          style: AppConstants.bodyStyle(
+            fontSize: 11,
+            color: Colors.grey.shade500,
+          ),
+        ),
       ],
     );
   }
@@ -54,22 +65,140 @@ class SellerStackedAreaChart extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          title,
-          style: AppConstants.bodyStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: AppConstants.bodyStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: AppConstants.bodyStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            _buildLegend(),
+          ],
         ),
-        const SizedBox(height: 4),
-        Text(
-          subtitle,
-          style: AppConstants.bodyStyle(
-            fontSize: 12,
-            color: Colors.grey.shade500,
+        if (trendResult != null) ...[
+          const SizedBox(height: 14),
+          // Headline number — the key figure at a glance
+          Text(
+            _formatCurrency(trendResult!.totalRevenue),
+            style: AppConstants.headlineStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+              color: AppConstants.secondary,
+            ),
           ),
-        ),
+          const SizedBox(height: 2),
+          _buildDeltaLine(trendResult!),
+        ],
       ],
+    );
+  }
+
+  /// Delta chip directly beneath the headline. Softens low-sample
+  /// baselines so a tiny/no prior period doesn't read as a crisis.
+  Widget _buildDeltaLine(SalesTrendResult trend) {
+    final prev = trend.previousPeriodRevenue;
+    final total = trend.totalRevenue;
+
+    if (prev <= 0) {
+      return _buildDeltaPill(
+        icon: Icons.remove,
+        iconColor: Colors.grey.shade400,
+        text: 'No previous-period data',
+        textColor: Colors.grey.shade500,
+      );
+    }
+
+    // Low baseline (e.g. a brand-new store or first week): the swing is
+    // noise, not signal — muted styling, no red "-100%" alarm.
+    if (prev < _lowBaselineFloor) {
+      return _buildDeltaPill(
+        icon: Icons.auto_graph,
+        iconColor: Colors.grey.shade400,
+        text: total <= 0
+            ? 'No orders yet this period'
+            : 'Early days — trend will firm up',
+        textColor: Colors.grey.shade500,
+      );
+    }
+
+    final change = trend.percentChange;
+    final isUp = change >= 0;
+    final color = isUp ? AppConstants.success : AppConstants.error;
+    final arrow = isUp ? Icons.arrow_upward : Icons.arrow_downward;
+    final periodWord = isWeekly ? 'last week' : 'last month';
+
+    return _buildDeltaPill(
+      icon: arrow,
+      iconColor: color,
+      text: '${change.abs().toStringAsFixed(1)}% ${isUp ? "up" : "down"}',
+      textColor: color,
+      suffix: 'vs ${_formatCurrency(prev)} $periodWord',
+      tint: color,
+    );
+  }
+
+  /// Rounded, tinted "chip" pill — the signature modern-dashboard element.
+  Widget _buildDeltaPill({
+    required IconData icon,
+    required Color iconColor,
+    required String text,
+    required Color textColor,
+    String? suffix,
+    Color? tint,
+  }) {
+    final base = tint ?? Colors.grey;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: base.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: base.withValues(alpha: 0.28)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: iconColor),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: AppConstants.bodyStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+              color: textColor,
+            ),
+          ),
+          if (suffix != null) ...[
+            const SizedBox(width: 6),
+            Text(
+              suffix,
+              style: AppConstants.bodyStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w500,
+                color: Colors.grey.shade500,
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -84,8 +213,13 @@ class SellerStackedAreaChart extends StatelessWidget {
 
   Widget _buildChart() {
     final maxY = points.map((p) => p.revenue).reduce((a, b) => a > b ? a : b);
-    final yMax = maxY > 0 ? maxY * 1.2 : 100.0;
-    final yInterval = _calculateYInterval(yMax);
+    final yInterval = _calculateYInterval(maxY > 0 ? maxY * 1.2 : 100.0);
+    // Snap the top of the axis UP to an exact multiple of the interval so
+    // every tick sits on a ladder rung. Without this, fl_chart also labels
+    // the (non-aligned) maxY, squeezing two labels together at the top
+    // (the "₱10.0k rendered twice" overlap).
+    final yMax = (maxY > 0 ? maxY * 1.2 : 100.0) / yInterval;
+    final yMaxAligned = (yMax.ceil() * yInterval).toDouble();
 
     // Build stacked spots: online on bottom, inStore on top
     final onlineSpots = <FlSpot>[];
@@ -96,6 +230,18 @@ class SellerStackedAreaChart extends StatelessWidget {
       // Stack: inStore sits on top of online
       inStoreSpots.add(FlSpot(x, points[i].onlineRevenue + points[i].inStoreRevenue));
     }
+
+    // Soft halo behind each line (Linear-style glow). Drawn first so the
+    // areas/lines render on top of it. Purely decorative.
+    LineChartBarData glowBar(List<FlSpot> spots, Color color) => LineChartBarData(
+      spots: spots,
+      isCurved: true,
+      curveSmoothness: 0.35,
+      color: color.withValues(alpha: 0.09),
+      barWidth: 10,
+      isStrokeCapRound: true,
+      dotData: const FlDotData(show: false),
+    );
 
     return SizedBox(
       height: 220,
@@ -108,8 +254,10 @@ class SellerStackedAreaChart extends StatelessWidget {
               drawVerticalLine: false,
               horizontalInterval: yInterval,
               getDrawingHorizontalLine: (value) => FlLine(
-                color: Colors.grey.withValues(alpha: 0.1),
+                color: Colors.grey.withValues(alpha: 0.07),
                 strokeWidth: 1,
+                // Hairline dashed grid — shadcn modern-dashboard signature
+                dashArray: [4, 6],
               ),
             ),
             titlesData: FlTitlesData(
@@ -127,7 +275,7 @@ class SellerStackedAreaChart extends StatelessWidget {
                         _formatCurrencyShort(value),
                         style: AppConstants.bodyStyle(
                           fontSize: 10,
-                          color: Colors.grey.shade600,
+                          color: Colors.grey.shade400,
                         ),
                       ),
                     );
@@ -154,7 +302,7 @@ class SellerStackedAreaChart extends StatelessWidget {
                         label,
                         style: AppConstants.bodyStyle(
                           fontSize: 10,
-                          color: Colors.grey.shade500,
+                          color: Colors.grey.shade400,
                         ),
                       ),
                     );
@@ -166,12 +314,16 @@ class SellerStackedAreaChart extends StatelessWidget {
             minX: 0,
             maxX: (points.length - 1).toDouble(),
             minY: 0,
-            maxY: yMax,
+            maxY: yMaxAligned,
             lineTouchData: LineTouchData(
               touchTooltipData: LineTouchTooltipData(
                 getTooltipColor: (_) => AppConstants.secondary,
-                tooltipRoundedRadius: 12,
-                tooltipPadding: const EdgeInsets.all(12),
+                tooltipRoundedRadius: 14,
+                tooltipPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                maxContentWidth: 200,
+                tooltipBorder: BorderSide(
+                  color: Colors.white.withValues(alpha: 0.12),
+                ),
                 getTooltipItems: (touchedSpots) {
                   if (touchedSpots.isEmpty) return [];
                   final idx = touchedSpots.first.x.toInt();
@@ -249,34 +401,66 @@ class SellerStackedAreaChart extends StatelessWidget {
               ),
               handleBuiltInTouches: true,
               touchSpotThreshold: 20,
+              // Stripe-style vertical guide line on touch — the tooltip
+              // carries the values, so no per-point dots are needed.
+              getTouchedSpotIndicator: (barData, spotIndexes) => spotIndexes
+                  .map((index) => TouchedSpotIndicatorData(
+                        const FlLine(color: Color(0x2E3B2314), strokeWidth: 1),
+                        FlDotData(show: false),
+                      ))
+                  .toList(),
             ),
             lineBarsData: [
-              // In-Store area (on top, drawn second for correct stacking)
+              // Glow halos (behind everything)
+              glowBar(inStoreSpots, inStoreColor),
+              glowBar(onlineSpots, onlineColor),
+              // In-Store area (stacked on top: its spots already include online)
               LineChartBarData(
                 spots: inStoreSpots,
-                isCurved: false,
-                color: _inStoreColor,
-                barWidth: 2,
+                isCurved: true,
+                curveSmoothness: 0.35,
+                color: inStoreColor,
+                barWidth: 2.5,
                 isStrokeCapRound: true,
-                dotData: const FlDotData(show: false),
+                dotData: FlDotData(
+                  show: true,
+                  getDotPainter: (spot, percent, barData, index) {
+                    // Emphasize the latest data point — the fintech
+                    // "current" marker on the most recent value.
+                    if (index != points.length - 1) {
+                      return FlDotCirclePainter(
+                        color: Colors.transparent,
+                        radius: 0,
+                      );
+                    }
+                    return FlDotCirclePainter(
+                      color: inStoreColor,
+                      radius: 4,
+                      strokeWidth: 2,
+                      strokeColor: Colors.white,
+                    );
+                  },
+                ),
                 belowBarData: BarAreaData(
                   show: true,
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [
-                      _inStoreColor.withValues(alpha: 0.4),
-                      _inStoreColor.withValues(alpha: 0.05),
+                      inStoreColor.withValues(alpha: 0.32),
+                      inStoreColor.withValues(alpha: 0.14),
+                      inStoreColor.withValues(alpha: 0.0),
                     ],
                   ),
                 ),
               ),
-              // Online area (on bottom, drawn first)
+              // Online area (bottom)
               LineChartBarData(
                 spots: onlineSpots,
-                isCurved: false,
-                color: _onlineColor,
-                barWidth: 2,
+                isCurved: true,
+                curveSmoothness: 0.35,
+                color: onlineColor,
+                barWidth: 2.5,
                 isStrokeCapRound: true,
                 dotData: const FlDotData(show: false),
                 belowBarData: BarAreaData(
@@ -285,100 +469,60 @@ class SellerStackedAreaChart extends StatelessWidget {
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [
-                      _onlineColor.withValues(alpha: 0.4),
-                      _onlineColor.withValues(alpha: 0.05),
+                      onlineColor.withValues(alpha: 0.32),
+                      onlineColor.withValues(alpha: 0.14),
+                      onlineColor.withValues(alpha: 0.0),
                     ],
                   ),
                 ),
               ),
             ],
           ),
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
+          // Slow, deliberate draw-in — feels premium vs an instant pop-in.
+          duration: const Duration(milliseconds: 800),
+          curve: Curves.easeOutCubic,
         ),
       ),
-    );
-  }
-
-  Widget _buildFooter() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Trend line
-        if (trendResult != null && trendResult!.hasComparison)
-          _buildTrendLine(trendResult!),
-        if (trendResult != null && trendResult!.hasComparison)
-          const SizedBox(height: 6),
-        // Scope subtitle
-        Text(
-          'Combined online + in-store revenue',
-          style: AppConstants.bodyStyle(
-            fontSize: 11,
-            color: Colors.grey.shade500,
-          ),
-        ),
-        const SizedBox(height: 8),
-        // Legend
-        _buildLegend(),
-      ],
-    );
-  }
-
-  Widget _buildTrendLine(SalesTrendResult trend) {
-    final change = trend.percentChange;
-    final isUp = change >= 0;
-    final icon = isUp ? Icons.trending_up : Icons.trending_down;
-    final color = isUp ? const Color(0xFF2E7D32) : const Color(0xFFC62828);
-    final label = isWeekly ? 'this week' : 'this month';
-
-    return Row(
-      children: [
-        Icon(icon, size: 16, color: color),
-        const SizedBox(width: 6),
-        Text(
-          'Trending ${isUp ? "up" : "down"} by ${change.abs().toStringAsFixed(1)}% $label',
-          style: AppConstants.bodyStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-            color: color,
-          ),
-        ),
-      ],
     );
   }
 
   Widget _buildLegend() {
     return Row(
       children: [
-        _legendItem(_onlineColor, 'Online'),
-        const SizedBox(width: 16),
-        _legendItem(_inStoreColor, 'In-Store'),
+        _legendItem(onlineColor, 'Online'),
+        const SizedBox(width: 8),
+        _legendItem(inStoreColor, 'In-Store'),
       ],
     );
   }
 
+  /// Pill-style legend chips (tinted capsule with a colored dot).
   Widget _legendItem(Color color, String label) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 12,
-          height: 12,
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.4),
-            borderRadius: BorderRadius.circular(3),
-            border: Border.all(color: color, width: 1.5),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
           ),
-        ),
-        const SizedBox(width: 6),
-        Text(
-          label,
-          style: AppConstants.bodyStyle(
-            fontSize: 12,
-            color: Colors.grey.shade600,
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: AppConstants.bodyStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey.shade700,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 

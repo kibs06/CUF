@@ -175,6 +175,12 @@ CREATE TABLE IF NOT EXISTS public.products (
     is_active       BOOLEAN NOT NULL DEFAULT true,
     is_featured     BOOLEAN NOT NULL DEFAULT false,
     is_published    BOOLEAN NOT NULL DEFAULT true,
+    -- Product sale fields (migration 20260804000000)
+    -- `price` is ALWAYS the original price; sale_price is the discounted
+    -- price while the sale is active (enforced in lib/utils/sale_price.dart).
+    sale_price      NUMERIC,
+    sale_starts_at  TIMESTAMP WITH TIME ZONE,
+    sale_ends_at    TIMESTAMP WITH TIME ZONE,
     created_at      TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at      TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );

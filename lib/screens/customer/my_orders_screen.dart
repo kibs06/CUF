@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -41,6 +43,10 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
   bool _bannerDismissed = false;
   StreamSubscription? _connectivitySub;
   bool _wasOffline = false;
+
+  /// Pending swipe-deletes: orderId → undo-window timer. The timer commits
+  /// the permanent Supabase delete only if the Undo snackbar expires.
+  final Map<dynamic, Timer> _pendingDeletes = {};
 
   static const _tabs = <_OrderTab>[
     _OrderTab('All orders', 'all'),
@@ -91,6 +97,10 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
 
   @override
   void dispose() {
+    for (final timer in _pendingDeletes.values) {
+      timer.cancel();
+    }
+    _pendingDeletes.clear();
     _connectivitySub?.cancel();
     _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
@@ -199,9 +209,44 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
                     itemCount: provider.myOrders.length,
                     itemBuilder: (context, index) {
                       final order = provider.myOrders[index];
-                      return _OrderCard(
+                      final card = _OrderCard(
                         order: order,
                         onTap: () => _navigateToTracking(order),
+                      );
+
+                      // Only cancelled (Returns tab) orders are swipeable.
+                      final status = (order['status'] ?? '')
+                          .toString()
+                          .toLowerCase();
+                      if (status != 'cancelled') return card;
+
+                      return Slidable(
+                        key: ValueKey(order['id']),
+                        // Swipe right → Delete (startActionPane), same
+                        // interaction as the notifications screen.
+                        startActionPane: ActionPane(
+                          motion: const BehindMotion(),
+                          dismissible: DismissiblePane(
+                            onDismissed: () {
+                              HapticFeedback.lightImpact();
+                              _swipeDeleteOrder(order);
+                            },
+                          ),
+                          children: [
+                            SlidableAction(
+                              onPressed: (_) {
+                                HapticFeedback.lightImpact();
+                                _swipeDeleteOrder(order);
+                              },
+                              backgroundColor: Colors.red.shade400,
+                              foregroundColor: Colors.white,
+                              icon: Icons.delete_outline,
+                              label: 'Delete',
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ],
+                        ),
+                        child: card,
                       );
                     },
                   ),
@@ -467,6 +512,56 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => OrderTrackingScreen(order: order),
+      ),
+    );
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  // SWIPE-TO-DELETE (Returns tab — cancelled orders only)
+  // ════════════════════════════════════════════════════════════════
+
+  /// Instant delete with a 4-second Undo window. The Supabase delete is
+  /// deliberately delayed until the snackbar expires, so Undo restores the
+  /// card locally without any network round-trip.
+  void _swipeDeleteOrder(Map<String, dynamic> order) {
+    // Guardrail: never delete anything but cancelled orders, even if the
+    // gesture were somehow available on other tabs.
+    final status = (order['status'] ?? '').toString().toLowerCase();
+    if (status != 'cancelled') return;
+
+    final orderId = order['id'];
+    if (_pendingDeletes.containsKey(orderId)) return;
+
+    final provider = Provider.of<OrderProvider>(context, listen: false);
+    final deleted = provider.deleteMyOrder(orderId);
+    if (deleted == null) return;
+
+    final timer = Timer(const Duration(seconds: 4), () {
+      _pendingDeletes.remove(orderId);
+      provider.permanentlyDeleteMyOrder(deleted);
+    });
+    _pendingDeletes[orderId] = timer;
+
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Order deleted — undo available for 4s'),
+        duration: const Duration(seconds: 4),
+        backgroundColor: AppConstants.secondary,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+        action: SnackBarAction(
+          label: 'UNDO',
+          textColor: AppConstants.primary,
+          onPressed: () {
+            timer.cancel();
+            _pendingDeletes.remove(orderId);
+            provider.restoreMyOrder(deleted);
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          },
+        ),
       ),
     );
   }

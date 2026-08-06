@@ -126,6 +126,7 @@ class SalesService {
         .from('orders')
         .select('total_amount')
         .inFilter('id', posOrderIds)
+        .eq('payment_status', 'paid')
         .gte('created_at', start);
 
     return (data as List).fold<double>(
@@ -145,6 +146,7 @@ class SalesService {
         .from('orders')
         .select('total_amount, created_at')
         .inFilter('id', posOrderIds)
+        .eq('payment_status', 'paid')
         .gte('created_at', from)
         .order('created_at');
     return (data as List)
@@ -185,6 +187,7 @@ class SalesService {
         .select('total_amount')
         .inFilter('id', orderIds)
         .neq('status', 'cancelled')
+        .eq('payment_status', 'paid')
         .gte('created_at', startOfDay);
 
     return (data as List).fold<double>(
@@ -214,6 +217,7 @@ class SalesService {
         .select('total_amount, created_at')
         .inFilter('id', orderIds)
         .neq('status', 'cancelled')
+        .eq('payment_status', 'paid')
         .gte('created_at', sevenDaysAgo.toIso8601String())
         .order('created_at');
 
@@ -259,11 +263,18 @@ class SalesService {
     final startOfMonth = DateTime(now.year, now.month, 1).toIso8601String();
     final orderIds = await _getOrderIds(storeId);
 
+    // Revenue definition (consistent app-wide): exclude cancelled orders
+    // and require payment_status = 'paid' (money actually received).
+    // POS now reads the LIVE orders.source='pos' path — the legacy
+    // sales_transactions table is no longer written by the POS screen.
     final futures = <Future<List>>[
       _client
-          .from('sales_transactions')
+          .from('orders')
           .select('total_amount')
           .eq('store_id', storeId)
+          .eq('source', 'pos')
+          .neq('status', 'cancelled')
+          .eq('payment_status', 'paid')
           .gte('created_at', startOfMonth)
           .then((d) => List.from(d as List)),
     ];
@@ -276,6 +287,7 @@ class SalesService {
             .select('total_amount')
             .inFilter('id', orderIds)
             .neq('status', 'cancelled')
+            .eq('payment_status', 'paid')
             .gte('created_at', startOfMonth)
             .then((d) => List.from(d as List)),
       );
@@ -317,6 +329,7 @@ class SalesService {
         .select('total_amount, created_at')
         .inFilter('id', orderIds)
         .neq('status', 'cancelled')
+        .eq('payment_status', 'paid')
         .gte('created_at', sixMonthsAgo.toIso8601String());
 
     return _aggregateMonthly(rows as List, now);
@@ -333,6 +346,7 @@ class SalesService {
         .from('orders')
         .select('total_amount, created_at')
         .inFilter('id', posOrderIds)
+        .eq('payment_status', 'paid')
         .gte('created_at', sixMonthsAgo.toIso8601String());
 
     return _aggregateMonthly(rows as List, now);
@@ -421,11 +435,16 @@ class SalesService {
               .lt('created_at', endStr)
               .then((d) => List.from(d as List))
           : Future.value([]),
-      // POS transactions in range
+      // POS orders in range — LIVE path (orders WHERE source='pos').
+      // The legacy sales_transactions table is no longer written by the
+      // POS screen, so reading it here silently dropped all POS revenue.
       _client
-          .from('sales_transactions')
+          .from('orders')
           .select('id, total_amount, created_at')
           .eq('store_id', storeId)
+          .eq('source', 'pos')
+          .neq('status', 'cancelled')
+          .eq('payment_status', 'paid')
           .gte('created_at', startStr)
           .lt('created_at', endStr)
           .then((d) => List.from(d as List)),
@@ -445,9 +464,12 @@ class SalesService {
               .then((d) => (d as List).fold<double>(0, (s, r) => s + ((r['total_amount'] as num?)?.toDouble() ?? 0)))
           : Future.value(0.0),
       _client
-          .from('sales_transactions')
+          .from('orders')
           .select('total_amount')
           .eq('store_id', storeId)
+          .eq('source', 'pos')
+          .neq('status', 'cancelled')
+          .eq('payment_status', 'paid')
           .gte('created_at', prevStartStr)
           .lt('created_at', prevEndStr)
           .then((d) => (d as List).fold<double>(0, (s, r) => s + ((r['total_amount'] as num?)?.toDouble() ?? 0))),
@@ -518,15 +540,16 @@ class SalesService {
       }
     }
 
-    // Fetch POS transaction items
+    // Fetch POS order items (order_items on the POS order ids — the
+    // sales_transaction_items table is legacy and no longer written).
     if (posTransactions.isNotEmpty) {
       final posTxIds = posTransactions
           .map((t) => t['id'])
           .toList();
       final posItems = await _client
-          .from('sales_transaction_items')
+          .from('order_items')
           .select('product_id, quantity, unit_price')
-          .inFilter('transaction_id', posTxIds);
+          .inFilter('order_id', posTxIds);
       for (final item in posItems as List) {
         addItem(
           item['product_id'] as String,
@@ -654,6 +677,9 @@ class SalesService {
         final monthDiff = (date.year - start.year) * 12 + (date.month - start.month);
         return monthDiff.clamp(0, monthsBack - 1);
       },
+      // Each point's date must be a DISTINCT month, rolled forward from the
+      // window start — otherwise the chart's month-abbrev x-labels repeat.
+      pointDateBuilder: (i) => DateTime(start.year, start.month + i, 1),
       labelBuilder: (i) {
         final offset = now.month - monthsBack + 1 + i;
         final month = ((offset % 12) + 12) % 12;
@@ -686,6 +712,7 @@ class SalesService {
     required String Function(int) labelBuilder,
     String Function(int)? fullLabelBuilder,
     required String periodLabel,
+    DateTime Function(int)? pointDateBuilder,
   }) async {
     final startStr = start.toIso8601String();
     final endStr = end.toIso8601String();
@@ -703,6 +730,7 @@ class SalesService {
           .select('total_amount, created_at')
           .inFilter('id', orderIds)
           .neq('status', 'cancelled')
+          .eq('payment_status', 'paid')
           .gte('created_at', startStr)
           .lt('created_at', endStr)
           .then((d) => List.from(d as List)));
@@ -718,6 +746,7 @@ class SalesService {
           .eq('store_id', storeId)
           .eq('source', 'pos')
           .neq('status', 'cancelled')
+          .eq('payment_status', 'paid')
           .gte('created_at', startStr)
           .lt('created_at', endStr)
           .then((d) => List.from(d as List)));
@@ -733,6 +762,7 @@ class SalesService {
           .select('total_amount')
           .inFilter('id', orderIds)
           .neq('status', 'cancelled')
+          .eq('payment_status', 'paid')
           .gte('created_at', prevStartStr)
           .lt('created_at', prevEndStr)
           .then((d) => List.from(d as List)));
@@ -746,6 +776,7 @@ class SalesService {
           .eq('store_id', storeId)
           .eq('source', 'pos')
           .neq('status', 'cancelled')
+          .eq('payment_status', 'paid')
           .gte('created_at', prevStartStr)
           .lt('created_at', prevEndStr)
           .then((d) => List.from(d as List)));
@@ -793,13 +824,17 @@ class SalesService {
         ? ((totalRevenue - previousPeriodRevenue) / previousPeriodRevenue) * 100
         : 0.0;
 
-    // Build points with channel-separated revenue
+    // Build points with channel-separated revenue.
+    // ⚠️ pointDateBuilder must produce DISTINCT dates per slot — the
+    // weekly default advances by day, while monthly rolls by month.
+    // (Bug: previously all monthly points shared the window-start month,
+    // making every x-axis label read the same month abbreviation.)
     final now = DateTime.now();
     final points = List.generate(slotCount, (i) {
       final online = onlineDaily[i];
       final inStore = inStoreDaily[i];
       return SalesDataPoint(
-        date: start.add(Duration(days: i)),
+        date: pointDateBuilder?.call(i) ?? start.add(Duration(days: i)),
         onlineRevenue: online,
         inStoreRevenue: inStore,
         revenue: online + inStore,

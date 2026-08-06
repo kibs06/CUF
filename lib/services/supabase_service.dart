@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../constants/app_constants.dart';
 import '../exceptions/stock_unavailable_exception.dart';
 import '../utils/cart_helpers.dart';
+import '../utils/product_stock.dart';
 import 'seller_notification_service.dart';
 
 /// Default timeout for all Supabase network calls.
@@ -135,7 +136,18 @@ class SupabaseService {
   /// When [storeId] is provided, only products belonging to that store are
   /// returned (seller/POS context). When null, all active products are
   /// returned (customer/admin context).
-  Future<List<Map<String, dynamic>>> fetchProducts({String? storeId}) async {
+  ///
+  /// [hideOutOfStock] removes products with zero stock on every size from
+  /// the result (customer browse surfaces). It uses the `inventory`
+  /// relation — the authoritative stock source for checkout — so hidden
+  /// products are exactly the ones a customer cannot purchase. Sellers and
+  /// admins keep the full list (default false) so they can still see and
+  /// restock them; restocked products reappear automatically on the next
+  /// fetch.
+  Future<List<Map<String, dynamic>>> fetchProducts({
+    String? storeId,
+    bool hideOutOfStock = false,
+  }) async {
     var query = _client
         .from('products')
         .select(
@@ -150,9 +162,15 @@ class SupabaseService {
         .order('created_at', ascending: false)
         .timeout(_defaultTimeout);
 
-    return (data as List)
+    var products = (data as List)
         .map((row) => _mapProduct(Map<String, dynamic>.from(row)))
         .toList();
+
+    if (hideOutOfStock) {
+      products = purchasableProducts(products);
+    }
+
+    return products;
   }
 
   Future<Map<String, dynamic>> addProduct(
@@ -177,6 +195,9 @@ class SupabaseService {
           'sku': productData['sku'],
           'is_featured': productData['is_featured'] ?? false,
           'is_published': productData['is_published'] ?? true,
+          'sale_price': productData['sale_price'],
+          'sale_starts_at': productData['sale_starts_at'],
+          'sale_ends_at': productData['sale_ends_at'],
         })
         .select()
         .single();
@@ -188,6 +209,12 @@ class SupabaseService {
     return _mapProduct(Map<String, dynamic>.from(inserted));
   }
 
+  /// Update a product row and/or its relations.
+  ///
+  /// When [productData] contains only relation data (e.g. `sizes` for the
+  /// Adjust Stock editor), the product row is left untouched and no product
+  /// SELECT is issued — the returned map is then empty and should be
+  /// ignored by callers.
   Future<Map<String, dynamic>> updateProduct(
     dynamic id,
     Map<String, dynamic> productData,
@@ -204,6 +231,9 @@ class SupabaseService {
       'sku',
       'is_featured',
       'is_published',
+      'sale_price',
+      'sale_starts_at',
+      'sale_ends_at',
     ]) {
       if (productData.containsKey(key)) {
         update[key] = productData[key];
@@ -219,14 +249,10 @@ class SupabaseService {
           .select()
           .single();
       product = Map<String, dynamic>.from(data);
-    } else {
-      final data = await _client
-          .from('products')
-          .select()
-          .eq('id', productId)
-          .single();
-      product = Map<String, dynamic>.from(data);
     }
+    // When only relation data changed (e.g. Adjust Stock sends just
+    // {'sizes': ...}), skip the pointless product SELECT — a redundant
+    // round-trip that could abort the inventory write on a flaky network.
 
     if (productData.containsKey('sizes')) {
       await _upsertInventory(productId, productData['sizes']);
@@ -821,7 +847,82 @@ class SupabaseService {
         )
         .toList();
     if (rows.isNotEmpty) {
-      await _client.from('inventory').upsert(rows);
+      try {
+        // onConflict must name the composite (product_id, size) key: the
+        // live `inventory` table guards it with a UNIQUE constraint (not
+        // the primary key), so without it PostgREST tries to INSERT every
+        // restock and dies with code 23505 on inventory_product_id_size_key.
+        await _client
+            .from('inventory')
+            .upsert(rows, onConflict: 'product_id,size');
+      } catch (e) {
+        debugPrint(
+            '[SupabaseService] inventory upsert FAILED for $productId: $e');
+        rethrow;
+      }
+      // Keep product_variants.stock in sync with the authoritative inventory
+      // rows. Without this, the Adjust Stock editor (which writes only
+      // `inventory`) drifts from `product_variants` — and the next product
+      // save would regenerate inventory FROM variants, silently wiping the
+      // seller's stock adjustments.
+      await _syncVariantStock(productId.toString(), rows);
+    }
+  }
+
+  /// Distribute inventory totals (size → stock) onto the matching
+  /// `product_variants` rows so the two tables never drift.
+  ///
+  /// Variants may have multiple rows per size (one per color). The delta
+  /// between the current variant total and the new inventory total is
+  /// applied row-by-row (each row clamped at 0) until fully absorbed.
+  Future<void> _syncVariantStock(
+    String productId,
+    List<Map<String, dynamic>> inventoryRows,
+  ) async {
+    List<dynamic> variants;
+    try {
+      variants = await _client
+          .from('product_variants')
+          .select('id, size, stock')
+          .eq('product_id', productId);
+    } catch (e) {
+      // Best-effort: the inventory write (authoritative for checkout) has
+      // already succeeded — a variant sync hiccup must never fail it.
+      debugPrint('[SupabaseService] variant stock sync failed: $e');
+      return;
+    }
+    if (variants.isEmpty) return;
+
+    final bySize = <String, List<Map<String, dynamic>>>{};
+    for (final v in variants) {
+      final row = Map<String, dynamic>.from(v);
+      bySize.putIfAbsent(row['size'].toString(), () => []).add(row);
+    }
+
+    for (final inv in inventoryRows) {
+      final size = inv['size'].toString();
+      final target = (inv['stock'] as num?)?.toInt() ?? 0;
+      final sizeVariants = bySize[size];
+      if (sizeVariants == null || sizeVariants.isEmpty) continue;
+
+      final currentStocks = sizeVariants
+          .map((v) => (v['stock'] as num?)?.toInt() ?? 0)
+          .toList();
+      final newStocks = distributeVariantStock(currentStocks, target);
+
+      for (var i = 0; i < sizeVariants.length; i++) {
+        if (newStocks[i] == currentStocks[i]) continue;
+        try {
+          await _client
+              .from('product_variants')
+              .update({'stock': newStocks[i]})
+              .eq('id', sizeVariants[i]['id']);
+        } catch (e) {
+          // Best-effort: one row's failure shouldn't abort the rest. The
+          // inventory write (authoritative for checkout) already succeeded.
+          debugPrint('[SupabaseService] variant stock sync failed: $e');
+        }
+      }
     }
   }
 
@@ -890,6 +991,7 @@ class SupabaseService {
       ...row,
       'id': row['id']?.toString(),
       'price': (row['price'] as num?)?.toDouble() ?? 0.0,
+      'sale_price': (row['sale_price'] as num?)?.toDouble(),
       'images': images.map((image) => image['image_url'].toString()).toList(),
       'sizes': sizes,
       'store_name': row['stores'] is Map ? row['stores']['name'] : null,

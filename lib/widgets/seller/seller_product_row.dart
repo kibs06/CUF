@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../constants/app_constants.dart';
+import '../../utils/sale_price.dart';
 
 class SellerProductRow extends StatelessWidget {
   final Map<String, dynamic> product;
@@ -41,6 +42,8 @@ class SellerProductRow extends StatelessWidget {
     final double price = (product['price'] is int)
         ? (product['price'] as int).toDouble()
         : (product['price'] ?? 0.0).toDouble();
+    final bool onSale = isOnSale(product);
+    final double displayPrice = onSale ? effectivePrice(product) : price;
     final sku =
         product['sku'] ?? 'SKU-${id.length > 8 ? id.substring(0, 8) : id}';
     final totalStock = _getTotalStock(product['sizes'] ?? {});
@@ -110,12 +113,46 @@ class SellerProductRow extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  '₱${price.toStringAsFixed(0)} · SKU: $sku',
-                  style: AppConstants.bodyStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade500,
-                  ),
+                Row(
+                  children: [
+                    if (onSale) ...[
+                      Text(
+                        '₱${displayPrice.toStringAsFixed(0)}',
+                        style: AppConstants.monoStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: AppConstants.error,
+                        ),
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        '₱${price.toStringAsFixed(0)}',
+                        style: AppConstants.bodyStyle(
+                          fontSize: 11,
+                          color: Colors.grey.shade400,
+                        ).copyWith(decoration: TextDecoration.lineThrough),
+                      ),
+                      const SizedBox(width: 5),
+                    ] else
+                      Text(
+                        '₱${price.toStringAsFixed(0)}',
+                        style: AppConstants.bodyStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade500,
+                        ),
+                      ),
+                    Expanded(
+                      child: Text(
+                        '· SKU: $sku',
+                        style: AppConstants.bodyStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade500,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 6),
                 Column(
@@ -179,6 +216,10 @@ class SellerProductRow extends StatelessWidget {
                     if (isFeatured) ...[
                       const SizedBox(width: 6),
                       _buildStatusChip('FEATURED', AppConstants.accent),
+                    ],
+                    if (onSale) ...[
+                      const SizedBox(width: 6),
+                      _buildStatusChip('ON SALE', AppConstants.error),
                     ],
                   ],
                 ),

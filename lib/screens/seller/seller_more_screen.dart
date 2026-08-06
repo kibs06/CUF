@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/auth_provider.dart';
-import 'manage_inventory_screen.dart';
 import 'custom_orders_screen.dart';
 import 'reports_screen.dart';
 
@@ -28,14 +27,6 @@ class SellerMoreScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          _menuItem(
-            icon: Icons.inventory_2_outlined,
-            title: 'Manage Inventory',
-            subtitle: 'Track stock levels',
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const ManageInventoryScreen()),
-            ),
-          ),
           _menuItem(
             icon: Icons.design_services_outlined,
             title: 'Custom Orders',

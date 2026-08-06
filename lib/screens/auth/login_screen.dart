@@ -293,9 +293,9 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                               const SizedBox(height: 6),
                               Text(
-                                'Carcar City Artisan Footwear',
+                                'Carcar United Footwear Manufacturers Association, Inc.',
                                 style: AppConstants.bodyStyle(
-                                  fontSize: 14,
+                                  fontSize: 13,
                                   color: AppConstants.surfaceLight.withValues(
                                     alpha: 0.75,
                                   ),

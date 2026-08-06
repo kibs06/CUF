@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -7,6 +9,34 @@ import 'package:app/services/supabase_service.dart';
 // Mock classes
 class MockSupabaseService extends Mock implements SupabaseService {}
 class MockSupabaseClient extends Mock implements SupabaseClient {}
+class MockSupabaseQueryBuilder extends Mock implements SupabaseQueryBuilder {}
+
+/// A real [PostgrestFilterBuilder] whose `eq` chain records calls and
+/// resolves immediately — avoids mocking `Future.then`, which mocktail
+/// cannot match on a Future-implementing mock.
+class RecordingFilterBuilder extends PostgrestFilterBuilder<dynamic> {
+  RecordingFilterBuilder()
+      : super(
+          PostgrestBuilder<dynamic, dynamic, dynamic>(
+            url: Uri.parse('https://test.local'),
+            headers: const <String, String>{},
+          ),
+        );
+
+  final List<(String, Object)> eqCalls = [];
+
+  @override
+  PostgrestFilterBuilder<dynamic> eq(String column, Object value) {
+    eqCalls.add((column, value));
+    return this;
+  }
+
+  @override
+  Future<R> then<R>(FutureOr<R> Function(dynamic value) onValue,
+      {Function? onError}) async {
+    return onValue(<dynamic>[]);
+  }
+}
 
 void main() {
   late OrderService orderService;
@@ -99,6 +129,26 @@ void main() {
         () => orderService.updateOrderStatus('order-123', 'cancelled'),
         throwsA(isA<PostgrestException>()),
       );
+    });
+    test('deleteOrder always targets the cancelled status (guardrail)',
+        () async {
+      // Arrange — stub the query chain with a recording fake builder
+      final query = MockSupabaseQueryBuilder();
+      final filter = RecordingFilterBuilder();
+      when(() => mockClient.from('orders')).thenAnswer((_) => query);
+      when(() => query.delete()).thenAnswer((_) => filter);
+
+      // Act
+      await orderService.deleteOrder('order-123');
+
+      // Assert — the status='cancelled' guard is baked into every call,
+      // so a non-cancelled order can never be deleted through this path.
+      verify(() => mockClient.from('orders')).called(1);
+      verify(() => query.delete()).called(1);
+      expect(filter.eqCalls, [
+        ('id', 'order-123'),
+        ('status', 'cancelled'),
+      ]);
     });
   });
 }

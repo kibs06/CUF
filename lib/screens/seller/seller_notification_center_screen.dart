@@ -9,7 +9,7 @@ import '../../providers/seller_notification_provider.dart';
 import '../../services/seller_notification_service.dart';
 import 'manage_orders_screen.dart';
 import 'custom_orders_screen.dart';
-import 'manage_inventory_screen.dart';
+import 'manage_products_screen.dart';
 import 'order_detail_screen.dart';
 import 'seller_inbox_screen.dart';
 
@@ -282,7 +282,10 @@ class _SellerNotificationCenterScreenState
         break;
       case 'low_stock':
         Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const ManageInventoryScreen()),
+          MaterialPageRoute(
+            builder: (_) =>
+                const ManageProductsScreen(initialFilter: 'Low Stock'),
+          ),
         );
         break;
       case 'custom_order_request':

@@ -4,6 +4,7 @@ import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../utils/recently_viewed.dart';
+import '../../utils/sale_price.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/message_provider.dart';
@@ -63,7 +64,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     super.initState();
     _loadRecentlyViewed();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<ProductProvider>(context, listen: false).loadProducts();
+      Provider.of<ProductProvider>(context, listen: false).loadProducts(hideOutOfStock: true);
       // Load conversations for the floating message button badge
       _loadConversations();
       // Set up push notification deep link handler
@@ -74,7 +75,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     _wasOffline = !ConnectivityService.instance.isOnline;
     _connectivitySub = ConnectivityService.instance.isOnlineStream.listen((isOnline) {
       if (isOnline && _wasOffline && mounted) {
-        Provider.of<ProductProvider>(context, listen: false).loadProducts();
+        Provider.of<ProductProvider>(context, listen: false).loadProducts(hideOutOfStock: true);
       }
       _wasOffline = !isOnline;
     });
@@ -256,6 +257,15 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     final auth = context.watch<AuthProvider>();
     final productProvider = context.watch<ProductProvider>();
     final filteredProducts = productProvider.getFilteredProducts(_searchKeyword);
+    // Products currently on sale — powers the dedicated "On Sale" sliver.
+    final saleProducts = productProvider.products.where(isOnSale).toList();
+    // Recently-viewed items still in the live catalog. Out-of-stock (now
+    // hidden from browse) and deleted products are excluded so the strip
+    // never shows a stale price with a dead tap.
+    final recentlyViewedItems = _recentlyViewed
+        .where((item) => productProvider.products.any(
+            (p) => p['id']?.toString() == item['id']))
+        .toList();
 
     return Scaffold(
       backgroundColor: AppConstants.surfaceLight,
@@ -276,7 +286,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
             child: RefreshIndicator(
               color: AppConstants.primary,
               onRefresh: () async {
-                await Provider.of<ProductProvider>(context, listen: false).loadProducts();
+                await Provider.of<ProductProvider>(context, listen: false).loadProducts(hideOutOfStock: true);
               },              child: CustomScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 slivers: [
@@ -387,7 +397,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 ),
 
                 // Recently viewed (only when search is empty)
-                if (_searchKeyword.isEmpty && _recentlyViewed.isNotEmpty)
+                if (_searchKeyword.isEmpty && recentlyViewedItems.isNotEmpty)
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.only(left: 20, right: 20, bottom: 8),
@@ -406,10 +416,25 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                             height: 180,
                             child: ListView.separated(
                               scrollDirection: Axis.horizontal,
-                              itemCount: _recentlyViewed.length,
+                              itemCount: recentlyViewedItems.length,
                               separatorBuilder: (_, __) => const SizedBox(width: 12),
                               itemBuilder: (context, index) {
-                                final item = _recentlyViewed[index];
+                                final item = recentlyViewedItems[index];
+                                // Resolve the live product (if it's still in
+                                // the catalog) so the strip shows the current
+                                // effective (sale-aware) price.
+                                final fullProduct = productProvider.products
+                                    .cast<Map<String, dynamic>?>()
+                                    .firstWhere(
+                                  (p) => p?['id']?.toString() == item['id'],
+                                  orElse: () => null,
+                                );
+                                final stripPrice = fullProduct != null
+                                    ? effectivePrice(fullProduct)
+                                    : ((item['price'] is num)
+                                            ? (item['price'] as num)
+                                            : 0)
+                                        .toDouble();
                                 return SizedBox(
                                   width: 130,
                                   child: GestureDetector(
@@ -437,11 +462,11 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                                           child: Image.network(
                                             item['imageUrl'] ?? '',
                                             width: 130,
-                                            height: 130,
+                                            height: 124,
                                             fit: BoxFit.cover,
                                             errorBuilder: (_, __, ___) => Container(
                                               width: 130,
-                                              height: 130,
+                                              height: 124,
                                               color: AppConstants.borderGray.withValues(alpha: 0.2),
                                               child: Icon(
                                                 Icons.image_outlined,
@@ -451,22 +476,61 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                                           ),
                                         ),
                                         const SizedBox(height: 6),
-                                        Text(
-                                          item['name'] ?? '',
-                                          style: AppConstants.bodyStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          '₱${(item['price'] is num ? (item['price'] as num) : 0).toStringAsFixed(2)}',
-                                          style: AppConstants.monoStyle(
-                                            fontSize: 11,
-                                            color: AppConstants.primary,
-                                            fontWeight: FontWeight.bold,
+                                        // Text block — Expanded + FittedBox
+                                        // (scaleDown) guarantees the card never
+                                        // overflows the 180px strip, even when
+                                        // an on-sale item renders two price
+                                        // lines or the device text scale is
+                                        // large.
+                                        Expanded(
+                                          child: FittedBox(
+                                            fit: BoxFit.scaleDown,
+                                            alignment: Alignment.topLeft,
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  item['name'] ?? '',
+                                                  style: AppConstants.bodyStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                                const SizedBox(height: 2),
+                                                if (fullProduct != null &&
+                                                    isOnSale(fullProduct)) ...[
+                                                  Text(
+                                                    '₱${stripPrice.toStringAsFixed(2)}',
+                                                    style: AppConstants.monoStyle(
+                                                      fontSize: 11,
+                                                      color: AppConstants.primary,
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                  Text(
+                                                    '₱${((fullProduct['price'] is num) ? (fullProduct['price'] as num) : 0).toStringAsFixed(2)}',
+                                                    style: AppConstants.monoStyle(
+                                                      fontSize: 9,
+                                                      color: AppConstants.secondary
+                                                          .withOpacity(0.5),
+                                                    ).copyWith(
+                                                        decoration: TextDecoration
+                                                            .lineThrough),
+                                                  ),
+                                                ] else
+                                                  Text(
+                                                    '₱${stripPrice.toStringAsFixed(2)}',
+                                                    style: AppConstants.monoStyle(
+                                                      fontSize: 11,
+                                                      color: AppConstants.primary,
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
                                           ),
                                         ),
                                       ],
@@ -507,6 +571,81 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                       ),
                     ),
                   ),
+
+                // On Sale section — dedicated masonry sliver. Shown only in
+                // the default browse state (no search, no category filter):
+                // when the 'On Sale' chip is selected the grid below already
+                // shows all sale items, so the sliver would duplicate it.
+                if (_searchKeyword.isEmpty &&
+                    saleProducts.isNotEmpty &&
+                    (productProvider.selectedCategory == null ||
+                        productProvider.selectedCategory == 'All')) ...[
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 10),
+                      child: Row(
+                        children: [
+                          Text(
+                            'On Sale',
+                            style: AppConstants.headlineStyle(fontSize: 16),
+                          ),
+                          const SizedBox(width: 10),
+                          const _PriceTagBadge(label: 'HOT DEALS'),
+                        ],
+                      ),
+                    ),
+                  ),
+                  SliverPadding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    // NOTE: deliberately a plain SliverGrid, NOT masonry.
+                    // Two SliverMasonryGrids in one CustomScrollView trigger a
+                    // scroll-offset-correction loop in flutter_staggered_grid_view
+                    // 0.7.0 that yanks the viewport back partway down the page
+                    // — making the bottom of a long catalog unreachable. The
+                    // catalog grid below keeps masonry; this small section uses
+                    // a deterministic grid (exact extent, no estimation).
+                    // Cards omit imageAspectRatio so the image is an Expanded
+                    // fill — the card adapts to any cell height without
+                    // overflowing.
+                    sliver: SliverGrid(
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        crossAxisSpacing: 16,
+                        mainAxisSpacing: 16,
+                        // 0.58 ≈ the catalog masonry cards' average image
+                        // height, so the two sections read similarly.
+                        childAspectRatio: 0.58,
+                      ),
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          final prod = saleProducts[index];
+                          return SoleProductCard(
+                            product: prod,
+                            onTap: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      ProductDetailScreen(product: prod),
+                                ),
+                              );
+                            },
+                            onTryOnTap: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (context) => ARVirtualFitScreen(
+                                      preselectedProduct: prod),
+                                ),
+                              );
+                            },
+                          );
+                        },
+                        childCount: saleProducts.length,
+                      ),
+                    ),
+                  ),
+                  const SliverToBoxAdapter(child: SizedBox(height: 16)),
+                ],
 
                 // Featured PageView Banner (when search query is empty)
                 if (_searchKeyword.isEmpty)
@@ -673,7 +812,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                       child: ConnectivityService.instance.isOnline
                           ? const CircularProgressIndicator(color: AppConstants.primary)
                           : NoInternetView(
-                              onRetry: () => Provider.of<ProductProvider>(context, listen: false).loadProducts(),
+                              onRetry: () => Provider.of<ProductProvider>(context, listen: false).loadProducts(hideOutOfStock: true),
                             ),
                     ),
                   )
@@ -739,3 +878,69 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     );
   }
 }
+
+/// A price-tag shaped badge (punched hole + pointed right edge) used to
+/// emphasize section labels like "HOT DEALS".
+class _PriceTagBadge extends StatelessWidget {
+  const _PriceTagBadge({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      painter: const _PriceTagPainter(color: Color(0xFFFFC107)),
+      child: Padding(
+        padding: const EdgeInsets.only(left: 22, right: 18, top: 5, bottom: 5),
+        child: Text(
+          label,
+          style: AppConstants.monoStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF3B2314),
+          ).copyWith(letterSpacing: 0.5),
+        ),
+      ),
+    );
+  }
+}
+
+class _PriceTagPainter extends CustomPainter {
+  const _PriceTagPainter({required this.color});
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const pointWidth = 12.0;
+    const holeRadius = 6.0;
+    final holeCenter = Offset(14, size.height / 2);
+
+    final path = Path()
+      ..fillType = PathFillType.evenOdd
+      ..addRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(0, 0, size.width - pointWidth, size.height),
+          const Radius.circular(4),
+        ),
+      )
+      ..moveTo(size.width - pointWidth, 0)
+      ..lineTo(size.width, size.height / 2)
+      ..lineTo(size.width - pointWidth, size.height)
+      ..close()
+      ..addOval(Rect.fromCircle(center: holeCenter, radius: holeRadius));
+
+    canvas.drawShadow(
+      path,
+      Colors.black.withValues(alpha: 0.25),
+      2,
+      false,
+    );
+    canvas.drawPath(path, Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(covariant _PriceTagPainter oldDelegate) =>
+      oldDelegate.color != color;
+}
+

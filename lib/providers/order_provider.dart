@@ -279,6 +279,58 @@ class OrderProvider extends ChangeNotifier {
         .eq('id', orderId);
   }
 
+  // ── My Orders: swipe-to-delete (Returns tab) ───────────────────
+
+  /// Optimistically remove one of the customer's orders from both the raw
+  /// and filtered lists. Returns the removed entry (with its original
+  /// positions) so it can be restored if the user taps Undo.
+  DeletedMyOrder? deleteMyOrder(dynamic orderId) {
+    final filteredIndex =
+        _filteredMyOrders.indexWhere((o) => o['id'] == orderId);
+    if (filteredIndex == -1) return null;
+
+    final rawIndex = _myOrders.indexWhere((o) => o['id'] == orderId);
+    final data = Map<String, dynamic>.from(_filteredMyOrders[filteredIndex]);
+    _filteredMyOrders.removeAt(filteredIndex);
+    if (rawIndex != -1) _myOrders.removeAt(rawIndex);
+    notifyListeners();
+    return DeletedMyOrder(
+      data: data,
+      index: filteredIndex,
+      rawIndex: rawIndex,
+    );
+  }
+
+  /// Reinsert a previously removed order at its original positions.
+  /// Called from the Undo action before any database delete has run.
+  void restoreMyOrder(DeletedMyOrder deleted) {
+    _filteredMyOrders.insert(
+      deleted.index.clamp(0, _filteredMyOrders.length),
+      Map<String, dynamic>.from(deleted.data),
+    );
+    if (deleted.rawIndex != -1) {
+      _myOrders.insert(
+        deleted.rawIndex.clamp(0, _myOrders.length),
+        Map<String, dynamic>.from(deleted.data),
+      );
+    }
+    notifyListeners();
+  }
+
+  /// Commit the permanent delete against Supabase. Only called after the
+  /// undo window expires. On failure, reinserts the order locally so the
+  /// UI never silently loses data, and returns false.
+  Future<bool> permanentlyDeleteMyOrder(DeletedMyOrder deleted) async {
+    try {
+      await _orderService.deleteOrder(deleted.data['id'].toString());
+      return true;
+    } catch (e) {
+      debugPrint('OrderProvider.permanentlyDeleteMyOrder error: $e');
+      restoreMyOrder(deleted);
+      return false;
+    }
+  }
+
   // --- ADMIN ACTIONS (UC004, UC005) ---
   Future<void> loadProfiles() async {
     _isLoading = true;
@@ -321,4 +373,22 @@ class OrderProvider extends ChangeNotifier {
       return false;
     }
   }
+}
+
+/// A customer order removed optimistically from the My Orders lists,
+/// together with its original positions so Undo can restore it exactly.
+class DeletedMyOrder {
+  final Map<String, dynamic> data;
+
+  /// Position in the filtered My Orders list at removal time.
+  final int index;
+
+  /// Position in the unfiltered list, or -1 if not present there.
+  final int rawIndex;
+
+  const DeletedMyOrder({
+    required this.data,
+    required this.index,
+    required this.rawIndex,
+  });
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/product_service.dart';
 import '../services/supabase_service.dart';
+import '../utils/sale_price.dart';
 
 enum SortMode {
   /// Default browse order — the catalog is shuffled once per
@@ -41,13 +42,18 @@ class ProductProvider extends ChangeNotifier {
   String? get selectedCategory => _selectedCategory;
   SortMode get sortMode => _sortMode;
 
-  // Fetch all categories present in the products list
+  // Fetch all categories present in the products list.
+  // An 'On Sale' pseudo-category is appended when at least one product is
+  // actively on sale — it acts like a filter chip, not a real category.
   List<String> get categories {
     final Set<String> uniqueCats = {'All'};
     for (var prod in _products) {
       if (prod.containsKey('category')) {
         uniqueCats.add(prod['category']);
       }
+    }
+    if (_products.any(isOnSale)) {
+      uniqueCats.add('On Sale');
     }
     return uniqueCats.toList();
   }
@@ -63,12 +69,20 @@ class ProductProvider extends ChangeNotifier {
   /// [reshuffle] defaults to true: every load (including pull-to-refresh)
   /// produces a new order. Set to false if a caller wants to preserve the
   /// current session's shuffled order.
-  Future<void> loadProducts({bool reshuffle = true}) async {
+  ///
+  /// [hideOutOfStock] removes products with no stock on any size — used by
+  /// customer browse screens so out-of-stock items disappear from the
+  /// catalog and reappear automatically once a seller restocks them.
+  /// Sellers and admins keep the full list (default false).
+  Future<void> loadProducts({
+    bool reshuffle = true,
+    bool hideOutOfStock = false,
+  }) async {
     _isLoading = true;
     notifyListeners();
 
     try {
-      _products = await _db.fetchProducts();
+      _products = await _db.fetchProducts(hideOutOfStock: hideOutOfStock);
       if (reshuffle) {
         _products.shuffle();
       }
@@ -113,20 +127,33 @@ class ProductProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Returns the price value from a product map, handling both int and double.
-  double _extractPrice(Map<String, dynamic> product) {
-    final price = product['price'];
-    if (price is int) return price.toDouble();
-    if (price is double) return price;
-    return 0.0;
-  }
+  /// Returns the EFFECTIVE price (sale-aware) from a product map.
+  ///
+  /// Delegates to the shared [isOnSale]/[effectivePrice] helpers so the
+  /// active-sale rule stays in one place (sale_price.dart). This single
+  /// change makes price sorting correct under active sales.
+  double _extractPrice(Map<String, dynamic> product) => effectivePrice(product);
+
+  /// Whether a product is currently on sale (delegates to the shared helper).
+  bool isProductOnSale(Map<String, dynamic> product) => isOnSale(product);
+
+  /// The price the customer pays right now (delegates to the shared helper).
+  double productEffectivePrice(Map<String, dynamic> product) =>
+      effectivePrice(product);
 
   /// Filtered + sorted products list.
   List<Map<String, dynamic>> getFilteredProducts(String searchKeyword) {
     List<Map<String, dynamic>> filtered = _products;
 
-    // Category filter
-    if (_selectedCategory != 'All' && _selectedCategory != null) {
+    // Category filter — 'On Sale' is a pseudo-category that filters by the
+    // active-sale rule instead of the product's category field. If the sale
+    // expired mid-session while 'On Sale' is selected, gracefully fall back
+    // to the full list instead of showing a confusing empty state.
+    final bool saleFilterActive =
+        _selectedCategory == 'On Sale' && _products.any(isOnSale);
+    if (saleFilterActive) {
+      filtered = filtered.where((p) => isOnSale(p)).toList();
+    } else if (_selectedCategory != 'All' && _selectedCategory != null) {
       filtered = filtered
           .where((p) => p['category'] == _selectedCategory)
           .toList();
@@ -200,7 +227,10 @@ class ProductProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
       return true;
-    } catch (_) {
+    } catch (e) {
+      // Log the real reason (e.g. PostgrestException code/message) so a
+      // failed write is never a silent dead end during debugging.
+      debugPrint('[ProductProvider] updateProduct failed for $id: $e');
       _isLoading = false;
       notifyListeners();
       return false;
