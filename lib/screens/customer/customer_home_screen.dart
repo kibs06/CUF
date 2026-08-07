@@ -17,7 +17,6 @@ import '../../widgets/sole_product_card.dart';
 import '../../widgets/cart_icon_button.dart';
 import '../../widgets/chat/chat_view.dart';
 import 'product_detail_screen.dart';
-import 'ar_fitting_screen.dart';
 import 'tracking_screen.dart';
 import 'my_reports_screen.dart';
 
@@ -630,14 +629,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                                 ),
                               );
                             },
-                            onTryOnTap: () {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (context) => ARVirtualFitScreen(
-                                      preselectedProduct: prod),
-                                ),
-                              );
-                            },
                           );
                         },
                         childCount: saleProducts.length,
@@ -849,13 +840,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                             Navigator.of(context).push(
                               MaterialPageRoute(
                                 builder: (context) => ProductDetailScreen(product: prod),
-                              ),
-                            );
-                          },
-                          onTryOnTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (context) => ARVirtualFitScreen(preselectedProduct: prod),
                               ),
                             );
                           },

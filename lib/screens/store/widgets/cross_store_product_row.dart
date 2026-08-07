@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../constants/app_constants.dart';
 import '../../customer/product_detail_screen.dart';
-import '../../customer/ar_fitting_screen.dart';
 import '../../../widgets/sole_product_card.dart';
 
 /// "Top Picks from a store" section.
@@ -90,15 +89,6 @@ class CrossStoreProductRow extends StatelessWidget {
                       Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) => ProductDetailScreen(product: product),
-                        ),
-                      );
-                    },
-                    onTryOnTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => ARVirtualFitScreen(
-                            preselectedProduct: product,
-                          ),
                         ),
                       );
                     },

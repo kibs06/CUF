@@ -20,6 +20,7 @@ import 'write_review_screen.dart';
 import '../../widgets/cart_icon_button.dart';
 import '../../widgets/seller/fly_to_order_animation.dart';
 import '../../widgets/size_guide_modal.dart';
+import '../../widgets/hanging_sale_tag.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   final Map<String, dynamic> product;
@@ -567,6 +568,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
     return KeyedSubtree(
       key: _productImageKey,
       child: Stack(
+      // The hanging tag pokes ~7px past the left edge — don't clip it.
+      clipBehavior: Clip.none,
       children: [
         // Main swipeable image area
         AspectRatio(
@@ -610,6 +613,20 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                   fontSize: 12,
                 ),
               ),
+            ),
+          ),
+
+        // Hanging sale tag — the same per-user/per-product object shown on
+        // the catalog cards: tap to reveal the discount, stays revealed
+        // everywhere for this product. Hangs off the left edge, below the
+        // back button, away from the image counter (top-right).
+        if (isOnSale(widget.product))
+          Positioned(
+            top: 52,
+            left: -7,
+            child: HangingSaleTag(
+              productId: widget.product['id']?.toString() ?? '',
+              salePercent: salePercent(widget.product),
             ),
           ),
 

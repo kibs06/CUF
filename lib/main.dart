@@ -20,6 +20,7 @@ import 'providers/follow_provider.dart';
 import 'providers/review_provider.dart';
 import 'providers/foot_measurement_provider.dart';
 import 'providers/update_provider.dart';
+import 'providers/sale_tag_provider.dart';
 import 'services/store_service.dart';
 import 'screens/auth/splash_screen.dart';
 import 'services/connectivity_service.dart';
@@ -113,6 +114,7 @@ class CUFMAIApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ReviewProvider()),
         ChangeNotifierProvider(create: (_) => FootMeasurementProvider()),
         ChangeNotifierProvider(create: (_) => UpdateProvider()),
+        ChangeNotifierProvider(create: (_) => SaleTagProvider()),
       ],
       child: MaterialApp(
         title: 'CUFMAI',

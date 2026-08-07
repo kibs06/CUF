@@ -6,7 +6,6 @@ import '../../providers/product_provider.dart';
 import '../../widgets/cart_icon_button.dart';
 import '../../widgets/sole_product_card.dart';
 import '../customer/product_detail_screen.dart';
-import '../customer/ar_fitting_screen.dart';
 
 /// Deterministic image aspect ratio per card keyed off product id.
 double _imageAspectRatioFor(dynamic product) {
@@ -104,15 +103,6 @@ class CollectionScreen extends StatelessWidget {
                             MaterialPageRoute(
                               builder: (_) =>
                                   ProductDetailScreen(product: prod),
-                            ),
-                          );
-                        },
-                        onTryOnTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => ARVirtualFitScreen(
-                                preselectedProduct: prod,
-                              ),
                             ),
                           );
                         },

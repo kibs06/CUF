@@ -15,7 +15,6 @@ import '../../widgets/chat/chat_view.dart';
 import '../../widgets/cart_icon_button.dart';
 import '../../widgets/sole_product_card.dart';
 import '../customer/product_detail_screen.dart';
-import '../customer/ar_fitting_screen.dart';
 import 'collection_screen.dart';
 import 'widgets/stitch_painter.dart';
 
@@ -618,14 +617,6 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                         Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (_) => ProductDetailScreen(product: prod),
-                          ),
-                        );
-                      },
-                      onTryOnTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                ARVirtualFitScreen(preselectedProduct: prod),
                           ),
                         );
                       },

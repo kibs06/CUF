@@ -121,11 +121,20 @@ final double displayPrice = effectivePrice(product);
 final int? salePct = salePercent(product);
 ```
 
-- **Image overlay (top-left):** red pill badge `SALE -30%` (or just `SALE` if percent is null), with `local_offer` icon. It is a `Positioned` overlay, so it never affects masonry sizing.
+- **Hanging sale tag (top-right corner):** instead of a flat red pill, a physical-looking **hang tag** (`lib/widgets/hanging_sale_tag.dart`) is clipped to the card's top-right corner as a pure `Positioned` overlay — it never affects masonry sizing or the HOT DEALS grid contract. The tag shows a "?" until the user taps it, then flips to the live discount (`-23%`), with a pendulum idle swing, flip+bounce+sparkle reveal, haptic, and reduced-motion support.
 - **Price block:** when on sale → two stacked lines: sale price (`₱{displayPrice}` in primary, bold) + original price with `TextDecoration.lineThrough` (muted). Otherwise → single price.
-- Top-right "Try On" AR badge is unrelated to sales (accent color).
+- The "Try On" AR badge was **removed from cards** (redundant — the product detail page has its own Try-On entry). `onTryOnTap` no longer exists on `SoleProductCard`.
 
-The same pattern (strikethrough original + effective price) is used in the **Recently Viewed strip** (`isOnSale(fullProduct)` on the resolved live product) and on `product_detail_screen.dart`.
+#### 4.3.1 Reveal-state persistence — `SaleTagProvider`
+
+The revealed/unrevealed state is **per user + per product**, and is the *same everywhere a product is shown* (cards, HOT DEALS, store screens, product detail hero). It is owned by `lib/providers/sale_tag_provider.dart`:
+
+- Backed by **local SharedPreferences** (`lib/services/sale_tag_service.dart`, key `sale_tag_reveals_<userId>` → JSON list of product ids). ⚠️ Known limitation: local-only — reveals don't sync across devices.
+- Loaded **once per signed-in user** (lazily, on first tag render — never per card per render); `reveal()` flips the UI **optimistically** then persists in the background.
+- Signed-out/guest: tags render unrevealed; a tap flips for the session only (nothing persisted).
+- The revealed face always shows the **current live** `salePercent(product)` — the reveal only gates *whether* the number shows, not *which* number.
+
+The same pattern (strikethrough original + effective price) is used in the **Recently Viewed strip** (`isOnSale(fullProduct)` on the resolved live product — no hanging tag at that tiny 130px scale, just the two-line price) and `product_detail_screen.dart` (tag hangs off the hero image's left edge; the price block below shows the full "You save ₱X · Ends …" note).
 
 ---
 
@@ -149,7 +158,10 @@ So "Price: Low to High" lists discounted items at their *actual* price. `SortMod
 | `lib/utils/sale_price.dart` | **Single source of truth** — `isOnSale`, `effectivePrice`, `salePercent` |
 | `lib/screens/customer/customer_home_screen.dart` | "On Sale" section sliver + chip wiring + recently-viewed sale prices |
 | `lib/providers/product_provider.dart` | `categories` (`'On Sale'` pseudo-category), `getFilteredProducts` (sale filter + effective-price sort) |
-| `lib/widgets/sole_product_card.dart` | Sale badge + strikethrough/effective price display |
+| `lib/widgets/sole_product_card.dart` | Hanging tag overlay + strikethrough/effective price display |
+| `lib/widgets/hanging_sale_tag.dart` | The interactive hang tag (swing, flip reveal, semantics, reduced motion) |
+| `lib/providers/sale_tag_provider.dart` | Per-user/per-product reveal state (optimistic flips, lazy load) |
+| `lib/services/sale_tag_service.dart` | SharedPreferences persistence (local-only, per-user key) |
 | `lib/screens/customer/product_detail_screen.dart` | Detail-page sale pricing (same helpers) |
 | `lib/services/product_service.dart` / `supabase_service.dart` | Read/write of `sale_price`, `sale_starts_at`, `sale_ends_at` |
 | `lib/screens/seller/add_edit_product_screen.dart`, `manage_products_screen.dart` | Seller sets/ends sales (validates `0 < salePrice < price`) |
@@ -161,7 +173,8 @@ So "Price: Low to High" lists discounted items at their *actual* price. `SortMod
 ## 7. Modification checklist (so the next AI doesn't break it)
 
 1. **Never duplicate the sale rule** — any new price display must call `isOnSale`/`effectivePrice`/`salePercent` from `sale_price.dart`.
-2. **Don't switch the HOT DEALS section to masonry** and don't give those cards `imageAspectRatio` (see §4.2 gotcha).
+2. **Don't switch the HOT DEALS section to masonry** and don't give those cards `imageAspectRatio` (see §4.2 gotcha). The hanging tag is an overlay (`clipBehavior: Clip.none` outer `Stack` in `SoleProductCard`) and must never change that.
 3. Keep the section's visibility guard tied to `_searchKeyword.isEmpty` + `selectedCategory` — search/category states must not double-render sale items.
 4. The `'On Sale'` chip is computed from `_products.any(isOnSale)` — if you add new sale criteria, update `sale_price.dart` only.
 5. Sorting by price must use `effectivePrice`, or discounted items will sort by their inflated original price.
+6. **Reveal state is per user+product, not per widget** — always read it through `SaleTagProvider` (never local widget state) so a product shows the same face on every screen. To make reveals sync across devices later, swap `SaleTagService` for a Supabase table (see the brief for the suggested `sale_tag_reveals` shape) — the provider API stays the same.
