@@ -1,10 +1,13 @@
 {
-  "latest_version": "1.0.5",
-  "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.5/app-release-1.0.5.apk",
-  "released_at": "2026-08-02",
+  "latest_version": "1.0.6",
+  "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.6/app-release-1.0.6.apk",
+  "released_at": "2026-08-07",
   "notes": [
-    "Fix background message push notifications after rebrand",
-    "FCM channel_id aligned to cufmai_messages (both message and order pushes)",
-    "Message notification channel now created eagerly at app init"
+    "Interactive hanging sale tag — tap any on-sale product to reveal your discount",
+    "Peel-away tape hides the sale price until you tap it (shares one reveal state with the tag)",
+    "Removed the redundant Try-On badge from product cards",
+    "Modernized number typography with the Sora font",
+    "Pack-the-box fly-to-cart animation on the AR fitting screen",
+    "Seller dashboard now has a Reports shortcut"
   ]
 }
