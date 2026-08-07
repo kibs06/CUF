@@ -18,8 +18,10 @@ import '../providers/sale_tag_provider.dart';
 ///    user+product it stays revealed everywhere that product is shown.
 ///
 /// Motion: a slow pendulum swing around the string's anchor point (a barely-
-/// noticeable breeze, frozen under reduced-motion settings), a 3D card-flip
-/// reveal with a settle bounce and a tiny sparkle burst, and a light haptic.
+/// noticeable breeze, frozen under reduced-motion settings) — each tag swings
+/// on its own per-product phase so tags never move in lockstep — plus a 3D
+/// card-flip reveal with a settle bounce and a tiny sparkle burst, and a
+/// light haptic.
 class HangingSaleTag extends StatefulWidget {
   final String productId;
 
@@ -43,7 +45,8 @@ class _HangingSaleTagState extends State<HangingSaleTag>
   // ── Motion controllers ───────────────────────────────────────────
   late final AnimationController _swingController = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 3200),
+    // A slow, lazy breeze: ~3.8s per full back-and-forth.
+    duration: const Duration(milliseconds: 3800),
   );
   late final AnimationController _revealController = AnimationController(
     vsync: this,
@@ -59,9 +62,9 @@ class _HangingSaleTagState extends State<HangingSaleTag>
   );
 
   // Resting tilt ~7° off vertical (bottom leaning OUT toward the card edge,
-  // like a real tag dangling from the corner), plus a faint ±3° breeze.
+  // like a real tag dangling from the corner), plus a faint ±2.5° breeze.
   static const double _restingAngle = -0.12;
-  static const double _swingAmplitude = 0.055;
+  static const double _swingAmplitude = 0.045;
 
   // Pivot = where the string meets the card edge, in widget coordinates.
   static const Offset _anchor = Offset(36, 7);
@@ -79,9 +82,19 @@ class _HangingSaleTagState extends State<HangingSaleTag>
 
   /// Read-based revealed check (safe outside build, e.g. tap handlers and
   /// debugFillProperties). Use [context.watch] in build for reactivity.
-  bool get _isRevealed =>
-      _localRevealed ||
-      (context.read<SaleTagProvider?>()?.isRevealed(widget.productId) ?? false);
+  bool get _isRevealed {
+    final provider = context.read<SaleTagProvider?>();
+    return _localRevealed ||
+        (provider?.isTagRevealed(widget.productId) ?? false);
+  }
+
+  /// Per-product swing phase: every tag on a grid swings on its OWN rhythm
+  /// instead of in lockstep with its neighbors (each tag looks like a real
+  /// tag in a light breeze). Derived deterministically from [productId] so it
+  /// is stable across rebuilds and follows element recycling — a recycled
+  /// State for a different product automatically picks up the new phase.
+  double get _swingPhase =>
+      ((widget.productId.hashCode & 0x7fffffff) % 360) / 360 * 2 * math.pi;
 
   @override
   void initState() {
@@ -145,12 +158,12 @@ class _HangingSaleTagState extends State<HangingSaleTag>
     if (_isRevealed) return; // one-way transition — never replays
 
     HapticFeedback.lightImpact();
-    // The reveal flag is the single source of truth; the flip plays via the
-    // transition handler in build() (which also fires when the price tape
-    // triggers the same reveal).
+    // The tag's OWN reveal flag is the source of truth; the flip plays via
+    // the transition handler in build(). This deliberately does NOT touch
+    // the price tape's flag (independent interactions — Option B).
     final provider = context.read<SaleTagProvider?>();
     if (provider != null) {
-      provider.reveal(widget.productId); // optimistic + persist
+      provider.revealTag(widget.productId); // optimistic + persist
     } else {
       setState(() => _localRevealed = true); // guest: session-only
     }
@@ -167,7 +180,8 @@ class _HangingSaleTagState extends State<HangingSaleTag>
         // jump straight to the revealed face — never replay the flip.
         _revealController.value = 1.0;
       } else {
-        // User-triggered reveal: play the flip (tag leads, tape follows).
+        // User-triggered reveal: play the flip (the tag is independent of
+        // the price tape — Option B).
         _revealController.forward(from: 0);
         _sparkleController.forward(from: 0);
       }
@@ -177,10 +191,11 @@ class _HangingSaleTagState extends State<HangingSaleTag>
   @override
   Widget build(BuildContext context) {
     // Watch the provider here (build) so the face updates reactively when a
-    // reveal lands (this tap, another tag, or a provider load).
+    // reveal lands (this tap, or a provider load). Independent of the price
+    // tape's reveal flag (Option B).
     final SaleTagProvider? provider = context.watch<SaleTagProvider?>();
     final bool revealed =
-        _localRevealed || (provider?.isRevealed(widget.productId) ?? false);
+        _localRevealed || (provider?.isTagRevealed(widget.productId) ?? false);
     final int? pct = widget.salePercent;
 
     // ── Reveal transition (plays the flip exactly once per mount) ──────
@@ -194,8 +209,6 @@ class _HangingSaleTagState extends State<HangingSaleTag>
     }
     _prevRevealed = revealed;
 
-    final double swingAngle =
-        _restingAngle + _swingAmplitude * math.sin(_swingController.value * 2 * math.pi);
     final bool flipInProgress = _revealController.isAnimating;
     // During the flip, the controller drives which face shows; otherwise the
     // stable revealed state (incl. mounts that jump straight to revealed).
@@ -227,13 +240,28 @@ class _HangingSaleTagState extends State<HangingSaleTag>
           child: Stack(
             clipBehavior: Clip.none,
             children: [
-              // ── Pendulum: the whole tag+string swings around the anchor ──
-              Transform.rotate(
-                angle: swingAngle,
-                alignment: Alignment(
-                  0,
-                  (_anchor.dy - 50) / 50, // pivot near the top of the widget
-                ),
+              // ── Pendulum: the whole tag+string swings around the anchor.
+              //    AnimatedBuilder repaints every swing tick (the repeating
+              //    controller's value feeds a smooth sine — this is what
+              //    actually makes the tag move; without it the angle would be
+              //    frozen at the first build). Each tag adds its own phase
+              //    (see [_swingPhase]) so tags never swing in lockstep. ──
+              AnimatedBuilder(
+                animation: _swingController,
+                builder: (context, child) {
+                  final double angle = _restingAngle +
+                      _swingAmplitude *
+                          math.sin(_swingController.value * 2 * math.pi +
+                              _swingPhase);
+                  return Transform.rotate(
+                    angle: angle,
+                    alignment: Alignment(
+                      0,
+                      (_anchor.dy - 50) / 50, // pivot near the top of the widget
+                    ),
+                    child: child,
+                  );
+                },
                 child: SizedBox(
                   width: 72,
                   height: 100,
@@ -358,18 +386,28 @@ class _HangingSaleTagState extends State<HangingSaleTag>
   // ── Faces ────────────────────────────────────────────────────────
 
   /// Unrevealed: "SALE" micro-label, a big "?", and a slow amber pulse dot.
+  /// The dot pulses on the SAME rhythm as this tag's swing (own AnimatedBuilder
+  /// so it repaints every tick — the pulse is independent per tag too).
   Widget _buildFrontFace() {
-    final double pulse = _reducedMotion
-        ? 0.5
-        : 0.35 + 0.3 * math.sin(_swingController.value * 2 * math.pi + 1.2);
-    return _FaceLayout(
-      label: 'SALE',
-      labelColor: AppConstants.secondary,
-      main: '?',
-      mainSize: 22,
-      mainColor: AppConstants.secondary,
-      dotColor: const Color(0xFFFFC107).withValues(alpha: pulse),
-      dotGlow: pulse,
+    return AnimatedBuilder(
+      animation: _swingController,
+      builder: (context, child) {
+        final double pulse = _reducedMotion
+            ? 0.5
+            : 0.35 +
+                0.3 *
+                    math.sin(
+                        _swingController.value * 2 * math.pi + _swingPhase + 1.2);
+        return _FaceLayout(
+          label: 'SALE',
+          labelColor: AppConstants.secondary,
+          main: '?',
+          mainSize: 22,
+          mainColor: AppConstants.secondary,
+          dotColor: const Color(0xFFFFC107).withValues(alpha: pulse),
+          dotGlow: pulse,
+        );
+      },
     );
   }
 

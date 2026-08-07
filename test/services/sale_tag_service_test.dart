@@ -38,4 +38,50 @@ void main() {
       expect(await svc.loadRevealedIds('u1'), {'p1', 'p2'});
     });
   });
+
+  group('SaleTagService price-tape reveals (independent of the tag)', () {
+    test('empty user has no tape reveals', () async {
+      expect(await SaleTagService.instance.loadTapeRevealedIds('u1'), isEmpty);
+    });
+
+    test('saveTapeRevealed persists per-user and is idempotent', () async {
+      final svc = SaleTagService.instance;
+      await svc.saveTapeRevealed('u1', 'p1');
+      await svc.saveTapeRevealed('u1', 'p2');
+      // Idempotent — re-saving the same product must not duplicate.
+      await svc.saveTapeRevealed('u1', 'p1');
+
+      expect(await svc.loadTapeRevealedIds('u1'), {'p1', 'p2'});
+      expect(await svc.loadTapeRevealedIds('u2'), isEmpty);
+    });
+
+    test('tag and tape sets never collide — one reveals nothing in the other',
+        () async {
+      final svc = SaleTagService.instance;
+      // Reveal p1 on the TAG only, p2 on the TAPE only.
+      await svc.saveRevealed('u1', 'p1');
+      await svc.saveTapeRevealed('u1', 'p2');
+
+      expect(await svc.loadRevealedIds('u1'), {'p1'});
+      expect(await svc.loadTapeRevealedIds('u1'), {'p2'});
+
+      // Same product in BOTH sets is fine (all four combos are valid).
+      await svc.saveRevealed('u1', 'p3');
+      await svc.saveTapeRevealed('u1', 'p3');
+      expect(await svc.loadRevealedIds('u1'), {'p1', 'p3'});
+      expect(await svc.loadTapeRevealedIds('u1'), {'p2', 'p3'});
+    });
+
+    test('tape reveals survive an app restart under their own key', () async {
+      final svc = SaleTagService.instance;
+      await svc.saveTapeRevealed('u1', 'p1');
+
+      SharedPreferences.setMockInitialValues(
+        {'sale_price_reveals_u1': '["p1"]'},
+      );
+      expect(await svc.loadTapeRevealedIds('u1'), {'p1'});
+      // The tag set stays empty even though the tape set has data.
+      expect(await svc.loadRevealedIds('u1'), isEmpty);
+    });
+  });
 }

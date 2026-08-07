@@ -11,25 +11,26 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// reveal (it just returns the plain price), so tests assert on the overlay.
 const _tapeOverlayKey = Key('sale-price-tape-overlay');
 
-/// Taps the tape and runs the reveal through the choreography stagger (140ms)
-/// + the full peel (520ms). The bare `pump()` first is important: the 140ms
-/// delay is scheduled in a post-frame callback, so it must be started before
-/// the time-advancing pumps. Then pump frame-by-frame — a single long pump
-/// only produces ONE frame, which would stall the peel ticker mid-flight.
+/// Taps the tape and runs the full peel (520ms). The bare `pump()` first is
+/// important: the peel is scheduled in a post-frame callback, so it must be
+/// started before the time-advancing pumps. Then pump frame-by-frame — a
+/// single long pump only produces ONE frame, which would stall the peel
+/// ticker mid-flight.
 Future<void> tapAndPeel(WidgetTester tester, Finder tape) async {
   await tester.tap(tape);
-  await tester.pump(); // reveal rebuild + post-frame schedules the stagger
+  await tester.pump(); // reveal rebuild + post-frame schedules the peel
   for (var i = 0; i < 5; i++) {
-    await tester.pump(const Duration(milliseconds: 250)); // stagger + peel
+    await tester.pump(const Duration(milliseconds: 250));
   }
 }
 
-/// Same as [tapAndPeel] but starting from a tap on the hanging tag.
-Future<void> tapTagAndPeel(WidgetTester tester, Finder tag) async {
+/// Taps the hanging tag and runs its flip (480ms) + settle bounce (340ms).
+/// The tag is independent of the tape — this must NOT peel anything.
+Future<void> tapTagOnly(WidgetTester tester, Finder tag) async {
   await tester.tap(tag);
-  await tester.pump(); // tag flip starts; the tape's stagger gets scheduled
-  for (var i = 0; i < 5; i++) {
-    await tester.pump(const Duration(milliseconds: 250)); // flip + peel
+  await tester.pump(); // tag flip starts
+  for (var i = 0; i < 4; i++) {
+    await tester.pump(const Duration(milliseconds: 250));
   }
 }
 
@@ -73,7 +74,7 @@ void main() {
 
   testWidgets('already-revealed product renders the price with no tape',
       (tester) async {
-    final provider = SaleTagProvider()..reveal('p1');
+    final provider = SaleTagProvider()..revealTape('p1');
 
     await tester.pumpWidget(wrap(tape(), provider: provider));
     await tester.pump();
@@ -168,7 +169,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('choreography: tapping the hanging tag also peels the tape',
+  testWidgets('independence: tapping the tag flips it but does NOT peel the tape',
       (tester) async {
     final onSaleProduct = {
       'id': 'prod-1',
@@ -196,11 +197,11 @@ void main() {
     expect(find.byType(HangingSaleTag), findsOneWidget);
     expect(find.byKey(_tapeOverlayKey), findsOneWidget);
 
-    // Tap the TAG → the shared reveal fires → the tape peels too (tag leads).
-    await tapTagAndPeel(tester, find.byType(HangingSaleTag));
+    // Tap the TAG → only the tag flips (Option B — the tape stays covered).
+    await tapTagOnly(tester, find.byType(HangingSaleTag));
 
     expect(find.text('-30%'), findsOneWidget); // tag flipped
-    expect(find.byKey(_tapeOverlayKey), findsNothing); // tape peeled
+    expect(find.byKey(_tapeOverlayKey), findsOneWidget); // tape UNTOUCHED
     expect(find.text('₱700.00'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -253,7 +254,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('choreography: tapping the tape also flips the hanging tag',
+  testWidgets('independence: tapping the tape peels it but does NOT flip the tag',
       (tester) async {
     final onSaleProduct = {
       'id': 'prod-1',
@@ -278,11 +279,47 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 300));
 
-    // Tap the TAPE → the tag flips a beat before the tape finishes peeling.
+    // Tap the TAPE → only the tape peels (Option B — the tag stays '?').
     await tapAndPeel(tester, find.byKey(_tapeOverlayKey));
 
-    expect(find.text('-30%'), findsOneWidget); // tag flipped too
+    expect(find.byKey(_tapeOverlayKey), findsNothing); // tape peeled
+    expect(find.text('?'), findsOneWidget); // tag UNTOUCHED
+    expect(find.text('₱700.00'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('revealing the tag then the tape shows both revealed',
+      (tester) async {
+    final onSaleProduct = {
+      'id': 'prod-1',
+      'name': 'Sale Boot',
+      'price': 1000,
+      'sale_price': 700,
+      'sale_starts_at': null,
+      'sale_ends_at': null,
+      'images': <String>[],
+      'category': 'Boots',
+      'review_count': 0,
+    };
+
+    await tester.pumpWidget(
+      wrap(
+        SizedBox(
+          width: 240,
+          height: 300,
+          child: SoleProductCard(product: onSaleProduct, onTap: () {}),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // Reveal in either order — each interaction is fully independent.
+    await tapAndPeel(tester, find.byKey(_tapeOverlayKey)); // tape first
+    await tapTagOnly(tester, find.byType(HangingSaleTag)); // then tag
+
     expect(find.byKey(_tapeOverlayKey), findsNothing);
+    expect(find.text('-30%'), findsOneWidget);
+    expect(find.text('?'), findsNothing);
     expect(find.text('₱700.00'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

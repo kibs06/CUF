@@ -11,11 +11,13 @@ import '../providers/sale_tag_provider.dart';
 /// A strip of "tape" stuck over a product's sale price, hiding the discounted
 /// number until the customer peels it off.
 ///
-/// **Shares its reveal state with the hanging sale tag (Option A):** the tape
-/// and the tag read the same per-user + per-product flag from
-/// [SaleTagProvider], so tapping *either* one reveals both. The original
-/// (strikethrough) price line is untouched — only the sale-price line is
-/// covered, and it stays covered until the user reveals it.
+/// **Independent reveal from the hanging sale tag (confirmed decision —
+/// Option B):** the tape reads its OWN per-user + per-product flag from
+/// [SaleTagProvider] (`isTapeRevealed`/`revealTape`); the tag's flag is never
+/// consulted here, so peeling the tape has zero effect on the tag and vice
+/// versa. The original (strikethrough) price line is untouched — only the
+/// sale-price line is covered, and it stays covered until the user reveals
+/// it.
 ///
 /// Visuals: a slightly-rotated, semi-transparent frosted strip with torn short
 /// edges, a soft drop shadow, a glossy sheen, faint fiber lines and a slow
@@ -88,9 +90,11 @@ class _SalePriceTapeState extends State<SalePriceTape>
   bool _hapticFired = false;
 
   /// Read-based revealed check (safe in tap handlers).
-  bool get _isRevealed =>
-      _localRevealed ||
-      (context.read<SaleTagProvider?>()?.isRevealed(widget.productId) ?? false);
+  bool get _isRevealed {
+    final provider = context.read<SaleTagProvider?>();
+    return _localRevealed ||
+        (provider?.isTapeRevealed(widget.productId) ?? false);
+  }
 
   @override
   void initState() {
@@ -161,17 +165,20 @@ class _SalePriceTapeState extends State<SalePriceTape>
   void _handleTap() {
     if (_isRevealed) return; // one-way — never replays
 
-    // The reveal flag is the single source of truth; the peel (and the
-    // hanging tag's flip) fire via the transition handler in build().
+    // The tape's OWN reveal flag is the source of truth; the peel fires via
+    // the transition handler in build(). This deliberately does NOT touch
+    // the hanging tag's flag (independent interactions — Option B).
     final provider = context.read<SaleTagProvider?>();
     if (provider != null) {
-      provider.reveal(widget.productId); // optimistic + persist
+      provider.revealTape(widget.productId); // optimistic + persist
     } else {
       setState(() => _localRevealed = true); // guest: session-only
     }
   }
 
-  /// Called from build when the reveal flag flips false→true while mounted.
+  /// Called from build when the tape's reveal flag flips false→true while
+  /// mounted. The peel starts on the next frame — no stagger: the tape is
+  /// its own interaction, independent of the hanging tag (Option B).
   void _schedulePeel({required bool wasLoading}) {
     if (_peelRequested) return;
     if (_reducedMotion || wasLoading) return; // instant swap, no peel
@@ -179,11 +186,7 @@ class _SalePriceTapeState extends State<SalePriceTape>
     _peelRequested = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      // Choreography: the hanging tag flips a beat before the tape starts
-      // peeling, so the two reveal animations read as one coordinated move.
-      Future.delayed(const Duration(milliseconds: 140), () {
-        if (mounted) _peelController.forward(from: 0);
-      });
+      _peelController.forward(from: 0);
     });
   }
 
@@ -191,7 +194,7 @@ class _SalePriceTapeState extends State<SalePriceTape>
   Widget build(BuildContext context) {
     final SaleTagProvider? provider = context.watch<SaleTagProvider?>();
     final bool revealed =
-        _localRevealed || (provider?.isRevealed(widget.productId) ?? false);
+        _localRevealed || (provider?.isTapeRevealed(widget.productId) ?? false);
 
     // ── Reveal transition (plays the peel exactly once per mount) ──────
     if (_firstBuild) {
