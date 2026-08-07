@@ -4,6 +4,7 @@ import '../constants/app_constants.dart';
 import '../utils/sale_price.dart';
 import 'sole_star_rating.dart';
 import 'hanging_sale_tag.dart';
+import 'sale_price_tape.dart';
 
 class SoleProductCard extends StatelessWidget {
   final dynamic product; // Can be a map or a model
@@ -116,17 +117,21 @@ class SoleProductCard extends StatelessWidget {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           if (onSale) ...[
-                            // Sale price + strikethrough original
+                            // Sale price (hidden behind a peel-away tape until
+                            // the user reveals it) + always-visible original.
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text(
-                                  '₱${displayPrice.toStringAsFixed(2)}',
-                                  style: AppConstants.monoStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppConstants.primary,
+                                SalePriceTape(
+                                  productId: product['id']?.toString() ?? '',
+                                  child: Text(
+                                    '₱${displayPrice.toStringAsFixed(2)}',
+                                    style: AppConstants.monoStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppConstants.primary,
+                                    ),
                                   ),
                                 ),
                                 Text(

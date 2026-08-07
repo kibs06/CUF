@@ -22,6 +22,12 @@ class SaleTagProvider extends ChangeNotifier {
   String? _loadedForUserId;
   bool _loading = false;
 
+  /// True while the per-user revealed set is being fetched from storage.
+  /// Widgets use this to distinguish a *user-triggered* reveal (animate the
+  /// flip/peel) from an *async load* finishing (jump straight to revealed —
+  /// never replay a wall of reveal animations on catalog load).
+  bool get isLoading => _loading;
+
   /// Best-effort current-user lookup. Supabase may be uninitialized in tests
   /// or briefly unavailable at runtime — treat that as "signed out" rather
   /// than letting a reveal/load crash.

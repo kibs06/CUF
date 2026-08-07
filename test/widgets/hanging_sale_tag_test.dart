@@ -105,6 +105,36 @@ void main() {
     handle.dispose();
   });
 
+  testWidgets('recycled element for a different product starts unrevealed',
+      (tester) async {
+    // No provider in the tree → the tap uses the guest/session-only local
+    // flip, which is exactly the state a recycled element must not carry
+    // over to a different product.
+    Widget home({required String id}) => MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: HangingSaleTag(productId: id, salePercent: 20),
+            ),
+          ),
+        );
+
+    await tester.pumpWidget(home(id: 'A'));
+    await tester.pump();
+
+    // Guest-reveal product A.
+    await tester.tap(find.byType(HangingSaleTag));
+    await tester.pump(const Duration(milliseconds: 700));
+    expect(find.text('-20%'), findsOneWidget); // A revealed
+
+    // Same element position, now product B — must NOT inherit A's reveal.
+    await tester.pumpWidget(home(id: 'B'));
+    await tester.pump();
+
+    expect(find.text('?'), findsOneWidget); // B unrevealed again
+    expect(find.text('-20%'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('SoleProductCard: sale product gets the tag, no Try On badge',
       (tester) async {
     final onSaleProduct = {
@@ -147,7 +177,8 @@ void main() {
 
     // Unrevealed: tapping the tag reveals — and does NOT navigate the card.
     await tester.tap(find.byType(HangingSaleTag));
-    await tester.pump(const Duration(milliseconds: 700));
+    await tester.pump(); // tag flip starts; the tape's stagger gets scheduled
+    await tester.pump(const Duration(milliseconds: 700)); // flip + tape peel
     expect(find.text('-30%'), findsOneWidget);
     expect(cardTaps, 0);
 

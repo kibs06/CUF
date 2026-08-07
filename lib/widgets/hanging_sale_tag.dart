@@ -68,7 +68,14 @@ class _HangingSaleTagState extends State<HangingSaleTag>
 
   bool _reducedMotion = false;
   bool _localRevealed = false; // guest fallback: session-only flip
-  bool _jumpedToRevealed = false;
+
+  // Reveal-transition tracking: the flip plays once, when the reveal flag
+  // flips false→true *while mounted* (this tap or the price tape's tap).
+  // Mounts that are already revealed, or reveals that arrive via the async
+  // provider load, jump straight to the revealed face instead of animating.
+  bool _firstBuild = true;
+  bool _prevRevealed = false;
+  bool _revealScheduled = false;
 
   /// Read-based revealed check (safe outside build, e.g. tap handlers and
   /// debugFillProperties). Use [context.watch] in build for reactivity.
@@ -103,14 +110,25 @@ class _HangingSaleTagState extends State<HangingSaleTag>
       _swingController.repeat();
     }
 
-    final provider = context.read<SaleTagProvider?>();
     // Load the user's revealed set once (idempotent per user).
-    provider?.ensureLoaded();
-    // If this product was already revealed (provider loaded after mount),
-    // jump straight to the revealed face — never replay the flip.
-    if (!_jumpedToRevealed && provider?.isRevealed(widget.productId) == true) {
-      _jumpedToRevealed = true;
-      _revealController.value = 1.0;
+    context.read<SaleTagProvider?>()?.ensureLoaded();
+  }
+
+  @override
+  void didUpdateWidget(covariant HangingSaleTag oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.productId != widget.productId) {
+      // Grid builders recycle elements: the same State can be re-used for a
+      // different product after the user scrolls. Reset every per-product
+      // transition flag so the new product starts fresh (unrevealed, no
+      // leftover flip/sparkle/bounce).
+      _localRevealed = false;
+      _firstBuild = true;
+      _prevRevealed = false;
+      _revealScheduled = false;
+      _revealController.reset();
+      _bounceController.reset();
+      _sparkleController.reset();
     }
   }
 
@@ -127,19 +145,33 @@ class _HangingSaleTagState extends State<HangingSaleTag>
     if (_isRevealed) return; // one-way transition — never replays
 
     HapticFeedback.lightImpact();
-    if (!_reducedMotion) {
-      // Start the flip BEFORE the provider notify so the rebuild (triggered
-      // by reveal()) sees the animation already running and plays it.
-      _revealController.forward(from: 0);
-      _sparkleController.forward(from: 0);
-    }
-
+    // The reveal flag is the single source of truth; the flip plays via the
+    // transition handler in build() (which also fires when the price tape
+    // triggers the same reveal).
     final provider = context.read<SaleTagProvider?>();
     if (provider != null) {
       provider.reveal(widget.productId); // optimistic + persist
     } else {
       setState(() => _localRevealed = true); // guest: session-only
     }
+  }
+
+  /// Called from build when the reveal flag flips false→true while mounted.
+  void _scheduleRevealAnimation({required bool wasLoading}) {
+    if (_revealScheduled) return;
+    _revealScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_reducedMotion || wasLoading) {
+        // Reduced motion, or the reveal came from the async provider load:
+        // jump straight to the revealed face — never replay the flip.
+        _revealController.value = 1.0;
+      } else {
+        // User-triggered reveal: play the flip (tag leads, tape follows).
+        _revealController.forward(from: 0);
+        _sparkleController.forward(from: 0);
+      }
+    });
   }
 
   @override
@@ -150,6 +182,17 @@ class _HangingSaleTagState extends State<HangingSaleTag>
     final bool revealed =
         _localRevealed || (provider?.isRevealed(widget.productId) ?? false);
     final int? pct = widget.salePercent;
+
+    // ── Reveal transition (plays the flip exactly once per mount) ──────
+    if (_firstBuild) {
+      _firstBuild = false;
+      if (revealed) {
+        _revealController.value = 1.0; // already revealed at mount — jump
+      }
+    } else if (revealed && !_prevRevealed) {
+      _scheduleRevealAnimation(wasLoading: provider?.isLoading ?? false);
+    }
+    _prevRevealed = revealed;
 
     final double swingAngle =
         _restingAngle + _swingAmplitude * math.sin(_swingController.value * 2 * math.pi);
@@ -373,7 +416,7 @@ class _FaceLayout extends StatelessWidget {
       children: [
         // Micro label
         Positioned(
-          top: 7,
+          top: 18,
           left: 0,
           right: 0,
           child: Text(
@@ -389,7 +432,7 @@ class _FaceLayout extends StatelessWidget {
         ),
         // Main content
         Positioned(
-          top: 15,
+          top: 27,
           left: 0,
           right: 0,
           child: Center(

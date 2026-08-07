@@ -122,8 +122,10 @@ final int? salePct = salePercent(product);
 ```
 
 - **Hanging sale tag (top-right corner):** instead of a flat red pill, a physical-looking **hang tag** (`lib/widgets/hanging_sale_tag.dart`) is clipped to the card's top-right corner as a pure `Positioned` overlay — it never affects masonry sizing or the HOT DEALS grid contract. The tag shows a "?" until the user taps it, then flips to the live discount (`-23%`), with a pendulum idle swing, flip+bounce+sparkle reveal, haptic, and reduced-motion support.
-- **Price block:** when on sale → two stacked lines: sale price (`₱{displayPrice}` in primary, bold) + original price with `TextDecoration.lineThrough` (muted). Otherwise → single price.
+- **Price block:** when on sale → two stacked lines: **sale price** (`₱{displayPrice}` in primary, bold) + **original price** with `TextDecoration.lineThrough` (muted). Otherwise → single price. The original/strikethrough line is **always visible**; the *sale-price* line is hidden behind a peel-away strip of tape (`lib/widgets/sale_price_tape.dart`) until the user taps it. The sale-price `Text` sits inside a box padded by `hitPadding` (default `fromLTRB(10, 18, 10, 8)`) — that padding is the **≥40px tap target** (dead air above the price; per-site `hitPadding` tunes where the slack goes). The SAME padded box is returned in the revealed state, so the footprint is pixel-identical and nothing reflows. The tape **visual** is a separate `IgnorePointer` overlay that hugs the text (~8px overhang above, ~4px below) and never reaches the strikethrough line.
+- **Option A — one shared reveal state:** the tape and the hanging tag read the **same** per-user+per-product flag from `SaleTagProvider`. Tapping either one reveals both — the tag flips a beat (~140ms) before the tape finishes peeling, so the two read as one choreographed reveal. On catalog load, reveals from the async provider load **jump** straight to revealed (never a wall of flips/peels) — only user-triggered reveals animate (`provider.isLoading` distinguishes the two).
 - The "Try On" AR badge was **removed from cards** (redundant — the product detail page has its own Try-On entry). `onTryOnTap` no longer exists on `SoleProductCard`.
+- The tape applies wherever the sale-price block renders: catalog grid, "On Sale" grid, HOT DEALS, the **Recently Viewed strip** (scaled down), and the **product detail** price row. Reduced motion → instant swap (no peel). Covered state exposes `Semantics` "Sale price hidden, tap to reveal".
 
 #### 4.3.1 Reveal-state persistence — `SaleTagProvider`
 
@@ -134,7 +136,7 @@ The revealed/unrevealed state is **per user + per product**, and is the *same ev
 - Signed-out/guest: tags render unrevealed; a tap flips for the session only (nothing persisted).
 - The revealed face always shows the **current live** `salePercent(product)` — the reveal only gates *whether* the number shows, not *which* number.
 
-The same pattern (strikethrough original + effective price) is used in the **Recently Viewed strip** (`isOnSale(fullProduct)` on the resolved live product — no hanging tag at that tiny 130px scale, just the two-line price) and `product_detail_screen.dart` (tag hangs off the hero image's left edge; the price block below shows the full "You save ₱X · Ends …" note).
+The same pattern (strikethrough original + effective price) is used in the **Recently Viewed strip** (`isOnSale(fullProduct)` on the resolved live product — no hanging tag at that tiny 130px scale, but the sale price does get the peel-away tape) and `product_detail_screen.dart` (tag hangs off the hero image's left edge; the sale price in the block below gets the tape; the full "You save ₱X · Ends …" note stays visible).
 
 ---
 
@@ -158,9 +160,10 @@ So "Price: Low to High" lists discounted items at their *actual* price. `SortMod
 | `lib/utils/sale_price.dart` | **Single source of truth** — `isOnSale`, `effectivePrice`, `salePercent` |
 | `lib/screens/customer/customer_home_screen.dart` | "On Sale" section sliver + chip wiring + recently-viewed sale prices |
 | `lib/providers/product_provider.dart` | `categories` (`'On Sale'` pseudo-category), `getFilteredProducts` (sale filter + effective-price sort) |
-| `lib/widgets/sole_product_card.dart` | Hanging tag overlay + strikethrough/effective price display |
+| `lib/widgets/sole_product_card.dart` | Hanging tag + price-tape overlays, strikethrough/effective price display |
 | `lib/widgets/hanging_sale_tag.dart` | The interactive hang tag (swing, flip reveal, semantics, reduced motion) |
-| `lib/providers/sale_tag_provider.dart` | Per-user/per-product reveal state (optimistic flips, lazy load) |
+| `lib/widgets/sale_price_tape.dart` | Peel-away tape over the sale price (corner-lift peel, blur, shimmer, shared reveal state) |
+| `lib/providers/sale_tag_provider.dart` | Per-user/per-product reveal state (optimistic flips, lazy load, `isLoading`) |
 | `lib/services/sale_tag_service.dart` | SharedPreferences persistence (local-only, per-user key) |
 | `lib/screens/customer/product_detail_screen.dart` | Detail-page sale pricing (same helpers) |
 | `lib/services/product_service.dart` / `supabase_service.dart` | Read/write of `sale_price`, `sale_starts_at`, `sale_ends_at` |
@@ -177,4 +180,7 @@ So "Price: Low to High" lists discounted items at their *actual* price. `SortMod
 3. Keep the section's visibility guard tied to `_searchKeyword.isEmpty` + `selectedCategory` — search/category states must not double-render sale items.
 4. The `'On Sale'` chip is computed from `_products.any(isOnSale)` — if you add new sale criteria, update `sale_price.dart` only.
 5. Sorting by price must use `effectivePrice`, or discounted items will sort by their inflated original price.
-6. **Reveal state is per user+product, not per widget** — always read it through `SaleTagProvider` (never local widget state) so a product shows the same face on every screen. To make reveals sync across devices later, swap `SaleTagService` for a Supabase table (see the brief for the suggested `sale_tag_reveals` shape) — the provider API stays the same.
+6. **Reveal state is per user+product, not per widget** — always read it through `SaleTagProvider` (never local widget state) so a product shows the same face on every screen (Option A: the tag and the tape share one flag). To make reveals sync across devices later, swap `SaleTagService` for a Supabase table (see the brief for the suggested `sale_tag_reveals` shape) — the provider API stays the same.
+7. **Never change the price block's footprint between states.** The sale-price `Text` sits in a padded box (`hitPadding` — the ≥40px tap target) and the SAME box is returned in the covered and revealed states; the tape visual is a `Positioned`/`IgnorePointer` overlay (`clipBehavior: Clip.none`) hugging the text. Covered and revealed must be pixel-identical in size, and the original/strikethrough line is never covered. Don't shrink `hitPadding` below ~40px total height — the detail screen puts the slack above (`fromLTRB(10, 22, 10, 0)`) to preserve its bottom-aligned price row; the strip uses `fromLTRB(10, 20, 10, 9)` for its 11px price.
+8. **Animate only user-triggered reveals.** Reveals that arrive from the async provider load must jump straight to revealed (`provider.isLoading` is true during the load) — otherwise the catalog would replay a wall of flips/peels on every app start.
+9. **Grid builders recycle element States across products.** `SliverChildBuilderDelegate`/`itemBuilder` re-use the same `State` for a different `productId` after scrolling. Both `HangingSaleTag` and `SalePriceTape` reset every per-product flag (`_localRevealed`, `_prevRevealed`, `_peelRequested`, …) in `didUpdateWidget` when `productId` changes — if you add new per-product state to either widget, reset it there too, or a guest's reveal will leak onto a different product.

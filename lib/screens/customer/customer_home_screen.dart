@@ -14,6 +14,7 @@ import '../../services/push_notification_service.dart';
 import '../../widgets/floating_message_button.dart';
 import '../../widgets/no_internet_view.dart';
 import '../../widgets/sole_product_card.dart';
+import '../../widgets/sale_price_tape.dart';
 import '../../widgets/cart_icon_button.dart';
 import '../../widgets/chat/chat_view.dart';
 import 'product_detail_screen.dart';
@@ -501,12 +502,29 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                                                 const SizedBox(height: 2),
                                                 if (fullProduct != null &&
                                                     isOnSale(fullProduct)) ...[
-                                                  Text(
-                                                    '₱${stripPrice.toStringAsFixed(2)}',
-                                                    style: AppConstants.monoStyle(
-                                                      fontSize: 11,
-                                                      color: AppConstants.primary,
-                                                      fontWeight: FontWeight.bold,
+                                                  // Sale price hides behind a
+                                                  // peel-away tape (same reveal
+                                                  // state as the cards' tags).
+                                                  SalePriceTape(
+                                                    productId: item['id']
+                                                            ?.toString() ??
+                                                        '',
+                                                    // 11px text → slightly
+                                                    // more padding to keep
+                                                    // the ~40px tap target.
+                                                    hitPadding: const EdgeInsets
+                                                        .fromLTRB(
+                                                            10, 20, 10, 9),
+                                                    child: Text(
+                                                      '₱${stripPrice.toStringAsFixed(2)}',
+                                                      style:
+                                                          AppConstants.monoStyle(
+                                                        fontSize: 11,
+                                                        color: AppConstants
+                                                            .primary,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                      ),
                                                     ),
                                                   ),
                                                   Text(

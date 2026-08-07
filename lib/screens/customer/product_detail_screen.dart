@@ -21,6 +21,7 @@ import '../../widgets/cart_icon_button.dart';
 import '../../widgets/seller/fly_to_order_animation.dart';
 import '../../widgets/size_guide_modal.dart';
 import '../../widgets/hanging_sale_tag.dart';
+import '../../widgets/sale_price_tape.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   final Map<String, dynamic> product;
@@ -818,17 +819,31 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                       const SizedBox(height: 10),
 
                       // Price tag — sale-aware: strikethrough original +
-                      // sale price + savings/end-date note.
+                      // sale price + savings/end-date note. The sale price is
+                      // hidden behind a peel-away tape (same reveal state as
+                      // the card tags); the original price stays always
+                      // visible.
                       if (onSale) ...[
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            Text(
-                              '₱${displayPrice.toStringAsFixed(2)}',
-                              style: AppConstants.monoStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                                color: AppConstants.primary,
+                            SalePriceTape(
+                              productId:
+                                  widget.product['id']?.toString() ?? '',
+                              // This row is bottom-aligned with the original
+                              // price beside it — the padding slack goes ABOVE
+                              // the price so its bottom stays flush with the
+                              // strikethrough price, while still reserving a
+                              // ≥40px hit target.
+                              hitPadding:
+                                  const EdgeInsets.fromLTRB(10, 22, 10, 0),
+                              child: Text(
+                                '₱${displayPrice.toStringAsFixed(2)}',
+                                style: AppConstants.monoStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppConstants.primary,
+                                ),
                               ),
                             ),
                             const SizedBox(width: 8),
