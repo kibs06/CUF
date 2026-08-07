@@ -6,6 +6,8 @@ import '../../providers/product_provider.dart';
 import '../../providers/cart_provider.dart';
 import '../../utils/cart_helpers.dart';
 import '../../widgets/ar_view_placeholder.dart';
+import '../../widgets/cart_icon_button.dart';
+import '../../widgets/seller/fly_to_order_animation.dart';
 
 class ARVirtualFitScreen extends StatefulWidget {
   final Map<String, dynamic>? preselectedProduct;
@@ -26,6 +28,11 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProv
   
   late ValueNotifier<bool> _isTracking;
   bool _showTutorial = true;
+  bool _isAddingToCart = false;
+
+  // GlobalKeys for the fly-to-cart overlay animation (Add to Cart → cart icon)
+  final GlobalKey _addToCartButtonKey = GlobalKey();
+  final GlobalKey _cartIconKey = GlobalKey();
   
   late AnimationController _pulseController;
   late AnimationController _particleController;
@@ -171,6 +178,11 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProv
   }
 
   void _addToCart() {
+    // Guard against rapid taps stacking multiple overlay flights (mirrors
+    // product detail screen's _isAddingToCart pattern).
+    if (_isAddingToCart) return;
+    setState(() => _isAddingToCart = true);
+
     final cart = Provider.of<CartProvider>(context, listen: false);
     final double price = (_activeProduct['price'] is int)
         ? (_activeProduct['price'] as int).toDouble()
@@ -185,10 +197,12 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProv
       color: _activeColor,
     );
 
+    final String imageUrl = images.isNotEmpty ? images.first : '';
+
     cart.addToCart(
       productId: _activeProduct['id'].toString(),
       productName: _activeProduct['name'],
-      imageUrl: images.isNotEmpty ? images.first : '',
+      imageUrl: imageUrl,
       price: price,
       size: _activeSize,
       color: _activeColor,
@@ -196,12 +210,21 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProv
       additionalPrice: additionalPrice,
     );
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Added ${_activeProduct['name']} (Size $_activeSize) to Cart!'),
-        backgroundColor: AppConstants.success,
-      ),
+    // Pack-the-box fly-to-cart overlay animation (same as the POS): the box
+    // GIF draws in around the product, then the solid box flies up to the
+    // cart icon and lands with a ring flash.
+    FlyToOrderAnimation.show(
+      context: context,
+      sourceKey: _addToCartButtonKey,
+      targetKey: _cartIconKey,
+      imageUrl: imageUrl,
     );
+
+    // Re-enable the button after the box-pack animation finishes (~1800 ms)
+    // so rapid taps can't stack overlapping flights.
+    Future.delayed(const Duration(milliseconds: 1900), () {
+      if (mounted) setState(() => _isAddingToCart = false);
+    });
   }
 
   @override
@@ -280,6 +303,12 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProv
                             ),
                           ],
                         ),
+                      ),
+                      const SizedBox(width: 4),
+                      // Cart shortcut — fly-to-cart target for the add-to-cart animation
+                      CartIconButton(
+                        iconKey: _cartIconKey,
+                        iconColor: AppConstants.surfaceLight,
                       ),
                     ],
                   ),
@@ -465,7 +494,8 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProv
                         width: double.infinity,
                         height: 44,
                         child: FilledButton(
-                          onPressed: _addToCart,
+                          key: _addToCartButtonKey,
+                          onPressed: _isAddingToCart ? null : _addToCart,
                           style: FilledButton.styleFrom(
                             backgroundColor: AppConstants.accent,
                             foregroundColor: AppConstants.secondary,

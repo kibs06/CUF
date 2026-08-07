@@ -376,20 +376,28 @@ class _CartItemRow extends StatelessWidget {
                         onTap: atMax ? null : () => cart.incrementQuantity(itemKey),
                         disabled: atMax,
                       ),
+                      // "Max: N" is flexible so it ellipsizes instead of
+                      // overflowing the row on narrow screens; the delete
+                      // button stays pinned to the right.
                       if (maxStock != null)
-                        Padding(
-                          padding: const EdgeInsets.only(left: 6),
-                          child: Text(
-                            'Max: $maxStock',
-                            style: AppConstants.bodyStyle(
-                              fontSize: 10,
-                              color: atMax
-                                  ? AppConstants.error
-                                  : AppConstants.secondary.withOpacity(0.4),
+                        Flexible(
+                          child: Padding(
+                            padding: const EdgeInsets.only(left: 6),
+                            child: Text(
+                              'Max: $maxStock',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppConstants.bodyStyle(
+                                fontSize: 10,
+                                color: atMax
+                                    ? AppConstants.error
+                                    : AppConstants.secondary.withOpacity(0.4),
+                              ),
                             ),
                           ),
-                        ),
-                      const Spacer(),
+                        )
+                      else
+                        const Spacer(),
                       // Delete button
                       GestureDetector(
                         onTap: () => _showDeleteConfirmation(context, cart, itemKey),

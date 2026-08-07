@@ -23,7 +23,7 @@ import '../../constants/app_constants.dart';
 /// The GIF is a 150×150 raster with real alpha transparency. Flutter's
 /// built-in GIF playback can't scrub/trim frames, so the animation decodes
 /// every frame once via `ui.instantiateImageCodec` and drives them itself
-/// with the same 1400 ms master controller that runs the item fade and the
+/// with the same 1800 ms master controller that runs the item fade and the
 /// flight — frame-level control with no new dependencies. The fully-drawn
 /// "solid" frame (index 42 of 90, pinned by the test suite) is what flies to
 /// the Order toggle; the fade-out tail of the loop is never shown. Its orange
@@ -39,7 +39,8 @@ class FlyToOrderAnimation {
 
   static void show({
     required BuildContext context,
-    required Offset source,
+    Offset? source,
+    GlobalKey? sourceKey,
     required GlobalKey targetKey,
     String? imageUrl,
     VoidCallback? onLanded,
@@ -47,6 +48,13 @@ class FlyToOrderAnimation {
     final targetBox =
         targetKey.currentContext?.findRenderObject() as RenderBox?;
     if (targetBox == null || !targetBox.hasSize) return;
+
+    // Resolve the flight source: an explicit [source] offset wins (the POS
+    // reads the Add button's center before its sheet pops); otherwise derive
+    // it from [sourceKey]'s RenderBox center (customer add-to-cart, where the
+    // source widget stays mounted). Bail if neither resolves.
+    final resolvedSource = source ?? _centerOf(sourceKey);
+    if (resolvedSource == null) return;
 
     final targetPos = targetBox.localToGlobal(Offset.zero);
     final targetCenter = targetPos +
@@ -57,7 +65,7 @@ class FlyToOrderAnimation {
 
     entry = OverlayEntry(
       builder: (_) => _PackingBoxAnimation(
-        source: source,
+        source: resolvedSource,
         target: targetCenter,
         imageUrl: imageUrl,
         onComplete: () {
@@ -68,6 +76,13 @@ class FlyToOrderAnimation {
     );
 
     overlay.insert(entry);
+  }
+
+  /// Global-space center of [key]'s render box, or null if it isn't resolved.
+  static Offset? _centerOf(GlobalKey? key) {
+    final box = key?.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return null;
+    return box.localToGlobal(Offset(box.size.width / 2, box.size.height / 2));
   }
 }
 
@@ -101,11 +116,11 @@ class _PackingBoxAnimationState extends State<_PackingBoxAnimation>
   static const double _drawInEnd = 0.50; // box fully drawn in → "packed"
   static const double _flightStart = 0.66; // solid box takes off
 
-  /// On-screen box sizes: the drawn-in box, its smaller landing size after
-  /// the flight, and the product thumbnail it packs. The GIF is 150 px
-  /// native, so 140 px is still a crisp downscale.
+  /// On-screen box sizes: the drawn-in box, its landing size (matched to the
+  /// cart icon it merges into), and the product thumbnail it packs. The GIF
+  /// is 150 px native, so 140 px is still a crisp downscale.
   static const double _boxSize = 140.0;
-  static const double _flightEndSize = 66.0;
+  static const double _landingSize = 26.0; // matches the cart icon size
   static const double _itemSize = 76.0;
 
   /// Index of the fully-drawn "solid" box frame in box_animation.gif.
@@ -128,7 +143,7 @@ class _PackingBoxAnimationState extends State<_PackingBoxAnimation>
     super.initState();
     _master = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1400),
+      duration: const Duration(milliseconds: 1800),
     );
 
     // The item fades out as the box reaches its solid state (packed).
@@ -231,9 +246,18 @@ class _PackingBoxAnimationState extends State<_PackingBoxAnimation>
         // Before takeoff (_flight.value == 0) this resolves to exactly the
         // source position — the box packs there, then flies off.
         final pos = _arcPosition(flightT);
-        // Big box that keeps a good chunk of size through the flight
-        // (140 → ~66 px) so the flying box stays legible.
-        final boxSize = _boxSize + (_flightEndSize - _boxSize) * flightT;
+
+        // The box holds its full size for most of the flight, then shrinks
+        // as it nears the cart icon so it lands at the icon's size.
+        // easeInQuad starts the shrink early enough to read clearly before
+        // the landing fade-out kicks in.
+        final double totalDist =
+            math.max((widget.source - widget.target).distance, 1.0);
+        final double approachT =
+            (1.0 - ((pos - widget.target).distance / totalDist))
+                .clamp(0.0, 1.0);
+        final double shrinkT = Curves.easeInQuad.transform(approachT);
+        final double boxSize = _boxSize + (_landingSize - _boxSize) * shrinkT;
 
         final hasBox = _decodeDone && _frames.isNotEmpty;
         final frameImage =
@@ -245,8 +269,43 @@ class _PackingBoxAnimationState extends State<_PackingBoxAnimation>
         final ringRadius = 14.0 + ringT * 34.0;
         final ringOpacity = (1.0 - ringT) * 0.9;
 
+        // Ground-plane shadow: a soft ellipse on the floor that slides under
+        // the box along the arc. It shrinks and fades as the box climbs, so
+        // the flight reads as hovering above the ground, and returns to full
+        // size as the box comes back down.
+        final double groundY = math.min(
+          math.max(widget.source.dy, widget.target.dy) + 14,
+          (MediaQuery.maybeOf(context)?.size.height ?? double.infinity) - 16,
+        );
+        final double alt = (groundY - pos.dy).clamp(0.0, 420.0);
+        final double altFrac = (alt / 210.0).clamp(0.0, 1.0);
+        final double shadowW = boxSize * (0.92 - 0.4 * altFrac);
+        final double shadowH = shadowW * 0.26;
+        final double shadowAlpha = 0.30 * (1.0 - 0.62 * altFrac);
+
+        // Landing fade — the box and its ground shadow dissolve into the
+        // cart icon over the final stretch of the flight (instead of being
+        // removed abruptly), while the landing ring flashes at the target.
+        final double landingFade = ((1.0 - flightT) / 0.18).clamp(0.0, 1.0);
+        final double shadowOpacity = shadowAlpha * landingFade;
+
         return Stack(
           children: [
+            // Ground shadow — rendered first so it sits beneath everything.
+            if (shadowOpacity > 0.02)
+              Positioned(
+                left: pos.dx - shadowW / 2,
+                top: groundY - shadowH / 2,
+                child: IgnorePointer(
+                  child: CustomPaint(
+                    size: Size(shadowW, shadowH),
+                    painter: _GroundShadowPainter(
+                      Colors.black.withValues(alpha: shadowOpacity),
+                    ),
+                  ),
+                ),
+              ),
+
             // Landing ring — sits under the arriving sealed box.
             if (ringT > 0 && ringT < 1)
               Positioned(
@@ -285,22 +344,26 @@ class _PackingBoxAnimationState extends State<_PackingBoxAnimation>
               ),
 
             // The box — GIF frames draw it in around the thumbnail (0→solid),
-            // then the solid frame flies to the toggle. Falls back to the
-            // product medallion if the GIF hasn't decoded (or failed).
+            // then the solid frame flies to the toggle, dissolving into the
+            // cart on arrival. Falls back to the product medallion if the
+            // GIF hasn't decoded (or failed).
             Positioned(
               left: pos.dx - boxSize / 2,
               top: pos.dy - boxSize / 2,
               child: IgnorePointer(
-                child: SizedBox(
-                  width: boxSize,
-                  height: boxSize,
-                  child: frameImage != null
-                      ? RawImage(
-                          image: frameImage,
-                          fit: BoxFit.contain,
-                          filterQuality: FilterQuality.medium,
-                        )
-                      : _productMedallion(boxSize),
+                child: Opacity(
+                  opacity: landingFade,
+                  child: SizedBox(
+                    width: boxSize,
+                    height: boxSize,
+                    child: frameImage != null
+                        ? RawImage(
+                            image: frameImage,
+                            fit: BoxFit.contain,
+                            filterQuality: FilterQuality.medium,
+                          )
+                        : _productMedallion(boxSize),
+                  ),
                 ),
               ),
             ),
@@ -312,6 +375,8 @@ class _PackingBoxAnimationState extends State<_PackingBoxAnimation>
 
   /// Circular product thumbnail — used both for the item standing at the box
   /// center during the draw-in and as the degraded fallback flying object.
+  /// A soft drop shadow lifts it off the background, matching the depth of
+  /// the box's ground shadow so the two feel like one scene.
   Widget _productMedallion(double size) {
     return Container(
       width: size,
@@ -321,9 +386,9 @@ class _PackingBoxAnimationState extends State<_PackingBoxAnimation>
         color: AppConstants.surfaceLight,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.18),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
+            color: Colors.black.withValues(alpha: 0.28),
+            blurRadius: 10,
+            offset: const Offset(0, 12),
           ),
         ],
       ),
@@ -355,4 +420,25 @@ class _PackingBoxAnimationState extends State<_PackingBoxAnimation>
       color: AppConstants.accent,
     );
   }
+}
+
+/// Soft elliptical ground shadow that slides beneath the flying box.
+/// Blurred via [ui.MaskFilter] so it reads as a soft cast shadow rather than
+/// a hard cut-out.
+class _GroundShadowPainter extends CustomPainter {
+  final Color color;
+
+  _GroundShadowPainter(this.color);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..maskFilter = ui.MaskFilter.blur(ui.BlurStyle.normal, 5);
+    canvas.drawOval(Offset.zero & size, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _GroundShadowPainter oldDelegate) =>
+      oldDelegate.color != color;
 }
