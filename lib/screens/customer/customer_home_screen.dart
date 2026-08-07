@@ -15,6 +15,7 @@ import '../../widgets/floating_message_button.dart';
 import '../../widgets/no_internet_view.dart';
 import '../../widgets/sole_product_card.dart';
 import '../../widgets/sale_price_tape.dart';
+import '../../widgets/sale_countdown_overlay.dart';
 import '../../widgets/cart_icon_button.dart';
 import '../../widgets/chat/chat_view.dart';
 import 'product_detail_screen.dart';
@@ -429,15 +430,41 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                                   (p) => p?['id']?.toString() == item['id'],
                                   orElse: () => null,
                                 );
-                                final stripPrice = fullProduct != null
-                                    ? effectivePrice(fullProduct)
-                                    : ((item['price'] is num)
-                                            ? (item['price'] as num)
-                                            : 0)
-                                        .toDouble();
-                                return SizedBox(
-                                  width: 130,
-                                  child: GestureDetector(
+                                final DateTime? stripEnd = fullProduct == null
+                                    ? null
+                                    : DateTime.tryParse(
+                                        fullProduct['sale_ends_at']
+                                                ?.toString() ??
+                                            '');
+                                // The expiry watcher re-renders this strip
+                                // item with a `now` past the sale end, so the
+                                // compact countdown and the sale price fall
+                                // back to non-sale together when it expires.
+                                return SaleEndWatcher(
+                                  product: fullProduct ?? const {},
+                                  builder: (context, now) {
+                                    final bool stripOnSale =
+                                        fullProduct != null &&
+                                            isOnSale(fullProduct, now: now);
+                                    final double liveStripPrice =
+                                        fullProduct != null
+                                            ? effectivePrice(fullProduct,
+                                                now: now)
+                                            : ((item['price'] is num)
+                                                    ? (item['price'] as num)
+                                                    : 0)
+                                                .toDouble();
+                                    final double originalPrice =
+                                        fullProduct != null
+                                            ? ((fullProduct['price'] is num)
+                                                    ? (fullProduct['price']
+                                                        as num)
+                                                    : 0)
+                                                .toDouble()
+                                            : 0;
+                                    return SizedBox(
+                                      width: 130,
+                                      child: GestureDetector(
                                     onTap: () {
                                       // Use the full product from the loaded list
                                       final productProvider = context.read<ProductProvider>();
@@ -456,23 +483,41 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        // Thumbnail
+                                        // Thumbnail + compact countdown band
+                                        // across its bottom edge (only for
+                                        // sales that actually end).
                                         ClipRRect(
                                           borderRadius: BorderRadius.circular(12),
-                                          child: Image.network(
-                                            item['imageUrl'] ?? '',
-                                            width: 130,
-                                            height: 124,
-                                            fit: BoxFit.cover,
-                                            errorBuilder: (_, __, ___) => Container(
-                                              width: 130,
-                                              height: 124,
-                                              color: AppConstants.borderGray.withValues(alpha: 0.2),
-                                              child: Icon(
-                                                Icons.image_outlined,
-                                                color: AppConstants.borderGray,
+                                          child: Stack(
+                                            fit: StackFit.passthrough,
+                                            children: [
+                                              Image.network(
+                                                item['imageUrl'] ?? '',
+                                                width: 130,
+                                                height: 124,
+                                                fit: BoxFit.cover,
+                                                errorBuilder: (_, __, ___) => Container(
+                                                  width: 130,
+                                                  height: 124,
+                                                  color: AppConstants.borderGray.withValues(alpha: 0.2),
+                                                  child: Icon(
+                                                    Icons.image_outlined,
+                                                    color: AppConstants.borderGray,
+                                                  ),
+                                                ),
                                               ),
-                                            ),
+                                              if (stripOnSale &&
+                                                  stripEnd != null)
+                                                Positioned(
+                                                  left: 0,
+                                                  right: 0,
+                                                  bottom: 0,
+                                                  child: SaleCountdownOverlay(
+                                                    saleEndsAt: stripEnd,
+                                                    compact: true,
+                                                  ),
+                                                ),
+                                            ],
                                           ),
                                         ),
                                         const SizedBox(height: 6),
@@ -500,8 +545,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                                                   overflow: TextOverflow.ellipsis,
                                                 ),
                                                 const SizedBox(height: 2),
-                                                if (fullProduct != null &&
-                                                    isOnSale(fullProduct)) ...[
+                                                if (stripOnSale) ...[
                                                   // Sale price hides behind a
                                                   // peel-away tape (same reveal
                                                   // state as the cards' tags).
@@ -516,7 +560,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                                                         .fromLTRB(
                                                             10, 20, 10, 9),
                                                     child: Text(
-                                                      '₱${stripPrice.toStringAsFixed(2)}',
+                                                      '₱${liveStripPrice.toStringAsFixed(2)}',
                                                       style:
                                                           AppConstants.monoStyle(
                                                         fontSize: 11,
@@ -528,7 +572,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                                                     ),
                                                   ),
                                                   Text(
-                                                    '₱${((fullProduct['price'] is num) ? (fullProduct['price'] as num) : 0).toStringAsFixed(2)}',
+                                                    '₱${originalPrice.toStringAsFixed(2)}',
                                                     style: AppConstants.monoStyle(
                                                       fontSize: 9,
                                                       color: AppConstants.secondary
@@ -539,7 +583,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                                                   ),
                                                 ] else
                                                   Text(
-                                                    '₱${stripPrice.toStringAsFixed(2)}',
+                                                    '₱${liveStripPrice.toStringAsFixed(2)}',
                                                     style: AppConstants.monoStyle(
                                                       fontSize: 11,
                                                       color: AppConstants.primary,
@@ -553,6 +597,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                                       ],
                                     ),
                                   ),
+                                    );
+                                  },
                                 );
                               },
                             ),

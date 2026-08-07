@@ -5,6 +5,7 @@ import '../utils/sale_price.dart';
 import 'sole_star_rating.dart';
 import 'hanging_sale_tag.dart';
 import 'sale_price_tape.dart';
+import 'sale_countdown_overlay.dart';
 
 class SoleProductCard extends StatelessWidget {
   final dynamic product; // Can be a map or a model
@@ -24,15 +25,30 @@ class SoleProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // The sale-expiry watcher re-renders this card with a `now` past the
+    // sale end the instant the countdown hits zero, so the hanging tag,
+    // price tape and sale-price line all fall back to non-sale together —
+    // no stale frozen sale UI on an idle screen.
+    return SaleEndWatcher(
+      product: product,
+      builder: (context, now) => _buildCard(context, now),
+    );
+  }
+
+  Widget _buildCard(BuildContext context, DateTime now) {
     // Gracefully handle dynamic Map or custom model data
     final String name = product['name'] ?? 'Artisan Shoe';
     final double price = (product['price'] is int)
         ? (product['price'] as int).toDouble()
         : (product['price'] ?? 0.0);
-    // Sale-aware display values (single source of truth: sale_price.dart)
-    final bool onSale = isOnSale(product);
-    final double displayPrice = effectivePrice(product);
-    final int? salePct = salePercent(product);
+    // Sale-aware display values (single source of truth: sale_price.dart).
+    // `now` comes from SaleEndWatcher — the sale expires the moment the
+    // countdown reaches zero.
+    final bool onSale = isOnSale(product, now: now);
+    final double displayPrice = effectivePrice(product, now: now);
+    final int? salePct = salePercent(product, now: now);
+    final DateTime? saleEnd =
+        DateTime.tryParse(product['sale_ends_at']?.toString() ?? '');
     final List<dynamic> images = product['images'] ?? [];
     final String imageUrl = images.isNotEmpty
         ? images.first
@@ -67,11 +83,19 @@ class SoleProductCard extends StatelessWidget {
                 if (imageAspectRatio != null)
                   AspectRatio(
                     aspectRatio: imageAspectRatio!,
-                    child: _buildImageSection(imageUrl),
+                    child: _buildImageSection(
+                      imageUrl,
+                      onSale: onSale,
+                      saleEndsAt: saleEnd,
+                    ),
                   )
                 else
                   Expanded(
-                    child: _buildImageSection(imageUrl),
+                    child: _buildImageSection(
+                      imageUrl,
+                      onSale: onSale,
+                      saleEndsAt: saleEnd,
+                    ),
                   ),
                 // Bottom half: Name and Price details
                 Padding(
@@ -186,36 +210,56 @@ class SoleProductCard extends StatelessWidget {
     );
   }
 
-  Widget _buildImageSection(String imageUrl) {
+  Widget _buildImageSection(
+    String imageUrl, {
+    required bool onSale,
+    DateTime? saleEndsAt,
+  }) {
     return ClipRRect(
       borderRadius: const BorderRadius.only(
         topLeft: Radius.circular(15),
         topRight: Radius.circular(15),
       ),
-      child: CachedNetworkImage(
-        imageUrl: imageUrl,
-        fit: BoxFit.cover,
-        width: double.infinity,
-        height: double.infinity,
-        placeholder: (context, url) => Container(
-          color: AppConstants.borderGray.withOpacity(0.3),
-          child: const Center(
-            child: SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor:
-                    AlwaysStoppedAnimation(AppConstants.primary),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          CachedNetworkImage(
+            imageUrl: imageUrl,
+            fit: BoxFit.cover,
+            width: double.infinity,
+            height: double.infinity,
+            placeholder: (context, url) => Container(
+              color: AppConstants.borderGray.withOpacity(0.3),
+              child: const Center(
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor:
+                        AlwaysStoppedAnimation(AppConstants.primary),
+                  ),
+                ),
               ),
             ),
+            errorWidget: (context, url, error) => Container(
+              color: AppConstants.borderGray.withOpacity(0.3),
+              child: const Icon(Icons.broken_image_outlined,
+                  color: AppConstants.primary),
+            ),
           ),
-        ),
-        errorWidget: (context, url, error) => Container(
-          color: AppConstants.borderGray.withOpacity(0.3),
-          child: const Icon(Icons.broken_image_outlined,
-              color: AppConstants.primary),
-        ),
+          // Sale countdown — a gradient scrim band across the bottom of the
+          // image. A pure overlay (never affects masonry sizing or the HOT
+          // DEALS grid contract), and only for sales that actually end
+          // (open-ended sales with a NULL end date show nothing at all).
+          if (onSale && saleEndsAt != null)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: SaleCountdownOverlay(saleEndsAt: saleEndsAt),
+            ),
+        ],
       ),
     );
   }

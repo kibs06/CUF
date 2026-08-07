@@ -22,6 +22,7 @@ import '../../widgets/seller/fly_to_order_animation.dart';
 import '../../widgets/size_guide_modal.dart';
 import '../../widgets/hanging_sale_tag.dart';
 import '../../widgets/sale_price_tape.dart';
+import '../../widgets/sale_countdown_overlay.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   final Map<String, dynamic> product;
@@ -556,8 +557,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
     );
   }
 
-  Widget _buildImageCarousel() {
+  Widget _buildImageCarousel(DateTime now) {
     final imageUrls = _sortedImageUrls;
+    final DateTime? heroEnd =
+        DateTime.tryParse(widget.product['sale_ends_at']?.toString() ?? '');
 
     if (imageUrls.isEmpty) {
       return KeyedSubtree(
@@ -621,20 +624,32 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
         // the catalog cards: tap to reveal the discount, stays revealed
         // everywhere for this product. Hangs off the left edge, below the
         // back button, away from the image counter (top-right).
-        if (isOnSale(widget.product))
+        if (isOnSale(widget.product, now: now))
           Positioned(
             top: 52,
             left: -7,
             child: HangingSaleTag(
               productId: widget.product['id']?.toString() ?? '',
-              salePercent: salePercent(widget.product),
+              salePercent: salePercent(widget.product, now: now),
             ),
           ),
 
-        // Dot indicators — bottom center
+        // Sale countdown — the same full-width yellow band as the catalog
+        // cards, pinned edge-to-edge across the hero's bottom (no side gaps).
+        // Only for sales with an end date; open-ended sales (NULL
+        // sale_ends_at) show no countdown at all.
+        if (isOnSale(widget.product, now: now) && heroEnd != null)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: SaleCountdownOverlay(saleEndsAt: heroEnd),
+          ),
+
+        // Dot indicators — bottom center, raised above the countdown band.
         if (imageUrls.length > 1)
           Positioned(
-            bottom: 12,
+            bottom: 34,
             left: 0,
             right: 0,
             child: Row(
@@ -722,15 +737,27 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Sale-expiry watcher: when the hero countdown hits zero the whole
+    // screen rebuilds with a `now` past the sale end — tag, price tape,
+    // sale price and savings note all fall back to non-sale together.
+    return SaleEndWatcher(
+      product: widget.product,
+      builder: (context, now) => _buildScaffold(context, now),
+    );
+  }
+
+  Widget _buildScaffold(BuildContext context, DateTime now) {
     final sizesMap = _buildSizesMap();
     final double price = (widget.product['price'] is int)
         ? (widget.product['price'] as int).toDouble()
         : (widget.product['price'] ?? 0.0);
     final String description = widget.product['description'] ?? 'No description available.';
 
-    // Sale-aware display values (single source of truth: sale_price.dart)
-    final bool onSale = isOnSale(widget.product);
-    final double displayPrice = effectivePrice(widget.product);
+    // Sale-aware display values (single source of truth: sale_price.dart).
+    // `now` comes from SaleEndWatcher — the sale expires the moment the
+    // countdown reaches zero.
+    final bool onSale = isOnSale(widget.product, now: now);
+    final double displayPrice = effectivePrice(widget.product, now: now);
     final double saveAmount = price - displayPrice;
     final DateTime? saleEndRaw =
         DateTime.tryParse(widget.product['sale_ends_at']?.toString() ?? '');
@@ -786,7 +813,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                   CartIconButton(iconKey: _cartIconKey),
                 ],
                 flexibleSpace: FlexibleSpaceBar(
-                  background: _buildImageCarousel(),
+                  background: _buildImageCarousel(now),
                 ),
               ),
 
