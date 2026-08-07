@@ -116,17 +116,19 @@ class AppConstants {
     );
   }
 
-  // Monospace / Codes - JetBrains Mono
+  // Numbers & figures - Sora (modern geometric sans). Drives every numeric
+  // display app-wide: prices, totals, counts, sizes, measurements, refs.
+  // Tabular figures keep price/amount columns aligned in receipts & POS.
   static TextStyle monoStyle({
     double fontSize = 14.0,
     FontWeight fontWeight = FontWeight.normal,
     Color color = secondary,
   }) {
-    return GoogleFonts.jetBrainsMono(
+    return GoogleFonts.sora(
       fontSize: fontSize,
       fontWeight: fontWeight,
       color: color,
-    );
+    ).copyWith(fontFeatures: const [FontFeature.tabularFigures()]);
   }
 
   // --- VISUAL LANGUAGE RULES ---

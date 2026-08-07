@@ -391,7 +391,7 @@ class _FootResultsScreenState extends State<FootResultsScreen> {
           const SizedBox(height: 8),
           Text(
             'EU $displayEu',
-            style: AppConstants.headlineStyle(
+            style: AppConstants.monoStyle(
               fontSize: 56,
               fontWeight: FontWeight.bold,
               color: AppConstants.secondary,

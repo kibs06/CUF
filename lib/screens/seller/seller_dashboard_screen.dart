@@ -459,13 +459,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
             _buildRecentOrders(data),
             const SizedBox(height: 20),
 
-            // Block 5 — Quick Actions
-            _buildSectionLabel('QUICK ACTIONS'),
-            const SizedBox(height: 10),
-            _buildQuickActions(),
-            const SizedBox(height: 20),
-
-            // Block 6 — Weekly Stacked Area Chart (Online + In-Store)
+            // Block 5 — Weekly Stacked Area Chart (Online + In-Store)
             Container(
               clipBehavior: Clip.antiAlias,
               padding: const EdgeInsets.all(16),
@@ -487,7 +481,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
             ),
             const SizedBox(height: 20),
 
-            // Block 7 — Monthly Stacked Area Chart
+            // Block 6 — Monthly Stacked Area Chart
             Container(
               clipBehavior: Clip.antiAlias,
               padding: const EdgeInsets.all(16),
@@ -506,7 +500,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
             ),
             const SizedBox(height: 20),
 
-            // Block 7b — Revenue Breakdown Doughnut (online vs in-store)
+            // Block 7 — Revenue Breakdown Doughnut (online vs in-store)
             Container(
               clipBehavior: Clip.antiAlias,
               padding: const EdgeInsets.all(16),
@@ -521,6 +515,8 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                 trendResult: data.monthlyTrend,
               ),
             ),
+            const SizedBox(height: 16),
+            _buildFullReportCta(),
 
             const SizedBox(height: 80),
           ],
@@ -840,48 +836,66 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     );
   }
 
-  // ─── Block 5: Quick Actions ─────────────────────────────────────
-  Widget _buildQuickActions() {
-    return Row(
-      children: [
-        _quickAction(
-          icon: Icons.bar_chart_outlined,
-          label: 'Reports',
-          onTap: () => Navigator.of(
-            context,
-          ).push(MaterialPageRoute(builder: (_) => const ReportsScreen())),
-        ),
-      ],
-    );
-  }
-
-  Widget _quickAction({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
+  // ─── Block 8: Full Report CTA ───────────────────────────────────
+  Widget _buildFullReportCta() {
+    return Material(
+      color: AppConstants.primary.withValues(alpha: 0.06),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const ReportsScreen()),
+          );
+        },
         child: Container(
-          height: 80,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
-            color: AppConstants.sellerCardBg,
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: AppConstants.sellerShadow,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: AppConstants.primary.withValues(alpha: 0.25),
+            ),
           ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+          child: Row(
             children: [
-              Icon(icon, size: 28, color: AppConstants.primary),
-              const SizedBox(height: 6),
-              Text(
-                label,
-                style: AppConstants.bodyStyle(
-                  fontSize: 11,
-                  color: AppConstants.secondary,
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: AppConstants.primary,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.bar_chart_rounded,
+                  color: Colors.white,
+                  size: 22,
                 ),
               ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'View Full Sales Report',
+                      style: AppConstants.bodyStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: AppConstants.secondary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Daily revenue, top products & CSV export',
+                      style: AppConstants.bodyStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right, color: AppConstants.primary),
             ],
           ),
         ),

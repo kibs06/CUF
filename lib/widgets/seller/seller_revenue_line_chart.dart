@@ -146,7 +146,7 @@ class SellerRevenueLineChart extends StatelessWidget {
                           return LineTooltipItem(
                             '$formatted\n',
                             const TextStyle(
-                              fontFamily: 'JetBrainsMono',
+                              fontFamily: 'Sora',
                               fontSize: 13,
                               fontWeight: FontWeight.bold,
                               color: Colors.white,

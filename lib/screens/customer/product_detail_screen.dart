@@ -18,7 +18,7 @@ import 'ar_fitting_screen.dart';
 import 'checkout_screen.dart';
 import 'write_review_screen.dart';
 import '../../widgets/cart_icon_button.dart';
-import '../../widgets/fly_to_cart_animation.dart';
+import '../../widgets/seller/fly_to_order_animation.dart';
 import '../../widgets/size_guide_modal.dart';
 
 class ProductDetailScreen extends StatefulWidget {
@@ -175,7 +175,7 @@ class _ReviewsSectionState extends State<_ReviewsSection> {
             children: [
               Text(
                 provider.avgRating.toStringAsFixed(2),
-                style: AppConstants.headlineStyle(
+                style: AppConstants.monoStyle(
                   fontSize: 32,
                   fontWeight: FontWeight.bold,
                   color: AppConstants.secondary,
@@ -441,8 +441,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
       additionalPrice: additionalPrice,
     );
 
-    // Fly-to-cart overlay animation
-    FlyToCartAnimation.show(
+    // Pack-the-box fly-to-cart overlay animation (same as the POS): the box
+    // GIF draws in around the product thumbnail, then the solid box flies to
+    // the cart icon and lands with a ring flash.
+    FlyToOrderAnimation.show(
       context: context,
       sourceKey: _productImageKey,
       targetKey: _cartIconKey,
@@ -451,16 +453,17 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
 
 
 
-    // Revert button to normal "Add to Cart" label after 800 ms
-    Future.delayed(const Duration(milliseconds: 800), () {
+    // Revert button to normal "Add to Cart" label after the box-pack
+    // animation finishes (~1800 ms) so rapid taps can't stack flights.
+    Future.delayed(const Duration(milliseconds: 1900), () {
       if (mounted) setState(() => _isAddingToCart = false);
     });
   }
 
   void _buyNow() {
     _addToCart();
-    // Navigate to checkout after add-to-cart animation completes
-    Future.delayed(const Duration(milliseconds: 1000), () {
+    // Navigate to checkout after the box-pack animation completes
+    Future.delayed(const Duration(milliseconds: 2000), () {
       if (!mounted) return;
       Navigator.of(context).push(
         MaterialPageRoute(

@@ -99,7 +99,7 @@ class SellerStackedAreaChart extends StatelessWidget {
           // Headline number — the key figure at a glance
           Text(
             _formatCurrency(trendResult!.totalRevenue),
-            style: AppConstants.headlineStyle(
+            style: AppConstants.monoStyle(
               fontSize: 28,
               fontWeight: FontWeight.bold,
               color: AppConstants.secondary,
@@ -352,7 +352,7 @@ class SellerStackedAreaChart extends StatelessWidget {
                         TextSpan(
                           text: _formatCurrency(point.onlineRevenue),
                           style: const TextStyle(
-                            fontFamily: 'JetBrainsMono',
+                            fontFamily: 'Sora',
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
@@ -370,7 +370,7 @@ class SellerStackedAreaChart extends StatelessWidget {
                         TextSpan(
                           text: _formatCurrency(point.inStoreRevenue),
                           style: const TextStyle(
-                            fontFamily: 'JetBrainsMono',
+                            fontFamily: 'Sora',
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
@@ -388,7 +388,7 @@ class SellerStackedAreaChart extends StatelessWidget {
                         TextSpan(
                           text: _formatCurrency(point.revenue),
                           style: const TextStyle(
-                            fontFamily: 'JetBrainsMono',
+                            fontFamily: 'Sora',
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
