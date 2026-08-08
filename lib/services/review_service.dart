@@ -379,6 +379,154 @@ class ReviewService {
   }
 
   // ═══════════════════════════════════════════════════════════════
+  //  STORE-LEVEL REVIEWS (store_reviews table — direct "Rate this store")
+  // ═══════════════════════════════════════════════════════════════
+
+  /// All direct store reviews for a store, joined with reviewer profiles.
+  Future<List<Map<String, dynamic>>> getStoreLevelReviews(String storeId) async {
+    try {
+      final data = await _client
+          .from('store_reviews')
+          .select('*, profiles!customer_id(full_name, avatar_url)')
+          .eq('store_id', storeId)
+          .order('created_at', ascending: false);
+
+      return (data as List).map((row) {
+        final map = Map<String, dynamic>.from(row as Map);
+        final profile = map['profiles'];
+        if (profile is Map) {
+          map['reviewer_name'] = profile['full_name'] ?? 'Customer';
+          map['reviewer_avatar'] = profile['avatar_url'];
+        } else {
+          map['reviewer_name'] = 'Customer';
+          map['reviewer_avatar'] = null;
+        }
+        return map;
+      }).toList();
+    } catch (e) {
+      return [];
+    }
+  }
+
+  /// The current user's direct store review for a store (or null).
+  Future<Map<String, dynamic>?> getMyStoreReview(String storeId) async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) return null;
+
+    try {
+      final data = await _client
+          .from('store_reviews')
+          .select('*, profiles!customer_id(full_name, avatar_url)')
+          .eq('store_id', storeId)
+          .eq('customer_id', userId)
+          .maybeSingle();
+
+      if (data != null) {
+        final map = Map<String, dynamic>.from(data as Map);
+        final profile = map['profiles'];
+        map['reviewer_name'] =
+            profile is Map ? (profile['full_name'] ?? 'Customer') : 'Customer';
+        map['reviewer_avatar'] =
+            profile is Map ? profile['avatar_url'] : null;
+        return map;
+      }
+    } catch (_) {
+      // Not found or RLS-blocked — treat as "no review" and return null.
+    }
+
+    return null;
+  }
+
+  /// Whether the current user can rate a store: verified buyer (has a
+  /// 'received' order from this store) and hasn't already reviewed it.
+  Future<bool> canReviewStore(String storeId) async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) return false;
+
+    try {
+      // Already reviewed? The UNIQUE(store_id, customer_id) also blocks
+      // duplicate inserts at the DB level.
+      final existing = await _client
+          .from('store_reviews')
+          .select('id')
+          .eq('store_id', storeId)
+          .eq('customer_id', userId)
+          .maybeSingle();
+      if (existing != null) return false;
+
+      // Must have a completed ('received') order from this store.
+      final orders = await _client
+          .from('orders')
+          .select('id')
+          .eq('customer_id', userId)
+          .eq('store_id', storeId)
+          .eq('status', 'received')
+          .limit(1);
+      return (orders as List).isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Submit a direct store review (1-5 stars + optional comment).
+  Future<void> submitStoreReview({
+    required String storeId,
+    required int rating,
+    String? comment,
+  }) async {
+    final userId = _client.auth.currentUser!.id;
+    if (rating < 1 || rating > 5) {
+      throw Exception('Store review rating must be 1–5, got $rating');
+    }
+
+    await _client.from('store_reviews').insert({
+      'store_id': storeId,
+      'customer_id': userId,
+      'rating': rating,
+      'comment': comment?.trim().isNotEmpty == true ? comment!.trim() : null,
+    });
+  }
+
+  /// Update the current user's store review.
+  Future<void> updateStoreReview({
+    required String reviewId,
+    required int rating,
+    String? comment,
+  }) async {
+    final userId = _client.auth.currentUser!.id;
+
+    final existing = await _client
+        .from('store_reviews')
+        .select('customer_id')
+        .eq('id', reviewId)
+        .single();
+    if (existing['customer_id'] != userId) {
+      throw Exception('You can only edit your own store reviews.');
+    }
+
+    await _client.from('store_reviews').update({
+      'rating': rating,
+      'comment': comment?.trim().isNotEmpty == true ? comment!.trim() : null,
+    }).eq('id', reviewId);
+  }
+
+  /// Delete the current user's store review.
+  Future<void> deleteStoreReview(String reviewId) async {
+    final userId = _client.auth.currentUser!.id;
+
+    final existing = await _client
+        .from('store_reviews')
+        .select('customer_id')
+        .eq('id', reviewId)
+        .single();
+    if (existing['customer_id'] != userId) {
+      throw Exception('You can only delete your own store reviews.');
+    }
+
+    await _client.from('store_reviews').delete().eq('id', reviewId);
+  }
+
+  // ═══════════════════════════════════════════════════════════════
   //  SUBMIT / UPDATE / DELETE (reviews table)
   // ═══════════════════════════════════════════════════════════════
 
@@ -642,6 +790,7 @@ class ReviewService {
           });
         }
       } catch (e) {
+        // Ignore per-image failures so one bad file doesn't abort the rest.
       }
     }
 
@@ -662,6 +811,8 @@ class ReviewService {
         final path = segments.sublist(bucketIndex + 1).join('/');
         await _client.storage.from('review-images').remove([path]);
       }
-    } catch (_) {}
+    } catch (_) {
+      // Best-effort cleanup — never throw for missing/deleted files.
+    }
   }
 }

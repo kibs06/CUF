@@ -184,8 +184,14 @@ class StoreHeroCard extends StatelessWidget {
                     // Stat pills row
                     Row(
                       children: [
-                        _buildStatPill('⭐ ${store.rating}'),
-                        const SizedBox(width: 8),
+                        // Rating pill only once the store has reviews
+                        // (stores.rating is NULL until the first review)
+                        if (store.rating != null) ...[
+                          _buildStatPill(
+                            '⭐ ${store.rating!.toStringAsFixed(1)}',
+                          ),
+                          const SizedBox(width: 8),
+                        ],
                         _buildStatPill('👟 $productCount'),
                         const SizedBox(width: 8),
                         Flexible(

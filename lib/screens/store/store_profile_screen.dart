@@ -9,13 +9,17 @@ import '../../constants/app_constants.dart';
 import '../../models/store.dart';
 import '../../providers/follow_provider.dart';
 import '../../providers/product_provider.dart';
+import '../../providers/review_provider.dart';
 import '../../services/message_service.dart';
 import '../../services/store_service.dart';
 import '../../widgets/chat/chat_view.dart';
 import '../../widgets/cart_icon_button.dart';
 import '../../widgets/sole_product_card.dart';
+import '../../widgets/sole_star_rating.dart';
+import '../../widgets/shimmer_group.dart';
 import '../customer/product_detail_screen.dart';
 import 'collection_screen.dart';
+import 'rate_store_screen.dart';
 import 'widgets/stitch_painter.dart';
 
 /// Full profile page for a single store.
@@ -145,6 +149,10 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
       _isLoading = false;
     });
 
+    // Load direct store reviews ("Rate this store") for this store.
+    // Placed before any awaits so the context use is lint-clean.
+    context.read<ReviewProvider>().loadStoreLevelReviews(widget.storeId);
+
     // Save last visited store for "Continue Browsing" (Change 6b)
     if (store != null) {
       final prefs = await SharedPreferences.getInstance();
@@ -163,9 +171,7 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
           elevation: 0,
           foregroundColor: AppConstants.secondary,
         ),
-        body: const Center(
-          child: CircularProgressIndicator(color: AppConstants.primary),
-        ),
+        body: const _StoreProfileSkeleton(),
       );
     }
 
@@ -265,6 +271,14 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                     ),
                   ],
                 ),
+              ),
+            ),
+
+            // ── Sliver 1.5: Store Reviews (direct "Rate this store") ──
+            SliverToBoxAdapter(
+              child: _StoreReviewsSection(
+                store: store,
+                onReviewChanged: _loadData,
               ),
             ),
 
@@ -652,8 +666,12 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
           ),
           _statDivider(),
           _statChip('${_storeProducts.length} products'),
-          _statDivider(),
-          _statChip('★ ${store.rating}'),
+          // Rating chip only once the store has reviews
+          // (stores.rating is NULL until the first review)
+          if (store.rating != null) ...[
+            _statDivider(),
+            _statChip('★ ${store.rating!.toStringAsFixed(1)}'),
+          ],
           if (store.hoursLabel != null) ...[
             _statDivider(),
             ConstrainedBox(
@@ -765,6 +783,433 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
       style: AppConstants.monoStyle(
         fontSize: 14,
         color: Colors.white.withAlpha(120),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Store Reviews section — direct "Rate this store" (store_reviews)
+// ══════════════════════════════════════════════════════════════════
+
+class _StoreReviewsSection extends StatelessWidget {
+  final Store store;
+  final VoidCallback onReviewChanged;
+
+  const _StoreReviewsSection({
+    required this.store,
+    required this.onReviewChanged,
+  });
+
+  String _formatDate(String? iso) {
+    final dt = DateTime.tryParse(iso ?? '');
+    if (dt == null) return '';
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
+  }
+
+  Future<void> _openRateStore(BuildContext context) async {
+    final provider = context.read<ReviewProvider>();
+    final result = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => RateStoreScreen(
+          storeId: store.id,
+          storeName: store.name,
+          existingReview: provider.myStoreReview,
+        ),
+      ),
+    );
+    if (result == true) onReviewChanged();
+  }
+
+  Future<void> _confirmDelete(BuildContext context) async {
+    final provider = context.read<ReviewProvider>();
+    final myReview = provider.myStoreReview;
+    if (myReview == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Delete review?'),
+        content: const Text('This removes your rating for this store.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              'Delete',
+              style: AppConstants.bodyStyle(color: AppConstants.error),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && context.mounted) {
+      final success = await provider.deleteStoreReview(
+        reviewId: myReview['id'].toString(),
+        storeId: store.id,
+      );
+      if (success && context.mounted) onReviewChanged();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<ReviewProvider>();
+    final reviews = provider.storeLevelReviews;
+    final myReview = provider.myStoreReview;
+
+    // Hide the whole section until there's something to show — including
+    // an eligible buyer who can rate (their CTA must still appear).
+    if (reviews.isEmpty &&
+        myReview == null &&
+        !provider.canReviewStore &&
+        !provider.isLoadingStoreLevelReviews) {
+      return const SizedBox.shrink();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 28, 20, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header: title + overall rating/count (merged aggregate)
+          Row(
+            children: [
+              Text(
+                'Store Reviews',
+                style: AppConstants.headlineStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const Spacer(),
+              if (store.rating != null) ...[_buildRatingSummary(store)],
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // My review card (edit/delete) — takes priority over the CTA
+          if (myReview != null) ...[_buildMyReviewCard(context, myReview)],
+
+          // Rate CTA — only for eligible verified buyers who haven't rated
+          if (myReview == null && provider.canReviewStore) ...[_buildRateCta(context)],
+
+          // Loading indicator on first load
+          if (provider.isLoadingStoreLevelReviews && reviews.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Center(
+                child: SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: AppConstants.primary,
+                  ),
+                ),
+              ),
+            ),
+
+          // Public list of store reviews
+          for (final review in reviews) _buildReviewCard(review),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRatingSummary(Store store) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          '★ ${store.rating!.toStringAsFixed(1)}',
+          style: AppConstants.bodyStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
+            color: AppConstants.primary,
+          ),
+        ),
+        const SizedBox(width: 4),
+        Text(
+          '(${store.reviewCount})',
+          style: AppConstants.bodyStyle(
+            fontSize: 12,
+            color: AppConstants.secondary.withValues(alpha: 0.5),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMyReviewCard(BuildContext context, Map<String, dynamic> review) {
+    final rating = (review['rating'] as num?)?.toInt() ?? 0;
+    final comment = review['comment']?.toString() ?? '';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppConstants.primary.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppConstants.primary.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'Your review',
+                style: AppConstants.bodyStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const Spacer(),
+              GestureDetector(
+                onTap: () => _openRateStore(context),
+                child: Text(
+                  'Edit',
+                  style: AppConstants.bodyStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: AppConstants.primary,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              GestureDetector(
+                onTap: () => _confirmDelete(context),
+                child: Text(
+                  'Delete',
+                  style: AppConstants.bodyStyle(
+                    fontSize: 12,
+                    color: AppConstants.error,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          SoleStarRating(rating: rating, size: 16),
+          if (comment.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              comment,
+              style: AppConstants.bodyStyle(
+                fontSize: 13,
+                color: AppConstants.secondary.withValues(alpha: 0.7),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRateCta(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: () => _openRateStore(context),
+        icon: const Icon(Icons.star_outline_rounded, size: 18),
+        label: const Text('Rate this store'),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppConstants.primary,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReviewCard(Map<String, dynamic> review) {
+    final rating = (review['rating'] as num?)?.toInt() ?? 0;
+    final comment = review['comment']?.toString() ?? '';
+    final name = review['reviewer_name']?.toString() ?? 'Customer';
+    final avatarUrl = review['reviewer_avatar']?.toString();
+    final date = _formatDate(review['created_at']?.toString());
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: AppConstants.warmShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 16,
+                backgroundColor: AppConstants.primary.withValues(alpha: 0.1),
+                backgroundImage: avatarUrl != null && avatarUrl.isNotEmpty
+                    ? CachedNetworkImageProvider(avatarUrl)
+                    : null,
+                child: avatarUrl == null || avatarUrl.isEmpty
+                    ? Text(
+                        name.isNotEmpty ? name[0].toUpperCase() : 'C',
+                        style: AppConstants.bodyStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: AppConstants.primary,
+                        ),
+                      )
+                    : null,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      style: AppConstants.bodyStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (date.isNotEmpty)
+                      Text(
+                        date,
+                        style: AppConstants.bodyStyle(
+                          fontSize: 11,
+                          color: AppConstants.secondary.withValues(alpha: 0.5),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              SoleStarRating(rating: rating, size: 14),
+            ],
+          ),
+          if (comment.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              comment,
+              style: AppConstants.bodyStyle(
+                fontSize: 13,
+                color: AppConstants.secondary.withValues(alpha: 0.8),
+                height: 1.4,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Skeleton loading state — mirrors banner + stats + product grid
+// ══════════════════════════════════════════════════════════════════
+
+class _StoreProfileSkeleton extends StatelessWidget {
+  const _StoreProfileSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    // Default physics: if the skeleton is taller than the viewport on
+    // short screens, the user can still scroll it while it loads.
+    return SingleChildScrollView(
+      child: ShimmerGroup(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Banner
+            const SkeletonBox(
+            width: double.infinity,
+            height: 220,
+            borderRadius: 0,
+          ),
+          const SizedBox(height: 16),
+
+          // Stats chips
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              children: [
+                SkeletonBox(width: 90, height: 12),
+                SizedBox(width: 16),
+                SkeletonBox(width: 70, height: 12),
+                SizedBox(width: 16),
+                SkeletonBox(width: 60, height: 12),
+              ],
+            ),
+          ),
+          const SizedBox(height: 28),
+
+          // Section title
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 20),
+            child: SkeletonBox(width: 180, height: 18),
+          ),
+          const SizedBox(height: 12),
+
+          // Product grid (2 columns x 3 rows)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Column(
+              children: [
+                for (int row = 0; row < 3; row++) ...[
+                  const Row(
+                    children: [
+                      Expanded(child: _StoreProductCardSkeleton()),
+                      SizedBox(width: 16),
+                      Expanded(child: _StoreProductCardSkeleton()),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                ],
+              ],
+            ),
+          ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StoreProductCardSkeleton extends StatelessWidget {
+  const _StoreProductCardSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SkeletonBox(width: double.infinity, height: 120, borderRadius: 8),
+          SizedBox(height: 10),
+          SkeletonBox(width: double.infinity, height: 14),
+          SizedBox(height: 6),
+          SkeletonBox(width: 80, height: 12),
+          SizedBox(height: 8),
+          SkeletonBox(width: 70, height: 16),
+        ],
       ),
     );
   }

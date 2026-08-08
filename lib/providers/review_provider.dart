@@ -41,6 +41,12 @@ class ReviewProvider extends ChangeNotifier {
   List<Map<String, dynamic>> _storeReviews = [];
   bool _isLoadingStoreReviews = false;
 
+  // ── Store-level review state (direct "Rate this store") ──────
+  List<Map<String, dynamic>> _storeLevelReviews = [];
+  Map<String, dynamic>? _myStoreReview;
+  bool _canReviewStore = false;
+  bool _isLoadingStoreLevelReviews = false;
+
   // ─── GETTERS ────────────────────────────────────────────────────
 
   List<Map<String, dynamic>> get reviews => _reviews;
@@ -55,6 +61,11 @@ class ReviewProvider extends ChangeNotifier {
 
   List<Map<String, dynamic>> get storeReviews => _storeReviews;
   bool get isLoadingStoreReviews => _isLoadingStoreReviews;
+
+  List<Map<String, dynamic>> get storeLevelReviews => _storeLevelReviews;
+  Map<String, dynamic>? get myStoreReview => _myStoreReview;
+  bool get canReviewStore => _canReviewStore;
+  bool get isLoadingStoreLevelReviews => _isLoadingStoreLevelReviews;
 
   double get avgRating {
     if (_ratingSummary == null) return 0.0;
@@ -339,6 +350,107 @@ class ReviewProvider extends ChangeNotifier {
     }
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  //  STORE-LEVEL REVIEWS (direct "Rate this store")
+  // ═══════════════════════════════════════════════════════════════
+
+  /// Load all store reviews, my review, and can-review status in parallel.
+  Future<void> loadStoreLevelReviews(String storeId) async {
+    _isLoadingStoreLevelReviews = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final results = await Future.wait([
+        _reviewService.getStoreLevelReviews(storeId),
+        _reviewService.getMyStoreReview(storeId),
+        _reviewService.canReviewStore(storeId),
+      ]);
+
+      _storeLevelReviews = results[0] as List<Map<String, dynamic>>;
+      _myStoreReview = results[1] as Map<String, dynamic>?;
+      _canReviewStore = results[2] as bool;
+    } catch (e) {
+      _errorMessage = 'Failed to load store reviews: $e';
+    }
+
+    _isLoadingStoreLevelReviews = false;
+    notifyListeners();
+  }
+
+  /// Submit a new direct store review.
+  Future<bool> submitStoreReview({
+    required String storeId,
+    required int rating,
+    String? comment,
+  }) async {
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      await _reviewService.submitStoreReview(
+        storeId: storeId,
+        rating: rating,
+        comment: comment,
+      );
+
+      await loadStoreLevelReviews(storeId);
+      return true;
+    } catch (e) {
+      _errorMessage = 'Failed to submit store review: $e';
+      _isLoadingStoreLevelReviews = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Update an existing direct store review.
+  Future<bool> updateStoreReview({
+    required String reviewId,
+    required String storeId,
+    required int rating,
+    String? comment,
+  }) async {
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      await _reviewService.updateStoreReview(
+        reviewId: reviewId,
+        rating: rating,
+        comment: comment,
+      );
+
+      await loadStoreLevelReviews(storeId);
+      return true;
+    } catch (e) {
+      _errorMessage = 'Failed to update store review: $e';
+      _isLoadingStoreLevelReviews = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Delete the current user's direct store review.
+  Future<bool> deleteStoreReview({
+    required String reviewId,
+    required String storeId,
+  }) async {
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      await _reviewService.deleteStoreReview(reviewId);
+      await loadStoreLevelReviews(storeId);
+      return true;
+    } catch (e) {
+      _errorMessage = 'Failed to delete store review: $e';
+      _isLoadingStoreLevelReviews = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
   // ─── RESET ──────────────────────────────────────────────────────
 
   /// Clear state when navigating away from a product.
@@ -347,6 +459,9 @@ class ReviewProvider extends ChangeNotifier {
     _myReview = null;
     _ratingSummary = null;
     _canReview = false;
+    _storeLevelReviews = [];
+    _myStoreReview = null;
+    _canReviewStore = false;
     _errorMessage = null;
     notifyListeners();
   }

@@ -136,8 +136,10 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
   String get _location => _store?['location'] ?? '';
   bool get _isOpen => _store?['is_open'] ?? true;
   String get _brandColorHex => _store?['brand_color'] ?? '#8B5A2B';
-  double get _rating =>
-      (_store?['rating'] as num?)?.toDouble() ?? 5.0;
+  /// Aggregate of customer reviews; NULL until the first review
+  /// (maintained by the refresh_store_rating() DB trigger).
+  double? get _rating =>
+      (_store?['rating'] as num?)?.toDouble();
   bool get _autoScheduleEnabled => _store?['auto_schedule_enabled'] ?? false;
   bool get _manualOverride => _store?['manual_override'] ?? false;
 
@@ -543,11 +545,18 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
             label: 'Orders',
           ),
           _statDivider(),
-          _statItem(
-            icon: Icons.star_outline,
-            value: _rating.toStringAsFixed(1),
-            label: 'Rating',
-          ),
+          if (_rating != null)
+            _statItem(
+              icon: Icons.star_outline,
+              value: _rating!.toStringAsFixed(1),
+              label: 'Rating',
+            )
+          else
+            _statItem(
+              icon: Icons.star_border_outlined,
+              value: '—',
+              label: 'No reviews',
+            ),
         ],
       ),
     );

@@ -528,7 +528,10 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
   // ─── Block 1: Metrics Grid (real data) ──────────────────────────
   Widget _buildMetricsGrid(_DashboardData data) {
     final storeRating = data.store?['rating'];
-    final ratingStr = storeRating != null
+    // Only surface the star once the store actually has reviews
+    // (stores.rating is NULL while review_count = 0).
+    final reviewCount = data.store?['review_count'] as num? ?? 0;
+    final ratingStr = storeRating != null && reviewCount > 0
         ? '${(storeRating as num).toDouble().toStringAsFixed(1)} ★'
         : null;
 

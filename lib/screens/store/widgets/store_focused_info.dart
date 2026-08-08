@@ -94,9 +94,12 @@ class StoreFocusedInfo extends StatelessWidget {
               ),
               const SizedBox(height: 4),
             ],
-            // Rating + product count
+            // Rating + product count (star hidden until the store has
+            // reviews — stores.rating is NULL with review_count = 0)
             Text(
-              '⭐ ${store.rating}  ·  $productCount products',
+              store.rating != null
+                  ? '⭐ ${store.rating!.toStringAsFixed(1)}  ·  $productCount products'
+                  : '$productCount products',
               style: AppConstants.bodyStyle(
                 fontSize: 13,
                 color: AppConstants.primary,

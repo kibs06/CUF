@@ -11,7 +11,12 @@ class Store {
   final String brandColor; // hex string, e.g. '#8B5A2B'
   final String? bannerUrl;
   final String? logoUrl;
-  final double rating;
+  /// Aggregate of customer reviews (1–5). NULL until the store has its
+  /// first review — maintained by the `refresh_store_rating()` DB trigger,
+  /// never written from the app.
+  final double? rating;
+  /// Number of reviews behind [rating] (trigger-maintained).
+  final int reviewCount;
   final bool isOpen;
   final bool isActive;
   final String? ownerId;
@@ -30,7 +35,8 @@ class Store {
     this.brandColor = '#8B5A2B',
     this.bannerUrl,
     this.logoUrl,
-    this.rating = 5.0,
+    this.rating,
+    this.reviewCount = 0,
     this.isOpen = true,
     this.isActive = true,
     this.ownerId,
@@ -92,7 +98,8 @@ class Store {
       brandColor: map['brand_color'] ?? '#8B5A2B',
       bannerUrl: map['banner_url'],
       logoUrl: map['logo_url'],
-      rating: (map['rating'] as num?)?.toDouble() ?? 5.0,
+      rating: (map['rating'] as num?)?.toDouble(),
+      reviewCount: (map['review_count'] as num?)?.toInt() ?? 0,
       isOpen: map['is_open'] ?? true,
       isActive: map['is_active'] ?? true,
       ownerId: map['owner_id'],
@@ -117,7 +124,8 @@ class Store {
       'brand_color': brandColor,
       'banner_url': bannerUrl,
       'logo_url': logoUrl,
-      'rating': rating,
+      'rating': rating, // trigger-maintained; null = no reviews yet
+      'review_count': reviewCount,
       'is_open': isOpen,
       'is_active': isActive,
       'owner_id': ownerId,
