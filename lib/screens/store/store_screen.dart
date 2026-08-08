@@ -5,6 +5,7 @@ import '../../models/store.dart';
 import '../../providers/product_provider.dart';
 import '../../services/store_service.dart';
 import '../../widgets/cart_icon_button.dart';
+import '../../widgets/shimmer_group.dart';
 import 'widgets/store_hero_carousel.dart';
 import 'widgets/store_focused_info.dart';
 import 'widgets/cross_store_product_row.dart';
@@ -96,9 +97,7 @@ class _StoreScreenState extends State<StoreScreen> {
         children: [
           AppConstants.noiseOverlay(opacity: 0.03),
           _isLoading
-              ? const Center(
-                  child: CircularProgressIndicator(color: AppConstants.primary),
-                )
+              ? const _StoreScreenSkeleton()
               : _stores.isEmpty
               ? Center(
                   child: Column(
@@ -156,3 +155,90 @@ class _StoreScreenState extends State<StoreScreen> {
     );
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// Skeleton loading state — mirrors hero carousel + focused info + rows
+// ═══════════════════════════════════════════════════════════════════
+
+class _StoreScreenSkeleton extends StatelessWidget {
+  const _StoreScreenSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      child: ShimmerGroup(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 8),
+
+            // Hero carousel card
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 6),
+            child: SkeletonBox(
+              width: double.infinity,
+              height: 260,
+              borderRadius: 24,
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Focused store info strip
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 20),
+            child: SkeletonBox(width: 200, height: 16),
+          ),
+          const SizedBox(height: 8),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 20),
+            child: SkeletonBox(width: 120, height: 12),
+          ),
+          const SizedBox(height: 24),
+
+          // Section header
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 20),
+            child: SkeletonBox(width: 140, height: 18),
+          ),
+          const SizedBox(height: 12),
+
+          // Cross-store product row
+          SizedBox(
+            height: 190,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              physics: const NeverScrollableScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              itemCount: 3,
+              separatorBuilder: (_, __) => const SizedBox(width: 12),
+              itemBuilder: (context, index) => const _CrossStoreCardSkeleton(),
+            ),
+          ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CrossStoreCardSkeleton extends StatelessWidget {
+  const _CrossStoreCardSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox(
+      width: 150,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SkeletonBox(width: 150, height: 110, borderRadius: 12),
+          SizedBox(height: 8),
+          SkeletonBox(width: 120, height: 12),
+          SizedBox(height: 6),
+          SkeletonBox(width: 80, height: 12),
+        ],
+      ),
+    );
+  }
+}
+

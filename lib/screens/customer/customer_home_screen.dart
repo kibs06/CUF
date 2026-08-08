@@ -16,6 +16,7 @@ import '../../widgets/no_internet_view.dart';
 import '../../widgets/sole_product_card.dart';
 import '../../widgets/sale_price_tape.dart';
 import '../../widgets/sale_countdown_overlay.dart';
+import '../../widgets/shimmer_group.dart';
 import '../../widgets/cart_icon_button.dart';
 import '../../widgets/chat/chat_view.dart';
 import 'product_detail_screen.dart';
@@ -860,17 +861,21 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
 
                 const SliverToBoxAdapter(child: SizedBox(height: 12)),
 
-                // Catalog Grid
+                // Catalog Grid — skeleton product cards while loading
                 if (productProvider.isLoading)
-                  SliverFillRemaining(
-                    child: Center(
-                      child: ConnectivityService.instance.isOnline
-                          ? const CircularProgressIndicator(color: AppConstants.primary)
-                          : NoInternetView(
-                              onRetry: () => Provider.of<ProductProvider>(context, listen: false).loadProducts(hideOutOfStock: true),
-                            ),
-                    ),
-                  )
+                  ConnectivityService.instance.isOnline
+                      ? const SliverToBoxAdapter(
+                          child: _CatalogSkeletonGrid(),
+                        )
+                      : SliverFillRemaining(
+                          hasScrollBody: false,
+                          child: NoInternetView(
+                            onRetry: () => Provider.of<ProductProvider>(
+                                context,
+                                listen: false)
+                                .loadProducts(hideOutOfStock: true),
+                          ),
+                        )
                 else if (filteredProducts.isEmpty)
                   SliverFillRemaining(
                     child: Center(
@@ -990,5 +995,61 @@ class _PriceTagPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _PriceTagPainter oldDelegate) =>
       oldDelegate.color != color;
+}
+
+/// Skeleton placeholder for a single catalog product card (loading state).
+class _ProductCardSkeleton extends StatelessWidget {
+  const _ProductCardSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SkeletonBox(width: double.infinity, height: 150, borderRadius: 8),
+          SizedBox(height: 10),
+          SkeletonBox(width: double.infinity, height: 14),
+          SizedBox(height: 6),
+          SkeletonBox(width: 90, height: 12),
+          SizedBox(height: 8),
+          SkeletonBox(width: 70, height: 16),
+        ],
+      ),
+    );
+  }
+}
+
+/// 2-column grid of skeleton product cards under one shimmer wave.
+class _CatalogSkeletonGrid extends StatelessWidget {
+  const _CatalogSkeletonGrid();
+
+  @override
+  Widget build(BuildContext context) {
+    return ShimmerGroup(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Column(
+          children: [
+            for (int row = 0; row < 3; row++) ...[
+              const Row(
+                children: [
+                  Expanded(child: _ProductCardSkeleton()),
+                  SizedBox(width: 16),
+                  Expanded(child: _ProductCardSkeleton()),
+                ],
+              ),
+              const SizedBox(height: 16),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }
 

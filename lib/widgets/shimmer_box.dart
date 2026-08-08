@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:shimmer/shimmer.dart';
+
+import 'shimmer_group.dart';
 
 class ShimmerBox extends StatelessWidget {
   final double width;
@@ -15,16 +16,13 @@ class ShimmerBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Shimmer.fromColors(
-      baseColor: Colors.grey.shade200,
-      highlightColor: Colors.grey.shade100,
-      child: Container(
+    // Delegate to ShimmerGroup + SkeletonBox so the placeholder styling
+    // lives in exactly one place. Same behavior, same colors as before.
+    return ShimmerGroup(
+      child: SkeletonBox(
         width: width,
         height: height,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(borderRadius),
-        ),
+        borderRadius: borderRadius,
       ),
     );
   }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../constants/app_constants.dart';
 import '../../services/report_service.dart';
+import '../../widgets/shimmer_group.dart';
 
 /// Screen showing the user's submitted reports with status tracking.
 class MyReportsScreen extends StatefulWidget {
@@ -50,9 +51,7 @@ class _MyReportsScreenState extends State<MyReportsScreen> {
           future: _reportsFuture,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(
-                child: CircularProgressIndicator(color: AppConstants.primary),
-              );
+              return const _ReportsSkeletonList();
             }
 
             if (snapshot.hasError) {
@@ -594,6 +593,50 @@ class _StatusBadge extends StatelessWidget {
           fontWeight: FontWeight.w600,
           color: color,
         ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Skeleton loading state — mirrors report cards
+// ═══════════════════════════════════════════════════════════════════
+
+class _ReportsSkeletonList extends StatelessWidget {
+  const _ReportsSkeletonList();
+
+  @override
+  Widget build(BuildContext context) {
+    return ShimmerGroup(
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: 4,
+        itemBuilder: (context, index) => Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Row(
+          children: [
+            SkeletonBox(width: 28, height: 28, borderRadius: 6),
+            SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SkeletonBox(width: 120, height: 13),
+                  SizedBox(height: 8),
+                  SkeletonBox(width: double.infinity, height: 12),
+                ],
+              ),
+            ),
+            SizedBox(width: 12),
+            SkeletonBox(width: 60, height: 18, borderRadius: 10),
+          ],
+        ),
+      ),
       ),
     );
   }

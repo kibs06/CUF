@@ -8,6 +8,7 @@ import '../../constants/app_constants.dart';
 import '../../providers/message_provider.dart';
 import '../../services/connectivity_service.dart';
 import '../../widgets/chat/chat_view.dart';
+import '../../widgets/shimmer_group.dart';
 
 /// Customer's inbox screen showing all conversations with stores.
 class CustomerInboxScreen extends StatefulWidget {
@@ -69,9 +70,7 @@ class _CustomerInboxScreenState extends State<CustomerInboxScreen> {
         ),
       ),
       body: provider.isLoadingConversations
-          ? const Center(
-              child: CircularProgressIndicator(color: AppConstants.primary),
-            )
+          ? const _InboxSkeletonList()
           : provider.conversations.isEmpty
               ? _buildEmptyState()
               : _buildConversationList(provider),
@@ -215,6 +214,46 @@ class _CustomerInboxScreenState extends State<CustomerInboxScreen> {
             ),
           );
         },
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Skeleton loading state — mirrors conversation tiles
+// ═══════════════════════════════════════════════════════════════════
+
+class _InboxSkeletonList extends StatelessWidget {
+  const _InboxSkeletonList();
+
+  @override
+  Widget build(BuildContext context) {
+    return ShimmerGroup(
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        itemCount: 8,
+        separatorBuilder: (_, _) => const SizedBox(height: 1),
+      itemBuilder: (context, index) => const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            SkeletonBox(width: 48, height: 48, borderRadius: 24),
+            SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SkeletonBox(width: 140, height: 14),
+                  SizedBox(height: 8),
+                  SkeletonBox(width: double.infinity, height: 12),
+                ],
+              ),
+            ),
+            SizedBox(width: 12),
+            SkeletonBox(width: 40, height: 10),
+          ],
+        ),
+      ),
+      ),
     );
   }
 }

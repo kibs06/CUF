@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/review_provider.dart';
 import '../../widgets/sole_star_rating.dart';
+import '../../widgets/shimmer_group.dart';
 import 'write_review_screen.dart';
 
 /// Screen showing all items in a delivered order, each with a "Rate & Review"
@@ -50,9 +51,7 @@ class _OrderReviewScreenState extends State<OrderReviewScreen> {
       body: Consumer<ReviewProvider>(
         builder: (context, provider, _) {
           if (provider.isLoadingOrderItems) {
-            return const Center(
-              child: CircularProgressIndicator(color: AppConstants.primary),
-            );
+            return const _OrderReviewSkeleton();
           }
 
           if (provider.errorMessage != null) {
@@ -410,6 +409,96 @@ class _OrderItemCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
       ),
       child: const Icon(Icons.shopping_bag_outlined, size: 24, color: AppConstants.primary),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Skeleton loading state — mirrors header card + order-item cards
+// ══════════════════════════════════════════════════════════════════
+
+class _OrderReviewSkeleton extends StatelessWidget {
+  const _OrderReviewSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    // Default physics: keeps the skeleton scrollable if it's taller than
+    // the viewport on short screens.
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: ShimmerGroup(
+        child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header card
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Row(
+              children: [
+                SkeletonBox(width: 44, height: 44, borderRadius: 22),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SkeletonBox(width: 150, height: 14),
+                      SizedBox(height: 8),
+                      SkeletonBox(width: double.infinity, height: 12),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Item cards
+          for (int i = 0; i < 3; i++) ...[
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      SkeletonBox(width: 56, height: 56, borderRadius: 10),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SkeletonBox(width: 140, height: 14),
+                            SizedBox(height: 8),
+                            SkeletonBox(width: 100, height: 12),
+                            SizedBox(height: 8),
+                            SkeletonBox(width: 60, height: 12),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 12),
+                  SkeletonBox(
+                    width: double.infinity,
+                    height: 38,
+                    borderRadius: 10,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+        ],
+        ),
+      ),
     );
   }
 }
