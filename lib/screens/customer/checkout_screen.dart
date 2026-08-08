@@ -1,5 +1,11 @@
+import 'dart:async';
+
+import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:uuid/uuid.dart';
 import '../../constants/app_constants.dart';
 import '../../models/address_model.dart';
 import '../../providers/address_provider.dart';
@@ -7,10 +13,14 @@ import '../../providers/auth_provider.dart';
 import '../../providers/cart_provider.dart';
 import '../../providers/order_provider.dart';
 import '../../utils/delivery_date.dart';
+import '../../services/gcash_payment_service.dart';
 import '../../widgets/sole_card.dart';
 import '../../widgets/sole_primary_button.dart';
 import 'address_book_screen.dart';
 import 'tracking_screen.dart';
+
+/// Stages of the online GCash payment flow.
+enum _GcashStage { none, launching, waiting, confirming, failed }
 
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});
@@ -32,9 +42,24 @@ class _CheckoutScreenState extends State<CheckoutScreen>
   Map<String, dynamic>? _placedOrder;
   double _placedTotal = 0;
 
+  // ── Online GCash payment flow (edge-function driven) ────────────
+  GcashPaymentService? _gcashService;
+  Timer? _gcashPollTimer;
+  StreamSubscription<Uri>? _appLinksSub;
+  AppLinks? _appLinks;
+  _GcashStage _gcashStage = _GcashStage.none;
+  String? _gcashOrderId;
+  String? _gcashCheckoutUrl;
+  List<Map<String, dynamic>> _gcashItems = [];
+  int _gcashPollAttempts = 0;
+  String? _gcashErrorMessage;
+
+  bool get _isGcashFlowActive => _gcashStage != _GcashStage.none;
+
   // Cart validation state
   bool _isValidatingCart = false;
   List<_CartItemValidation> _itemValidations = [];
+  bool _isSubmitting = false;
 
   // Animation controller for checkmark
   late AnimationController _checkController;
@@ -60,6 +85,8 @@ class _CheckoutScreenState extends State<CheckoutScreen>
 
   @override
   void dispose() {
+    _gcashPollTimer?.cancel();
+    _appLinksSub?.cancel();
     _checkController.dispose();
     super.dispose();
   }
@@ -208,6 +235,14 @@ class _CheckoutScreenState extends State<CheckoutScreen>
     }
     orderTotal += cart.selectedDeliveryFee; // ₱100 delivery
 
+    // GCash: real redirect payment — the server creates the order in
+    // 'awaiting_payment' and returns a PayMongo checkout URL. The cart is
+    // cleared only AFTER the verified webhook marks the order paid.
+    if (_paymentMethod == 'GCash') {
+      await _startGcashCheckout(items: items);
+      return;
+    }
+
     // Build items list for the order
     final orderItems = items.map((item) => {
       'product_id': item['product_id'],
@@ -294,6 +329,240 @@ class _CheckoutScreenState extends State<CheckoutScreen>
   }
 
   // ═══════════════════════════════════════════════════════════════
+  // GCASH FLOW — create intent → system browser → deep-link/button
+  // return → poll get-payment-status → confirm ONLY when paid
+  // ═══════════════════════════════════════════════════════════════
+
+  Future<void> _startGcashCheckout({
+    required List<Map<String, dynamic>> items,
+  }) async {
+    final gcash = _gcashService ??= GcashPaymentService();
+    final idempotencyKey = const Uuid().v4();
+    _gcashItems = items;
+
+    setState(() {
+      _isSubmitting = true;
+      _gcashStage = _GcashStage.launching;
+      _gcashErrorMessage = null;
+    });
+
+    try {
+      final result = await gcash.createIntent(
+        idempotencyKey: idempotencyKey,
+        items: items
+            .map((i) => {
+                  'product_id': i['product_id'],
+                  'size': i['size'] ?? '',
+                  'quantity': i['quantity'],
+                })
+            .toList(),
+        deliveryAddress: _selectedAddress?.formattedAddress,
+        shippingAddress: _selectedAddress?.toSnapshot(),
+      );
+
+      if (!mounted) return;
+      _gcashOrderId = result.orderId;
+      _gcashCheckoutUrl = result.checkoutUrl;
+      _setupAppLinks();
+
+      setState(() {
+        _isSubmitting = false;
+        _gcashStage = _GcashStage.waiting;
+      });
+
+      // System browser (decision: external) — the browser hands the
+      // gcash:// deep link to the GCash app natively.
+      await launchUrl(
+        Uri.parse(result.checkoutUrl),
+        mode: LaunchMode.externalApplication,
+      );
+    } on GcashPaymentException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isSubmitting = false;
+        _gcashStage = _GcashStage.none;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.message),
+          backgroundColor: AppConstants.error,
+        ),
+      );
+    } catch (e) {
+      debugPrint('[CHECKOUT-GCASH] createIntent error: $e');
+      if (!mounted) return;
+      setState(() {
+        _isSubmitting = false;
+        _gcashStage = _GcashStage.none;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not start the GCash payment. Please try again.'),
+          backgroundColor: AppConstants.error,
+        ),
+      );
+    }
+  }
+
+  /// Listen for the deep-link return (solvision://checkout/gcash) while the
+  /// GCash flow is active. The "I've Completed Payment" button covers every
+  /// return path, so the link is a convenience, not a dependency.
+  void _setupAppLinks() {
+    _appLinks ??= AppLinks();
+    _appLinksSub ??= _appLinks!.uriLinkStream.listen((Uri? uri) {
+      if (uri != null && uri.scheme == 'solvision') {
+        _onGcashReturn();
+      }
+    }, onError: (Object e) {
+      debugPrint('[CHECKOUT-GCASH] app_links error: $e');
+    });
+    // Warm relaunch (app was killed, then reopened via the link).
+    unawaited(_appLinks!.getInitialLink().then((Uri? uri) {
+      if (uri != null && uri.scheme == 'solvision' && _isGcashFlowActive) {
+        _onGcashReturn();
+      }
+    }));
+  }
+
+  /// The customer returned from GCash (deep link or button) — start
+  /// polling the authoritative status.
+  void _onGcashReturn() {
+    if (_gcashOrderId == null) return;
+    if (_gcashStage == _GcashStage.waiting ||
+        _gcashStage == _GcashStage.confirming) {
+      setState(() => _gcashStage = _GcashStage.confirming);
+      _startGcashPolling();
+    }
+  }
+
+  void _startGcashPolling() {
+    _gcashPollTimer?.cancel();
+    _gcashPollAttempts = 0;
+    unawaited(_pollGcashStatus());
+    _gcashPollTimer = Timer.periodic(
+      const Duration(seconds: 2),
+      (_) => unawaited(_pollGcashStatus()),
+    );
+  }
+
+  Future<void> _pollGcashStatus() async {
+    final orderId = _gcashOrderId;
+    if (orderId == null) return;
+    _gcashPollAttempts++;
+    try {
+      final status = await _gcashService!.getStatus(orderId);
+      if (!mounted) return;
+
+      if (status.paid) {
+        _gcashPollTimer?.cancel();
+        await _finalizeGcashOrder(status);
+        return;
+      }
+      final terminal = status.paymentStatus == 'failed' ||
+          status.status == 'cancelled' ||
+          status.intentStatus == 'failed' ||
+          status.intentStatus == 'expired';
+      if (terminal) {
+        _gcashPollTimer?.cancel();
+        setState(() {
+          _gcashStage = _GcashStage.failed;
+          _gcashErrorMessage = _gcashFailureMessage(status);
+        });
+        return;
+      }
+      // Still pending — keep polling until the timeout budget is spent.
+      if (_gcashPollAttempts >= 30) {
+        _gcashPollTimer?.cancel();
+        setState(() {
+          _gcashStage = _GcashStage.waiting;
+          _gcashErrorMessage =
+              'Your payment is still being confirmed. You can check again, or we will finalize your order automatically.';
+        });
+      }
+    } catch (e) {
+      debugPrint('[CHECKOUT-GCASH] poll error: $e');
+      if (!mounted) return;
+      if (_gcashPollAttempts >= 30) {
+        _gcashPollTimer?.cancel();
+        setState(() {
+          _gcashStage = _GcashStage.waiting;
+          _gcashErrorMessage =
+              'We had trouble checking your payment. Please check again in a moment.';
+        });
+      }
+    }
+  }
+
+  /// Payment confirmed by the webhook — load the real order row, clear the
+  /// cart (server + local), and show the confirmation step.
+  Future<void> _finalizeGcashOrder(GcashStatusResult status) async {
+    try {
+      final order = await Supabase.instance.client
+          .from('orders')
+          .select('*')
+          .eq('id', status.orderId)
+          .single();
+      if (!mounted) return;
+      final cart = context.read<CartProvider>();
+      final items = cart.selectedItems;
+      final orderedServerIds = items
+          .map((item) => item['server_id'] as String?)
+          .where((id) => id != null)
+          .cast<String>()
+          .toList();
+      if (orderedServerIds.isNotEmpty) {
+        await cart.removeServerItems(orderedServerIds);
+      } else {
+        await cart.clearCartFromServer();
+      }
+      for (final item in items) {
+        final key = item['id'] as String;
+        cart.removeFromCart(key);
+      }
+      if (!mounted) return;
+      setState(() {
+        _itemValidations = [];
+        _checkoutStep = 1;
+        _gcashStage = _GcashStage.none;
+        _placedOrderId = order['id']?.toString();
+        _placedOrder = Map<String, dynamic>.from(order);
+        _placedTotal = status.totalAmount;
+      });
+      _checkController.forward();
+    } catch (e) {
+      debugPrint('[CHECKOUT-GCASH] finalize error: $e');
+      if (!mounted) return;
+      setState(() {
+        _gcashStage = _GcashStage.waiting;
+        _gcashErrorMessage =
+            'Your payment was confirmed, but we had trouble loading your order. You can find it under My Orders.';
+      });
+    }
+  }
+
+  String _gcashFailureMessage(GcashStatusResult status) {
+    if (status.intentStatus == 'expired') {
+      return 'Your payment session expired before the payment was completed. No charge was made — you can try again.';
+    }
+    if (status.status == 'cancelled' || status.paymentStatus == 'failed') {
+      return 'Your payment was not completed and no charge was made. You can try again with GCash or choose Cash on Pickup.';
+    }
+    return 'Your payment could not be confirmed. No charge was made — you can try again.';
+  }
+
+  /// Abandon the GCash flow (no charge yet). The pending order is closed
+  /// server-side by the expiry sweep; the cart is left intact.
+  void _cancelGcashFlow() {
+    _gcashPollTimer?.cancel();
+    setState(() {
+      _gcashStage = _GcashStage.none;
+      _gcashErrorMessage = null;
+      _gcashOrderId = null;
+      _gcashCheckoutUrl = null;
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════
   // BUILD
   // ═══════════════════════════════════════════════════════════════
 
@@ -321,12 +590,196 @@ class _CheckoutScreenState extends State<CheckoutScreen>
       body: Stack(
         children: [
           AppConstants.noiseOverlay(opacity: 0.03),
-          _checkoutStep == 0
-              ? _buildFormStep(cart)
-              : _buildConfirmationStep(),
+          _checkoutStep == 1
+              ? _buildConfirmationStep()
+              : _isGcashFlowActive
+                  ? _buildGcashFlow()
+                  : _buildFormStep(cart),
         ],
       ),
     );
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // GCASH FLOW UI
+  // ═══════════════════════════════════════════════════════════════
+
+  Widget _buildGcashFlow() {
+    switch (_gcashStage) {
+      case _GcashStage.launching:
+      case _GcashStage.confirming:
+        return Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(
+                width: 32,
+                height: 32,
+                child: CircularProgressIndicator(
+                  strokeWidth: 3,
+                  color: AppConstants.primary,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                _gcashStage == _GcashStage.launching
+                    ? 'Connecting to GCash…'
+                    : 'Confirming your payment…',
+                style: AppConstants.headlineStyle(fontSize: 16),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _gcashStage == _GcashStage.launching
+                    ? 'Please wait while we prepare a secure payment.'
+                    : 'We are verifying your payment with GCash. This usually takes a few seconds.',
+                textAlign: TextAlign.center,
+                style: AppConstants.bodyStyle(
+                  fontSize: 13,
+                  color: AppConstants.secondary.withValues(alpha: 0.7),
+                ),
+              ),
+            ],
+          ),
+        );
+
+      case _GcashStage.failed:
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 72,
+                  height: 72,
+                  decoration: const BoxDecoration(
+                    color: AppConstants.error,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.payment, size: 34, color: Colors.white),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'Payment not completed',
+                  style: AppConstants.headlineStyle(fontSize: 20),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  _gcashErrorMessage ??
+                      'Your payment could not be completed. No charge was made.',
+                  textAlign: TextAlign.center,
+                  style: AppConstants.bodyStyle(
+                    fontSize: 13,
+                    color: AppConstants.secondary.withValues(alpha: 0.7),
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 28),
+                SizedBox(
+                  width: double.infinity,
+                  child: SolePrimaryButton(
+                    label: 'Try Again',
+                    onPressed: () => unawaited(
+                      _startGcashCheckout(items: _gcashItems),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextButton(
+                  onPressed: _cancelGcashFlow,
+                  child: const Text('Back to Checkout'),
+                ),
+              ],
+            ),
+          ),
+        );
+
+      case _GcashStage.waiting:
+      default:
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    color: AppConstants.primary.withValues(alpha: 0.08),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.account_balance_wallet_outlined,
+                    size: 38,
+                    color: AppConstants.primary,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'Complete your payment in GCash',
+                  textAlign: TextAlign.center,
+                  style: AppConstants.headlineStyle(fontSize: 20),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'We opened GCash to authorize your payment. Once you are done, return here and your order will be confirmed automatically.',
+                  textAlign: TextAlign.center,
+                  style: AppConstants.bodyStyle(
+                    fontSize: 13,
+                    color: AppConstants.secondary.withValues(alpha: 0.7),
+                    height: 1.4,
+                  ),
+                ),
+                if (_gcashErrorMessage != null) ...[
+                  const SizedBox(height: 14),
+                  Text(
+                    _gcashErrorMessage!,
+                    textAlign: TextAlign.center,
+                    style: AppConstants.bodyStyle(
+                      fontSize: 12,
+                      color: AppConstants.error,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 28),
+                SizedBox(
+                  width: double.infinity,
+                  child: SolePrimaryButton(
+                    label: "I've Completed Payment",
+                    onPressed: _onGcashReturn,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextButton(
+                  onPressed: () {
+                    final url = _gcashCheckoutUrl;
+                    if (url != null) {
+                      unawaited(
+                        launchUrl(
+                          Uri.parse(url),
+                          mode: LaunchMode.externalApplication,
+                        ),
+                      );
+                    }
+                  },
+                  child: const Text('Open GCash again'),
+                ),
+                TextButton(
+                  onPressed: _cancelGcashFlow,
+                  child: Text(
+                    'Cancel Checkout',
+                    style: AppConstants.bodyStyle(
+                      color: AppConstants.secondary.withValues(alpha: 0.6),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -505,7 +958,9 @@ class _CheckoutScreenState extends State<CheckoutScreen>
                   const SizedBox(height: 16),
                   SolePrimaryButton(
                     label: 'Complete Order',
-                    onPressed: _canSubmitOrder(cart) ? _submitCheckout : null,
+                    onPressed: (_isSubmitting || !_canSubmitOrder(cart))
+                        ? null
+                        : _submitCheckout,
                   ),
                 ],
               ),

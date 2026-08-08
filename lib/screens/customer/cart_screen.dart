@@ -705,19 +705,23 @@ class _CartCheckoutBar extends StatelessWidget {
             ),
           ),
 
-          // Checkout button
-          SolePrimaryButton(
-            label: canCheckout ? 'Check Out ($selectedCount)' : 'Check Out',
-            expandToFill: false,
-            onPressed: canCheckout
-                ? () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) => const CheckoutScreen(),
-                      ),
-                    );
-                  }
-                : null,
+          // Checkout button — fixed generous width so it doesn't shrink
+          // to just the label and look cramped in the bar.
+          SizedBox(
+            width: 150,
+            child: SolePrimaryButton(
+              label: 'Check Out',
+              expandToFill: true,
+              onPressed: canCheckout
+                  ? () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => const CheckoutScreen(),
+                        ),
+                      );
+                    }
+                  : null,
+            ),
           ),
         ],
       ),

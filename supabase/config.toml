@@ -412,3 +412,24 @@ enabled = true
 # declarative_schema_path = "./database"
 # JSON string passed through to pg-delta SQL formatting.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":80,\"commaStyle\":\"trailing\"}"
+
+# ────────────────────────────────────────────────────────────────
+# Edge Functions — online GCash payments (see docs/AI/CHECKOUT_AND_GCASH_ARCHITECTURE.md)
+# ────────────────────────────────────────────────────────────────
+# gcash-webhook is called by PayMongo with a signed payload (not a
+# Supabase JWT), so JWT verification is disabled for it. Signature
+# verification is performed INSIDE the function (mandatory) via
+# PAYMONGO_WEBHOOK_SECRET.
+[functions.gcash-webhook]
+verify_jwt = false
+
+# create-gcash-payment-intent and get-payment-status use the default
+# (verify_jwt = true) — they require the customer's JWT.
+
+# Secrets required at runtime (set on the hosted platform with:
+#   supabase secrets set PAYMONGO_SECRET_KEY=sk_test_... \
+#     PAYMONGO_WEBHOOK_SECRET=whsk_... \
+#     PUBLIC_RETURN_URL=solvision://checkout/gcash \
+#     GCASH_PAYMENT_EXPIRY_MINUTES=30 \
+#     PAYMONGO_LIVEMODE=false        # set to true only when live keys are wired
+# For local development, mirror them under [functions.*.env] if needed.
