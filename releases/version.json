@@ -1,8 +1,11 @@
 {
-  "latest_version": "1.0.6",
-  "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.6/app-release-1.0.6.apk",
-  "released_at": "2026-08-07",
+  "latest_version": "1.0.7",
+  "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.7/app-release-1.0.7.apk",
+  "released_at": "2026-08-08",
   "notes": [
-    "Release v1.0.6"
+    "Real online GCash payments — pay securely via the GCash app (PayMongo, webhook-verified)",
+    "Store ratings now aggregate real customer reviews + new Rate this Store screen",
+    "Skeleton loading on customer screens for a smoother feel",
+    "Wider Check Out button in cart"
   ]
 }
