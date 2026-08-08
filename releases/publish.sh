@@ -75,9 +75,12 @@ ASSET="app-release-$NEW_VERSION.apk"
 RELEASED_AT="$(date +%Y-%m-%d)"
 
 # Derive the repo slug from the git remote so this doesn't drift if the repo
-# moves (falls back to kibs06/CUF if parsing fails).
+# moves (falls back to kibs06/CUF if parsing fails). Strip a trailing `.git`
+# FIRST — a greedy capture would otherwise swallow it into the slug and
+# produce broken apk_urls like `kibs06/CUF.git/releases/...`.
 REMOTE_URL="$(git remote get-url origin 2>/dev/null || echo 'https://github.com/kibs06/CUF.git')"
-REPO_SLUG="$(echo "$REMOTE_URL" | sed -E 's#.*github.com[:/]([^/]+/[^/]+)(\.git)?$#\1#')"
+REMOTE_URL="${REMOTE_URL%.git}"
+REPO_SLUG="$(echo "$REMOTE_URL" | sed -E 's#.*github.com[:/]##')"
 if [[ -z "$REPO_SLUG" || "$REPO_SLUG" == "$REMOTE_URL" ]]; then
   REPO_SLUG="kibs06/CUF"
 fi
