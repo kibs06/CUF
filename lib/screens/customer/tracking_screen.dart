@@ -11,6 +11,8 @@ import '../../widgets/sole_card.dart';
 import '../../widgets/sole_primary_button.dart';
 import '../../widgets/sole_status_chip.dart';
 import '../../widgets/sole_timeline.dart';
+import '../../services/direct_gcash_service.dart';
+import 'gcash_pay_screen.dart';
 import 'order_review_screen.dart';
 
 /// Unified Order Detail / Tracking screen — content driven by order status.
@@ -37,6 +39,11 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   Timer? _countdownTimer;
   Duration _remainingTime = Duration.zero;
 
+  // Gateway-free GCash payment state (awaiting_payment_confirmation)
+  bool _proofSubmitted = false;
+  String _paymentCountdown = '';
+  Timer? _paymentTimer;
+
   // Order status → timeline step index (5 steps with Part D's 'delivered')
   static const _statusToStep = <String, int>{
     'pending': 0,
@@ -46,6 +53,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     'delivered': 3,
     'received': 4,
     'cancelled': -1, // special: show cancelled banner
+    'awaiting_payment_confirmation': 0,
   };
 
   @override
@@ -54,11 +62,13 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     _order = Map<String, dynamic>.from(widget.order);
     _loadStatusHistory();
     _startCountdownIfNeeded();
+    _initPaymentState();
   }
 
   @override
   void dispose() {
     _countdownTimer?.cancel();
+    _paymentTimer?.cancel();
     super.dispose();
   }
 
@@ -143,6 +153,234 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
       return '${d.inHours}h ${d.inMinutes % 60}m';
     }
     return '${d.inMinutes}m ${d.inSeconds % 60}s';
+  }
+
+  // ─── Gateway-free GCash payment state ──────────────────────────
+
+  bool get _isAwaitingPayment =>
+      _currentStatus == 'awaiting_payment_confirmation';
+
+  /// For awaiting-payment orders: fire the opportunistic expiry sweep,
+  /// load whether a proof was submitted, and start the deadline countdown.
+  Future<void> _initPaymentState() async {
+    if (!_isAwaitingPayment) return;
+    unawaited(DirectGcashService().expireOverdue());
+    await _ensurePaymentFields();
+    await _loadProofState();
+    _startPaymentCountdown();
+  }
+
+  /// Notification-tap / minimal-fetch paths may lack store_id and the
+  /// payment deadline — pull them when missing so the payment banner and
+  /// resume button work from every entry point.
+  Future<void> _ensurePaymentFields() async {
+    final needs = _order['store_id'] == null ||
+        _order['payment_confirmation_deadline'] == null;
+    if (!needs) return;
+    try {
+      final row = await Supabase.instance.client
+          .from('orders')
+          .select('store_id, payment_confirmation_deadline, total_amount')
+          .eq('id', _order['id'])
+          .maybeSingle();
+      if (row == null || !mounted) return;
+      setState(() {
+        _order['store_id'] = row['store_id'];
+        _order['payment_confirmation_deadline'] =
+            row['payment_confirmation_deadline'];
+        _order['total_amount'] = row['total_amount'];
+      });
+    } catch (e) {
+      debugPrint('[Tracking] payment fields error: $e');
+    }
+  }
+
+  Future<void> _loadProofState() async {
+    try {
+      final data = await Supabase.instance.client
+          .from('gcash_payment_proofs')
+          .select('id')
+          .eq('order_id', _order['id'])
+          .maybeSingle();
+      if (!mounted) return;
+      setState(() => _proofSubmitted = data != null);
+    } catch (e) {
+      debugPrint('[Tracking] proof state error: $e');
+    }
+  }
+
+  void _startPaymentCountdown() {
+    _paymentTimer?.cancel();
+    final deadline = DateTime.tryParse(
+      _order['payment_confirmation_deadline']?.toString() ?? '',
+    );
+    if (deadline == null) return;
+    void tick() {
+      if (!mounted) return;
+      final left = deadline.difference(DateTime.now());
+      setState(() => _paymentCountdown = left.isNegative
+          ? '0m 00s'
+          : '${left.inMinutes}m ${(left.inSeconds % 60).toString().padLeft(2, '0')}s');
+    }
+    tick();
+    _paymentTimer = Timer.periodic(const Duration(seconds: 1), (_) => tick());
+  }
+
+  /// Re-open the payment screen (pay + submit proof) from the tracking
+  /// screen — covers the 'abandoned checkout, came back later' path.
+  Future<void> _resumePayment() async {
+    final storeId = _order['store_id']?.toString();
+    if (storeId == null) return;
+    try {
+      final store = await Supabase.instance.client
+          .from('stores')
+          .select('id, name, gcash_qr_url, gcash_number, gcash_account_name')
+          .eq('id', storeId)
+          .single();
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => GcashPayScreen(
+            orderId: _order['id'].toString(),
+            storeId: storeId,
+            totalAmount: (_order['total_amount'] as num?)?.toDouble() ?? 0,
+            deadline: DateTime.tryParse(
+              _order['payment_confirmation_deadline']?.toString() ?? '',
+            ),
+            storeName: store['name']?.toString() ?? '',
+            gcashQrUrl: store['gcash_qr_url']?.toString(),
+            gcashNumber: store['gcash_number']?.toString(),
+            gcashAccountName: store['gcash_account_name']?.toString(),
+            proofSubmitted: _proofSubmitted,
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint('[Tracking] resume payment error: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not open the payment screen. Please try again.'),
+          backgroundColor: AppConstants.error,
+        ),
+      );
+    }
+  }
+
+  /// Banner shown for awaiting_payment_confirmation orders: countdown +
+  /// explanation + resume/complete-payment action.
+  Widget _buildPaymentBanner() {
+    final deadline = DateTime.tryParse(
+      _order['payment_confirmation_deadline']?.toString() ?? '',
+    );
+    final expired = deadline != null && deadline.isBefore(DateTime.now());
+    final color = _proofSubmitted
+        ? AppConstants.statusConfirmedColor
+        : (expired ? AppConstants.error : AppConstants.statusPendingColor);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                _proofSubmitted
+                    ? Icons.verified_outlined
+                    : (expired
+                        ? Icons.timer_off_outlined
+                        : Icons.payment_outlined),
+                color: color,
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  _proofSubmitted
+                      ? 'Payment proof submitted'
+                      : (expired
+                          ? 'Payment window expired'
+                          : 'Complete your GCash payment'),
+                  style: AppConstants.bodyStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: color,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _proofSubmitted
+                ? 'The store is verifying your payment. Once confirmed, your order will be prepared.'
+                : (expired
+                    ? 'The payment window closed before you paid, so your items were released. You can place a new order anytime.'
+                    : 'Pay the store directly via GCash and submit your proof before the window closes.'),
+            style: AppConstants.bodyStyle(
+              fontSize: 12,
+              color: AppConstants.secondary.withValues(alpha: 0.7),
+              height: 1.35,
+            ),
+          ),
+          if (!_proofSubmitted && !expired) ...[const SizedBox(height: 8), _buildPaymentCountdownRow()],
+          // Only offer to resume when we know the store (never a dead button).
+          if (!_proofSubmitted && !expired && _order['store_id'] != null) ...[
+            const SizedBox(height: 14),
+            _buildCompletePaymentButton(),
+          ],
+          if (_proofSubmitted) ...[const SizedBox(height: 14), _buildViewPaymentButton()],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPaymentCountdownRow() {
+    return Row(
+      children: [
+        const Icon(
+          Icons.timer_outlined,
+          size: 14,
+          color: AppConstants.statusPendingColor,
+        ),
+        const SizedBox(width: 6),
+        Text(
+          'Confirm within ${_paymentCountdown.isEmpty ? '...' : _paymentCountdown}',
+          style: AppConstants.bodyStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: AppConstants.statusPendingColor,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCompletePaymentButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: SolePrimaryButton(
+        label: 'Complete Payment',
+        onPressed: _resumePayment,
+      ),
+    );
+  }
+
+  Widget _buildViewPaymentButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton(
+        onPressed: _resumePayment,
+        child: const Text('View Payment Details'),
+      ),
+    );
   }
 
   // ─── Cancel Order ──────────────────────────────────────────────
@@ -375,6 +613,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                   const SizedBox(height: 20),
                 ],
 
+                // ── Awaiting GCash payment confirmation ────────
+                if (_isAwaitingPayment) ...[_buildPaymentBanner(), const SizedBox(height: 20)],
+
                 // ── Order header details card ───────────────────
                 SoleCard(
                   color: Colors.white,
@@ -539,7 +780,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                 ),
 
                 // ── Status-specific section + action button ─────
-                if (_currentStatus != 'cancelled') ...[
+                if (_currentStatus != 'cancelled' && !_isAwaitingPayment) ...[
                   const SizedBox(height: 24),
                   _buildStatusSection(),
                 ],

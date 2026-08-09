@@ -38,6 +38,10 @@ class SoleStatusChip extends StatelessWidget {
         bg = AppConstants.error.withOpacity(0.15);
         text = AppConstants.error;
         break;
+      case 'awaiting_payment_confirmation':
+        bg = AppConstants.primary.withOpacity(0.12);
+        text = AppConstants.primary;
+        break;
       default:
         bg = AppConstants.secondary.withOpacity(0.1);
         text = AppConstants.secondary;

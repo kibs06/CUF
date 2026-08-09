@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/message_provider.dart';
@@ -13,6 +14,7 @@ import '../../services/order_service.dart';
 import '../../services/sales_service.dart';
 import '../../services/seller_notification_service.dart';
 import '../../services/store_service.dart';
+import '../../services/direct_gcash_service.dart';
 import '../../widgets/error_retry_widget.dart';
 import '../../widgets/shimmer_box.dart';
 import '../../widgets/seller/seller_metric_card.dart';
@@ -29,6 +31,7 @@ import 'order_detail_screen.dart';
 import 'seller_notification_center_screen.dart';
 import 'seller_inbox_screen.dart';
 import 'reports_screen.dart';
+import 'gcash_payment_queue_screen.dart';
 
 /// Dashboard data model — holds all real data fetched from Supabase.
 class _DashboardData {
@@ -439,6 +442,10 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
           children: [
             // Block 1 — Today's Snapshot (real data)
             _buildMetricsGrid(data),
+            const SizedBox(height: 16),
+
+            // Block 1.5 — GCash payments awaiting confirmation
+            _PaymentsToConfirmCard(storeId: _storeId!),
             const SizedBox(height: 16),
 
             // Block 2 — Needs Attention Alert Strip
@@ -1037,6 +1044,158 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// GCash payments awaiting the seller's confirmation - count + entry
+/// point to the confirm/reject queue. Self-contained: fetches its own
+/// count and fires the opportunistic expiry sweep so overdue orders
+/// drop off on their own.
+class _PaymentsToConfirmCard extends StatefulWidget {
+  final String storeId;
+  const _PaymentsToConfirmCard({required this.storeId});
+
+  @override
+  State<_PaymentsToConfirmCard> createState() => _PaymentsToConfirmCardState();
+}
+
+class _PaymentsToConfirmCardState extends State<_PaymentsToConfirmCard> {
+  int? _count;
+  bool _loading = true;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+    // Keep the count fresh + expire overdue orders periodically.
+    _timer = Timer.periodic(const Duration(seconds: 30), (_) => _refresh());
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _refresh() async {
+    try {
+      unawaited(DirectGcashService().expireOverdue());
+      final data = await Supabase.instance.client
+          .from('orders')
+          .select('id')
+          .eq('store_id', widget.storeId)
+          .eq('status', 'awaiting_payment_confirmation');
+      if (!mounted) return;
+      setState(() {
+        _count = (data as List).length;
+        _loading = false;
+      });
+    } catch (e) {
+      debugPrint('[DASHBOARD] awaiting-payment count failed: $e');
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final count = _count ?? 0;
+    final has = count > 0;
+    return Material(
+      color: has
+          ? AppConstants.statusPendingColor.withValues(alpha: 0.08)
+          : Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const GcashPaymentQueueScreen(),
+            ),
+          );
+        },
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: has
+                  ? AppConstants.statusPendingColor.withValues(alpha: 0.35)
+                  : AppConstants.borderGray,
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppConstants.primary.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.account_balance_wallet_outlined,
+                  size: 20,
+                  color: AppConstants.primary,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'GCash Payments to Confirm',
+                      style: AppConstants.bodyStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _loading
+                          ? 'Checking...'
+                          : (has
+                              ? '$count order${count == 1 ? '' : 's'} awaiting your confirmation'
+                              : 'No payments waiting'),
+                      style: AppConstants.bodyStyle(
+                        fontSize: 12,
+                        color: has
+                            ? AppConstants.statusPendingColor
+                            : AppConstants.secondary.withValues(alpha: 0.55),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (has)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppConstants.error,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '$count',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              const SizedBox(width: 6),
+              const Icon(
+                Icons.chevron_right,
+                color: AppConstants.primary,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
