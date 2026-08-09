@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../constants/app_constants.dart';
+import '../../providers/cart_provider.dart';
 import '../../providers/order_provider.dart';
 import '../../widgets/order_cancellation_sheet.dart';
 import '../../widgets/sole_card.dart';
@@ -12,7 +13,9 @@ import '../../widgets/sole_primary_button.dart';
 import '../../widgets/sole_status_chip.dart';
 import '../../widgets/sole_timeline.dart';
 import '../../services/direct_gcash_service.dart';
+import '../../services/gcash_payment_service.dart';
 import 'gcash_pay_screen.dart';
+import 'gcash_payment_screen.dart';
 import 'order_review_screen.dart';
 
 /// Unified Order Detail / Tracking screen — content driven by order status.
@@ -53,7 +56,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     'delivered': 3,
     'received': 4,
     'cancelled': -1, // special: show cancelled banner
-    'awaiting_payment_confirmation': 0,
+    'awaiting_payment': 0, // PayMongo GCash: not yet paid
+    'payment_conflict': -1, // money captured but needs review
+    'awaiting_payment_confirmation': 0, // dormant direct flow
   };
 
   @override
@@ -63,6 +68,30 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     _loadStatusHistory();
     _startCountdownIfNeeded();
     _initPaymentState();
+    _reconcilePurchasedCart();
+  }
+
+  /// If this order is already paid/conflict (e.g. the webhook confirmed
+  /// while the app was killed mid-GCash), remove its items from the cart
+  /// — the items were left visible while payment was awaiting, and only
+  /// the server-confirmed order_items say what was actually bought.
+  /// Idempotent: cash orders (cart already cleared at placement) and
+  /// awaiting orders (not yet paid) match nothing.
+  Future<void> _reconcilePurchasedCart() async {
+    final items = _order['order_items'];
+    if (items is! List || items.isEmpty) return;
+    final paymentStatus = _order['payment_status']?.toString() ?? '';
+    // Any order where money was captured: pending (normal pipeline),
+    // payment_conflict (needs review), or cancelled-after-payment (e.g.
+    // admin refund/void) — the purchased items must leave the cart so
+    // they can't be re-ordered. Awaiting/failed orders keep their items.
+    if (paymentStatus != 'paid') return;
+    final purchased = items
+        .whereType<Map>()
+        .map((m) => Map<String, dynamic>.from(m))
+        .toList();
+    if (purchased.isEmpty || !mounted) return;
+    await context.read<CartProvider>().removePurchasedItems(purchased);
   }
 
   @override
@@ -160,9 +189,20 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   bool get _isAwaitingPayment =>
       _currentStatus == 'awaiting_payment_confirmation';
 
+  /// PayMongo online GCash — order created, not yet paid (webhook-driven).
+  bool get _isPaymongoAwaiting => _currentStatus == 'awaiting_payment';
+
+  /// PayMongo terminal flag — money captured but order needs manual review.
+  bool get _isPaymentConflict => _currentStatus == 'payment_conflict';
+
   /// For awaiting-payment orders: fire the opportunistic expiry sweep,
   /// load whether a proof was submitted, and start the deadline countdown.
   Future<void> _initPaymentState() async {
+    if (_isPaymongoAwaiting) {
+      // PayMongo path — resume the hosted checkout + countdown.
+      await _initPaymongoPaymentState();
+      return;
+    }
     if (!_isAwaitingPayment) return;
     unawaited(DirectGcashService().expireOverdue());
     await _ensurePaymentFields();
@@ -383,6 +423,159 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     );
   }
 
+  // ─── PayMongo GCash payment state (awaiting_payment) ──────────
+
+  GcashIntentResult? _paymongoIntent;
+  String _paymongoCountdown = '';
+
+  /// For PayMongo awaiting-payment orders: load the pending intent for
+  /// THIS order (expiry + checkout URL) and start the countdown.
+  Future<void> _initPaymongoPaymentState() async {
+    _paymongoIntent = await GcashPaymentService().fetchIntentForOrder(
+      _order['id'].toString(),
+    );
+    _startPaymongoCountdown();
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  void _startPaymongoCountdown() {
+    _paymentTimer?.cancel();
+    final deadline = _paymongoIntent?.expiresAt;
+    if (deadline == null) return;
+    void tick() {
+      if (!mounted) return;
+      final left = deadline.difference(DateTime.now());
+      setState(() => _paymongoCountdown = left.isNegative
+          ? '0m 00s'
+          : '${left.inMinutes}m ${(left.inSeconds % 60).toString().padLeft(2, '0')}s');
+    }
+    tick();
+    _paymentTimer = Timer.periodic(const Duration(seconds: 1), (_) => tick());
+  }
+
+  /// Re-open the PayMongo payment screen (authorize in GCash + poll).
+  Future<void> _resumePaymongoPayment() async {
+    final intent = _paymongoIntent;
+    if (intent == null) {
+      // Intent gone (expired/cancelled) — refresh the order state.
+      final row = await Supabase.instance.client
+          .from('orders')
+          .select('status')
+          .eq('id', _order['id'])
+          .maybeSingle();
+      if (row != null && mounted) {
+        setState(() => _order['status'] = row['status']);
+      }
+      return;
+    }
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => GcashPaymentScreen(intent: intent)),
+    );
+    if (!mounted) return;
+    // Coming back from the payment screen — refresh this screen's state
+    // (it may have been paid/failed/expired while we were away).
+    final row = await Supabase.instance.client
+        .from('orders')
+        .select('*')
+        .eq('id', _order['id'])
+        .maybeSingle();
+    if (row != null && mounted) {
+      setState(() => _order = Map<String, dynamic>.from(row));
+      _initPaymentState();
+    }
+  }
+
+  /// Banner shown for awaiting_payment (PayMongo) orders: countdown +
+  /// explanation + resume-payment action.
+  Widget _buildPaymongoBanner() {
+    final deadline = _paymongoIntent?.expiresAt;
+    final expired = deadline != null && deadline.isBefore(DateTime.now());
+    final color = expired ? AppConstants.error : AppConstants.statusPendingColor;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                expired ? Icons.timer_off_outlined : Icons.payment_outlined,
+                color: color,
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  expired
+                      ? 'Payment window expired'
+                      : 'Complete your GCash payment',
+                  style: AppConstants.bodyStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: color,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            expired
+                ? 'The payment window closed before you paid, so this checkout was released. You can place a new order anytime.'
+                : 'Authorize the exact amount in GCash. Your order is only confirmed once the payment is verified.',
+            style: AppConstants.bodyStyle(
+              fontSize: 12,
+              color: AppConstants.secondary.withValues(alpha: 0.7),
+              height: 1.35,
+            ),
+          ),
+          if (!expired) ...[const SizedBox(height: 8), _buildPaymongoCountdownRow()],
+          if (!expired && _paymongoIntent != null) ...[const SizedBox(height: 14), _buildCompletePaymongoButton()],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPaymongoCountdownRow() {
+    return Row(
+      children: [
+        const Icon(
+          Icons.timer_outlined,
+          size: 14,
+          color: AppConstants.statusPendingColor,
+        ),
+        const SizedBox(width: 6),
+        Text(
+          'Complete within ${_paymongoCountdown.isEmpty ? '...' : _paymongoCountdown}',
+          style: AppConstants.bodyStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: AppConstants.statusPendingColor,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCompletePaymongoButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: SolePrimaryButton(
+        label: 'Complete Payment',
+        onPressed: _resumePaymongoPayment,
+      ),
+    );
+  }
+
   // ─── Cancel Order ──────────────────────────────────────────────
 
   Future<void> _requestCancellation() async {
@@ -426,7 +619,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
           ? AppConstants.statusCancellationRequested
           : 'cancelled';
 
-      final success = await provider.cancelOrder(
+      await provider.cancelOrder(
         orderId: _order['id'],
         newStatus: newStatus,
         reason: result.reason,
@@ -504,7 +697,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
 
     setState(() => _isUpdating = true);
     try {
-      final success = await context
+      await context
           .read<OrderProvider>()
           .updateOrderStatus(_order['id'], 'received');
 
@@ -545,9 +738,6 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
         : <dynamic>[];
     final totalAmount =
         (_order['total_amount'] as num?)?.toDouble() ?? 0.0;
-    final createdAt = _order['created_at']?.toString() ?? '';
-    final fulfillment =
-        (_order['fulfillment'] ?? 'pickup').toString().toLowerCase();
 
     // Resolve store name from order_items → products → stores, or profiles
     String storeName = 'Artisan Shop';
@@ -613,8 +803,19 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                   const SizedBox(height: 20),
                 ],
 
-                // ── Awaiting GCash payment confirmation ────────
+                // ── Awaiting GCash payment confirmation (dormant direct flow) ──
                 if (_isAwaitingPayment) ...[_buildPaymentBanner(), const SizedBox(height: 20)],
+
+                // ── Awaiting PayMongo GCash payment ────────────
+                if (_isPaymongoAwaiting) ...[_buildPaymongoBanner(), const SizedBox(height: 20)],
+
+                // ── Payment conflict (money captured, needs review) ──
+                if (_isPaymentConflict) ...[_buildCancellationBanner(
+                  icon: Icons.help_outline,
+                  color: AppConstants.error,
+                  message: 'Payment received — needs review',
+                  details: 'Your payment went through, but the store needs to review your order before preparing it. Contact the store for help.',
+                ), const SizedBox(height: 20)],
 
                 // ── Order header details card ───────────────────
                 SoleCard(
@@ -710,7 +911,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                                           width: 44,
                                           height: 44,
                                           fit: BoxFit.cover,
-                                          errorBuilder: (_, __, ___) =>
+                                          errorBuilder: (_, _, _) =>
                                               const Icon(
                                             Icons.shopping_bag_outlined,
                                             size: 20,
@@ -780,7 +981,10 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                 ),
 
                 // ── Status-specific section + action button ─────
-                if (_currentStatus != 'cancelled' && !_isAwaitingPayment) ...[
+                if (_currentStatus != 'cancelled' &&
+                    !_isAwaitingPayment &&
+                    !_isPaymongoAwaiting &&
+                    !_isPaymentConflict) ...[
                   const SizedBox(height: 24),
                   _buildStatusSection(),
                 ],
@@ -797,7 +1001,6 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   // ─── Timeline items with real timestamps from order_status_history ──
 
   List<SoleTimelineItem> _buildTimelineItems() {
-    final status = _currentStatus;
     final placedAt = _formatTimestamp(_statusTimestamps['pending'] ??
         _statusTimestamps['placed'] ??
         DateTime.tryParse(_order['created_at']?.toString() ?? ''));
@@ -1157,7 +1360,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
               ),
             ],
           ),
-          if (child != null) child!,
+          ?child,
         ],
       ),
     );

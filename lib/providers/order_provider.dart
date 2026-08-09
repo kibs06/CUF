@@ -25,6 +25,16 @@ class OrderProvider extends ChangeNotifier {
   List<Map<String, dynamic>> get orders => _orders;
   List<Map<String, dynamic>> get customizations => _customizations;
   List<Map<String, dynamic>> get profiles => _profiles;
+
+  /// Directly sets a profile's role in the local cache and notifies
+  /// listeners (admin console local-only role assignment).
+  void setProfileRole(String userId, String role) {
+    final index = _profiles.indexWhere((p) => p['id'] == userId);
+    if (index != -1) {
+      _profiles[index]['role'] = role;
+      notifyListeners();
+    }
+  }
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   StockUnavailableException? get stockError => _stockError;
@@ -76,10 +86,10 @@ class OrderProvider extends ChangeNotifier {
         'total_amount': totalAmount,
         'delivery_address': deliveryAddress,
         'payment_method': paymentMethod,
-        if (shippingAddress != null) 'shipping_address': shippingAddress,
+        'shipping_address': ?shippingAddress,
         'source': source,
-        if (amountTendered != null) 'amount_tendered': amountTendered,
-        if (gcashReference != null) 'gcash_reference_number': gcashReference,
+        'amount_tendered': ?amountTendered,
+        'gcash_reference_number': ?gcashReference,
       });
       await loadOrders();
       _isLoading = false;

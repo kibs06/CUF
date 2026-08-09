@@ -23,9 +23,16 @@ import 'providers/update_provider.dart';
 import 'providers/sale_tag_provider.dart';
 import 'services/store_service.dart';
 import 'screens/auth/splash_screen.dart';
+import 'screens/customer/gcash_payment_screen.dart';
 import 'services/connectivity_service.dart';
+import 'services/deep_link_service.dart';
+import 'services/gcash_payment_service.dart';
 import 'services/push_notification_service.dart';
 import 'widgets/connectivity_banner.dart';
+
+/// Root navigator key — lets the deep-link handler push the GCash
+/// payment screen even from a cold start (before any screen is open).
+final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
 
 /// Top-level background message handler for Firebase Cloud Messaging.
 /// Required by firebase_messaging — must be a top-level function, not a method.
@@ -65,7 +72,7 @@ Future<void> main() async {
   try {
     await Supabase.initialize(
       url: AppConstants.url,
-      anonKey: AppConstants.anonKey,
+      publishableKey: AppConstants.publishableKey,
     ).timeout(const Duration(seconds: 10));
     supabaseReady = true;
   } catch (e) {
@@ -201,10 +208,68 @@ class CUFMAIApp extends StatelessWidget {
         ),
 
         // Start screen is Splash, which auto-navigates to AuthGate
-        home: const SplashScreen(),
+        home: const DeepLinkHost(child: SplashScreen()),
+        navigatorKey: _navigatorKey,
       ),
     );
   }
+}
+
+/// Wraps the app so `solvision://checkout/gcash/*` deep links are heard
+/// even when the app is launched cold from the GCash redirect.
+///
+/// The link is INFORMATIONAL ONLY: it never marks a payment paid. It
+/// merely resumes the pending checkout's payment screen (which polls the
+/// authoritative server status). Warm returns are skipped here — the
+/// already-open GcashPaymentScreen handles those with its own poll.
+class DeepLinkHost extends StatefulWidget {
+  final Widget child;
+
+  const DeepLinkHost({super.key, required this.child});
+
+  @override
+  State<DeepLinkHost> createState() => _DeepLinkHostState();
+}
+
+class _DeepLinkHostState extends State<DeepLinkHost> {
+  @override
+  void initState() {
+    super.initState();
+    DeepLinkService.instance.init(onLink: _onLink);
+  }
+
+  @override
+  void dispose() {
+    DeepLinkService.instance.dispose();
+    super.dispose();
+  }
+
+  Future<void> _onLink(Uri uri) async {
+    if (!DeepLinkService.isGcashReturn(uri)) return;
+    // Warm return: the payment screen is open and polling — skip.
+    if (GcashPaymentScreen.isOpen) return;
+
+    // Cold start: auth may still be restoring — wait briefly, then resume
+    // the customer's pending checkout if one exists.
+    for (var attempt = 0; attempt < 30; attempt++) {
+      final uid = Supabase.instance.client.auth.currentUser?.id;
+      if (uid != null) {
+        final intent = await GcashPaymentService().fetchPendingIntent();
+        if (intent != null && intent.checkoutUrl.isNotEmpty && mounted) {
+          _navigatorKey.currentState?.push(
+            MaterialPageRoute(
+              builder: (_) => GcashPaymentScreen(intent: intent),
+            ),
+          );
+        }
+        return;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 /// Fallback app shown when Supabase fails to initialize.

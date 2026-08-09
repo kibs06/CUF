@@ -22,7 +22,13 @@ class _CartScreenState extends State<CartScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _validateStock());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _validateStock();
+      // Remove any lines that were already paid for while the app was
+      // away (e.g. the GCash webhook confirmed during a killed app) so
+      // they can't be accidentally re-ordered.
+      context.read<CartProvider>().reconcilePurchasedCart();
+    });
   }
 
   Future<void> _validateStock() async {
@@ -174,7 +180,7 @@ class _StoreGroupCard extends StatelessWidget {
               decoration: BoxDecoration(
                 border: Border(
                   bottom: BorderSide(
-                    color: AppConstants.borderGray.withOpacity(0.4),
+                    color: AppConstants.borderGray.withValues(alpha: 0.4),
                     width: 0.5,
                   ),
                 ),
@@ -233,7 +239,7 @@ class _StoreGroupCard extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 14),
                 child: Divider(
                   height: 0.5,
-                  color: AppConstants.borderGray.withOpacity(0.3),
+                  color: AppConstants.borderGray.withValues(alpha: 0.3),
                 ),
               ),
           ],
@@ -268,7 +274,7 @@ class _CartItemRow extends StatelessWidget {
       curve: Curves.easeInOut,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        color: isSelected ? AppConstants.accent.withOpacity(0.03) : Colors.transparent,
+        color: isSelected ? AppConstants.accent.withValues(alpha: 0.03) : Colors.transparent,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
@@ -293,7 +299,7 @@ class _CartItemRow extends StatelessWidget {
                 errorBuilder: (context, error, stackTrace) => Container(
                   width: 60,
                   height: 60,
-                  color: AppConstants.borderGray.withOpacity(0.2),
+                  color: AppConstants.borderGray.withValues(alpha: 0.2),
                   child: const Icon(Icons.broken_image, color: AppConstants.primary, size: 20),
                 ),
               ),
@@ -325,7 +331,7 @@ class _CartItemRow extends StatelessWidget {
                           'EU ${item['size']} · ${item['color']}',
                           style: AppConstants.bodyStyle(
                             fontSize: 11,
-                            color: AppConstants.secondary.withOpacity(0.5),
+                            color: AppConstants.secondary.withValues(alpha: 0.5),
                           ),
                         ),
                       ),
@@ -391,7 +397,7 @@ class _CartItemRow extends StatelessWidget {
                                 fontSize: 10,
                                 color: atMax
                                     ? AppConstants.error
-                                    : AppConstants.secondary.withOpacity(0.4),
+                                    : AppConstants.secondary.withValues(alpha: 0.4),
                               ),
                             ),
                           ),
@@ -406,7 +412,7 @@ class _CartItemRow extends StatelessWidget {
                           child: Icon(
                             Icons.delete_outline,
                             size: 16,
-                            color: AppConstants.error.withOpacity(0.7),
+                            color: AppConstants.error.withValues(alpha: 0.7),
                           ),
                         ),
                       ),
@@ -434,7 +440,7 @@ class _CartItemRow extends StatelessWidget {
                     '₱${price.toStringAsFixed(2)} each',
                     style: AppConstants.bodyStyle(
                       fontSize: 10,
-                      color: AppConstants.secondary.withOpacity(0.4),
+                      color: AppConstants.secondary.withValues(alpha: 0.4),
                     ),
                   ),
               ],
@@ -483,7 +489,7 @@ class _CartItemRow extends StatelessWidget {
               'This item will be removed from your cart.',
               style: AppConstants.bodyStyle(
                 fontSize: 13,
-                color: AppConstants.secondary.withOpacity(0.6),
+                color: AppConstants.secondary.withValues(alpha: 0.6),
               ),
             ),
             const SizedBox(height: 24),
@@ -555,20 +561,20 @@ class _QuantityButton extends StatelessWidget {
         decoration: BoxDecoration(
           border: Border.all(
             color: isDisabled
-                ? AppConstants.borderGray.withOpacity(0.3)
+                ? AppConstants.borderGray.withValues(alpha: 0.3)
                 : AppConstants.borderGray,
             width: 1,
           ),
           borderRadius: BorderRadius.circular(6),
           color: isDisabled
-              ? AppConstants.borderGray.withOpacity(0.08)
+              ? AppConstants.borderGray.withValues(alpha: 0.08)
               : Colors.transparent,
         ),
         child: Icon(
           icon,
           size: 14,
           color: isDisabled
-              ? AppConstants.secondary.withOpacity(0.25)
+              ? AppConstants.secondary.withValues(alpha: 0.25)
               : AppConstants.secondary,
         ),
       ),
@@ -640,7 +646,7 @@ class _CartCheckoutBar extends StatelessWidget {
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
+            color: Colors.black.withValues(alpha: 0.06),
             blurRadius: 12,
             offset: const Offset(0, -4),
           ),
@@ -673,7 +679,7 @@ class _CartCheckoutBar extends StatelessWidget {
               style: AppConstants.bodyStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
-                color: AppConstants.secondary.withOpacity(0.6),
+                color: AppConstants.secondary.withValues(alpha: 0.6),
               ),
             ),
             const SizedBox(width: 12),
@@ -690,7 +696,7 @@ class _CartCheckoutBar extends StatelessWidget {
                     'Delivery: ₱${cart.selectedDeliveryFee.toStringAsFixed(2)}',
                     style: AppConstants.bodyStyle(
                       fontSize: 11,
-                      color: AppConstants.secondary.withOpacity(0.5),
+                      color: AppConstants.secondary.withValues(alpha: 0.5),
                     ),
                   ),
                 Text(

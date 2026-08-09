@@ -487,6 +487,103 @@ class CartProvider extends ChangeNotifier {
     }
   }
 
+  /// Remove (or reduce) cart lines that were just paid for.
+  ///
+  /// Keeps the customer's cart honest when a GCash payment is confirmed:
+  /// lines fully covered by the purchase are removed (local + server),
+  /// and lines where the bought quantity is less than the cart quantity
+  /// are reduced to the remainder (applied locally AND on the server).
+  /// Items NOT in the purchase are left untouched (e.g. things the
+  /// customer added to the cart while the payment was still awaiting).
+  ///
+  /// Idempotent: calling it again after items were already removed is a
+  /// no-op.
+  ///
+  /// [purchasedItems] entries need at least `product_id` and `size`;
+  /// `quantity` is used when present (defaults to 1).
+  Future<void> removePurchasedItems(
+    List<Map<String, dynamic>> purchasedItems,
+  ) async {
+    if (_userId == null || purchasedItems.isEmpty) return;
+
+    final adjustments = computePurchasedAdjustments(_items, purchasedItems);
+    final keysToRemove = adjustments.$1;
+    final serverIdsToRemove = adjustments.$2;
+    final newQuantitiesByKey = adjustments.$3;
+
+    var mutated = false;
+    if (keysToRemove.isNotEmpty) {
+      for (final key in keysToRemove) {
+        _items.remove(key);
+        _selectedKeys.remove(key);
+      }
+      mutated = true;
+    }
+
+    final quantityUpdates = <(String, int)>[];
+    for (final entry in newQuantitiesByKey.entries) {
+      final item = _items[entry.key];
+      if (item == null) continue;
+      item['quantity'] = entry.value; // apply locally
+      final serverId = item['server_id'] as String?;
+      if (serverId != null) quantityUpdates.add((serverId, entry.value));
+      mutated = true;
+    }
+
+    if (mutated) {
+      notifyListeners();
+      _writeToCache();
+    }
+
+    if (serverIdsToRemove.isNotEmpty) {
+      await removeServerItems(serverIdsToRemove);
+    }
+    for (final (serverId, qty) in quantityUpdates) {
+      CartService.instance
+          .updateQuantity(cartItemId: serverId, newQuantity: qty)
+          .catchError((e) {
+        debugPrint('CartProvider: purchased-item qty sync failed: $e');
+      });
+    }
+  }
+
+  /// Reconcile the cart against the customer's recently-PAID orders.
+  ///
+  /// Covers the path where the app was killed mid-GCash-payment and the
+  /// webhook confirmed while the user was away: when they next open the
+  /// cart, any lines that were actually paid for are removed so they
+  /// can't be accidentally re-ordered. Scoped to orders confirmed in the
+  /// last 30 minutes (the awaiting_payment window) to keep the query
+  /// cheap; safe to call on every cart screen load.
+  Future<void> reconcilePurchasedCart() async {
+    if (_userId == null || _items.isEmpty) return;
+    try {
+      final since = DateTime.now()
+          .subtract(const Duration(minutes: 30))
+          .toIso8601String();
+      final orders = await Supabase.instance.client
+          .from('orders')
+          .select('order_items(product_id, size, quantity)')
+          .eq('customer_id', _userId!)
+          .eq('payment_status', 'paid')
+          .gte('created_at', since)
+          .limit(10);
+      if (orders.isEmpty) return;
+      final purchased = <Map<String, dynamic>>[];
+      for (final order in orders.whereType<Map>()) {
+        final items = order['order_items'];
+        if (items is! List) continue;
+        purchased.addAll(
+          items.whereType<Map>().map((m) => Map<String, dynamic>.from(m)),
+        );
+      }
+      if (purchased.isEmpty) return;
+      await removePurchasedItems(purchased);
+    } catch (e) {
+      debugPrint('CartProvider: reconcilePurchasedCart failed: $e');
+    }
+  }
+
   /// Fallback: clear the entire server cart for this user.
   /// Used when ordered items have no server_id (background sync
   /// hadn't completed) so targeted deletion isn't possible.
@@ -535,4 +632,52 @@ class CartProvider extends ChangeNotifier {
       }
     }
   }
+}
+
+/// Pure computation for [CartProvider.removePurchasedItems] — kept
+/// separate from the provider so the cart/order reconciliation logic
+/// is unit-testable without Supabase.
+///
+/// Returns `(keysToRemove, serverIdsToRemove, newQuantitiesByKey)`:
+///   • keysToRemove — cart keys fully covered by the purchase;
+///   • serverIdsToRemove — server row ids for those removed lines;
+///   • newQuantitiesByKey — cart key → remaining quantity for lines
+///     only partially covered (the caller applies these locally AND
+///     syncs them to the server).
+(List<String>, List<String>, Map<String, int>) computePurchasedAdjustments(
+  Map<String, Map<String, dynamic>> cartItems,
+  List<Map<String, dynamic>> purchasedItems,
+) {
+  // Aggregate bought quantities per product+size key.
+  final bought = <String, int>{};
+  for (final item in purchasedItems) {
+    final key = '${item['product_id']}|${item['size'] ?? ''}';
+    final qty = (item['quantity'] as num?)?.toInt() ?? 1;
+    bought[key] = (bought[key] ?? 0) + qty;
+  }
+
+  final keysToRemove = <String>[];
+  final serverIdsToRemove = <String>[];
+  final newQuantitiesByKey = <String, int>{};
+
+  for (final entry in cartItems.entries) {
+    final key = entry.key;
+    final item = entry.value;
+    final productKey = '${item['product_id']}|${item['size'] ?? ''}';
+    final boughtQty = bought[productKey];
+    if (boughtQty == null || boughtQty <= 0) continue;
+
+    final cartQty = (item['quantity'] as num?)?.toInt() ?? 1;
+    final remaining = cartQty - boughtQty;
+    final serverId = item['server_id'] as String?;
+
+    if (remaining <= 0) {
+      keysToRemove.add(key);
+      if (serverId != null) serverIdsToRemove.add(serverId);
+    } else {
+      newQuantitiesByKey[key] = remaining;
+    }
+  }
+
+  return (keysToRemove, serverIdsToRemove, newQuantitiesByKey);
 }

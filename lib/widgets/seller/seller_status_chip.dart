@@ -23,27 +23,27 @@ class SellerStatusChip extends StatelessWidget {
 
     switch (status.toLowerCase()) {
       case 'pending':
-        bg = AppConstants.statusPendingColor.withOpacity(0.12);
+        bg = AppConstants.statusPendingColor.withValues(alpha: 0.12);
         text = AppConstants.statusPendingColor;
         break;
       case 'preparing':
-        bg = AppConstants.statusConfirmedColor.withOpacity(0.12);
+        bg = AppConstants.statusConfirmedColor.withValues(alpha: 0.12);
         text = AppConstants.statusConfirmedColor;
         break;
       case 'ready':
-        bg = AppConstants.statusReadyColor.withOpacity(0.12);
+        bg = AppConstants.statusReadyColor.withValues(alpha: 0.12);
         text = AppConstants.statusReadyColor;
         break;
       case 'received':
-        bg = AppConstants.statusDeliveredColor.withOpacity(0.12);
+        bg = AppConstants.statusDeliveredColor.withValues(alpha: 0.12);
         text = AppConstants.statusDeliveredColor;
         break;
       case 'cancelled':
-        bg = AppConstants.statusCancelledColor.withOpacity(0.12);
+        bg = AppConstants.statusCancelledColor.withValues(alpha: 0.12);
         text = AppConstants.statusCancelledColor;
         break;
       default:
-        bg = AppConstants.secondary.withOpacity(0.1);
+        bg = AppConstants.secondary.withValues(alpha: 0.1);
         text = AppConstants.secondary;
     }
 

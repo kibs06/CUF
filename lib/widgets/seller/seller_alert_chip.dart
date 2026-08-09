@@ -21,7 +21,7 @@ class SellerAlertChip extends StatelessWidget {
         height: 36,
         padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
-          color: AppConstants.statusPendingColor.withOpacity(0.12),
+          color: AppConstants.statusPendingColor.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(18),
         ),
         child: Row(

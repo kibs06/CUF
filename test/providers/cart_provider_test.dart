@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:app/providers/cart_provider.dart';
+
 /// Tests for CartProvider state logic.
 /// 
 /// Note: CartProvider's constructor accesses Supabase.instance.client,
@@ -8,6 +10,156 @@ import 'package:flutter_test/flutter_test.dart';
 /// the full provider lifecycle.
 
 void main() {
+  group('computePurchasedAdjustments (cart kept while awaiting payment)', () {
+    Map<String, dynamic> cartLine({
+      required String id,
+      required String productId,
+      String size = '42',
+      int quantity = 1,
+      String? serverId = 'srv-1',
+    }) {
+      return {
+        'id': id,
+        'product_id': productId,
+        'size': size,
+        'quantity': quantity,
+        'server_id': serverId,
+      };
+    }
+
+    test('fully-bought lines are removed (with server ids)', () {
+      final cart = {
+        'p1-42-black': cartLine(id: 'p1-42-black', productId: 'p1'),
+        'p2-40-brown': cartLine(
+          id: 'p2-40-brown',
+          productId: 'p2',
+          size: '40',
+          serverId: 'srv-2',
+        ),
+      };
+      final purchased = [
+        {'product_id': 'p1', 'size': '42', 'quantity': 1},
+        {'product_id': 'p2', 'size': '40', 'quantity': 1},
+      ];
+
+      final (keys, serverIds, newQtyByKey) =
+          computePurchasedAdjustments(cart, purchased);
+
+      expect(keys, containsAll(['p1-42-black', 'p2-40-brown']));
+      expect(serverIds, containsAll(['srv-1', 'srv-2']));
+      expect(newQtyByKey, isEmpty);
+    });
+
+    test('partially-bought lines are reduced, not removed', () {
+      final cart = {
+        'p1-42-black': cartLine(
+          id: 'p1-42-black',
+          productId: 'p1',
+          quantity: 3,
+          serverId: 'srv-1',
+        ),
+      };
+      final purchased = [
+        {'product_id': 'p1', 'size': '42', 'quantity': 2},
+      ];
+
+      final (keys, serverIds, newQtyByKey) =
+          computePurchasedAdjustments(cart, purchased);
+
+      expect(keys, isEmpty);
+      expect(serverIds, isEmpty);
+      expect(newQtyByKey, {'p1-42-black': 1});
+    });
+
+    test('unbought lines are untouched', () {
+      final cart = {
+        'p1-42-black': cartLine(id: 'p1-42-black', productId: 'p1'),
+        'p9-38-white': cartLine(
+          id: 'p9-38-white',
+          productId: 'p9',
+          size: '38',
+          serverId: 'srv-9',
+        ),
+      };
+      final purchased = [
+        {'product_id': 'p1', 'size': '42', 'quantity': 1},
+      ];
+
+      final (keys, serverIds, newQtyByKey) =
+          computePurchasedAdjustments(cart, purchased);
+
+      expect(keys, ['p1-42-black']);
+      expect(serverIds, ['srv-1']);
+      expect(newQtyByKey, isEmpty);
+      // p9 line is preserved
+      expect(cart.containsKey('p9-38-white'), isTrue);
+    });
+
+    test('same product different size is a different line', () {
+      final cart = {
+        'p1-42-black': cartLine(id: 'p1-42-black', productId: 'p1'),
+        'p1-44-black': cartLine(
+          id: 'p1-44-black',
+          productId: 'p1',
+          size: '44',
+          serverId: 'srv-2',
+        ),
+      };
+      final purchased = [
+        {'product_id': 'p1', 'size': '42', 'quantity': 1},
+      ];
+
+      final (keys, serverIds, newQtyByKey) =
+          computePurchasedAdjustments(cart, purchased);
+
+      expect(keys, ['p1-42-black']);
+      expect(serverIds, ['srv-1']);
+      expect(newQtyByKey, isEmpty);
+    });
+
+    test('aggregates multiple purchased rows for the same line', () {
+      final cart = {
+        'p1-42-black': cartLine(
+          id: 'p1-42-black',
+          productId: 'p1',
+          quantity: 4,
+          serverId: 'srv-1',
+        ),
+      };
+      final purchased = [
+        {'product_id': 'p1', 'size': '42', 'quantity': 1},
+        {'product_id': 'p1', 'size': '42', 'quantity': 2},
+      ];
+
+      final (keys, serverIds, newQtyByKey) =
+          computePurchasedAdjustments(cart, purchased);
+
+      // 4 - (1 + 2) = 1 remaining
+      expect(keys, isEmpty);
+      expect(newQtyByKey, {'p1-42-black': 1});
+    });
+
+    test('line without server_id is removed locally but not server-synced', () {
+      final cart = {
+        'p1-42-black': cartLine(
+          id: 'p1-42-black',
+          productId: 'p1',
+          serverId: null,
+        ),
+      };
+      final purchased = [
+        {'product_id': 'p1', 'size': '42', 'quantity': 1},
+      ];
+
+      final (keys, serverIds, newQtyByKey) =
+          computePurchasedAdjustments(cart, purchased);
+
+      expect(keys, ['p1-42-black']);
+      expect(serverIds, isEmpty);
+      expect(newQtyByKey, isEmpty);
+    });
+  });
+
   group('Cart subtotal calculations', () {
     test('calculates subtotal from items', () {
       final items = {

@@ -68,7 +68,7 @@ serve(async (req: Request) => {
   } catch (error) {
     console.error("[CREATE-GCASH] Error:", error);
     return new Response(
-      JSON.stringify({ error: error.message || "Internal server error" }),
+      JSON.stringify({ error: (error as any)?.message || "Internal server error" }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

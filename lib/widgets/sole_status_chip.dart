@@ -20,7 +20,7 @@ class SoleStatusChip extends StatelessWidget {
       case 'completed':
       case 'ready':
       case 'fit looks good!':
-        bg = AppConstants.success.withOpacity(0.15);
+        bg = AppConstants.success.withValues(alpha: 0.15);
         text = AppConstants.success;
         break;
       case 'pending':
@@ -29,21 +29,23 @@ class SoleStatusChip extends StatelessWidget {
       case 'being prepared':
       case 'in_progress':
       case 'tracking your feet...':
-        bg = Colors.amber.withOpacity(0.15);
+      case 'awaiting_payment':
+        bg = Colors.amber.withValues(alpha: 0.15);
         text = const Color(0xFFC47D00);
         break;
       case 'rejected':
       case 'deactivated':
       case 'failed':
-        bg = AppConstants.error.withOpacity(0.15);
+      case 'payment_conflict':
+        bg = AppConstants.error.withValues(alpha: 0.15);
         text = AppConstants.error;
         break;
       case 'awaiting_payment_confirmation':
-        bg = AppConstants.primary.withOpacity(0.12);
+        bg = AppConstants.primary.withValues(alpha: 0.12);
         text = AppConstants.primary;
         break;
       default:
-        bg = AppConstants.secondary.withOpacity(0.1);
+        bg = AppConstants.secondary.withValues(alpha: 0.1);
         text = AppConstants.secondary;
     }
 

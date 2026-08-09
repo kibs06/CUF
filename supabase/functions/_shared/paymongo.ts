@@ -1,13 +1,19 @@
 // Shared PayMongo API helpers for Edge Functions (Deno)
 //
-// Two flows live here:
-//   1. GCASH E-WALLET REDIRECT (current online checkout) — Payment Intent
-//      with payment_method_allowed ['gcash'], a gcash payment method, and
-//      attach → next_action.redirect.url sends the customer into GCash.
-//   2. LEGACY QR Ph helpers (createQrPhPayment etc.) — kept so the dormant
-//      attempt-#2 function `create-gcash-payment` still compiles. The POS
-//      flow does NOT use these (it uses the seller's static QR + manual
-//      confirmation).
+// Flows that live here:
+//   1. GCASH E-WALLET VIA CHECKOUT SESSIONS (attempt #6 — CURRENT online
+//      checkout). One POST /v1/checkout_sessions → PayMongo-hosted page
+//      handles the GCash handoff; the customer returns via success_url /
+//      cancel_url; a signature-verified webhook
+//      (checkout_session.payment.paid / payment.paid / payment.failed)
+//      finalizes the order. Recommended by PayMongo for standard
+//      integrations and built for pass-on (Model B) fees.
+//   2. LEGACY GCASH E-WALLET REDIRECT (attempt #4 — dormant). Manual
+//      Payment Intent + gcash method + attach with return_url →
+//      next_action.redirect.url. Kept so the attempt-#4 function still
+//      compiles; NOT used by the live flow.
+//   3. LEGACY QR Ph helpers (attempt #2 — dormant). Kept so the dormant
+//      `create-gcash-payment` function still compiles. Do not extend.
 
 const PAYMONGO_BASE_URL = "https://api.paymongo.com/v1";
 
@@ -22,101 +28,104 @@ export function getSecretAuthHeader(): string {
 }
 
 // ────────────────────────────────────────────────────────────────
-// CURRENT FLOW — GCash e-wallet redirect (Payment Intents API)
+// CURRENT FLOW — GCash via Checkout Sessions (attempt #6)
 // ────────────────────────────────────────────────────────────────
 
-export interface GcashRedirectPayment {
-  paymentIntentId: string;
-  paymentMethodId: string;
-  clientKey: string;
-  checkoutUrl: string;
+export interface GcashCheckoutSession {
+  checkoutSessionId: string; // cs_xxx
+  clientKey: string;         // cs_xxx_client_…
+  checkoutUrl: string;       // https://checkout.paymongo.com/cs_xxx#…
 }
 
-/// Full e-wallet flow: create intent (gcash) → create gcash method →
-/// attach with return_url → return the redirect URL for the customer.
-/// @param amount - amount in PHP (converted to centavos server-side)
-/// @param description - shown on the payment record
-/// @param returnUrl - where PayMongo sends the customer after auth
-export async function createGcashRedirectPayment(
-  amount: number,
+export interface CheckoutSessionLineItem {
+  name: string;
+  /** Amount PER UNIT in centavos. */
+  amount: number;
+  quantity: number;
+}
+
+/// Create a hosted Checkout Session for GCash.
+/// @param lineItems - what the customer sees on the hosted page (items,
+///                    delivery fee, and the Model B GCash fee line)
+/// @param successUrl / cancelUrl - deep links the customer returns to
+///                    after completing/aborting the GCash authorization
+/// @param metadata - string-keyed reconciliation data (order id, etc.)
+export async function createGcashCheckoutSession(
+  lineItems: CheckoutSessionLineItem[],
+  successUrl: string,
+  cancelUrl: string,
   description: string,
-  returnUrl: string,
-): Promise<GcashRedirectPayment> {
-  const amountInCentavos = Math.round(amount * 100);
-
-  // Step 1: Payment Intent with gcash allowed
-  const piRes = await fetch(`${PAYMONGO_BASE_URL}/payment_intents`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Authorization": getSecretAuthHeader() },
-    body: JSON.stringify({
-      data: {
-        attributes: {
-          amount: amountInCentavos,
+  metadata: Record<string, string>,
+): Promise<GcashCheckoutSession> {
+  const body = {
+    data: {
+      attributes: {
+        line_items: lineItems.map((it) => ({
+          name: it.name,
+          amount: it.amount,
           currency: "PHP",
-          payment_method_allowed: ["gcash"],
-          description,
-        },
+          quantity: it.quantity,
+        })),
+        payment_method_types: ["gcash"],
+        success_url: successUrl,
+        cancel_url: cancelUrl,
+        description,
+        metadata,
+        send_email_receipt: false,
+        show_line_items: true,
       },
-    }),
-  });
-  if (!piRes.ok) {
-    throw new Error(
-      `PayMongo createPaymentIntent error (${piRes.status}): ${await piRes.text()}`,
-    );
-  }
-  const pi = (await piRes.json()).data;
-  const paymentIntentId: string = pi.id;
-  const clientKey: string = pi.attributes?.client_key ?? "";
-
-  // Step 2: Payment Method (gcash e-wallet)
-  const pmRes = await fetch(`${PAYMONGO_BASE_URL}/payment_methods`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Authorization": getSecretAuthHeader() },
-    body: JSON.stringify({
-      data: { attributes: { type: "gcash" } },
-    }),
-  });
-  if (!pmRes.ok) {
-    throw new Error(
-      `PayMongo createPaymentMethod error (${pmRes.status}): ${await pmRes.text()}`,
-    );
-  }
-  const paymentMethodId: string = (await pmRes.json()).data?.id ?? "";
-
-  // Step 3: Attach → the response carries next_action.redirect.url.
-  // return_url tells PayMongo where to send the customer after they
-  // complete or abort the GCash authorization.
-  const attachRes = await fetch(
-    `${PAYMONGO_BASE_URL}/payment_intents/${paymentIntentId}/attach`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": getSecretAuthHeader() },
-      body: JSON.stringify({
-        data: {
-          attributes: {
-            payment_method: paymentMethodId,
-            client_key: clientKey,
-            return_url: returnUrl,
-          },
-        },
-      }),
     },
-  );
-  if (!attachRes.ok) {
+  };
+  const res = await fetch(`${PAYMONGO_BASE_URL}/checkout_sessions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": getSecretAuthHeader(),
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
     throw new Error(
-      `PayMongo attachPaymentMethod error (${attachRes.status}): ${await attachRes.text()}`,
+      `PayMongo createCheckoutSession error (${res.status}): ${await res.text()}`,
     );
   }
-
-  const attrs = (await attachRes.json()).data?.attributes ?? {};
-  const nextAction = attrs.next_action ?? {};
-  const checkoutUrl: string = nextAction.redirect?.url ?? "";
-  if (!checkoutUrl) {
-    console.error("[PAYMONGO] No next_action.redirect.url. attrs:", JSON.stringify(attrs));
-    throw new Error("PayMongo did not return a checkout URL");
+  const data = (await res.json()).data;
+  const attrs = data?.attributes ?? {};
+  const checkoutUrl: string = attrs.checkout_url ?? "";
+  const clientKey: string = attrs.client_key ?? "";
+  const checkoutSessionId: string = data?.id ?? "";
+  if (!checkoutUrl || !clientKey || !checkoutSessionId) {
+    console.error("[PAYMONGO] Incomplete checkout session response:", JSON.stringify(attrs));
+    throw new Error("PayMongo did not return a complete checkout session");
   }
+  return { checkoutSessionId, clientKey, checkoutUrl };
+}
 
-  return { paymentIntentId, paymentMethodId, clientKey, checkoutUrl };
+/// Server-side retrieval of a Checkout Session (secret key required).
+/// Used by the webhook as a FALLBACK when a checkout_session event
+/// payload does not embed payments[] / payment_intent — PayMongo's
+/// own docs recommend retrieving the resource as the rollback
+/// mechanism, and the payments attribute is only returned to
+/// secret-key callers.
+export async function fetchCheckoutSessionById(
+  checkoutSessionId: string,
+): Promise<{ payments: any[]; paymentIntentId: string }> {
+  const res = await fetch(
+    `${PAYMONGO_BASE_URL}/checkout_sessions/${checkoutSessionId}`,
+    { headers: { "Authorization": getSecretAuthHeader() } },
+  );
+  if (!res.ok) {
+    throw new Error(
+      `PayMongo fetchCheckoutSession error (${res.status}): ${await res.text()}`,
+    );
+  }
+  const data = (await res.json()).data;
+  const attrs = data?.attributes ?? {};
+  return {
+    payments: Array.isArray(attrs.payments) ? attrs.payments : [],
+    paymentIntentId: (attrs.payment_intent?.id as string) ??
+      (attrs.payment_intent_id as string) ?? "",
+  };
 }
 
 // ────────────────────────────────────────────────────────────────
@@ -147,12 +156,13 @@ export function resolveInventorySize(
 }
 
 // ────────────────────────────────────────────────────────────────
-// WEBHOOK SIGNATURE VERIFICATION (mandatory — see task brief §2.2)
+// WEBHOOK SIGNATURE VERIFICATION (mandatory — task brief §3.2)
 //
 // Header: Paymongo-Signature: t=<unix_ts>,te=<test sig>,li=<live sig>
 // Signed string:  "<timestamp>.<raw JSON body>" (exact bytes)
 // Algorithm:      HMAC-SHA256, hex digest, key = webhook secret (whsk_…)
 // Replay guard:   timestamps older than 10 minutes are rejected.
+// There is NO bypass flag and no "skip in dev" path.
 // ────────────────────────────────────────────────────────────────
 
 async function hmacSha256Hex(keyBytes: Uint8Array, message: string): Promise<string> {
@@ -208,21 +218,33 @@ export async function verifyWebhookSignature(
 }
 
 // ────────────────────────────────────────────────────────────────
-// EVENT PARSING
+// EVENT PARSING (attempt #6 — handles both checkout_session.* and
+// payment.* payload shapes)
+//
+// PayMongo envelope:  { data: { id: evt_xxx, type: "event",
+//                       attributes: { type: "<event.type>", livemode,
+//                                     data: { id: <resource id>,
+//                                             type, attributes: {...} } } } }
+//   • checkout_session.payment.paid → resource = the checkout session
+//     (id cs_xxx; attributes.payments[] with the paid payment; and
+//     attributes.payment_intent with the pi_xxx).
+//   • payment.paid / payment.failed → resource = the payment object
+//     (id pay_xxx; attributes.amount + payment_intent_id pi_xxx).
 // ────────────────────────────────────────────────────────────────
 
 export interface PayMongoEvent {
   /// Event id (evt_xxx) — the idempotency key.
   id: string;
-  /// Event type (payment.paid, payment.failed, …).
+  /// Event type (checkout_session.payment.paid, payment.paid, …).
   type: string;
   livemode: boolean;
-  /// The resource embedded in the event (payment object) — may be absent.
+  /// The resource embedded in the event.
   data: {
-    id: string;          // resource id (pay_xxx)
+    id: string;          // resource id (cs_xxx | pay_xxx)
+    type: string;
     attributes: Record<string, unknown>;
   };
-  /// Raw redaction-friendly summary (no payment-method details).
+  /// Redaction-friendly summary (no payment-method/wallet details).
   redacted: Record<string, unknown>;
 }
 
@@ -237,6 +259,7 @@ export function parseWebhookEvent(body: string): PayMongoEvent {
     livemode: attributes?.livemode === true,
     data: {
       id: resource?.id ?? "",
+      type: resource?.type ?? "",
       attributes: resource?.attributes ?? {},
     },
     redacted: {
@@ -244,12 +267,188 @@ export function parseWebhookEvent(body: string): PayMongoEvent {
       type: attributes?.type ?? "",
       livemode: attributes?.livemode ?? false,
       resource_id: resource?.id ?? "",
-      amount: resource?.attributes?.amount ?? null,
+      resource_type: resource?.type ?? "",
       status: resource?.attributes?.status ?? null,
-      payment_intent: resource?.attributes?.payment_intent?.id ?? null,
-      payment_intent_id: resource?.attributes?.payment_intent_id ?? null,
     },
   };
+}
+
+/** Resource attributes as a plain record. */
+export function resourceAttrs(event: PayMongoEvent): Record<string, any> {
+  return event.data.attributes as Record<string, any>;
+}
+
+/// Payment id (pay_xxx) from a payment.* or checkout_session.* event.
+export function extractPaymentId(event: PayMongoEvent): string {
+  const attrs = resourceAttrs(event);
+  if (event.data.type === "checkout_session") {
+    const payments = Array.isArray(attrs.payments) ? attrs.payments : [];
+    const first = payments[0] as any;
+    return (first?.id as string) ?? "";
+  }
+  return event.data.id; // payment.* → resource is the payment itself
+}
+
+/// Payment Intent id (pi_xxx) — checkout sessions embed it post-payment.
+export function extractPaymentIntentId(event: PayMongoEvent): string {
+  const attrs = resourceAttrs(event);
+  if (event.data.type === "checkout_session") {
+    return (attrs.payment_intent?.id as string) ??
+      (attrs.payment_intent_id as string) ?? "";
+  }
+  return (attrs.payment_intent_id as string) ??
+    (attrs.payment_intent?.id as string) ?? "";
+}
+
+/// Charged amount in CENTAVOS for the payment event.
+export function extractAmountCents(event: PayMongoEvent): number {
+  const attrs = resourceAttrs(event);
+  if (event.data.type === "checkout_session") {
+    const payments = Array.isArray(attrs.payments) ? attrs.payments : [];
+    const first = payments[0] as any;
+    return Number(first?.attributes?.amount ?? 0);
+  }
+  return Number(attrs.amount ?? 0);
+}
+
+/// Sum of PayMongo's ACTUAL fees for the payment, in PESOS (each fee
+/// entry is in centavos). NULL when the payload carries no fee data —
+/// callers must store null, never a fabricated estimate. Only paid
+/// payment events carry fees; failure/expiry/cancel audit rows return
+/// null.
+export function extractPaymongoFeePesos(event: PayMongoEvent): number | null {
+  const attrs = resourceAttrs(event);
+  const payments = event.data.type === "checkout_session"
+    ? (Array.isArray(attrs.payments) ? (attrs.payments as any[]) : [])
+    : [event.data];
+  let totalCents = 0;
+  let found = false;
+  for (const p of payments) {
+    const fees = (p as any)?.attributes?.fees;
+    if (!Array.isArray(fees)) continue;
+    for (const f of fees) {
+      const amt = Number((f as any)?.amount);
+      if (Number.isFinite(amt) && amt > 0) {
+        totalCents += amt;
+        found = true;
+      }
+    }
+  }
+  return found ? Math.round(totalCents) / 100 : null;
+}
+
+/// E-wallet reference number for the payment (GCash ref from
+/// payment_method_details), when the payload exposes it. NULL otherwise
+/// — the reference column stays unset and the admin UI shows "—".
+export function extractGcashReference(event: PayMongoEvent): string | null {
+  const attrs = resourceAttrs(event);
+  const candidates = event.data.type === "checkout_session"
+    ? (Array.isArray(attrs.payments)
+        ? (attrs.payments as any[]).map((p) => (p as any)?.attributes)
+        : [])
+    : [attrs];
+  for (const a of candidates) {
+    const details = (a as any)?.payment_method_details;
+    if (!details || typeof details !== "object") continue;
+    const ref = details?.gcash?.ref ?? details?.ewallet?.ref;
+    if (typeof ref === "string" && ref.trim()) return ref.trim();
+  }
+  return null;
+}
+
+// ────────────────────────────────────────────────────────────────
+// LEGACY — attempt #4 e-wallet redirect (dormant). Kept so the
+// dormant `create-gcash-payment-intent`-era code still compiles.
+// NOT used by the live flow. Do not extend.
+// ────────────────────────────────────────────────────────────────
+
+export interface GcashRedirectPayment {
+  paymentIntentId: string;
+  paymentMethodId: string;
+  clientKey: string;
+  checkoutUrl: string;
+}
+
+/// Full e-wallet flow: create intent (gcash) → create gcash method →
+/// attach with return_url → return the redirect URL for the customer.
+export async function createGcashRedirectPayment(
+  amount: number,
+  description: string,
+  returnUrl: string,
+): Promise<GcashRedirectPayment> {
+  const amountInCentavos = Math.round(amount * 100);
+
+  // Step 1: Payment Intent with gcash allowed
+  const piRes = await fetch(`${PAYMONGO_BASE_URL}/payment_intents`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": getSecretAuthHeader() },
+    body: JSON.stringify({
+      data: {
+        attributes: {
+          amount: amountInCentavos,
+          currency: "PHP",
+          payment_method_allowed: ["gcash"],
+          description,
+        },
+      },
+    }),
+  });
+  if (!piRes.ok) {
+    throw new Error(
+      `PayMongo createPaymentIntent error (${piRes.status}): ${await piRes.text()}`,
+    );
+  }
+  const pi = (await piRes.json()).data;
+  const paymentIntentId: string = pi.id;
+  const clientKey: string = pi.attributes?.client_key ?? "";
+
+  // Step 2: Payment Method (gcash e-wallet)
+  const pmRes = await fetch(`${PAYMONGO_BASE_URL}/payment_methods`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": getSecretAuthHeader() },
+    body: JSON.stringify({
+      data: { attributes: { type: "gcash" } },
+    }),
+  });
+  if (!pmRes.ok) {
+    throw new Error(
+      `PayMongo createPaymentMethod error (${pmRes.status}): ${await pmRes.text()}`,
+    );
+  }
+  const paymentMethodId: string = (await pmRes.json()).data?.id ?? "";
+
+  // Step 3: Attach → the response carries next_action.redirect.url.
+  const attachRes = await fetch(
+    `${PAYMONGO_BASE_URL}/payment_intents/${paymentIntentId}/attach`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": getSecretAuthHeader() },
+      body: JSON.stringify({
+        data: {
+          attributes: {
+            payment_method: paymentMethodId,
+            client_key: clientKey,
+            return_url: returnUrl,
+          },
+        },
+      }),
+    },
+  );
+  if (!attachRes.ok) {
+    throw new Error(
+      `PayMongo attachPaymentMethod error (${attachRes.status}): ${await attachRes.text()}`,
+    );
+  }
+
+  const attrs = (await attachRes.json()).data?.attributes ?? {};
+  const nextAction = attrs.next_action ?? {};
+  const checkoutUrl: string = nextAction.redirect?.url ?? "";
+  if (!checkoutUrl) {
+    console.error("[PAYMONGO] No next_action.redirect.url. attrs:", JSON.stringify(attrs));
+    throw new Error("PayMongo did not return a checkout URL");
+  }
+
+  return { paymentIntentId, paymentMethodId, clientKey, checkoutUrl };
 }
 
 // ────────────────────────────────────────────────────────────────
