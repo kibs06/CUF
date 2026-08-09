@@ -307,7 +307,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                 ),
                 const SizedBox(height: 6),
                 DropdownButtonFormField<String>(
-                  value: showCustomSystem ? '__other__' : (selectedSystem.isEmpty ? null : selectedSystem),
+                  initialValue: showCustomSystem ? '__other__' : (selectedSystem.isEmpty ? null : selectedSystem),
                   hint: Text('Select sizing system', style: AppConstants.bodyStyle(fontSize: 14)),
                   style: AppConstants.bodyStyle(fontSize: 15),
                   decoration: InputDecoration(
@@ -372,7 +372,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                   ),
                   const SizedBox(height: 6),
                   DropdownButtonFormField<String>(
-                    value: showCustomSize ? '__other__' : (selectedSizePreset.isEmpty ? null : selectedSizePreset),
+                    initialValue: showCustomSize ? '__other__' : (selectedSizePreset.isEmpty ? null : selectedSizePreset),
                     hint: Text('Select a size', style: AppConstants.bodyStyle(fontSize: 14)),
                     style: AppConstants.bodyStyle(fontSize: 15),
                     decoration: InputDecoration(
@@ -575,7 +575,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                 ),
                 const SizedBox(height: 6),
                 DropdownButtonFormField<String>(
-                  value: showCustomType ? '__other__' : (selectedTypePreset.isEmpty ? null : selectedTypePreset),
+                  initialValue: showCustomType ? '__other__' : (selectedTypePreset.isEmpty ? null : selectedTypePreset),
                   hint: Text('Select a type', style: AppConstants.bodyStyle(fontSize: 14)),
                   style: AppConstants.bodyStyle(fontSize: 15),
                   decoration: InputDecoration(
@@ -876,11 +876,13 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
         _showSnackBar(errorMessage, isError: true, duration: const Duration(seconds: 5));
       }
     } finally {
-      if (mounted) setState(() {
+      if (mounted) {
+        setState(() {
         _isSaving = false;
         _isUploading = false;
         _uploadProgress = 0;
       });
+      }
     }
   }
 
@@ -1204,7 +1206,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                 ? CachedNetworkImage(
                     imageUrl: item.url!,
                     fit: BoxFit.cover,
-                    placeholder: (_, __) => Container(
+                    placeholder: (_, _) => Container(
                       color: AppConstants.borderGray.withValues(alpha: 0.3),
                       child: const Center(
                         child: SizedBox(
@@ -1342,7 +1344,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
           ),
           const SizedBox(height: 6),
           DropdownButtonFormField<String>(
-            value: _categories.contains(_category) ? _category : _categories.first,
+            initialValue: _categories.contains(_category) ? _category : _categories.first,
             style: AppConstants.bodyStyle(fontSize: 15),
             decoration: InputDecoration(
               filled: true,
@@ -1773,7 +1775,6 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
               ),
               value: _isActive,
               onChanged: (val) => setState(() => _isActive = val),
-              activeColor: SoleSwitch.onColor,
               activeThumbColor: SoleSwitch.thumbColor,
               inactiveThumbColor: SoleSwitch.thumbColor,
               inactiveTrackColor: SoleSwitch.offColor,
@@ -1798,7 +1799,6 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
               ),
               value: _isFeatured,
               onChanged: (val) => setState(() => _isFeatured = val),
-              activeColor: SoleSwitch.onColor,
               activeThumbColor: SoleSwitch.thumbColor,
               inactiveThumbColor: SoleSwitch.thumbColor,
               inactiveTrackColor: SoleSwitch.offColor,

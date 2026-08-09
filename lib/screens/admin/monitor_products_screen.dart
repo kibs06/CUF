@@ -123,13 +123,13 @@ class _MonitorProductsScreenState extends State<MonitorProductsScreen> {
                                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                       decoration: BoxDecoration(
                                         color: lowStock
-                                            ? AppConstants.error.withOpacity(0.08)
-                                            : AppConstants.primary.withOpacity(0.05),
+                                            ? AppConstants.error.withValues(alpha: 0.08)
+                                            : AppConstants.primary.withValues(alpha: 0.05),
                                         borderRadius: BorderRadius.circular(8),
                                         border: Border.all(
                                           color: lowStock
-                                              ? AppConstants.error.withOpacity(0.3)
-                                              : AppConstants.primary.withOpacity(0.12),
+                                              ? AppConstants.error.withValues(alpha: 0.3)
+                                              : AppConstants.primary.withValues(alpha: 0.12),
                                           width: 1,
                                         ),
                                       ),

@@ -4,7 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 class AppConstants {
   // --- SUPABASE ---
   static const String url = 'https://psczvbfoybqhjeqssimw.supabase.co';
-  static const String anonKey =
+  static const String publishableKey =
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBzY3p2YmZveWJxaGplcXNzaW13Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3NjU2NDIsImV4cCI6MjA5NzM0MTY0Mn0.31zMQ2VbrcMLYBENzozBht5O7PFwV0JDWH1UQ2ba7W8';
 
   // --- MAPTILER ---

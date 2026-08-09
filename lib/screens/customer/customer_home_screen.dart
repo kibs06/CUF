@@ -304,7 +304,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                           'Good morning, ${auth.displayName.split(" ").first} 👋',
                           style: AppConstants.bodyStyle(
                             fontSize: 14,
-                            color: AppConstants.secondary.withOpacity(0.6),
+                            color: AppConstants.secondary.withValues(alpha: 0.6),
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -322,7 +322,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                             hintText: 'Search artisan boots, oxfords, loafers...',
                             hintStyle: AppConstants.bodyStyle(
                               fontSize: 14,
-                              color: AppConstants.secondary.withOpacity(0.4),
+                              color: AppConstants.secondary.withValues(alpha: 0.4),
                             ),
                             filled: true,
                             fillColor: Colors.white,
@@ -387,7 +387,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                             selectedColor: AppConstants.primary,
                             backgroundColor: Colors.white,
                             side: BorderSide(
-                              color: isSelected ? Colors.transparent : AppConstants.borderGray.withOpacity(0.4),
+                              color: isSelected ? Colors.transparent : AppConstants.borderGray.withValues(alpha: 0.4),
                               width: 1,
                             ),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -419,7 +419,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                             child: ListView.separated(
                               scrollDirection: Axis.horizontal,
                               itemCount: recentlyViewedItems.length,
-                              separatorBuilder: (_, __) => const SizedBox(width: 12),
+                              separatorBuilder: (_, _) => const SizedBox(width: 12),
                               itemBuilder: (context, index) {
                                 final item = recentlyViewedItems[index];
                                 // Resolve the live product (if it's still in
@@ -497,7 +497,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                                                 width: 130,
                                                 height: 124,
                                                 fit: BoxFit.cover,
-                                                errorBuilder: (_, __, ___) => Container(
+                                                errorBuilder: (_, _, _) => Container(
                                                   width: 130,
                                                   height: 124,
                                                   color: AppConstants.borderGray.withValues(alpha: 0.2),
@@ -577,7 +577,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                                                     style: AppConstants.monoStyle(
                                                       fontSize: 9,
                                                       color: AppConstants.secondary
-                                                          .withOpacity(0.5),
+                                                          .withValues(alpha: 0.5),
                                                     ).copyWith(
                                                         decoration: TextDecoration
                                                             .lineThrough),
@@ -742,8 +742,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                                             decoration: BoxDecoration(
                                               gradient: LinearGradient(
                                                 colors: [
-                                                  Colors.black.withOpacity(0.6),
-                                                  Colors.black.withOpacity(0.1),
+                                                  Colors.black.withValues(alpha: 0.6),
+                                                  Colors.black.withValues(alpha: 0.1),
                                                 ],
                                                 begin: Alignment.bottomCenter,
                                                 end: Alignment.topCenter,
@@ -770,7 +770,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                                                   item['subtitle']!,
                                                   style: AppConstants.bodyStyle(
                                                     fontSize: 12,
-                                                    color: AppConstants.surfaceLight.withOpacity(0.8),
+                                                    color: AppConstants.surfaceLight.withValues(alpha: 0.8),
                                                   ),
                                                 ),
                                               ],
@@ -882,11 +882,11 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.search_off, size: 48, color: AppConstants.primary.withOpacity(0.5)),
+                          Icon(Icons.search_off, size: 48, color: AppConstants.primary.withValues(alpha: 0.5)),
                           const SizedBox(height: 12),
                           Text(
                             'No shoes match your criteria.',
-                            style: AppConstants.bodyStyle(color: AppConstants.secondary.withOpacity(0.6)),
+                            style: AppConstants.bodyStyle(color: AppConstants.secondary.withValues(alpha: 0.6)),
                           ),
                         ],
                       ),

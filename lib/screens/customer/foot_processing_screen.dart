@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../constants/app_constants.dart';
 import '../../utils/foot_measurement_utils.dart';
@@ -39,7 +38,6 @@ class _FootProcessingScreenState extends State<FootProcessingScreen>
     with SingleTickerProviderStateMixin {
   String _currentStep = 'Loading image...';
   double _progress = 0.0;
-  bool _isProcessing = true;
   String? _error;
 
   late AnimationController _pulseController;
@@ -80,7 +78,6 @@ class _FootProcessingScreenState extends State<FootProcessingScreen>
       });
       // In production: run classical CV edge detection + contour finding
       // For now, simulate with known paper dimensions
-      final paper = PaperDimensions.fromKey(widget.paperSize);
       await Future.delayed(const Duration(milliseconds: 800));
 
       // Step 3: Compute scale factor
@@ -90,7 +87,6 @@ class _FootProcessingScreenState extends State<FootProcessingScreen>
       });
       // In production: use detected paper corners to compute actual scale
       // For simulation, use a reasonable scale based on typical phone camera
-      final simulatedScaleFactor = paper.widthMm / 600; // ~600px paper width at arm's length
       await Future.delayed(const Duration(milliseconds: 600));
 
       // Step 4: Foot segmentation
@@ -152,7 +148,6 @@ class _FootProcessingScreenState extends State<FootProcessingScreen>
       if (mounted) {
         setState(() {
           _error = e.toString();
-          _isProcessing = false;
         });
       }
     }

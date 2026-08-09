@@ -1,6 +1,7 @@
 /// Data models for the product management feature.
 ///
 /// Used by [ProductService] and the add/edit product screen.
+library;
 
 class ProductVariant {
   final String? id;

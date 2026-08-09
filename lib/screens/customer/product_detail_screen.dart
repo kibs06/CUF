@@ -607,7 +607,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.55),
+                color: Colors.black.withValues(alpha: 0.55),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
@@ -679,8 +679,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
 
   Widget _buildShimmerPlaceholder() {
     return Shimmer.fromColors(
-      baseColor: AppConstants.borderGray.withOpacity(0.4),
-      highlightColor: AppConstants.borderGray.withOpacity(0.1),
+      baseColor: AppConstants.borderGray.withValues(alpha: 0.4),
+      highlightColor: AppConstants.borderGray.withValues(alpha: 0.1),
       child: Container(color: Colors.white),
     );
   }
@@ -703,8 +703,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
   /// Shimmer skeleton placeholders for the size selector row.
   Widget _buildSizeSkeleton() {
     return Shimmer.fromColors(
-      baseColor: AppConstants.borderGray.withOpacity(0.3),
-      highlightColor: AppConstants.borderGray.withOpacity(0.1),
+      baseColor: AppConstants.borderGray.withValues(alpha: 0.3),
+      highlightColor: AppConstants.borderGray.withValues(alpha: 0.1),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
@@ -782,7 +782,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                 leading: Container(
                   margin: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.3),
+                    color: Colors.black.withValues(alpha: 0.3),
                     shape: BoxShape.circle,
                   ),
                   child: IconButton(
@@ -796,7 +796,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                     icon: Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.3),
+                        color: Colors.black.withValues(alpha: 0.3),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
@@ -838,7 +838,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                           const SizedBox(width: 8),
                           SoleBadge(
                             label: widget.product['category'] ?? 'Artisan',
-                            backgroundColor: AppConstants.primary.withOpacity(0.15),
+                            backgroundColor: AppConstants.primary.withValues(alpha: 0.15),
                             textColor: AppConstants.primary,
                           ),
                         ],
@@ -879,7 +879,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                               style: AppConstants.monoStyle(
                                 fontSize: 14,
                                 color:
-                                    AppConstants.secondary.withOpacity(0.5),
+                                    AppConstants.secondary.withValues(alpha: 0.5),
                               ).copyWith(
                                   decoration: TextDecoration.lineThrough),
                             ),
@@ -956,7 +956,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                           decoration: BoxDecoration(
-                            color: AppConstants.borderGray.withOpacity(0.15),
+                            color: AppConstants.borderGray.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Row(
@@ -964,14 +964,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                               Icon(
                                 Icons.info_outline,
                                 size: 16,
-                                color: AppConstants.secondary.withOpacity(0.5),
+                                color: AppConstants.secondary.withValues(alpha: 0.5),
                               ),
                               const SizedBox(width: 8),
                               Text(
                                 'No sizes available for this product.',
                                 style: AppConstants.bodyStyle(
                                   fontSize: 13,
-                                  color: AppConstants.secondary.withOpacity(0.5),
+                                  color: AppConstants.secondary.withValues(alpha: 0.5),
                                 ),
                               ),
                             ],
@@ -1007,12 +1007,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                                       decoration: BoxDecoration(
                                         color: isSelected
                                             ? AppConstants.primary
-                                            : (isAvailable ? Colors.white : AppConstants.borderGray.withOpacity(0.2)),
+                                            : (isAvailable ? Colors.white : AppConstants.borderGray.withValues(alpha: 0.2)),
                                         borderRadius: BorderRadius.circular(8),
                                         border: Border.all(
                                           color: isSelected
                                               ? AppConstants.primary
-                                              : AppConstants.borderGray.withOpacity(0.5),
+                                              : AppConstants.borderGray.withValues(alpha: 0.5),
                                           width: 1.5,
                                         ),
                                       ),
@@ -1029,7 +1029,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                                                     ? AppConstants.surfaceLight
                                                     : (isAvailable
                                                         ? AppConstants.secondary
-                                                        : AppConstants.secondary.withOpacity(0.3)),
+                                                        : AppConstants.secondary.withValues(alpha: 0.3)),
                                               ),
                                             ),
                                             if (!isAvailable)
@@ -1039,7 +1039,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                                                 child: Container(
                                                   width: 32,
                                                   height: 2,
-                                                  color: AppConstants.error.withOpacity(0.5),
+                                                  color: AppConstants.error.withValues(alpha: 0.5),
                                                 ),
                                               ),
                                           ],
@@ -1132,7 +1132,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                           overflow: TextOverflow.ellipsis,
                           style: AppConstants.bodyStyle(
                             fontSize: 14,
-                            color: AppConstants.secondary.withOpacity(0.8),
+                            color: AppConstants.secondary.withValues(alpha: 0.8),
                             height: 1.4,
                           ),
                         ),

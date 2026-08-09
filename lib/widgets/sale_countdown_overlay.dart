@@ -28,10 +28,7 @@ class SaleCountdownTicker {
   void addListener(VoidCallback listener) {
     _ticks.addListener(listener);
     _listeners++;
-    if (_timer == null) {
-      _timer =
-          Timer.periodic(const Duration(seconds: 1), (_) => _ticks.value++);
-    }
+    _timer ??= Timer.periodic(const Duration(seconds: 1), (_) => _ticks.value++);
   }
 
   void removeListener(VoidCallback listener) {

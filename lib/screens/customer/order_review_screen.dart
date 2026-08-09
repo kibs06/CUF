@@ -272,7 +272,7 @@ class _OrderItemCard extends StatelessWidget {
                             width: 56,
                             height: 56,
                             fit: BoxFit.cover,
-                            errorWidget: (_, __, ___) => _buildPlaceholder(),
+                            errorWidget: (_, _, _) => _buildPlaceholder(),
                           )
                         : _buildPlaceholder(),
                   ),

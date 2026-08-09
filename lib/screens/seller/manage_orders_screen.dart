@@ -483,7 +483,7 @@ class _ManageOrdersScreenState extends State<ManageOrdersScreen>
             ),
             const SizedBox(height: 12),
             Text(
-              '$customerName',
+              customerName,
               style: AppConstants.bodyStyle(
                 fontSize: 13,
                 color: Colors.grey.shade600,

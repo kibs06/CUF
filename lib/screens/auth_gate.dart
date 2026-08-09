@@ -512,11 +512,20 @@ class _ProfileErrorViewState extends State<_ProfileErrorView> {
       );
     }
 
-    // Online but profile fetch failed — show the generic error with retry
+    // Online but profile fetch failed — show a friendly message with
+    // retry. NEVER surface raw exception strings (PostgrestException etc.)
+    // to the customer — they're developer noise, not user guidance.
     final error = widget.error;
-    final message = error is TimeoutException
-        ? 'Taking longer than expected. Please check your connection and try again.'
-        : (error?.toString() ?? 'Unable to load your profile.');
+    // Keep the raw exception in the log so server-side issues (e.g.
+    // PostgrestException code 42P17) stay diagnosable in production.
+    debugPrint('[auth_gate] profile load failed: $error');
+    final message = switch (error) {
+      TimeoutException() =>
+        'Taking longer than expected. Please check your connection and try again.',
+      PostgrestException() =>
+        'We could not load your account right now. Please try again in a moment.',
+      _ => 'Unable to load your profile. Please try again.',
+    };
     return Scaffold(
       backgroundColor: AppConstants.surfaceLight,
       body: SafeArea(

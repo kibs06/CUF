@@ -10,9 +10,9 @@ void main() {
   }) =>
       {
         'price': price,
-        if (salePrice != null) 'sale_price': salePrice,
-        if (startsAt != null) 'sale_starts_at': startsAt,
-        if (endsAt != null) 'sale_ends_at': endsAt,
+        'sale_price': ?salePrice,
+        'sale_starts_at': ?startsAt,
+        'sale_ends_at': ?endsAt,
       };
 
   final now = DateTime.utc(2026, 8, 4, 12); // Tuesday noon UTC

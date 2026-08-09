@@ -54,7 +54,7 @@ class ProductService {
           if (barcode != null && barcode.isNotEmpty) 'barcode': barcode.trim(),
           // Sale fields — `price` stays the ORIGINAL price; sale_price is
           // the discounted price (active-sale rules live in sale_price.dart).
-          if (salePrice != null) 'sale_price': salePrice,
+          'sale_price': ?salePrice,
           if (saleStartsAt != null)
             'sale_starts_at': saleStartsAt.toIso8601String(),
           if (saleEndsAt != null) 'sale_ends_at': saleEndsAt.toIso8601String(),

@@ -53,7 +53,7 @@ class _ARViewPlaceholderState extends State<ARViewPlaceholder> with SingleTicker
               height: 320,
               decoration: BoxDecoration(
                 border: Border.all(
-                  color: AppConstants.accent.withOpacity(0.3),
+                  color: AppConstants.accent.withValues(alpha: 0.3),
                   width: 2,
                   style: BorderStyle.solid,
                 ),
@@ -72,7 +72,7 @@ class _ARViewPlaceholderState extends State<ARViewPlaceholder> with SingleTicker
                       children: [
                         Icon(
                           Icons.fit_screen_outlined,
-                          color: AppConstants.accent.withOpacity(0.5),
+                          color: AppConstants.accent.withValues(alpha: 0.5),
                           size: 40,
                         ),
                         const SizedBox(height: 12),
@@ -81,7 +81,7 @@ class _ARViewPlaceholderState extends State<ARViewPlaceholder> with SingleTicker
                           style: AppConstants.bodyStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
-                            color: AppConstants.surfaceLight.withOpacity(0.6),
+                            color: AppConstants.surfaceLight.withValues(alpha: 0.6),
                           ),
                         ),
                       ],
@@ -107,7 +107,7 @@ class _ARViewPlaceholderState extends State<ARViewPlaceholder> with SingleTicker
                     color: AppConstants.accent,
                     boxShadow: [
                       BoxShadow(
-                        color: AppConstants.accent.withOpacity(0.8),
+                        color: AppConstants.accent.withValues(alpha: 0.8),
                         blurRadius: 10,
                         spreadRadius: 2,
                       ),
@@ -128,7 +128,7 @@ class _ARViewPlaceholderState extends State<ARViewPlaceholder> with SingleTicker
                 'Simulating AR Foundation Camera Feed...',
                 style: AppConstants.bodyStyle(
                   fontSize: 11,
-                  color: AppConstants.surfaceLight.withOpacity(0.4),
+                  color: AppConstants.surfaceLight.withValues(alpha: 0.4),
                 ),
               ),
             ),

@@ -169,7 +169,7 @@ class SoleReviewCard extends StatelessWidget {
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: images.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                separatorBuilder: (_, _) => const SizedBox(width: 8),
                 itemBuilder: (context, index) {
                   final img = images[index];
                   final url = img is Map ? img['image_url']?.toString() : null;
@@ -183,7 +183,7 @@ class SoleReviewCard extends StatelessWidget {
                         width: 80,
                         height: 80,
                         fit: BoxFit.cover,
-                        errorWidget: (_, __, ___) => Container(
+                        errorWidget: (_, _, _) => Container(
                           width: 80,
                           height: 80,
                           color: AppConstants.borderGray.withValues(alpha: 0.2),

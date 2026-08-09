@@ -56,7 +56,7 @@ class SoleTextField extends StatelessWidget {
           style: AppConstants.bodyStyle(fontSize: 15, color: AppConstants.secondary),
           decoration: InputDecoration(
             hintText: hintText,
-            hintStyle: AppConstants.bodyStyle(fontSize: 14, color: AppConstants.secondary.withOpacity(0.5)),
+            hintStyle: AppConstants.bodyStyle(fontSize: 14, color: AppConstants.secondary.withValues(alpha: 0.5)),
             filled: true,
             fillColor: Colors.white,
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -64,11 +64,11 @@ class SoleTextField extends StatelessWidget {
             suffixIcon: suffixIcon,
             border: OutlineInputBorder(
               borderRadius: AppConstants.buttonRadius,
-              borderSide: BorderSide(color: AppConstants.borderGray.withOpacity(0.5), width: 1.5),
+              borderSide: BorderSide(color: AppConstants.borderGray.withValues(alpha: 0.5), width: 1.5),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: AppConstants.buttonRadius,
-              borderSide: BorderSide(color: AppConstants.borderGray.withOpacity(0.5), width: 1.5),
+              borderSide: BorderSide(color: AppConstants.borderGray.withValues(alpha: 0.5), width: 1.5),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: AppConstants.buttonRadius,

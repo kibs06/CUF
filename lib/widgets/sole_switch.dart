@@ -39,7 +39,6 @@ class SoleSwitch extends StatelessWidget {
       value: value,
       onChanged: onChanged,
       // Active (ON) state
-      activeColor: onColor,
       activeThumbColor: thumbColor,
       activeTrackColor: onColor,
       // Inactive (OFF) state

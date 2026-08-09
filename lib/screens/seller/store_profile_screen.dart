@@ -445,7 +445,6 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
               Switch(
                 value: _isOpen,
                 onChanged: (_) => _toggleOpen(),
-                activeColor: SoleSwitch.onColor,
                 activeThumbColor: SoleSwitch.thumbColor,
                 inactiveTrackColor: SoleSwitch.offColor,
                 inactiveThumbColor: SoleSwitch.thumbColor,

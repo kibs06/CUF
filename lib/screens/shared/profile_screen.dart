@@ -865,7 +865,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               onChanged: _isTogglingStore
                                   ? null
                                   : (_) => _toggleStoreOpen(),
-                              activeColor: SoleSwitch.onColor,
                               activeThumbColor: SoleSwitch.thumbColor,
                               inactiveTrackColor: SoleSwitch.offColor,
                               inactiveThumbColor: SoleSwitch.thumbColor,

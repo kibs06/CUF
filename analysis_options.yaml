@@ -9,6 +9,13 @@
 # packages, and plugins designed to encourage good coding practices.
 include: package:flutter_lints/flutter.yaml
 
+# docs/ contains stale Dart snapshots (documentation copies with broken
+# relative imports) that are NOT part of the app — exclude them from
+# analysis so `flutter analyze` reports on the real code (lib/, test/) only.
+analyzer:
+  exclude:
+    - docs/**
+
 linter:
   # The lint rules applied to this project can be customized in the
   # section below to disable rules from the `package:flutter_lints/flutter.yaml`

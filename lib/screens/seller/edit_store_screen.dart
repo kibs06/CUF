@@ -604,7 +604,6 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
           ),
           value: _isOpen,
           onChanged: (val) => setState(() => _isOpen = val),
-          activeColor: SoleSwitch.onColor,
           activeThumbColor: SoleSwitch.thumbColor,
           inactiveThumbColor: SoleSwitch.thumbColor,
           inactiveTrackColor: SoleSwitch.offColor,

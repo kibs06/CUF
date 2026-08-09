@@ -143,7 +143,7 @@ class _SellerInboxScreenState extends State<SellerInboxScreen> {
       child: ListView.separated(
         padding: const EdgeInsets.symmetric(vertical: 8),
         itemCount: provider.conversations.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 1),
+        separatorBuilder: (_, _) => const SizedBox(height: 1),
         itemBuilder: (context, index) {
           final conv = provider.conversations[index];
           return _buildConversationTile(conv);

@@ -1163,7 +1163,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
                             ? CachedNetworkImage(
                                 imageUrl: imageUrl,
                                 fit: BoxFit.cover,
-                                placeholder: (_, __) => Container(
+                                placeholder: (_, _) => Container(
                                   color: AppConstants.borderGray
                                       .withValues(alpha: 0.3),
                                   child: const Center(
@@ -1171,7 +1171,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
                                         color: AppConstants.borderGray),
                                   ),
                                 ),
-                                errorWidget: (_, __, ___) => Container(
+                                errorWidget: (_, _, _) => Container(
                                   color: AppConstants.borderGray
                                       .withValues(alpha: 0.3),
                                   child: const Center(
@@ -1354,7 +1354,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
         scrollDirection: Axis.horizontal,
         itemCount: filters.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
           final filter = filters[index];
           final selected = _activeFilter == filter;

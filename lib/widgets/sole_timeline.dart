@@ -82,7 +82,7 @@ class SoleTimeline extends StatelessWidget {
                       Expanded(
                         child: Container(
                           width: 2,
-                          color: isPast ? AppConstants.success : AppConstants.borderGray.withOpacity(0.5),
+                          color: isPast ? AppConstants.success : AppConstants.borderGray.withValues(alpha: 0.5),
                         ),
                       ),
                   ],
@@ -104,7 +104,7 @@ class SoleTimeline extends StatelessWidget {
                           fontWeight: FontWeight.bold,
                           color: isActive
                               ? AppConstants.primary
-                              : (isPast ? AppConstants.secondary : AppConstants.secondary.withOpacity(0.5)),
+                              : (isPast ? AppConstants.secondary : AppConstants.secondary.withValues(alpha: 0.5)),
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -112,7 +112,7 @@ class SoleTimeline extends StatelessWidget {
                         item.description,
                         style: AppConstants.bodyStyle(
                           fontSize: 13,
-                          color: AppConstants.secondary.withOpacity(isFuture ? 0.4 : 0.7),
+                          color: AppConstants.secondary.withValues(alpha: isFuture ? 0.4 : 0.7),
                         ),
                       ),
                       if (item.time.isNotEmpty) ...[
@@ -121,7 +121,7 @@ class SoleTimeline extends StatelessWidget {
                           item.time,
                           style: AppConstants.monoStyle(
                             fontSize: 11,
-                            color: AppConstants.primary.withOpacity(isFuture ? 0.4 : 0.8),
+                            color: AppConstants.primary.withValues(alpha: isFuture ? 0.4 : 0.8),
                           ),
                         ),
                       ],

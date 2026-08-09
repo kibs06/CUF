@@ -13,7 +13,6 @@ class MockPostgrestTransformBuilder extends Mock implements PostgrestTransformBu
 class MockUser extends Mock implements User {}
 
 void main() {
-  late CartService cartService;
   late MockSupabaseClient mockClient;
   late MockGoTrueClient mockAuth;
   late MockUser mockUser;

@@ -171,7 +171,7 @@ class ReportService {
         .eq('id', reportId)
         .maybeSingle();
 
-    return response as Map<String, dynamic>?;
+    return response;
   }
 
   // ── Admin: Fetch all reports with filters ────────────────────────

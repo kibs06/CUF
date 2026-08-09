@@ -94,7 +94,7 @@ class SizeGuideModal extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
               shrinkWrap: true,
               itemCount: _sizes.length,
-              separatorBuilder: (_, __) => const Divider(
+              separatorBuilder: (_, _) => const Divider(
                 height: 1,
                 color: AppConstants.borderGray,
               ),

@@ -1096,7 +1096,7 @@ class _POSScreenState extends State<POSScreen>
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: _scanHistory.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
           final entry = _scanHistory[index];
           final products = context.read<ProductProvider>().products;
@@ -1105,7 +1105,7 @@ class _POSScreenState extends State<POSScreen>
           final hasStock = product != null && _availableSizes(product).isNotEmpty;
 
           return GestureDetector(
-            onTap: hasStock ? () => _openProductSheet(product as Map<String, dynamic>) : null,
+            onTap: hasStock ? () => _openProductSheet(product) : null,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(

@@ -94,7 +94,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       children: [
                         CircleAvatar(
                           radius: 64,
-                          backgroundColor: AppConstants.primary.withOpacity(0.1),
+                          backgroundColor: AppConstants.primary.withValues(alpha: 0.1),
                           backgroundImage: _avatarUrl != null
                               ? NetworkImage(_avatarUrl!)
                               : null,
@@ -177,10 +177,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                         decoration: BoxDecoration(
-                          color: AppConstants.borderGray.withOpacity(0.3),
+                          color: AppConstants.borderGray.withValues(alpha: 0.3),
                           borderRadius: AppConstants.buttonRadius,
                           border: Border.all(
-                            color: AppConstants.borderGray.withOpacity(0.5),
+                            color: AppConstants.borderGray.withValues(alpha: 0.5),
                             width: 1,
                           ),
                         ),
@@ -197,7 +197,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 auth.displayEmail,
                                 style: AppConstants.bodyStyle(
                                   fontSize: 15,
-                                  color: AppConstants.secondary.withOpacity(0.6),
+                                  color: AppConstants.secondary.withValues(alpha: 0.6),
                                 ),
                               ),
                             ),

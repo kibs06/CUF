@@ -83,21 +83,19 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
       onPressed: () async {
         Navigator.of(context).pop();
         if (isSelected) return;
-        final success = await Provider.of<OrderProvider>(context, listen: false).deactivateUser(userId); // deactivates to customer
+        final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+        await orderProvider.deactivateUser(userId); // deactivates to customer
+        if (!mounted) return;
         if (roleValue != AppConstants.roleCustomer) {
           // If advancing to seller or admin
           if (roleValue == AppConstants.roleSeller) {
-            await Provider.of<OrderProvider>(context, listen: false).approveSeller(userId);
+            await orderProvider.approveSeller(userId);
           } else {
-            // mock custom role assignment
-            final op = Provider.of<OrderProvider>(context, listen: false);
-            final index = op.profiles.indexWhere((p) => p['id'] == userId);
-            if (index != -1) {
-              op.profiles[index]['role'] = AppConstants.roleAdmin;
-              op.notifyListeners();
-            }
+            // mock custom role assignment (local cache only)
+            orderProvider.setProfileRole(userId, AppConstants.roleAdmin);
           }
         }
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Role updated to $label!'), backgroundColor: AppConstants.success),
         );
@@ -177,13 +175,13 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                               Color roleBgColor;
                               Color roleTextColor;
                               if (role == AppConstants.roleAdmin) {
-                                roleBgColor = AppConstants.error.withOpacity(0.15);
+                                roleBgColor = AppConstants.error.withValues(alpha: 0.15);
                                 roleTextColor = AppConstants.error;
                               } else if (role == AppConstants.roleSeller) {
-                                roleBgColor = Colors.amber.withOpacity(0.15);
+                                roleBgColor = Colors.amber.withValues(alpha: 0.15);
                                 roleTextColor = const Color(0xFFC47D00);
                               } else {
-                                roleBgColor = Colors.grey.withOpacity(0.15);
+                                roleBgColor = Colors.grey.withValues(alpha: 0.15);
                                 roleTextColor = Colors.grey;
                               }
 
@@ -196,7 +194,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                                     children: [
                                       CircleAvatar(
                                         radius: 20,
-                                        backgroundColor: AppConstants.primary.withOpacity(0.1),
+                                        backgroundColor: AppConstants.primary.withValues(alpha: 0.1),
                                         backgroundImage: profile['avatar_url'] != null
                                             ? NetworkImage(profile['avatar_url'])
                                             : null,

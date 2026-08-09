@@ -730,10 +730,11 @@ class SupabaseService {
         'title': title,
         'body': body,
         'type': type,
-        if (referenceId != null) 'referenceId': referenceId,
-        if (screen != null) 'screen': screen,
+        'referenceId': ?referenceId,
+        'screen': ?screen,
       }).catchError((e) {
         debugPrint('[SupabaseService] Customer push trigger failed: $e');
+        return FunctionResponse(status: 500);
       });
     } catch (e) {
       debugPrint('[SupabaseService] Customer push trigger failed: $e');

@@ -227,7 +227,7 @@ class SellerNotificationService {
         'title': title,
         'body': body,
         'reference_id': referenceId,
-        if (metadata != null) 'metadata': metadata,
+        'metadata': ?metadata,
       });
     } catch (e) {
       debugPrint('[SellerNotification] Create failed: $e');
@@ -478,8 +478,8 @@ class SellerNotificationService {
           'title': title,
           'body': body,
           'type': type,
-          if (referenceId != null) 'referenceId': referenceId,
-          if (screen != null) 'screen': screen,
+          'referenceId': ?referenceId,
+          'screen': ?screen,
         });
       }).catchError((e) {
         debugPrint('[SellerNotification] Push trigger failed: $e');

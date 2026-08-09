@@ -36,7 +36,7 @@ class SoleCard extends StatelessWidget {
         color: color ?? AppConstants.surfaceLight,
         borderRadius: borderRadius ?? AppConstants.cardRadius,
         boxShadow: shadow ?? AppConstants.warmShadow,
-        border: border ?? Border.all(color: AppConstants.primary.withOpacity(0.08), width: 1),
+        border: border ?? Border.all(color: AppConstants.primary.withValues(alpha: 0.08), width: 1),
       ),
       child: child,
     );

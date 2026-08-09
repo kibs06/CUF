@@ -33,7 +33,7 @@ class SolePrimaryButton extends StatelessWidget {
         onPressed: isLoading ? null : onPressed,
         style: FilledButton.styleFrom(
           backgroundColor: backgroundColor,
-          disabledBackgroundColor: backgroundColor.withOpacity(0.6),
+          disabledBackgroundColor: backgroundColor.withValues(alpha: 0.6),
           shape: RoundedRectangleBorder(
             borderRadius: AppConstants.buttonRadius,
           ),

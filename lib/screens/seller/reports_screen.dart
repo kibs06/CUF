@@ -274,7 +274,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
@@ -322,7 +322,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
         decoration: BoxDecoration(
           color: selected
               ? AppConstants.primary
-              : AppConstants.primary.withOpacity(0.08),
+              : AppConstants.primary.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Text(
@@ -388,7 +388,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             height: 24,
             decoration: BoxDecoration(
               color: rank <= 3
-                  ? AppConstants.primary.withOpacity(0.1)
+                  ? AppConstants.primary.withValues(alpha: 0.1)
                   : Colors.transparent,
               borderRadius: BorderRadius.circular(12),
             ),

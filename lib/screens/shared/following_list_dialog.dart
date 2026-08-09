@@ -180,7 +180,7 @@ class _FollowingListDialogState extends State<FollowingListDialog> {
         customerId: customerId,
       );
 
-      if (!mounted) return;
+      if (!context.mounted) return;
       Navigator.of(context).pop();
       Navigator.of(context).push(
         MaterialPageRoute(
@@ -192,7 +192,7 @@ class _FollowingListDialogState extends State<FollowingListDialog> {
         ),
       );
     } catch (e) {
-      if (!mounted) return;
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Could not open chat: $e'),
@@ -437,7 +437,7 @@ class _FollowingRow extends StatelessWidget {
     if (store.logoUrl != null && store.logoUrl!.isNotEmpty) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(12),
-        child: Image.network(store.logoUrl!, width: 44, height: 44, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _initialsAvatar(brandColor)),
+        child: Image.network(store.logoUrl!, width: 44, height: 44, fit: BoxFit.cover, errorBuilder: (_, _, _) => _initialsAvatar(brandColor)),
       );
     }
     return _initialsAvatar(brandColor);

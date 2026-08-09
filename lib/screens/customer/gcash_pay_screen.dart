@@ -437,7 +437,7 @@ class _GcashPayScreenState extends State<GcashPayScreen> {
                               width: 180,
                               height: 180,
                               fit: BoxFit.contain,
-                              errorBuilder: (_, __, ___) => Container(
+                              errorBuilder: (_, _, _) => Container(
                                 width: 180,
                                 height: 180,
                                 color: AppConstants.borderGray

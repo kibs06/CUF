@@ -191,37 +191,38 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                   title: Text('Base Shoe Design', style: AppConstants.headlineStyle(fontSize: 16)),
                   content: SoleCard(
                     color: Colors.white,
-                    child: Column(
-                      children: List.generate(_baseDesigns.length, (index) {
-                        final item = _baseDesigns[index];
-                        final isSelected = _selectedBaseIndex == index;
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          decoration: BoxDecoration(
-                            border: Border.all(
-                              color: isSelected ? AppConstants.primary : AppConstants.borderGray.withOpacity(0.4),
-                              width: isSelected ? 2 : 1,
+                    child: RadioGroup<int>(
+                      groupValue: _selectedBaseIndex,
+                      onChanged: (val) {
+                        if (val == null) return;
+                        setState(() => _selectedBaseIndex = val);
+                      },
+                      child: Column(
+                        children: List.generate(_baseDesigns.length, (index) {
+                          final item = _baseDesigns[index];
+                          final isSelected = _selectedBaseIndex == index;
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            decoration: BoxDecoration(
+                              border: Border.all(
+                                color: isSelected ? AppConstants.primary : AppConstants.borderGray.withValues(alpha: 0.4),
+                                width: isSelected ? 2 : 1,
+                              ),
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: RadioListTile(
-                            activeColor: AppConstants.primary,
-                            value: index,
-                            groupValue: _selectedBaseIndex,
-                            title: Text(item['name']!, style: AppConstants.bodyStyle(fontWeight: FontWeight.bold)),
-                            subtitle: Text(item['desc']!, style: AppConstants.bodyStyle(fontSize: 12, color: Colors.black54)),
-                            secondary: ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Image.network(item['image']!, width: 50, height: 50, fit: BoxFit.cover),
+                            child: RadioListTile(
+                              activeColor: AppConstants.primary,
+                              value: index,
+                              title: Text(item['name']!, style: AppConstants.bodyStyle(fontWeight: FontWeight.bold)),
+                              subtitle: Text(item['desc']!, style: AppConstants.bodyStyle(fontSize: 12, color: Colors.black54)),
+                              secondary: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.network(item['image']!, width: 50, height: 50, fit: BoxFit.cover),
+                              ),
                             ),
-                            onChanged: (val) {
-                              setState(() {
-                                _selectedBaseIndex = val as int;
-                              });
-                            },
-                          ),
-                        );
-                      }),
+                          );
+                        }),
+                      ),
                     ),
                   ),
                 ),
@@ -238,7 +239,7 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                       children: [
                         Text(
                           'Tap color palette to apply',
-                          style: AppConstants.bodyStyle(fontSize: 13, color: AppConstants.secondary.withOpacity(0.6)),
+                          style: AppConstants.bodyStyle(fontSize: 13, color: AppConstants.secondary.withValues(alpha: 0.6)),
                         ),
                         const SizedBox(height: 12),
                         GridView.builder(
@@ -264,10 +265,10 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                               },
                               child: Container(
                                 decoration: BoxDecoration(
-                                  color: colorVal.withOpacity(0.1),
+                                  color: colorVal.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
-                                    color: isSelected ? AppConstants.primary : AppConstants.borderGray.withOpacity(0.4),
+                                    color: isSelected ? AppConstants.primary : AppConstants.borderGray.withValues(alpha: 0.4),
                                     width: isSelected ? 2 : 1,
                                   ),
                                 ),
@@ -314,10 +315,10 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                             margin: const EdgeInsets.only(bottom: 12),
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              color: isSelected ? AppConstants.primary.withOpacity(0.04) : Colors.white,
+                              color: isSelected ? AppConstants.primary.withValues(alpha: 0.04) : Colors.white,
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                color: isSelected ? AppConstants.primary : AppConstants.borderGray.withOpacity(0.4),
+                                color: isSelected ? AppConstants.primary : AppConstants.borderGray.withValues(alpha: 0.4),
                                 width: isSelected ? 2 : 1,
                               ),
                             ),
@@ -343,7 +344,7 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                   decoration: BoxDecoration(
-                                    color: AppConstants.primary.withOpacity(0.1),
+                                    color: AppConstants.primary.withValues(alpha: 0.1),
                                     borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: Text(
@@ -471,7 +472,7 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                             width: double.infinity,
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
-                              color: Colors.grey.withOpacity(0.05),
+                              color: Colors.grey.withValues(alpha: 0.05),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(

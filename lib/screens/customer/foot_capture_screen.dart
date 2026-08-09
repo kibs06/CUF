@@ -36,7 +36,7 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
   bool _isCapturing = false;
 
   // Capture state
-  int _currentFoot = 0; // 0 = left, 1 = right
+  final int _currentFoot = 0; // 0 = left, 1 = right
   String _guidanceText = 'Point camera at your foot on the paper';
   String _guidanceStatus = 'searching'; // 'searching', 'detected', 'ready'
   double _paperConfidence = 0.0;

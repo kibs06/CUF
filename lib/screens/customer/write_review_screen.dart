@@ -240,7 +240,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
                         width: 40,
                         height: 40,
                         fit: BoxFit.cover,
-                        errorWidget: (_, __, ___) => Container(
+                        errorWidget: (_, _, _) => Container(
                           width: 40,
                           height: 40,
                           color: AppConstants.primary.withValues(alpha: 0.1),
@@ -476,7 +476,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
                   fit: BoxFit.cover,
                   width: 80,
                   height: 80,
-                  errorWidget: (_, __, ___) => Container(
+                  errorWidget: (_, _, _) => Container(
                     width: 80,
                     height: 80,
                     color: AppConstants.borderGray.withValues(alpha: 0.2),

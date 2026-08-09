@@ -35,7 +35,7 @@ class SoleMetricCard extends StatelessWidget {
                 style: AppConstants.bodyStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
-                  color: AppConstants.secondary.withOpacity(0.6),
+                  color: AppConstants.secondary.withValues(alpha: 0.6),
                 ),
               ),
               Icon(

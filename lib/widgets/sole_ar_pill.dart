@@ -18,7 +18,7 @@ class SoleARPill extends StatelessWidget {
         borderRadius: BorderRadius.circular(30),
         boxShadow: [
           BoxShadow(
-            color: AppConstants.accent.withOpacity(0.3),
+            color: AppConstants.accent.withValues(alpha: 0.3),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),

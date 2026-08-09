@@ -67,7 +67,7 @@ class SoleProductCard extends StatelessWidget {
               borderRadius: AppConstants.cardRadius,
               boxShadow: AppConstants.warmShadow,
               border: Border.all(
-                color: AppConstants.primary.withOpacity(0.08),
+                color: AppConstants.primary.withValues(alpha: 0.08),
                 width: 1,
               ),
             ),
@@ -129,7 +129,7 @@ class SoleProductCard extends StatelessWidget {
                               '(${product['review_count']})',
                               style: AppConstants.bodyStyle(
                                 fontSize: 10,
-                                color: AppConstants.secondary.withOpacity(0.5),
+                                color: AppConstants.secondary.withValues(alpha: 0.5),
                               ),
                             ),
                           ],
@@ -162,7 +162,7 @@ class SoleProductCard extends StatelessWidget {
                                   '₱${price.toStringAsFixed(2)}',
                                   style: AppConstants.monoStyle(
                                     fontSize: 11,
-                                    color: AppConstants.secondary.withOpacity(0.5),
+                                    color: AppConstants.secondary.withValues(alpha: 0.5),
                                   ).copyWith(
                                       decoration: TextDecoration.lineThrough),
                                 ),
@@ -181,7 +181,7 @@ class SoleProductCard extends StatelessWidget {
                             product['category'] ?? 'Artisan',
                             style: AppConstants.bodyStyle(
                               fontSize: 10,
-                              color: AppConstants.secondary.withOpacity(0.6),
+                              color: AppConstants.secondary.withValues(alpha: 0.6),
                             ),
                           ),
                         ],
@@ -229,7 +229,7 @@ class SoleProductCard extends StatelessWidget {
             width: double.infinity,
             height: double.infinity,
             placeholder: (context, url) => Container(
-              color: AppConstants.borderGray.withOpacity(0.3),
+              color: AppConstants.borderGray.withValues(alpha: 0.3),
               child: const Center(
                 child: SizedBox(
                   width: 20,
@@ -243,7 +243,7 @@ class SoleProductCard extends StatelessWidget {
               ),
             ),
             errorWidget: (context, url, error) => Container(
-              color: AppConstants.borderGray.withOpacity(0.3),
+              color: AppConstants.borderGray.withValues(alpha: 0.3),
               child: const Icon(Icons.broken_image_outlined,
                   color: AppConstants.primary),
             ),

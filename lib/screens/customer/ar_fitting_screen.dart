@@ -153,7 +153,7 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProv
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: inStock ? AppConstants.success.withOpacity(0.2) : AppConstants.error.withOpacity(0.2),
+                          color: inStock ? AppConstants.success.withValues(alpha: 0.2) : AppConstants.error.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
@@ -268,7 +268,7 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProv
               child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
                 child: Container(
-                  color: Colors.black.withOpacity(0.4),
+                  color: Colors.black.withValues(alpha: 0.4),
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   child: Row(
                     children: [
@@ -298,7 +298,7 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProv
                               'Active Color: $_activeColor',
                               style: AppConstants.bodyStyle(
                                 fontSize: 12,
-                                color: AppConstants.surfaceLight.withOpacity(0.6),
+                                color: AppConstants.surfaceLight.withValues(alpha: 0.6),
                               ),
                             ),
                           ],
@@ -327,7 +327,7 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProv
               child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
                 child: Container(
-                  color: Colors.black.withOpacity(0.55),
+                  color: Colors.black.withValues(alpha: 0.55),
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -356,7 +356,7 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProv
                                           boxShadow: [
                                             BoxShadow(
                                               color: (tracking ? AppConstants.success : AppConstants.accent)
-                                                  .withOpacity(0.6 * _pulseController.value),
+                                                  .withValues(alpha: 0.6 * _pulseController.value),
                                               blurRadius: 6,
                                               spreadRadius: 2,
                                             ),
@@ -388,12 +388,12 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProv
                                   style: AppConstants.bodyStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.bold,
-                                    color: AppConstants.surfaceLight.withOpacity(0.8),
+                                    color: AppConstants.surfaceLight.withValues(alpha: 0.8),
                                   ),
                                 ),
                                 Icon(
                                   Icons.arrow_drop_up,
-                                  color: AppConstants.surfaceLight.withOpacity(0.8),
+                                  color: AppConstants.surfaceLight.withValues(alpha: 0.8),
                                 ),
                               ],
                             ),
@@ -587,7 +587,7 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProv
     return Row(
       children: [
         CircleAvatar(
-          backgroundColor: AppConstants.primary.withOpacity(0.2),
+          backgroundColor: AppConstants.primary.withValues(alpha: 0.2),
           child: Icon(icon, color: AppConstants.accent),
         ),
         const SizedBox(width: 16),
@@ -602,7 +602,7 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProv
               const SizedBox(height: 2),
               Text(
                 desc,
-                style: AppConstants.bodyStyle(fontSize: 12, color: AppConstants.surfaceLight.withOpacity(0.7)),
+                style: AppConstants.bodyStyle(fontSize: 12, color: AppConstants.surfaceLight.withValues(alpha: 0.7)),
               ),
             ],
           ),
@@ -621,7 +621,7 @@ class _ARParticlePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = AppConstants.accent.withOpacity(0.2)
+      ..color = AppConstants.accent.withValues(alpha: 0.2)
       ..style = PaintingStyle.fill;
 
     // Draw small animated glowing circles near borders

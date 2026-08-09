@@ -71,9 +71,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       margin: const EdgeInsets.only(bottom: 20),
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: Colors.amber.withOpacity(0.15),
+                        color: Colors.amber.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.amber.withOpacity(0.3), width: 1.5),
+                        border: Border.all(color: Colors.amber.withValues(alpha: 0.3), width: 1.5),
                       ),
                       child: Row(
                         children: [

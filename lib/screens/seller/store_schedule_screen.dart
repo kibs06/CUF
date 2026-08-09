@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../../constants/app_constants.dart';
 import '../../services/store_service.dart';
 import '../../widgets/sole_primary_button.dart';
@@ -315,7 +314,7 @@ class _StoreScheduleScreenState extends State<StoreScheduleScreen> {
             onChanged: (value) {
               setState(() => _autoScheduleEnabled = value);
             },
-            activeColor: AppConstants.primary,
+            activeThumbColor: AppConstants.primary,
           ),
         ],
       ),

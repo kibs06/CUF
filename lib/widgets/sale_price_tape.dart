@@ -314,8 +314,8 @@ class _SalePriceTapeState extends State<SalePriceTape>
                               ..setEntry(3, 2, 0.0012)
                               ..rotateX(tilt)
                               ..rotateZ(spin)
-                              ..translate(dx, dy)
-                              ..scale(scale),
+                              ..translateByDouble(dx, dy, 0.0, 1.0)
+                              ..scaleByDouble(scale, scale, scale, 1.0),
                             alignment: Alignment.center,
                             // Corner lift: the RIGHT end detaches first.
                             child: Transform.rotate(
