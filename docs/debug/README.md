@@ -1,32 +1,40 @@
-# SoleVision — Auth Debug Reference
+# SoleVision — docs/debug (Debug Reference)
 
-This folder contains **snapshots** of the core authentication files as of **June 29, 2026**, after the account-switching freeze bug was fixed.
+This folder contains **historical debugging documentation and setup SQL scripts**
+from past sessions. Nothing here is the source of truth — the actual source files
+live in `lib/`.
 
-These files are kept here for reference only — they are **not** the source of truth. The actual source files live in `lib/`.
-
----
-
-## Why These Files Were Copied
-
-During the debugging session, we identified and fixed **5 root causes** of a high-severity bug: the app freezing when a seller or customer logs out and logs in with a different account.
-
-The fixes touched every file in the auth flow, so these copies serve as a documented checkpoint of the corrected state.
+> **Note (2026-08-09):** The snapshot `.dart` copies of source files that used to
+> live here were **removed** — they drifted from the live codebase, broke
+> `flutter analyze` (733 errors from broken relative imports), and confused
+> contributors. If you need the old snapshots, they are fully recoverable from
+> git history (`git log -- docs/debug`).
 
 ---
 
-## Files
+## What's still here
 
-| File | Responsibility | Key Fixes Applied |
-|------|---------------|-------------------|
-| `auth_provider.dart` | Auth state: `_currentUser`, `_profile`, `_isLoading`, `_errorMessage` | State fully cleared on `login()` and `logout()`; `try/catch/finally` guarantees `_isLoading` resets |
-| `auth_service.dart` | Supabase Auth calls: `signIn`, `signOut`, `getProfile` with retry logic | Force signs out existing session before new `signIn`; retry counter uses local variable (no stale state) |
-| `auth_gate.dart` | `StreamBuilder` routing by role after auth state changes | Explicit `signedOut`/`signedIn` handling; profile cache reset on sign-out; 12-second profile fetch timeout; offline detection via `InternetAddress.lookup` |
-| `login_screen.dart` | Login form UI, button state, error display | Button only disabled on `isLoading`; error shown via SnackBar; no manual `Navigator.push` after login |
-| `biometric_service.dart` | Biometric auth, credential storage via `FlutterSecureStorage` | `clearCredentials()` called on logout to prevent Account A's credentials from interfering with Account B |
+| File | Purpose |
+|------|---------|
+| `inventory_backfill.sql` | Backfill `inventory` from `product_variants` (referenced by setup docs) |
+| `cart_items_migration.sql` | Legacy cart-items table setup |
+| `CUSTOMER_ORDER_PROCESS.md` | Customer order flow reference |
+| `REVIEW_INSERT_PAYLOAD_AND_ORDER_STATUSES.md` | Order status + review payload reference |
+| `SELLER_ORDER_CONFIRMATION_ARCHITECTURE.md` | Seller order confirmation architecture |
+| `SESSION_LOG_JUNE_30_2026.md` | Session log (historical) |
+| `SESSION_LOG_JULY_2_2026.md` | Session log (historical) |
+| `SoleVision_Project_Documentation2.md` | Older project documentation (historical) |
 
 ---
 
-## Bug Summary
+## Historical: Auth Debug Reference (June 29, 2026)
+
+The snapshot files this section once documented were removed on 2026-08-09; the
+record of what was fixed is preserved here.
+
+During the debugging session, we identified and fixed **5 root causes** of a
+high-severity bug: the app freezing when a seller or customer logs out and logs
+in with a different account.
 
 | Cause | Fix |
 |-------|-----|
@@ -36,17 +44,6 @@ The fixes touched every file in the auth flow, so these copies serve as a docume
 | Biometric credentials from previous account interfering | `BiometricService.clearCredentials()` called in `AuthProvider.logout()` |
 | `_isLoading` stuck `true` after failed login | `try/catch/finally` in `login()` guarantees reset |
 
----
-
-## Additional Improvements
-
-- **Profile fetch timeout** (12s) — prevents users from being stuck on loading screen forever
-- **Offline detection** — `InternetAddress.lookup('google.com')` check shows "No Internet Connection" screen with retry button instead of spinning indefinitely
-
----
-
-## How to Use
-
-These files are **read-only reference copies**. If you need to make changes, edit the actual source files in `lib/`. After making changes, you can update these copies by running the copy commands again.
-
-> **Note:** These snapshots will drift from the live codebase over time. They are intended as a debugging reference, not a sync mechanism.
+**Additional improvements:** 12-second profile fetch timeout (prevents stuck
+loading), and offline detection (`InternetAddress.lookup`) with a "No Internet
+Connection" retry screen.

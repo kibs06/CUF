@@ -1923,7 +1923,9 @@ called and the skeleton is shown while loading.
 
 ## Reference Copies
 
-All modified source files were copied to `docs/debug/` for reference:
+All modified source files were copied to `docs/debug/` for reference
+(those snapshot copies were **removed on 2026-08-09** — they had drifted from
+the live codebase and broke `flutter analyze`; recover them via git history):
 
 | File | Source | Purpose |
 |------|--------|---------|
@@ -1982,7 +1984,7 @@ across all colors) and inserts one row per unique size into `inventory`. Uses
 | 5 | `lib/screens/customer/product_detail_screen.dart` | `_buildSizesMap()` helper, `_fetchInventory()` fallback, loading skeleton |
 | 6 | `docs/debug/inventory_backfill.sql` | SQL backfill script for existing products |
 | 7 | `docs/debug/README.md` | Debug folder overview |
-| 8 | `docs/debug/*.dart` | Reference copies of all modified source files |
+| 8 | ~~`docs/debug/*.dart`~~ | Reference copies of all modified source files — **removed 2026-08-09** (recoverable via git history) |
 
 ---
 

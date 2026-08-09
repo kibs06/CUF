@@ -248,7 +248,7 @@ app/
 │   ├── widgets/           # Reusable widgets + seller/ subfolder
 │   └── main.dart          # Entry point
 ├── supabase/schema.sql    # Database schema + RLS policies
-└── docs/debug/            # Reference copies of modified files + backfill SQL
+└── docs/debug/            # Setup SQL scripts + historical docs (snapshots removed 2026-08-09)
 ```
 
 ---
