@@ -7,6 +7,7 @@ import Users from './pages/Users.jsx'
 import SellerApplications from './pages/SellerApplications.jsx'
 import Products from './pages/Products.jsx'
 import Orders from './pages/Orders.jsx'
+import Transactions from './pages/Transactions.jsx'
 import Reports from './pages/Reports.jsx'
 import Analytics from './pages/Analytics.jsx'
 import Settings from './pages/Settings.jsx'
@@ -22,6 +23,7 @@ export default function App() {
           <Route path="seller-applications" element={<SellerApplications />} />
           <Route path="products" element={<Products />} />
           <Route path="orders" element={<Orders />} />
+          <Route path="transactions" element={<Transactions />} />
           <Route path="reports" element={<Reports />} />
           <Route path="analytics" element={<Analytics />} />
           <Route path="settings" element={<Settings />} />

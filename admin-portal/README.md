@@ -49,5 +49,6 @@ npm run preview
 | `/seller-applications` | Approve/reject seller applications |
 | `/products` | Product catalog management |
 | `/orders` | Order management |
+| `/transactions` | GCash/PayMongo payment transactions (read-only) |
 | `/analytics` | Charts and trends |
 | `/settings` | Admin profile & password |

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import Badge from '../components/ui/Badge.jsx'
 import Modal from '../components/ui/Modal.jsx'
 import { TableSkeleton } from '../components/ui/Skeleton.jsx'
@@ -231,6 +232,14 @@ export default function Orders() {
               <p className="font-semibold text-[#3B2314]">{selectedOrder.customer_name}</p>
               <p className="text-[#6B5C4E]">{selectedOrder.customer_email}</p>
               <p className="text-[#6B5C4E]">{formatDateTime(selectedOrder.created_at)}</p>
+              {selectedOrder.payment_method === 'gcash' && selectedOrder.source === 'online' && (
+                <Link
+                  to={`/transactions?order=${selectedOrder.id}`}
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-[#8B5A2B] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#6B4520]"
+                >
+                  View Payment
+                </Link>
+              )}
             </div>
 
             <div>

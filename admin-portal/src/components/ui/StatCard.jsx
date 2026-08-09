@@ -1,4 +1,4 @@
-export default function StatCard({ icon, label, value, highlight = false, iconBg = 'rgba(139,90,43,0.1)', iconColor = '#8B5A2B' }) {
+export default function StatCard({ icon, label, value, highlight = false, iconBg = 'rgba(139,90,43,0.1)', iconColor = '#8B5A2B', children }) {
   return (
     <div
       className={`rounded-2xl border border-[#D9D0C7] bg-white p-6 shadow-sm transition-shadow hover:shadow-md ${
@@ -14,7 +14,7 @@ export default function StatCard({ icon, label, value, highlight = false, iconBg
       </div>
 
       {/* Number in JetBrains Mono */}
-      <p className="font-mono text-3xl font-bold text-[#3B2314] mb-1">{value}</p>
+      <p className="font-mono text-3xl font-bold text-[#3B2314] mb-1">{children ?? value}</p>
 
       {/* Label */}
       <p className="text-sm font-medium text-[#6B5C4E]">{label}</p>

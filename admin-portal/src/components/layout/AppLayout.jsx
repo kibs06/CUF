@@ -9,6 +9,7 @@ const TITLES = {
   '/seller-applications': 'Seller Applications',
   '/products': 'Products',
   '/orders': 'Orders',
+  '/transactions': 'Transactions',
   '/analytics': 'Analytics',
   '/settings': 'Settings',
 }

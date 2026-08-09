@@ -33,6 +33,14 @@ export const ORDER_STATUSES = [
   'cancelled',
 ]
 
+export const PAYMENT_INTENT_STATUSES = [
+  'pending',
+  'succeeded',
+  'failed',
+  'expired',
+  'cancelled',
+]
+
 export function formatDate(value) {
   if (!value) return '—'
   return new Date(value).toLocaleDateString('en-PH', {

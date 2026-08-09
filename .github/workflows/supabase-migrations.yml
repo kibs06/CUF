@@ -1,0 +1,87 @@
+name: Supabase Migrations
+
+# Applies every migration in supabase/migrations/ to a throwaway local
+# Supabase stack and runs the pgTAP tests in supabase/tests/ — most
+# importantly the RLS recursion canary, which catches policies that
+# compile fine but fail at QUERY time with Postgres 42P17 ("infinite
+# recursion detected in policy"). See supabase/tests/rls_recursion_canary.test.sql
+# for why applying migrations alone is not enough.
+#
+# Runs only when Supabase files change (and manually via workflow_dispatch).
+# No secrets/tokens required: everything happens against the local stack.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+      - 'supabase/tests/**'
+      - 'supabase/config.toml'
+      - '.github/workflows/supabase-migrations.yml'
+  pull_request:
+    paths:
+      - 'supabase/migrations/**'
+      - 'supabase/tests/**'
+      - 'supabase/config.toml'
+      - '.github/workflows/supabase-migrations.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: supabase-migrations-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  migrations:
+    name: Apply migrations + RLS canary
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          # Pinned for reproducibility — a CLI behavior change could
+          # otherwise break or silently weaken this job. Bump deliberately.
+          version: v2.109.1
+
+      # Start only the services needed to apply migrations and run pgTAP:
+      # postgres (db), gotrue (auth schema), postgrest, kong, postgres-meta.
+      # Excluding the heavy optional services keeps the GitHub-hosted runner
+      # (7 GB RAM) comfortably under the ~7 GB the full stack recommends.
+      # NOTE: this is safe because `db reset` / `test db` talk to the postgres
+      # container directly (port 54322, not the supavisor pooler) and the
+      # storage/auth schemas live in the CLI's DB template, not in the
+      # storage-api container. If a future CLI version changes either of
+      # those, `storage-api`/`supavisor` are the first suspects to remove
+      # from this exclude list.
+      - name: Start local Supabase stack
+        run: supabase start -x studio,imgproxy,logflare,vector,mailpit,edge-runtime,realtime,storage-api,supavisor
+
+      # Deterministic: drop + re-create the local database and apply EVERY
+      # migration in supabase/migrations/ from scratch.
+      - name: Apply all migrations from scratch
+        run: supabase db reset
+
+      # pgTAP tests in supabase/tests/*.test.sql. The RLS recursion canary
+      # sweeps every RLS-enabled public table as anon + authenticated, so a
+      # recursive policy (42P17) or any other runtime policy failure fails
+      # this step with a clear message. New tables are covered automatically.
+      # The grep guard fails the job if the canary was NOT discovered (e.g. a
+      # future CLI test-glob change) instead of silently passing with 0 tests.
+      - name: Run pgTAP tests (RLS recursion canary)
+        run: |
+          set -euo pipefail
+          supabase test db | tee /tmp/pgtap.log
+          grep -q 'rls_recursion_canary' /tmp/pgtap.log
+
+      # Informational only: flags RLS-disabled tables, security-definer
+      # views, functions without search_path, etc. Never blocks the build.
+      - name: Lint database (informational)
+        continue-on-error: true
+        run: supabase db lint

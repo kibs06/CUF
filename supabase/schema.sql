@@ -1,8 +1,19 @@
 -- ══════════════════════════════════════════════════════════════════
 -- SoleVision — Supabase Database Schema
--- Generated: July 2026
+-- Generated: July 2026 — RLS section updated 2026-08-09 (42P17 recursion fix)
 -- Derived from actual service code, models, and SQL migration files.
 -- This file documents the LIVE database structure.
+--
+-- ⚠️ SOURCE OF TRUTH = supabase/migrations/ (this snapshot can drift).
+-- RLS policies call the recursion-free helpers public.is_admin() and
+-- public.is_seller_or_admin() (SECURITY DEFINER — see migration
+-- 20260809120000_fix_profiles_rls_recursion.sql). NEVER write a policy ON
+-- public.profiles whose USING subqueries public.profiles: Postgres only
+-- fails at QUERY time with 42P17 (infinite recursion).
+-- ⚠️ REFERENCE ONLY — do not execute this file against a live database.
+-- Policies are created by migrations; plain CREATE POLICY fails when a
+-- policy already exists. Use `supabase db push` / the SQL editor for
+-- migration files only.
 -- ══════════════════════════════════════════════════════════════════
 
 -- ─── ROLE CONSTANTS ───────────────────────────────────────────────
@@ -32,7 +43,52 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Public profiles are viewable by everyone"
+-- Recursion-free role helpers. SECURITY DEFINER = run as the owner (postgres),
+-- which BYPASSES RLS, so policies can call them without re-entering profiles
+-- RLS -> no 42P17 infinite recursion. Defined in migration
+-- 20260809120000_fix_profiles_rls_recursion.sql. Both anon and authenticated
+-- need EXECUTE because policies are evaluated for both roles.
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = auth.uid() AND role = 'admin'
+  );
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.is_admin() FROM PUBLIC;
+GRANT  EXECUTE ON FUNCTION public.is_admin() TO anon, authenticated;
+
+COMMENT ON FUNCTION public.is_admin() IS
+  'True when the current user has role=admin. SECURITY DEFINER (runs as owner, bypasses RLS) so policies can call it without re-entering profiles RLS (fixes 42P17 infinite recursion).';
+
+CREATE OR REPLACE FUNCTION public.is_seller_or_admin()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = auth.uid() AND role IN ('seller', 'admin')
+  );
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.is_seller_or_admin() FROM PUBLIC;
+GRANT  EXECUTE ON FUNCTION public.is_seller_or_admin() TO anon, authenticated;
+
+COMMENT ON FUNCTION public.is_seller_or_admin() IS
+  'True when the current user has role seller or admin. SECURITY DEFINER so policies can call it without re-entering profiles RLS (fixes 42P17 infinite recursion).';
+
+-- Renamed by 20260715b_fix_profiles_rls_for_conversations.sql (was
+-- "Public profiles are viewable by everyone").
+CREATE POLICY "Users can view profiles of their conversation partners"
     ON public.profiles FOR SELECT USING (true);
 
 CREATE POLICY "Users can insert their own profile"
@@ -41,29 +97,17 @@ CREATE POLICY "Users can insert their own profile"
 CREATE POLICY "Users can update their own profile"
     ON public.profiles FOR UPDATE USING (auth.uid() = id);
 
+-- "Admins can update any profile" and "Admins can update all profiles" are
+-- legacy duplicate names (schema.sql era vs admin_policies.sql) that the
+-- fix migration may both recreate — both are FOR UPDATE USING is_admin().
 CREATE POLICY "Admins can update any profile"
-    ON public.profiles FOR UPDATE USING (
-        EXISTS (
-            SELECT 1 FROM public.profiles
-            WHERE id = auth.uid() AND role = 'admin'
-        )
-    );
+    ON public.profiles FOR UPDATE USING (public.is_admin());
 
 CREATE POLICY "Admins can read all profiles"
-    ON public.profiles FOR SELECT USING (
-        EXISTS (
-            SELECT 1 FROM public.profiles
-            WHERE id = auth.uid() AND role = 'admin'
-        )
-    );
+    ON public.profiles FOR SELECT USING (public.is_admin());
 
 CREATE POLICY "Admins can update all profiles"
-    ON public.profiles FOR UPDATE USING (
-        EXISTS (
-            SELECT 1 FROM public.profiles
-            WHERE id = auth.uid() AND role = 'admin'
-        )
-    );
+    ON public.profiles FOR UPDATE USING (public.is_admin());
 
 -- ═══════════════════════════════════════════════════════════════════
 -- 2. STORES
@@ -101,12 +145,7 @@ CREATE POLICY "Store owners can update their store"
     ON public.stores FOR UPDATE USING (auth.uid() = owner_id);
 
 CREATE POLICY "Admins can manage all stores"
-    ON public.stores FOR ALL USING (
-        EXISTS (
-            SELECT 1 FROM public.profiles
-            WHERE id = auth.uid() AND role = 'admin'
-        )
-    );
+    ON public.stores FOR ALL USING (public.is_admin());
 
 -- ═══════════════════════════════════════════════════════════════════
 -- 3. STORY ENTRIES (workshop stories per store)
@@ -135,12 +174,7 @@ CREATE POLICY "Store owners can manage their story entries"
     );
 
 CREATE POLICY "Admins can manage story entries"
-    ON public.story_entries FOR ALL USING (
-        EXISTS (
-            SELECT 1 FROM public.profiles
-            WHERE id = auth.uid() AND role = 'admin'
-        )
-    );
+    ON public.story_entries FOR ALL USING (public.is_admin());
 
 -- ═══════════════════════════════════════════════════════════════════
 -- 4. STORE FOLLOWS
@@ -196,28 +230,13 @@ CREATE POLICY "Products are viewable by everyone"
     ON public.products FOR SELECT USING (true);
 
 CREATE POLICY "Sellers and Admins can insert products"
-    ON public.products FOR INSERT WITH CHECK (
-        EXISTS (
-            SELECT 1 FROM public.profiles
-            WHERE id = auth.uid() AND (role = 'seller' OR role = 'admin')
-        )
-    );
+    ON public.products FOR INSERT WITH CHECK (public.is_seller_or_admin());
 
 CREATE POLICY "Sellers and Admins can update products"
-    ON public.products FOR UPDATE USING (
-        EXISTS (
-            SELECT 1 FROM public.profiles
-            WHERE id = auth.uid() AND (role = 'seller' OR role = 'admin')
-        )
-    );
+    ON public.products FOR UPDATE USING (public.is_seller_or_admin());
 
 CREATE POLICY "Sellers and Admins can delete products"
-    ON public.products FOR DELETE USING (
-        EXISTS (
-            SELECT 1 FROM public.profiles
-            WHERE id = auth.uid() AND (role = 'seller' OR role = 'admin')
-        )
-    );
+    ON public.products FOR DELETE USING (public.is_seller_or_admin());
 
 -- ═══════════════════════════════════════════════════════════════════
 -- 6. PRODUCT IMAGES
@@ -244,12 +263,7 @@ CREATE POLICY "Sellers can manage their product images"
     );
 
 CREATE POLICY "Admins can manage all product images"
-    ON public.product_images FOR ALL USING (
-        EXISTS (
-            SELECT 1 FROM public.profiles
-            WHERE id = auth.uid() AND role = 'admin'
-        )
-    );
+    ON public.product_images FOR ALL USING (public.is_admin());
 
 -- ═══════════════════════════════════════════════════════════════════
 -- 7. PRODUCT VARIANTS (size × color combinations)
@@ -278,12 +292,7 @@ CREATE POLICY "Sellers can manage their product variants"
     );
 
 CREATE POLICY "Admins can manage all product variants"
-    ON public.product_variants FOR ALL USING (
-        EXISTS (
-            SELECT 1 FROM public.profiles
-            WHERE id = auth.uid() AND role = 'admin'
-        )
-    );
+    ON public.product_variants FOR ALL USING (public.is_admin());
 
 -- ═══════════════════════════════════════════════════════════════════
 -- 8. PRODUCT CUSTOMIZATIONS (per-product customization options)
@@ -313,12 +322,7 @@ CREATE POLICY "Sellers can manage their product customizations"
     );
 
 CREATE POLICY "Admins can manage all product customizations"
-    ON public.product_customizations FOR ALL USING (
-        EXISTS (
-            SELECT 1 FROM public.profiles
-            WHERE id = auth.uid() AND role = 'admin'
-        )
-    );
+    ON public.product_customizations FOR ALL USING (public.is_admin());
 
 -- ═══════════════════════════════════════════════════════════════════
 -- 9. INVENTORY (aggregated stock by size per product)
@@ -347,12 +351,7 @@ CREATE POLICY "Sellers can manage their inventory"
     );
 
 CREATE POLICY "Admins can manage all inventory"
-    ON public.inventory FOR ALL USING (
-        EXISTS (
-            SELECT 1 FROM public.profiles
-            WHERE id = auth.uid() AND role = 'admin'
-        )
-    );
+    ON public.inventory FOR ALL USING (public.is_admin());
 
 -- ═══════════════════════════════════════════════════════════════════
 -- 10. ORDERS
@@ -399,20 +398,10 @@ CREATE POLICY "Sellers can view orders for their store"
     );
 
 CREATE POLICY "Sellers and Admins can update order status"
-    ON public.orders FOR UPDATE USING (
-        EXISTS (
-            SELECT 1 FROM public.profiles
-            WHERE id = auth.uid() AND (role = 'seller' OR role = 'admin')
-        )
-    );
+    ON public.orders FOR UPDATE USING (public.is_seller_or_admin());
 
 CREATE POLICY "Admins can read all orders"
-    ON public.orders FOR SELECT USING (
-        EXISTS (
-            SELECT 1 FROM public.profiles
-            WHERE id = auth.uid() AND role = 'admin'
-        )
-    );
+    ON public.orders FOR SELECT USING (public.is_admin());
 
 -- ═══════════════════════════════════════════════════════════════════
 -- 11. ORDER ITEMS (line items within an order)
@@ -434,10 +423,7 @@ CREATE POLICY "Order items follow order access rules"
             SELECT 1 FROM public.orders
             WHERE id = order_id AND (
                 customer_id = auth.uid()
-                OR EXISTS (
-                    SELECT 1 FROM public.profiles
-                    WHERE id = auth.uid() AND (role = 'seller' OR role = 'admin')
-                )
+                OR public.is_seller_or_admin()
             )
         )
     );
@@ -483,12 +469,7 @@ CREATE POLICY "Sellers can create transactions for their store"
     );
 
 CREATE POLICY "Admins can view all transactions"
-    ON public.sales_transactions FOR SELECT USING (
-        EXISTS (
-            SELECT 1 FROM public.profiles
-            WHERE id = auth.uid() AND role = 'admin'
-        )
-    );
+    ON public.sales_transactions FOR SELECT USING (public.is_admin());
 
 -- ═══════════════════════════════════════════════════════════════════
 -- 13. SALES TRANSACTION ITEMS (line items for POS sales)
@@ -513,10 +494,7 @@ CREATE POLICY "Transaction items follow transaction access rules"
                     SELECT 1 FROM public.stores
                     WHERE id = st.store_id AND owner_id = auth.uid()
                 )
-                OR EXISTS (
-                    SELECT 1 FROM public.profiles
-                    WHERE id = auth.uid() AND role = 'admin'
-                )
+                OR public.is_admin()
             )
         )
     );
@@ -582,20 +560,10 @@ CREATE POLICY "Sellers can view customizations for their store"
     );
 
 CREATE POLICY "Sellers and Admins can update customization status"
-    ON public.customization_requests FOR UPDATE USING (
-        EXISTS (
-            SELECT 1 FROM public.profiles
-            WHERE id = auth.uid() AND (role = 'seller' OR role = 'admin')
-        )
-    );
+    ON public.customization_requests FOR UPDATE USING (public.is_seller_or_admin());
 
 CREATE POLICY "Admins can view all customization requests"
-    ON public.customization_requests FOR SELECT USING (
-        EXISTS (
-            SELECT 1 FROM public.profiles
-            WHERE id = auth.uid() AND role = 'admin'
-        )
-    );
+    ON public.customization_requests FOR SELECT USING (public.is_admin());
 
 -- ═══════════════════════════════════════════════════════════════════
 -- STORAGE BUCKETS (created via Supabase Dashboard / API)
