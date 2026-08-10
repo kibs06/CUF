@@ -129,4 +129,4 @@ Status machine (shared with customer side): `pending → preparing → ready →
 5. **OrderProvider sorts by numeric `id` desc** (order_provider.dart:45), recent orders sort by `created_at` desc — same-ish result but not guaranteed identical ordering.
 6. **`SellerOrderCard` is shared** with ManageOrdersScreen — changing its layout affects both surfaces; the `showPrimaryAction` flag is the difference.
 7. **The phone icon is a no-op** (seller_order_card.dart:120) — don't wire it to anything without checking the design intent.
-8. **Profiles SELECT is broad** — `20260715b_fix_profiles_rls_for_conversations.sql` sets `USING (true)`, so the customer-name lookups in `getRecentOrders` work, but never add sensitive data to `profiles`.
+8. **Profiles SELECT is broad** — `20260715090200_fix_profiles_rls_for_conversations.sql` sets `USING (true)`, so the customer-name lookups in `getRecentOrders` work, but never add sensitive data to `profiles`.

@@ -112,7 +112,7 @@ ProfileService.uploadAvatar(userId, filePath)
 
 RLS: everyone can SELECT; user can INSERT/UPDATE own row (`auth.uid() = id`); admins can read/update all.
 
-**⚠️ Gotcha:** `profiles` RLS blocks sellers from reading customer rows — several migrations exist to work around this for conversations (`20260715b_fix_profiles_rls_for_conversations.sql`, `20260715c_add_customer_name_to_conversations.sql`). Don't write queries that join profiles to customer data for sellers without checking these.
+**⚠️ Gotcha:** `profiles` RLS blocks sellers from reading customer rows — several migrations exist to work around this for conversations (`20260715090200_fix_profiles_rls_for_conversations.sql`, `20260715090300_add_customer_name_to_conversations.sql`). Don't write queries that join profiles to customer data for sellers without checking these.
 
 ---
 

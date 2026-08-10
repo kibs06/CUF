@@ -14,6 +14,9 @@
 -- Policies are created by migrations; plain CREATE POLICY fails when a
 -- policy already exists. Use `supabase db push` / the SQL editor for
 -- migration files only.
+-- ⚠️ ID TYPES: products.id / orders.id / order_items.id are UUID in the
+-- live DB and in the migrations (see 20260601000000_base_schema.sql);
+-- the TEXT/BIGINT shown below for those columns is outdated doc drift.
 -- ══════════════════════════════════════════════════════════════════
 
 -- ─── ROLE CONSTANTS ───────────────────────────────────────────────
@@ -86,7 +89,7 @@ GRANT  EXECUTE ON FUNCTION public.is_seller_or_admin() TO anon, authenticated;
 COMMENT ON FUNCTION public.is_seller_or_admin() IS
   'True when the current user has role seller or admin. SECURITY DEFINER so policies can call it without re-entering profiles RLS (fixes 42P17 infinite recursion).';
 
--- Renamed by 20260715b_fix_profiles_rls_for_conversations.sql (was
+-- Renamed by 20260715090200_fix_profiles_rls_for_conversations.sql (was
 -- "Public profiles are viewable by everyone").
 CREATE POLICY "Users can view profiles of their conversation partners"
     ON public.profiles FOR SELECT USING (true);
