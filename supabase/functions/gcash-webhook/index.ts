@@ -50,6 +50,7 @@ import {
   normalizeSize,
   resolveInventorySize,
 } from "../_shared/paymongo.ts";
+import { sendPushToUser } from "../_shared/push.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -490,7 +491,7 @@ serve(async (req: Request) => {
         .update({ status: "succeeded", paid_at: new Date().toISOString(), ...feeFields })
         .eq("id", pi.id);
 
-      // ── Notifications (in-app; FCM push out of scope, noted) ────
+      // ── Notifications (in-app + seller FCM push; fire-and-forget) ──
       await notifyPaid(supabase, order.id);
 
       await markEvent("processed", { order_id: order.id, payment_intent_id: paymentIntentId || null });
@@ -538,8 +539,11 @@ serve(async (req: Request) => {
 });
 
 // ────────────────────────────────────────────────────────────────
-// NOTIFICATIONS (in-app tables only; both fire-and-forget — a failure
-// here must never fail the webhook's 200 ack after the order is paid)
+// NOTIFICATIONS (in-app rows + seller FCM push; a failure here must
+// never fail the webhook's 200 ack after the order is paid). The
+// seller push is deliberately AWAITED (not unawaited): an orphaned
+// promise can be dropped when the isolate shuts down after the
+// response — and a dropped push is exactly the silent gap this fixes.
 // ────────────────────────────────────────────────────────────────
 
 // Fire-and-forget notification helpers. The supabase client is typed as
@@ -558,15 +562,29 @@ async function notifyPaid(supabase: any, orderId: string): Promise<void> {
     const shortId = String(orderId).slice(-8);
     const total = Number(order.total_amount ?? 0);
     const fee = Number(order.gcash_fee_amount ?? 0);
+    const title = "New paid order";
+    const body =
+      `Order #${shortId} — ₱${total.toFixed(2)} (incl. ₱${fee.toFixed(2)} GCash fee). Payment verified automatically.`;
 
     // Seller: a new PAID order entered the pipeline.
     await supabase.from("seller_notifications").insert({
       store_id: order.store_id,
       type: "new_order",
-      title: "New paid order",
-      body: `Order #${shortId} — ₱${total.toFixed(2)} (incl. ₱${fee.toFixed(2)} GCash fee). Payment verified automatically.`,
+      title,
+      body,
       reference_id: orderId,
     } as any);
+
+    // Seller: FCM push to the store owner's devices. The in-app row above
+    // is the live bell badge; this is the OS notification that fires while
+    // the app is backgrounded/killed — the gap the cash-order path already
+    // covers via the client-side send-notification-push trigger.
+    // Fire-and-forget — a push failure must never fail the webhook's ack.
+    await notifySellerPush(supabase, order.store_id, {
+      title,
+      body: `Order #${shortId} — ₱${total.toFixed(2)} paid. Tap to view.`,
+      referenceId: orderId,
+    });
 
     // Customer: payment confirmed.
     await supabase.from("notifications").insert({
@@ -578,6 +596,52 @@ async function notifyPaid(supabase: any, orderId: string): Promise<void> {
     } as any);
   } catch (e) {
     console.error("[WEBHOOK] notifyPaid failed (non-fatal):", (e as any)?.message ?? e);
+  }
+}
+
+/// FCM push to a store owner's devices for a new paid order. Reuses the
+/// exact shared helper (`sendPushToUser`) that the send-notification-push
+/// edge function calls for cash orders, so the seller gets the OS
+/// notification even when their app is in the background/killed.
+///
+/// Requires the FIREBASE_PROJECT_ID and FCM_SERVICE_ACCOUNT_KEY secrets
+/// (set project-wide with `supabase secrets set` — shared by all edge
+/// functions, so they are available here too). If they are ever missing,
+/// sendPushToUser logs `[FCM] Missing Firebase configuration` and no-ops
+/// with successCount 0 — check the webhook logs if a push is silent.
+///
+/// NOTE: the dormant gateway-free GCash RPCs (submit_gcash_proof) have
+/// the same in-app-row-without-push gap. They are DORMANT (no wired UI
+/// calls them for new orders), so left untouched — re-wire them with a
+/// push here if that flow is ever revived.
+async function notifySellerPush(
+  supabase: any,
+  storeId: string,
+  opts: { title: string; body: string; referenceId: string },
+): Promise<void> {
+  try {
+    const { data: rawStore } = await supabase
+      .from("stores")
+      .select("owner_id")
+      .eq("id", storeId)
+      .maybeSingle();
+    const ownerId = (rawStore as { owner_id?: string } | null)?.owner_id;
+    if (!ownerId) return;
+    await sendPushToUser(
+      supabase,
+      ownerId,
+      { title: opts.title, body: opts.body },
+      {
+        type: "new_order",
+        referenceId: opts.referenceId,
+        screen: "seller_order_detail",
+      },
+    );
+  } catch (e) {
+    console.error(
+      "[WEBHOOK] seller push failed (non-fatal):",
+      (e as any)?.message ?? e,
+    );
   }
 }
 
