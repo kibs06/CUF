@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../constants/app_constants.dart';
+import '../../constants/seller_theme_constants.dart';
 import '../../utils/gcash_ref_extractor.dart';
 
 /// Scan-to-fill GCash reference number using OCR (text recognition — not
@@ -426,8 +427,9 @@ class _GcashRefScannerScreenState extends State<GcashRefScannerScreen> {
             child: Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: SellerTheme.card,
                 borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: SellerTheme.cardBorder),
                 boxShadow: AppConstants.sellerShadow,
               ),
               child: _buildResultBody(),

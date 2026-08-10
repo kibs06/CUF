@@ -6,6 +6,7 @@ import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../constants/app_constants.dart';
+import '../../constants/seller_theme_constants.dart';
 import '../../services/store_service.dart';
 import '../../utils/qr_image_crop.dart';
 import '../../widgets/sole_primary_button.dart';
@@ -664,7 +665,7 @@ class _GcashPaymentSettingsScreenState extends State<GcashPaymentSettingsScreen>
                 height: 220,
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: SellerTheme.card,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
                     color: AppConstants.borderGray.withValues(alpha: 0.5),

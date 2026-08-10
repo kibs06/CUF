@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../constants/app_constants.dart';
+import '../../constants/seller_theme_constants.dart';
 
 class SellerStatusChip extends StatelessWidget {
   final String status;
@@ -18,25 +19,24 @@ class SellerStatusChip extends StatelessWidget {
       'cancelled': 'Cancelled',
     };
 
+    // Espresso/cream palette pairs (see SellerTheme): pending = amber,
+    // confirmed = neutral blue, ready/received = sage, cancelled = red.
     Color bg;
     Color text;
 
     switch (status.toLowerCase()) {
       case 'pending':
-        bg = AppConstants.statusPendingColor.withValues(alpha: 0.12);
-        text = AppConstants.statusPendingColor;
+        bg = SellerTheme.amberBg;
+        text = SellerTheme.amberDark;
         break;
       case 'preparing':
-        bg = AppConstants.statusConfirmedColor.withValues(alpha: 0.12);
-        text = AppConstants.statusConfirmedColor;
+        bg = SellerTheme.blueBg;
+        text = SellerTheme.blue;
         break;
       case 'ready':
-        bg = AppConstants.statusReadyColor.withValues(alpha: 0.12);
-        text = AppConstants.statusReadyColor;
-        break;
       case 'received':
-        bg = AppConstants.statusDeliveredColor.withValues(alpha: 0.12);
-        text = AppConstants.statusDeliveredColor;
+        bg = SellerTheme.sageBg;
+        text = SellerTheme.sageDark;
         break;
       case 'cancelled':
         bg = AppConstants.statusCancelledColor.withValues(alpha: 0.12);

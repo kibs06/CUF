@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 
 import '../../constants/app_constants.dart';
+import '../../constants/seller_theme_constants.dart';
 import '../../providers/review_provider.dart';
 import '../../widgets/sole_star_rating.dart';
 import '../../widgets/sole_review_card.dart';
@@ -120,8 +121,9 @@ class _SellerReviewsScreenState extends State<SellerReviewsScreen> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: SellerTheme.card,
                     borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: SellerTheme.cardBorder),
                     boxShadow: AppConstants.sellerShadow,
                   ),
                   child: Row(
@@ -290,8 +292,9 @@ class _SellerReviewCardState extends State<_SellerReviewCard> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: SellerTheme.card,
                 borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: SellerTheme.cardBorder),
                 boxShadow: AppConstants.sellerShadow,
               ),
               child: Column(

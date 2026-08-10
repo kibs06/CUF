@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../constants/app_constants.dart';
+import '../../constants/seller_theme_constants.dart';
 import '../../utils/sale_price.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/order_provider.dart';
@@ -803,8 +804,9 @@ class _POSScreenState extends State<POSScreen>
         itemCount: 8,
         itemBuilder: (context, index) => Container(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: SellerTheme.card,
             borderRadius: AppConstants.cardRadius,
+            border: Border.all(color: SellerTheme.cardBorder),
             boxShadow: AppConstants.sellerShadow,
           ),
           clipBehavior: Clip.antiAlias,
@@ -842,8 +844,9 @@ class _POSScreenState extends State<POSScreen>
           padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
           child: Container(
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: SellerTheme.card,
               borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: SellerTheme.cardBorder),
               boxShadow: AppConstants.sellerShadow,
             ),
             child: TextField(
@@ -854,7 +857,7 @@ class _POSScreenState extends State<POSScreen>
                 hintText: 'Search product or scan barcode...',
                 hintStyle: AppConstants.bodyStyle(
                   fontSize: 13,
-                  color: Colors.grey.shade500,
+                  color: SellerTheme.textMuted,
                 ),
                 prefixIcon: const Icon(Icons.search, color: AppConstants.primary),
                 suffixIcon: _searchKeyword.isEmpty
@@ -970,8 +973,9 @@ class _POSScreenState extends State<POSScreen>
         enabled: !out,
         child: Container(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: SellerTheme.card,
             borderRadius: AppConstants.cardRadius,
+            border: Border.all(color: SellerTheme.cardBorder),
             boxShadow: AppConstants.warmShadow,
           ),
           clipBehavior: Clip.antiAlias,
@@ -1174,7 +1178,7 @@ class _POSScreenState extends State<POSScreen>
                     TimeOfDay.now().format(context),
                     style: AppConstants.bodyStyle(
                       fontSize: 12,
-                      color: Colors.grey.shade500,
+                      color: SellerTheme.textMuted,
                     ),
                   ),
                 ],
@@ -1211,19 +1215,20 @@ class _POSScreenState extends State<POSScreen>
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: SellerTheme.cardBorder),
               boxShadow: AppConstants.sellerShadow,
             ),
             child: Column(
               children: [
                 Icon(
                   Icons.point_of_sale_outlined,
-                  color: Colors.grey.shade400,
+                  color: SellerTheme.textMuted,
                   size: 34,
                 ),
                 const SizedBox(height: 8),
                 Text(
                   'No items in this order yet',
-                  style: AppConstants.bodyStyle(color: Colors.grey.shade500),
+                  style: AppConstants.bodyStyle(color: SellerTheme.textMuted),
                 ),
               ],
             ),
@@ -1246,8 +1251,9 @@ class _POSScreenState extends State<POSScreen>
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: SellerTheme.card,
         borderRadius: AppConstants.cardRadius,
+        border: Border.all(color: SellerTheme.cardBorder),
         boxShadow: AppConstants.sellerShadow,
       ),
       child: Row(
@@ -1291,7 +1297,7 @@ class _POSScreenState extends State<POSScreen>
                       item.size,
                       style: AppConstants.bodyStyle(
                         fontSize: 12,
-                        color: Colors.grey.shade500,
+                        color: SellerTheme.textMuted,
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -1391,8 +1397,9 @@ class _POSScreenState extends State<POSScreen>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: SellerTheme.card,
         borderRadius: AppConstants.cardRadius,
+        border: Border.all(color: SellerTheme.cardBorder),
         boxShadow: AppConstants.sellerShadow,
       ),
       child: Column(
@@ -1434,7 +1441,7 @@ class _POSScreenState extends State<POSScreen>
           label,
           style: AppConstants.bodyStyle(
             fontSize: 12,
-            color: Colors.grey.shade600,
+            color: SellerTheme.textSecondary,
           ),
         ),
         Text(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../constants/app_constants.dart';
+import '../../constants/seller_theme_constants.dart';
 import '../../models/sales_trend_data.dart';
 import 'seller_stacked_area_chart.dart';
 
@@ -64,7 +65,7 @@ class SellerRevenueDoughnutChart extends StatelessWidget {
           periodLabel,
           style: AppConstants.bodyStyle(
             fontSize: 12,
-            color: Colors.grey.shade500,
+            color: SellerTheme.textMuted,
           ),
         ),
         const SizedBox(height: 2),
@@ -132,7 +133,7 @@ class SellerRevenueDoughnutChart extends StatelessWidget {
                 'this month',
                 style: AppConstants.bodyStyle(
                   fontSize: 11,
-                  color: Colors.grey.shade500,
+                  color: SellerTheme.textMuted,
                 ),
               ),
             ],
@@ -188,7 +189,7 @@ class SellerRevenueDoughnutChart extends StatelessWidget {
           style: AppConstants.bodyStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
-            color: Colors.grey.shade700,
+            color: SellerTheme.textSecondary,
           ),
         ),
         const Spacer(),
@@ -204,7 +205,7 @@ class SellerRevenueDoughnutChart extends StatelessWidget {
           '· $percent%',
           style: AppConstants.bodyStyle(
             fontSize: 12,
-            color: Colors.grey.shade500,
+            color: SellerTheme.textMuted,
           ),
         ),
       ],
@@ -219,9 +220,9 @@ class SellerRevenueDoughnutChart extends StatelessWidget {
     if (prev <= 0) {
       return _buildFooterRow(
         icon: Icons.remove,
-        iconColor: Colors.grey.shade400,
+        iconColor: SellerTheme.textMuted,
         text: 'No previous-period data',
-        textColor: Colors.grey.shade500,
+        textColor: SellerTheme.textMuted,
       );
     }
 
@@ -229,11 +230,11 @@ class SellerRevenueDoughnutChart extends StatelessWidget {
     if (prev < _lowBaselineFloor) {
       return _buildFooterRow(
         icon: Icons.auto_graph,
-        iconColor: Colors.grey.shade400,
+        iconColor: SellerTheme.textMuted,
         text: total <= 0
             ? 'No orders yet this period'
             : 'Early days — trend will firm up',
-        textColor: Colors.grey.shade500,
+        textColor: SellerTheme.textMuted,
       );
     }
 
@@ -281,7 +282,7 @@ class SellerRevenueDoughnutChart extends StatelessWidget {
               style: AppConstants.bodyStyle(
                 fontSize: 11.5,
                 fontWeight: FontWeight.w500,
-                color: Colors.grey.shade500,
+                color: SellerTheme.textMuted,
               ),
             ),
           ],
@@ -311,7 +312,7 @@ class SellerRevenueDoughnutChart extends StatelessWidget {
               'Loading chart data...',
               style: AppConstants.bodyStyle(
                 fontSize: 12,
-                color: Colors.grey.shade400,
+                color: SellerTheme.textMuted,
               ),
             ),
           ],
@@ -333,7 +334,7 @@ class SellerRevenueDoughnutChart extends StatelessWidget {
               'Failed to load chart data',
               style: AppConstants.bodyStyle(
                 fontSize: 12,
-                color: Colors.grey.shade500,
+                color: SellerTheme.textMuted,
               ),
             ),
             if (onRetry != null) ...[
@@ -381,7 +382,7 @@ class SellerRevenueDoughnutChart extends StatelessWidget {
               'No sales yet this period',
               style: AppConstants.bodyStyle(
                 fontSize: 12,
-                color: Colors.grey.shade400,
+                color: SellerTheme.textMuted,
               ),
             ),
           ],

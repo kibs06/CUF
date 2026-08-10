@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../constants/app_constants.dart';
+import '../../constants/seller_theme_constants.dart';
 import '../../models/revenue_point.dart';
 import '../../models/sales_trend_data.dart';
 
@@ -91,7 +92,7 @@ class SellerRevenueLineChart extends StatelessWidget {
                               _formatCurrencyShort(value),
                               style: AppConstants.bodyStyle(
                                 fontSize: 9,
-                                color: Colors.grey.shade600,
+                                color: SellerTheme.textSecondary,
                               ),
                             ),
                           );
@@ -119,7 +120,7 @@ class SellerRevenueLineChart extends StatelessWidget {
                               data[idx].label,
                               style: AppConstants.bodyStyle(
                                 fontSize: 10,
-                                color: Colors.grey.shade500,
+                                color: SellerTheme.textMuted,
                               ),
                             ),
                           );
@@ -245,7 +246,7 @@ class SellerRevenueLineChart extends StatelessWidget {
             label,
             style: AppConstants.bodyStyle(
               fontSize: 11,
-              color: Colors.grey.shade600,
+              color: SellerTheme.textSecondary,
             ),
           ),
         ],

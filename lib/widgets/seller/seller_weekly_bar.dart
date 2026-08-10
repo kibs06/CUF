@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../constants/app_constants.dart';
+import '../../constants/seller_theme_constants.dart';
 
 class SellerWeeklyBar extends StatelessWidget {
   final List<double> dailySales;
@@ -76,7 +77,9 @@ class _WeeklyBarPainter extends CustomPainter {
       } else if (i < todayIndex) {
         barColor = AppConstants.primary;
       } else {
-        barColor = AppConstants.sellerSurface;
+        // Future days — warm hairline tan so the bars stay visible on the
+        // cream card surface (cream-on-cream would vanish).
+        barColor = SellerTheme.cardBorder;
       }
 
       final barPaint = Paint()..color = barColor;
@@ -94,7 +97,7 @@ class _WeeklyBarPainter extends CustomPainter {
           style: TextStyle(
             fontFamily: 'DMSans',
             fontSize: 10,
-            color: Colors.grey[500],
+            color: SellerTheme.textMuted,
           ),
         ),
         textDirection: TextDirection.ltr,

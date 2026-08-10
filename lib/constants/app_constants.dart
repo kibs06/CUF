@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'seller_theme_constants.dart';
+
 class AppConstants {
   // --- SUPABASE ---
   static const String url = 'https://psczvbfoybqhjeqssimw.supabase.co';
@@ -72,18 +74,17 @@ class AppConstants {
   static const Color lowStockColor = Color(0xFFEF4444); // urgent red
   static const Color okStockColor = Color(0xFF6B8F47); // safe green
 
-  // Seller surface — slightly cooler than customer
-  static const Color sellerSurface = Color(0xFFF8F9FA);
-  static const Color sellerCardBg = Color(0xFFFFFFFF);
+  // Seller surface — espresso/cream palette. These are repointed at the
+  // SellerTheme tokens so the ENTIRE seller module (every seller screen +
+  // seller widget) rethemes consistently without touching each file.
+  // Shared customer surfaces that used to reference these (e.g. chat_view)
+  // now pin their own values so customer UI is unchanged.
+  static const Color sellerSurface = SellerTheme.creamBg;
+  static const Color sellerCardBg = SellerTheme.card;
 
-  // Neutral shadow for seller cards
-  static final List<BoxShadow> sellerShadow = [
-    BoxShadow(
-      color: Colors.black.withAlpha(15),
-      blurRadius: 10,
-      offset: const Offset(0, 2),
-    ),
-  ];
+  // Neutral shadow for seller cards — soft espresso-tinted (mockup
+  // treatment: 10px blur, 2px y, low opacity) instead of Material elevation.
+  static final List<BoxShadow> sellerShadow = SellerTheme.cardShadow;
 
   // --- TYPOGRAPHY ---
   // Headlines - Playfair Display

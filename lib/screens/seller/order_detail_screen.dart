@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../constants/app_constants.dart';
+import '../../constants/seller_theme_constants.dart';
 import '../../providers/order_provider.dart';
 import '../../services/message_service.dart';
 import '../../widgets/seller/seller_status_chip.dart';
@@ -504,6 +505,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               decoration: BoxDecoration(
                 color: AppConstants.sellerCardBg,
                 borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: SellerTheme.cardBorder),
                 boxShadow: AppConstants.sellerShadow,
               ),
               padding: const EdgeInsets.all(16),
@@ -601,6 +603,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               decoration: BoxDecoration(
                 color: AppConstants.sellerCardBg,
                 borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: SellerTheme.cardBorder),
                 boxShadow: AppConstants.sellerShadow,
               ),
               padding: const EdgeInsets.all(16),

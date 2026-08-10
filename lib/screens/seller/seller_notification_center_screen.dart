@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../constants/app_constants.dart';
+import '../../constants/seller_theme_constants.dart';
 import '../../providers/seller_notification_provider.dart';
 import '../../services/seller_notification_service.dart';
 import 'manage_orders_screen.dart';
@@ -526,6 +527,7 @@ class _NotificationRowContent extends StatelessWidget {
                 ? AppConstants.sellerCardBg
                 : AppConstants.statusConfirmedColor.withValues(alpha: 0.04),
             borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: SellerTheme.cardBorder),
             boxShadow: AppConstants.sellerShadow,
           ),
           child: Row(

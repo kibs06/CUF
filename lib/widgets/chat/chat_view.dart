@@ -1001,7 +1001,7 @@ class _ChatViewState extends State<ChatView> with SingleTickerProviderStateMixin
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
-              color: AppConstants.sellerCardBg,
+              color: Colors.white,
               borderRadius: BorderRadius.circular(16),
             ),
             child: Row(
@@ -1676,14 +1676,23 @@ class _ChatViewState extends State<ChatView> with SingleTickerProviderStateMixin
           ),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
-            color: isOwnMessage ? AppConstants.primary : AppConstants.sellerCardBg,
+            // Kept on explicit white/shadow (NOT the cream seller theme) —
+            // ChatView is shared with customers, so its bubbles must stay
+            // unchanged while the seller module rethemes.
+            color: isOwnMessage ? AppConstants.primary : Colors.white,
             borderRadius: BorderRadius.only(
               topLeft: const Radius.circular(16),
               topRight: const Radius.circular(16),
               bottomLeft: Radius.circular(isOwnMessage ? 16 : 4),
               bottomRight: Radius.circular(isOwnMessage ? 4 : 16),
             ),
-            boxShadow: AppConstants.sellerShadow,
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x0F000000),
+                blurRadius: 10,
+                offset: Offset(0, 2),
+              ),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

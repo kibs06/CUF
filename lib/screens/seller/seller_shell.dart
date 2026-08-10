@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../constants/app_constants.dart';
+import '../../constants/seller_theme_constants.dart';
 import '../../services/push_notification_service.dart';
 import '../../widgets/chat/chat_view.dart';
 import 'seller_dashboard_screen.dart';
@@ -86,34 +87,38 @@ class _SellerShellState extends State<SellerShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppConstants.surfaceLight,
+      backgroundColor: SellerTheme.creamBg,
       body: _screens.isEmpty
           ? const Center(child: Text('Unable to load screen'))
           : IndexedStack(index: _currentIndex, children: _screens),
-      bottomNavigationBar: NavigationBarTheme(
-        data: NavigationBarThemeData(
-          backgroundColor: AppConstants.sellerCardBg,
-          indicatorColor: AppConstants.primary.withAlpha(30),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(color: SellerTheme.cardBorder)),
+        ),
+        child: NavigationBarTheme(
+          data: NavigationBarThemeData(
+            backgroundColor: SellerTheme.card,
+            indicatorColor: SellerTheme.amberBg,
           iconTheme: WidgetStateProperty.resolveWith((states) {
             if (states.contains(WidgetState.selected)) {
-              return const IconThemeData(color: AppConstants.primary);
+              return const IconThemeData(color: SellerTheme.rustDeep);
             }
-            return IconThemeData(color: Colors.grey.shade500);
+            return const IconThemeData(color: SellerTheme.textMuted);
           }),
           labelTextStyle: WidgetStateProperty.resolveWith((states) {
             if (states.contains(WidgetState.selected)) {
               return AppConstants.bodyStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
-                color: AppConstants.primary,
+                color: SellerTheme.rustDeep,
               );
             }
             return AppConstants.bodyStyle(
               fontSize: 11,
-              color: Colors.grey.shade500,
+              color: SellerTheme.textMuted,
             );
           }),
-        ),
+          ),
         child: NavigationBar(
           selectedIndex: _currentIndex,
           onDestinationSelected: (index) {
@@ -147,6 +152,7 @@ class _SellerShellState extends State<SellerShell> {
               label: 'Profile',
             ),
           ],
+        ),
         ),
       ),
     );

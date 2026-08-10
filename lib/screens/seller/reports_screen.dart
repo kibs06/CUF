@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../constants/app_constants.dart';
+import '../../constants/seller_theme_constants.dart';
 import '../../models/seller_report_data.dart';
 import '../../services/sales_service.dart';
 import '../../services/store_service.dart';
@@ -211,6 +212,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
       decoration: BoxDecoration(
         color: AppConstants.sellerCardBg,
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: SellerTheme.cardBorder),
         boxShadow: AppConstants.sellerShadow,
       ),
       padding: const EdgeInsets.all(16),
@@ -345,6 +347,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
         decoration: BoxDecoration(
           color: AppConstants.sellerCardBg,
           borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: SellerTheme.cardBorder),
           boxShadow: AppConstants.sellerShadow,
         ),
         child: Center(
@@ -360,6 +363,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
       decoration: BoxDecoration(
         color: AppConstants.sellerCardBg,
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: SellerTheme.cardBorder),
         boxShadow: AppConstants.sellerShadow,
       ),
       child: Column(

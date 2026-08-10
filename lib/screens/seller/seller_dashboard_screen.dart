@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../constants/app_constants.dart';
+import '../../constants/seller_theme_constants.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/message_provider.dart';
 import '../../providers/order_provider.dart';
@@ -302,7 +303,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     final firstName = auth.displayName.split(' ').first;
 
     return Scaffold(
-      backgroundColor: AppConstants.sellerSurface,
+      backgroundColor: SellerTheme.creamBg,
       appBar: AppBar(
         backgroundColor: AppConstants.secondary,
         elevation: 0,
@@ -440,6 +441,9 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // "Today's snapshot" eyebrow (mockup header)
+            _eyebrow("TODAY'S SNAPSHOT"),
+            const SizedBox(height: 12),
             // Block 1 — Today's Snapshot (real data)
             _buildMetricsGrid(data),
             const SizedBox(height: 16),
@@ -471,9 +475,10 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
               clipBehavior: Clip.antiAlias,
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppConstants.sellerCardBg,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: AppConstants.sellerShadow,
+                color: SellerTheme.card,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: SellerTheme.cardBorder),
+                boxShadow: SellerTheme.cardShadow,
               ),
               child: SellerStackedAreaChart(
                 title: 'Revenue — This Week',
@@ -493,9 +498,10 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
               clipBehavior: Clip.antiAlias,
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppConstants.sellerCardBg,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: AppConstants.sellerShadow,
+                color: SellerTheme.card,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: SellerTheme.cardBorder),
+                boxShadow: SellerTheme.cardShadow,
               ),
               child: SellerStackedAreaChart(
                 title: 'Revenue — Monthly Trend',
@@ -512,9 +518,10 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
               clipBehavior: Clip.antiAlias,
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppConstants.sellerCardBg,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: AppConstants.sellerShadow,
+                color: SellerTheme.card,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: SellerTheme.cardBorder),
+                boxShadow: SellerTheme.cardShadow,
               ),
               child: SellerRevenueDoughnutChart(
                 title: 'Revenue breakdown',
@@ -549,17 +556,24 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
       children: [
         Row(
           children: [
-            // Today's Revenue (large, left)
+            // Today's Revenue — hero card (large, left)
             Expanded(
               flex: 58,
               child: SellerMetricCard(
                 label: "TODAY'S SALES",
                 value: _formatCurrency(data.todayRevenue),
                 isLarge: true,
+                valueColor: SellerTheme.rustDeep,
                 subtitle: ratingStr,
+                subtitleColor: SellerTheme.amber,
                 trailing: Padding(
                   padding: const EdgeInsets.only(top: 6),
-                  child: SellerSparkline(values: data.weeklySalesChart),
+                  child: SellerSparkline(
+                    values: data.weeklySalesChart,
+                    color: SellerTheme.rust,
+                    showFill: true,
+                    height: 40,
+                  ),
                 ),
               ),
             ),
@@ -570,13 +584,12 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
               child: SellerMetricCard(
                 label: 'THIS WEEK',
                 value: _formatCurrency(weeklyTotal),
-                valueColor: AppConstants.primary,
                 subtitle: _getWeekDateRange(),
                 trailing: Padding(
                   padding: const EdgeInsets.only(top: 4),
                   child: SellerSparkline(
                     values: data.weeklySalesChart,
-                    color: AppConstants.primary,
+                    color: SellerTheme.espressoMid,
                   ),
                 ),
                 onTap: () {
@@ -598,8 +611,8 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                 label: 'LOW STOCK',
                 value: '${data.lowStockCount}',
                 valueColor: data.lowStockCount > 0
-                    ? AppConstants.lowStockColor
-                    : AppConstants.okStockColor,
+                    ? SellerTheme.rust
+                    : SellerTheme.sage,
                 subtitle: data.lowStockCount > 0
                     ? 'items need restocking'
                     : 'stock levels OK',
@@ -704,29 +717,23 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: AppConstants.sellerCardBg,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: AppConstants.sellerShadow,
+        color: SellerTheme.card,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: SellerTheme.cardBorder),
+        boxShadow: SellerTheme.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Text(
-                'ORDER STATUS',
-                style: AppConstants.bodyStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.grey.shade500,
-                ).copyWith(letterSpacing: 1.0),
-              ),
+              _eyebrow('ORDER STATUS'),
               const SizedBox(width: 8),
               Text(
                 '$total total',
                 style: AppConstants.monoStyle(
                   fontSize: 11,
-                  color: Colors.grey.shade500,
+                  color: SellerTheme.textMuted,
                 ),
               ),
             ],
@@ -738,6 +745,16 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
               return Expanded(
                 child: Column(
                   children: [
+                    // Status dot above the number (mockup).
+                    Container(
+                      width: 7,
+                      height: 7,
+                      decoration: BoxDecoration(
+                        color: _statusDotColor(status),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
                     Text(
                       '$count',
                       style: AppConstants.monoStyle(
@@ -751,7 +768,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                       status.toUpperCase(),
                       style: AppConstants.monoStyle(
                         fontSize: 9,
-                        color: Colors.grey.shade500,
+                        color: SellerTheme.textMuted,
                       ),
                     ),
                   ],
@@ -767,17 +784,23 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
   Color _statusColor(String status) {
     switch (status) {
       case 'placed':
-        return AppConstants.statusPendingColor;
+        return SellerTheme.amber;
       case 'preparing':
-        return AppConstants.statusConfirmedColor;
+        return SellerTheme.blue;
       case 'ready':
-        return AppConstants.statusReadyColor;
+        return SellerTheme.rustDeep;
       case 'received':
-        return AppConstants.statusDeliveredColor;
+        return SellerTheme.sage;
       default:
         return AppConstants.secondary;
     }
   }
+
+  /// Dot color per status — derived from [_statusColor] (single source of
+  /// truth) with one exception: the mockup's Ready dot is rust while the
+  /// number itself is rustDeep.
+  Color _statusDotColor(String status) =>
+      status == 'ready' ? SellerTheme.rust : _statusColor(status);
 
   // ─── Block 4: Recent Orders (real data) ─────────────────────────
   Widget _buildRecentOrders(_DashboardData data) {
@@ -787,14 +810,15 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
       return Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: AppConstants.sellerCardBg,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: AppConstants.sellerShadow,
+          color: SellerTheme.card,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: SellerTheme.cardBorder),
+          boxShadow: SellerTheme.cardShadow,
         ),
         child: Center(
           child: Text(
             'No pending orders.',
-            style: AppConstants.bodyStyle(color: Colors.grey.shade400),
+            style: AppConstants.bodyStyle(color: SellerTheme.textMuted),
           ),
         ),
       );
@@ -836,7 +860,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
               style: AppConstants.bodyStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color: AppConstants.accent,
+                color: SellerTheme.rust,
               ),
             ),
           ),
@@ -916,16 +940,35 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
   Widget _buildSectionLabel(String label) {
     return Row(
       children: [
+        _eyebrow(label),
+        const SizedBox(width: 10),
+        Expanded(child: Divider(color: SellerTheme.cardBorder, height: 1)),
+      ],
+    );
+  }
+
+  /// Eyebrow caption: rust dot + uppercase, tracked-out muted text.
+  Widget _eyebrow(String text) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 5,
+          height: 5,
+          decoration: const BoxDecoration(
+            color: SellerTheme.rust,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 6),
         Text(
-          label,
+          text,
           style: AppConstants.bodyStyle(
             fontSize: 11,
-            fontWeight: FontWeight.w500,
-            color: Colors.grey.shade500,
-          ).copyWith(letterSpacing: 1.0),
+            fontWeight: FontWeight.w700,
+            color: SellerTheme.textMuted,
+          ).copyWith(letterSpacing: 1.2),
         ),
-        const SizedBox(width: 10),
-        Expanded(child: Divider(color: Colors.grey.shade300, height: 1)),
       ],
     );
   }
@@ -1102,12 +1145,10 @@ class _PaymentsToConfirmCardState extends State<_PaymentsToConfirmCard> {
     final count = _count ?? 0;
     final has = count > 0;
     return Material(
-      color: has
-          ? AppConstants.statusPendingColor.withValues(alpha: 0.08)
-          : Colors.white,
-      borderRadius: BorderRadius.circular(14),
+      color: SellerTheme.card,
+      borderRadius: BorderRadius.circular(20),
       child: InkWell(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(20),
         onTap: () {
           Navigator.of(context).push(
             MaterialPageRoute(
@@ -1118,26 +1159,29 @@ class _PaymentsToConfirmCardState extends State<_PaymentsToConfirmCard> {
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(20),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [SellerTheme.gcashBgStart, SellerTheme.gcashBgEnd],
+            ),
             border: Border.all(
-              color: has
-                  ? AppConstants.statusPendingColor.withValues(alpha: 0.35)
-                  : AppConstants.borderGray,
+              color: has ? SellerTheme.amber : SellerTheme.gcashBorder,
             ),
           ),
           child: Row(
             children: [
               Container(
-                width: 40,
-                height: 40,
+                width: 46,
+                height: 46,
                 decoration: BoxDecoration(
-                  color: AppConstants.primary.withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
+                  color: SellerTheme.espressoDark,
+                  borderRadius: BorderRadius.circular(14),
                 ),
                 child: const Icon(
                   Icons.account_balance_wallet_outlined,
                   size: 20,
-                  color: AppConstants.primary,
+                  color: SellerTheme.creamText,
                 ),
               ),
               const SizedBox(width: 12),
@@ -1162,8 +1206,8 @@ class _PaymentsToConfirmCardState extends State<_PaymentsToConfirmCard> {
                       style: AppConstants.bodyStyle(
                         fontSize: 12,
                         color: has
-                            ? AppConstants.statusPendingColor
-                            : AppConstants.secondary.withValues(alpha: 0.55),
+                            ? SellerTheme.amberDark
+                            : SellerTheme.textMuted,
                       ),
                     ),
                   ],
@@ -1189,7 +1233,7 @@ class _PaymentsToConfirmCardState extends State<_PaymentsToConfirmCard> {
               const SizedBox(width: 6),
               const Icon(
                 Icons.chevron_right,
-                color: AppConstants.primary,
+                color: SellerTheme.rust,
               ),
             ],
           ),

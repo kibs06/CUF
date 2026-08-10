@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../constants/app_constants.dart';
+import '../../constants/seller_theme_constants.dart';
 import '../../models/sales_trend_data.dart';
 
 /// Stacked area chart for revenue data, showing Online vs In-Store channels.
@@ -29,10 +30,11 @@ class SellerStackedAreaChart extends StatelessWidget {
     this.labels,
   });
 
-  // Chart colors matching shadcn/ui design tokens. Public so other
-  // revenue visuals (e.g. the doughnut card) reuse the same channel colors.
-  static const Color onlineColor = Color(0xFF2563EB);   // blue-600
-  static const Color inStoreColor = Color(0xFFD97706);  // amber-600
+  // Espresso/cream palette: online = rust, in-store = mid espresso.
+  // Public so other revenue visuals (e.g. the doughnut card) reuse the
+  // same channel colors.
+  static const Color onlineColor = SellerTheme.rust;
+  static const Color inStoreColor = SellerTheme.espressoMid;
 
   // Delta uses the app's brand success/error (olive / crimson) so the
   // growth chip reads as part of the product, not a generic material color.
@@ -54,7 +56,7 @@ class SellerStackedAreaChart extends StatelessWidget {
           'Combined online + in-store revenue',
           style: AppConstants.bodyStyle(
             fontSize: 11,
-            color: Colors.grey.shade500,
+            color: SellerTheme.textMuted,
           ),
         ),
       ],
@@ -84,7 +86,7 @@ class SellerStackedAreaChart extends StatelessWidget {
                     subtitle,
                     style: AppConstants.bodyStyle(
                       fontSize: 12,
-                      color: Colors.grey.shade500,
+                      color: SellerTheme.textMuted,
                     ),
                   ),
                 ],
@@ -121,9 +123,9 @@ class SellerStackedAreaChart extends StatelessWidget {
     if (prev <= 0) {
       return _buildDeltaPill(
         icon: Icons.remove,
-        iconColor: Colors.grey.shade400,
+        iconColor: SellerTheme.textMuted,
         text: 'No previous-period data',
-        textColor: Colors.grey.shade500,
+        textColor: SellerTheme.textMuted,
       );
     }
 
@@ -132,11 +134,11 @@ class SellerStackedAreaChart extends StatelessWidget {
     if (prev < _lowBaselineFloor) {
       return _buildDeltaPill(
         icon: Icons.auto_graph,
-        iconColor: Colors.grey.shade400,
+        iconColor: SellerTheme.textMuted,
         text: total <= 0
             ? 'No orders yet this period'
             : 'Early days — trend will firm up',
-        textColor: Colors.grey.shade500,
+        textColor: SellerTheme.textMuted,
       );
     }
 
@@ -193,7 +195,7 @@ class SellerStackedAreaChart extends StatelessWidget {
               style: AppConstants.bodyStyle(
                 fontSize: 11.5,
                 fontWeight: FontWeight.w500,
-                color: Colors.grey.shade500,
+                color: SellerTheme.textMuted,
               ),
             ),
           ],
@@ -275,7 +277,7 @@ class SellerStackedAreaChart extends StatelessWidget {
                         _formatCurrencyShort(value),
                         style: AppConstants.bodyStyle(
                           fontSize: 10,
-                          color: Colors.grey.shade400,
+                          color: SellerTheme.textMuted,
                         ),
                       ),
                     );
@@ -302,7 +304,7 @@ class SellerStackedAreaChart extends StatelessWidget {
                         label,
                         style: AppConstants.bodyStyle(
                           fontSize: 10,
-                          color: Colors.grey.shade400,
+                          color: SellerTheme.textMuted,
                         ),
                       ),
                     );
@@ -518,7 +520,7 @@ class SellerStackedAreaChart extends StatelessWidget {
             style: AppConstants.bodyStyle(
               fontSize: 11,
               fontWeight: FontWeight.w600,
-              color: Colors.grey.shade700,
+              color: SellerTheme.textSecondary,
             ),
           ),
         ],
@@ -547,7 +549,7 @@ class SellerStackedAreaChart extends StatelessWidget {
               style: TextStyle(
                 fontFamily: 'DMSans',
                 fontSize: 12,
-                color: Colors.grey.shade400,
+                color: SellerTheme.textMuted,
               ),
             ),
           ],
@@ -570,7 +572,7 @@ class SellerStackedAreaChart extends StatelessWidget {
               style: TextStyle(
                 fontFamily: 'DMSans',
                 fontSize: 12,
-                color: Colors.grey.shade500,
+                color: SellerTheme.textMuted,
               ),
             ),
             if (onRetry != null) ...[
@@ -608,7 +610,7 @@ class SellerStackedAreaChart extends StatelessWidget {
               style: TextStyle(
                 fontFamily: 'DMSans',
                 fontSize: 12,
-                color: Colors.grey.shade400,
+                color: SellerTheme.textMuted,
               ),
             ),
             const SizedBox(height: 4),
@@ -617,7 +619,7 @@ class SellerStackedAreaChart extends StatelessWidget {
               style: TextStyle(
                 fontFamily: 'DMSans',
                 fontSize: 10,
-                color: Colors.grey.shade400,
+                color: SellerTheme.textMuted,
               ),
             ),
           ],

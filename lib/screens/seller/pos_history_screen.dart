@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../constants/app_constants.dart';
+import '../../constants/seller_theme_constants.dart';
 import '../../widgets/shimmer_box.dart';
 import '../../services/order_service.dart';
 import '../../services/product_service.dart';
@@ -304,6 +305,7 @@ class _PosHistoryScreenState extends State<PosHistoryScreen> {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: SellerTheme.cardBorder),
               boxShadow: AppConstants.sellerShadow,
             ),
             child: Column(

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../constants/app_constants.dart';
+import '../../constants/seller_theme_constants.dart';
 import 'seller_status_chip.dart';
 
 /// Map an order's `source` column to its human-readable fulfillment label.
@@ -77,9 +78,10 @@ class SellerOrderCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: AppConstants.sellerCardBg,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: AppConstants.sellerShadow,
+        color: SellerTheme.card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: SellerTheme.cardBorder),
+        boxShadow: SellerTheme.cardShadow,
       ),
       padding: const EdgeInsets.all(14),
       child: Column(
@@ -107,13 +109,13 @@ class SellerOrderCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   Text(
                     timeAgo,
-                    style: AppConstants.bodyStyle(fontSize: 11, color: Colors.grey.shade500),
+                    style: AppConstants.bodyStyle(fontSize: 11, color: SellerTheme.textMuted),
                   ),
                 ],
               ),
             ],
           ),
-          const Divider(height: 16, color: AppConstants.borderGray),
+          Divider(height: 16, color: SellerTheme.cardBorder),
           Row(
             children: [
               Expanded(
@@ -145,7 +147,7 @@ class SellerOrderCard extends StatelessWidget {
                 '$itemCount items · ₱${totalAmount.toStringAsFixed(0)}',
                 style: AppConstants.bodyStyle(
                   fontSize: 12,
-                  color: Colors.grey.shade600,
+                  color: SellerTheme.textSecondary,
                 ),
               ),
               _FulfillmentChip(label: fulfillmentType),
@@ -216,10 +218,13 @@ class SellerOrderCard extends StatelessWidget {
                   Expanded(
                     child: SizedBox(
                       height: 36,
-                      child: OutlinedButton(
+                      child: FilledButton(
                         onPressed: onViewDetails,
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: AppConstants.borderGray),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: SellerTheme.espressoDark,
+                          foregroundColor: SellerTheme.creamText,
+                          disabledBackgroundColor:
+                              SellerTheme.espressoDark.withValues(alpha: 0.6),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10),
                           ),
@@ -229,7 +234,7 @@ class SellerOrderCard extends StatelessWidget {
                           style: AppConstants.bodyStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            color: AppConstants.secondary,
+                            color: SellerTheme.creamText,
                           ),
                         ),
                       ),
@@ -241,10 +246,13 @@ class SellerOrderCard extends StatelessWidget {
               SizedBox(
                 height: 36,
                 width: double.infinity,
-                child: OutlinedButton(
+                child: FilledButton(
                   onPressed: onViewDetails,
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: AppConstants.borderGray),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: SellerTheme.espressoDark,
+                    foregroundColor: SellerTheme.creamText,
+                    disabledBackgroundColor:
+                        SellerTheme.espressoDark.withValues(alpha: 0.6),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
@@ -254,7 +262,7 @@ class SellerOrderCard extends StatelessWidget {
                     style: AppConstants.bodyStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: AppConstants.secondary,
+                      color: SellerTheme.creamText,
                     ),
                   ),
                 ),

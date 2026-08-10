@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../constants/app_constants.dart';
+import '../../constants/seller_theme_constants.dart';
 import '../../utils/sale_price.dart';
 
 class SellerProductRow extends StatelessWidget {
@@ -67,6 +68,7 @@ class SellerProductRow extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppConstants.sellerCardBg,
         borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: SellerTheme.cardBorder),
         boxShadow: AppConstants.sellerShadow,
       ),
       padding: const EdgeInsets.all(12),
@@ -129,7 +131,7 @@ class SellerProductRow extends StatelessWidget {
                         '₱${price.toStringAsFixed(0)}',
                         style: AppConstants.bodyStyle(
                           fontSize: 11,
-                          color: Colors.grey.shade400,
+                          color: SellerTheme.textMuted,
                         ).copyWith(decoration: TextDecoration.lineThrough),
                       ),
                       const SizedBox(width: 5),
@@ -138,7 +140,7 @@ class SellerProductRow extends StatelessWidget {
                         '₱${price.toStringAsFixed(0)}',
                         style: AppConstants.bodyStyle(
                           fontSize: 12,
-                          color: Colors.grey.shade500,
+                          color: SellerTheme.textMuted,
                         ),
                       ),
                     Expanded(
@@ -146,7 +148,7 @@ class SellerProductRow extends StatelessWidget {
                         '· SKU: $sku',
                         style: AppConstants.bodyStyle(
                           fontSize: 12,
-                          color: Colors.grey.shade500,
+                          color: SellerTheme.textMuted,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -174,7 +176,7 @@ class SellerProductRow extends StatelessWidget {
                           'Stock: $totalStock / $maxStock',
                           style: AppConstants.bodyStyle(
                             fontSize: 11,
-                            color: Colors.grey.shade500,
+                            color: SellerTheme.textMuted,
                           ),
                         ),
                         if (isLow) ...[

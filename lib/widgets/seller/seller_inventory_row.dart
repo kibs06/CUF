@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../constants/app_constants.dart';
+import '../../constants/seller_theme_constants.dart';
 
 /// Flat, universal stock cap per size. UI-layer only — a predictable limit
 /// for sellers; no DB CHECK constraint (the schema's `stock >= 0` guard is
@@ -200,6 +201,7 @@ class _SellerInventoryRowState extends State<SellerInventoryRow>
       decoration: BoxDecoration(
         color: AppConstants.sellerCardBg,
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: SellerTheme.cardBorder),
         boxShadow: AppConstants.sellerShadow,
       ),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
