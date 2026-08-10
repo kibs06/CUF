@@ -319,7 +319,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                           },
                           style: AppConstants.bodyStyle(fontSize: 15),
                           decoration: InputDecoration(
-                            hintText: 'Search artisan boots, oxfords, loafers...',
+                            hintText: 'Search products or tags — handmade, leather, boots…',
                             hintStyle: AppConstants.bodyStyle(
                               fontSize: 14,
                               color: AppConstants.secondary.withValues(alpha: 0.4),

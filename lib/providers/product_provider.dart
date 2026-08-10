@@ -183,15 +183,31 @@ class ProductProvider extends ChangeNotifier {
           .toList();
     }
 
-    // Search keyword
+    // Search keyword — matches the product NAME or any of its TAGS.
+    // The name keeps its exact-substring behavior; tags additionally match
+    // per-word, so a multi-word query like "handmade leather" finds
+    // products tagged with any of those words.
     if (searchKeyword.isNotEmpty) {
-      filtered = filtered
-          .where(
-            (p) => p['name'].toLowerCase().contains(
-              searchKeyword.trim().toLowerCase(),
-            ),
-          )
+      final query = searchKeyword.trim().toLowerCase();
+      final words = query
+          .split(RegExp(r'\s+'))
+          .where((w) => w.isNotEmpty)
           .toList();
+      filtered = filtered.where((p) {
+        final name = (p['name'] ?? '').toString().toLowerCase();
+        if (name.contains(query)) return true;
+        // Tag match: any whitespace-separated word of the query as a
+        // substring of any tag (covers single-word "leather" and
+        // multi-word "handmade leather" queries alike).
+        final tags = p['tags'];
+        if (tags is List) {
+          for (final tag in tags) {
+            final tagText = tag.toString().toLowerCase();
+            if (words.any((w) => tagText.contains(w))) return true;
+          }
+        }
+        return false;
+      }).toList();
     }
 
     // Sort
