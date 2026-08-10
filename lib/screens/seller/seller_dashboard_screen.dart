@@ -806,7 +806,6 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
           // Enrich the order map for SellerOrderCard
           final enriched = Map<String, dynamic>.from(order);
           enriched['time_ago'] = _timeAgo(order['created_at'] as String?);
-          enriched['fulfillment_type'] = 'Walk-in';
 
           // Dashboard is a glanceable summary — status changes should
           // happen from the Orders tab / Order Detail screen where the

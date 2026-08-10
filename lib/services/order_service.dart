@@ -75,7 +75,7 @@ class OrderService {
         .from('orders')
         .select(
           'id, customer_id, status, total_amount, payment_method, '
-          'created_at',
+          'created_at, source',
         )
         .inFilter('id', orderIds)
         .order('created_at', ascending: false);
@@ -165,7 +165,8 @@ class OrderService {
     final data = await _client
         .from('orders')
         .select(
-          'id, customer_id, total_amount, status, created_at',
+          // source is needed by SellerOrderCard to show Online vs Walk-in.
+          'id, customer_id, total_amount, status, created_at, source',
         )
         .inFilter('id', orderIds)
         .order('created_at', ascending: false);

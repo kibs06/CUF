@@ -800,7 +800,6 @@ class _ManageOrdersScreenState extends State<ManageOrdersScreen>
 
                       order['customer_name'] = customerName;
                       order['time_ago'] = _timeAgo(order['created_at'] as String?);
-                      order['fulfillment_type'] = 'Walk-in';
 
                       return _buildSlidableOrderCard(order, id, status);
                     },

@@ -2,6 +2,14 @@ import 'package:flutter/material.dart';
 import '../../constants/app_constants.dart';
 import 'seller_status_chip.dart';
 
+/// Map an order's `source` column to its human-readable fulfillment label.
+/// - `online` → "Online"  (customer placed the order through the app)
+/// - `pos` / missing → "Walk-in"  (in-person sale at the counter)
+String orderFulfillmentLabel(Map<String, dynamic> order) {
+  final source = order['source']?.toString().toLowerCase();
+  return source == 'online' ? 'Online' : 'Walk-in';
+}
+
 class SellerOrderCard extends StatelessWidget {
   final Map<String, dynamic> order;
   final VoidCallback onPrimaryAction;
@@ -33,7 +41,9 @@ class SellerOrderCard extends StatelessWidget {
     final totalAmount = (order['total_amount'] is double)
         ? order['total_amount'] as double
         : (order['total_amount'] ?? 0).toDouble();
-    final fulfillmentType = order['fulfillment_type'] ?? 'Walk-in';
+    // Derived from the orders.source column ('online' | 'pos') — the UI
+    // never trusts a fake 'fulfillment_type' key.
+    final fulfillmentType = orderFulfillmentLabel(order);
     final timeAgo = order['time_ago'] ?? '';
 
     String primaryLabel;
@@ -124,9 +134,22 @@ class SellerOrderCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 4),
-          Text(
-            '$itemCount items · ₱${totalAmount.toStringAsFixed(0)}  $fulfillmentType',
-            style: AppConstants.bodyStyle(fontSize: 12, color: Colors.grey.shade600),
+          // Wrap (not Row) so the chip drops to its own line instead of
+          // truncating the amount when the summary text is long.
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(
+                '$itemCount items · ₱${totalAmount.toStringAsFixed(0)}',
+                style: AppConstants.bodyStyle(
+                  fontSize: 12,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+              _FulfillmentChip(label: fulfillmentType),
+            ],
           ),
           const SizedBox(height: 12),
           if (primaryLabel.isNotEmpty && showPrimaryAction)
@@ -236,6 +259,46 @@ class SellerOrderCard extends StatelessWidget {
                   ),
                 ),
               ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Small colored pill for the order source (Online / Walk-in), matching
+/// the visual language of [SellerStatusChip].
+class _FulfillmentChip extends StatelessWidget {
+  final String label;
+
+  const _FulfillmentChip({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final isOnline = label.toLowerCase() == 'online';
+    // Online uses a deeper teal than the raw accent for text-on-tint
+    // legibility; Walk-in uses the brand brown.
+    final color = isOnline ? const Color(0xFF0E7A73) : AppConstants.primary;
+    final icon = isOnline ? Icons.smartphone : Icons.storefront_outlined;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label.toUpperCase(),
+            style: AppConstants.monoStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
         ],
       ),
     );
