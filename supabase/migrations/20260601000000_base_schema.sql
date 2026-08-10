@@ -618,3 +618,19 @@ VALUES
     ('Carcar Sole Works', 'Where tradition meets comfort', 'Poblacion, Carcar City', '#4A3728', true),
     ('Cebu Heritage Shoes', 'Crafted with Cebuano pride', 'Carcar City, Cebu', '#5C4033', false)
 ON CONFLICT DO NOTHING;
+
+-- ═══════════════════════════════════════════════════════════════════
+-- TABLE PRIVILEGES (legacy Supabase default)
+-- ═══════════════════════════════════════════════════════════════════
+-- The live database was built under Supabase's legacy behaviour where
+-- anon / authenticated / service_role automatically get ALL table
+-- privileges (RLS still gates every row). The current CLI/cloud default
+-- ("always-revoked" — auto_expose_new_tables unset) leaves freshly
+-- created tables with NO grants, which breaks the app AND the CI RLS
+-- recursion canary (permission denied for table cart_items / profiles).
+--
+-- GRANT ALL covers the tables created above; ALTER DEFAULT PRIVILEGES
+-- covers every table created by later migrations, so this class of
+-- bug cannot recur.
+GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
