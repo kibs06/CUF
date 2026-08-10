@@ -24,7 +24,8 @@ export default function TopBar({ title, onMenuClick }) {
         >
           <Menu size={18} className="text-[#6B5C4E]" />
         </button>
-        <div>
+        <div className="relative pl-4">
+          <span className="absolute inset-y-1 left-0 w-1 rounded-full bg-gradient-to-b from-primary to-accent" />
           <h1 className="font-display text-3xl font-bold text-[#3B2314]">{title}</h1>
           <p className="mt-0.5 text-sm text-[#6B5C4E]">
             Welcome back, {profile?.full_name ?? 'Admin'} · {formatDateLong()}

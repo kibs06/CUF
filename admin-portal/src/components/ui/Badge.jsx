@@ -21,11 +21,10 @@ const VARIANTS = {
   resolved: 'bg-teal-50 text-teal-700 border border-teal-200',
   none: 'bg-gray-50 text-gray-500 border border-gray-200',
   // Payment intent statuses (Transactions page) — reuse existing tones:
-  // succeeded → teal (same as delivered/received), failed → red (same as
-  // cancelled), expired → amber (the existing warning tone), pending → amber.
+  // succeeded → teal, failed → red, pending → amber, expired → neutral gray.
   succeeded: 'bg-teal-50 text-teal-700 border border-teal-200',
   failed: 'bg-red-50 text-red-700 border border-red-200',
-  expired: 'bg-amber-50 text-amber-700 border border-amber-200',
+  expired: 'bg-gray-100 text-gray-600 border border-gray-200',
   // Webhook event processing statuses (timeline). NOTE: do not add a key
   // that already exists above (e.g. 'received' is the order status) — the
   // duplicate would silently override the order status tone.
@@ -36,7 +35,7 @@ const VARIANTS = {
   rejected_signature: 'bg-red-50 text-red-700 border border-red-200',
 }
 
-export default function Badge({ label, variant }) {
+export default function Badge({ label, variant, dot = false }) {
   const key = (variant ?? label ?? '').toLowerCase()
   const classes = VARIANTS[key] ?? 'bg-gray-50 text-gray-600 border border-gray-200'
 
@@ -44,6 +43,7 @@ export default function Badge({ label, variant }) {
     <span
       className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ${classes}`}
     >
+      {dot && <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-current opacity-80" />}
       {label}
     </span>
   )

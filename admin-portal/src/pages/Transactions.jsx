@@ -1,19 +1,28 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
-import { Search, Download, ArrowUpRight } from 'lucide-react'
+import {
+  AlertTriangle,
+  ArrowUpRight,
+  Banknote,
+  Download,
+  Landmark,
+  Receipt,
+  Search,
+  SearchX,
+  Wallet,
+  X,
+} from 'lucide-react'
+import { Area, AreaChart, ResponsiveContainer } from 'recharts'
 import Badge from '../components/ui/Badge.jsx'
 import Modal from '../components/ui/Modal.jsx'
 import StatCard from '../components/ui/StatCard.jsx'
 import { StatCardSkeleton, TableSkeleton } from '../components/ui/Skeleton.jsx'
 import EmptyState from '../components/ui/EmptyState.jsx'
+import AvatarInitials from '../components/ui/AvatarInitials.jsx'
+import DateRangePicker from '../components/ui/DateRangePicker.jsx'
 import { useTransactions } from '../hooks/useTransactions.js'
-import {
-  formatCurrency,
-  formatDateTime,
-  shortId,
-  PAYMENT_INTENT_STATUSES,
-} from '../lib/constants'
+import { formatCurrency, formatDateTime, shortId } from '../lib/constants'
 
 const PAGE_SIZE = 20
 
@@ -25,6 +34,23 @@ const EVENT_STATUS_VARIANTS = {
   stock_conflict: 'stock_conflict',
   rejected_signature: 'rejected_signature',
   failed: 'failed',
+}
+
+const STATUS_SEGMENTS = [
+  { value: 'all', label: 'All', dot: 'bg-secondary' },
+  { value: 'succeeded', label: 'Paid', dot: 'bg-accent' },
+  { value: 'pending', label: 'Pending', dot: 'bg-pending' },
+  { value: 'failed', label: 'Failed', dot: 'bg-error' },
+  { value: 'expired', label: 'Expired', dot: 'bg-gray-400' },
+  { value: 'cancelled', label: 'Cancelled', dot: 'bg-gray-300' },
+]
+
+const ROW_HOVER_ACCENT = {
+  succeeded: 'hover:shadow-[inset_3px_0_0_#4ECDC4]',
+  pending: 'hover:shadow-[inset_3px_0_0_#E8A020]',
+  failed: 'hover:shadow-[inset_3px_0_0_#D64545]',
+  expired: 'hover:shadow-[inset_3px_0_0_#9CA3AF]',
+  cancelled: 'hover:shadow-[inset_3px_0_0_#D64545]',
 }
 
 function humanize(value) {
@@ -64,6 +90,34 @@ function exportCsv(rows) {
   URL.revokeObjectURL(url)
 }
 
+function timeAgo(dateStr) {
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  const days = Math.floor(hrs / 24)
+  if (days < 7) return `${days}d ago`
+  if (days < 30) return `${Math.floor(days / 7)}w ago`
+  if (days < 365) return `${Math.floor(days / 30)}mo ago`
+  return `${Math.floor(days / 365)}y ago`
+}
+
+function parseISODate(str) {
+  if (!str) return null
+  const [y, m, d] = str.split('-').map(Number)
+  return new Date(y, m - 1, d)
+}
+
+function toISODate(date) {
+  if (!date) return ''
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
 // ── Count-up number for stat cards (numeric tween only; <800ms) ──────
 function AnimatedNumber({ value, format = (v) => v }) {
   const reduce = useReducedMotion()
@@ -96,6 +150,33 @@ function AnimatedNumber({ value, format = (v) => v }) {
 
 const moneyFormat = (v) => formatCurrency(Math.round(v * 100) / 100)
 
+// ── Tiny sparkline for the "Total paid" card ─────────────────────────
+function Sparkline({ data }) {
+  if (!data || data.length < 2) return null
+  return (
+    <div className="h-10 w-24 shrink-0">
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={data} margin={{ top: 2, right: 0, bottom: 0, left: 0 }}>
+          <defs>
+            <linearGradient id="sparkFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#4ECDC4" stopOpacity={0.35} />
+              <stop offset="100%" stopColor="#4ECDC4" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <Area
+            type="monotone"
+            dataKey="value"
+            stroke="#4ECDC4"
+            strokeWidth={2}
+            fill="url(#sparkFill)"
+            isAnimationActive={false}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
 // ── Status badge that pulses only when the status actually changes ───
 function StatusBadge({ rowId, status }) {
   const reduce = useReducedMotion()
@@ -104,7 +185,7 @@ function StatusBadge({ rowId, status }) {
   const changed = wasSeen && seen.current.get(rowId) !== status
   seen.current.set(rowId, status)
 
-  if (reduce || !changed) return <Badge label={status} variant={status} />
+  if (reduce || !changed) return <Badge label={status} variant={status} dot />
 
   return (
     <motion.span
@@ -113,7 +194,7 @@ function StatusBadge({ rowId, status }) {
       animate={{ scale: 1, opacity: 1 }}
       transition={{ type: 'spring', bounce: 0.1, duration: 0.45 }}
     >
-      <Badge label={status} variant={status} />
+      <Badge label={status} variant={status} dot />
     </motion.span>
   )
 }
@@ -324,30 +405,43 @@ export default function Transactions() {
     }
   }, [filtered])
 
+  // Daily succeeded-amount series over the current filter period, for the
+  // "Total paid" sparkline.
+  const sparkData = useMemo(() => {
+    const buckets = new Map()
+    for (const t of filtered) {
+      if (t.status !== 'succeeded' || !Number(t.amount)) continue
+      const d = new Date(t.created_at)
+      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+      buckets.set(key, (buckets.get(key) ?? 0) + Number(t.amount))
+    }
+    return [...buckets.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([, value]) => ({ value: Math.round(value) }))
+  }, [filtered])
+
   const cards = useMemo(
     () => [
       {
         key: 'total',
-        icon: '💳',
         label: 'Transactions',
-        iconBg: 'rgba(139,90,43,0.1)',
-        iconColor: '#8B5A2B',
+        tone: 'primary',
+        Icon: Wallet,
         value: <AnimatedNumber value={stats.total} format={(v) => Math.round(v).toLocaleString()} />,
       },
       {
         key: 'paid',
-        icon: '💰',
         label: 'Total paid amount',
-        iconBg: 'rgba(78,205,196,0.1)',
-        iconColor: '#4ECDC4',
+        tone: 'accent',
+        Icon: Banknote,
+        sparkline: <Sparkline data={sparkData} />,
         value: <AnimatedNumber value={stats.totalPaid} format={moneyFormat} />,
       },
       {
         key: 'fees',
-        icon: '🏦',
         label: 'PayMongo fees',
-        iconBg: 'rgba(139,90,43,0.08)',
-        iconColor: '#3B2314',
+        tone: 'neutral',
+        Icon: Landmark,
         value:
           stats.fees != null ? (
             <AnimatedNumber value={stats.fees} format={moneyFormat} />
@@ -357,19 +451,30 @@ export default function Transactions() {
       },
       {
         key: 'attention',
-        icon: '⚠️',
         label: 'Failed / expired',
-        iconBg: 'rgba(214,69,69,0.1)',
-        iconColor: '#D64545',
+        tone: 'error',
+        Icon: AlertTriangle,
         highlight: stats.attention > 0,
         value: <AnimatedNumber value={stats.attention} format={(v) => Math.round(v).toLocaleString()} />,
       },
     ],
-    [stats],
+    [stats, sparkData],
   )
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const pageRows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+
+  const filtersActive = Boolean(
+    search.trim() || statusFilter !== 'all' || storeFilter !== 'all' || dateFrom || dateTo,
+  )
+
+  const clearAllFilters = () => {
+    setSearch('')
+    setStatusFilter('all')
+    setStoreFilter('all')
+    setDateFrom('')
+    setDateTo('')
+  }
 
   // Deep link from Orders: /transactions?order=<orderId> opens that transaction.
   useEffect(() => {
@@ -422,11 +527,11 @@ export default function Transactions() {
               transition={{ duration: 0.3, delay: i * 0.06 }}
             >
               <StatCard
-                icon={card.icon}
                 label={card.label}
+                tone={card.tone}
+                Icon={card.Icon}
                 highlight={card.highlight}
-                iconBg={card.iconBg}
-                iconColor={card.iconColor}
+                sparkline={card.sparkline}
               >
                 {card.value}
               </StatCard>
@@ -435,59 +540,82 @@ export default function Transactions() {
         )}
       </div>
 
-      {/* Search & filter bar */}
-      <div className="flex flex-wrap gap-3">
-        <div className="relative min-w-52 flex-1">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6B5C4E]" />
+      {/* Filter panel */}
+      <div className="rounded-2xl border border-[#D9D0C7] bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Status segmented control */}
+          <div className="flex items-center gap-1 rounded-full border border-[#D9D0C7] bg-[#F5F0EB] p-1">
+            {STATUS_SEGMENTS.map((s) => {
+              const active = statusFilter === s.value
+              return (
+                <button
+                  key={s.value}
+                  type="button"
+                  onClick={() => setStatusFilter(s.value)}
+                  className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
+                    active
+                      ? 'bg-white text-secondary shadow-sm'
+                      : 'text-[#6B5C4E] hover:text-secondary'
+                  }`}
+                >
+                  <span className={`h-1.5 w-1.5 rounded-full ${s.dot} ${active ? '' : 'opacity-50'}`} />
+                  {s.label}
+                </button>
+              )
+            })}
+          </div>
+
+          <div className="ml-auto flex flex-wrap items-center gap-3">
+            <select
+              value={storeFilter}
+              onChange={(e) => setStoreFilter(e.target.value)}
+              className="rounded-full border border-[#D9D0C7] bg-white px-4 py-2 text-sm font-medium text-[#3B2314] outline-none transition-colors focus:border-primary"
+            >
+              <option value="all">All stores</option>
+              {stores.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+            <DateRangePicker
+              from={parseISODate(dateFrom)}
+              to={parseISODate(dateTo)}
+              onChange={(from, to) => {
+                setDateFrom(toISODate(from))
+                setDateTo(toISODate(to))
+              }}
+            />
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={!filtered.length}
+              className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:bg-secondary hover:shadow-md disabled:opacity-40"
+            >
+              <Download size={16} />
+              Export CSV
+            </button>
+          </div>
+        </div>
+
+        {/* Search */}
+        <div className="relative mt-3">
+          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#6B5C4E]" />
           <input
             type="search"
             placeholder="Search order, customer, store, ref…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-xl border border-[#D9D0C7] bg-white py-2.5 pl-9 pr-4 text-sm text-[#3B2314] placeholder-[#6B5C4E] outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
+            className="w-full rounded-xl border border-[#D9D0C7] bg-[#FBF8F5] py-2.5 pl-10 pr-10 text-sm text-[#3B2314] placeholder-[#6B5C4E] outline-none transition-all focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/20"
           />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-[#6B5C4E] transition-colors hover:bg-[#F5F0EB] hover:text-[#3B2314]"
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="rounded-xl border border-[#D9D0C7] bg-white px-4 py-2.5 text-sm text-[#3B2314] outline-none focus:border-[#8B5A2B]"
-        >
-          <option value="all">All statuses</option>
-          {PAYMENT_INTENT_STATUSES.map((s) => (
-            <option key={s} value={s}>{s}</option>
-          ))}
-        </select>
-        <select
-          value={storeFilter}
-          onChange={(e) => setStoreFilter(e.target.value)}
-          className="rounded-xl border border-[#D9D0C7] bg-white px-4 py-2.5 text-sm text-[#3B2314] outline-none focus:border-[#8B5A2B]"
-        >
-          <option value="all">All stores</option>
-          {stores.map((s) => (
-            <option key={s.id} value={s.id}>{s.name}</option>
-          ))}
-        </select>
-        <input
-          type="date"
-          value={dateFrom}
-          onChange={(e) => setDateFrom(e.target.value)}
-          className="rounded-xl border border-[#D9D0C7] bg-white px-4 py-2.5 text-sm text-[#3B2314] outline-none focus:border-[#8B5A2B]"
-        />
-        <input
-          type="date"
-          value={dateTo}
-          onChange={(e) => setDateTo(e.target.value)}
-          className="rounded-xl border border-[#D9D0C7] bg-white px-4 py-2.5 text-sm text-[#3B2314] outline-none focus:border-[#8B5A2B]"
-        />
-        <button
-          type="button"
-          onClick={handleExport}
-          disabled={!filtered.length}
-          className="inline-flex items-center gap-2 rounded-xl border border-[#8B5A2B] px-4 py-2.5 text-sm font-semibold text-[#8B5A2B] transition-colors hover:bg-[#8B5A2B]/10 disabled:opacity-40"
-        >
-          <Download size={16} />
-          Export CSV
-        </button>
       </div>
 
       {isLoading && (
@@ -509,12 +637,12 @@ export default function Transactions() {
         <>
           <div className="overflow-x-auto rounded-2xl border border-[#D9D0C7] bg-white shadow-sm">
             <table className="min-w-full text-left text-sm">
-              <thead className="bg-[#F5F0EB]">
+              <thead className="bg-[#FBF8F5]">
                 <tr>
                   <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">Date</th>
-                  <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">Order</th>
                   <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">Customer</th>
-                  <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">Amount</th>
+                  <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">Order</th>
+                  <th className="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">Amount</th>
                   <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">Status</th>
                 </tr>
               </thead>
@@ -523,9 +651,28 @@ export default function Transactions() {
                   <tr>
                     <td colSpan={5} className="p-0">
                       <EmptyState
-                        icon="💳"
-                        title="No transactions found"
-                        description="Try adjusting your search or filters."
+                        Icon={rows.length === 0 && !filtersActive ? Receipt : SearchX}
+                        title={
+                          rows.length === 0 && !filtersActive
+                            ? 'No transactions yet'
+                            : 'No matches'
+                        }
+                        description={
+                          rows.length === 0 && !filtersActive
+                            ? 'GCash payments will show up here as customers place orders online.'
+                            : 'No transactions match the current search and filters.'
+                        }
+                        action={
+                          filtersActive ? (
+                            <button
+                              type="button"
+                              onClick={clearAllFilters}
+                              className="mt-4 rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-secondary"
+                            >
+                              Clear filters
+                            </button>
+                          ) : undefined
+                        }
                       />
                     </td>
                   </tr>
@@ -535,21 +682,30 @@ export default function Transactions() {
                       <motion.tr
                         key={row.id}
                         {...rowAnim(i)}
-                        whileHover={reduce ? undefined : { x: 3 }}
                         onClick={() => setSelected(row)}
-                        className="group cursor-pointer transition-colors hover:bg-[#FBF8F5]"
+                        className={`group cursor-pointer transition-all hover:bg-[#FBF8F5] ${
+                          ROW_HOVER_ACCENT[row.status] ?? 'hover:shadow-[inset_3px_0_0_#8B5A2B]'
+                        }`}
                       >
-                        <td className="px-6 py-4 text-[#6B5C4E]">
-                          {formatDateTime(row.created_at)}
+                        <td className="px-6 py-4 align-middle">
+                          <p className="text-sm font-medium text-[#3B2314]">{timeAgo(row.created_at)}</p>
+                          <p className="text-xs text-[#6B5C4E]" title={formatDateTime(row.created_at)}>
+                            {formatDateTime(row.created_at)}
+                          </p>
                         </td>
-                        <td className="px-6 py-4 font-mono text-xs text-[#3B2314]">
+                        <td className="px-6 py-4 align-middle">
+                          <div className="flex items-center gap-3">
+                            <AvatarInitials name={row.customer_name} email={row.customer_email} />
+                            <div>
+                              <p className="font-medium text-[#3B2314]">{row.customer_name}</p>
+                              <p className="text-xs text-[#6B5C4E]">{row.store_name}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 align-middle font-mono text-xs text-[#6B5C4E]">
                           {shortId(row.order_id)}
                         </td>
-                        <td className="px-6 py-4">
-                          <p className="text-[#3B2314]">{row.customer_name}</p>
-                          <p className="text-xs text-[#6B5C4E]">{row.store_name}</p>
-                        </td>
-                        <td className="px-6 py-4">
+                        <td className="px-6 py-4 text-right align-middle">
                           <p className="font-mono text-base font-bold text-[#3B2314]">
                             {formatCurrency(row.amount)}
                           </p>
@@ -559,7 +715,7 @@ export default function Transactions() {
                             </p>
                           )}
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="px-6 py-4 align-middle">
                           <div className="flex items-center gap-1.5">
                             <StatusBadge rowId={row.id} status={row.status} />
                             <ArrowUpRight size={14} className="text-[#6B5C4E] opacity-0 transition-opacity group-hover:opacity-100" />
