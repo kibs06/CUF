@@ -26,6 +26,12 @@ class PushNotificationService {
   bool _initialized = false;
   StreamSubscription? _foregroundSub;
   StreamSubscription? _tokenRefreshSub;
+  StreamSubscription<AuthState>? _authSub;
+
+  /// The last user id this device's FCM token was registered under. Used
+  /// to clean the token up when that user signs out (the auth state's
+  /// session is already null by then, so currentUser can't be read).
+  String? _registeredUserId;
 
   /// Navigation callback for message notifications — set by shell widgets.
   /// Signature: (String conversationId, String storeName)
@@ -84,7 +90,10 @@ class PushNotificationService {
       // 3. Get and store the initial FCM token
       final token = await _messaging.getToken();
       if (token != null) {
-        await _storeToken(token);
+        final user = Supabase.instance.client.auth.currentUser;
+        if (user != null) {
+          await _storeToken(userId: user.id, token: token);
+        }
         if (kDebugMode) {
           debugPrint('[Push] FCM token: ${token.substring(0, 20)}...');
           debugPrint('[Push] ═══════════════════════════════════════');
@@ -96,9 +105,56 @@ class PushNotificationService {
 
       // 4. Listen for token refreshes
       _tokenRefreshSub = _messaging.onTokenRefresh.listen((newToken) {
-        _storeToken(newToken);
+        final user = Supabase.instance.client.auth.currentUser;
+        if (user != null) {
+          _storeToken(userId: user.id, token: newToken);
+        }
         if (kDebugMode) debugPrint('[Push] Token refreshed');
       });
+
+      // 4b. Re-register the token whenever the auth session changes
+      // (login, logout, or a persisted session restoring after a cold
+      // start). init() runs in main() BEFORE Supabase finishes restoring
+      // the session, so the token stored above is silently dropped when
+      // the user is not yet authenticated — that is exactly how a seller
+      // ends up with NO row in device_tokens while the edge function
+      // (verified correct) reports "No device tokens for user". This
+      // listener re-attaches the token the moment a session appears.
+      _authSub =
+          Supabase.instance.client.auth.onAuthStateChange.listen((authState) {
+        final user = authState.session?.user;
+        if (user == null) {
+          // Signed out — remove this device's token from the account it
+          // was registered under, so that account no longer receives
+          // pushes on this device. The session is already null here, so
+          // the user id comes from our tracked _registeredUserId.
+          final prevUserId = _registeredUserId;
+          _registeredUserId = null;
+          if (prevUserId != null) {
+            _messaging.getToken().then((t) {
+              if (t != null) _removeToken(userId: prevUserId, token: t);
+            }).catchError((e) {
+              if (kDebugMode) debugPrint('[Push] Auth token removal failed: $e');
+            });
+          }
+          return;
+        }
+        _messaging.getToken().then((t) {
+          if (t != null) _storeToken(userId: user.id, token: t);
+        }).catchError((e) {
+          if (kDebugMode) debugPrint('[Push] Auth token re-register failed: $e');
+        });
+      });
+
+      // 4c. If the session was already restored by the time init() ran
+      // (fast cold start), the listener above may have missed it — store
+      // the token immediately as well. getToken() is cached, so this is
+      // a cheap no-op when the listener already did the work.
+      final currentUser = Supabase.instance.client.auth.currentUser;
+      if (currentUser != null) {
+        final t = await _messaging.getToken();
+        if (t != null) await _storeToken(userId: currentUser.id, token: t);
+      }
 
       // 5. Handle foreground messages
       _foregroundSub = FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
@@ -228,21 +284,31 @@ class PushNotificationService {
 
   // ── Notification Channels ───────────────────────────────────────
 
-  /// Ensure the message notification channel exists (Android 8+).
-  /// Idempotent — safe to call repeatedly.
+  /// Ensure the notification channels exist (Android 8+). Idempotent —
+  /// safe to call repeatedly.
+  ///
+  /// Creates BOTH channel ids that the app has ever used. Android 8+
+  /// silently drops an FCM notification whose channel_id does not exist
+  /// on the device, and the channel id has flip-flopped between
+  /// `solevision_messages` and `cufmai_messages` across the rebrand/fix/
+  /// revert cycle — a deployed edge function can be ahead of (or behind)
+  /// an installed APK. Registering both makes the app immune to that
+  /// drift: whichever id the server sends, a matching channel exists.
   Future<void> _ensureMessageChannel() async {
     try {
       final androidPlugin = _localNotifications.resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>();
       if (androidPlugin != null) {
-        await androidPlugin.createNotificationChannel(
-          const AndroidNotificationChannel(
-            'solevision_messages',
-            'Messages',
-            description: 'New message notifications from stores',
-            importance: Importance.high,
-          ),
-        );
+        for (final channelId in const ['solevision_messages', 'cufmai_messages']) {
+          await androidPlugin.createNotificationChannel(
+            AndroidNotificationChannel(
+              channelId,
+              'Messages',
+              description: 'New message notifications from stores',
+              importance: Importance.high,
+            ),
+          );
+        }
       }
     } catch (e) {
       if (kDebugMode) print('[Push] Failed to ensure notification channel: $e');
@@ -329,10 +395,15 @@ class PushNotificationService {
   /// Uses upsert on `customer_id` only — one token per user.
   /// When the token rotates (which happens frequently), this replaces
   /// the old token instead of inserting a new row.
-  Future<void> _storeToken(String token) async {
-    final userId = Supabase.instance.client.auth.currentUser?.id;
-    if (userId == null) return;
-
+  ///
+  /// [userId] is passed explicitly (rather than re-read from
+  /// `auth.currentUser`) so callers that hold a session/user object are
+  /// immune to races where currentUser is momentarily null mid-auth-flow.
+  Future<void> _storeToken({
+    required String userId,
+    required String token,
+  }) async {
+    _registeredUserId = userId;
     final platform = defaultTargetPlatform == TargetPlatform.iOS ? 'ios' : 'android';
 
     try {
@@ -347,26 +418,34 @@ class PushNotificationService {
         },
         onConflict: 'customer_id,fcm_token',
       );
-      // Best-effort cleanup: delete any OTHER stale tokens for this user.
-      // If this fails, we still have the fresh token stored.
+      // Best-effort cleanup: delete OTHER stale tokens for this user — but
+      // only ones that haven't been seen in a week. Deleting every other
+      // token (the old behavior) silently breaks multi-device setups: the
+      // seller's phone token gets wiped whenever the app is opened on an
+      // emulator/tablet, and pushes to the phone stop. The edge function
+      // independently removes UNREGISTERED tokens.
+      final staleCutoff = DateTime.now()
+          .subtract(const Duration(days: 7))
+          .toIso8601String();
       await Supabase.instance.client
           .from('device_tokens')
           .delete()
           .eq('customer_id', userId)
-          .neq('fcm_token', token);
+          .neq('fcm_token', token)
+          .lt('updated_at', staleCutoff);
       if (kDebugMode) print('[Push] Token stored for user: $userId (token: ${token.substring(0, 20)}...)');
     } catch (e) {
       if (kDebugMode) print('[Push] Failed to store token: $e');
     }
   }
 
-  /// Remove the current device's token on logout (optional but good practice).
-  Future<void> removeToken() async {
-    final token = await _messaging.getToken();
-    final userId = Supabase.instance.client.auth.currentUser?.id;
-
-    if (token == null || userId == null) return;
-
+  /// Remove this device's token from [userId]'s registration (used on
+  /// logout). The user id is passed explicitly because on sign-out the
+  /// auth session is already null.
+  Future<void> _removeToken({
+    required String userId,
+    required String token,
+  }) async {
     try {
       await Supabase.instance.client
           .from('device_tokens')
@@ -384,5 +463,6 @@ class PushNotificationService {
   void dispose() {
     _foregroundSub?.cancel();
     _tokenRefreshSub?.cancel();
+    _authSub?.cancel();
   }
 }
