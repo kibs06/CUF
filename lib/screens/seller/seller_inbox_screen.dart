@@ -153,7 +153,13 @@ class _SellerInboxScreenState extends State<SellerInboxScreen> {
   }
 
   Widget _buildConversationTile(dynamic conv) {
-    final hasUnread = conv.unreadCount > 0;
+    // Unread counts come from the provider (computed per-conversation via
+    // `getUnreadCount`). `conv.unreadCount` is NOT reliable — the
+    // conversations query never selects an unread_count column, so it is
+    // always 0. This is what powers the Messenger-style bold name + blue
+    // dot on unread conversations.
+    final unreadCount = context.read<MessageProvider>().unreadCountFor(conv.id);
+    final hasUnread = unreadCount > 0;
 
     return ListTile(
       tileColor: hasUnread
@@ -184,7 +190,8 @@ class _SellerInboxScreenState extends State<SellerInboxScreen> {
                 conv.customerName ?? 'Customer',
                 style: AppConstants.bodyStyle(
                   fontSize: 15,
-                  fontWeight: hasUnread ? FontWeight.bold : FontWeight.w600,
+                  // Messenger-style: unread conversations have a bold name.
+                  fontWeight: hasUnread ? FontWeight.bold : FontWeight.w500,
                   color: AppConstants.secondary,
                 ),
                 maxLines: 1,
@@ -193,11 +200,19 @@ class _SellerInboxScreenState extends State<SellerInboxScreen> {
             ),
             if (hasUnread)
               Container(
-                width: 8,
-                height: 8,
-                decoration: const BoxDecoration(
+                width: 9,
+                height: 9,
+                margin: const EdgeInsets.only(left: 8),
+                decoration: BoxDecoration(
                   color: AppConstants.statusConfirmedColor,
                   shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppConstants.statusConfirmedColor
+                          .withValues(alpha: 0.35),
+                      blurRadius: 4,
+                    ),
+                  ],
                 ),
               ),
           ],
@@ -208,6 +223,7 @@ class _SellerInboxScreenState extends State<SellerInboxScreen> {
             conv.lastMessagePreview ?? 'No messages yet',
             style: AppConstants.bodyStyle(
               fontSize: 13,
+              fontWeight: hasUnread ? FontWeight.w600 : FontWeight.normal,
               color: hasUnread
                   ? AppConstants.secondary
                   : AppConstants.secondary.withValues(alpha: 0.6),
@@ -220,7 +236,11 @@ class _SellerInboxScreenState extends State<SellerInboxScreen> {
           conv.relativeTime,
           style: AppConstants.bodyStyle(
             fontSize: 11,
-            color: AppConstants.secondary.withValues(alpha: 0.5),
+            // Messenger-style: the timestamp is bold while unread.
+            fontWeight: hasUnread ? FontWeight.bold : FontWeight.normal,
+            color: hasUnread
+                ? AppConstants.secondary
+                : AppConstants.secondary.withValues(alpha: 0.5),
           ),
         ),
         onTap: () {

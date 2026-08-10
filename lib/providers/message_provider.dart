@@ -73,6 +73,13 @@ class MessageProvider extends ChangeNotifier {
       final counts = <String, int>{};
       int total = 0;
       for (final conv in _conversations) {
+        // Skip conversations that were optimistically marked as read —
+        // keep their count at 0 until a new customer message arrives.
+        // Mirrors the customer-side logic below.
+        if (_optimisticallyReadConversations.contains(conv.id)) {
+          counts[conv.id] = 0;
+          continue;
+        }
         final count = await _service.getUnreadCount(
           conversationId: conv.id,
           readerType: 'seller',
