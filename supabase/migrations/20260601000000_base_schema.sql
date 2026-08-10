@@ -1,0 +1,620 @@
+-- ══════════════════════════════════════════════════════════════════
+-- BASE SCHEMA — frozen pre-migration baseline
+-- ══════════════════════════════════════════════════════════════════
+-- WHY THIS FILE EXISTS:
+--   supabase/schema.sql is a REFERENCE-ONLY snapshot of the live DB
+--   (it says so in its own header) and is NOT applied by the Supabase
+--   CLI when starting a local stack or running db reset. Without this
+--   migration, a fresh database has ZERO tables when the first real
+--   migration (20260702_notifications.sql) runs, so CI fails with
+--   "relation public.profiles does not exist".
+--
+--   This file is the schema state that existed when migrations began
+--   (July 2026), frozen from the repo historical supabase/schema.sql
+--   and given the EARLIEST timestamp so every migration replays on
+--   top of it in chronological order.
+--
+--   IMPORTANT ID-TYPE NOTE:
+--   The live database uses UUID for products.id, orders.id and
+--   order_items.id (explicitly confirmed by 20260718_order_item_
+--   reviews.sql and 20260808210000_add_direct_gcash_rpcs.sql sec 0).
+--   The historical schema.sql snapshot documented TEXT/BIGINT for
+--   those columns — this file corrects them to UUID and re-types the
+--   dependent FK columns to match, so the migrations replay cleanly
+--   and the local DB matches production.
+-- ══════════════════════════════════════════════════════════════════
+
+-- ─── ROLE CONSTANTS ───────────────────────────────────────────────
+-- roles:          'customer', 'seller', 'admin'
+-- seller_status:  'none', 'pending', 'approved', 'rejected'
+-- order status:   'placed', 'preparing', 'ready', 'received', 'cancelled', 'pending'
+-- payment_status: 'paid', 'unpaid'
+-- fulfillment:    'pickup', 'delivery'
+
+-- ═══════════════════════════════════════════════════════════════════
+-- 1. PROFILES
+-- ═══════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS public.profiles (
+    id              UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
+    full_name       TEXT NOT NULL,
+    email           TEXT NOT NULL UNIQUE,
+    phone           TEXT,
+    role            TEXT NOT NULL DEFAULT 'customer'
+                        CHECK (role IN ('customer', 'seller', 'admin')),
+    seller_status   TEXT NOT NULL DEFAULT 'pending'
+                        CHECK (seller_status IN ('none', 'pending', 'approved', 'rejected')),
+    avatar_url      TEXT,
+    suspended       BOOLEAN DEFAULT false,
+    rejection_reason TEXT,
+    created_at      TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Public profiles are viewable by everyone"
+    ON public.profiles FOR SELECT USING (true);
+
+CREATE POLICY "Users can insert their own profile"
+    ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id);
+
+CREATE POLICY "Users can update their own profile"
+    ON public.profiles FOR UPDATE USING (auth.uid() = id);
+
+CREATE POLICY "Admins can update any profile"
+    ON public.profiles FOR UPDATE USING (
+        EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE id = auth.uid() AND role = 'admin'
+        )
+    );
+
+CREATE POLICY "Admins can read all profiles"
+    ON public.profiles FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE id = auth.uid() AND role = 'admin'
+        )
+    );
+
+CREATE POLICY "Admins can update all profiles"
+    ON public.profiles FOR UPDATE USING (
+        EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE id = auth.uid() AND role = 'admin'
+        )
+    );
+
+-- ═══════════════════════════════════════════════════════════════════
+-- 2. STORES
+-- ═══════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS public.stores (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name            TEXT NOT NULL,
+    tagline         TEXT,
+    location        TEXT NOT NULL,
+    brand_color     TEXT DEFAULT '#8B5A2B',
+    banner_url      TEXT,
+    logo_url        TEXT,
+    rating          NUMERIC(2,1) DEFAULT 5.0,
+    is_open         BOOLEAN DEFAULT true,
+    is_active       BOOLEAN DEFAULT true,
+    owner_id        UUID REFERENCES public.profiles(id),
+    created_at      TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.stores ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Stores are viewable by everyone"
+    ON public.stores FOR SELECT USING (true);
+
+CREATE POLICY "Store owners can insert their store"
+    ON public.stores FOR INSERT WITH CHECK (auth.uid() = owner_id);
+
+CREATE POLICY "Store owners can update their store"
+    ON public.stores FOR UPDATE USING (auth.uid() = owner_id);
+
+CREATE POLICY "Admins can manage all stores"
+    ON public.stores FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE id = auth.uid() AND role = 'admin'
+        )
+    );
+
+-- ═══════════════════════════════════════════════════════════════════
+-- 3. STORY ENTRIES (workshop stories per store)
+-- ═══════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS public.story_entries (
+    id              BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    store_id        UUID REFERENCES public.stores(id) ON DELETE CASCADE,
+    title           TEXT NOT NULL,
+    body_text       TEXT NOT NULL,
+    image_url       TEXT,
+    display_order   INTEGER NOT NULL DEFAULT 0,
+    created_at      TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.story_entries ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Story entries are viewable by everyone"
+    ON public.story_entries FOR SELECT USING (true);
+
+CREATE POLICY "Store owners can manage their story entries"
+    ON public.story_entries FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM public.stores
+            WHERE id = store_id AND owner_id = auth.uid()
+        )
+    );
+
+CREATE POLICY "Admins can manage story entries"
+    ON public.story_entries FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE id = auth.uid() AND role = 'admin'
+        )
+    );
+
+-- ═══════════════════════════════════════════════════════════════════
+-- 4. STORE FOLLOWS
+-- ═══════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS public.store_follows (
+    user_id         UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+    store_id        UUID REFERENCES public.stores(id) ON DELETE CASCADE,
+    created_at      TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    PRIMARY KEY (user_id, store_id)
+);
+
+ALTER TABLE public.store_follows ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view their own follows"
+    ON public.store_follows FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can follow stores"
+    ON public.store_follows FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can unfollow stores"
+    ON public.store_follows FOR DELETE USING (auth.uid() = user_id);
+
+-- ═══════════════════════════════════════════════════════════════════
+-- 5. PRODUCTS
+-- ═══════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS public.products (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    store_id        UUID REFERENCES public.stores(id),
+    seller_id       UUID REFERENCES public.profiles(id),
+    name            TEXT NOT NULL,
+    description     TEXT,
+    price           NUMERIC NOT NULL CHECK (price >= 0),
+    category        TEXT NOT NULL DEFAULT 'General',
+    tags            TEXT[] DEFAULT '{}',
+    collection      TEXT,
+    sku             TEXT,
+    is_active       BOOLEAN NOT NULL DEFAULT true,
+    is_featured     BOOLEAN NOT NULL DEFAULT false,
+    is_published    BOOLEAN NOT NULL DEFAULT true,
+    created_at      TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at      TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Products are viewable by everyone"
+    ON public.products FOR SELECT USING (true);
+
+CREATE POLICY "Sellers and Admins can insert products"
+    ON public.products FOR INSERT WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE id = auth.uid() AND (role = 'seller' OR role = 'admin')
+        )
+    );
+
+CREATE POLICY "Sellers and Admins can update products"
+    ON public.products FOR UPDATE USING (
+        EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE id = auth.uid() AND (role = 'seller' OR role = 'admin')
+        )
+    );
+
+CREATE POLICY "Sellers and Admins can delete products"
+    ON public.products FOR DELETE USING (
+        EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE id = auth.uid() AND (role = 'seller' OR role = 'admin')
+        )
+    );
+
+-- ═══════════════════════════════════════════════════════════════════
+-- 6. PRODUCT IMAGES
+-- ═══════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS public.product_images (
+    id              BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    product_id      UUID REFERENCES public.products(id) ON DELETE CASCADE,
+    image_url       TEXT NOT NULL,
+    display_order   INTEGER NOT NULL DEFAULT 0,
+    is_primary      BOOLEAN DEFAULT false
+);
+
+ALTER TABLE public.product_images ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Product images are viewable by everyone"
+    ON public.product_images FOR SELECT USING (true);
+
+CREATE POLICY "Sellers can manage their product images"
+    ON public.product_images FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM public.products
+            WHERE id = product_id AND seller_id = auth.uid()
+        )
+    );
+
+CREATE POLICY "Admins can manage all product images"
+    ON public.product_images FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE id = auth.uid() AND role = 'admin'
+        )
+    );
+
+-- ═══════════════════════════════════════════════════════════════════
+-- 7. PRODUCT VARIANTS (size × color combinations)
+-- ═══════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS public.product_variants (
+    id              BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    product_id      UUID REFERENCES public.products(id) ON DELETE CASCADE,
+    size            TEXT NOT NULL,
+    color           TEXT,
+    stock           INTEGER NOT NULL DEFAULT 0 CHECK (stock >= 0),
+    additional_price NUMERIC NOT NULL DEFAULT 0 CHECK (additional_price >= 0),
+    sku             TEXT
+);
+
+ALTER TABLE public.product_variants ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Product variants are viewable by everyone"
+    ON public.product_variants FOR SELECT USING (true);
+
+CREATE POLICY "Sellers can manage their product variants"
+    ON public.product_variants FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM public.products
+            WHERE id = product_id AND seller_id = auth.uid()
+        )
+    );
+
+CREATE POLICY "Admins can manage all product variants"
+    ON public.product_variants FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE id = auth.uid() AND role = 'admin'
+        )
+    );
+
+-- ═══════════════════════════════════════════════════════════════════
+-- 8. PRODUCT CUSTOMIZATIONS (per-product customization options)
+-- ═══════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS public.product_customizations (
+    id              BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    product_id      UUID REFERENCES public.products(id) ON DELETE CASCADE,
+    option_name     TEXT NOT NULL,
+    option_type     TEXT NOT NULL DEFAULT 'text'
+                        CHECK (option_type IN ('text', 'select', 'color')),
+    options         TEXT[] DEFAULT '{}',
+    is_required     BOOLEAN DEFAULT false,
+    additional_price NUMERIC NOT NULL DEFAULT 0
+);
+
+ALTER TABLE public.product_customizations ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Product customizations are viewable by everyone"
+    ON public.product_customizations FOR SELECT USING (true);
+
+CREATE POLICY "Sellers can manage their product customizations"
+    ON public.product_customizations FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM public.products
+            WHERE id = product_id AND seller_id = auth.uid()
+        )
+    );
+
+CREATE POLICY "Admins can manage all product customizations"
+    ON public.product_customizations FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE id = auth.uid() AND role = 'admin'
+        )
+    );
+
+-- ═══════════════════════════════════════════════════════════════════
+-- 9. INVENTORY (aggregated stock by size per product)
+-- ═══════════════════════════════════════════════════════════════════
+-- Stock is synced from product_variants via _syncInventoryFromVariants().
+-- One row per unique (product_id, size); sums across all colors.
+CREATE TABLE IF NOT EXISTS public.inventory (
+    product_id      UUID REFERENCES public.products(id) ON DELETE CASCADE,
+    size            TEXT NOT NULL,
+    stock           INTEGER NOT NULL DEFAULT 0 CHECK (stock >= 0),
+    updated_at      TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    PRIMARY KEY (product_id, size)
+);
+
+ALTER TABLE public.inventory ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Inventory is viewable by everyone"
+    ON public.inventory FOR SELECT USING (true);
+
+CREATE POLICY "Sellers can manage their inventory"
+    ON public.inventory FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM public.products
+            WHERE id = product_id AND seller_id = auth.uid()
+        )
+    );
+
+CREATE POLICY "Admins can manage all inventory"
+    ON public.inventory FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE id = auth.uid() AND role = 'admin'
+        )
+    );
+
+-- ═══════════════════════════════════════════════════════════════════
+-- 10. ORDERS
+-- ═══════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS public.orders (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    customer_id     UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+    store_id        UUID REFERENCES public.stores(id),
+    status          TEXT NOT NULL DEFAULT 'placed'
+                        CHECK (status IN ('placed', 'preparing', 'ready', 'received', 'cancelled', 'pending')),
+    total_amount    NUMERIC NOT NULL CHECK (total_amount >= 0),
+    payment_method  TEXT NOT NULL DEFAULT 'cash',
+    payment_status  TEXT NOT NULL DEFAULT 'unpaid'
+                        CHECK (payment_status IN ('paid', 'unpaid')),
+    fulfillment     TEXT NOT NULL DEFAULT 'pickup'
+                        CHECK (fulfillment IN ('pickup', 'delivery')),
+    notes           TEXT,
+    -- Legacy columns kept for backward compatibility (order_service.dart queries them)
+    -- New orders should use order_items for product/size/quantity details.
+    size            TEXT,
+    color           TEXT,
+    quantity        INTEGER,
+    created_at      TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view their own orders"
+    ON public.orders FOR SELECT USING (auth.uid() = customer_id);
+
+CREATE POLICY "Users can place their own orders"
+    ON public.orders FOR INSERT WITH CHECK (auth.uid() = customer_id);
+
+CREATE POLICY "Sellers can view orders for their store"
+    ON public.orders FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM public.stores
+            WHERE id = store_id AND owner_id = auth.uid()
+        )
+    );
+
+CREATE POLICY "Sellers and Admins can update order status"
+    ON public.orders FOR UPDATE USING (
+        EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE id = auth.uid() AND (role = 'seller' OR role = 'admin')
+        )
+    );
+
+CREATE POLICY "Admins can read all orders"
+    ON public.orders FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE id = auth.uid() AND role = 'admin'
+        )
+    );
+
+-- ═══════════════════════════════════════════════════════════════════
+-- 11. ORDER ITEMS (line items within an order)
+-- ═══════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS public.order_items (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    order_id        UUID REFERENCES public.orders(id) ON DELETE CASCADE,
+    product_id      UUID REFERENCES public.products(id) ON DELETE SET NULL,
+    size            TEXT,
+    quantity        INTEGER NOT NULL DEFAULT 1 CHECK (quantity > 0),
+    unit_price      NUMERIC NOT NULL DEFAULT 0 CHECK (unit_price >= 0)
+);
+
+ALTER TABLE public.order_items ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Order items follow order access rules"
+    ON public.order_items FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM public.orders
+            WHERE id = order_id AND (
+                customer_id = auth.uid()
+                OR EXISTS (
+                    SELECT 1 FROM public.profiles
+                    WHERE id = auth.uid() AND (role = 'seller' OR role = 'admin')
+                )
+            )
+        )
+    );
+
+CREATE POLICY "Users can insert order items for their orders"
+    ON public.order_items FOR INSERT WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM public.orders
+            WHERE id = order_id AND customer_id = auth.uid()
+        )
+    );
+
+-- ═══════════════════════════════════════════════════════════════════
+-- 12. SALES TRANSACTIONS (POS / in-person sales)
+-- ═══════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS public.sales_transactions (
+    id              BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    store_id        UUID REFERENCES public.stores(id) ON DELETE CASCADE,
+    seller_id       UUID REFERENCES public.profiles(id),
+    total_amount    NUMERIC NOT NULL CHECK (total_amount >= 0),
+    payment_method  TEXT NOT NULL DEFAULT 'cash',
+    amount_tendered NUMERIC DEFAULT 0,
+    change_amount   NUMERIC DEFAULT 0,
+    created_at      TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.sales_transactions ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Sellers can view their store's transactions"
+    ON public.sales_transactions FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM public.stores
+            WHERE id = store_id AND owner_id = auth.uid()
+        )
+    );
+
+CREATE POLICY "Sellers can create transactions for their store"
+    ON public.sales_transactions FOR INSERT WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM public.stores
+            WHERE id = store_id AND owner_id = auth.uid()
+        )
+    );
+
+CREATE POLICY "Admins can view all transactions"
+    ON public.sales_transactions FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE id = auth.uid() AND role = 'admin'
+        )
+    );
+
+-- ═══════════════════════════════════════════════════════════════════
+-- 13. SALES TRANSACTION ITEMS (line items for POS sales)
+-- ═══════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS public.sales_transaction_items (
+    id              BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    transaction_id  BIGINT REFERENCES public.sales_transactions(id) ON DELETE CASCADE,
+    product_id      UUID REFERENCES public.products(id) ON DELETE SET NULL,
+    size            TEXT,
+    quantity        INTEGER NOT NULL DEFAULT 1 CHECK (quantity > 0),
+    unit_price      NUMERIC NOT NULL DEFAULT 0 CHECK (unit_price >= 0)
+);
+
+ALTER TABLE public.sales_transaction_items ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Transaction items follow transaction access rules"
+    ON public.sales_transaction_items FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM public.sales_transactions st
+            WHERE id = transaction_id AND (
+                EXISTS (
+                    SELECT 1 FROM public.stores
+                    WHERE id = st.store_id AND owner_id = auth.uid()
+                )
+                OR EXISTS (
+                    SELECT 1 FROM public.profiles
+                    WHERE id = auth.uid() AND role = 'admin'
+                )
+            )
+        )
+    );
+
+-- ═══════════════════════════════════════════════════════════════════
+-- 14. CART ITEMS (persistent server-side cart)
+-- ═══════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS public.cart_items (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id         UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+    product_id      UUID REFERENCES public.products(id) ON DELETE CASCADE,
+    variant_id      BIGINT REFERENCES public.product_variants(id) ON DELETE SET NULL,
+    quantity        INTEGER NOT NULL DEFAULT 1 CHECK (quantity > 0),
+    customizations  JSONB,
+    created_at      TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at      TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.cart_items ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view their own cart"
+    ON public.cart_items FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert items into their cart"
+    ON public.cart_items FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own cart"
+    ON public.cart_items FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete items from their cart"
+    ON public.cart_items FOR DELETE USING (auth.uid() = user_id);
+
+-- ═══════════════════════════════════════════════════════════════════
+-- 15. CUSTOMIZATION REQUESTS
+-- ═══════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS public.customization_requests (
+    id              BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    customer_id     UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+    store_id        UUID REFERENCES public.stores(id),
+    base_product_id UUID REFERENCES public.products(id) ON DELETE SET NULL,
+    color_choice    TEXT,
+    material_choice TEXT,
+    special_request TEXT,
+    status          TEXT NOT NULL DEFAULT 'pending'
+                        CHECK (status IN ('pending', 'approved', 'in_progress', 'completed', 'rejected')),
+    created_at      TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.customization_requests ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view their own customization requests"
+    ON public.customization_requests FOR SELECT USING (auth.uid() = customer_id);
+
+CREATE POLICY "Users can create customization requests"
+    ON public.customization_requests FOR INSERT WITH CHECK (auth.uid() = customer_id);
+
+CREATE POLICY "Sellers can view customizations for their store"
+    ON public.customization_requests FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM public.stores
+            WHERE id = store_id AND owner_id = auth.uid()
+        )
+    );
+
+CREATE POLICY "Sellers and Admins can update customization status"
+    ON public.customization_requests FOR UPDATE USING (
+        EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE id = auth.uid() AND (role = 'seller' OR role = 'admin')
+        )
+    );
+
+CREATE POLICY "Admins can view all customization requests"
+    ON public.customization_requests FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM public.profiles
+            WHERE id = auth.uid() AND role = 'admin'
+        )
+    );
+
+-- ═══════════════════════════════════════════════════════════════════
+-- STORAGE BUCKETS (created via Supabase Dashboard / API)
+-- ═══════════════════════════════════════════════════════════════════
+-- 1. 'product-images' — product photos (public read)
+-- 2. 'store-assets'   — store logos and banners (public read)
+-- 3. 'avatars'        — user profile avatars (public read)
+
+-- ═══════════════════════════════════════════════════════════════════
+-- SEED DATA
+-- ═══════════════════════════════════════════════════════════════════
+
+-- Initial Carcar stores (if not already present)
+INSERT INTO public.stores (name, tagline, location, brand_color, is_open)
+VALUES
+    ('Valladolid Leather Co.', 'Handcrafted footwear since 1992', 'Valladolid, Carcar City', '#8B5A2B', true),
+    ('Carcar Sole Works', 'Where tradition meets comfort', 'Poblacion, Carcar City', '#4A3728', true),
+    ('Cebu Heritage Shoes', 'Crafted with Cebuano pride', 'Carcar City, Cebu', '#5C4033', false)
+ON CONFLICT DO NOTHING;

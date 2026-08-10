@@ -22,7 +22,7 @@ $$;
 CREATE TABLE IF NOT EXISTS public.notifications (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id     UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  order_id    BIGINT REFERENCES public.orders(id) ON DELETE CASCADE,
+  order_id    UUID REFERENCES public.orders(id) ON DELETE CASCADE,
   category    notification_category NOT NULL,
   title       TEXT NOT NULL,
   message     TEXT NOT NULL,
