@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../constants/app_constants.dart';
 import '../../constants/seller_theme_constants.dart';
 import '../../services/push_notification_service.dart';
+import '../../widgets/sole_bottom_nav.dart';
 import '../../widgets/chat/chat_view.dart';
 import 'seller_dashboard_screen.dart';
 import 'pos_screen.dart';
@@ -36,49 +37,55 @@ class _SellerShellState extends State<SellerShell> {
   void initState() {
     super.initState();
     // Wire up push notification deep-link for sellers
-    PushNotificationService.instance.onNavigateToChat = (conversationId, storeName) {
-      if (!mounted) return;
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => ChatView(
-            conversationId: conversationId,
-            viewerRole: 'seller',
-            otherPartyName: storeName,
-          ),
-        ),
-      );
-    };
+    PushNotificationService.instance.onNavigateToChat =
+        (conversationId, storeName) {
+          if (!mounted) return;
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => ChatView(
+                conversationId: conversationId,
+                viewerRole: 'seller',
+                otherPartyName: storeName,
+              ),
+            ),
+          );
+        };
 
-    PushNotificationService.instance.onNavigateToScreen = (screen, referenceId) {
+    PushNotificationService
+        .instance
+        .onNavigateToScreen = (screen, referenceId) {
       if (!mounted) return;
       switch (screen) {
         case 'seller_order_detail':
           if (referenceId != null) {
             Supabase.instance.client
                 .from('orders')
-                .select('*, profiles!orders_customer_id_fkey(full_name, email), order_items(*, products(name))')
+                .select(
+                  '*, profiles!orders_customer_id_fkey(full_name, email), order_items(*, products(name))',
+                )
                 .eq('id', referenceId)
                 .single()
                 .then((data) {
-              if (mounted) {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => OrderDetailScreen(order: data),
-                  ),
-                );
-              }
-            }).catchError((e) {
-              debugPrint('[Push] Failed to fetch order for deep-link: $e');
-            });
+                  if (mounted) {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => OrderDetailScreen(order: data),
+                      ),
+                    );
+                  }
+                })
+                .catchError((e) {
+                  debugPrint('[Push] Failed to fetch order for deep-link: $e');
+                });
           }
           break;
         case 'seller_product_detail':
           setState(() => _currentIndex = 2); // Products tab
           break;
         case 'seller_custom_order':
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const CustomOrdersScreen()),
-          );
+          Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const CustomOrdersScreen()));
           break;
       }
     };
@@ -95,64 +102,20 @@ class _SellerShellState extends State<SellerShell> {
         decoration: BoxDecoration(
           border: Border(top: BorderSide(color: SellerTheme.cardBorder)),
         ),
-        child: NavigationBarTheme(
-          data: NavigationBarThemeData(
-            backgroundColor: SellerTheme.card,
-            indicatorColor: SellerTheme.amberBg,
-          iconTheme: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.selected)) {
-              return const IconThemeData(color: SellerTheme.rustDeep);
-            }
-            return const IconThemeData(color: SellerTheme.textMuted);
-          }),
-          labelTextStyle: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.selected)) {
-              return AppConstants.bodyStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: SellerTheme.rustDeep,
-              );
-            }
-            return AppConstants.bodyStyle(
-              fontSize: 11,
-              color: SellerTheme.textMuted,
-            );
-          }),
-          ),
-        child: NavigationBar(
-          selectedIndex: _currentIndex,
-          onDestinationSelected: (index) {
+        // Same sliding-pill nav as the customer/admin shells, tinted with
+        // the seller palette (no tap ripple/highlight by default).
+        child: SoleBottomNav(
+          role: AppConstants.roleSeller,
+          currentIndex: _currentIndex,
+          onTap: (index) {
             setState(() => _currentIndex = index);
           },
-          height: 65,
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.dashboard_outlined),
-              selectedIcon: Icon(Icons.dashboard),
-              label: 'Dashboard',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.point_of_sale_outlined),
-              selectedIcon: Icon(Icons.point_of_sale),
-              label: 'POS',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.inventory_2_outlined),
-              selectedIcon: Icon(Icons.inventory_2),
-              label: 'Products',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.receipt_long_outlined),
-              selectedIcon: Icon(Icons.receipt_long),
-              label: 'Orders',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.person_outline),
-              selectedIcon: Icon(Icons.person),
-              label: 'Profile',
-            ),
-          ],
-        ),
+          backgroundColor: SellerTheme.card,
+          activeColor: SellerTheme.rustDeep,
+          inactiveColor: SellerTheme.textMuted,
+          // Keep the seller's signature amber indicator, now sliding.
+          pillColor: SellerTheme.amberBg,
+          barHeight: 65,
         ),
       ),
     );

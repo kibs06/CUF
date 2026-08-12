@@ -173,6 +173,21 @@ class SupabaseService {
     return products;
   }
 
+  /// Fetch a single product by ID in the customer-facing shape
+  /// (same select + [_mapProduct] as [fetchProducts]). Used by the
+  /// deep-link handler to open a shared product link.
+  Future<Map<String, dynamic>?> fetchProductById(String productId) async {
+    final data = await _client
+        .from('products')
+        .select(
+          '*, stores(name), product_images(image_url, display_order), inventory(size, stock), product_variants(size, stock)',
+        )
+        .eq('id', productId)
+        .maybeSingle()
+        .timeout(_defaultTimeout);
+    return data == null ? null : _mapProduct(Map<String, dynamic>.from(data));
+  }
+
   Future<Map<String, dynamic>> addProduct(
     Map<String, dynamic> productData,
   ) async {

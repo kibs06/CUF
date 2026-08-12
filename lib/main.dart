@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'firebase_options.dart';
@@ -24,8 +25,10 @@ import 'providers/sale_tag_provider.dart';
 import 'services/store_service.dart';
 import 'screens/auth/splash_screen.dart';
 import 'screens/customer/gcash_payment_screen.dart';
+import 'screens/customer/product_detail_screen.dart';
 import 'services/connectivity_service.dart';
 import 'services/deep_link_service.dart';
+import 'services/supabase_service.dart';
 import 'services/gcash_payment_service.dart';
 import 'services/push_notification_service.dart';
 import 'widgets/connectivity_banner.dart';
@@ -232,6 +235,18 @@ class DeepLinkHost extends StatefulWidget {
 }
 
 class _DeepLinkHostState extends State<DeepLinkHost> {
+  /// Single-flight lock on the route push itself: only one deep-link push
+  /// happens at a time. A second push that arrives while one is already in
+  /// flight is dropped — racing two pushes is what can corrupt the
+  /// navigator's overlay and throw "Multiple widgets used the same
+  /// GlobalKey". Held only around the push (not the fetches/waits), so a
+  /// slow link never blocks a faster one from being handled.
+  bool _pushPending = false;
+
+  /// The shared product currently being opened — dedupes repeated taps of
+  /// the same link so the detail screen is never pushed twice.
+  String? _openingProductId;
+
   @override
   void initState() {
     super.initState();
@@ -245,27 +260,104 @@ class _DeepLinkHostState extends State<DeepLinkHost> {
   }
 
   Future<void> _onLink(Uri uri) async {
+    // Shared product links (edge-function URL or future /p/{id}) open the
+    // product detail screen directly. Handled before GCash so product URLs
+    // never fall through to the payment flow.
+    final productId = DeepLinkService.productIdFromLink(uri);
+    if (productId != null) {
+      await _openSharedProduct(productId);
+      return;
+    }
+
     if (!DeepLinkService.isGcashReturn(uri)) return;
     // Warm return: the payment screen is open and polling — skip.
     if (GcashPaymentScreen.isOpen) return;
 
     // Cold start: auth may still be restoring — wait briefly, then resume
-    // the customer's pending checkout if one exists.
+    // the customer's pending checkout if one exists. Links arriving during
+    // this wait are handled independently — the push lock lives in
+    // [_pushDeferred], so a slow wait can't block another link's push.
     for (var attempt = 0; attempt < 30; attempt++) {
       final uid = Supabase.instance.client.auth.currentUser?.id;
       if (uid != null) {
         final intent = await GcashPaymentService().fetchPendingIntent();
         if (intent != null && intent.checkoutUrl.isNotEmpty && mounted) {
-          _navigatorKey.currentState?.push(
-            MaterialPageRoute(
-              builder: (_) => GcashPaymentScreen(intent: intent),
-            ),
-          );
+          await _pushDeferred((_) => GcashPaymentScreen(intent: intent));
         }
         return;
       }
       await Future<void>.delayed(const Duration(milliseconds: 500));
     }
+  }
+
+  /// Opens a shared product link: fetches the product and pushes its detail
+  /// screen. Best-effort — a missing/inactive product or a fetch failure
+  /// shows a SnackBar instead of navigating (mirrors the OG endpoint's
+  /// "no longer available" fallback).
+  Future<void> _openSharedProduct(String productId) async {
+    // Dedupe: a repeated tap of the same link (before the first push lands)
+    // must not push the detail screen twice.
+    if (_openingProductId == productId) return;
+    _openingProductId = productId;
+    try {
+      // Cold start: Supabase restores the session asynchronously. Wait
+      // briefly (bounded) so the fetch runs with the user's real RLS
+      // context.
+      for (var attempt = 0; attempt < 20; attempt++) {
+        if (Supabase.instance.client.auth.currentUser != null) break;
+        await Future<void>.delayed(const Duration(milliseconds: 250));
+      }
+
+      final product =
+          await SupabaseService.instance.fetchProductById(productId);
+      if (!mounted) return;
+      if (product != null) {
+        await _pushDeferred((_) => ProductDetailScreen(product: product));
+      } else {
+        _showLinkNotice('This product is no longer available.');
+      }
+    } catch (e) {
+      debugPrint('[DeepLink] Failed to open shared product $productId: $e');
+      _showLinkNotice('Could not open this product right now.');
+    } finally {
+      if (_openingProductId == productId) _openingProductId = null;
+    }
+  }
+
+  /// Deferred, frame-safe, single-flight route push for deep links.
+  ///
+  /// Touches the navigator only when the widget tree is idle: if the push is
+  /// requested mid-frame (build/layout/paint) it waits for the frame to
+  /// finish first, and it re-checks that the host and navigator are still
+  /// alive immediately before pushing. Between frames (the normal case for a
+  /// deep link arriving from the platform) it pushes right away, so it never
+  /// depends on a frame that may not be scheduled. The single-flight lock is
+  /// acquired synchronously, so two concurrent links can never double-push.
+  Future<void> _pushDeferred(WidgetBuilder pageBuilder) async {
+    if (!mounted) return;
+    if (_pushPending) return; // a deep-link push is already on its way
+    _pushPending = true;
+    try {
+      if (SchedulerBinding.instance.schedulerPhase ==
+          SchedulerPhase.persistentCallbacks) {
+        await WidgetsBinding.instance.endOfFrame;
+      }
+      if (!mounted) return;
+      final navigator = _navigatorKey.currentState;
+      if (navigator == null || !navigator.context.mounted) return;
+      navigator.push(MaterialPageRoute(builder: pageBuilder));
+    } finally {
+      _pushPending = false;
+    }
+  }
+
+  /// Shows a SnackBar on the root navigator. Re-acquires the navigator (and
+  /// checks its context is still mounted) so it's safe after async gaps.
+  void _showLinkNotice(String message) {
+    final navigator = _navigatorKey.currentState;
+    if (navigator == null || !navigator.context.mounted) return;
+    ScaffoldMessenger.of(navigator.context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override

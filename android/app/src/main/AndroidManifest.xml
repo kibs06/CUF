@@ -55,6 +55,28 @@
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data android:scheme="solvision" android:host="checkout" android:pathPrefix="/gcash"/>
             </intent-filter>
+            <!-- App Links for product shares (Phase B — DISABLED until a
+                 custom domain exists). Shared product links open the app
+                 directly to ProductDetailScreen.
+
+                 To activate:
+                 1. Replace YOUR-DOMAIN.com with the real domain and set
+                    android:autoVerify="true".
+                 2. Host the file below at https://YOUR-DOMAIN.com/.well-known/assetlinks.json
+                    (source: web/.well-known/assetlinks.json in this repo)
+                    with the real signing-cert SHA-256 fingerprint from:
+                    keytool -list -v -keystore <keystore> -alias <alias> | grep SHA256
+                 3. Reinstall the app (autoVerify only runs on fresh install)
+                    and confirm verification with:
+                    adb shell pm verify-app-links (pass the re-verify flag) com.solevision.app
+                 See docs/AI/SHARE_PRODUCT_ARCHITECTURE.md.
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="https" android:host="YOUR-DOMAIN.com" android:pathPrefix="/p"/>
+            </intent-filter>
+            -->
         </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->

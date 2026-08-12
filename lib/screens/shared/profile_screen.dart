@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../constants/app_constants.dart';
-import '../../models/notification_category.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/follow_provider.dart';
-import '../../providers/notification_provider.dart';
+import '../../providers/order_provider.dart';
+import '../../utils/notification_formatters.dart';
 import 'following_list_dialog.dart';
+import '../../services/auth_service.dart';
 import '../../services/profile_service.dart';
 import '../../services/store_service.dart';
 import '../../providers/update_provider.dart';
@@ -23,6 +24,8 @@ import '../customer/foot_instructions_screen.dart';
 import 'whats_new_screen.dart';
 import 'terms_privacy_screen.dart';
 import 'about_cufmai_screen.dart';
+import '../auth/seller_application_flow.dart';
+import '../seller/seller_business_verification_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -45,6 +48,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<Map<String, dynamic>?>? _sellerStoreFuture;
   Map<String, dynamic>? _sellerStore;
   bool _isTogglingStore = false;
+
+  /// Tier 2 business-verification status ('none' | 'pending' | 'verified'
+  /// | 'rejected'), resolved per profile from seller_business_docs.
+  /// Refreshed on tab re-entry (TTL) and when returning from the Tier 2
+  /// screen, so the pill never shows a stale pre-submit status.
+  Future<String>? _businessVerificationFuture;
+  DateTime? _businessFetchedAt;
+
+  /// Guards the one-shot "My Orders" panel count load so it fires at most
+  /// once per screen lifetime (even if the first attempt fails).
+  bool _ordersCountsRequested = false;
 
   @override
   void initState() {
@@ -76,9 +90,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
         }
         return store;
       });
+      // profileId is non-null here: if the profile were missing, the
+      // `_loadedProfileId == profileId` guard above would have returned.
+      _businessVerificationFuture = AuthService.instance
+          .fetchBusinessVerification(profileId!)
+          .then((row) =>
+              row?['verification_status']?.toString() ?? AppConstants.bizStatusNone);
+      _businessFetchedAt = DateTime.now();
     } else {
       _sellerStoreFuture = null;
+      _businessVerificationFuture = null;
+      _businessFetchedAt = null;
     }
+  }
+
+  /// Re-fetches the Tier 2 status pill. Called post-frame (so setState is
+  /// safe) when the tab is re-entered after a TTL, or when the seller
+  /// returns from the SellerBusinessVerificationScreen.
+  void _refreshBusinessStatus() {
+    final profileId = context.read<AuthProvider>().profile?['id']?.toString();
+    if (profileId == null) return;
+    _businessVerificationFuture = AuthService.instance
+        .fetchBusinessVerification(profileId)
+        .then((row) =>
+            row?['verification_status']?.toString() ?? AppConstants.bizStatusNone);
+    _businessFetchedAt = DateTime.now();
+    if (mounted) setState(() {});
   }
 
   // ── Store Open/Closed toggle ─────────────────────────────────
@@ -266,6 +303,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final auth = context.watch<AuthProvider>();
     _syncControllers(auth);
 
+    // Keep the Tier 2 status pill fresh when the seller tab is re-entered
+    // (the screen lives in an IndexedStack, so re-entry re-runs build but
+    // not _syncControllers).
+    if (auth.userRole == AppConstants.roleSeller &&
+        _businessFetchedAt != null &&
+        DateTime.now().difference(_businessFetchedAt!) >
+            const Duration(seconds: 30)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _refreshBusinessStatus();
+      });
+    }
+
     return Scaffold(
       backgroundColor: AppConstants.surfaceLight,
       appBar: AppBar(
@@ -324,6 +373,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const SizedBox(height: 16),
                 ],
                 if (auth.userRole != AppConstants.roleSeller) ...[
+                  if (auth.sellerStatus == AppConstants.statusRejected) ...[
+                    _buildRejectedBanner(auth),
+                    const SizedBox(height: 16),
+                  ],
                   _buildNotificationsPanel(),
                   const SizedBox(height: 16),
                 ],
@@ -551,18 +604,170 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   // ════════════════════════════════════════════════════════════════
+  // REJECTED SELLER BANNER — surface the reason + let them re-apply
+  // ════════════════════════════════════════════════════════════════
+  Widget _buildRejectedBanner(AuthProvider auth) {
+    final reason = auth.profile?['rejection_reason']?.toString() ?? '';
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppConstants.error.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppConstants.error.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.error_outline_rounded,
+                size: 20,
+                color: AppConstants.error,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Seller application not approved',
+                style: AppConstants.bodyStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: AppConstants.error,
+                ),
+              ),
+            ],
+          ),
+          if (reason.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              reason,
+              style: AppConstants.bodyStyle(
+                fontSize: 12,
+                color: AppConstants.secondary.withValues(alpha: 0.75),
+                height: 1.4,
+              ),
+            ),
+          ],
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            height: 44,
+            child: FilledButton.icon(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        SellerApplicationFlow(prefillProfile: auth.profile),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              label: const Text('Re-apply as a seller'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppConstants.primary,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  // TIER 2 BUSINESS VERIFICATION STATUS PILL (async, resolved once)
+  // ════════════════════════════════════════════════════════════════
+  Widget _buildBusinessStatusChip() {
+    return FutureBuilder<String>(
+      future: _businessVerificationFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Padding(
+            padding: EdgeInsets.only(right: 6),
+            child: SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: AppConstants.primary,
+              ),
+            ),
+          );
+        }
+        final status = snapshot.data ?? AppConstants.bizStatusNone;
+        final (bg, fg, label) = switch (status) {
+          AppConstants.bizStatusVerified => (
+              AppConstants.success.withValues(alpha: 0.15),
+              AppConstants.success,
+              'Verified',
+            ),
+          AppConstants.bizStatusPending => (
+              Colors.amber.withValues(alpha: 0.2),
+              const Color(0xFFB45309),
+              'Pending',
+            ),
+          AppConstants.bizStatusRejected => (
+              AppConstants.error.withValues(alpha: 0.15),
+              AppConstants.error,
+              'Rejected',
+            ),
+          _ => (
+              AppConstants.secondary.withValues(alpha: 0.08),
+              AppConstants.secondary.withValues(alpha: 0.6),
+              'Optional',
+            ),
+        };
+        return Padding(
+          padding: const EdgeInsets.only(right: 4),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: bg,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              label,
+              style: AppConstants.monoStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: fg,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // ════════════════════════════════════════════════════════════════
   // NOTIFICATIONS PANEL
   // ════════════════════════════════════════════════════════════════
   Widget _buildNotificationsPanel() {
-    final notifProvider = context.watch<NotificationProvider>();
-    final counts = notifProvider.unreadCounts;
+    // Badge counts come from the customer's REAL orders — computed with the
+    // same predicates as the My Orders tabs — so they always match the tabs
+    // (previously they were unread-notification counts and drifted).
+    final orderProvider = context.watch<OrderProvider>();
+
+    // This panel only renders for non-sellers, so the lazy load below never
+    // fires for sellers. Schedule at most once per screen lifetime.
+    if (!orderProvider.hasLoadedMyOrders && !_ordersCountsRequested) {
+      _ordersCountsRequested = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        context.read<OrderProvider>().loadMyOrders();
+      });
+    }
+
+    final counts = orderProvider.myOrdersCounts;
 
     final items = <_NotifItem>[
-      _NotifItem(NotificationCategory.unpaid, Icons.credit_card_outlined, 'Unpaid', 'unpaid'),
-      _NotifItem(NotificationCategory.processing, Icons.inventory_2_outlined, 'Processing', 'processing'),
-      _NotifItem(NotificationCategory.shipped, Icons.local_shipping_outlined, 'Shipped', 'shipped'),
-      _NotifItem(NotificationCategory.review, Icons.chat_bubble_outline, 'Review', 'review'),
-      _NotifItem(NotificationCategory.returns, Icons.assignment_return_outlined, 'Returns', 'returns'),
+      _NotifItem(Icons.credit_card_outlined, 'Unpaid', 'unpaid'),
+      _NotifItem(Icons.inventory_2_outlined, 'Processing', 'processing'),
+      _NotifItem(Icons.local_shipping_outlined, 'Shipped', 'shipped'),
+      _NotifItem(Icons.chat_bubble_outline, 'Review', 'review'),
+      _NotifItem(Icons.assignment_return_outlined, 'Returns', 'returns'),
     ];
 
     return Column(
@@ -609,7 +814,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: items.map((item) {
-              final count = counts[item.category] ?? 0;
+              final count = counts[item.filter] ?? 0;
               return Expanded(
                 child: GestureDetector(
                   onTap: () {
@@ -635,24 +840,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ),
                             if (count > 0)
                               Positioned(
-                                top: -6,
-                                right: -8,
+                                top: -8,
+                                right: -10,
                                 child: Container(
-                                  padding: const EdgeInsets.all(3),
+                                  padding: const EdgeInsets.all(4),
                                   constraints: const BoxConstraints(
-                                    minWidth: 16,
-                                    minHeight: 16,
+                                    minWidth: 20,
+                                    minHeight: 20,
                                   ),
                                   decoration: const BoxDecoration(
                                     color: AppConstants.error,
                                     shape: BoxShape.circle,
                                   ),
                                   child: Text(
-                                    count > 9 ? '9+' : '$count',
+                                    formatBadgeCount(count),
                                     textAlign: TextAlign.center,
                                     style: const TextStyle(
                                       color: Colors.white,
-                                      fontSize: 9,
+                                      fontSize: 11,
                                       height: 1.2,
                                     ),
                                   ),
@@ -695,20 +900,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
         children: [
           // Sellers set up their GCash static QR here (shown at POS checkout).
           if (auth.userRole == AppConstants.roleSeller) ...[
-            _settingsRow(
-              icon: Icons.qr_code_2,
-              title: 'Payment Methods',
-              subtitle: 'Set up your GCash QR code',
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const GcashPaymentSettingsScreen(),
-                  ),
-                );
-              },
-            ),
-            const Divider(height: 1, color: Color(0xFFE5E7EB)),
-          ],
+          _settingsRow(
+            icon: Icons.qr_code_2,
+            title: 'Payment Methods',
+            subtitle: 'Set up your GCash QR code',
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const GcashPaymentSettingsScreen(),
+                ),
+              );
+            },
+          ),
+          const Divider(height: 1, color: Color(0xFFE5E7EB)),
+          // Tier 2 — optional business verification (never gates selling).
+          _settingsRow(
+            icon: Icons.business_center_outlined,
+            title: 'Business Verification',
+            subtitle: 'Optional: DTI, BIR COR & permits',
+            trailing: _buildBusinessStatusChip(),
+            onTap: () async {
+              await Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const SellerBusinessVerificationScreen(),
+                ),
+              );
+              // Refresh the pill with the status the seller just saw.
+              if (mounted) _refreshBusinessStatus();
+            },
+          ),
+          const Divider(height: 1, color: Color(0xFFE5E7EB)),
+        ],
           _settingsRow(
             icon: Icons.straighten_outlined,
             title: 'Get Your Foot Size',
@@ -1154,9 +1376,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 // Private helpers
 // ══════════════════════════════════════════════════════════════════
 class _NotifItem {
-  final NotificationCategory category;
   final IconData icon;
   final String label;
   final String filter;
-  const _NotifItem(this.category, this.icon, this.label, this.filter);
+  const _NotifItem(this.icon, this.label, this.filter);
 }

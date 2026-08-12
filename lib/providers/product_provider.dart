@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../constants/app_constants.dart';
 import '../services/product_service.dart';
 import '../services/supabase_service.dart';
 import '../utils/sale_price.dart';
@@ -42,11 +43,17 @@ class ProductProvider extends ChangeNotifier {
   String? get selectedCategory => _selectedCategory;
   SortMode get sortMode => _sortMode;
 
-  // Fetch all categories present in the products list.
-  // An 'On Sale' pseudo-category is appended when at least one product is
+  // Fetch all categories present in the products list, UNIONed with the
+  // canonical [AppConstants.productCategories] (the same presets the seller
+  // product form offers), so chips like Boots/Sneakers/Slip-ons are always
+  // filterable even before any product uses them. Any category actually on a
+  // product that isn't canonical (legacy values, custom entries) still shows
+  // up, so nothing already filterable disappears. 'All' stays first and the
+  // 'On Sale' pseudo-category is appended last when at least one product is
   // actively on sale — it acts like a filter chip, not a real category.
   List<String> get categories {
     final Set<String> uniqueCats = {'All'};
+    uniqueCats.addAll(AppConstants.productCategories);
     for (var prod in _products) {
       if (prod.containsKey('category')) {
         uniqueCats.add(prod['category']);

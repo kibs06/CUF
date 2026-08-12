@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../constants/app_constants.dart';
+import '../models/seller_application_data.dart';
 import '../services/auth_service.dart';
 import '../services/biometric_service.dart';
 import '../services/supabase_service.dart';
@@ -85,12 +86,12 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  // Register (UC001)
-  Future<bool> signUp({
+  // Register — customer (UC001, split from the legacy unified form)
+  Future<bool> signUpCustomer({
     required String fullName,
     required String email,
     required String password,
-    required bool applyAsSeller,
+    String? phone,
   }) async {
     _isLoading = true;
     _errorMessage = null;
@@ -101,10 +102,46 @@ class AuthProvider extends ChangeNotifier {
         fullName: fullName,
         email: email,
         password: password,
-        sellerStatus: applyAsSeller ? AppConstants.statusPending : 'none',
+        sellerStatus: 'none',
+        phone: phone,
       );
 
       // Auto login after sign up
+      _currentUser = res['user'];
+      _profile = res['profile'];
+      onLoginHook?.call(_currentUser!['id'] as String);
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString().replaceAll('Exception: ', '');
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Register — seller (final step of the multi-step application flow).
+  ///
+  /// The documents are uploaded by the flow's `SellerApplicationController`
+  /// BEFORE this is called; here we create the auth account (only at this
+  /// point — abandoning earlier steps never orphans an account), persist
+  /// the full Tier 1 application, and adopt the session so AuthGate routes
+  /// the user to the PendingApprovalScreen.
+  Future<bool> signUpSeller({
+    required SellerApplicationData data,
+  }) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final user = await _auth.ensureUser(
+        email: data.email,
+        password: data.password,
+        fullName: data.fullName,
+      );
+      final res = await _auth.completeSellerApplication(user: user, data: data);
+
       _currentUser = res['user'];
       _profile = res['profile'];
       onLoginHook?.call(_currentUser!['id'] as String);

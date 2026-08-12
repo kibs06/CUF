@@ -602,6 +602,10 @@ class _ManageOrdersScreenState extends State<ManageOrdersScreen>
     final card = SellerOrderCard(
       order: order,
       isUpdating: _updatingOrderIds.contains(id),
+      // No bottom margin inside the card: the 12px gap is re-applied outside
+      // the Slidable below, so the swipe pane (red delete area) is exactly
+      // the height of the card box.
+      margin: EdgeInsets.zero,
       onPrimaryAction: () => _updateStatus(id, status, orderData: order),
       onReject: status.toLowerCase() == 'pending'
           ? () => _showRejectDialog(id, order)
@@ -634,30 +638,44 @@ class _ManageOrdersScreenState extends State<ManageOrdersScreen>
       ),
     );
 
-    // Only cancelled orders are swipeable
-    if (!isCancelled) return animatedCard;
+    // The card's own margin is zero here (see above); the 12px gap between
+    // items is applied OUTSIDE the Slidable / card, so the swipe pane (red
+    // delete area) is exactly the height of the card box.
+    const bottomGap = EdgeInsets.only(bottom: 12);
 
-    return Slidable(
-      key: ValueKey(id),
-      startActionPane: ActionPane(
-        motion: const BehindMotion(),
-        extentRatio: 0.28,
-        children: [
-          CustomSlidableAction(
-            onPressed: (_) => _confirmDeleteOrder(id, order),
-            backgroundColor: Colors.red.shade400,
-            foregroundColor: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            padding: EdgeInsets.zero,
-            child: const Icon(
-              Icons.delete_outline,
-              color: Colors.white,
-              size: 32,
+    // Only cancelled orders are swipeable
+    if (!isCancelled) {
+      return Padding(padding: bottomGap, child: animatedCard);
+    }
+
+    return Padding(
+      padding: bottomGap,
+      child: Slidable(
+        key: ValueKey(id),
+        startActionPane: ActionPane(
+          motion: const BehindMotion(),
+          // Keep the original horizontal extent (28% of the card); only the
+          // VERTICAL size was changed to match the card box height.
+          extentRatio: 0.28,
+          children: [
+            CustomSlidableAction(
+              onPressed: (_) => _confirmDeleteOrder(id, order),
+              backgroundColor: Colors.red.shade400,
+              foregroundColor: Colors.white,
+              // No borderRadius: the delete reveal is a full-bleed rectangle
+              // that matches the card box — square corners, flush to the card's
+              // edges and full height (padding stays zero).
+              padding: EdgeInsets.zero,
+              child: const Icon(
+                Icons.delete_outline,
+                color: Colors.white,
+                size: 32,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
+        child: animatedCard,
       ),
-      child: animatedCard,
     );
   }
 

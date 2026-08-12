@@ -21,7 +21,6 @@ import '../../widgets/shimmer_box.dart';
 import '../../widgets/seller/seller_metric_card.dart';
 import '../../widgets/seller/seller_alert_chip.dart';
 import '../../widgets/seller/seller_order_card.dart';
-import '../../widgets/seller/seller_sparkline.dart';
 import '../../models/sales_trend_data.dart';
 import '../../widgets/seller/seller_stacked_area_chart.dart';
 import '../../widgets/seller/seller_revenue_doughnut.dart';
@@ -566,15 +565,6 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                 valueColor: SellerTheme.rustDeep,
                 subtitle: ratingStr,
                 subtitleColor: SellerTheme.amber,
-                trailing: Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: SellerSparkline(
-                    values: data.weeklySalesChart,
-                    color: SellerTheme.rust,
-                    showFill: true,
-                    height: 40,
-                  ),
-                ),
               ),
             ),
             const SizedBox(width: 8),
@@ -585,13 +575,6 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                 label: 'THIS WEEK',
                 value: _formatCurrency(weeklyTotal),
                 subtitle: _getWeekDateRange(),
-                trailing: Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: SellerSparkline(
-                    values: data.weeklySalesChart,
-                    color: SellerTheme.espressoMid,
-                  ),
-                ),
                 onTap: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const ReportsScreen()),

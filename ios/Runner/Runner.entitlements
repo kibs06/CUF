@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Associated Domains for Universal Links (product sharing, Phase B).
+
+  STATUS: DISABLED — this file is NOT yet wired into the Xcode project and
+  contains a placeholder domain. Product share links currently use the
+  `product-preview` edge function URL on *.supabase.co, which cannot host
+  apple-app-site-association, so Universal Links cannot activate until a
+  custom domain exists.
+
+  To activate (when a custom domain is ready):
+  1. Replace YOUR-DOMAIN.com with the real domain below.
+  2. In Xcode → Runner target → Signing & Capabilities → + Capability →
+     "Associated Domains", which creates Runner.entitlements. (Or set
+     CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements in Build Settings
+     if you prefer to keep this file.) Add the domain as: applinks:YOUR-DOMAIN.com
+  3. Host the file below at https://YOUR-DOMAIN.com/.well-known/apple-app-site-association
+     (source: web/.well-known/apple-app-site-association in this repo).
+  4. Rebuild and ship to TestFlight, then verify the app opens
+     https://YOUR-DOMAIN.com/p/{id} directly.
+
+  See docs/AI/SHARE_PRODUCT_ARCHITECTURE.md.
+-->
+<plist version="1.0">
+<dict>
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:YOUR-DOMAIN.com</string>
+	</array>
+</dict>
+</plist>

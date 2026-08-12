@@ -14,6 +14,7 @@ import '../widgets/error_retry_widget.dart';
 import 'admin/admin_shell.dart';
 import 'auth/login_screen.dart';
 import 'auth/onboarding_screen.dart';
+import 'auth/pending_approval_screen.dart';
 import 'customer/customer_shell.dart';
 import 'seller/seller_shell.dart';
 
@@ -28,10 +29,6 @@ class _AuthGateState extends State<AuthGate> {
   final AuthService _authService = AuthService.instance;
   Future<Map<String, dynamic>?>? _profileFuture;
   String? _profileUserId;
-
-  /// Whether the user was previously authenticated in this session.
-  /// Used to detect session expiry mid-use.
-  bool _wasAuthenticated = false;
 
   /// Whether we've set up the auth hooks (login/logout) already.
   bool _hooksWired = false;
@@ -92,81 +89,6 @@ class _AuthGateState extends State<AuthGate> {
     }
   }
 
-  /// Show a non-dismissible bottom sheet when the session expires mid-use.
-  void _showSessionExpiredSheet() {
-    if (!mounted) return;
-
-    showModalBottomSheet(
-      context: context,
-      isDismissible: false,
-      enableDrag: false,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: AppConstants.error.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const Icon(
-                Icons.lock_clock_rounded,
-                color: AppConstants.error,
-                size: 28,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Session Expired',
-              style: AppConstants.headlineStyle(fontSize: 22),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Your session has expired. Please sign in again.',
-              textAlign: TextAlign.center,
-              style: AppConstants.bodyStyle(
-                color: AppConstants.secondary.withValues(alpha: 0.7),
-                height: 1.4,
-              ),
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: FilledButton(
-                onPressed: () {
-                  Navigator.of(ctx).pop();
-                },
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppConstants.primary,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: AppConstants.buttonRadius,
-                  ),
-                ),
-                child: Text(
-                  'Sign In',
-                  style: AppConstants.headlineStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: AppConstants.surfaceLight,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     // Ensure hooks are wired once per widget lifecycle.
@@ -181,7 +103,6 @@ class _AuthGateState extends State<AuthGate> {
               Supabase.instance.client.auth.currentSession;
           if (existingSession != null) {
             // Already logged in — load profile and route directly
-            _wasAuthenticated = true;
             return FutureBuilder<Map<String, dynamic>?>(
               future: _profileFor(existingSession.user),
               builder: (context, profileSnapshot) {
@@ -213,22 +134,10 @@ class _AuthGateState extends State<AuthGate> {
           // the new user's profile from scratch.
           _resetProfileCache();
 
-          // Detect session expiry mid-use
-          if (_wasAuthenticated) {
-            _wasAuthenticated = false;
-
-            // Schedule showing the session expired sheet after build
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              _showSessionExpiredSheet();
-            });
-          }
-
           // First time ever opening app → show onboarding
           // Returning logged-out user → show login
           return const _FirstTimeOrLoginRouter();
         }
-
-        _wasAuthenticated = true;
 
         // Ensure FollowProvider is loaded for this session.
         // The hook covers explicit login; this covers persisted sessions.
@@ -334,69 +243,9 @@ class _FirstTimeOrLoginRouterState extends State<_FirstTimeOrLoginRouter> {
 }
 
 // ─── Pending Approval Screen ──────────────────────────────────────
-class PendingApprovalScreen extends StatelessWidget {
-  const PendingApprovalScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppConstants.surfaceLight,
-      body: Stack(
-        children: [
-          AppConstants.noiseOverlay(opacity: 0.03),
-          SafeArea(
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 72,
-                      height: 72,
-                      decoration: BoxDecoration(
-                        color: AppConstants.statusPendingColor.withValues(
-                          alpha: 0.16,
-                        ),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: const Icon(
-                        Icons.hourglass_top_rounded,
-                        color: AppConstants.statusPendingColor,
-                        size: 34,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      'Seller Application Pending',
-                      textAlign: TextAlign.center,
-                      style: AppConstants.headlineStyle(fontSize: 24),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Your account was created. An admin needs to approve your seller access before you can open the seller dashboard.',
-                      textAlign: TextAlign.center,
-                      style: AppConstants.bodyStyle(
-                        color: AppConstants.secondary.withValues(alpha: 0.68),
-                        height: 1.4,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    OutlinedButton.icon(
-                      onPressed: () => context.read<AuthProvider>().logout(),
-                      icon: const Icon(Icons.logout),
-                      label: const Text('Log Out'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+// Moved to lib/screens/auth/pending_approval_screen.dart (redesigned for
+// the tiered-verification signup: shows submitted Tier 1 items + explains
+// optional Tier 2). Imported at the top of this file.
 
 // ─── Profile Error View ──────────────────────────────────────────
 /// Checks connectivity and shows either a timeout message or a

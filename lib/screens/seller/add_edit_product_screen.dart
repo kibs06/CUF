@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../constants/app_constants.dart';
+import '../../constants/seller_theme_constants.dart';
 import '../../models/product_models.dart';
 import '../../services/product_service.dart';
 import '../../widgets/sole_card.dart';
@@ -27,7 +28,6 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
   final _nameController = TextEditingController();
   final _priceController = TextEditingController();
   final _descController = TextEditingController();
-  final _tagController = TextEditingController();
   final _productService = ProductService.instance;
   final _imagePicker = ImagePicker();
 
@@ -46,9 +46,10 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
   final List<_ImageItem> _imageItems = [];
   static const int _maxImages = 6;
 
-  // Tags
+  // Tags — persisted on the product (products.tags). Presets are stored as
+  // snake_case ids; custom "Other" entries as `custom:<group>:<text>` so they
+  // stay distinguishable. See _ProductTagSelector for parse/serialize.
   final List<String> _tags = [];
-  static const int _maxTags = 10;
 
   // Variants
   final List<ProductVariant> _variants = [];
@@ -59,14 +60,9 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
   // Store ID (fetched on init)
   String? _storeId;
 
-  static const List<String> _categories = [
-    'Casual',
-    'Formal',
-    'Sports',
-    'Sandals',
-    'Custom',
-    'Other',
-  ];
+  // Single source of truth lives in AppConstants so the seller form and the
+  // customer home filter share the same preset list and can never drift.
+  static const List<String> _categories = AppConstants.productCategories;
 
   bool get isEdit => widget.product != null;
 
@@ -100,7 +96,9 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
         DateTime.tryParse(p['sale_starts_at']?.toString() ?? '');
     _saleEndsAt = DateTime.tryParse(p['sale_ends_at']?.toString() ?? '');
 
-    // Tags
+    // Tags — passed through raw; the grouped selector parses every stored
+    // string (presets, `custom:<group>:<text>` entries, and legacy free text)
+    // and pre-selects / re-renders the right chips.
     if (p['tags'] is List) {
       _tags.addAll(List<String>.from(p['tags']));
     }
@@ -140,7 +138,6 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
     _nameController.dispose();
     _priceController.dispose();
     _descController.dispose();
-    _tagController.dispose();
     _barcodeController.dispose();
     _salePriceController.dispose();
     super.dispose();
@@ -178,25 +175,6 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
       _productService.removeImage(item.id!, item.url!);
     }
     setState(() => _imageItems.removeAt(index));
-  }
-
-  // ─── TAG ACTIONS ────────────────────────────────────────────────
-
-  void _addTag() {
-    final tag = _tagController.text.trim();
-    if (tag.isEmpty) return;
-    if (_tags.length >= _maxTags) {
-      _showSnackBar('Maximum $_maxTags tags allowed.', isError: true);
-      return;
-    }
-    if (_tags.contains(tag)) {
-      _showSnackBar('Tag already exists.', isError: true);
-      return;
-    }
-    setState(() {
-      _tags.add(tag);
-      _tagController.clear();
-    });
   }
 
   // ─── VARIANT ACTIONS ────────────────────────────────────────────
@@ -247,28 +225,33 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
   }
 
   void _showVariantSheet({ProductVariant? existing, int? editIndex}) {
-    // Determine initial sizing system and size from existing variant
+    // Determine initial sizing system and size from an existing variant.
+    // Sizes are stored as 'SYSTEM SIZE' (e.g. 'EU 40', 'JP 25').
     final existingSize = existing?.size ?? '';
-    String selectedSystem = _detectSizingSystem(existingSize);
-    String selectedSizePreset = '';
-    bool showCustomSize = false;
-    bool showCustomSystem = selectedSystem == 'Other';
-    final customSizeCtrl = TextEditingController();
-    final customSystemCtrl = TextEditingController();
-
-    if (selectedSystem != 'Other' && existingSize.isNotEmpty) {
-      final extracted = _extractSizeValue(existingSize, selectedSystem);
-      final systemSizes = _sizingSystems[selectedSystem] ?? [];
-      if (systemSizes.contains(extracted)) {
-        selectedSizePreset = extracted;
-      } else {
-        showCustomSize = true;
-        customSizeCtrl.text = extracted;
-      }
+    String selectedSystem = '';
+    // Multi-select sizes: each selected size becomes its own variant on save.
+    List<String> selectedSizes = [];
+    String customSystemSizeText = ''; // free-text size for CUSTOM systems
+    final detectedSystem = _detectSizingSystem(existingSize);
+    if (detectedSystem != 'Other' && existingSize.isNotEmpty) {
+      // Known system prefix (e.g. 'EU 40' → system 'EU', size '40').
+      selectedSystem = detectedSystem;
+      selectedSizes = [_extractSizeValue(existingSize, detectedSystem)];
     } else if (existingSize.isNotEmpty) {
-      showCustomSize = true;
-      customSizeCtrl.text = existingSize;
+      // Unknown system — try splitting 'SYSTEM SIZE' on the first space so a
+      // custom system (e.g. 'JP 25') prefills as system 'JP' + size '25'.
+      final space = existingSize.indexOf(' ');
+      if (space > 0) {
+        selectedSystem = existingSize.substring(0, space).trim();
+        customSystemSizeText = existingSize.substring(space + 1).trim();
+      } else {
+        // No recoverable system — keep the raw value for a custom-system size.
+        customSystemSizeText = existingSize;
+      }
     }
+    // Free-text size field, only shown when a custom system is selected
+    // (custom systems have no size presets).
+    final customSizeCtrl = TextEditingController(text: customSystemSizeText);
 
     final colorCtrl = TextEditingController(text: existing?.color ?? '');
     final stockCtrl =
@@ -280,12 +263,18 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: AppConstants.sellerCardBg,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheetState) => Padding(
+        builder: (ctx, setSheetState) {
+          // Live count of sizes about to be created — powers the button label
+          // ("Add 3 Variants"). Recomputes on every sheet rebuild.
+          final sizeCount = _sizingSystems.containsKey(selectedSystem)
+              ? selectedSizes.length
+              : (customSizeCtrl.text.trim().isNotEmpty ? 1 : 0);
+          return Padding(
           padding: EdgeInsets.fromLTRB(
               24, 20, 24, MediaQuery.of(ctx).viewInsets.bottom + 24),
           child: SingleChildScrollView(
@@ -294,135 +283,79 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  editIndex != null ? 'Edit Variant' : 'Add Variant',
+                  editIndex != null
+                      ? (sizeCount > 1
+                          ? 'Edit $sizeCount Variants'
+                          : 'Edit Variant')
+                      : (sizeCount > 1
+                          ? 'Add $sizeCount Variants'
+                          : 'Add Variant'),
                   style: AppConstants.headlineStyle(fontSize: 20),
                 ),
                 const SizedBox(height: 16),
-                // Size selector: dropdown + Other fallback
-                // Sizing System selector
+                // Sizing System — single-select chips (+ Other for custom
+                // systems like JP/CHN). Values stay compact codes; the chips
+                // show the friendly full names.
                 Text(
                   'Sizing System *',
                   style: AppConstants.bodyStyle(
                       fontWeight: FontWeight.bold, fontSize: 14),
                 ),
                 const SizedBox(height: 6),
-                DropdownButtonFormField<String>(
-                  initialValue: showCustomSystem ? '__other__' : (selectedSystem.isEmpty ? null : selectedSystem),
-                  hint: Text('Select sizing system', style: AppConstants.bodyStyle(fontSize: 14)),
-                  style: AppConstants.bodyStyle(fontSize: 15),
-                  decoration: InputDecoration(
-                    filled: true,
-                    fillColor: Colors.white,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    border: OutlineInputBorder(
-                      borderRadius: AppConstants.buttonRadius,
-                      borderSide: const BorderSide(color: AppConstants.borderGray),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: AppConstants.buttonRadius,
-                      borderSide: BorderSide(color: AppConstants.borderGray.withValues(alpha: 0.5), width: 1.5),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: AppConstants.buttonRadius,
-                      borderSide: const BorderSide(color: AppConstants.primary, width: 1.5),
-                    ),
-                  ),
-                  items: const [
-                    DropdownMenuItem(value: 'US', child: Text('US (American)')),
-                    DropdownMenuItem(value: 'EU', child: Text('EU (European)')),
-                    DropdownMenuItem(value: 'UK', child: Text('UK (British)')),
-                    DropdownMenuItem(
-                      value: '__other__',
-                      child: Text('Other (custom system)'),
-                    ),
-                  ],
-                  onChanged: (val) {
+                _PresetChipSelector(
+                  key: const ValueKey('sizing-system'),
+                  initialValue: selectedSystem,
+                  presets: const ['US', 'EU', 'UK'],
+                  presetLabels: const {
+                    'US': 'US (American)',
+                    'EU': 'EU (European)',
+                    'UK': 'UK (British)',
+                  },
+                  otherHint: 'e.g. JP, CHN, AUS',
+                  emptyError: 'Type a sizing system first.',
+                  duplicateError:
+                      'That is already a system — tap it above instead.',
+                  onChanged: (value) {
                     setSheetState(() {
-                      if (val == '__other__') {
-                        showCustomSystem = true;
-                        selectedSystem = '';
-                        selectedSizePreset = '';
-                        showCustomSize = false;
-                        customSizeCtrl.clear();
-                      } else {
-                        showCustomSystem = false;
-                        selectedSystem = val ?? '';
-                        selectedSizePreset = '';
-                        showCustomSize = false;
-                        customSizeCtrl.clear();
-                      }
+                      selectedSystem = value;
+                      selectedSizes = [];
+                      customSizeCtrl.clear();
                     });
                   },
                 ),
-                if (showCustomSystem) ...[
-                  const SizedBox(height: 10),
-                  SoleTextField(
-                    labelText: 'Custom Sizing System',
-                    hintText: 'e.g. JP, CHN, AUS',
-                    controller: customSystemCtrl,
-                  ),
-                ],
                 const SizedBox(height: 12),
-                // Size value selector (only shown when a system is selected)
-                if (!showCustomSystem && selectedSystem.isNotEmpty) ...[
+                // Size value selector — MULTI-select chips (each selected
+                // size becomes its own variant on save); free text when the
+                // system is custom (no preset sizes).
+                if (selectedSystem.isNotEmpty) ...[
                   Text(
-                    'Size *',
+                    'Size * (select multiple)',
                     style: AppConstants.bodyStyle(
                         fontWeight: FontWeight.bold, fontSize: 14),
                   ),
                   const SizedBox(height: 6),
-                  DropdownButtonFormField<String>(
-                    initialValue: showCustomSize ? '__other__' : (selectedSizePreset.isEmpty ? null : selectedSizePreset),
-                    hint: Text('Select a size', style: AppConstants.bodyStyle(fontSize: 14)),
-                    style: AppConstants.bodyStyle(fontSize: 15),
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: Colors.white,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      border: OutlineInputBorder(
-                        borderRadius: AppConstants.buttonRadius,
-                        borderSide: const BorderSide(color: AppConstants.borderGray),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: AppConstants.buttonRadius,
-                        borderSide: BorderSide(color: AppConstants.borderGray.withValues(alpha: 0.5), width: 1.5),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: AppConstants.buttonRadius,
-                        borderSide: const BorderSide(color: AppConstants.primary, width: 1.5),
-                      ),
+                  if (_sizingSystems.containsKey(selectedSystem))
+                    _SizeMultiSelector(
+                      // Re-created whenever the system changes so sizes
+                      // picked for one system can't leak into another.
+                      key: ValueKey('sizes-$selectedSystem'),
+                      initialSelected: selectedSizes,
+                      presets: _sizingSystems[selectedSystem] ?? const [],
+                      otherHint: 'e.g. 48, Kids 12',
+                      emptyError: 'Type a size first.',
+                      duplicateError:
+                          'That is already a size — tap it above instead.',
+                      onChanged: (values) {
+                        setSheetState(() => selectedSizes = values);
+                      },
+                    )
+                  else ...[
+                    SoleTextField(
+                      labelText: 'Custom Size',
+                      hintText: 'e.g. 48, Kids 12',
+                      controller: customSizeCtrl,
                     ),
-                    items: [
-                      ...(_sizingSystems[selectedSystem] ?? []).map((s) => DropdownMenuItem(
-                        value: s,
-                        child: Text(s),
-                      )),
-                      const DropdownMenuItem(
-                        value: '__other__',
-                        child: Text('Other (custom size)'),
-                      ),
-                    ],
-                    onChanged: (val) {
-                      setSheetState(() {
-                        if (val == '__other__') {
-                          showCustomSize = true;
-                          selectedSizePreset = '';
-                        } else {
-                          showCustomSize = false;
-                          selectedSizePreset = val ?? '';
-                          customSizeCtrl.clear();
-                        }
-                      });
-                    },
-                  ),
-                ],
-                if (showCustomSize) ...[
-                  const SizedBox(height: 10),
-                  SoleTextField(
-                    labelText: 'Custom Size',
-                    hintText: 'e.g. 48, Kids 12',
-                    controller: customSizeCtrl,
-                  ),
+                  ],
                 ],
                 const SizedBox(height: 12),
                 SoleTextField(
@@ -460,46 +393,71 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                 ),
                 const SizedBox(height: 20),
                 SolePrimaryButton(
-                  label: editIndex != null ? 'Update Variant' : 'Add Variant',
+                  label: editIndex != null
+                      ? (sizeCount > 1
+                          ? 'Update $sizeCount Variants'
+                          : 'Update Variant')
+                      : (sizeCount > 1
+                          ? 'Add $sizeCount Variants'
+                          : 'Add Variant'),
                   onPressed: () {
-                    // Resolve sizing system
-                    final system = showCustomSystem
-                        ? customSystemCtrl.text.trim()
-                        : selectedSystem;
+                    // Resolve sizing system — preset code or custom text from
+                    // the chip selector (single source of truth).
+                    final system = selectedSystem.trim();
                     if (system.isEmpty) {
                       _showSnackBar('Sizing system is required.', isError: true);
                       return;
                     }
-                    // Resolve size value
-                    String sizeValue;
-                    if (showCustomSystem || showCustomSize) {
-                      sizeValue = customSizeCtrl.text.trim();
-                    } else {
-                      sizeValue = selectedSizePreset;
-                    }
-                    if (sizeValue.isEmpty) {
-                      _showSnackBar('Size is required.', isError: true);
+                    // Resolve size values — each selected chip (or the custom
+                    // free-text size for custom systems) becomes its own
+                    // variant, sharing color/stock/price/sku.
+                    final sizeValues = _sizingSystems.containsKey(system)
+                        ? selectedSizes
+                            .map((s) => s.trim())
+                            .where((s) => s.isNotEmpty)
+                            .toList()
+                        : (customSizeCtrl.text.trim().isNotEmpty
+                            ? [customSizeCtrl.text.trim()]
+                            : <String>[]);
+                    if (sizeValues.isEmpty) {
+                      _showSnackBar('Select at least one size.',
+                          isError: true);
                       return;
                     }
-                    // Format as 'SYSTEM SIZE' (e.g. 'EU 40', 'US 8')
-                    final fullSize = '$system $sizeValue';
-                    final variant = ProductVariant(
-                      size: fullSize,
-                      color: colorCtrl.text.trim().isNotEmpty
-                          ? colorCtrl.text.trim()
-                          : null,
-                      stock: int.tryParse(stockCtrl.text) ?? 0,
-                      additionalPrice: double.tryParse(priceCtrl.text) ?? 0,
-                      sku: skuCtrl.text.trim().isNotEmpty
-                          ? skuCtrl.text.trim()
-                          : null,
-                    );
+                    final color = colorCtrl.text.trim().isNotEmpty
+                        ? colorCtrl.text.trim()
+                        : null;
+                    final stock = int.tryParse(stockCtrl.text) ?? 0;
+                    final additionalPrice =
+                        double.tryParse(priceCtrl.text) ?? 0;
+                    final sku = skuCtrl.text.trim().isNotEmpty
+                        ? skuCtrl.text.trim()
+                        : null;
+                    // Format each as 'SYSTEM SIZE' (e.g. 'EU 40', 'US 8').
+                    // When one entry creates several sizes, each variant
+                    // suffixes its size onto the shared SKU so SKUs stay
+                    // unique (e.g. SV-OXF-BLK-42-8 / -9 / -10).
+                    final makeSku = sku != null && sizeValues.length > 1
+                        ? (String size) => '$sku-$size'
+                        : (String _) => sku;
+                    final variants = [
+                      for (final sizeValue in sizeValues)
+                        ProductVariant(
+                          size: '$system $sizeValue',
+                          color: color,
+                          stock: stock,
+                          additionalPrice: additionalPrice,
+                          sku: makeSku(sizeValue),
+                        ),
+                    ];
 
                     setState(() {
                       if (editIndex != null) {
-                        _variants[editIndex] = variant;
+                        // Replace the single edited variant with the new set.
+                        _variants.removeAt(editIndex);
+                        _variants.insertAll(editIndex, variants);
                       } else {
-                        _variants.add(variant);
+                        _variants.addAll(variants);
                       }
                     });
                     Navigator.of(ctx).pop();
@@ -508,27 +466,25 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
               ],
             ),
           ),
-        ),
+          );
+        },
       ),
     );
   }
 
   // ─── CUSTOMIZATION ACTIONS ──────────────────────────────────────
 
-  /// Built-in customization type values.
-  static const List<String> _builtinCustomizationTypes = ['text', 'select', 'color'];
-
   void _showCustomizationSheet(
       {ProductCustomization? existing, int? editIndex}) {
     final nameCtrl =
         TextEditingController(text: existing?.optionName ?? '');
-    // Determine initial type: check if it's one of the built-in types
-    final existingType = existing?.optionType ?? 'text';
-    final isBuiltinType = _builtinCustomizationTypes.contains(existingType);
-    String selectedTypePreset = isBuiltinType ? existingType : '';
-    final customTypeCtrl = TextEditingController(
-        text: isBuiltinType ? '' : existingType);
-    bool showCustomType = !isBuiltinType && existingType.isNotEmpty;
+    // Type selector: single-select chips (Text / Select / Color) with a
+    // custom "+ Other" fallback. The selector prefills a built-in type as a
+    // selected chip, a previously-saved custom type as a custom chip, and
+    // defaults new customizations to 'text' (matching the old dropdown's
+    // pre-selected "Text" so adding a customization never requires touching
+    // the type field).
+    String selectedType = existing?.optionType ?? 'text';
 
     final choices = List<String>.from(existing?.options ?? []);
     final choiceCtrl = TextEditingController();
@@ -539,7 +495,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: AppConstants.sellerCardBg,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -565,7 +521,8 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                   controller: nameCtrl,
                 ),
                 const SizedBox(height: 12),
-                // Type selector: dropdown + Other fallback
+                // Type selector: single-select chips (+ Other for custom
+                // types like number/date/file upload).
                 Text(
                   'Type *',
                   style: AppConstants.bodyStyle(
@@ -574,58 +531,23 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                   ),
                 ),
                 const SizedBox(height: 6),
-                DropdownButtonFormField<String>(
-                  initialValue: showCustomType ? '__other__' : (selectedTypePreset.isEmpty ? null : selectedTypePreset),
-                  hint: Text('Select a type', style: AppConstants.bodyStyle(fontSize: 14)),
-                  style: AppConstants.bodyStyle(fontSize: 15),
-                  decoration: InputDecoration(
-                    filled: true,
-                    fillColor: Colors.white,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    border: OutlineInputBorder(
-                      borderRadius: AppConstants.buttonRadius,
-                      borderSide: const BorderSide(color: AppConstants.borderGray),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: AppConstants.buttonRadius,
-                      borderSide: BorderSide(color: AppConstants.borderGray.withValues(alpha: 0.5), width: 1.5),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: AppConstants.buttonRadius,
-                      borderSide: const BorderSide(color: AppConstants.primary, width: 1.5),
-                    ),
-                  ),
-                  items: const [
-                    DropdownMenuItem(value: 'text', child: Text('Text')),
-                    DropdownMenuItem(value: 'select', child: Text('Select')),
-                    DropdownMenuItem(value: 'color', child: Text('Color')),
-                    DropdownMenuItem(
-                      value: '__other__',
-                      child: Text('Other (custom type)'),
-                    ),
-                  ],
-                  onChanged: (val) {
-                    setSheetState(() {
-                      if (val == '__other__') {
-                        showCustomType = true;
-                        selectedTypePreset = '';
-                      } else {
-                        showCustomType = false;
-                        selectedTypePreset = val ?? '';
-                        customTypeCtrl.clear();
-                      }
-                    });
+                _PresetChipSelector(
+                  key: const ValueKey('customization-type'),
+                  initialValue: selectedType,
+                  presets: const ['text', 'select', 'color'],
+                  presetLabels: const {
+                    'text': 'Text',
+                    'select': 'Select',
+                    'color': 'Color',
+                  },
+                  otherHint: 'e.g. number, date, file upload',
+                  duplicateError:
+                      'That is already a type — tap it above instead.',
+                  onChanged: (value) {
+                    setSheetState(() => selectedType = value);
                   },
                 ),
-                if (showCustomType) ...[
-                  const SizedBox(height: 10),
-                  SoleTextField(
-                    labelText: 'Custom Type',
-                    hintText: 'e.g. number, date, file upload',
-                    controller: customTypeCtrl,
-                  ),
-                ],
-                if (selectedTypePreset == 'select' || selectedTypePreset == 'color') ...[
+                if (selectedType == 'select' || selectedType == 'color') ...[
                   const SizedBox(height: 12),
                   Text(
                     'Choices',
@@ -672,7 +594,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                                 setSheetState(() => choices.remove(c));
                               },
                               backgroundColor:
-                                  AppConstants.accent.withValues(alpha: 0.15),
+                                  AppConstants.primary.withValues(alpha: 0.12),
                               side: BorderSide.none,
                             ))
                         .toList(),
@@ -716,10 +638,9 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                           isError: true);
                       return;
                     }
-                    // Resolve type from dropdown or custom input
-                    final typeValue = showCustomType
-                        ? customTypeCtrl.text.trim()
-                        : selectedTypePreset;
+                    // Resolve type — preset value or custom text from the
+                    // chip selector (single source of truth).
+                    final typeValue = selectedType.trim();
                     if (typeValue.isEmpty) {
                       _showSnackBar('Type is required.', isError: true);
                       return;
@@ -902,7 +823,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppConstants.surfaceLight,
+      backgroundColor: AppConstants.sellerSurface,
       appBar: AppBar(
         title: Text(
           isEdit ? 'Edit Product' : 'Add Product',
@@ -999,7 +920,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                       'Uploading images... ${(_uploadProgress * 100).toInt()}%',
                       style: AppConstants.bodyStyle(
                         fontSize: 12,
-                        color: AppConstants.secondary.withValues(alpha: 0.6),
+                        color: SellerTheme.textSecondary,
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -1138,6 +1059,18 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
   }
 
   // ─── SECTION BUILDERS ─────────────────────────────────────────
+
+  /// Seller-styled form card — warm cream surface with the hairline espresso
+  /// border and soft shadow used across the seller module, so the product
+  /// form reads as part of the same espresso/cream design.
+  Widget _formCard({required Widget child}) {
+    return SoleCard(
+      color: AppConstants.sellerCardBg,
+      border: Border.all(color: SellerTheme.cardBorder),
+      shadow: AppConstants.sellerShadow,
+      child: child,
+    );
+  }
 
   Widget _buildSectionHeader(String title, IconData icon) {
     return Row(
@@ -1318,8 +1251,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
   // ── Basic Info ──
 
   Widget _buildBasicInfoSection() {
-    return SoleCard(
-      color: Colors.white,
+    return _formCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1336,46 +1268,50 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
           ),
           const SizedBox(height: 16),
 
-          // Category Dropdown
+          // Category — single-select animated chips (replaces the dropdown).
+          // Radio-style: tapping a chip selects it and deselects the previous
+          // one; the dashed "+ Other" chip reveals an inline custom-category
+          // input. Wrapped in a FormField so the dropdown's required
+          // validation still blocks submission if nothing is selected.
           Text(
             'Category *',
             style: AppConstants.bodyStyle(
                 fontWeight: FontWeight.bold, fontSize: 14),
           ),
           const SizedBox(height: 6),
-          DropdownButtonFormField<String>(
-            initialValue: _categories.contains(_category) ? _category : _categories.first,
-            style: AppConstants.bodyStyle(fontSize: 15),
-            decoration: InputDecoration(
-              filled: true,
-              fillColor: Colors.white,
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              border: OutlineInputBorder(
-                borderRadius: AppConstants.buttonRadius,
-                borderSide: const BorderSide(color: AppConstants.borderGray),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: AppConstants.buttonRadius,
-                borderSide: BorderSide(
-                    color: AppConstants.borderGray.withValues(alpha: 0.5),
-                    width: 1.5),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: AppConstants.buttonRadius,
-                borderSide:
-                    const BorderSide(color: AppConstants.primary, width: 1.5),
-              ),
-            ),
-            items: _categories
-                .map((cat) =>
-                    DropdownMenuItem(value: cat, child: Text(cat)))
-                .toList(),
-            onChanged: (val) {
-              if (val != null) setState(() => _category = val);
-            },
+          FormField<String>(
+            initialValue: _category,
             validator: (val) =>
                 val == null || val.isEmpty ? 'Please select a category' : null,
+            builder: (field) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _PresetChipSelector(
+                    initialValue: field.value ?? '',
+                    presets: _categories,
+                    otherHint: 'Add your own category…',
+                    emptyError: 'Type a category first.',
+                    duplicateError:
+                        'That is already a category option — tap it above instead.',
+                    onChanged: (value) {
+                      field.didChange(value);
+                      _category = value;
+                    },
+                  ),
+                  if (field.hasError) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      field.errorText!,
+                      style: AppConstants.bodyStyle(
+                        fontSize: 12,
+                        color: AppConstants.error,
+                      ),
+                    ),
+                  ],
+                ],
+              );
+            },
           ),
           const SizedBox(height: 16),
 
@@ -1445,7 +1381,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                 '${_descController.text.length}/500',
                 style: AppConstants.monoStyle(
                   fontSize: 11,
-                  color: AppConstants.secondary.withValues(alpha: 0.5),
+                  color: SellerTheme.textSecondary,
                 ),
               ),
             ),
@@ -1458,8 +1394,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
   // ── Barcode ──
 
   Widget _buildBarcodeSection() {
-    return SoleCard(
-      color: Colors.white,
+    return _formCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1490,72 +1425,26 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
   // ── Tags ──
 
   Widget _buildTagsSection() {
-    return SoleCard(
-      color: Colors.white,
+    return _formCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(
-                child: SoleTextField(
-                  labelText: '',
-                  hintText: 'e.g. handmade, leather, slip-on',
-                  controller: _tagController,
-                ),
-              ),
-              const SizedBox(width: 8),
-              SizedBox(
-                height: 48,
-                child: FilledButton(
-                  onPressed: _addTag,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppConstants.primary,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: AppConstants.buttonRadius,
-                    ),
-                  ),
-                  child: const Text('Add'),
-                ),
-              ),
-            ],
+          Text(
+            'Select all that apply across each group, or add your own with '
+            'the + Other option. These help customers find your product.',
+            style: AppConstants.bodyStyle(
+              fontSize: 12,
+              color: AppConstants.secondary.withValues(alpha: 0.5),
+            ),
           ),
-          if (_tags.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: _tags
-                  .map((tag) => Chip(
-                        label: Text(tag,
-                            style: AppConstants.bodyStyle(
-                                fontSize: 12,
-                                color: AppConstants.accent)),
-                        deleteIcon:
-                            const Icon(Icons.close, size: 14, color: AppConstants.accent),
-                        onDeleted: () => setState(() => _tags.remove(tag)),
-                        backgroundColor:
-                            AppConstants.accent.withValues(alpha: 0.12),
-                        side: BorderSide.none,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                      ))
-                  .toList(),
-            ),
-          ],
-          if (_tags.isEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                'No tags yet. Add up to $_maxTags tags.',
-                style: AppConstants.bodyStyle(
-                  fontSize: 12,
-                  color: AppConstants.secondary.withValues(alpha: 0.5),
-                ),
-              ),
-            ),
+          const SizedBox(height: 16),
+          // Grouped multi-select chips. The selector owns its state +
+          // animation scope so a chip tap rebuilds only this section, and it
+          // reports the serialized tag list back via onChanged.
+          _ProductTagSelector(
+            initialTags: _tags,
+            onChanged: (tags) => _tags..clear()..addAll(tags),
+          ),
         ],
       ),
     );
@@ -1572,9 +1461,10 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
           return Container(
             margin: const EdgeInsets.only(bottom: 8),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppConstants.sellerCardBg,
               borderRadius: AppConstants.cardRadius,
-              boxShadow: AppConstants.warmShadow,
+              border: Border.all(color: SellerTheme.cardBorder),
+              boxShadow: AppConstants.sellerShadow,
             ),
             child: Material(
               color: Colors.transparent,
@@ -1667,9 +1557,10 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
           return Container(
             margin: const EdgeInsets.only(bottom: 8),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppConstants.sellerCardBg,
               borderRadius: AppConstants.cardRadius,
-              boxShadow: AppConstants.warmShadow,
+              border: Border.all(color: SellerTheme.cardBorder),
+              boxShadow: AppConstants.sellerShadow,
             ),
             child: Material(
               color: Colors.transparent,
@@ -1680,7 +1571,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: AppConstants.accent.withValues(alpha: 0.12),
+                  color: AppConstants.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
@@ -1689,7 +1580,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                       : c.optionType == 'select'
                           ? Icons.list
                           : Icons.text_fields,
-                  color: AppConstants.accent,
+                  color: AppConstants.primary,
                   size: 20,
                 ),
               ),
@@ -1753,8 +1644,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
   // ── Visibility ──
 
   Widget _buildVisibilitySection() {
-    return SoleCard(
-      color: Colors.white,
+    return _formCard(
       child: Column(
         children: [
           Material(
@@ -1770,7 +1660,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                     : 'Product is hidden from customers',
                 style: AppConstants.bodyStyle(
                   fontSize: 12,
-                  color: AppConstants.secondary.withValues(alpha: 0.6),
+                  color: SellerTheme.textMuted,
                 ),
               ),
               value: _isActive,
@@ -1794,7 +1684,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                     : 'Not in featured section',
                 style: AppConstants.bodyStyle(
                   fontSize: 12,
-                  color: AppConstants.secondary.withValues(alpha: 0.6),
+                  color: SellerTheme.textMuted,
                 ),
               ),
               value: _isFeatured,
@@ -1806,6 +1696,1301 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ─── Grouped product tag selector ────────────────────────────────
+/// One selectable preset tag. Stored value is a stable snake_case id that is
+/// globally unique across all three groups, so it never needs a group prefix.
+class _TagPreset {
+  final String id;
+  final String label;
+  final IconData icon;
+  const _TagPreset({
+    required this.id,
+    required this.label,
+    required this.icon,
+  });
+}
+
+/// A tag group: its presets, its accent color (espresso/cream family so the
+/// three groups stay visually distinct but on-palette), and the content color
+/// that must contrast against [color] when a chip is selected.
+class _TagGroup {
+  final String id; // 'type' | 'material' | 'sustainability' | 'other'
+  final String label;
+  final IconData icon;
+  final Color color; // selected fill
+  final Color onColor; // selected content
+  final List<_TagPreset> presets;
+  const _TagGroup({
+    required this.id,
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.onColor,
+    this.presets = const [],
+  });
+}
+
+/// The three editable groups, in display order. Colors are drawn from the
+/// espresso/cream palette (burnished clay, leather camel, dark olive stitch)
+/// so the groups stay distinct without clashing with the theme.
+const List<_TagGroup> _tagGroups = [
+  _TagGroup(
+    id: 'type',
+    label: 'Product type',
+    icon: Icons.category_outlined,
+    color: AppConstants.primary,
+    onColor: AppConstants.surfaceLight,
+    presets: [
+      _TagPreset(id: 'handmade', label: 'Handmade', icon: Icons.handyman_outlined),
+      _TagPreset(id: 'made_to_order', label: 'Made-to-order', icon: Icons.straighten_outlined),
+      _TagPreset(id: 'ready_to_wear', label: 'Ready-to-wear', icon: Icons.checkroom_outlined),
+      _TagPreset(id: 'limited_edition', label: 'Limited edition', icon: Icons.star_outline),
+    ],
+  ),
+  _TagGroup(
+    id: 'material',
+    label: 'Material',
+    icon: Icons.layers_outlined,
+    color: Color(0xFFC08552), // leather camel
+    onColor: AppConstants.secondary,
+    presets: [
+      _TagPreset(id: 'leather', label: 'Leather', icon: Icons.work_outline),
+      _TagPreset(id: 'canvas', label: 'Canvas', icon: Icons.texture),
+      _TagPreset(id: 'rubber', label: 'Rubber', icon: Icons.sports_tennis_outlined),
+      _TagPreset(id: 'suede', label: 'Suede', icon: Icons.gesture),
+    ],
+  ),
+  _TagGroup(
+    id: 'sustainability',
+    label: 'Sustainability',
+    icon: Icons.eco_outlined,
+    color: Color(0xFF556B2F), // dark olive stitch
+    onColor: AppConstants.surfaceLight,
+    presets: [
+      _TagPreset(id: 'eco_friendly', label: 'Eco-friendly', icon: Icons.eco_outlined),
+      _TagPreset(id: 'upcycled_materials', label: 'Upcycled materials', icon: Icons.recycling),
+      _TagPreset(id: 'recycled_packaging', label: 'Recycled packaging', icon: Icons.inventory_2_outlined),
+    ],
+  ),
+];
+
+/// Neutral bucket for legacy free-text tags (saved before the grouped
+/// selector existed) that don't match any preset. Shown only when present.
+const _TagGroup _otherBucketGroup = _TagGroup(
+  id: 'other',
+  label: 'Custom tags',
+  icon: Icons.label_outline,
+  color: AppConstants.borderGray,
+  onColor: AppConstants.secondary,
+);
+
+const int _maxCustomTagLength = 30;
+
+/// Lowercased preset id → canonical stored id, for parsing legacy values
+/// case-insensitively (e.g. "Handmade" -> "handmade").
+final Map<String, String> _presetCanonicalByLower = {
+  for (final g in _tagGroups)
+    for (final p in g.presets) p.id.toLowerCase(): p.id,
+};
+
+/// One selected tag entry (a preset or a custom value) scoped to a group.
+class _TagEntry {
+  final String group;
+  final String value; // preset id, or raw custom text
+  final bool custom;
+  const _TagEntry({
+    required this.group,
+    required this.value,
+    required this.custom,
+  });
+}
+
+/// Serialize a custom entry into its stored form: `custom:<group>:<text>`.
+/// The fixed prefix makes customs unambiguously distinguishable from preset
+/// ids (plain snake_case strings) and records the group so edit mode can
+/// re-render the chip in the right section.
+String _customStoredValue(String group, String text) => 'custom:$group:$text';
+
+/// Parse one stored tag string into a [_TagEntry].
+///   * known preset id (case-insensitive) → preset in its group
+///   * `custom:<group>:<text>`            → custom in that group
+///   * anything else (legacy free text)   → custom in the 'other' bucket
+_TagEntry _parseStoredTag(String raw) {
+  final t = raw.trim();
+  final lower = t.toLowerCase();
+  final canonical = _presetCanonicalByLower[lower];
+  if (canonical != null) {
+    final group = _tagGroups
+        .firstWhere((g) => g.presets.any((p) => p.id == canonical))
+        .id;
+    return _TagEntry(group: group, value: canonical, custom: false);
+  }
+  if (lower.startsWith('custom:')) {
+    final parts = t.split(':');
+    if (parts.length >= 3) {
+      final group = parts[1].toLowerCase();
+      final text = parts.sublist(2).join(':').trim();
+      final known = _tagGroups.any((g) => g.id == group) || group == 'other';
+      if (known && text.isNotEmpty) {
+        return _TagEntry(group: group, value: text, custom: true);
+      }
+    }
+    // Malformed custom entry (e.g. "custom:type:" with no text) — drop it
+    // rather than rendering the raw prefix as a chip.
+    return const _TagEntry(group: 'other', value: '', custom: true);
+  }
+  return _TagEntry(group: 'other', value: t, custom: true);
+}
+
+/// Parse a list of stored tags, dropping entries that produced no value
+/// (empty strings and malformed `custom:` entries).
+List<_TagEntry> _parseTags(List<String> raw) {
+  final result = <_TagEntry>[];
+  for (final t in raw) {
+    final e = _parseStoredTag(t);
+    if (e.value.isNotEmpty) result.add(e);
+  }
+  return result;
+}
+
+/// Grouped, multi-select tag selector for the product form.
+///
+/// Renders the three preset groups (Product type / Material / Sustainability)
+/// plus a custom "+ Other" input per group. Owns its selection state and
+/// animation scope so a chip tap rebuilds only this section, and reports the
+/// fully-serialized tag list up via [onChanged] — the form persists exactly
+/// what's shown in the same write as the rest of the form.
+class _ProductTagSelector extends StatefulWidget {
+  final List<String> initialTags;
+  final ValueChanged<List<String>> onChanged;
+
+  const _ProductTagSelector({
+    required this.initialTags,
+    required this.onChanged,
+  });
+
+  @override
+  State<_ProductTagSelector> createState() => _ProductTagSelectorState();
+}
+
+class _ProductTagSelectorState extends State<_ProductTagSelector> {
+  late final List<_TagEntry> _entries = _parseTags(widget.initialTags);
+
+  // Per-group "Other" input state. The controllers are owned by this widget
+  // (created lazily, disposed here) — never disposed mid-teardown of a route,
+  // which is what prevents the framework's `_dependents.isEmpty` assertion.
+  final Map<String, TextEditingController> _otherControllers = {};
+  final Map<String, bool> _otherOpen = {};
+  final Map<String, String?> _otherErrors = {};
+
+  TextEditingController _controllerFor(String group) =>
+      _otherControllers.putIfAbsent(group, TextEditingController.new);
+
+  @override
+  void dispose() {
+    for (final c in _otherControllers.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  List<_TagEntry> _groupEntries(String group) =>
+      _entries.where((e) => e.group == group).toList();
+
+  /// Serialize the selection in display order (group by group, presets then
+  /// customs) and report it up so the form persists exactly what's shown.
+  void _push() {
+    final stored = <String>[];
+    void addGroup(String gid) {
+      stored.addAll(
+          _groupEntries(gid).where((e) => !e.custom).map((e) => e.value));
+      stored.addAll(_groupEntries(gid)
+          .where((e) => e.custom)
+          .map((e) => _customStoredValue(e.group, e.value)));
+    }
+
+    for (final g in _tagGroups) {
+      addGroup(g.id);
+    }
+    addGroup(_otherBucketGroup.id);
+    widget.onChanged(stored);
+  }
+
+  void _togglePreset(_TagGroup group, String id) {
+    setState(() {
+      final idx = _entries.indexWhere(
+          (e) => !e.custom && e.group == group.id && e.value == id);
+      if (idx >= 0) {
+        _entries.removeAt(idx);
+      } else {
+        _entries.add(_TagEntry(group: group.id, value: id, custom: false));
+      }
+    });
+    _push();
+  }
+
+  void _toggleOtherInput(String group) {
+    setState(() {
+      _otherOpen[group] = !(_otherOpen[group] ?? false);
+      _otherErrors.remove(group);
+    });
+  }
+
+  void _addCustom(String group) {
+    final ctrl = _controllerFor(group);
+    final text = ctrl.text.trim();
+    if (text.isEmpty) {
+      setState(() => _otherErrors[group] = 'Type a tag first.');
+      return;
+    }
+    if (text.length > _maxCustomTagLength) {
+      setState(() => _otherErrors[group] =
+          'Keep it under $_maxCustomTagLength characters.');
+      return;
+    }
+    final lower = text.toLowerCase();
+    final groupPresets = _tagGroups.firstWhere((g) => g.id == group).presets;
+    if (groupPresets.any((p) => p.id.toLowerCase() == lower)) {
+      setState(() => _otherErrors[group] =
+          'That is already a preset option — tap it above instead.');
+      return;
+    }
+    if (_groupEntries(group)
+        .any((e) => e.custom && e.value.toLowerCase() == lower)) {
+      setState(() => _otherErrors[group] = 'That tag is already added.');
+      return;
+    }
+    setState(() {
+      _entries.add(_TagEntry(group: group, value: text, custom: true));
+      ctrl.clear();
+      _otherErrors.remove(group);
+    });
+    _push();
+  }
+
+  void _removeCustom(String group, String value) {
+    setState(() {
+      _entries.removeWhere(
+          (e) => e.custom && e.group == group && e.value == value);
+    });
+    _push();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final otherEntries = _groupEntries(_otherBucketGroup.id);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final group in _tagGroups) ...[
+          _buildGroup(group),
+          const SizedBox(height: 22),
+        ],
+        if (otherEntries.isNotEmpty) ...[
+          _buildGroupLabel(_otherBucketGroup),
+          _buildCustomChips(_otherBucketGroup, otherEntries),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildGroup(_TagGroup group) {
+    final entries = _groupEntries(group.id);
+    final customs = entries.where((e) => e.custom).toList();
+    final isOpen = _otherOpen[group.id] ?? false;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildGroupLabel(group),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final p in group.presets)
+              _TagChip(
+                label: p.label,
+                icon: p.icon,
+                color: group.color,
+                onColor: group.onColor,
+                selected: entries.any((e) => !e.custom && e.value == p.id),
+                onTap: () => _togglePreset(group, p.id),
+              ),
+            _OtherTagChip(
+              color: group.color,
+              open: isOpen,
+              onTap: () => _toggleOtherInput(group.id),
+            ),
+          ],
+        ),
+        // Custom chips animate in/out via AnimatedSwitcher — only on user
+        // interaction; the initial render (edit-mode pre-fill) is static.
+        _buildCustomChips(group, customs),
+        if (isOpen) ...[
+          const SizedBox(height: 10),
+          _buildOtherInput(group),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildCustomChips(_TagGroup group, List<_TagEntry> customs) {
+    return _CustomChipSwitcher(
+      keyValue: customs.isEmpty
+          ? null
+          : customs.map((e) => e.value.toLowerCase()).join('\u0001'),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (final e in customs)
+            _CustomTagChip(
+              label: e.value,
+              color: group.color,
+              onColor: group.onColor,
+              onRemove: () => _removeCustom(group.id, e.value),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGroupLabel(_TagGroup group) {
+    return Row(
+      children: [
+        Container(
+          width: 26,
+          height: 26,
+          decoration: BoxDecoration(
+            color: group.color.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(group.icon, size: 14, color: group.color),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          group.label,
+          style: AppConstants.bodyStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: AppConstants.secondary,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOtherInput(_TagGroup group) {
+    final ctrl = _controllerFor(group.id);
+    final error = _otherErrors[group.id];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: TextField(
+                controller: ctrl,
+                autofocus: true,
+                maxLength: _maxCustomTagLength,
+                style: AppConstants.bodyStyle(fontSize: 14),
+                decoration: InputDecoration(
+                  counterText: '',
+                  isDense: true,
+                  hintText: 'Add your own ${group.label.toLowerCase()}…',
+                  filled: true,
+                  fillColor: Colors.white,
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  border: OutlineInputBorder(
+                    borderRadius: AppConstants.buttonRadius,
+                    borderSide:
+                        const BorderSide(color: AppConstants.borderGray),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: AppConstants.buttonRadius,
+                    borderSide:
+                        const BorderSide(color: AppConstants.borderGray),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: AppConstants.buttonRadius,
+                    borderSide: BorderSide(color: group.color, width: 1.5),
+                  ),
+                ),
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _addCustom(group.id),
+              ),
+            ),
+            const SizedBox(width: 8),
+            _AddCustomButton(
+              color: group.color,
+              onColor: group.onColor,
+              onPressed: () => _addCustom(group.id),
+            ),
+          ],
+        ),
+        if (error != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            error,
+            style: AppConstants.bodyStyle(
+              fontSize: 12,
+              color: AppConstants.error,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// One preset chip with a subtle "pop" on tap (quick scale up ~1.07 then
+/// settle back) and an animated fill/border/color transition on selection.
+/// Colors come from the owning [_TagGroup]. The animation only plays on user
+/// interaction — the initial render (edit-mode pre-fill) is static.
+class _TagChip extends StatefulWidget {
+  final String label;
+  final IconData? icon; // null → text-only chip (used by the category row)
+  final Color color;
+  final Color onColor;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _TagChip({
+    required this.label,
+    this.icon,
+    required this.color,
+    required this.onColor,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  State<_TagChip> createState() => _TagChipState();
+}
+
+class _TagChipState extends State<_TagChip> with SingleTickerProviderStateMixin {
+  late final AnimationController _pop = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 240),
+  );
+  late final Animation<double> _scale = TweenSequence<double>([
+    TweenSequenceItem(
+      tween: Tween(begin: 1.0, end: 1.07)
+          .chain(CurveTween(curve: Curves.easeOut)),
+      weight: 45,
+    ),
+    TweenSequenceItem(
+      tween: Tween(begin: 1.07, end: 1.0)
+          .chain(CurveTween(curve: Curves.easeInOut)),
+      weight: 55,
+    ),
+  ]).animate(_pop);
+
+  @override
+  void dispose() {
+    _pop.dispose();
+    super.dispose();
+  }
+
+  void _handleTap() {
+    _pop.forward(from: 0);
+    widget.onTap();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = widget.selected;
+    // Unselected chips stay uniform (white fill, muted carob text, suede
+    // border); selection fills the chip with the group's accent color and
+    // swaps the content to the group's on-color.
+    final offColor = AppConstants.secondary.withValues(alpha: 0.65);
+
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: widget.label,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: _handleTap,
+        child: AnimatedBuilder(
+          animation: _scale,
+          builder: (context, child) =>
+              Transform.scale(scale: _scale.value, child: child),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeInOut,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: selected ? widget.color : Colors.white,
+              borderRadius: AppConstants.stadiumRadius,
+              border: Border.all(
+                color: selected ? widget.color : AppConstants.borderGray,
+                width: 1.5,
+              ),
+              boxShadow: selected
+                  ? [
+                      BoxShadow(
+                        color: widget.color.withValues(alpha: 0.25),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (widget.icon != null) ...[
+                  Icon(widget.icon,
+                      size: 16, color: selected ? widget.onColor : offColor),
+                  const SizedBox(width: 6),
+                ],
+                Text(
+                  widget.label,
+                  style: AppConstants.bodyStyle(
+                    fontSize: 13,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                    color: selected ? widget.onColor : offColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A selected custom tag chip. Always shown in the selected (filled) state;
+/// tapping removes it from the selection entirely (custom entries have no
+/// reason to persist as an option once unchecked).
+class _CustomTagChip extends StatefulWidget {
+  final String label;
+  final Color color;
+  final Color onColor;
+  final VoidCallback onRemove;
+
+  const _CustomTagChip({
+    required this.label,
+    required this.color,
+    required this.onColor,
+    required this.onRemove,
+  });
+
+  @override
+  State<_CustomTagChip> createState() => _CustomTagChipState();
+}
+
+class _CustomTagChipState extends State<_CustomTagChip>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pop = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 240),
+  );
+  late final Animation<double> _scale = TweenSequence<double>([
+    TweenSequenceItem(
+      tween: Tween(begin: 1.0, end: 1.07)
+          .chain(CurveTween(curve: Curves.easeOut)),
+      weight: 45,
+    ),
+    TweenSequenceItem(
+      tween: Tween(begin: 1.07, end: 1.0)
+          .chain(CurveTween(curve: Curves.easeInOut)),
+      weight: 55,
+    ),
+  ]).animate(_pop);
+
+  @override
+  void dispose() {
+    _pop.dispose();
+    super.dispose();
+  }
+
+  void _handleRemove() {
+    _pop.forward(from: 0);
+    widget.onRemove();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'Remove ${widget.label}',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: _handleRemove,
+        child: AnimatedBuilder(
+          animation: _scale,
+          builder: (context, child) =>
+              Transform.scale(scale: _scale.value, child: child),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: widget.color,
+              borderRadius: AppConstants.stadiumRadius,
+              border: Border.all(color: widget.color, width: 1.5),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.close, size: 14, color: widget.onColor),
+                const SizedBox(width: 6),
+                Text(
+                  widget.label,
+                  style: AppConstants.bodyStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: widget.onColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The "+ Other" chip per group. Dashed border + distinct icon signal that it
+/// adds a custom value rather than selecting a fixed option; tapping toggles
+/// the group's inline text input.
+class _OtherTagChip extends StatelessWidget {
+  final Color color;
+  final bool open;
+  final VoidCallback onTap;
+
+  const _OtherTagChip({
+    required this.color,
+    required this.open,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: open ? 'Close input' : 'Add your own',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+          decoration: BoxDecoration(
+            color: open ? color.withValues(alpha: 0.08) : Colors.white,
+            borderRadius: AppConstants.stadiumRadius,
+          ),
+          child: CustomPaint(
+            painter: _DashedBorderPainter(
+              color: color.withValues(alpha: open ? 0.95 : 0.55),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(open ? Icons.close : Icons.add, size: 15, color: color),
+                  const SizedBox(width: 5),
+                  Text(
+                    open ? 'Close' : 'Other',
+                    style: AppConstants.bodyStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: color,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Paints a dashed rounded-rect border (used for the "+ Other" chip so it
+/// reads as "add your own" rather than a fixed option).
+class _DashedBorderPainter extends CustomPainter {
+  final Color color;
+  static const double _dashLength = 5;
+  static const double _gapLength = 4;
+
+  _DashedBorderPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5
+      ..strokeCap = StrokeCap.round;
+    final path = Path()
+      ..addRRect(RRect.fromRectAndRadius(
+        Offset.zero & size,
+        Radius.circular(size.height / 2),
+      ));
+    for (final metric in path.computeMetrics()) {
+      var distance = 0.0;
+      while (distance < metric.length) {
+        canvas.drawPath(
+          metric.extractPath(distance, distance + _dashLength),
+          paint,
+        );
+        distance += _dashLength + _gapLength;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DashedBorderPainter oldDelegate) =>
+      oldDelegate.color != color;
+}
+
+/// Small filled "+ Add" button beside the inline custom-tag input.
+class _AddCustomButton extends StatelessWidget {
+  final Color color;
+  final Color onColor;
+  final VoidCallback onPressed;
+
+  const _AddCustomButton({
+    required this.color,
+    required this.onColor,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: color,
+      borderRadius: AppConstants.buttonRadius,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: AppConstants.buttonRadius,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.add, size: 16, color: onColor),
+              const SizedBox(width: 4),
+              Text(
+                'Add',
+                style: AppConstants.bodyStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: onColor,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Fade/scale switcher for custom chips — animates chips in/out on add/remove
+/// (user interaction) and stays static on the initial render. Both the old
+/// and new children stay left-aligned while they cross-fade, so the row
+/// slides in place instead of re-centering.
+class _CustomChipSwitcher extends StatelessWidget {
+  /// Drives the transition: changes → animate; null → collapsed (nothing).
+  final String? keyValue;
+  final Widget child;
+
+  const _CustomChipSwitcher({
+    required this.keyValue,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final collapsed = keyValue == null;
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 240),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      layoutBuilder: (currentChild, previousChildren) => Stack(
+        alignment: Alignment.centerLeft,
+        children: [...previousChildren, ?currentChild],
+      ),
+      transitionBuilder: (child, animation) => FadeTransition(
+        opacity: animation,
+        child: ScaleTransition(
+          scale: Tween<double>(begin: 0.9, end: 1).animate(animation),
+          child: child,
+        ),
+      ),
+      child: collapsed
+          ? const SizedBox.shrink()
+          : Padding(
+              key: ValueKey(keyValue),
+              padding: const EdgeInsets.only(top: 10),
+              child: child,
+            ),
+    );
+  }
+}
+
+/// Single-select chip row (radio-style, replaces the old dropdown pattern).
+///
+/// Tapping a preset chip selects it and deselects the previous selection; the
+/// dashed "+ Other" chip reveals an inline text input for a custom value.
+/// Only one value can be active at a time, and picking a preset fully replaces
+/// any custom value. Reports the active VALUE (a preset value or the custom
+/// text) up via [onChanged]. Display labels are decoupled from stored values
+/// via [presetLabels] (e.g. 'US' → 'US (American)'), so chips can read nicely
+/// while the persisted value stays compact.
+class _PresetChipSelector extends StatefulWidget {
+  final String initialValue;
+  final List<String> presets;
+
+  /// Optional display label per preset value — the chip shows
+  /// `presetLabels[value] ?? value`, while the selected/reported value stays
+  /// the raw preset value.
+  final Map<String, String>? presetLabels;
+
+  /// Hint text for the inline custom-value input.
+  final String otherHint;
+
+  /// Error shown when the custom input is submitted empty.
+  final String emptyError;
+
+  /// Error shown when the custom input duplicates a preset value.
+  final String duplicateError;
+
+  final ValueChanged<String> onChanged;
+
+  const _PresetChipSelector({
+    super.key,
+    required this.initialValue,
+    required this.presets,
+    this.presetLabels,
+    this.otherHint = 'Add your own…',
+    this.emptyError = 'Type a value first.',
+    this.duplicateError =
+        'That is already an option — tap it above instead.',
+    required this.onChanged,
+  });
+
+  @override
+  State<_PresetChipSelector> createState() => _PresetChipSelectorState();
+}
+
+class _PresetChipSelectorState extends State<_PresetChipSelector> {
+  // Matches the rest of the seller UI's selected chips (burnished clay fill).
+  static const Color _color = AppConstants.primary;
+  static const Color _onColor = AppConstants.surfaceLight;
+
+  String _presetLabel(String value) => widget.presetLabels?[value] ?? value;
+
+  late String _selected = widget.initialValue;
+  // Fallback preset when a custom value is removed. Empty presets (e.g. a
+  // size row with no sizes) make this empty — removing the custom simply
+  // leaves nothing selected.
+  late String _preset = widget.presets.isEmpty
+      ? ''
+      : (widget.presets.contains(widget.initialValue)
+          ? widget.initialValue
+          : widget.presets.first);
+  late String? _custom =
+      widget.initialValue.isEmpty || widget.presets.contains(widget.initialValue)
+          ? null
+          : widget.initialValue;
+
+  bool _otherOpen = false;
+  String? _otherError;
+  final TextEditingController _ctrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _selectPreset(String value) {
+    setState(() {
+      _selected = value;
+      _preset = value;
+      _custom = null;
+      _otherOpen = false;
+      _otherError = null;
+    });
+    _ctrl.clear();
+    widget.onChanged(value);
+  }
+
+  void _toggleOther() {
+    setState(() {
+      _otherOpen = !_otherOpen;
+      _otherError = null;
+      if (_otherOpen) _ctrl.text = _custom ?? '';
+    });
+  }
+
+  void _submitCustom() {
+    final text = _ctrl.text.trim();
+    if (text.isEmpty) {
+      setState(() => _otherError = widget.emptyError);
+      return;
+    }
+    if (text.length > _maxCustomTagLength) {
+      setState(() => _otherError =
+          'Keep it under $_maxCustomTagLength characters.');
+      return;
+    }
+    final lower = text.toLowerCase();
+    if (widget.presets.any((p) => p.toLowerCase() == lower)) {
+      setState(() => _otherError = widget.duplicateError);
+      return;
+    }
+    setState(() {
+      _selected = text;
+      _custom = text;
+      _otherOpen = false;
+      _otherError = null;
+    });
+    _ctrl.clear();
+    widget.onChanged(text);
+  }
+
+  void _removeCustom() {
+    // Removing an active custom value reverts to the last selected preset
+    // (e.g. category custom → 'Casual'), keeping a valid selection active.
+    setState(() {
+      _selected = _preset;
+      _custom = null;
+      _otherOpen = false;
+      _otherError = null;
+    });
+    _ctrl.clear();
+    widget.onChanged(_preset);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // The custom chip below is only constructed when a custom value exists:
+    // eager evaluation of a `!` on a `late` field would crash the build
+    // whenever no custom value is active (the default state).
+    final custom = _custom;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final value in widget.presets)
+              _TagChip(
+                label: _presetLabel(value),
+                color: _color,
+                onColor: _onColor,
+                selected: _selected == value,
+                onTap: () => _selectPreset(value),
+              ),
+            _OtherTagChip(
+              color: _color,
+              open: _otherOpen,
+              onTap: _toggleOther,
+            ),
+          ],
+        ),
+        // Active custom value chip — animates in/out on add/remove.
+        _CustomChipSwitcher(
+          keyValue: custom?.toLowerCase(),
+          child: custom == null
+              ? const SizedBox.shrink()
+              : _CustomTagChip(
+                  label: custom,
+                  color: _color,
+                  onColor: _onColor,
+                  onRemove: _removeCustom,
+                ),
+        ),
+        if (_otherOpen) ...[const SizedBox(height: 10), _buildOtherInput()],
+      ],
+    );
+  }
+
+  Widget _buildOtherInput() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _ctrl,
+                autofocus: true,
+                maxLength: _maxCustomTagLength,
+                style: AppConstants.bodyStyle(fontSize: 14),
+                decoration: InputDecoration(
+                  counterText: '',
+                  isDense: true,
+                  hintText: widget.otherHint,
+                  filled: true,
+                  fillColor: Colors.white,
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  border: OutlineInputBorder(
+                    borderRadius: AppConstants.buttonRadius,
+                    borderSide:
+                        const BorderSide(color: AppConstants.borderGray),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: AppConstants.buttonRadius,
+                    borderSide:
+                        const BorderSide(color: AppConstants.borderGray),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: AppConstants.buttonRadius,
+                    borderSide: BorderSide(color: _color, width: 1.5),
+                  ),
+                ),
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _submitCustom(),
+              ),
+            ),
+            const SizedBox(width: 8),
+            _AddCustomButton(
+              color: _color,
+              onColor: _onColor,
+              onPressed: _submitCustom,
+            ),
+          ],
+        ),
+        if (_otherError != null) ...[const SizedBox(height: 6), _buildError()],
+      ],
+    );
+  }
+
+  Widget _buildError() {
+    return Text(
+      _otherError!,
+      style: AppConstants.bodyStyle(fontSize: 12, color: AppConstants.error),
+    );
+  }
+}
+
+/// Multi-select size chip row for the variant sheet.
+///
+/// Checkbox-style: any number of preset sizes can be selected at once (each
+/// becomes its own variant on save), and the dashed "+ Other" chip adds
+/// custom size entries that stay in the selection. Reuses the same chip
+/// widgets and animations as the tag selector.
+class _SizeMultiSelector extends StatefulWidget {
+  final List<String> initialSelected;
+  final List<String> presets;
+  final String otherHint;
+  final String emptyError;
+  final String duplicateError;
+  final ValueChanged<List<String>> onChanged;
+
+  const _SizeMultiSelector({
+    super.key,
+    required this.initialSelected,
+    required this.presets,
+    this.otherHint = 'Add your own…',
+    this.emptyError = 'Type a value first.',
+    this.duplicateError =
+        'That is already an option — tap it above instead.',
+    required this.onChanged,
+  });
+
+  @override
+  State<_SizeMultiSelector> createState() => _SizeMultiSelectorState();
+}
+
+class _SizeMultiSelectorState extends State<_SizeMultiSelector> {
+  // Matches the rest of the seller UI's selected chips (burnished clay fill).
+  static const Color _color = AppConstants.primary;
+  static const Color _onColor = AppConstants.surfaceLight;
+
+  late final List<String> _selected = List.of(widget.initialSelected);
+
+  bool _otherOpen = false;
+  String? _otherError;
+  final TextEditingController _ctrl = TextEditingController();
+
+  // Custom entries = selected values that aren't presets (typed via
+  // "+ Other", or a saved custom size that isn't in the preset list).
+  List<String> get _customs =>
+      _selected.where((s) => !widget.presets.contains(s)).toList();
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _toggle(String value) {
+    setState(() {
+      if (_selected.contains(value)) {
+        _selected.remove(value);
+      } else {
+        _selected.add(value);
+      }
+    });
+    widget.onChanged(List.unmodifiable(_selected));
+  }
+
+  void _toggleOther() {
+    setState(() {
+      _otherOpen = !_otherOpen;
+      _otherError = null;
+    });
+  }
+
+  void _submitCustom() {
+    final text = _ctrl.text.trim();
+    if (text.isEmpty) {
+      setState(() => _otherError = widget.emptyError);
+      return;
+    }
+    if (text.length > _maxCustomTagLength) {
+      setState(() => _otherError =
+          'Keep it under $_maxCustomTagLength characters.');
+      return;
+    }
+    final lower = text.toLowerCase();
+    final exists = _selected.any((s) => s.toLowerCase() == lower) ||
+        widget.presets.any((p) => p.toLowerCase() == lower);
+    if (exists) {
+      setState(() => _otherError = widget.duplicateError);
+      return;
+    }
+    setState(() {
+      _selected.add(text);
+      _otherError = null;
+      // Keep the input open and cleared so more custom sizes can be added.
+      _ctrl.clear();
+    });
+    widget.onChanged(List.unmodifiable(_selected));
+  }
+
+  void _removeCustom(String value) {
+    setState(() => _selected.remove(value));
+    widget.onChanged(List.unmodifiable(_selected));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final customs = _customs;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final size in widget.presets)
+              _TagChip(
+                label: size,
+                color: _color,
+                onColor: _onColor,
+                selected: _selected.contains(size),
+                onTap: () => _toggle(size),
+              ),
+            _OtherTagChip(
+              color: _color,
+              open: _otherOpen,
+              onTap: _toggleOther,
+            ),
+          ],
+        ),
+        // Custom size chips animate in/out on add/remove (user interaction
+        // only — the initial edit-mode pre-fill renders statically).
+        _CustomChipSwitcher(
+          keyValue: customs.isEmpty
+              ? null
+              : customs.map((s) => s.toLowerCase()).join('\u0001'),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final size in customs)
+                _CustomTagChip(
+                  label: size,
+                  color: _color,
+                  onColor: _onColor,
+                  onRemove: () => _removeCustom(size),
+                ),
+            ],
+          ),
+        ),
+        if (_otherOpen) ...[const SizedBox(height: 10), _buildOtherInput()],
+      ],
+    );
+  }
+
+  Widget _buildOtherInput() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _ctrl,
+                autofocus: true,
+                maxLength: _maxCustomTagLength,
+                style: AppConstants.bodyStyle(fontSize: 14),
+                decoration: InputDecoration(
+                  counterText: '',
+                  isDense: true,
+                  hintText: widget.otherHint,
+                  filled: true,
+                  fillColor: Colors.white,
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  border: OutlineInputBorder(
+                    borderRadius: AppConstants.buttonRadius,
+                    borderSide:
+                        const BorderSide(color: AppConstants.borderGray),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: AppConstants.buttonRadius,
+                    borderSide:
+                        const BorderSide(color: AppConstants.borderGray),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: AppConstants.buttonRadius,
+                    borderSide: BorderSide(color: _color, width: 1.5),
+                  ),
+                ),
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _submitCustom(),
+              ),
+            ),
+            const SizedBox(width: 8),
+            _AddCustomButton(
+              color: _color,
+              onColor: _onColor,
+              onPressed: _submitCustom,
+            ),
+          ],
+        ),
+        if (_otherError != null) ...[const SizedBox(height: 6), _buildError()],
+      ],
+    );
+  }
+
+  Widget _buildError() {
+    return Text(
+      _otherError!,
+      style: AppConstants.bodyStyle(fontSize: 12, color: AppConstants.error),
     );
   }
 }

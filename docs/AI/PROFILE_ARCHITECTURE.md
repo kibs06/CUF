@@ -236,7 +236,7 @@ This is the **main profile screen** used by customers. It is a `StatefulWidget` 
    - Email (locked, grey background)
    - Phone Number (editable TextField)
    - Save Changes button
-3. **Notifications Panel** — "My Orders" row with 5 category icons (Unpaid, Processing, Shipped, Review, Returns) showing unread badge counts
+3. **Notifications Panel** — "My Orders" row with 5 category icons (Unpaid, Processing, Shipped, Review, Returns) showing real per-tab order counts (from `OrderProvider.myOrdersCounts`)
 4. **Settings Card** — Change Password, Terms & Privacy, Help & Support, About SoleVision
 5. **Seller Section** (if `userRole == 'seller'`) — Store link, Seller Status chip, Member Since
 6. **Logout Button** — Confirmation dialog → `auth.logout()`

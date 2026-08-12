@@ -49,7 +49,16 @@ class NotificationProvider extends ChangeNotifier {
       if (session != null) {
         _userId = session.user.id;
         loadUnreadCounts();
+        // Re-establish the live stream on fresh sign-in (the constructor
+        // only subscribes when the app starts already logged in). Without
+        // this, the badge goes stale and disagrees with the feed.
+        _subscribeToRealtime();
       } else {
+        // Cancel the live stream so the previous user's events can't
+        // repopulate the cleared state (and never leak to the next
+        // account that signs in).
+        _realtimeSub?.cancel();
+        _realtimeSub = null;
         _userId = null;
         _notifications = [];
         _unreadCounts = {
@@ -436,23 +445,24 @@ class NotificationProvider extends ChangeNotifier {
     if (_userId == null) return;
 
     // NOTE: .order() and .limit() are NOT supported by Supabase Realtime
-    // streams — sorting and capping are done client-side below.
+    // streams — sorting is done client-side below.
     _realtimeSub = Supabase.instance.client
         .from('notifications')
         .stream(primaryKey: ['id'])
         .eq('user_id', _userId!)
         .listen(
       (data) {
-        // Client-side filter: not soft-deleted, sort newest-first, cap at 50
+        // Client-side filter (defense in depth — RLS also excludes
+        // soft-deleted rows), then sort newest-first. Deliberately NO
+        // client-side cap: fetchNotifications is uncapped too, and capping
+        // here truncated the unread counts whenever a user had more than 50
+        // notifications, making the bell badge disagree with the feed.
         _notifications = data
             .where((row) => row['is_deleted'] != true)
             .map((row) =>
                 AppNotification.fromMap(Map<String, dynamic>.from(row)))
             .toList()
           ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-        if (_notifications.length > 50) {
-          _notifications = _notifications.sublist(0, 50);
-        }
         _recomputeUnreadCounts();
         notifyListeners();
       },

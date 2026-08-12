@@ -22,6 +22,30 @@ class OrderProvider extends ChangeNotifier {
   bool _isLoadingMyOrders = false;
   String? _myOrdersError;
 
+  /// Whether the customer's orders have been fetched at least once.
+  /// Lets the Profile "My Orders" panel trigger a single load so its
+  /// badge counts are populated without re-fetching on every build.
+  bool _myOrdersLoaded = false;
+
+  /// The auth user whose orders are currently cached. When the signed-in
+  /// user changes (or signs out), the cached orders are cleared so stale
+  /// counts are never shown to the next account.
+  String? _myOrdersUserId;
+
+  OrderProvider() {
+    Supabase.instance.client.auth.onAuthStateChange.listen((state) {
+      final uid = state.session?.user.id;
+      if (uid != _myOrdersUserId) {
+        _myOrdersUserId = uid;
+        _myOrders = [];
+        _filteredMyOrders = [];
+        _myOrdersLoaded = false;
+        _myOrdersError = null;
+        notifyListeners();
+      }
+    });
+  }
+
   List<Map<String, dynamic>> get orders => _orders;
   List<Map<String, dynamic>> get customizations => _customizations;
   List<Map<String, dynamic>> get profiles => _profiles;
@@ -43,6 +67,14 @@ class OrderProvider extends ChangeNotifier {
   bool get isLoadingMyOrders => _isLoadingMyOrders;
   String? get myOrdersError => _myOrdersError;
   String get myOrdersFilter => _myOrdersFilter;
+  bool get hasLoadedMyOrders => _myOrdersLoaded;
+
+  /// Counts of the customer's orders per My Orders tab, computed from the
+  /// same in-memory orders (and the same [matchesMyOrdersFilter] predicates)
+  /// as the tab lists themselves — so the Profile "My Orders" panel badges
+  /// always match what each tab shows.
+  Map<String, int> get myOrdersCounts =>
+      Map.unmodifiable(computeMyOrdersCounts(_myOrders));
 
   // Load Orders (UC019, UC023, UC025)
   Future<void> loadOrders() async {
@@ -216,6 +248,7 @@ class OrderProvider extends ChangeNotifier {
 
     try {
       _myOrders = await _orderService.fetchMyOrders();
+      _myOrdersLoaded = true;
       _applyMyOrdersFilter();
     } catch (e) {
       debugPrint('OrderProvider.loadMyOrders error: $e');
@@ -236,30 +269,9 @@ class OrderProvider extends ChangeNotifier {
   }
 
   void _applyMyOrdersFilter() {
-    if (_myOrdersFilter == 'all') {
-      _filteredMyOrders = List.from(_myOrders);
-      return;
-    }
-
-    _filteredMyOrders = _myOrders.where((order) {
-      final status = (order['status'] ?? '').toString().toLowerCase();
-      final paymentStatus = (order['payment_status'] ?? '').toString().toLowerCase();
-
-      switch (_myOrdersFilter) {
-        case 'unpaid':
-          return paymentStatus == 'unpaid' && status != 'cancelled';
-        case 'processing':
-          return status == 'pending' || status == 'placed' || status == 'preparing';
-        case 'shipped':
-          return status == 'ready';
-        case 'review':
-          return status == 'received';
-        case 'returns':
-          return status == 'cancelled';
-        default:
-          return true;
-      }
-    }).toList();
+    _filteredMyOrders = _myOrders
+        .where((order) => matchesMyOrdersFilter(order, _myOrdersFilter))
+        .toList();
   }
 
   // ── Delete cancelled order ────────────────────────────────────
@@ -383,6 +395,65 @@ class OrderProvider extends ChangeNotifier {
       return false;
     }
   }
+}
+
+/// The My Orders tab filter keys, in display order.
+const List<String> myOrdersFilterKeys = [
+  'all',
+  'unpaid',
+  'processing',
+  'shipped',
+  'review',
+  'returns',
+];
+
+/// Whether [order] belongs in the given My Orders tab ([filter]).
+///
+/// Single source of truth shared by the tab list filtering
+/// (`OrderProvider._applyMyOrdersFilter`) and the per-tab badge counts
+/// (`computeMyOrdersCounts`), so the Profile "My Orders" panel badges can
+/// never drift from the actual tab lists. Status/payment_status are matched
+/// case-insensitively, mirroring the legacy behavior.
+bool matchesMyOrdersFilter(Map<String, dynamic> order, String filter) {
+  final status = (order['status'] ?? '').toString().toLowerCase();
+  final paymentStatus =
+      (order['payment_status'] ?? '').toString().toLowerCase();
+
+  switch (filter) {
+    case 'unpaid':
+      return paymentStatus == 'unpaid' && status != 'cancelled';
+    case 'processing':
+      return status == 'pending' ||
+          status == 'placed' ||
+          status == 'preparing';
+    case 'shipped':
+      return status == 'ready';
+    case 'review':
+      return status == 'received';
+    case 'returns':
+      return status == 'cancelled';
+    default:
+      // 'all' (and any unknown key) matches every order.
+      return true;
+  }
+}
+
+/// Per-tab counts for a raw customer order list, keyed by [myOrdersFilterKeys].
+///
+/// Note that statuses with no tab home (`delivered`, `cancellation_requested`)
+/// are only counted under `all`.
+Map<String, int> computeMyOrdersCounts(List<Map<String, dynamic>> orders) {
+  final counts = <String, int>{
+    for (final key in myOrdersFilterKeys) key: 0,
+  };
+  for (final order in orders) {
+    for (final key in myOrdersFilterKeys) {
+      if (matchesMyOrdersFilter(order, key)) {
+        counts[key] = counts[key]! + 1;
+      }
+    }
+  }
+  return counts;
 }
 
 /// A customer order removed optimistically from the My Orders lists,

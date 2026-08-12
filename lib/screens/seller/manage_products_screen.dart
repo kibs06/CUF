@@ -482,6 +482,11 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
   }
 
   void _showProductActions(Map<String, dynamic> product) {
+    final active = _isActive(product);
+    final featured = _isFeatured(product);
+    final onSale = _isOnSale(product);
+    final stock = _totalStock(product);
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
@@ -490,94 +495,199 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
       ),
       builder: (ctx) => SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                product['name'] ?? 'Product',
-                style: AppConstants.headlineStyle(fontSize: 18),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              // ── Drag handle (same treatment as the Adjust Stock sheet) ──
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 3,
+                  decoration: BoxDecoration(
+                    color: AppConstants.primary,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
               ),
               const SizedBox(height: 16),
-              ListTile(
-                leading: const Icon(Icons.edit_outlined,
-                    color: AppConstants.primary),
-                title: Text('Edit',
-                    style: AppConstants.bodyStyle()),
-                onTap: () {
-                  Navigator.of(ctx).pop();
-                  _navigateToAddEdit(product: product);
-                },
+              // ── Product header: thumbnail · name · status · stock ──
+              Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: SizedBox(
+                      width: 52,
+                      height: 52,
+                      child: _productThumbnail(product),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          product['name'] ?? 'Product',
+                          style: AppConstants.bodyStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 6),
+                        // Status dot + label — same convention as the card
+                        // (green Active / red Inactive) — then stock count.
+                        Row(
+                          children: [
+                            Container(
+                              width: 7,
+                              height: 7,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: active
+                                    ? AppConstants.success
+                                    : AppConstants.error,
+                              ),
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              active ? 'Active' : 'Inactive',
+                              style: AppConstants.bodyStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: active
+                                    ? AppConstants.success
+                                    : AppConstants.error,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              stock == 0
+                                  ? '· Out of stock'
+                                  : '· $stock in stock',
+                              style: AppConstants.bodyStyle(
+                                fontSize: 11,
+                                color: AppConstants.secondary
+                                    .withValues(alpha: 0.6),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-              ListTile(
-                leading: const Icon(Icons.inventory_2_outlined,
-                    color: AppConstants.statusReadyColor),
-                title: Text('Adjust Stock',
-                    style: AppConstants.bodyStyle()),
-                onTap: () {
-                  Navigator.of(ctx).pop();
-                  _showStockEditor(product);
-                },
+              const SizedBox(height: 20),
+              // ── Quick actions — icon grid, 4 across ────────────────
+              // Built as Expanded children so a 5th action fits without a
+              // redesign (6+ would need wrapping — noted limitation).
+              Row(
+                children: [
+                  Expanded(
+                    child: _QuickActionButton(
+                      icon: Icons.edit_outlined,
+                      label: 'Edit',
+                      iconColor: AppConstants.primary,
+                      iconBg: AppConstants.primary.withValues(alpha: 0.10),
+                      onTap: () {
+                        Navigator.of(ctx).pop();
+                        _navigateToAddEdit(product: product);
+                      },
+                    ),
+                  ),
+                  Expanded(
+                    child: _QuickActionButton(
+                      icon: Icons.inventory_2_outlined,
+                      label: 'Adjust Stock',
+                      iconColor: AppConstants.primary,
+                      iconBg: AppConstants.primary.withValues(alpha: 0.10),
+                      onTap: () {
+                        Navigator.of(ctx).pop();
+                        _showStockEditor(product);
+                      },
+                    ),
+                  ),
+                  Expanded(
+                    child: _QuickActionButton(
+                      // Amber = the app's existing "featured" accent (the
+                      // same statusPendingColor used for the card's star
+                      // badge) — not an invented yellow.
+                      icon: featured ? Icons.star : Icons.star_border,
+                      label: featured
+                          ? 'Remove from featured'
+                          : 'Mark as featured',
+                      iconColor: AppConstants.statusPendingColor,
+                      iconBg:
+                          AppConstants.statusPendingColor.withValues(alpha: 0.15),
+                      onTap: () {
+                        Navigator.of(ctx).pop();
+                        _toggleFeatured(product);
+                      },
+                    ),
+                  ),
+                  Expanded(
+                    child: _QuickActionButton(
+                      icon: onSale
+                          ? Icons.local_offer
+                          : Icons.local_offer_outlined,
+                      label: onSale ? 'End sale' : 'Put on sale',
+                      iconColor: AppConstants.primary,
+                      iconBg: AppConstants.primary.withValues(alpha: 0.10),
+                      onTap: () {
+                        Navigator.of(ctx).pop();
+                        _toggleSale(product);
+                      },
+                    ),
+                  ),
+                ],
               ),
+              const SizedBox(height: 16),
+              const Divider(
+                height: 16,
+                color: AppConstants.borderGray,
+              ),
+              // ── Secondary action(s) — extensible row list ───────────
               ListTile(
+                contentPadding: EdgeInsets.zero,
                 leading: Icon(
-                  _isActive(product)
+                  active
                       ? Icons.visibility_off_outlined
                       : Icons.visibility_outlined,
                   color: AppConstants.statusPendingColor,
                 ),
                 title: Text(
-                  _isActive(product) ? 'Hide from customers' : 'Make active',
-                  style: AppConstants.bodyStyle(),
+                  active ? 'Hide from customers' : 'Make active',
+                  style: AppConstants.bodyStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
                 onTap: () {
                   Navigator.of(ctx).pop();
                   _toggleActive(product);
                 },
               ),
-              ListTile(
-                leading: Icon(
-                  _isFeatured(product) ? Icons.star : Icons.star_border,
-                  color: AppConstants.statusPendingColor,
-                ),
-                title: Text(
-                  _isFeatured(product)
-                      ? 'Remove from featured'
-                      : 'Mark as featured',
-                  style: AppConstants.bodyStyle(),
-                ),
-                onTap: () {
-                  Navigator.of(ctx).pop();
-                  _toggleFeatured(product);
-                },
+              const Divider(
+                height: 16,
+                color: AppConstants.borderGray,
               ),
+              // ── Destructive action — visually separated, keeps its
+              //    confirmation dialog untouched. ─────────────────────
               ListTile(
-                leading: Icon(
-                  _isOnSale(product)
-                      ? Icons.local_offer
-                      : Icons.local_offer_outlined,
-                  color: _isOnSale(product)
-                      ? AppConstants.error
-                      : AppConstants.primary,
-                ),
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.delete_outline,
+                    color: AppConstants.error),
                 title: Text(
-                  _isOnSale(product) ? 'End sale' : 'Put on sale',
-                  style: AppConstants.bodyStyle(),
+                  'Delete',
+                  style: AppConstants.bodyStyle(
+                    color: AppConstants.error,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
-                onTap: () {
-                  Navigator.of(ctx).pop();
-                  _toggleSale(product);
-                },
-              ),
-              const Divider(),
-              ListTile(
-                leading: const Icon(Icons.delete_outline, color: AppConstants.error),
-                title: Text('Delete',
-                    style:
-                        AppConstants.bodyStyle(color: AppConstants.error)),
                 onTap: () {
                   Navigator.of(ctx).pop();
                   _deleteProduct(product);
@@ -585,6 +695,37 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  /// 52×52 rounded thumbnail for the action-sheet header — the product's
+  /// primary image, or the same neutral placeholder the card uses.
+  Widget _productThumbnail(Map<String, dynamic> product) {
+    final imageUrl = _primaryImageUrl(product);
+    if (imageUrl == null) {
+      return Container(
+        color: AppConstants.borderGray.withValues(alpha: 0.3),
+        child: const Center(
+          child: Icon(Icons.image_outlined,
+              color: AppConstants.borderGray, size: 22),
+        ),
+      );
+    }
+    return CachedNetworkImage(
+      imageUrl: imageUrl,
+      fit: BoxFit.cover,
+      placeholder: (_, _) => Container(
+        color: AppConstants.borderGray.withValues(alpha: 0.3),
+        child: const Center(
+          child: Icon(Icons.image, color: AppConstants.borderGray),
+        ),
+      ),
+      errorWidget: (_, _, _) => Container(
+        color: AppConstants.borderGray.withValues(alpha: 0.3),
+        child: const Center(
+          child: Icon(Icons.broken_image, color: AppConstants.borderGray),
         ),
       ),
     );
@@ -1473,6 +1614,90 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
                   color: AppConstants.secondary.withValues(alpha: 0.5)),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A tappable icon-grid action for the product action sheet: a circular
+/// icon above a short label, with a subtle scale-down while pressed (the
+/// same pop feedback the product-form chips use). Sized for a comfortable
+/// tap target and built as an [Expanded] child so a 5th quick action can be
+/// added without a redesign (6+ would need wrapping).
+class _QuickActionButton extends StatefulWidget {
+  final IconData icon;
+  final String label;
+  final Color iconColor;
+  final Color iconBg;
+  final VoidCallback onTap;
+
+  const _QuickActionButton({
+    required this.icon,
+    required this.label,
+    required this.iconColor,
+    required this.iconBg,
+    required this.onTap,
+  });
+
+  @override
+  State<_QuickActionButton> createState() => _QuickActionButtonState();
+}
+
+class _QuickActionButtonState extends State<_QuickActionButton> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: widget.label,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapUp: (_) => setState(() => _pressed = false),
+        onTapCancel: () => setState(() => _pressed = false),
+        onTap: widget.onTap,
+        child: AnimatedScale(
+          scale: _pressed ? 0.92 : 1.0,
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOut,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Icon in a circular background
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: widget.iconBg,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(widget.icon, color: widget.iconColor, size: 22),
+              ),
+              const SizedBox(height: 6),
+              // Fixed 2-line label area so all four grid labels align;
+              // the label is centered vertically so one-line labels
+              // ("Edit") sit evenly with two-line ones ("Remove from
+              // featured").
+              SizedBox(
+                height: 26,
+                child: Center(
+                  child: Text(
+                    widget.label,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppConstants.bodyStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      height: 1.2,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

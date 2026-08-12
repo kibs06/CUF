@@ -22,6 +22,14 @@ class SellerOrderCard extends StatelessWidget {
   /// should only happen from the Orders tab / Order Detail screen.
   final bool showPrimaryAction;
 
+  /// Spacing below the card. Defaults to 12px so list items breathe.
+  ///
+  /// The Orders screen passes [EdgeInsets.zero] when the card sits inside a
+  /// swipe-to-delete [Slidable] — otherwise the bottom margin inflates the
+  /// pane height and the red delete area no longer matches the card box.
+  /// The Orders screen re-applies the 12px gap OUTSIDE the Slidable.
+  final EdgeInsetsGeometry margin;
+
   const SellerOrderCard({
     super.key,
     required this.order,
@@ -30,6 +38,7 @@ class SellerOrderCard extends StatelessWidget {
     this.onReject,
     this.isUpdating = false,
     this.showPrimaryAction = true,
+    this.margin = const EdgeInsets.only(bottom: 12),
   });
 
   @override
@@ -76,7 +85,7 @@ class SellerOrderCard extends StatelessWidget {
     }
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: margin,
       decoration: BoxDecoration(
         color: SellerTheme.card,
         borderRadius: BorderRadius.circular(18),

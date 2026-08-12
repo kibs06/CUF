@@ -9,6 +9,20 @@ class AppConstants {
   static const String publishableKey =
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBzY3p2YmZveWJxaGplcXNzaW13Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3NjU2NDIsImV4cCI6MjA5NzM0MTY0Mn0.31zMQ2VbrcMLYBENzozBht5O7PFwV0JDWH1UQ2ba7W8';
 
+  // --- PRODUCT SHARING (rich link previews) ---
+  // Server-rendered Open Graph endpoint (Supabase Edge Function
+  // `product-preview`, see supabase/functions/product-preview/index.ts).
+  // WhatsApp / Messenger / Facebook fetch this URL and read its meta tags
+  // to render a Shopee/Lazada-style preview card when a product is shared.
+  // When a custom domain is added later, point this at https://<domain>/p
+  // and update docs/AI/SHARE_PRODUCT_ARCHITECTURE.md + DeepLinkService.
+  static const String productShareBaseUrl =
+      'https://psczvbfoybqhjeqssimw.supabase.co/functions/v1/product-preview';
+
+  /// Shareable URL for a product (triggers the OG rich preview).
+  static String productShareUrl(String productId) =>
+      '$productShareBaseUrl/$productId';
+
   // --- MAPTILER ---
   static const String maptilerKey = 'ZsHghTkRWCoZDpjMxUir';
 
@@ -178,6 +192,25 @@ class AppConstants {
     'Other',
   ];
 
+  // --- PRODUCT CATEGORIES (canonical) ---
+  /// Canonical product categories, the single source of truth used by BOTH
+  /// the seller product form (category chip selector) and the customer home
+  /// category filter, so the two can never drift. Categories saved on
+  /// products that aren't in this list (legacy 'Other' values, older free
+  /// text, future presets) are still surfaced by the customer filter — the
+  /// provider unions this list with whatever categories actually exist on
+  /// products.
+  static const List<String> productCategories = [
+    'Casual',
+    'Formal',
+    'Sports',
+    'Sandals',
+    'Boots',
+    'Sneakers',
+    'Slip-ons',
+    'Custom',
+  ];
+
   // --- APP CONSTANTS & STATUSES ---
   static const String roleCustomer = 'customer';
   static const String roleSeller = 'seller';
@@ -192,6 +225,23 @@ class AppConstants {
   static const String statusPending = 'pending';
   static const String statusApproved = 'approved';
   static const String statusRejected = 'rejected';
+
+  // --- TIER 2 BUSINESS VERIFICATION (optional, decoupled from approval) ---
+  // seller_business_docs.verification_status values.
+  static const String bizStatusNone = 'none';
+  static const String bizStatusPending = 'pending';
+  static const String bizStatusVerified = 'verified';
+  static const String bizStatusRejected = 'rejected';
+
+  // --- SELLER PAYOUT RAILS (Tier 1 profile fields) ---
+  static const String payoutGcash = 'gcash';
+  static const String payoutBank = 'bank';
+
+  // --- PRIVATE VERIFICATION STORAGE ---
+  /// Private bucket for ID photos, selfies, barangay proofs and Tier 2
+  /// business docs. Owner-only + admin read (see migration
+  /// 20260812000000_add_seller_tiered_verification.sql). Never public.
+  static const String verificationDocsBucket = 'seller-verification-docs';
 
   // --- MOCK NOISE OVERLAY PATTERN PAINT ---
   // Renders a very fine organic-looking noise pattern using CustomPainter

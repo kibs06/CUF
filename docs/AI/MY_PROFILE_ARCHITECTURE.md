@@ -34,7 +34,7 @@ CustomerShell / SellerShell / AdminShell
 | Screen | `lib/screens/shared/profile_screen.dart` | The whole screen (1120 lines, all sections inline) |
 | Shim | `lib/screens/customer/profile_screen.dart` | `export '../shared/profile_screen.dart';` |
 | State | `lib/providers/auth_provider.dart` | `profile`, `currentUser`, `userRole`, `sellerStatus`, `updateProfile()`, `logout()` |
-| State | `lib/providers/notification_provider.dart` | `unreadCounts` → My Orders panel badges |
+| State | `lib/providers/order_provider.dart` | `myOrdersCounts` → My Orders panel badges (real per-tab order counts) |
 | State | `lib/providers/follow_provider.dart` | `followingCount` → Following stat |
 | State | `lib/providers/update_provider.dart` | `installedVersion`, `hasUnviewedUpdate` → What's New dot |
 | Service | `lib/services/profile_service.dart` | Avatar pick + upload (storage bucket `avatars`) + `profiles.avatar_url` update |
@@ -62,7 +62,7 @@ CustomerShell / SellerShell / AdminShell
 | `logout()` | Clears all state **first**, then `signOut()` + `BiometricService.clearCredentials()` (best-effort). |
 
 ### Providers consumed inline by ProfileScreen (context.watch)
-- `NotificationProvider.unreadCounts` — per-category **unread notification** counts (`notification_provider.dart:466-476`).
+- `OrderProvider.myOrdersCounts` — per-tab **real order counts** computed from the customer's loaded orders with the same predicates as the My Orders tabs (`order_provider.dart` → `matchesMyOrdersFilter` / `computeMyOrdersCounts`), so badges always match the tabs. A one-shot `loadMyOrders()` is triggered from `initState` if orders haven't been fetched yet.
 - `FollowProvider.followingCount` / `isLoaded`.
 - `UpdateProvider.installedVersion` / `hasUnviewedUpdate`.
 
@@ -74,7 +74,7 @@ CustomerShell / SellerShell / AdminShell
 |---------|--------|---------|
 | Header | `_buildHeader` :317 | CircleAvatar (network image or initials), camera overlay → `_uploadAvatar`, name + edit toggle icon, email, `SoleBadge` role, `_buildFollowingStat` (non-sellers) |
 | Edit panel | `_buildEditPanel` :427 | Collapsible via `_isEditing`; Full Name field, **email locked** (greyed w/ lock icon), Phone field, Save Changes button. Animated with `AnimatedSize`. |
-| Orders panel | `_buildNotificationsPanel` :529 | "My Orders" + View all → `MyOrdersScreen()`. 5 items (Unpaid/Processing/Shipped/Review/Returns), each a `_NotifItem(category, icon, label, filter)`; badge = `counts[category]`; tap → `MyOrdersScreen(initialFilter: item.filter)` |
+| Orders panel | `_buildNotificationsPanel` :529 | "My Orders" + View all → `MyOrdersScreen()`. 5 items (Unpaid/Processing/Shipped/Review/Returns), each a `_NotifItem(icon, label, filter)`; badge = `orderProvider.myOrdersCounts[filter]`; tap → `MyOrdersScreen(initialFilter: item.filter)` |
 | Settings | `_buildSettingsCard` :659 | 6 `_settingsRow` ListTiles (see §1) |
 | Seller section | `_buildSellerSection` :760 | `FutureBuilder` on `_sellerStoreFuture` (`StoreService.getMyStore()`); store name + Open/Closed pill + toggle switch (`_toggleStoreOpen` → `StoreService.toggleStoreOpen`); tapping row → `StoreProfileScreen(store)` or `CreateStoreScreen` if none; `SoleStatusChip(sellerStatus)`; Member Since (`profiles.created_at`) |
 | Logout | `_buildLogoutButton` :903 | Confirm dialog → `auth.logout()` |
@@ -118,7 +118,7 @@ RLS: everyone can SELECT; user can INSERT/UPDATE own row (`auth.uid() = id`); ad
 
 ## 7. Gotchas for AI Agents
 
-1. **The "My Orders" panel badges are UNREAD NOTIFICATION counts, not order counts** (`profile_screen.dart:531` → `notifProvider.unreadCounts`). They drift from the actual order lists: reading notifications drops badges, multiple notifications per order inflate them, `delivered`/POS orders mismatch tabs. The 5 categories mirror the My Orders tabs, but the data source is different. If a task says "badge count doesn't match the tab", this is the root cause — see `docs/AI/MY_ORDERS_ARCHITECTURE.md`.
+1. **The "My Orders" panel badges are REAL per-tab ORDER counts** (`profile_screen.dart:529` → `orderProvider.myOrdersCounts`, computed from the same loaded orders + predicates as the tabs). They previously showed unread-notification counts and drifted (reading notifications dropped badges, multiple notifications per order inflated them). If a task says "badge count doesn't match the tab", check `OrderProvider.myOrdersCounts` stays in sync with `_applyMyOrdersFilter` — both must use `matchesMyOrdersFilter`. See `docs/AI/MY_ORDERS_ARCHITECTURE.md`.
 2. **Don't create a separate edit screen** — the pattern is inline editing on the profile screen (`_isEditing` state). `EditProfileScreen` is dead code; don't revive it without a reason.
 3. **`_syncControllers` is called from `build`** — it's idempotent (guarded by `_loadedProfileId`) but be careful adding heavy work there.
 4. **Email is not editable** in the app (locked field); password changes go through a reset email, not a change-password form.

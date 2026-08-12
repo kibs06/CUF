@@ -427,6 +427,13 @@ enabled = true
 [functions.gcash-webhook]
 verify_jwt = false
 
+# product-preview is fetched by ANONYMOUS link-preview scrapers
+# (WhatsApp / Messenger / Facebook), so JWT verification is disabled —
+# otherwise every shared-link fetch would get a 401 before the function
+# runs. It only reads public product data (service role, server-side).
+[functions.product-preview]
+verify_jwt = false
+
 # create-gcash-payment-intent and get-payment-status use the default
 # (verify_jwt = true) — they require the customer's JWT.
 

@@ -24,6 +24,36 @@ class DeepLinkService {
       uri.host == 'checkout' &&
       uri.path.startsWith('/gcash');
 
+  /// The product ID when [uri] is a product share link, else null.
+  ///
+  /// Accepts both shapes so the handler is future-proof:
+  ///   1. the current edge-function URL
+  ///      https://…supabase.co/functions/v1/product-preview/{id}
+  ///   2. a future custom-domain clean link `https://<domain>/p/{id}`
+  ///
+  /// The ID is validated loosely (alphanumeric + dashes, ≤ 64 chars) — the
+  /// fetch itself is the real authority; anything else yields null.
+  static String? productIdFromLink(Uri uri) {
+    if (uri.scheme != 'https' && uri.scheme != 'http') return null;
+
+    final segments = uri.pathSegments.where((s) => s.isNotEmpty).toList();
+    String? id;
+    if (segments.length == 2 && segments[0] == 'p') {
+      id = segments[1];
+    } else if (segments.length == 4 &&
+        segments[0] == 'functions' &&
+        segments[1] == 'v1' &&
+        segments[2] == 'product-preview') {
+      id = segments[3];
+    }
+    if (id == null || id.isEmpty || id.length > 64) return null;
+    if (!RegExp(r'^[A-Za-z0-9-]+$').hasMatch(id)) return null;
+    return id;
+  }
+
+  /// Whether [uri] is a product share link (see [productIdFromLink]).
+  static bool isProductLink(Uri uri) => productIdFromLink(uri) != null;
+
   /// Live stream of in-app deep links (broadcast — multiple listeners OK).
   Stream<Uri> get uriStream => _appLinks.uriLinkStream;
 

@@ -477,13 +477,21 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
   }
 
   /// Share this product via the native share sheet.
+  ///
+  /// The message now includes the product's public URL, which points at the
+  /// `product-preview` edge function. Receiving apps (WhatsApp, Messenger,
+  /// Facebook, …) fetch that URL and render a rich preview card from its
+  /// Open Graph meta tags. Sharing stays text-only (no XFile) — the URL is
+  /// what triggers the preview, and it degrades gracefully to plain text.
   Future<void> _shareProduct() async {
     final name = widget.product['name'] ?? 'CUFMAI Footwear';
     final price = effectivePrice(widget.product);
     final priceStr = '₱${price.toStringAsFixed(2)}';
     final storeName = widget.product['store_name'] ?? 'CUFMAI';
+    final shareUrl =
+        AppConstants.productShareUrl(widget.product['id'].toString());
 
-    final text = 'Check out $name — only $priceStr at $storeName!\n\nBrowse more artisan footwear on the CUFMAI app.';
+    final text = 'Check out $name — only $priceStr at $storeName!\n$shareUrl';
 
     try {
       await SharePlus.instance.share(
