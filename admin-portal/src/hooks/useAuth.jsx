@@ -15,6 +15,17 @@ async function fetchProfile(userId) {
   return data
 }
 
+// Hard-enforcement gate for the portal: only an ACTIVE admin may use it.
+// Suspended accounts (even admins) are signed out immediately.
+function isBlocked(profile) {
+  return profile?.role !== ROLES.ADMIN || !!profile?.suspended
+}
+
+function blockReason(profile) {
+  if (profile?.suspended) return 'Your admin account has been suspended.'
+  return 'Access denied. This portal is for admins only.'
+}
+
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [profile, setProfile] = useState(null)
@@ -34,7 +45,7 @@ export function AuthProvider({ children }) {
       if (currentSession?.user) {
         try {
           const userProfile = await fetchProfile(currentSession.user.id)
-          if (userProfile?.role !== ROLES.ADMIN) {
+          if (isBlocked(userProfile)) {
             await supabase.auth.signOut()
             setAccessDenied(true)
             setProfile(null)
@@ -64,7 +75,7 @@ export function AuthProvider({ children }) {
 
       try {
         const userProfile = await fetchProfile(newSession.user.id)
-        if (userProfile?.role !== ROLES.ADMIN) {
+        if (isBlocked(userProfile)) {
           await supabase.auth.signOut()
           setAccessDenied(true)
           setProfile(null)
@@ -95,10 +106,10 @@ export function AuthProvider({ children }) {
     if (error) throw error
 
     const userProfile = await fetchProfile(data.user.id)
-    if (userProfile?.role !== ROLES.ADMIN) {
+    if (isBlocked(userProfile)) {
       await supabase.auth.signOut()
       setAccessDenied(true)
-      throw new Error('Access denied. This portal is for admins only.')
+      throw new Error(blockReason(userProfile))
     }
 
     setProfile(userProfile)

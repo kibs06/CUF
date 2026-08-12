@@ -23,9 +23,10 @@ function getAvatarColor(name) {
 export default function UserRow({ user, showSellerStatus, onView }) {
   const initials = getInitials(user.full_name, user.email)
   const avatarColor = getAvatarColor(user.full_name)
+  const suspended = !!user.suspended
 
   return (
-    <div className="group flex items-center gap-4 px-5 py-4 transition-colors hover:bg-[#FDFAF7]">
+    <div className={`group flex items-center gap-4 px-5 py-4 transition-colors hover:bg-[#FDFAF7] ${suspended ? 'bg-red-50/40' : ''}`}>
       {/* Avatar */}
       <div className="flex-shrink-0">
         {user.avatar_url ? (
@@ -45,8 +46,13 @@ export default function UserRow({ user, showSellerStatus, onView }) {
 
       {/* Name + email */}
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold text-[#3B2314]">
+        <p className="flex items-center gap-2 truncate text-sm font-semibold text-[#3B2314]">
           {user.full_name || 'Unnamed User'}
+          {suspended && (
+            <span className="flex-shrink-0 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-600">
+              Suspended
+            </span>
+          )}
         </p>
         <p className="truncate text-xs text-[#6B5C4E]">{user.email}</p>
       </div>

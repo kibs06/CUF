@@ -12,6 +12,12 @@
 
 -- Ensure the recursion-free helper exists even if this file is applied
 -- on a DB without the migration (idempotent).
+--
+-- ⚠️ 2026-08-13: kept in sync with migration
+-- 20260813000000_admin_suspension_enforcement.sql — is_admin() now also
+-- excludes suspended accounts so a banned admin loses console access
+-- instantly. If you re-run THIS file after that migration, do not use an
+-- older is_admin() body here or you will silently downgrade enforcement.
 CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS boolean
 LANGUAGE sql
@@ -21,7 +27,9 @@ SET search_path = public
 AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.profiles
-    WHERE id = auth.uid() AND role = 'admin'
+    WHERE id = auth.uid()
+      AND role = 'admin'
+      AND NOT COALESCE(suspended, false)
   );
 $$;
 

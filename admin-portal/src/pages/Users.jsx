@@ -29,6 +29,7 @@ function UsersSkeleton() {
 export default function Users() {
   const { data, isLoading, isError, error } = useUsers()
   const [activeTab, setActiveTab] = useState('All')
+  const [statusFilter, setStatusFilter] = useState('All')
   const [search, setSearch] = useState('')
   const [selectedUser, setSelectedUser] = useState(null)
 
@@ -36,26 +37,22 @@ export default function Users() {
 
   const q = search.trim().toLowerCase()
 
-  const filteredCustomers = useMemo(() => {
-    if (!q) return customers
-    return customers.filter(
-      (u) => u.full_name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q),
-    )
-  }, [customers, q])
+  // Filter by name/email and account status (active vs suspended).
+  const filterList = (list) => {
+    let out = list
+    if (q) {
+      out = out.filter(
+        (u) => u.full_name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q),
+      )
+    }
+    if (statusFilter === 'Active') out = out.filter((u) => !u.suspended)
+    if (statusFilter === 'Suspended') out = out.filter((u) => !!u.suspended)
+    return out
+  }
 
-  const filteredSellers = useMemo(() => {
-    if (!q) return sellers
-    return sellers.filter(
-      (u) => u.full_name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q),
-    )
-  }, [sellers, q])
-
-  const filteredAdmins = useMemo(() => {
-    if (!q) return admins
-    return admins.filter(
-      (u) => u.full_name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q),
-    )
-  }, [admins, q])
+  const filteredCustomers = useMemo(() => filterList(customers), [customers, q, statusFilter])
+  const filteredSellers = useMemo(() => filterList(sellers), [sellers, q, statusFilter])
+  const filteredAdmins = useMemo(() => filterList(admins), [admins, q, statusFilter])
 
   const tabs = [
     { key: 'All', color: 'bg-[#8B5A2B] text-white shadow-sm' },
@@ -66,9 +63,9 @@ export default function Users() {
 
   return (
     <div className="space-y-6">
-      {/* Tab bar + Search */}
+      {/* Tab bar + Search + Status filter */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {tabs.map((tab) => (
             <button
               key={tab.key}
@@ -90,6 +87,25 @@ export default function Users() {
                   {tab.count}
                 </span>
               )}
+            </button>
+          ))}
+
+          {/* Status filter chips */}
+          <span className="mx-1 h-6 w-px bg-[#D9D0C7]" />
+          {['All', 'Active', 'Suspended'].map((status) => (
+            <button
+              key={status}
+              type="button"
+              onClick={() => setStatusFilter(status)}
+              className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
+                statusFilter === status
+                  ? status === 'Suspended'
+                    ? 'bg-[#D64545] text-white'
+                    : 'bg-[#3B2314] text-white'
+                  : 'border border-[#D9D0C7] bg-white text-[#6B5C4E] hover:bg-[#F5F0EB]'
+              }`}
+            >
+              {status}
             </button>
           ))}
         </div>

@@ -173,6 +173,16 @@ class _AuthGateState extends State<AuthGate> {
   /// Routes to the correct shell based on the user's profile role.
   /// Wrapped in AnimatedSwitcher for a smooth fade transition.
   Widget _routeByRole(Map<String, dynamic> profile) {
+    // Hard ban gate: a suspended account never reaches any shell. RLS
+    // blocks their writes server-side; here we block the UI entirely and
+    // clear the session so they land on the login screen.
+    if (profile['suspended'] == true) {
+      return _SuspendedAccountScreen(
+        reason: profile['suspended_reason']?.toString(),
+        onSignOut: () => context.read<AuthProvider>().logout(),
+      );
+    }
+
     final role = profile['role']?.toString() ?? AppConstants.roleCustomer;
     final sellerStatus = profile['seller_status']?.toString() ?? 'none';
 
@@ -246,6 +256,106 @@ class _FirstTimeOrLoginRouterState extends State<_FirstTimeOrLoginRouter> {
 // Moved to lib/screens/auth/pending_approval_screen.dart (redesigned for
 // the tiered-verification signup: shows submitted Tier 1 items + explains
 // optional Tier 2). Imported at the top of this file.
+
+// ─── Suspended Account Screen ────────────────────────────────────
+/// Shown when the signed-in profile has `suspended = true`. Explains the
+/// ban and offers sign-out; the session is only cleared when the user
+/// taps the button (keeps them on this screen rather than silently
+/// flipping to login).
+class _SuspendedAccountScreen extends StatelessWidget {
+  final String? reason;
+  final VoidCallback onSignOut;
+
+  const _SuspendedAccountScreen({required this.reason, required this.onSignOut});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppConstants.surfaceLight,
+      body: Stack(
+        children: [
+          AppConstants.noiseOverlay(opacity: 0.03),
+          SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 72,
+                      height: 72,
+                      decoration: BoxDecoration(
+                        color: AppConstants.error.withValues(alpha: 0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.block_rounded,
+                        size: 36,
+                        color: AppConstants.error,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Text(
+                      'Account Suspended',
+                      style: AppConstants.headlineStyle(fontSize: 22),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Your account has been suspended. Please contact support if you believe this is a mistake.',
+                      style: AppConstants.bodyStyle(
+                        fontSize: 14,
+                        color: AppConstants.secondary.withValues(alpha: 0.6),
+                        height: 1.5,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    if (reason != null && reason!.trim().isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: AppConstants.cardRadius,
+                          border: Border.all(
+                            color: AppConstants.borderGray.withValues(alpha: 0.5),
+                          ),
+                        ),
+                        child: Text(
+                          reason!,
+                          style: AppConstants.bodyStyle(fontSize: 13),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 28),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: FilledButton.icon(
+                        onPressed: onSignOut,
+                        icon: const Icon(Icons.logout_rounded, size: 18),
+                        label: const Text('Sign out'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppConstants.primary,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: AppConstants.buttonRadius,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 // ─── Profile Error View ──────────────────────────────────────────
 /// Checks connectivity and shows either a timeout message or a

@@ -48,4 +48,8 @@ app.*.map.json
 dart_defines.json
 *.env
 nul
+
+# Local backup secrets + outputs (see backup/README)
+backup/config.ps1
+backup/backups/
 android/build/
