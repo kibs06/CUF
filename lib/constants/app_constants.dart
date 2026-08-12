@@ -237,6 +237,42 @@ class AppConstants {
   static const String payoutGcash = 'gcash';
   static const String payoutBank = 'bank';
 
+  // --- CUSTOMER SIGN-UP PROFILE FIELDS ---
+  /// Gender options offered at customer signup (optional field).
+  /// 'Self-describe' reveals a free-text field rather than hardcoding a
+  /// closed set — see lib/utils/customer_profile_fields.dart for the
+  /// validator that guards it.
+  static const List<String> customerGenderOptions = [
+    'Woman',
+    'Man',
+    'Prefer not to say',
+    'Self-describe',
+  ];
+
+  /// Minimum acceptable age for customer sign-up (COPPA-style).
+  /// Enforced by [validateBirthday] in lib/utils/customer_profile_fields.dart.
+  static const int minimumSignupAgeYears = 13;
+
+  /// Width options for the manual foot-profile entry (the lightweight
+  /// fallback to the AR scan). Stored verbatim in profiles.foot_width.
+  static const List<String> footWidthOptions = ['Narrow', 'Regular', 'Wide'];
+
+  // --- FOOT PROFILE SNAPSHOT (profiles columns, see migration
+  // 20260812130000_add_customer_profile_fields.sql) ---
+  // foot_profile_source values — the rest of the app (checkout, size
+  // recommendations, the reminder banner) uses these to grade confidence.
+  static const String footProfileArScan = 'ar_scan';
+  static const String footProfileManual = 'manual';
+  static const String footProfileSkipped = 'skipped';
+
+  /// Whether a customer has a usable foot profile (i.e. the reminder banner
+  /// should show). NULL (pre-feature accounts) counts as missing — 'skip'
+  /// must never mean "never ask again silently".
+  static bool needsFootProfile(dynamic source) {
+    final s = source?.toString();
+    return s == null || s.isEmpty || s == footProfileSkipped;
+  }
+
   // --- PRIVATE VERIFICATION STORAGE ---
   /// Private bucket for ID photos, selfies, barangay proofs and Tier 2
   /// business docs. Owner-only + admin read (see migration

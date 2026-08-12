@@ -123,6 +123,31 @@ class SupabaseService {
     return Map<String, dynamic>.from(data);
   }
 
+  /// Writes the foot-profile snapshot onto a profiles row and returns the
+  /// refreshed row. Full scan fidelity lives in `foot_measurements`; these
+  /// columns are the cheap snapshot other screens read (see migration
+  /// 20260812130000_add_customer_profile_fields.sql).
+  Future<Map<String, dynamic>> updateProfileFootSnapshot(
+    String profileId, {
+    double? sizeEu,
+    String? widthLabel,
+    required String source,
+  }) async {
+    final data = await _client
+        .from('profiles')
+        .update({
+          'foot_size_ph': sizeEu,
+          'foot_width': widthLabel,
+          'foot_profile_source': source,
+          'foot_profile_updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', profileId)
+        .select()
+        .single()
+        .timeout(_defaultTimeout);
+    return Map<String, dynamic>.from(data);
+  }
+
   Future<void> resetPassword(String email) async {
     await _client.auth.resetPasswordForEmail(email.trim());
   }

@@ -14,6 +14,8 @@ class SoleTextField extends StatelessWidget {
   final VoidCallback? onTap;
   final int maxLines;
   final Iterable<String>? autofillHints;
+  final bool autocorrect;
+  final bool enableSuggestions;
 
   const SoleTextField({
     super.key,
@@ -29,6 +31,11 @@ class SoleTextField extends StatelessWidget {
     this.onTap,
     this.maxLines = 1,
     this.autofillHints,
+    // Kept ON here (shared app-wide, incl. prose fields like search/review);
+    // fields that must not show the keyboard's spell-check underline opt
+    // out explicitly (see the login screen's email/password fields).
+    this.autocorrect = true,
+    this.enableSuggestions = true,
   });
 
   @override
@@ -53,6 +60,8 @@ class SoleTextField extends StatelessWidget {
           onTap: onTap,
           maxLines: maxLines,
           autofillHints: autofillHints,
+          autocorrect: autocorrect,
+          enableSuggestions: enableSuggestions,
           style: AppConstants.bodyStyle(fontSize: 15, color: AppConstants.secondary),
           decoration: InputDecoration(
             hintText: hintText,

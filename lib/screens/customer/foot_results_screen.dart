@@ -136,6 +136,26 @@ class _FootResultsScreenState extends State<FootResultsScreen> {
     setState(() => _isSaving = false);
 
     if (saved != null) {
+      // Stamp the profile snapshot so the rest of the app (checkout, size
+      // recommendations, the reminder banner) can grade this result by
+      // confidence: live-AR scans are 'ar_scan', paper-based camera scans
+      // are 'manual'. Full scan fidelity lives in foot_measurements — this
+      // is just the cheap snapshot column. Best-effort: a snapshot write
+      // failure must never fail the scan save the user just confirmed.
+      try {
+        await auth.saveFootProfile(
+          sizeEu: double.tryParse(saved.effectiveEuSize ?? ''),
+          source: _isArScan
+              ? AppConstants.footProfileArScan
+              : AppConstants.footProfileManual,
+        );
+      } catch (e) {
+        debugPrint('[FootResults] Foot profile snapshot write failed: $e');
+      }
+
+      // The snapshot write above is a new async gap — re-check before
+      // touching the context again.
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Foot size saved to your profile!'),

@@ -18,6 +18,7 @@ import '../../widgets/sale_price_tape.dart';
 import '../../widgets/sale_countdown_overlay.dart';
 import '../../widgets/shimmer_group.dart';
 import '../../widgets/cart_icon_button.dart';
+import '../../widgets/customer_foot_profile_banner.dart';
 import '../../widgets/chat/chat_view.dart';
 import 'product_detail_screen.dart';
 import 'tracking_screen.dart';
@@ -355,6 +356,16 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                         ),
                       ],
                     ),
+                  ),
+                ),
+
+                // Foot-profile reminder (skipped/incomplete profiles only).
+                // Quiet, dismissible-for-session, never a pop-up — one
+                // placement on the home screen.
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+                    child: const CustomerFootProfileBanner(),
                   ),
                 ),
 

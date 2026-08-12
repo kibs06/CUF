@@ -63,15 +63,18 @@ LoginScreen ──"Register"──▶ RoleChoiceScreen
               ┌─────────────────┴──────────────────┐
               ▼                                    ▼
    CustomerRegisterScreen               SellerApplicationFlow (4 steps)
-   (name/email/phone/password/terms)    Account → Identity → Community → Storefront
-              │                                    │
-   AuthProvider.signUpCustomer()       AuthProvider.signUpSeller(data)
-   seller_status = 'none'              seller_status = 'pending'
-              │                                    │
-              ▼                                    ▼
-        CustomerShell                     PendingApprovalScreen
-                                         (shows submitted Tier 1 items,
-                                          explains optional Tier 2)
+   (name/email/birthday/gender/         Account → Identity → Community → Storefront
+    phone/password/terms)                         │
+              │                                  AuthProvider.signUpSeller(data)
+   AuthProvider.signUpCustomer()                 seller_status = 'pending'
+   seller_status = 'none'                        │
+              │                                  ▼
+              ▼                            PendingApprovalScreen
+   FootProfileOnboardingScreen            (shows submitted Tier 1 items,
+   (AR scan / manual / skip)               explains optional Tier 2)
+   NEVER a hard gate — all paths │
+   land in the shell            ▼
+                          CustomerShell
 
 PendingApprovalScreen ──admin approve──▶ SellerShell (role flipped to seller)
 PendingApprovalScreen ──admin reject──▶ CustomerShell + rejection banner
@@ -87,13 +90,57 @@ unchanged in spirit: `pending` → `PendingApprovalScreen`, `seller` +
 ## Customer signup (UC001)
 
 1. RoleChoiceScreen → **Continue as customer**.
-2. `CustomerRegisterScreen` collects: full name, email, phone (optional),
-   password (+ live strength meter), confirm, terms checkbox.
+2. `CustomerRegisterScreen` collects: full name, email, **birthday
+   (required, 13+, date picker with a short why-we-ask line)**, **gender
+   (optional: Woman / Man / Prefer not to say / Self-describe → free-text
+   field)**, phone (optional), password (+ live strength meter), confirm,
+   terms checkbox.
 3. Duplicate-email check (`AuthService.emailExists`) runs BEFORE creating
    the account and surfaces inline on the email field.
 4. `AuthProvider.signUpCustomer(...)` → `AuthService.signUp(...)` creates
-   the Supabase user, upserts `profiles` with `role: 'customer'`,
-   `seller_status: 'none'` → auto-login → AuthGate → **CustomerShell**.
+   the Supabase user and upserts `profiles` (role `customer`,
+   `seller_status: 'none'`, `birthday`, `gender`) → auto-login.
+5. The register screen then `pushReplacement`s to
+   **`FootProfileOnboardingScreen`** (customer flow ONLY — sellers never see
+   it). **Account creation already succeeded at this point**; onboarding is
+   a separate, always-skippable step and never blocks access.
+6. Onboarding completion pops to the first route, where AuthGate has
+   already swapped the root to **CustomerShell**.
+
+---
+
+## Customer foot-profile onboarding (post-signup step)
+
+`lib/screens/auth/foot_profile_onboarding_screen.dart` — shown ONCE,
+immediately after signup, to introduce the AR foot scanner. Three paths,
+deliberately unequal in visual weight:
+
+| Path | Visual | Persists to profiles |
+|------|--------|----------------------|
+| **Scan with AR** (primary) | accent-filled card, larger, "RECOMMENDED" badge | `foot_profile_source = 'ar_scan'` — stamped by `FootResultsScreen` after the scan saves (full fidelity → `foot_measurements`) |
+| **Manual entry** (secondary) | outline card, inline EU size + width pickers | `foot_profile_source = 'manual'` + `foot_size_ph` + `foot_width` |
+| **Skip for now** (tertiary) | plain text button | `foot_profile_source = 'skipped'` (best-effort — never blocks) |
+
+- The AR path pushes the EXISTING `FootInstructionsScreen` (the pre-existing
+  scan flow) **on top of** the onboarding screen — so an abandoned scan,
+  camera-permission denial or AR failure lands the user back on onboarding
+  with the manual option in plain sight. Never a dead end.
+- Persistence goes through `AuthProvider.saveFootProfile(...)`
+  (`SupabaseService.updateProfileFootSnapshot`), which refreshes
+  `_profile` so watchers update immediately.
+- `FootResultsScreen._saveToProfile` also stamps the snapshot on EVERY scan
+  (profile-tab re-scans included): live AR → `'ar_scan'`, paper camera scan
+  → `'manual'` (the scan's `paperSize` decides).
+
+### Reminder banner (skipped / never-touched profiles)
+
+`lib/widgets/customer_foot_profile_banner.dart` — a quiet, dismissible card
+on the HOME screen (one placement, never a pop-up) shown when
+`profiles.foot_profile_source` is `NULL` (pre-feature accounts) or
+`'skipped'` (`AppConstants.needsFootProfile`). Dismiss hides it for the
+SESSION only (in-memory, per account) — "skip" never means "never ask again
+silently". The banner's **Complete** button reopens the same AR scan flow;
+it disappears for good once the profile snapshot is written.
 
 ---
 
@@ -215,7 +262,10 @@ manually upserts a minimal profile as a safety net.
 | Layer | File | Responsibility |
 |-------|------|----------------|
 | Entry | `lib/screens/auth/role_choice_screen.dart` | Role split (customer vs seller) |
-| UI | `lib/screens/auth/customer_register_screen.dart` | Slimmed customer signup |
+| UI | `lib/screens/auth/customer_register_screen.dart` | Customer signup (name, email, birthday 13+, optional gender, phone, password, terms) |
+| UI | `lib/screens/auth/foot_profile_onboarding_screen.dart` | Post-signup foot-profile step: AR scan / manual / skip (never a hard gate) |
+| Widget | `lib/widgets/customer_foot_profile_banner.dart` | Dismissible home-screen reminder for skipped/incomplete foot profiles |
+| Utils | `lib/utils/customer_profile_fields.dart` | Birthday/gender validation, EU size + width lists, `formatBirthdayForDb` |
 | UI | `lib/screens/auth/seller_application_flow.dart` | 4-step seller application + submission checklist |
 | State | `lib/providers/seller_application_controller.dart` | Seller form + upload + submit orchestration |
 | UI | `lib/screens/auth/pending_approval_screen.dart` | Post-apply locked screen (Tier 1 summary + Tier 2 explainer) |
@@ -253,3 +303,15 @@ manually upserts a minimal profile as a safety net.
    (admin review zoom uses `InteractiveViewer`).
 8. **Re-apply without a live session** throws a clear "sign in again"
    message (`ensureUser` requires password/fullName when no session).
+9. **Customer onboarding is NOT a hard gate**: account creation completes
+   BEFORE `FootProfileOnboardingScreen` exists; all three paths (and even
+   the Android back button) land in `CustomerShell`. `pushReplacement` (not
+   push) swaps the register screen for onboarding so the stack stays clean.
+10. **`foot_profile_source` semantics**: `'ar_scan'` (live AR tap-to-
+    measure) > `'manual'` (manual size picker OR paper camera scan) >
+    `'skipped'`/NULL (reminder banner shows). Full scan fidelity always
+    lives in `foot_measurements`; `profiles.foot_size_ph` is the cheap
+    snapshot (effective EU size as a number), `foot_width` is only set by
+    the manual picker. See migration `20260812130000_add_customer_profile_fields.sql`.
+11. **Birthday is sent as local YYYY-MM-DD** (`formatBirthdayForDb`) so the
+    DATE column never shifts across midnight via UTC serialization.

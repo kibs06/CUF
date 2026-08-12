@@ -4,6 +4,7 @@ import '../models/seller_application_data.dart';
 import '../services/auth_service.dart';
 import '../services/biometric_service.dart';
 import '../services/supabase_service.dart';
+import '../utils/auth_error_messages.dart';
 
 class AuthProvider extends ChangeNotifier {
   final AuthService _auth = AuthService.instance;
@@ -47,8 +48,8 @@ class AuthProvider extends ChangeNotifier {
       final profile = await _db.getProfile(user.id);
       _currentUser = {'id': user.id, 'email': user.email};
       _profile = profile;
-    } catch (e) {
-      _errorMessage = e.toString().replaceAll('Exception: ', '');
+    } catch (e, st) {
+      _errorMessage = friendlyAuthErrorMessage(e, stackTrace: st);
     }
 
     _isLoading = false;
@@ -77,8 +78,8 @@ class AuthProvider extends ChangeNotifier {
       _profile = res['profile'];
       onLoginHook?.call(_currentUser!['id'] as String);
       return true;
-    } catch (e) {
-      _errorMessage = e.toString().replaceAll('Exception: ', '');
+    } catch (e, st) {
+      _errorMessage = friendlyAuthErrorMessage(e, stackTrace: st);
       return false;
     } finally {
       _isLoading = false;
@@ -92,6 +93,8 @@ class AuthProvider extends ChangeNotifier {
     required String email,
     required String password,
     String? phone,
+    DateTime? birthday,
+    String? gender,
   }) async {
     _isLoading = true;
     _errorMessage = null;
@@ -104,6 +107,8 @@ class AuthProvider extends ChangeNotifier {
         password: password,
         sellerStatus: 'none',
         phone: phone,
+        birthday: birthday,
+        gender: gender,
       );
 
       // Auto login after sign up
@@ -111,8 +116,8 @@ class AuthProvider extends ChangeNotifier {
       _profile = res['profile'];
       onLoginHook?.call(_currentUser!['id'] as String);
       return true;
-    } catch (e) {
-      _errorMessage = e.toString().replaceAll('Exception: ', '');
+    } catch (e, st) {
+      _errorMessage = friendlyAuthErrorMessage(e, stackTrace: st);
       return false;
     } finally {
       _isLoading = false;
@@ -146,12 +151,52 @@ class AuthProvider extends ChangeNotifier {
       _profile = res['profile'];
       onLoginHook?.call(_currentUser!['id'] as String);
       return true;
-    } catch (e) {
-      _errorMessage = e.toString().replaceAll('Exception: ', '');
+    } catch (e, st) {
+      _errorMessage = friendlyAuthErrorMessage(e, stackTrace: st);
       return false;
     } finally {
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  /// Persists the customer's foot-profile snapshot onto the profiles row.
+  ///
+  /// [source] is 'ar_scan' | 'manual' | 'skipped' (AppConstants
+  /// footProfile*). [sizeEu] is the effective EU size as a number; for scans
+  /// it mirrors the latest foot_measurements recommendation (full scan
+  /// fidelity stays in foot_measurements — this is just the cheap snapshot
+  /// other screens read). [widthLabel] is only set by the manual picker
+  /// ('Narrow'/'Regular'/'Wide').
+  ///
+  /// Updates the local [_profile] so consumers watching this provider
+  /// (e.g. the home reminder banner) hide immediately. Deliberately does
+  /// NOT flip [_isLoading] — this is a background snapshot write (called
+  /// from the onboarding screen and post-scan), so it must never flash
+  /// global loading spinners on unrelated screens.
+  Future<bool> saveFootProfile({
+    double? sizeEu,
+    String? widthLabel,
+    required String source,
+  }) async {
+    final profileId = _profile?['id']?.toString();
+    if (profileId == null) return false;
+
+    try {
+      final updated = await _db.updateProfileFootSnapshot(
+        profileId,
+        sizeEu: sizeEu,
+        widthLabel: widthLabel,
+        source: source,
+      );
+      _profile = updated;
+      _errorMessage = null;
+      notifyListeners();
+      return true;
+    } catch (e, st) {
+      _errorMessage = friendlyAuthErrorMessage(e, stackTrace: st);
+      notifyListeners();
+      return false;
     }
   }
 
@@ -178,9 +223,9 @@ class AuthProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
       return true;
-    } catch (e) {
+    } catch (e, st) {
       _isLoading = false;
-      _errorMessage = e.toString().replaceAll('Exception: ', '');
+      _errorMessage = friendlyAuthErrorMessage(e, stackTrace: st);
       notifyListeners();
       return false;
     }
@@ -191,8 +236,8 @@ class AuthProvider extends ChangeNotifier {
     try {
       await _db.resetPassword(email);
       return true;
-    } catch (e) {
-      _errorMessage = e.toString().replaceAll('Exception: ', '');
+    } catch (e, st) {
+      _errorMessage = friendlyAuthErrorMessage(e, stackTrace: st);
       notifyListeners();
       return false;
     }

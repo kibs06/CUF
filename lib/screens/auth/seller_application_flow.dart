@@ -4,12 +4,14 @@ import 'package:provider/provider.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/seller_application_controller.dart';
+import '../../screens/shared/terms_privacy_screen.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/auth/auth_text_field.dart';
 import '../../widgets/auth/document_upload_tile.dart';
 import '../../widgets/auth/password_strength_meter.dart';
 import '../../widgets/auth/signup_scaffold.dart';
 import '../../widgets/auth/step_progress_indicator.dart';
+import '../../widgets/auth/terms_policy_tile.dart';
 
 /// Multi-step seller application (the spec's "SellerApplicationFlow"):
 ///
@@ -63,10 +65,21 @@ class _SellerApplicationFlowState extends State<SellerApplicationFlow> {
     _memberIdController.text = _controller.cufmaiMemberId;
     _storeNameController.text = _controller.storeName;
     _payoutDetailsController.text = _controller.payoutDetails;
+    // The step widgets read controller state directly in their build
+    // methods (step index, termsAccepted, document statuses…), so the flow
+    // must re-run its own build whenever the controller changes — otherwise
+    // a value like termsAccepted is stored but never repainted (e.g. the
+    // terms checkbox staying unchecked after the read-and-agree flow).
+    _controller.addListener(_onControllerChanged);
+  }
+
+  void _onControllerChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    _controller.removeListener(_onControllerChanged);
     _controller.dispose();
     _nameController.dispose();
     _emailController.dispose();
@@ -373,7 +386,7 @@ class _AccountStep extends StatelessWidget {
             ),
           ],
           const SizedBox(height: AuthSpacing.s16),
-          _TermsTile(
+          TermsPolicyTile(
             value: ctrl.termsAccepted,
             onChanged: (v) => ctrl.termsAccepted = v,
           ),
@@ -720,14 +733,49 @@ class _StorefrontStep extends StatelessWidget {
             onPressed: ctrl.isSubmitting ? null : onSubmit,
           ),
           const SizedBox(height: AuthSpacing.s8),
+          // Footnote with an inline tappable link to the Terms & Privacy
+          // Policy — WidgetSpan + GestureDetector keeps it leak-free inside
+          // this stateless step (no recognizer lifecycle to manage).
           Center(
-            child: Text(
-              'By submitting, you agree to be reviewed by a SoleVision admin before selling.',
-              textAlign: TextAlign.center,
-              style: AppConstants.bodyStyle(
-                fontSize: 11,
-                color: AppConstants.secondary.withValues(alpha: 0.45),
+            child: Text.rich(
+              TextSpan(
+                style: AppConstants.bodyStyle(
+                  fontSize: 11,
+                  color: AppConstants.secondary.withValues(alpha: 0.45),
+                  height: 1.4,
+                ),
+                children: [
+                  const TextSpan(
+                    text: 'By submitting, you agree to be reviewed by a '
+                        'SoleVision admin before selling, and to our ',
+                  ),
+                  WidgetSpan(
+                    alignment: PlaceholderAlignment.middle,
+                    child: GestureDetector(
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const TermsPrivacyScreen(),
+                          ),
+                        );
+                      },
+                      child: Text(
+                        'Terms & Privacy Policy',
+                        style: AppConstants.bodyStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: AppConstants.primary,
+                        ).copyWith(
+                          decoration: TextDecoration.underline,
+                          decorationColor: AppConstants.primary,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const TextSpan(text: '.'),
+                ],
               ),
+              textAlign: TextAlign.center,
             ),
           ),
         ],
@@ -1032,56 +1080,6 @@ class _InfoBanner extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _TermsTile extends StatelessWidget {
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  const _TermsTile({required this.value, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: () => onChanged(!value),
-      borderRadius: BorderRadius.circular(10),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: AuthSpacing.s4),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              width: 22,
-              height: 22,
-              decoration: BoxDecoration(
-                color: value ? AppConstants.primary : Colors.white,
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(
-                  color: value ? AppConstants.primary : AppConstants.borderGray,
-                  width: 1.5,
-                ),
-              ),
-              child: value
-                  ? const Icon(Icons.check_rounded, size: 15, color: Colors.white)
-                  : null,
-            ),
-            const SizedBox(width: AuthSpacing.s12),
-            Expanded(
-              child: Text(
-                'I agree to the Terms & Privacy Policy of SoleVision.',
-                style: AppConstants.bodyStyle(
-                  fontSize: 13,
-                  color: AppConstants.secondary.withValues(alpha: 0.75),
-                  height: 1.4,
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

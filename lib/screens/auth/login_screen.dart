@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/biometric_service.dart';
+import '../../utils/auth_error_messages.dart';
+import '../../widgets/app_error_toast.dart';
 import '../../widgets/sole_card.dart';
 import '../../widgets/sole_text_field.dart';
 import '../../widgets/sole_primary_button.dart';
@@ -79,18 +80,12 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      _showError(
-        kDebugMode
-            ? 'Debug: ${e.toString()}'
-            : 'Something went wrong. Please try again.',
-      );
+      _showError(friendlyAuthErrorMessage(e));
     }
   }
 
   void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: AppConstants.error),
-    );
+    AppErrorToast.show(context, message: message);
   }
 
   /// Offer biometric enrollment after a successful email/password login.
@@ -335,6 +330,11 @@ class _LoginScreenState extends State<LoginScreen> {
                               keyboardType: TextInputType.emailAddress,
                               prefixIcon: Icons.email_outlined,
                               autofillHints: const [AutofillHints.email],
+                              // No spell-check/suggestions on credentials:
+                              // prevents the keyboard's yellow per-word
+                              // underlines and mangling of the address.
+                              autocorrect: false,
+                              enableSuggestions: false,
                               validator: (val) {
                                 if (val == null || val.isEmpty) {
                                   return 'Please enter your email';
@@ -352,6 +352,8 @@ class _LoginScreenState extends State<LoginScreen> {
                               obscureText: _obscurePassword,
                               prefixIcon: Icons.lock_outline,
                               autofillHints: const [AutofillHints.password],
+                              autocorrect: false,
+                              enableSuggestions: false,
                               suffixIcon: IconButton(
                                 icon: Icon(
                                   _obscurePassword

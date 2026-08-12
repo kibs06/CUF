@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../constants/app_constants.dart';
 import '../models/seller_application_data.dart';
+import '../utils/customer_profile_fields.dart' as customer_profile_fields;
 
 class AuthService {
   AuthService._();
@@ -96,6 +97,8 @@ class AuthService {
     required String password,
     String sellerStatus = 'none',
     String? phone,
+    DateTime? birthday,
+    String? gender,
   }) async {
     final response = await _client.auth.signUp(
       email: email.trim(),
@@ -113,6 +116,11 @@ class AuthService {
       'seller_status': sellerStatus,
       'avatar_url': null,
       'phone': phone,
+      // Birthday/gender are collected at signup (see customer_register_screen).
+      // formatBirthdayForDb keeps the DATE column from shifting across
+      // midnight via UTC serialization.
+      'birthday': customer_profile_fields.formatBirthdayForDb(birthday),
+      'gender': gender,
     };
 
     await _client.from('profiles').upsert(profileData);

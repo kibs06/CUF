@@ -16,6 +16,12 @@ import 'signup_scaffold.dart';
 ///    icon and animated in with AnimatedSwitcher.
 ///  * **Password show/hide toggle** with a screen-reader label.
 ///
+/// Autocorrect + suggestions are OFF by default: auth forms collect
+/// structured data (names, emails, passwords, IDs) that autocorrect would
+/// fight, and the keyboard's per-word spell-check underline under that text
+/// reads as a stray yellow underline. Pass `autocorrect`/`enableSuggestions`
+/// explicitly to re-enable on genuinely prose fields.
+///
 /// Drop it inside a `Form` like any `TextFormField` — `Form.validate()`
 /// still drives the submit-time error text.
 class AuthTextField extends StatefulWidget {
@@ -34,6 +40,8 @@ class AuthTextField extends StatefulWidget {
   final TextInputAction textInputAction;
   final ValueChanged<String>? onChanged;
   final VoidCallback? onFieldSubmitted;
+  final bool autocorrect;
+  final bool enableSuggestions;
 
   const AuthTextField({
     super.key,
@@ -52,6 +60,10 @@ class AuthTextField extends StatefulWidget {
     this.textInputAction = TextInputAction.next,
     this.onChanged,
     this.onFieldSubmitted,
+    // See the class doc: auth fields are structured data entry, and the
+    // keyboard's per-word spell-check underline must not appear here.
+    this.autocorrect = false,
+    this.enableSuggestions = false,
   });
 
   @override
@@ -157,6 +169,8 @@ class _AuthTextFieldState extends State<AuthTextField> {
           autofillHints: widget.autofillHints,
           textInputAction: widget.textInputAction,
           onFieldSubmitted: (_) => widget.onFieldSubmitted?.call(),
+          autocorrect: widget.autocorrect,
+          enableSuggestions: widget.enableSuggestions,
           style: AppConstants.bodyStyle(
             fontSize: 15,
             color: AppConstants.secondary,

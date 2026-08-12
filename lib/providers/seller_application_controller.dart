@@ -6,6 +6,7 @@ import '../constants/app_constants.dart';
 import '../models/seller_application_data.dart';
 import '../services/auth_service.dart';
 import '../services/verification_document_service.dart';
+import '../utils/auth_error_messages.dart';
 import '../widgets/auth/document_upload_tile.dart';
 
 /// Lifecycle state of one verification document inside the seller flow.
@@ -85,8 +86,19 @@ class SellerApplicationController extends ChangeNotifier {
   String email = '';
   String phone = '';
   String password = '';
-  bool termsAccepted = false;
   String? emailExistsError;
+
+  // Notifying getter/setter (NOT a plain field): the TermsPolicyTile on
+  // Step 1 sets this when the user agrees inside the read-and-agree flow,
+  // and the UI must repaint its checkbox the moment that happens. A plain
+  // field would store the value but leave the box visually unchecked.
+  bool _termsAccepted = false;
+  bool get termsAccepted => _termsAccepted;
+  set termsAccepted(bool value) {
+    if (value == _termsAccepted) return;
+    _termsAccepted = value;
+    notifyListeners();
+  }
 
   // ── Step 2 · Identity ─────────────────────────────────────────
   final SellerDocState idDocument = SellerDocState();
@@ -261,16 +273,13 @@ class SellerApplicationController extends ChangeNotifier {
       return true;
     } catch (e) {
       debugPrint('[SellerApplication] submit failed: $e');
-      if (e is AuthException) {
-        submitError = switch (e.message.toLowerCase()) {
-          _ when e.message.contains('already registered') =>
-            'This email is already registered. Go back to step 1 and use a different email.',
-          _ => 'We could not create your account. Please try again.',
-        };
-      } else {
-        submitError =
-            'Something went wrong. Check your connection and try again.';
-      }
+      // Auth failures (duplicate email, weak password, rate limits…) go
+      // through the SAME code-keyed mapper as login/customer signup so the
+      // two flows never drift into inconsistent wording. Non-auth failures
+      // (uploads, network) get a connection-aware generic message.
+      submitError = e is AuthException
+          ? friendlyAuthError(e)
+          : 'Something went wrong. Check your connection and try again.';
       notifyListeners();
       return false;
     } finally {
