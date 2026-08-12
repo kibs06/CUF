@@ -1,5 +1,19 @@
 [
   {
+    "latest_version": "1.0.8",
+    "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.8/app-release-1.0.8.apk",
+    "released_at": "2026-08-12",
+    "notes": [
+      "Seller tiered verification with supporting documents",
+      "Enhanced customer signup: foot measurement onboarding, error toasts, and CUFMAI terms with read-and-agree",
+      "Suspended accounts are blocked app-wide; admins can suspend and reactivate users from the admin portal",
+      "Sellers get the espresso/cream redesign across all seller screens",
+      "Real My Orders badges and product share previews",
+      "Orders show Online vs Walk-in origin; home search now matches product tags",
+      "Online GCash: direct GCash and PayMongo checkout with webhook-verified confirmations and seller push alerts"
+    ]
+  },
+  {
     "latest_version": "1.0.7",
     "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.7/app-release-1.0.7.apk",
     "released_at": "2026-08-08",
