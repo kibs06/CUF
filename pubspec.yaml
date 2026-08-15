@@ -98,6 +98,7 @@ flutter:
 
   assets:
     - assets/animations/box_animation.gif
+    - video/locals.mp4
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

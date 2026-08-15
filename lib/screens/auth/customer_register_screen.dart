@@ -10,6 +10,7 @@ import '../../widgets/app_error_toast.dart';
 import '../../widgets/auth/auth_text_field.dart';
 import '../../widgets/auth/password_strength_meter.dart';
 import '../../widgets/auth/signup_scaffold.dart';
+import '../../screens/shared/terms_privacy_screen.dart';
 import '../../widgets/auth/terms_policy_tile.dart';
 import '../../widgets/sole_primary_button.dart';
 import 'foot_profile_onboarding_screen.dart';
@@ -371,6 +372,7 @@ class _CustomerRegisterScreenState extends State<CustomerRegisterScreen> {
             TermsPolicyTile(
               value: _termsAccepted,
               onChanged: (v) => setState(() => _termsAccepted = v),
+              policy: CUFMAITermsPolicy.customer,
             ),
             const SizedBox(height: AuthSpacing.s24),
             SolePrimaryButton(

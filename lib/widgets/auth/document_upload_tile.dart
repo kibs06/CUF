@@ -119,12 +119,32 @@ class DocumentUploadTile extends StatelessWidget {
       padding: const EdgeInsets.all(AuthSpacing.s12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: borderColor.withValues(alpha: 0.7), width: 1),
+        borderRadius: BorderRadius.circular(16),
+        // Warm, subtle edge — softer alpha than the old hard border, with a
+        // soft clay shadow carrying the card instead.
+        border: Border.all(
+          color: borderColor.withValues(alpha: 0.55),
+          width: 1,
+        ),
+        boxShadow: AppConstants.warmShadow,
       ),
-      child: status == DocumentUploadStatus.empty
-          ? _buildEmpty(context)
-          : _buildContent(context),
+      // Scale + fade between the empty drop target and the filled state so
+      // picking a photo feels tactile; inner status changes (uploading →
+      // uploaded) keep their own lighter transitions inside _buildContent.
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 250),
+        switchInCurve: Curves.easeOutBack,
+        switchOutCurve: Curves.easeIn,
+        transitionBuilder: (child, animation) => ScaleTransition(
+          scale: Tween<double>(begin: 0.94, end: 1).animate(
+            CurvedAnimation(parent: animation, curve: Curves.easeOutBack),
+          ),
+          child: FadeTransition(opacity: animation, child: child),
+        ),
+        child: status == DocumentUploadStatus.empty
+            ? _buildEmpty(context)
+            : _buildContent(context),
+      ),
     );
   }
 

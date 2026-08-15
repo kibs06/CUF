@@ -21,6 +21,28 @@ class StepProgressIndicator extends StatelessWidget {
     required this.labels,
   }) : assert(labels.length == totalSteps);
 
+  /// Animated step label — AnimatedDefaultTextStyle lerps the color and
+  /// weight when the active step moves, so labels transition smoothly
+  /// instead of hard-jumping between steps.
+  Widget _label(String text, int i) {
+    return AnimatedDefaultTextStyle(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+      style: AppConstants.bodyStyle(
+        fontSize: 11,
+        fontWeight: i == currentStep ? FontWeight.bold : FontWeight.w500,
+        color: i <= currentStep
+            ? AppConstants.secondary
+            : AppConstants.secondary.withValues(alpha: 0.4),
+      ),
+      child: Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -59,37 +81,14 @@ class StepProgressIndicator extends StatelessWidget {
                   child: SizedBox(
                     height: 14,
                     child: Center(
-                      child: Text(
-                        labels[i],
-                        overflow: TextOverflow.ellipsis,
-                        style: AppConstants.bodyStyle(
-                          fontSize: 11,
-                          fontWeight:
-                              i == currentStep ? FontWeight.bold : FontWeight.w500,
-                          color: i <= currentStep
-                              ? AppConstants.secondary
-                              : AppConstants.secondary.withValues(alpha: 0.4),
-                        ),
-                      ),
+                      child: _label(labels[i], i),
                     ),
                   ),
                 ),
               SizedBox(
                 width: 32,
                 child: Center(
-                  child: Text(
-                    labels[i],
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppConstants.bodyStyle(
-                      fontSize: 11,
-                      fontWeight:
-                          i == currentStep ? FontWeight.bold : FontWeight.w500,
-                      color: i <= currentStep
-                          ? AppConstants.secondary
-                          : AppConstants.secondary.withValues(alpha: 0.4),
-                    ),
-                  ),
+                  child: _label(labels[i], i),
                 ),
               ),
             ],
@@ -131,6 +130,16 @@ class _StepCircle extends StatelessWidget {
                   : AppConstants.borderGray),
           width: isCurrent ? 2 : 1,
         ),
+        // Soft glow halo around the active step circle.
+        boxShadow: isCurrent
+            ? [
+                BoxShadow(
+                  color: AppConstants.primary.withValues(alpha: 0.28),
+                  blurRadius: 12,
+                  spreadRadius: 1,
+                ),
+              ]
+            : const [],
       ),
       child: Center(
         child: AnimatedSwitcher(

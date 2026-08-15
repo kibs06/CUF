@@ -7,7 +7,9 @@ import 'signup_scaffold.dart';
 
 /// Checkbox row for the Terms & Privacy consent — the shared tile used by
 /// BOTH the customer registration and the seller application flows (they
-/// used to each carry a private copy of this row).
+/// used to each carry a private copy of this row). The tile is role-aware:
+/// it consents to the [CUFMAITermsPolicy] passed in and opens the matching
+/// document in read-and-agree mode.
 ///
 /// To mark the checkbox the user must READ the policy first: tapping the row
 /// (or the "Terms & Privacy Policy" link) opens [TermsPrivacyScreen] in
@@ -18,10 +20,15 @@ class TermsPolicyTile extends StatefulWidget {
   final bool value;
   final ValueChanged<bool> onChanged;
 
+  /// Which Terms & Privacy document this tile consents to — the customer
+  /// document at registration, the seller document in the seller flow.
+  final CUFMAITermsPolicy policy;
+
   const TermsPolicyTile({
     super.key,
     required this.value,
     required this.onChanged,
+    this.policy = CUFMAITermsPolicy.customer,
   });
 
   @override
@@ -45,7 +52,8 @@ class _TermsPolicyTileState extends State<TermsPolicyTile> {
   Future<void> _openReadAndAgree() async {
     final agreed = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
-        builder: (_) => const TermsPrivacyScreen(readAndAgree: true),
+        builder: (_) =>
+            TermsPrivacyScreen(readAndAgree: true, policy: widget.policy),
       ),
     );
     if (agreed == true && mounted) {
@@ -73,13 +81,23 @@ class _TermsPolicyTileState extends State<TermsPolicyTile> {
       decorationColor: AppConstants.primary,
     );
 
+    // The tile is only ever given a single-document policy, but handle
+    // `all` (admin combined view) defensively by omitting the role prefix.
+    final prefix = switch (widget.policy) {
+      CUFMAITermsPolicy.seller => 'Seller ',
+      CUFMAITermsPolicy.customer => 'Customer ',
+      CUFMAITermsPolicy.all => '',
+    };
+    final consentLabel =
+        'I agree to the ${prefix}Terms & Privacy Policy of CUFMAI.';
+
     return Semantics(
       // The checkbox is a custom-drawn box (AnimatedContainer + icon), so it
       // has no built-in semantics. Announce the whole row as a checkbox with
       // its current state so screen-reader users can discover the toggle.
       container: true,
       checked: widget.value,
-      label: 'I agree to the Terms & Privacy Policy of CUFMAI.',
+      label: consentLabel,
       child: InkWell(
         onTap: () {
           if (widget.value) {
@@ -126,7 +144,7 @@ class _TermsPolicyTileState extends State<TermsPolicyTile> {
                     children: [
                       const TextSpan(text: 'I agree to the '),
                       TextSpan(
-                        text: 'Terms & Privacy Policy',
+                        text: '${prefix}Terms & Privacy Policy',
                         style: linkStyle,
                         // Deeper than the row's InkWell, so a tap on the
                         // link opens the policy and does NOT toggle the

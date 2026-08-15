@@ -150,8 +150,37 @@ class AppConstants {
   static final BorderRadius cardRadius = BorderRadius.circular(16);
   static final BorderRadius buttonRadius = BorderRadius.circular(12);
 
+  // Organic 20px corners for premium cards (role choice, submission card),
+  // with the matching 14px inner field radius so inputs sit concentrically
+  // inside those cards.
+  static final BorderRadius premiumCardRadius = BorderRadius.circular(20);
+  static final BorderRadius fieldRadius = BorderRadius.circular(14);
+
   // Full pill — chips, quantity steppers, small badges, destructive pills.
   static const BorderRadius stadiumRadius = BorderRadius.all(Radius.circular(999));
+
+  // Premium card treatment (role-choice cards, submission card) — ambient
+  // clay shadow instead of a 1px border: high blur, low opacity, and a
+  // negative spread so the glow hugs the card's organic 20px corners.
+  static final List<BoxShadow> premiumCardShadow = [
+    BoxShadow(
+      color: primary.withValues(alpha: 0.08),
+      blurRadius: 32,
+      offset: const Offset(0, 12),
+      spreadRadius: -4,
+    ),
+  ];
+
+  // Pressed state of the premium cards — tighter, deeper shadow that reads
+  // as physical depth while the card scales down.
+  static final List<BoxShadow> premiumCardShadowPressed = [
+    BoxShadow(
+      color: primary.withValues(alpha: 0.10),
+      blurRadius: 16,
+      offset: const Offset(0, 6),
+      spreadRadius: -2,
+    ),
+  ];
 
   // Subtle warm shadow for surfaceLight cards
   static final List<BoxShadow> warmShadow = [

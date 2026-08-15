@@ -12,13 +12,13 @@ void main() {
     expect(find.textContaining('TERMS OF SERVICE'), findsOneWidget);
     expect(find.textContaining('PRIVACY POLICY'), findsOneWidget);
 
-    // Part I section titles.
+    // Part I section titles (customer policy — the default document).
     expect(find.text('Your Account & Eligibility'), findsOneWidget);
-    expect(find.text('Marketplace Roles'), findsOneWidget);
     expect(find.text('Orders & Payment'), findsOneWidget);
     expect(find.text('Returns & Refunds'), findsOneWidget);
-    expect(find.text('Seller Terms'), findsOneWidget);
     expect(find.text('Prohibited Conduct'), findsOneWidget);
+    expect(find.text('Account Suspension & Termination'), findsOneWidget);
+    expect(find.text('Disclaimer & Limitation of Liability'), findsOneWidget);
 
     // Part II section titles.
     expect(find.text('Information We Collect'), findsOneWidget);

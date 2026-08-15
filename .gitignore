@@ -53,3 +53,6 @@ nul
 backup/config.ps1
 backup/backups/
 android/build/
+
+# Obsidian local settings (vault notes themselves are committed)
+.obsidian/

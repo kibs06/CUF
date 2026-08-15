@@ -955,7 +955,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
             onTap: () {
               Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (_) => const TermsPrivacyScreen(),
+                  // Role-aware: sellers see the seller document, admins see
+                  // both combined, everyone else sees the customer document.
+                  builder: (_) => TermsPrivacyScreen(
+                    policy: auth.userRole == AppConstants.roleSeller
+                        ? CUFMAITermsPolicy.seller
+                        : (auth.userRole == AppConstants.roleAdmin
+                            ? CUFMAITermsPolicy.all
+                            : CUFMAITermsPolicy.customer),
+                  ),
                 ),
               );
             },

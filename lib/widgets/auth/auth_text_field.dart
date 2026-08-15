@@ -140,7 +140,7 @@ class _AuthTextFieldState extends State<AuthTextField> {
   @override
   Widget build(BuildContext context) {
     final border = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: AppConstants.fieldRadius,
       borderSide: BorderSide(
         color: AppConstants.borderGray.withValues(alpha: 0.6),
         width: 1,
@@ -198,21 +198,21 @@ class _AuthTextFieldState extends State<AuthTextField> {
             border: border,
             enabledBorder: border,
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: AppConstants.fieldRadius,
               borderSide: const BorderSide(
                 color: AppConstants.primary,
                 width: 1.5,
               ),
             ),
             errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: AppConstants.fieldRadius,
               borderSide: const BorderSide(
                 color: AppConstants.error,
                 width: 1.5,
               ),
             ),
             focusedErrorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: AppConstants.fieldRadius,
               borderSide: const BorderSide(
                 color: AppConstants.error,
                 width: 1.5,

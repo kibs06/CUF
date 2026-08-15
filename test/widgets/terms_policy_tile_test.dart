@@ -147,7 +147,9 @@ void main() {
     await tester.pumpWidget(harness(value: true, onChanged: (_) {}));
 
     final match = find.bySemanticsLabel(
-      'I agree to the Terms & Privacy Policy of CUFMAI.',
+      // The tile defaults to the customer policy, so the consent label
+      // carries the role prefix.
+      'I agree to the Customer Terms & Privacy Policy of CUFMAI.',
     );
     expect(match, findsAtLeastNWidgets(1));
     final node = tester.getSemantics(match.first);

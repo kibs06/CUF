@@ -10,6 +10,7 @@ import '../../widgets/auth/auth_text_field.dart';
 import '../../widgets/auth/document_upload_tile.dart';
 import '../../widgets/auth/password_strength_meter.dart';
 import '../../widgets/auth/signup_scaffold.dart';
+import '../../widgets/auth/sole_primary_auth_button.dart';
 import '../../widgets/auth/step_progress_indicator.dart';
 import '../../widgets/auth/terms_policy_tile.dart';
 
@@ -389,6 +390,7 @@ class _AccountStep extends StatelessWidget {
           TermsPolicyTile(
             value: ctrl.termsAccepted,
             onChanged: (v) => ctrl.termsAccepted = v,
+            policy: CUFMAITermsPolicy.seller,
           ),
           const SizedBox(height: AuthSpacing.s24),
           SolePrimaryAuthButton(
@@ -755,7 +757,9 @@ class _StorefrontStep extends StatelessWidget {
                       onTap: () {
                         Navigator.of(context).push(
                           MaterialPageRoute(
-                            builder: (_) => const TermsPrivacyScreen(),
+                            builder: (_) => const TermsPrivacyScreen(
+                              policy: CUFMAITermsPolicy.seller,
+                            ),
                           ),
                         );
                       },
@@ -801,10 +805,8 @@ class _SubmissionView extends StatelessWidget {
           padding: const EdgeInsets.all(AuthSpacing.s20),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: AppConstants.borderGray.withValues(alpha: 0.6),
-            ),
+            borderRadius: AppConstants.premiumCardRadius,
+            boxShadow: AppConstants.premiumCardShadow,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -868,7 +870,7 @@ class _SubmissionView extends StatelessWidget {
             padding: const EdgeInsets.all(AuthSpacing.s16),
             decoration: BoxDecoration(
               color: AppConstants.error.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(color: AppConstants.error.withValues(alpha: 0.4)),
             ),
             child: Column(
@@ -1085,52 +1087,4 @@ class _InfoBanner extends StatelessWidget {
   }
 }
 
-/// Primary CTA used inside the seller flow steps (wraps the app's standard
-/// SolePrimaryButton styling so the flow keeps one button look).
-class SolePrimaryAuthButton extends StatelessWidget {
-  final String label;
-  final VoidCallback? onPressed;
-  final bool isLoading;
 
-  const SolePrimaryAuthButton({
-    super.key,
-    required this.label,
-    required this.onPressed,
-    this.isLoading = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      height: 52,
-      child: FilledButton(
-        onPressed: isLoading ? null : onPressed,
-        style: FilledButton.styleFrom(
-          backgroundColor: AppConstants.primary,
-          disabledBackgroundColor: AppConstants.primary.withValues(alpha: 0.6),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-        child: isLoading
-            ? const SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.5,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              )
-            : Text(
-                label,
-                style: AppConstants.bodyStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-      ),
-    );
-  }
-}
