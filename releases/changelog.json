@@ -1,5 +1,16 @@
 [
   {
+    "latest_version": "1.0.9",
+    "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.9/app-release-1.0.9.apk",
+    "released_at": "2026-08-15",
+    "notes": [
+      "Full-bleed video hero on the Create your account screen (looping muted background, CUFMAI branding)",
+      "Role-aware Terms & Privacy: separate customer and seller policies plus an admin combined view",
+      "Premium auth polish: clay shadows, press micro-interactions, glow step indicator, concentric field radius",
+      "Seller application UI architecture docs"
+    ]
+  },
+  {
     "latest_version": "1.0.8",
     "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.8/app-release-1.0.8.apk",
     "released_at": "2026-08-12",
