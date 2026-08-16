@@ -60,6 +60,118 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     }
   }
 
+  /// Permanently deletes a user's account (profile + auth + owned stores).
+  /// Only offered for suspended accounts, and only after an explicit
+  /// confirmation — the action cannot be undone.
+  Future<void> _deleteUserPermanently(String userId, String name) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppConstants.surfaceLight,
+        title: Text(
+          'Delete account permanently?',
+          style: AppConstants.headlineStyle(fontSize: 18),
+        ),
+        content: Text(
+          'This permanently deletes "$name" — their account, store, and '
+          'data. This cannot be undone.\n\n'
+          'Customer orders placed at their store will be kept but detached '
+          'from the store.',
+          style: AppConstants.bodyStyle(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text('Cancel', style: AppConstants.bodyStyle(color: AppConstants.secondary)),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppConstants.error),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text('Delete forever', style: AppConstants.bodyStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    // Second step: type DELETE to confirm, so a mis-tap on the popup can't
+    // destroy an account. (The popup menu is one tap away from this dialog.)
+    final deleteController = TextEditingController();
+    final typedCorrectly = ValueNotifier<bool>(false);
+    final doubleCheck = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: AppConstants.surfaceLight,
+          title: Text('Are you absolutely sure?', style: AppConstants.headlineStyle(fontSize: 18)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'This permanently removes the account and cannot be undone. '
+                'Type DELETE to confirm.',
+                style: AppConstants.bodyStyle(),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: deleteController,
+                style: AppConstants.bodyStyle(fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: 'DELETE',
+                  hintStyle: AppConstants.bodyStyle(fontSize: 13, color: Colors.black38),
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                ),
+                onChanged: (val) {
+                  typedCorrectly.value = val.trim().toUpperCase() == 'DELETE';
+                  setDialogState(() {});
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text('Cancel', style: AppConstants.bodyStyle(color: AppConstants.secondary)),
+            ),
+            ValueListenableBuilder<bool>(
+              valueListenable: typedCorrectly,
+              builder: (context, canDelete, _) => FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppConstants.error,
+                  disabledBackgroundColor: AppConstants.error.withValues(alpha: 0.35),
+                ),
+                onPressed: canDelete
+                    ? () => Navigator.of(context).pop(true)
+                    : null,
+                child: Text('Delete forever', style: AppConstants.bodyStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    deleteController.dispose();
+    if (doubleCheck != true || !mounted) return;
+
+    final success = await Provider.of<OrderProvider>(context, listen: false)
+        .deleteUserPermanently(userId);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          success ? 'Account deleted permanently.' : 'Delete failed. Try again.',
+          style: const TextStyle(color: Colors.white),
+        ),
+        backgroundColor: success ? AppConstants.success : AppConstants.error,
+      ),
+    );
+  }
+
   void _changeRole(String userId, String currentRole) {
     showDialog(
       context: context,
@@ -170,13 +282,29 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                               final name = profile['full_name'];
                               final email = profile['email'];
                               final String role = profile['role'];
+                              final String sellerStatus =
+                                  profile['seller_status']?.toString() ?? 'none';
                               final userId = profile['id'];
+
+                              // A pending seller applicant keeps role=customer
+                              // until admin approval (that's what locks them
+                              // out of the seller shell), so badge them as
+                              // PENDING SELLER instead of a plain customer.
+                              final bool isPendingSeller =
+                                  role == AppConstants.roleCustomer &&
+                                  sellerStatus == AppConstants.statusPending;
+                              final String badgeLabel = isPendingSeller
+                                  ? 'PENDING SELLER'
+                                  : role.toUpperCase();
 
                               Color roleBgColor;
                               Color roleTextColor;
                               if (role == AppConstants.roleAdmin) {
                                 roleBgColor = AppConstants.error.withValues(alpha: 0.15);
                                 roleTextColor = AppConstants.error;
+                              } else if (isPendingSeller) {
+                                roleBgColor = Colors.orange.withValues(alpha: 0.14);
+                                roleTextColor = const Color(0xFFB45309);
                               } else if (role == AppConstants.roleSeller) {
                                 roleBgColor = Colors.amber.withValues(alpha: 0.15);
                                 roleTextColor = const Color(0xFFC47D00);
@@ -221,7 +349,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                                           borderRadius: BorderRadius.circular(8),
                                         ),
                                         child: Text(
-                                          role.toUpperCase(),
+                                          badgeLabel,
                                           style: AppConstants.monoStyle(
                                             fontSize: 9,
                                             fontWeight: FontWeight.bold,
@@ -250,6 +378,35 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                                           ),
                                         ],
                                       ),
+                                      // Permanent delete — a dedicated button
+                                      // at the far right, isolated from the
+                                      // other actions. Only shown for
+                                      // suspended accounts (the enforcement
+                                      // gate in auth_gate.dart already keeps
+                                      // them out of the app), and always
+                                      // guarded by the two-step confirmation.
+                                      const SizedBox(width: 6),
+                                      if (profile['suspended'] == true)
+                                        Tooltip(
+                                          message: 'Delete permanently',
+                                          child: InkWell(
+                                            onTap: () =>
+                                                _deleteUserPermanently(userId, name),
+                                            borderRadius: BorderRadius.circular(10),
+                                            child: Container(
+                                              padding: const EdgeInsets.all(10),
+                                              decoration: BoxDecoration(
+                                                color: AppConstants.error.withValues(alpha: 0.10),
+                                                borderRadius: BorderRadius.circular(10),
+                                              ),
+                                              child: const Icon(
+                                                Icons.delete_forever_outlined,
+                                                size: 20,
+                                                color: AppConstants.error,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
                                     ],
                                   ),
                                 ),

@@ -15,6 +15,7 @@ import 'admin/admin_shell.dart';
 import 'auth/account_entry_screen.dart';
 import 'auth/onboarding_screen.dart';
 import 'auth/pending_approval_screen.dart';
+import 'auth/seller_approved_celebration_screen.dart';
 import 'customer/customer_shell.dart';
 import 'seller/seller_shell.dart';
 
@@ -30,11 +31,42 @@ class _AuthGateState extends State<AuthGate> {
   Future<Map<String, dynamic>?>? _profileFuture;
   String? _profileUserId;
 
+  /// User ids that already saw the approval celebration — so the welcome
+  /// screen shows exactly once per account (persisted in prefs).
+  final Set<String> _celebratedUserIds = {};
+
   /// Whether we've set up the auth hooks (login/logout) already.
   bool _hooksWired = false;
 
   /// Maximum time to wait for a profile fetch before showing a retry screen.
   static const _profileTimeout = Duration(seconds: 12);
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCelebratedUsers();
+  }
+
+  /// Loads the persisted set of user ids that already saw the approval
+  /// celebration (prefs key `seller_celebration_seen_v1`).
+  Future<void> _loadCelebratedUsers() async {
+    final prefs = await SharedPreferences.getInstance();
+    final ids = prefs.getStringList('seller_celebration_seen_v1') ?? [];
+    if (!mounted) return;
+    setState(() => _celebratedUserIds.addAll(ids));
+  }
+
+  /// Marks [userId] as having seen the celebration and persists it, so the
+  /// welcome screen never shows again for that account.
+  Future<void> _markCelebrated(String userId) async {
+    if (_celebratedUserIds.contains(userId)) return;
+    setState(() => _celebratedUserIds.add(userId));
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+      'seller_celebration_seen_v1',
+      _celebratedUserIds.toList(),
+    );
+  }
 
   /// Wire up auth hooks so FollowProvider loads on login and resets on logout.
   void _wireAuthHooks() {
@@ -116,6 +148,8 @@ class _AuthGateState extends State<AuthGate> {
                     error: profileSnapshot.error,
                     onRetry: () => _retryProfile(existingSession.user),
                     checkConnection: _hasConnection,
+                    onSignOut: () =>
+                        context.read<AuthProvider>().logout(),
                   );
                 }
                 return _routeByRole(profileSnapshot.data!);
@@ -160,6 +194,7 @@ class _AuthGateState extends State<AuthGate> {
                 error: profileSnapshot.error,
                 onRetry: () => _retryProfile(user),
                 checkConnection: _hasConnection,
+                onSignOut: () => context.read<AuthProvider>().logout(),
               );
             }
 
@@ -191,7 +226,18 @@ class _AuthGateState extends State<AuthGate> {
       target = const AdminShell();
     } else if (role == AppConstants.roleSeller &&
         sellerStatus == AppConstants.statusApproved) {
-      target = const SellerShell();
+      // One-time welcome: the first launch after approval shows the
+      // celebration screen instead of going straight into the dashboard.
+      // "Go to dashboard" marks the user seen and routes to SellerShell.
+      final userId = profile['id']?.toString() ?? '';
+      if (userId.isNotEmpty && !_celebratedUserIds.contains(userId)) {
+        target = SellerApprovedCelebrationScreen(
+          userName: profile['full_name']?.toString() ?? '',
+          onGoToDashboard: () => _markCelebrated(userId),
+        );
+      } else {
+        target = const SellerShell();
+      }
     } else if (sellerStatus == AppConstants.statusPending) {
       target = const PendingApprovalScreen();
     } else {
@@ -366,10 +412,16 @@ class _ProfileErrorView extends StatefulWidget {
   final VoidCallback onRetry;
   final Future<bool> Function() checkConnection;
 
+  /// Clears the current session. Offered on the error screen because a
+  /// stale session (e.g. the account was deleted by an admin) can make the
+  /// profile fetch fail forever — "Try Again" would loop without end.
+  final VoidCallback onSignOut;
+
   const _ProfileErrorView({
     required this.error,
     required this.onRetry,
     required this.checkConnection,
+    required this.onSignOut,
   });
 
   @override
@@ -489,9 +541,30 @@ class _ProfileErrorViewState extends State<_ProfileErrorView> {
     return Scaffold(
       backgroundColor: AppConstants.surfaceLight,
       body: SafeArea(
-        child: ErrorRetryWidget(
-          message: message,
-          onRetry: widget.onRetry,
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ErrorRetryWidget(
+                  message: message,
+                  onRetry: widget.onRetry,
+                ),
+                const SizedBox(height: 16),
+                // Escape hatch: a session whose account was deleted will
+                // never load a profile, so Retry alone is a dead end.
+                TextButton.icon(
+                  onPressed: widget.onSignOut,
+                  icon: const Icon(Icons.logout_rounded, size: 18),
+                  label: const Text('Sign out'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppConstants.secondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

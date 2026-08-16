@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../constants/app_constants.dart';
 import '../../services/store_service.dart';
 import '../../widgets/sole_primary_button.dart';
+import '../../widgets/seller/tag_selector.dart';
 
 /// First-time store setup screen for sellers.
 ///
@@ -21,6 +22,7 @@ class _CreateStoreScreenState extends State<CreateStoreScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _taglineController = TextEditingController();
+  final _descriptionController = TextEditingController();
   final _locationController = TextEditingController();
   final _storeService = StoreService.instance;
   final _imagePicker = ImagePicker();
@@ -29,6 +31,15 @@ class _CreateStoreScreenState extends State<CreateStoreScreen> {
   XFile? _bannerImage;
   XFile? _logoImage;
   bool _isSaving = false;
+
+  /// Banner already on file from the seller application (store-front
+  /// photo). Shown as the preview until the seller picks a new one, so the
+  /// uploaded image doesn't look "blank" before they hit Create.
+  String? _existingBannerUrl;
+
+  /// Store tags carried over from the seller application (Step 5) — same
+  /// preset vocabulary as product tags. Editable here; saved with the store.
+  List<String> _storeTags = [];
 
   static const List<Map<String, dynamic>> _presetColors = [
     {'hex': '#8B5A2B', 'name': 'Burnished Clay'},
@@ -40,9 +51,48 @@ class _CreateStoreScreenState extends State<CreateStoreScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _prefillFromApplication();
+  }
+
+  /// Pre-fills the form with the storefront the seller already submitted
+  /// in their Tier 1 application (Step 4): store name, description, and
+  /// the store-front photo shown as the banner preview. Best-effort — a
+  /// failure just leaves the form blank.
+  Future<void> _prefillFromApplication() async {
+    try {
+      final app = await _storeService.getApplicationStorefront();
+      if (!mounted || app == null) return;
+      final name = app['store_name'] as String? ?? '';
+      final description = app['store_description'] as String? ?? '';
+      final bannerUrl = app['banner_url'] as String?;
+      final location = app['store_location'] as String? ?? '';
+      final tags = app['store_tags'] as List? ?? const <String>[];
+      if (name.isEmpty &&
+          description.isEmpty &&
+          bannerUrl == null &&
+          location.isEmpty &&
+          tags.isEmpty) {
+        return;
+      }
+      setState(() {
+        if (name.isNotEmpty) _nameController.text = name;
+        if (description.isNotEmpty) _descriptionController.text = description;
+        if (location.isNotEmpty) _locationController.text = location;
+        _existingBannerUrl = bannerUrl;
+        _storeTags = List<String>.from(tags);
+      });
+    } catch (_) {
+      // Pre-fill is a convenience — never block store creation on it.
+    }
+  }
+
+  @override
   void dispose() {
     _nameController.dispose();
     _taglineController.dispose();
+    _descriptionController.dispose();
     _locationController.dispose();
     super.dispose();
   }
@@ -58,6 +108,8 @@ class _CreateStoreScreenState extends State<CreateStoreScreen> {
         tagline: _taglineController.text,
         location: _locationController.text,
         brandColor: _brandColor,
+        description: _descriptionController.text,
+        tags: _storeTags,
         logoImage: _logoImage,
         bannerImage: _bannerImage,
       );
@@ -194,22 +246,18 @@ class _CreateStoreScreenState extends State<CreateStoreScreen> {
                         fit: BoxFit.cover,
                       ),
                     )
-                  : Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.camera_alt,
-                            size: 40,
-                            color: Colors.white.withValues(alpha: 0.7)),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Add Banner',
-                          style: AppConstants.bodyStyle(
-                            fontSize: 13,
-                            color: Colors.white.withValues(alpha: 0.8),
+                  : _existingBannerUrl != null
+                      ? ClipRRect(
+                          borderRadius: AppConstants.cardRadius,
+                          child: Image.network(
+                            _existingBannerUrl!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, _, _) => _bannerPlaceholder(),
+                            loadingBuilder: (context, child, progress) =>
+                                progress == null ? child : _bannerPlaceholder(),
                           ),
-                        ),
-                      ],
-                    ),
+                        )
+                      : _bannerPlaceholder(),
             ),
           ),
           // Logo (overlapping bottom-left)
@@ -246,6 +294,27 @@ class _CreateStoreScreenState extends State<CreateStoreScreen> {
     );
   }
 
+  /// The "Add Banner" placeholder shown when there's no banner image at
+  /// all (neither a freshly picked one nor the application's store-front
+  /// photo).
+  Widget _bannerPlaceholder() {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(Icons.camera_alt,
+            size: 40, color: Colors.white.withValues(alpha: 0.7)),
+        const SizedBox(height: 8),
+        Text(
+          'Add Banner',
+          style: AppConstants.bodyStyle(
+            fontSize: 13,
+            color: Colors.white.withValues(alpha: 0.8),
+          ),
+        ),
+      ],
+    );
+  }
+
   Future<void> _pickImage({required bool isBanner}) async {
     final picked = await _imagePicker.pickImage(
       source: ImageSource.gallery,
@@ -257,6 +326,9 @@ class _CreateStoreScreenState extends State<CreateStoreScreen> {
       setState(() {
         if (isBanner) {
           _bannerImage = picked;
+          // A newly picked banner replaces the application's store-front
+          // photo — clear the preview URL so it doesn't fight the file.
+          _existingBannerUrl = null;
         } else {
           _logoImage = picked;
         }
@@ -332,6 +404,45 @@ class _CreateStoreScreenState extends State<CreateStoreScreen> {
               }
               return null;
             },
+          ),
+          const SizedBox(height: 16),
+          // Description (optional — sellers can add this later)
+          Text(
+            'Description (optional)',
+            style: AppConstants.bodyStyle(
+                fontWeight: FontWeight.bold, fontSize: 14),
+          ),
+          const SizedBox(height: 6),
+          TextFormField(
+            controller: _descriptionController,
+            style: AppConstants.bodyStyle(fontSize: 15),
+            decoration: _inputDecoration(
+                'Tell customers about your craft — materials, styles, story.'),
+            maxLines: 4,
+            maxLength: 500,
+          ),
+          const SizedBox(height: 16),
+          // Tags (carried over from the application — same vocabulary as
+          // product tags; editable here)
+          Text(
+            'Store tags',
+            style: AppConstants.bodyStyle(
+                fontWeight: FontWeight.bold, fontSize: 14),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Help customers find you — the same tags used on your products.',
+            style: AppConstants.bodyStyle(
+              fontSize: 12,
+              color: AppConstants.secondary.withValues(alpha: 0.6),
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 10),
+          TagSelector(
+            groups: storeTagGroups,
+            initialTags: _storeTags,
+            onChanged: (tags) => _storeTags = List.of(tags),
           ),
         ],
       ),

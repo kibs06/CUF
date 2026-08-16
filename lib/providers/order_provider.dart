@@ -370,15 +370,54 @@ class OrderProvider extends ChangeNotifier {
     try {
       await _db.approveSellerApplication(userId);
       await loadProfiles();
+      // Fire-and-forget: email the applicant the good news (the in-app
+      // notification is written by the DB trigger). Failure to send must
+      // never fail the approval itself.
+      _triggerApprovalEmail(userId, outcome: 'approved');
       return true;
     } catch (_) {
       return false;
     }
   }
 
-  Future<bool> rejectSeller(String userId) async {
+  Future<bool> rejectSeller(String userId, {String? reason}) async {
     try {
       await _db.rejectSellerApplication(userId);
+      await loadProfiles();
+      // Fire-and-forget: email the applicant about the decision. Failure to
+      // send must never fail the rejection itself.
+      _triggerApprovalEmail(userId, outcome: 'rejected', reason: reason);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Fire-and-forget invoke of the `send-approval-email` edge function.
+  /// Errors are caught and logged — never propagated to the caller.
+  void _triggerApprovalEmail(
+    String userId, {
+    required String outcome,
+    String? reason,
+  }) {
+    try {
+      Supabase.instance.client.functions
+          .invoke('send-approval-email', body: {
+        'userId': userId,
+        'outcome': outcome,
+        if (reason != null && reason.isNotEmpty) 'rejectionReason': reason,
+      }).catchError((e) {
+        debugPrint('[OrderProvider] Approval email trigger failed: $e');
+        return FunctionResponse(status: 500);
+      });
+    } catch (e) {
+      debugPrint('[OrderProvider] Approval email trigger failed: $e');
+    }
+  }
+
+  Future<bool> deactivateUser(String userId) async {
+    try {
+      await _db.updateProfileRole(userId, 'customer');
       await loadProfiles();
       return true;
     } catch (_) {
@@ -386,9 +425,11 @@ class OrderProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> deactivateUser(String userId) async {
+  /// Permanently deletes a user (profile + auth account + owned stores)
+  /// via the admin-only `admin_delete_user` RPC. Refreshes the list after.
+  Future<bool> deleteUserPermanently(String userId) async {
     try {
-      await _db.updateProfileRole(userId, 'customer');
+      await _db.deleteUserPermanently(userId);
       await loadProfiles();
       return true;
     } catch (_) {

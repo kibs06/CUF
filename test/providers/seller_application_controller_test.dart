@@ -44,15 +44,15 @@ void main() {
   });
 
   group('SellerApplicationController.store photos', () {
-    test('required upload count includes the store photos and all 5 '
-        'product photos', () {
+    test('required upload count includes the identity, business, store and '
+        'product documents', () {
       final ctrl = SellerApplicationController();
-      // member: ID + selfie + store front + 5 product photos
-      expect(ctrl.requiredUploadCount, 8);
+      // member: ID + selfie + DTI + BIR + permit + store front + 5 photos
+      expect(ctrl.requiredUploadCount, 11);
 
       ctrl.isCufmaiMember = false;
       // + barangay proof
-      expect(ctrl.requiredUploadCount, 9);
+      expect(ctrl.requiredUploadCount, 12);
     });
   });
 

@@ -4,12 +4,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:app/screens/auth/seller_application_flow.dart';
 import 'package:app/utils/dev_mode.dart';
 
-/// Coverage for the store photos added to Step 4 (Storefront): the seller
+/// Coverage for the store photos added to Step 5 (Storefront): the seller
 /// must upload a store-front photo (which becomes the store banner) and a
 /// product photo before the application can be submitted.
 ///
-/// DevMode skips Steps 1–3 (their Continues hit Supabase), then is turned
-/// off so Step 4's real submit validation runs.
+/// DevMode skips Steps 1–4 (their Continues hit Supabase), then is turned
+/// off so Step 5's real submit validation runs.
 void main() {
   tearDown(() {
     if (DevMode.instance.isEnabled) DevMode.instance.toggle();
@@ -20,7 +20,7 @@ void main() {
     await tester.pumpWidget(const MaterialApp(home: SellerApplicationFlow()));
     expect(find.text('Create your seller account'), findsOneWidget);
 
-    for (var i = 0; i < 3; i++) {
+    for (var i = 0; i < 4; i++) {
       final continueBtn = find.widgetWithText(FilledButton, 'Continue');
       await tester.ensureVisible(continueBtn);
       await tester.pumpAndSettle();
@@ -43,11 +43,11 @@ void main() {
     }
   });
 
-  testWidgets('submit is blocked until the store photos are added',
-      (tester) async {
+  testWidgets('submit is blocked until a store tag and the store photos '
+      'are added', (tester) async {
     await pumpToStorefrontStep(tester);
 
-    // Fill the store form so only the photo gates remain.
+    // Fill the store form so only the tag + photo gates remain.
     final fields = find.byType(TextField);
     await tester.enterText(fields.at(0), 'Reyes Handcrafted Leather');
     await tester.enterText(
@@ -56,9 +56,23 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // No store photos → Submit must refuse (form validates first, then the
-    // photo gate fires in order: store front, then product).
+    // No store tags → Submit must refuse on the tag gate first.
     final submitBtn = find.widgetWithText(FilledButton, 'Submit application');
+    await tester.ensureVisible(submitBtn);
+    await tester.pumpAndSettle();
+    await tester.tap(submitBtn);
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Please choose at least one store tag.'),
+      findsOneWidget,
+    );
+
+    // Pick one store tag, then the photo gate fires (store front first).
+    await tester.ensureVisible(find.text('Handmade'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Handmade'));
+    await tester.pumpAndSettle();
+
     await tester.ensureVisible(submitBtn);
     await tester.pumpAndSettle();
     await tester.tap(submitBtn);

@@ -13,9 +13,15 @@ import 'package:flutter/foundation.dart';
 //   • Unlocked by swiping 2 up, 2 down, 2 right, 2 left on the
 //     "Create your account" screen (AccountEntryScreen, via
 //     DevModeSwipeDetector).
-//   • While enabled, every Continue / Create-account / Submit button in the
-//     customer + seller flows skips validation and advances WITHOUT touching
-//     Supabase — no account is ever created (the UI-only contract).
+//   • While enabled, every Continue / Create-account button in the customer
+//     + seller flows skips validation and advances WITHOUT touching
+//     Supabase.
+//   • EXCEPTION: the seller flow's final Submit creates a REAL seller
+//     application (a real account with seller_status = pending) so the dev
+//     lands on PendingApprovalScreen and can test the full admin loop —
+//     approve in the console → in-app notification + Gmail via
+//     send-approval-email. See docs/AI/DEV_MODE_ARCHITECTURE.md. All other
+//     steps stay UI-only.
 //   • A persistent "DEV MODE" chip (DevModeBadge) is shown so it's obvious
 //     the skip behavior is active — tapping the chip toggles dev mode OFF
 //     from any screen in a flow.

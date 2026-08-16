@@ -43,9 +43,13 @@
 - **Auto-login after sign up** — customers land in `CustomerShell`;
   pending sellers land in `PendingApprovalScreen`.
 - ⛔ **Temporary dev mode exists** (swipe ↑↑↓↓→→←← on the entry screen) —
-  a UI-only signup skip, **no backend writes**, shows a "DEV MODE" chip.
-  **REMOVE BEFORE RELEASE** — see
-  `docs/AI/DEV_MODE_ARCHITECTURE.md` for the full removal checklist.
+  a signup skip that shows a "DEV MODE" chip. Mostly UI-only (no backend
+  writes), with ONE exception: the seller flow's final Submit creates a
+  REAL, PENDING seller application (same `signUpSeller` path as production)
+  so the dev lands on PendingApprovalScreen and can test the full admin
+  loop — approve → in-app notification + **Gmail approval email**.
+  **REMOVE BEFORE RELEASE** — see `docs/AI/DEV_MODE_ARCHITECTURE.md` for
+  the full removal checklist.
 
 ---
 
@@ -84,14 +88,34 @@ AccountEntryScreen (create mode, full-bleed video)
    land in the shell            ▼
                           CustomerShell
 
-PendingApprovalScreen ──admin approve──▶ SellerShell (role flipped to seller)
+PendingApprovalScreen ──admin approve──▶ SellerApprovedCelebrationScreen
+                                        (ONE-TIME welcome, persisted per user;
+                                         "Go to dashboard →" → SellerShell)
 PendingApprovalScreen ──admin reject──▶ CustomerShell + rejection banner
                                         (rejection_reason + "Re-apply" → flow)
 ```
 
+**On approve/reject the applicant is emailed too** (not just the in-app
+`approval` notification from the DB trigger `trg_notify_on_seller_approved`):
+both admin surfaces (Flutter `OrderProvider.approveSeller/rejectSeller` and
+admin-portal `useApproveApplication/useRejectApplication`) fire-and-forget
+invoke the `send-approval-email` edge function (`supabase/functions/
+send-approval-email/index.ts`) after the `profiles` update succeeds. It looks
+up the applicant's `profiles.email` with the service role and sends via
+Gmail SMTP (smtp.gmail.com:465, implicit TLS) using the app's own Gmail
+account + App Password (env secrets `GMAIL_SENDER`, `GMAIL_APP_PASSWORD`).
+No third-party email provider, no domain ownership, no DNS records — just
+a dedicated Gmail. A failed email never fails the approval/rejection — the
+DB update is the source of truth; the email is best-effort.
+
 AuthGate's StreamBuilder still owns all post-auth routing (`_routeByRole`),
 unchanged in spirit: `pending` → `PendingApprovalScreen`, `seller` +
-`approved` → `SellerShell`, admin → `AdminShell`, else → `CustomerShell`.
+`approved` → **`SellerApprovedCelebrationScreen` on first launch** (a
+one-time "You're now part of the CUFMAI family!" welcome with a
+"Go to dashboard →" CTA — per-user "seen" flag persisted in
+SharedPreferences under `seller_celebration_seen_v1`, so it never shows
+twice; every later launch goes straight to `SellerShell`), admin →
+`AdminShell`, else → `CustomerShell`.
 
 ---
 
@@ -154,15 +178,16 @@ it disappears for good once the profile snapshot is written.
 
 ## Seller application flow (the important part)
 
-**Four steps** in `SellerApplicationFlow` (stepper in
+**Five steps** in `SellerApplicationFlow` (stepper in
 `StepProgressIndicator`):
 
 | Step | Fields | Validation gate |
 |------|--------|-----------------|
-| 1 · Account | full name, email, phone (required), password, confirm, terms | form + duplicate-email check at Continue |
+| 1 · Account | full name, email, phone (required), **birthday** (required, 13+, `profiles.birthday`), **gender** (optional chips + self-describe, `profiles.gender`), password, confirm, terms | form + duplicate-email check at Continue |
 | 2 · Identity | **government ID type** (picker of `AppConstants.govIdTypes` — stored as `profiles.id_type`), government ID photo, liveness selfie | type + both photos picked |
-| 3 · Community | segmented: CUFMAI member ID (optional field) **or** barangay proof upload | at least one |
-| 4 · Storefront | store name, store description (20+ chars), **store-front photo** (public `store-assets` bucket — doubles as the store banner), **5 product photos** (private verification bucket) | form + store-front + all 5 product photos |
+| 3 · Community | segmented: CUFMAI member ID (optional field) **or** barangay proof upload; **store location** (pushed `StoreLocationPickerScreen` — a lightweight full-screen map pin + MapTiler geocoding/GPS picker, no delivery-address form → `profiles.store_location` + `store_lat`/`store_lng`) | member/barangay + location |
+| 4 · Business | **DTI certificate**, **BIR COR**, **mayor's/barangay permit** — all three REQUIRED, uploaded to the private verification bucket and written to `seller_business_docs` (status `pending`) | all 3 docs uploaded |
+| 5 · Storefront | store name, store description **(optional** — can be added later via Create/Edit Store → `stores.description`), **store tags** (store-specific preset vocabulary — Craft & heritage / Local pride / Services & offers — via `TagSelector(groups: storeTagGroups)` → `profiles.store_tags`, copied to `stores.tags` at store creation), **store-front photo** (public `store-assets` bucket — doubles as the store banner), **5 product photos** (private verification bucket) | form + at least 1 tag + store-front + all 5 product photos |
 
 **State** lives in `SellerApplicationController` (a ChangeNotifier scoped
 to the flow route via `ChangeNotifierProvider.value`), so navigating

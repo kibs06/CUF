@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../constants/app_constants.dart';
 import '../../models/store.dart';
 import '../../providers/follow_provider.dart';
+import '../../widgets/seller/tag_selector.dart';
 import '../../providers/product_provider.dart';
 import '../../providers/review_provider.dart';
 import '../../services/message_service.dart';
@@ -260,6 +261,52 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                                 color: Colors.white.withAlpha(190),
                               ),
                             ),
+                          if (store.description != null &&
+                              store.description!.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              store.description!,
+                              style: AppConstants.bodyStyle(
+                                fontSize: 13,
+                                color: Colors.white.withAlpha(190),
+                                height: 1.4,
+                              ),
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                          if (store.tags.isNotEmpty) ...[
+                            const SizedBox(height: 10),
+                            // Store tags — same vocabulary as product tags
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: [
+                                for (final t in store.tags)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 10, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color:
+                                          Colors.white.withValues(alpha: 0.18),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: Colors.white
+                                            .withValues(alpha: 0.35),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      tagDisplayLabel(t),
+                                      style: AppConstants.bodyStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ],
                           const SizedBox(height: 12),
                           // Stats row — horizontally scrollable, never overflows
                           _buildStatsRow(store),

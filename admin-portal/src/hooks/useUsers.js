@@ -76,3 +76,26 @@ export function useUpdateUserRole() {
     onSuccess: () => invalidateUsers(queryClient),
   })
 }
+
+/**
+ * Permanently delete a user account.
+ *
+ * Calls the admin-only SECURITY DEFINER RPC `admin_delete_user` (migration
+ * 20260817120000_admin_delete_user.sql) — the anon-key client cannot touch
+ * auth.users directly, so the admin check runs inside the function. Removes
+ * the profile, the auth account, and owned stores/products in FK-safe order;
+ * customer orders placed at a deleted store are kept with store_id = NULL.
+ * Only offer this for suspended accounts, and always confirm first.
+ */
+export function useDeleteUser() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ userId }) => {
+      const { error } = await supabase.rpc('admin_delete_user', {
+        target_user_id: userId,
+      })
+      if (error) throw error
+    },
+    onSuccess: () => invalidateUsers(queryClient),
+  })
+}

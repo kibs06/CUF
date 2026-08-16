@@ -11,10 +11,11 @@
 
 ## Quick Facts
 
-- **Stack:** Flutter + Supabase + Firebase Cloud Messaging (FCM)
-- **Three notification systems:** Customer in-app, Seller in-app, Push (FCM)
+- **Stack:** Flutter + Supabase + Firebase Cloud Messaging (FCM) + Gmail SMTP (email)
+- **Four notification systems:** Customer in-app, Seller in-app, Push (FCM), Email (Gmail SMTP)
 - **Notification types:** 6 customer categories + 5 seller types (11 total)
 - **Push only fires for messages** — order status changes do NOT trigger push
+- **Email only fires for seller application decisions** — `send-approval-email` edge function (Gmail SMTP)
 
 ---
 
@@ -49,6 +50,7 @@ Customer In-App               Seller In-App               Push (FCM)
 | `lib/services/push_notification_service.dart` | FCM token mgmt, foreground display, deep-link navigation |
 | `lib/services/message_service.dart` | Triggers push after message send (`_triggerPushNotification`) |
 | `supabase/functions/send-message-push/index.ts` | Edge Function — looks up recipient, queries device_tokens, sends FCM HTTP v1 |
+| `supabase/functions/send-approval-email/index.ts` | Edge Function — emails the applicant when an admin approves/rejects their seller application (Gmail SMTP via App Password — no third-party provider, no domain; env: `GMAIL_SENDER`, `GMAIL_APP_PASSWORD`) |
 
 ---
 
@@ -246,6 +248,7 @@ Used for: `stale_order`, `low_stock`, `new_message`. Not used for: `new_order`, 
 | Order status → ready | `OrderProvider.updateOrderStatus()` | `shipped` |
 | Order status → received | `OrderProvider.updateOrderStatus()` | `review` |
 | Message from store | DB trigger `on_new_message_notify` | `message` |
+| Seller application approved/rejected | `send-approval-email` edge function (invoked fire-and-forget from `OrderProvider.approveSeller/rejectSeller` and admin-portal `useApproveApplication/useRejectApplication`) | Email (Gmail SMTP) |
 
 ### Seller Notifications
 | Trigger | Where Created | Type |
@@ -280,3 +283,4 @@ Used for: `stale_order`, `low_stock`, `new_message`. Not used for: `new_order`, 
 4. **RLS everywhere** — All tables have Row Level Security; service role for inserts
 5. **Deduplication** — Check for unread existing notification before creating new one
 6. **Edge Functions** — Push delivery is handled server-side via Supabase Edge Functions
+7. **Email on application decisions** — approval/rejection emails go through `send-approval-email` (Gmail SMTP), fire-and-forget so a failed email never fails the admin action. The in-app `approval` notification still comes from the DB trigger `trg_notify_on_seller_approved`.

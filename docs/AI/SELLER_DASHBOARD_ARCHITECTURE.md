@@ -66,7 +66,10 @@ SellerShell (lib/screens/seller/seller_shell.dart)
 On `initState` (post-frame) and on offline→online reconnect (`ConnectivityService.isOnlineStream`):
 
 ```
-1. StoreService.getMyStore()            → storeId (or bail, no store)
+1. StoreService.getMyStore()            → storeId; null → "no store" prompt
+                                          (new sellers have no store row yet
+                                          until they run CreateStoreScreen);
+                                          throw → error card with retry
 2. setState: _dashboardFuture = _fetchDashboardData(auth, storeId)
 3. _dashboardFuture.then → _cachedData (serves as fallback when refresh fails)
 4. SellerNotificationProvider.init(storeId)   ← idempotent per store

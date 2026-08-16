@@ -7,7 +7,14 @@ class Store {
   final String id;
   final String name;
   final String? tagline;
+  /// Longer "about the store" text (optional — sellers can add it after
+  /// store creation; the application's Step 4 description was optional).
+  final String? description;
   final String location;
+  /// Store tag ids — same preset vocabulary as product tags (handmade,
+  /// leather, eco-friendly…). Collected during the seller application and
+  /// editable via Edit Store.
+  final List<String> tags;
   final String brandColor; // hex string, e.g. '#8B5A2B'
   final String? bannerUrl;
   final String? logoUrl;
@@ -31,7 +38,9 @@ class Store {
     required this.id,
     required this.name,
     this.tagline,
+    this.description,
     required this.location,
+    this.tags = const [],
     this.brandColor = '#8B5A2B',
     this.bannerUrl,
     this.logoUrl,
@@ -94,7 +103,13 @@ class Store {
       id: map['id']?.toString() ?? '',
       name: map['name'] ?? '',
       tagline: map['tagline'],
+      description: map['description'],
       location: map['location'] ?? '',
+      tags: (map['tags'] as List?)
+              ?.map((e) => e?.toString() ?? '')
+              .where((e) => e.isNotEmpty)
+              .toList() ??
+          const [],
       brandColor: map['brand_color'] ?? '#8B5A2B',
       bannerUrl: map['banner_url'],
       logoUrl: map['logo_url'],
@@ -120,7 +135,9 @@ class Store {
       'id': id,
       'name': name,
       'tagline': tagline,
+      'description': description,
       'location': location,
+      'tags': tags,
       'brand_color': brandColor,
       'banner_url': bannerUrl,
       'logo_url': logoUrl,

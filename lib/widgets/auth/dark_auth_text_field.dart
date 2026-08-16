@@ -54,35 +54,50 @@ class DarkAuthTextField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          labelText,
-          style: AppConstants.bodyStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            color: AppConstants.surfaceLight,
-          ),
+    return TextFormField(
+      controller: controller,
+      obscureText: obscureText,
+      keyboardType: keyboardType,
+      autofillHints: autofillHints,
+      autocorrect: autocorrect,
+      enableSuggestions: enableSuggestions,
+      style: AppConstants.bodyStyle(
+        fontSize: 17,
+        color: Colors.white,
+      ),
+      decoration: InputDecoration(
+        // Material floating label: rests inside the field as the
+        // placeholder, then animates up to the top border on focus / once
+        // filled. The hint appears only while focused/empty (Material's
+        // built-in behavior), so the resting label doubles as the
+        // placeholder and never collides with the hint.
+        labelText: labelText,
+        labelStyle: AppConstants.bodyStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w500,
+          color: Colors.white.withValues(alpha: 0.7),
         ),
-        const SizedBox(height: 6),
-        TextFormField(
-          controller: controller,
-          obscureText: obscureText,
-          keyboardType: keyboardType,
-          autofillHints: autofillHints,
-          autocorrect: autocorrect,
-          enableSuggestions: enableSuggestions,
-          style: AppConstants.bodyStyle(
-            fontSize: 15,
-            color: Colors.white,
-          ),
-          decoration: InputDecoration(
-            hintText: hintText,
-            hintStyle: AppConstants.bodyStyle(
-              fontSize: 14,
-              color: Colors.white.withValues(alpha: 0.7),
+        floatingLabelStyle: AppConstants.bodyStyle(
+          fontSize: 20,
+          fontWeight: FontWeight.bold,
+          color: AppConstants.surfaceLight,
+        ).copyWith(
+          // Soft shadow so the floated label stays readable where it sits
+          // on the field's top border, over the video background.
+          shadows: [
+            Shadow(
+              color: Colors.black.withValues(alpha: 0.55),
+              blurRadius: 4,
+              offset: const Offset(0, 1),
             ),
+          ],
+        ),
+        floatingLabelBehavior: FloatingLabelBehavior.auto,
+        hintText: hintText,
+        hintStyle: AppConstants.bodyStyle(
+          fontSize: 15,
+          color: Colors.white.withValues(alpha: 0.7),
+        ),
             filled: true,
             // Semi-opaque dark fill — the merged-screen treatment, deepened
             // to 0.35 (from the brief's 0.28) so white/cream text clears
@@ -91,7 +106,7 @@ class DarkAuthTextField extends StatelessWidget {
             fillColor: Colors.black.withValues(alpha: 0.35),
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
-              vertical: 14,
+              vertical: 16,
             ),
             prefixIcon: prefixIcon != null
                 ? Icon(
@@ -138,8 +153,6 @@ class DarkAuthTextField extends StatelessWidget {
             ),
           ),
           validator: validator,
-        ),
-      ],
-    );
+        );
   }
 }

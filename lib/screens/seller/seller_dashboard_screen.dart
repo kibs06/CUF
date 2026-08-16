@@ -32,6 +32,7 @@ import 'seller_notification_center_screen.dart';
 import 'seller_inbox_screen.dart';
 import 'reports_screen.dart';
 import 'gcash_payment_queue_screen.dart';
+import 'create_store_screen.dart';
 
 /// Dashboard data model — holds all real data fetched from Supabase.
 class _DashboardData {
@@ -91,6 +92,13 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
   StreamSubscription<bool>? _connectivitySub;
   bool _wasOffline = false;
 
+  // First-time sellers have no store row yet (it's created via
+  // CreateStoreScreen after approval) and a failed store lookup should
+  // surface an error instead of spinning forever — track both so the body
+  // can render a real state.
+  bool _noStore = false;
+  String? _loadError;
+
   @override
   void initState() {
     super.initState();
@@ -114,16 +122,39 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
 
   Future<void> _loadDashboard() async {
     final auth = context.read<AuthProvider>();
-    final storeId = await StoreService.instance.getMyStore();
-    if (storeId == null || !mounted) return;
+    Map<String, dynamic>? storeId;
+    try {
+      storeId = await StoreService.instance.getMyStore();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loadError = '$e');
+      return;
+    }
+    if (!mounted) return;
+    if (storeId == null) {
+      // No store yet — show the create-store prompt instead of an
+      // infinite spinner (new sellers land here until they set up a store).
+      setState(() {
+        _noStore = true;
+        _loadError = null;
+      });
+      return;
+    }
     final id = storeId['id'] as String;
     setState(() {
       _storeId = id;
+      _noStore = false;
+      _loadError = null;
       _dashboardFuture = _fetchDashboardData(auth, id);
     });
-    _dashboardFuture.then((data) {
-      if (mounted) setState(() => _cachedData = data);
-    });
+    _dashboardFuture.then(
+      (data) {
+        if (mounted) setState(() => _cachedData = data);
+      },
+      onError: (Object _) {
+        // Error surfaces via the FutureBuilder; nothing to cache.
+      },
+    );
     // Initialize seller notifications for this store
     // Set up subscription first (init is idempotent for same storeId)
     final notifProv = context.read<SellerNotificationProvider>();
@@ -342,12 +373,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
         ],
       ),
       body: _storeId == null
-          ? const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: CircularProgressIndicator(color: AppConstants.primary),
-              ),
-            )
+          ? _buildStoreLookupState()
           : FutureBuilder<_DashboardData>(
               future: _dashboardFuture,
               builder: (context, snapshot) {
@@ -380,6 +406,94 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                 return _buildDashboardBody(data);
               },
             ),
+    );
+  }
+
+  // ─── STORE LOOKUP STATE ────────────────────────────────────────
+  /// Rendered while [_storeId] is unresolved: spinner while the store
+  /// lookup is in flight, an error card if it failed, or the first-time
+  /// seller prompt if the seller has no store yet.
+  Widget _buildStoreLookupState() {
+    if (_loadError != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: ErrorRetryWidget(
+            message: 'Failed to load your store.\n$_loadError',
+            onRetry: _loadDashboard,
+          ),
+        ),
+      );
+    }
+    if (_noStore) return _buildNoStorePrompt();
+    return const Center(
+      child: Padding(
+        padding: EdgeInsets.all(24),
+        child: CircularProgressIndicator(color: AppConstants.primary),
+      ),
+    );
+  }
+
+  /// First-time seller landing — the dashboard can't render without a
+  /// store (revenue, orders, POS all key off storeId). Until the seller
+  /// creates one via CreateStoreScreen, show a friendly setup prompt
+  /// instead of an infinite spinner.
+  Widget _buildNoStorePrompt() {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: AppConstants.primary.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Icon(
+                Icons.storefront_outlined,
+                size: 36,
+                color: AppConstants.primary,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Welcome to your dashboard!',
+              textAlign: TextAlign.center,
+              style: AppConstants.headlineStyle(fontSize: 18),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Set up your store to start selling. Your sales, orders, '
+              'products, and POS will all show up here once your store '
+              'is live.',
+              textAlign: TextAlign.center,
+              style: AppConstants.bodyStyle(color: SellerTheme.textMuted),
+            ),
+            const SizedBox(height: 20),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: AppConstants.primary,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+              onPressed: () async {
+                await Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const CreateStoreScreen(),
+                  ),
+                );
+                // Reload after setup so the dashboard picks up the store.
+                if (mounted) _loadDashboard();
+              },
+              icon: const Icon(Icons.storefront, size: 18),
+              label: const Text('Create your store'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

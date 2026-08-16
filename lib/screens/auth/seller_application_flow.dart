@@ -5,13 +5,16 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../constants/app_constants.dart';
+import '../../models/seller_application_data.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/seller_application_controller.dart';
 import '../../screens/shared/terms_privacy_screen.dart';
 import '../../services/auth_service.dart';
 import '../../services/seller_application_draft_store.dart';
-import 'pending_approval_screen.dart';
+import '../../utils/customer_profile_fields.dart';
 import '../../utils/dev_mode.dart';
+import '../../screens/seller/store_location_picker_screen.dart';
+import '../../widgets/seller/tag_selector.dart';
 import '../../widgets/auth/auth_text_field.dart';
 import '../../widgets/auth/document_upload_tile.dart';
 import '../../widgets/auth/password_strength_meter.dart';
@@ -22,10 +25,11 @@ import '../../widgets/auth/terms_policy_tile.dart';
 
 /// Multi-step seller application (the spec's "SellerApplicationFlow"):
 ///
-///   Step 1 — Account      full name, email, phone, password, terms
+///   Step 1 — Account      full name, email, phone, birthday, gender, password, terms
 ///   Step 2 — Identity     government ID photo + liveness selfie
-///   Step 3 — Community    CUFMAI member ID (members) OR barangay proof
-///   Step 4 — Storefront   store name + description
+///   Step 3 — Community    CUFMAI/barangay proof + store location (map)
+///   Step 4 — Business     DTI certificate + BIR COR + mayor's/barangay permit (required)
+///   Step 5 — Storefront   store name, description, tags, store photos
 ///
 /// The Supabase Auth user is created ONLY on final submit (see
 /// SellerApplicationController). All form + upload state lives in the
@@ -64,6 +68,12 @@ class _SellerApplicationFlowState extends State<SellerApplicationFlow> {
   final _memberIdController = TextEditingController();
   final _storeNameController = TextEditingController();
   final _storeDescController = TextEditingController();
+  // Step 3 personal-detail fields (owned here so draft restore + re-apply
+  // prefill can seed them like every other text field).
+  final _birthdayController = TextEditingController();
+  final _genderSelfDescribeController = TextEditingController();
+  final _locationController = TextEditingController();
+  String? _gender;
 
   // One form key per step — AnimatedSwitcher briefly keeps the outgoing
   // step mounted, so sharing a key between steps would crash with
@@ -89,6 +99,7 @@ class _SellerApplicationFlowState extends State<SellerApplicationFlow> {
     _phoneController.text = _controller.phone;
     _memberIdController.text = _controller.cufmaiMemberId;
     _storeNameController.text = _controller.storeName;
+    _seedPersonalDetails();
     // The step widgets read controller state directly in their build
     // methods (step index, termsAccepted, document statuses…), so the flow
     // must re-run its own build whenever the controller changes — otherwise
@@ -116,7 +127,28 @@ class _SellerApplicationFlowState extends State<SellerApplicationFlow> {
     _memberIdController.text = _controller.cufmaiMemberId;
     _storeNameController.text = _controller.storeName;
     _storeDescController.text = _controller.storeDescription;
+    _seedPersonalDetails();
     setState(() {});
+  }
+
+  /// Seeds the Step 1 personal-detail fields from controller state — used
+  /// on init (re-apply prefill already lives in the controller) and after
+  /// a draft restore. A saved free-text gender maps back to the
+  /// 'Self-describe' chip with the text restored.
+  void _seedPersonalDetails() {
+    final ctrl = _controller;
+    _birthdayController.text =
+        ctrl.birthday == null ? '' : _formatBirthday(ctrl.birthday!);
+    final gender = ctrl.gender;
+    if (gender != null && gender.isNotEmpty) {
+      if (AppConstants.customerGenderOptions.contains(gender)) {
+        _gender = gender;
+      } else {
+        _gender = 'Self-describe';
+        _genderSelfDescribeController.text = gender;
+      }
+    }
+    _locationController.text = ctrl.storeLocation;
   }
 
   void _onControllerChanged() {
@@ -143,12 +175,19 @@ class _SellerApplicationFlowState extends State<SellerApplicationFlow> {
         isCufmaiMember: ctrl.isCufmaiMember,
         cufmaiMemberId: ctrl.cufmaiMemberId,
         idType: ctrl.idType,
+        birthday: ctrl.birthday,
+        gender: ctrl.gender,
+        storeLocation: ctrl.storeLocation,
+        storeTags: ctrl.storeTags,
         storeName: ctrl.storeName,
         storeDescription: ctrl.storeDescription,
         idDocumentPath: ctrl.idDocument.localPath,
         selfiePath: ctrl.selfie.localPath,
         barangayProofPath: ctrl.barangayProof.localPath,
         storeFrontPath: ctrl.storeFront.localPath,
+        dtiPath: ctrl.dti.localPath,
+        birPath: ctrl.bir.localPath,
+        permitPath: ctrl.permit.localPath,
         productPhotoPaths:
             ctrl.productPhotos.map((doc) => doc.localPath).toList(),
         savedAt: DateTime.now(),
@@ -186,6 +225,9 @@ class _SellerApplicationFlowState extends State<SellerApplicationFlow> {
     _memberIdController.dispose();
     _storeNameController.dispose();
     _storeDescController.dispose();
+    _birthdayController.dispose();
+    _genderSelfDescribeController.dispose();
+    _locationController.dispose();
     super.dispose();
   }
 
@@ -235,35 +277,98 @@ class _SellerApplicationFlowState extends State<SellerApplicationFlow> {
 
   Future<void> _submit() async {
     // ⚠️ DEV MODE — REMOVE BEFORE RELEASE (docs/AI/DEV_MODE_ARCHITECTURE.md).
-    // UI-only submission: skip storefront validation and show a fake
-    // "submitted" outcome — NO account is created and nothing hits Supabase.
+    // REAL-ACCOUNT dev submit: creates an actual Supabase account with a
+    // normal PENDING application (role stays customer, seller_status =
+    // pending), so the dev lands on PendingApprovalScreen and the FULL
+    // admin loop runs: admin approves in the console → in-app notification
+    // + Gmail via the send-approval-email edge function. No documents are
+    // uploaded (paths are null — the admin review shows them as missing,
+    // which is fine for testing). The chosen credentials are reused when
+    // the email already exists (ensureUser signs back in), so repeated dev
+    // runs land on the same pending account.
     if (DevMode.instance.isEnabled) {
+      final auth = context.read<AuthProvider>();
+      final email = _emailController.text.trim().isNotEmpty
+          ? _emailController.text.trim()
+          : 'dev.seller@test.com';
+      final password = _passwordController.text.isNotEmpty
+          ? _passwordController.text
+          : 'devpass123';
+      final fullName = _nameController.text.trim().isNotEmpty
+          ? _nameController.text.trim()
+          : 'Dev Seller';
+      final ok = await auth.signUpSeller(
+        data: SellerApplicationData(
+          fullName: fullName,
+          email: email,
+          phone: _phoneController.text.trim().isNotEmpty
+              ? _phoneController.text.trim()
+              : '09171234567',
+          password: password,
+          idType: _controller.idType,
+          idDocumentPath: null,
+          selfiePath: null,
+          cufmaiMemberId: _controller.cufmaiMemberId.trim().isNotEmpty
+              ? _controller.cufmaiMemberId.trim()
+              : null,
+          barangayProofPath: null,
+          birthday: _controller.birthday ?? DateTime(2000, 1, 1),
+          gender: resolveGenderValue(
+            _gender,
+            _genderSelfDescribeController.text,
+          ),
+          storeLocation: _controller.storeLocation.trim().isNotEmpty
+              ? _controller.storeLocation.trim()
+              : 'Carcar City, Cebu',
+          storeLat: _controller.storeLat,
+          storeLng: _controller.storeLng,
+          dtiCertPath: null,
+          birCorPath: null,
+          permitPath: null,
+          storeName: _controller.storeName.trim().isNotEmpty
+              ? _controller.storeName.trim()
+              : 'Dev Store',
+          storeDescription: _controller.storeDescription.trim(),
+          storeTags: _controller.storeTags.isNotEmpty
+              ? List.of(_controller.storeTags)
+              : const ['local'],
+          storeFrontPath: null,
+          productPhotoPaths: const [],
+        ),
+      );
+      if (!mounted) return;
+
       // Capture messenger + navigator before popping — the flow's context
       // is disposed by popUntil (flow + entry screen both unwind), so
-      // reading it afterwards is unsafe.
+      // reading it afterwards is unsafe. AuthGate routes to the real
+      // PendingApprovalScreen (session adopted, seller_status = pending).
       final messenger = ScaffoldMessenger.of(context);
       final navigator = Navigator.of(context);
       navigator.popUntil((route) => route.isFirst);
       messenger.showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
-            'Application submitted! (dev mode — no account was created)',
+            ok
+                ? 'Dev seller application submitted — awaiting admin approval (DEV MODE)'
+                : 'Dev seller application failed: '
+                    '${auth.errorMessage ?? 'unknown error'}',
           ),
-          backgroundColor: AppConstants.success,
-        ),
-      );
-      // DEV PREVIEW: route into the real pending-approval screen so the
-      // dev can inspect it without creating an account (no session, so
-      // AuthGate can't do it). Remove with the rest of dev mode.
-      navigator.push(
-        MaterialPageRoute(
-          builder: (_) => const PendingApprovalScreen(),
+          backgroundColor: ok ? AppConstants.success : AppConstants.error,
         ),
       );
       return;
     }
 
     if (!_storefrontFormKey.currentState!.validate()) return;
+    // Resolve the Step 1 gender (chip → free text when 'Self-describe')
+    // into the controller so the submission carries the final value.
+    _controller.gender =
+        resolveGenderValue(_gender, _genderSelfDescribeController.text);
+    // At least one store tag is required (application v2).
+    if (_controller.storeTags.isEmpty) {
+      _showError('Please choose at least one store tag.');
+      return;
+    }
     // Store photos are required — admins verify the applicant really runs
     // a store, and the store-front photo doubles as the store banner.
     if (_controller.storeFront.status == DocumentUploadStatus.empty) {
@@ -342,7 +447,7 @@ class _SellerApplicationFlowState extends State<SellerApplicationFlow> {
               StepProgressIndicator(
                 currentStep: ctrl.step,
                 totalSteps: SellerApplicationController.stepCount,
-                labels: const ['Account', 'Identity', 'Community', 'Storefront'],
+                labels: const ['Account', 'Identity', 'Community', 'Business', 'Storefront'],
               ),
               const SizedBox(height: AuthSpacing.s24),
               AnimatedSwitcher(
@@ -373,6 +478,8 @@ class _SellerApplicationFlowState extends State<SellerApplicationFlow> {
         return 'Verify your identity';
       case 2:
         return 'Prove your community link';
+      case 3:
+        return 'Verify your business';
       default:
         return 'Set up your storefront';
     }
@@ -387,9 +494,11 @@ class _SellerApplicationFlowState extends State<SellerApplicationFlow> {
       case 1:
         return 'A government ID and a selfie help admins confirm it’s really you.';
       case 2:
-        return 'CUFMAI membership, or a barangay proof if you’re not a member.';
+        return 'CUFMAI membership (or barangay proof), your personal details, and your store’s location.';
+      case 3:
+        return 'DTI certificate, BIR COR, and mayor’s/barangay permit — these confirm you run a registered business.';
       default:
-        return 'How customers will find you, and where your earnings go.';
+        return 'Your store name, tags, and photos — how customers will find you.';
     }
   }
 
@@ -406,6 +515,11 @@ class _SellerApplicationFlowState extends State<SellerApplicationFlow> {
           confirm: _confirmController,
           checkingEmail: _checkingEmail,
           onContinue: _continueFromAccount,
+          birthdayController: _birthdayController,
+          gender: _gender,
+          onGenderChanged: (g) => setState(() => _gender = g),
+          selfDescribeController: _genderSelfDescribeController,
+          onPickBirthday: _pickBirthday,
         );
       case 1:
         return _IdentityStep(ctrl: ctrl, onPick: _pickDocument);
@@ -414,7 +528,11 @@ class _SellerApplicationFlowState extends State<SellerApplicationFlow> {
           ctrl: ctrl,
           memberId: _memberIdController,
           onPick: _pickDocument,
+          locationController: _locationController,
+          onPickLocation: _pickStoreLocation,
         );
+      case 3:
+        return _BusinessStep(ctrl: ctrl, onPick: _pickDocument);
       default:
         return _StorefrontStep(
           formKey: _storefrontFormKey,
@@ -425,6 +543,45 @@ class _SellerApplicationFlowState extends State<SellerApplicationFlow> {
           onSubmit: _submit,
         );
     }
+  }
+
+  // ── Step 3 actions ────────────────────────────────────────────
+  Future<void> _pickBirthday() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate:
+          _controller.birthday ?? DateTime(now.year - 25, now.month, now.day),
+      firstDate: DateTime(1900),
+      lastDate: now,
+      helpText: 'Select your birthday',
+    );
+    if (picked == null || !mounted) return;
+    _controller.birthday = picked;
+    _birthdayController.text = _formatBirthday(picked);
+  }
+
+  /// Store location: pushes the lightweight map picker (same MapTiler +
+  /// Geolocator infrastructure as the customer's address screen, but no
+  /// delivery-address form) and captures the confirmed address line +
+  /// coordinates into the controller.
+  Future<void> _pickStoreLocation() async {
+    final picked = await Navigator.of(context).push<StoreLocationResult>(
+      MaterialPageRoute(builder: (_) => const StoreLocationPickerScreen()),
+    );
+    if (picked == null || !mounted) return;
+    _controller.storeLocation = picked.address;
+    _controller.storeLat = picked.latitude;
+    _controller.storeLng = picked.longitude;
+    _locationController.text = picked.address;
+  }
+
+  String _formatBirthday(DateTime date) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${months[date.month - 1]} ${date.day}, ${date.year}';
   }
 }
 
@@ -442,6 +599,13 @@ class _AccountStep extends StatelessWidget {
   final bool checkingEmail;
   final VoidCallback onContinue;
 
+  // Personal details (application v2 — birthday required, gender optional)
+  final TextEditingController birthdayController;
+  final String? gender;
+  final ValueChanged<String?> onGenderChanged;
+  final TextEditingController selfDescribeController;
+  final VoidCallback onPickBirthday;
+
   const _AccountStep({
     required this.formKey,
     required this.ctrl,
@@ -452,6 +616,11 @@ class _AccountStep extends StatelessWidget {
     required this.confirm,
     required this.checkingEmail,
     required this.onContinue,
+    required this.birthdayController,
+    required this.gender,
+    required this.onGenderChanged,
+    required this.selfDescribeController,
+    required this.onPickBirthday,
   });
 
   @override
@@ -523,6 +692,79 @@ class _AccountStep extends StatelessWidget {
               }
               return null;
             },
+          ),
+          const SizedBox(height: AuthSpacing.s16),
+
+          // ── Personal details ────────────────────────────────────
+          AuthTextField(
+            label: 'Birthday *',
+            hint: 'Tap to select your date of birth',
+            controller: birthdayController,
+            readOnly: true,
+            onTap: onPickBirthday,
+            prefixIcon: Icons.cake_outlined,
+            validator: (_) => validateBirthday(ctrl.birthday),
+          ),
+          const SizedBox(height: AuthSpacing.s16),
+          Text(
+            'Gender (optional)',
+            style: AppConstants.bodyStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: AuthSpacing.s8),
+          Wrap(
+            spacing: AuthSpacing.s8,
+            runSpacing: AuthSpacing.s8,
+            children: AppConstants.customerGenderOptions.map((option) {
+              final selected = gender == option;
+              return ChoiceChip(
+                label: Text(
+                  option,
+                  style: AppConstants.bodyStyle(
+                    fontSize: 13,
+                    fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                    color: selected
+                        ? AppConstants.surfaceLight
+                        : AppConstants.secondary,
+                  ),
+                ),
+                selected: selected,
+                showCheckmark: false,
+                onSelected: (sel) => onGenderChanged(sel ? option : null),
+                selectedColor: AppConstants.primary,
+                backgroundColor: Colors.white,
+                side: BorderSide(
+                  color: selected
+                      ? Colors.transparent
+                      : AppConstants.borderGray.withValues(alpha: 0.5),
+                  width: 1,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              );
+            }).toList(),
+          ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeInOut,
+            child: gender == 'Self-describe'
+                ? Padding(
+                    padding: const EdgeInsets.only(top: AuthSpacing.s12),
+                    child: AuthTextField(
+                      label: 'How would you describe yourself?',
+                      hint: 'e.g. Agender, Pangender, genderfluid…',
+                      controller: selfDescribeController,
+                      prefixIcon: Icons.edit_outlined,
+                      validator: (_) => validateGenderSelfDescribe(
+                        gender,
+                        selfDescribeController.text,
+                      ),
+                    ),
+                  )
+                : const SizedBox.shrink(),
           ),
           const SizedBox(height: AuthSpacing.s16),
           if (!ctrl.isReapply) ...[
@@ -867,10 +1109,16 @@ class _CommunityStep extends StatefulWidget {
   final TextEditingController memberId;
   final void Function(SellerDocState doc) onPick;
 
+  // Store location (application v2 — map-picked, required)
+  final TextEditingController locationController;
+  final VoidCallback onPickLocation;
+
   const _CommunityStep({
     required this.ctrl,
     required this.memberId,
     required this.onPick,
+    required this.locationController,
+    required this.onPickLocation,
   });
 
   @override
@@ -965,12 +1213,46 @@ class _CommunityStepState extends State<_CommunityStep> {
                   ),
           ),
           const SizedBox(height: AuthSpacing.s24),
+
+          // ── Store location (map picker) ─────────────────────────
+          _buildSectionLabel(
+            context,
+            'Store location *',
+            Icons.location_on_outlined,
+          ),
+          const SizedBox(height: AuthSpacing.s8),
+          AuthTextField(
+            label: 'Where is your store?',
+            hint: 'Tap to pin your store on the map',
+            controller: widget.locationController,
+            readOnly: true,
+            onTap: widget.onPickLocation,
+            prefixIcon: Icons.map_outlined,
+          ),
+          const SizedBox(height: AuthSpacing.s8),
+          Text(
+            'Pick your store address on the map — this becomes your store’s location on your public page.',
+            style: AppConstants.bodyStyle(
+              fontSize: 12,
+              color: AppConstants.secondary.withValues(alpha: 0.6),
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: AuthSpacing.s24),
+
           SolePrimaryAuthButton(
             label: 'Continue',
             onPressed: () {
               // ⚠️ DEV MODE — REMOVE BEFORE RELEASE (docs/AI/DEV_MODE_ARCHITECTURE.md).
               if (DevMode.instance.isEnabled) {
                 ctrl.nextStep();
+                return;
+              }
+              if (ctrl.storeLocation.trim().isEmpty) {
+                _showSnack(
+                  context,
+                  'Please set your store location on the map to continue.',
+                );
                 return;
               }
               if (!ctrl.isCufmaiMember &&
@@ -982,6 +1264,23 @@ class _CommunityStepState extends State<_CommunityStep> {
             },
           ),
         ],
+    );
+  }
+
+  Widget _buildSectionLabel(
+    BuildContext context,
+    String text,
+    IconData icon,
+  ) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: AppConstants.primary),
+        const SizedBox(width: 6),
+        Text(
+          text,
+          style: AppConstants.headlineStyle(fontSize: 16),
+        ),
+      ],
     );
   }
 
@@ -997,7 +1296,120 @@ class _CommunityStepState extends State<_CommunityStep> {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// STEP 4 — STOREFRONT
+// STEP 4 — BUSINESS VERIFICATION
+// ══════════════════════════════════════════════════════════════════
+class _BusinessStep extends StatefulWidget {
+  final SellerApplicationController ctrl;
+  final void Function(SellerDocState doc) onPick;
+
+  const _BusinessStep({
+    required this.ctrl,
+    required this.onPick,
+  });
+
+  @override
+  State<_BusinessStep> createState() => _BusinessStepState();
+}
+
+class _BusinessStepState extends State<_BusinessStep> {
+  @override
+  Widget build(BuildContext context) {
+    final ctrl = widget.ctrl;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _InfoBanner(
+          icon: Icons.verified_outlined,
+          text:
+              'These documents confirm you run a registered business. All three are required — they help admins verify your store before approving your application.',
+        ),
+        const SizedBox(height: AuthSpacing.s16),
+        _DocTileLabel('DTI certificate'),
+        DocumentUploadTile(
+          title: 'DTI Business Registration',
+          description:
+              'Certificate of Business Name Registration issued by the DTI.',
+          status: ctrl.dti.status,
+          imagePath: ctrl.dti.localPath,
+          errorMessage: ctrl.dti.errorMessage,
+          onPick: () => widget.onPick(ctrl.dti),
+          onRemove: () => ctrl.removeDocument(ctrl.dti),
+          onRetry: () => _retrySubmit(context, ctrl),
+        ),
+        const SizedBox(height: AuthSpacing.s16),
+        _DocTileLabel('BIR Certificate of Registration'),
+        DocumentUploadTile(
+          title: 'BIR COR',
+          description:
+              'Certificate of Registration issued by the BIR for your business.',
+          status: ctrl.bir.status,
+          imagePath: ctrl.bir.localPath,
+          errorMessage: ctrl.bir.errorMessage,
+          onPick: () => widget.onPick(ctrl.bir),
+          onRemove: () => ctrl.removeDocument(ctrl.bir),
+          onRetry: () => _retrySubmit(context, ctrl),
+        ),
+        const SizedBox(height: AuthSpacing.s16),
+        _DocTileLabel('Mayor’s / barangay permit'),
+        DocumentUploadTile(
+          title: 'Business permit',
+          description:
+              'Mayor’s permit or barangay business permit for your location.',
+          status: ctrl.permit.status,
+          imagePath: ctrl.permit.localPath,
+          errorMessage: ctrl.permit.errorMessage,
+          onPick: () => widget.onPick(ctrl.permit),
+          onRemove: () => ctrl.removeDocument(ctrl.permit),
+          onRetry: () => _retrySubmit(context, ctrl),
+        ),
+        const SizedBox(height: AuthSpacing.s24),
+        SolePrimaryAuthButton(
+          label: 'Continue',
+          onPressed: () {
+            // ⚠️ DEV MODE — REMOVE BEFORE RELEASE (docs/AI/DEV_MODE_ARCHITECTURE.md).
+            if (DevMode.instance.isEnabled) {
+              ctrl.nextStep();
+              return;
+            }
+            if (ctrl.dti.status == DocumentUploadStatus.empty) {
+              _showSnack(
+                context,
+                'Please add your DTI certificate to continue.',
+              );
+              return;
+            }
+            if (ctrl.bir.status == DocumentUploadStatus.empty) {
+              _showSnack(context, 'Please add your BIR COR to continue.');
+              return;
+            }
+            if (ctrl.permit.status == DocumentUploadStatus.empty) {
+              _showSnack(
+                context,
+                'Please add your business permit to continue.',
+              );
+              return;
+            }
+            ctrl.nextStep();
+          },
+        ),
+      ],
+    );
+  }
+
+  void _showSnack(BuildContext context, String message) {
+    // Replace any visible snackbar — rapid validation taps on the same
+    // step should update the message, not queue stale ones behind it.
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: AppConstants.error),
+      );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// STEP 5 — STOREFRONT
 // ══════════════════════════════════════════════════════════════════
 class _StorefrontStep extends StatelessWidget {
   final GlobalKey<FormState> formKey;
@@ -1035,17 +1447,42 @@ class _StorefrontStep extends StatelessWidget {
           ),
           const SizedBox(height: AuthSpacing.s16),
           AuthTextField(
-            label: 'Store Description',
-            hint: 'Tell customers about your craft — materials, styles, story.',
+            // Optional — sellers can add their story after approval from
+            // their store's edit screen; don't gate submission on it.
+            label: 'Store Description (optional)',
+            hint: 'Tell customers about your craft — you can add this later.',
             controller: storeDescription,
             maxLines: 4,
             onChanged: (v) => ctrl.storeDescription = v,
-            validator: (val) {
-              if (val == null || val.trim().length < 20) {
-                return 'Please write at least a short paragraph (20+ characters)';
-              }
-              return null;
-            },
+          ),
+          const SizedBox(height: AuthSpacing.s24),
+
+          // ── Store tags (same vocabulary as product tags) ────────
+          Row(
+            children: [
+              Icon(Icons.sell_outlined,
+                  size: 16, color: AppConstants.primary),
+              const SizedBox(width: 6),
+              Text(
+                'Store tags (optional)',
+                style: AppConstants.headlineStyle(fontSize: 16),
+              ),
+            ],
+          ),
+          const SizedBox(height: AuthSpacing.s8),
+          Text(
+            'Choose at least one tag that describes your store — handmade, family-owned, Carcar-made…',
+            style: AppConstants.bodyStyle(
+              fontSize: 12,
+              color: AppConstants.secondary.withValues(alpha: 0.6),
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: AuthSpacing.s12),
+          TagSelector(
+            groups: storeTagGroups,
+            initialTags: ctrl.storeTags,
+            onChanged: (tags) => ctrl.storeTags = tags,
           ),
           const SizedBox(height: AuthSpacing.s24),
           _DocTileLabel('Store photos'),

@@ -7,6 +7,7 @@ import '../../constants/app_constants.dart';
 import '../../services/store_service.dart';
 import '../../widgets/sole_primary_button.dart';
 import '../../widgets/sole_switch.dart';
+import '../../widgets/seller/tag_selector.dart';
 
 /// Edit store screen — same layout as [CreateStoreScreen] but pre-fills
 /// all existing store data and allows toggling store open/closed.
@@ -23,6 +24,7 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _taglineController = TextEditingController();
+  final _descriptionController = TextEditingController();
   final _locationController = TextEditingController();
   final _storeService = StoreService.instance;
   final _imagePicker = ImagePicker();
@@ -34,6 +36,9 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
   bool _removeLogo = false;
   bool _isOpen = true;
   bool _isSaving = false;
+
+  /// Store tag ids — same preset vocabulary as product tags, editable here.
+  List<String> _tags = [];
 
   static const List<Map<String, dynamic>> _presetColors = [
     {'hex': '#8B5A2B', 'name': 'Burnished Clay'},
@@ -54,16 +59,21 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
     final s = widget.store;
     _nameController.text = s['name'] ?? '';
     _taglineController.text = s['tagline'] ?? '';
+    _descriptionController.text = s['description'] ?? '';
     _locationController.text = s['location'] ?? '';
     _brandColor = s['brand_color'] ?? '#8B5A2B';
     _isOpen = s['is_open'] ?? true;
-
+    final tags = s['tags'];
+    if (tags is List) {
+      _tags = tags.map((e) => e?.toString() ?? '').where((e) => e.isNotEmpty).toList();
+    }
   }
 
   @override
   void dispose() {
     _nameController.dispose();
     _taglineController.dispose();
+    _descriptionController.dispose();
     _locationController.dispose();
 
     super.dispose();
@@ -83,6 +93,8 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
         location: _locationController.text,
         brandColor: _brandColor,
         isOpen: _isOpen,
+        description: _descriptionController.text,
+        tags: _tags,
         newLogoImage: _newLogoImage,
         newBannerImage: _newBannerImage,
         removeLogo: _removeLogo,
@@ -480,6 +492,43 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
             decoration: _inputDecoration(
                 'e.g. Handcrafted in Carcar since 1998'),
             maxLength: 100,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Description (optional)',
+            style: AppConstants.bodyStyle(
+                fontWeight: FontWeight.bold, fontSize: 14),
+          ),
+          const SizedBox(height: 6),
+          TextFormField(
+            controller: _descriptionController,
+            style: AppConstants.bodyStyle(fontSize: 15),
+            decoration: _inputDecoration(
+                'Tell customers about your craft — materials, styles, story.'),
+            maxLines: 4,
+            maxLength: 500,
+          ),
+          const SizedBox(height: 16),
+          // Store tags — same vocabulary as product tags
+          Text(
+            'Store tags',
+            style: AppConstants.bodyStyle(
+                fontWeight: FontWeight.bold, fontSize: 14),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Help customers find you — the same tags used on your products.',
+            style: AppConstants.bodyStyle(
+              fontSize: 12,
+              color: AppConstants.secondary.withValues(alpha: 0.6),
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 10),
+          TagSelector(
+            groups: storeTagGroups,
+            initialTags: _tags,
+            onChanged: (tags) => _tags = List.of(tags),
           ),
           const SizedBox(height: 16),
           Text(

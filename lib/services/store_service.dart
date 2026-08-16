@@ -36,6 +36,10 @@ class StoreService {
     required String tagline,
     required String location,
     required String brandColor,
+    // Optional — collected separately from the Step 4 description so a
+    // seller can add their story after store creation.
+    String? description,
+    List<String> tags = const [],
     XFile? logoImage,
     XFile? bannerImage,
   }) async {
@@ -56,6 +60,14 @@ class StoreService {
           'tagline': tagline.trim(),
           'location': location.trim(),
           'brand_color': brandColor,
+          // Null when left blank — not an empty string.
+          'description': (description == null || description.trim().isEmpty)
+              ? null
+              : description.trim(),
+          // Store tags — same preset vocabulary as product tags. Falls
+          // back to the application's profiles.store_tags when the caller
+          // passed none (mirrors the banner fallback below).
+          'tags': tags.isNotEmpty ? tags : null,
           'is_open': true,
           'is_active': true,
         })
@@ -98,12 +110,68 @@ class StoreService {
       }
     }
 
+    // Tags fallback: when the caller passed none (first-time setup with no
+    // tag edits), carry over the application's store_tags from the profile.
+    if (tags.isEmpty) {
+      final profileTags = await _client
+          .from('profiles')
+          .select('store_tags')
+          .eq('id', sellerId)
+          .maybeSingle();
+      final fallback = _stringListOf(profileTags?['store_tags']);
+      if (fallback.isNotEmpty) {
+        updates['tags'] = fallback;
+      }
+    }
+
     if (updates.isNotEmpty) {
       await _client.from('stores').update(updates).eq('id', storeId);
       store.addAll(updates);
     }
 
     return Map<String, dynamic>.from(store);
+  }
+
+  /// The storefront the seller already submitted in their Tier 1
+  /// application (Steps 3–5): the proposed store name, description, tags,
+  /// map-picked location, and the store-front photo as a ready-to-render
+  /// public URL (it doubles as the store banner). Used to pre-fill
+  /// CreateStoreScreen so a seller never re-enters what they already
+  /// typed/uploaded. Returns null when the seller has no storefront
+  /// application data on their profile.
+  Future<Map<String, dynamic>?> getApplicationStorefront() async {
+    final sellerId = _client.auth.currentUser!.id;
+    final profile = await _client
+        .from('profiles')
+        .select(
+          'store_name, store_description, store_front_url, '
+          'store_location, store_lat, store_lng, store_tags',
+        )
+        .eq('id', sellerId)
+        .maybeSingle();
+    if (profile == null) return null;
+    final storeFrontPath = profile['store_front_url']?.toString() ?? '';
+    return {
+      'store_name': profile['store_name']?.toString() ?? '',
+      'store_description': profile['store_description']?.toString() ?? '',
+      'banner_url': storeFrontPath.isEmpty
+          ? null
+          : _client.storage.from('store-assets').getPublicUrl(storeFrontPath),
+      'store_location': profile['store_location']?.toString() ?? '',
+      'store_lat': (profile['store_lat'] as num?)?.toDouble(),
+      'store_lng': (profile['store_lng'] as num?)?.toDouble(),
+      'store_tags': _stringListOf(profile['store_tags']),
+    };
+  }
+
+  static List<String> _stringListOf(dynamic value) {
+    if (value is List) {
+      return value
+          .map((e) => e?.toString() ?? '')
+          .where((e) => e.isNotEmpty)
+          .toList();
+    }
+    return const [];
   }
 
   /// Update an existing store.
@@ -114,6 +182,8 @@ class StoreService {
     required String location,
     required String brandColor,
     required bool isOpen,
+    String? description,
+    List<String> tags = const [],
     XFile? newLogoImage,
     XFile? newBannerImage,
     bool removeLogo = false,
@@ -126,6 +196,11 @@ class StoreService {
       'location': location.trim(),
       'brand_color': brandColor,
       'is_open': isOpen,
+      'description': (description == null || description.trim().isEmpty)
+          ? null
+          : description.trim(),
+      // Null when cleared — not an empty array (keeps legacy rows tidy).
+      'tags': tags.isEmpty ? null : tags,
     };
 
     if (newLogoImage != null) {

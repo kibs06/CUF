@@ -5,6 +5,7 @@ import '../../constants/app_constants.dart';
 import '../../providers/order_provider.dart';
 import '../../services/verification_document_service.dart';
 import '../../widgets/admin/verification_doc_viewer.dart';
+import '../../widgets/seller/tag_selector.dart';
 import '../../widgets/sole_card.dart';
 import 'seller_business_docs_review_screen.dart';
 
@@ -40,23 +41,136 @@ class _SellerApprovalScreenState extends State<SellerApprovalScreen> {
   }
 
   void _handleApproval(String userId, String name, bool approve) async {
-    final confirmed = await showDialog<bool>(
+    String? rejectionReason;
+
+    if (approve) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: AppConstants.surfaceLight,
+          title: Text(
+            'Approve Seller?',
+            style: AppConstants.headlineStyle(fontSize: 18),
+          ),
+          content: Text(
+            'Authorize "$name" to upload products and execute register POS sales?',
+            style: AppConstants.bodyStyle(),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(
+                'Cancel',
+                style: AppConstants.bodyStyle(color: AppConstants.secondary),
+              ),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: AppConstants.success,
+              ),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(
+                'Approve',
+                style: AppConstants.bodyStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+    } else {
+      // Reject — collect an optional reason FIRST (it goes into the
+      // rejection email via the send-approval-email edge function), then
+      // confirm. Cancelling (null) aborts; an empty reason is allowed.
+      rejectionReason = await _promptRejectionReason(name);
+      if (rejectionReason == null || !mounted) return;
+    }
+
+    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+    setState(() => _busyUserId = userId);
+    final success = approve
+        ? await orderProvider.approveSeller(userId)
+        : await orderProvider.rejectSeller(
+            userId,
+            reason: rejectionReason,
+          );
+    if (mounted) setState(() => _busyUserId = null);
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          success
+              ? approve
+                    ? '$name is now an authorized Seller!'
+                    : 'Application rejected.'
+              : 'Unable to update seller application.',
+        ),
+        backgroundColor: success ? AppConstants.success : AppConstants.error,
+      ),
+    );
+  }
+
+  /// Reject dialog — collects an optional reason that is included in the
+  /// rejection email sent to the applicant (via the `send-approval-email`
+  /// edge function). Returns the trimmed reason, or null when cancelled.
+  /// An empty-string reason is allowed (the email simply omits the reason
+  /// line).
+  Future<String?> _promptRejectionReason(String name) {
+    final controller = TextEditingController();
+    return showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: AppConstants.surfaceLight,
         title: Text(
-          approve ? 'Approve Seller?' : 'Reject Request?',
+          'Reject Request?',
           style: AppConstants.headlineStyle(fontSize: 18),
         ),
-        content: Text(
-          approve
-              ? 'Authorize "$name" to upload products and execute register POS sales?'
-              : 'Reject seller registration application for "$name"?',
-          style: AppConstants.bodyStyle(),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Reject seller registration application for "$name"?',
+              style: AppConstants.bodyStyle(),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'The reason (optional) is included in the email sent to the '
+              'applicant.',
+              style: AppConstants.bodyStyle(
+                fontSize: 12,
+                color: AppConstants.secondary.withValues(alpha: 0.6),
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: controller,
+              maxLines: 3,
+              maxLength: 300,
+              style: AppConstants.bodyStyle(fontSize: 14),
+              decoration: InputDecoration(
+                hintText: 'e.g. Incomplete business documents',
+                hintStyle: AppConstants.bodyStyle(
+                  fontSize: 13,
+                  color: Colors.black38,
+                ),
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
+            onPressed: () => Navigator.of(context).pop(),
             child: Text(
               'Cancel',
               style: AppConstants.bodyStyle(color: AppConstants.secondary),
@@ -64,13 +178,11 @@ class _SellerApprovalScreenState extends State<SellerApprovalScreen> {
           ),
           FilledButton(
             style: FilledButton.styleFrom(
-              backgroundColor: approve
-                  ? AppConstants.success
-                  : AppConstants.error,
+              backgroundColor: AppConstants.error,
             ),
-            onPressed: () => Navigator.of(context).pop(true),
+            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
             child: Text(
-              approve ? 'Approve' : 'Reject',
+              'Reject',
               style: AppConstants.bodyStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
@@ -79,30 +191,7 @@ class _SellerApprovalScreenState extends State<SellerApprovalScreen> {
           ),
         ],
       ),
-    );
-
-    if (confirmed == true && mounted) {
-      final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-      setState(() => _busyUserId = userId);
-      final success = approve
-          ? await orderProvider.approveSeller(userId)
-          : await orderProvider.rejectSeller(userId);
-      if (mounted) setState(() => _busyUserId = null);
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            success
-                ? approve
-                      ? '$name is now an authorized Seller!'
-                      : 'Application rejected.'
-                : 'Unable to update seller application.',
-          ),
-          backgroundColor: success ? AppConstants.success : AppConstants.error,
-        ),
-      );
-    }
+    ).whenComplete(controller.dispose);
   }
 
   @override
@@ -363,12 +452,29 @@ class _Tier1Review extends StatelessWidget {
     final memberId = _text(applicant['cufmai_member_id']);
     final storeName = _text(applicant['store_name']);
     final storeDescription = _text(applicant['store_description']);
+    final birthday = _text(applicant['birthday']);
+    final gender = _text(applicant['gender']);
+    final storeLocation = _text(applicant['store_location']);
     final hasId = applicant['id_document_url'] != null;
     final hasSelfie = applicant['selfie_url'] != null;
     final hasBarangay = applicant['barangay_proof_url'] != null;
+    // Step 4 business docs arrive nested via the FK join. PostgREST can
+    // embed a single row as a Map or a one-element List — handle both.
+    final bizRaw = applicant['seller_business_docs'];
+    final Map<String, dynamic>? bizDocs = bizRaw is Map
+        ? Map<String, dynamic>.from(bizRaw)
+        : (bizRaw is List && bizRaw.isNotEmpty && bizRaw.first is Map)
+            ? Map<String, dynamic>.from(bizRaw.first as Map)
+            : null;
     final idTypeLabel = AppConstants.govIdTypeLabel(
       applicant['id_type']?.toString(),
     );
+    // Store tags (Step 5) — stored ids, displayed via the shared resolver.
+    final storeTags = (applicant['store_tags'] as List?)
+            ?.map((e) => e?.toString() ?? '')
+            .where((e) => e.isNotEmpty)
+            .toList() ??
+        const <String>[];
     // The 5 product photos live in a Postgres TEXT[] column.
     final productPaths = (applicant['product_photo_urls'] as List?)
             ?.map((e) => e?.toString())
@@ -448,6 +554,76 @@ class _Tier1Review extends StatelessWidget {
             const SizedBox(height: 12),
           ],
 
+          // Personal details + store location (application v2, Step 3)
+          if (birthday.isNotEmpty ||
+              gender.isNotEmpty ||
+              storeLocation.isNotEmpty) ...[
+            Text(
+              'Personal details',
+              style: AppConstants.bodyStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 4),
+            if (birthday.isNotEmpty)
+              Text(
+                'Birthday: $birthday',
+                style: AppConstants.bodyStyle(
+                  fontSize: 12,
+                  color: AppConstants.secondary.withValues(alpha: 0.7),
+                ),
+              ),
+            if (gender.isNotEmpty)
+              Text(
+                'Gender: $gender',
+                style: AppConstants.bodyStyle(
+                  fontSize: 12,
+                  color: AppConstants.secondary.withValues(alpha: 0.7),
+                ),
+              ),
+            if (storeLocation.isNotEmpty)
+              Text(
+                '📍 $storeLocation',
+                style: AppConstants.bodyStyle(
+                  fontSize: 12,
+                  color: AppConstants.secondary.withValues(alpha: 0.7),
+                ),
+              ),
+            const SizedBox(height: 12),
+          ],
+
+          // Business documents (application v2, Step 4 — all required)
+          if (bizDocs != null) ...[
+            Text(
+              'Business documents (required)',
+              style: AppConstants.bodyStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              children: [
+                _ThumbColumn(
+                  label: 'DTI cert',
+                  storagePath: bizDocs['dti_cert_url']?.toString(),
+                ),
+                _ThumbColumn(
+                  label: 'BIR COR',
+                  storagePath: bizDocs['bir_cor_url']?.toString(),
+                ),
+                _ThumbColumn(
+                  label: 'Permit',
+                  storagePath: bizDocs['permit_url']?.toString(),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+          ],
+
           // Storefront
           if (storeName.isNotEmpty) ...[
             Text(
@@ -471,6 +647,16 @@ class _Tier1Review extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 8),
+            // Store tags (Step 5 — same vocabulary as product tags)
+            if (storeTags.isNotEmpty)
+              Text(
+                'Tags: ${storeTags.map(tagDisplayLabel).join(' · ')}',
+                style: AppConstants.bodyStyle(
+                  fontSize: 12,
+                  color: AppConstants.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
           ],
 
           // Store photos (storefront becomes the banner; the 5 product

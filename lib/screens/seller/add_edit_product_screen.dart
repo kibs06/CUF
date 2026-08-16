@@ -9,6 +9,7 @@ import '../../widgets/sole_card.dart';
 import '../../widgets/sole_text_field.dart';
 import '../../widgets/sole_primary_button.dart';
 import '../../widgets/sole_switch.dart';
+import '../../widgets/seller/tag_selector.dart';
 
 /// Full add/edit product form for sellers.
 ///
@@ -1701,92 +1702,18 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
 }
 
 // ─── Grouped product tag selector ────────────────────────────────
-/// One selectable preset tag. Stored value is a stable snake_case id that is
-/// globally unique across all three groups, so it never needs a group prefix.
-class _TagPreset {
-  final String id;
-  final String label;
-  final IconData icon;
-  const _TagPreset({
-    required this.id,
-    required this.label,
-    required this.icon,
-  });
-}
+// The preset vocabulary (TagPreset/TagGroup/tagGroups) lives in
+// lib/widgets/seller/tag_selector.dart so the seller application's
+// Storefront step and the store forms share the SAME tags as products.
+// This file keeps its own private widget copies (selector + chips) and
+// aliases the shared definitions so the two never drift apart.
+// (`_TagGroup` aliases the shared TagGroup so the group/chip widgets below
+// keep their original private names while sharing the preset vocabulary.)
+typedef _TagGroup = TagGroup;
 
-/// A tag group: its presets, its accent color (espresso/cream family so the
-/// three groups stay visually distinct but on-palette), and the content color
-/// that must contrast against [color] when a chip is selected.
-class _TagGroup {
-  final String id; // 'type' | 'material' | 'sustainability' | 'other'
-  final String label;
-  final IconData icon;
-  final Color color; // selected fill
-  final Color onColor; // selected content
-  final List<_TagPreset> presets;
-  const _TagGroup({
-    required this.id,
-    required this.label,
-    required this.icon,
-    required this.color,
-    required this.onColor,
-    this.presets = const [],
-  });
-}
+const List<_TagGroup> _tagGroups = tagGroups;
 
-/// The three editable groups, in display order. Colors are drawn from the
-/// espresso/cream palette (burnished clay, leather camel, dark olive stitch)
-/// so the groups stay distinct without clashing with the theme.
-const List<_TagGroup> _tagGroups = [
-  _TagGroup(
-    id: 'type',
-    label: 'Product type',
-    icon: Icons.category_outlined,
-    color: AppConstants.primary,
-    onColor: AppConstants.surfaceLight,
-    presets: [
-      _TagPreset(id: 'handmade', label: 'Handmade', icon: Icons.handyman_outlined),
-      _TagPreset(id: 'made_to_order', label: 'Made-to-order', icon: Icons.straighten_outlined),
-      _TagPreset(id: 'ready_to_wear', label: 'Ready-to-wear', icon: Icons.checkroom_outlined),
-      _TagPreset(id: 'limited_edition', label: 'Limited edition', icon: Icons.star_outline),
-    ],
-  ),
-  _TagGroup(
-    id: 'material',
-    label: 'Material',
-    icon: Icons.layers_outlined,
-    color: Color(0xFFC08552), // leather camel
-    onColor: AppConstants.secondary,
-    presets: [
-      _TagPreset(id: 'leather', label: 'Leather', icon: Icons.work_outline),
-      _TagPreset(id: 'canvas', label: 'Canvas', icon: Icons.texture),
-      _TagPreset(id: 'rubber', label: 'Rubber', icon: Icons.sports_tennis_outlined),
-      _TagPreset(id: 'suede', label: 'Suede', icon: Icons.gesture),
-    ],
-  ),
-  _TagGroup(
-    id: 'sustainability',
-    label: 'Sustainability',
-    icon: Icons.eco_outlined,
-    color: Color(0xFF556B2F), // dark olive stitch
-    onColor: AppConstants.surfaceLight,
-    presets: [
-      _TagPreset(id: 'eco_friendly', label: 'Eco-friendly', icon: Icons.eco_outlined),
-      _TagPreset(id: 'upcycled_materials', label: 'Upcycled materials', icon: Icons.recycling),
-      _TagPreset(id: 'recycled_packaging', label: 'Recycled packaging', icon: Icons.inventory_2_outlined),
-    ],
-  ),
-];
-
-/// Neutral bucket for legacy free-text tags (saved before the grouped
-/// selector existed) that don't match any preset. Shown only when present.
-const _TagGroup _otherBucketGroup = _TagGroup(
-  id: 'other',
-  label: 'Custom tags',
-  icon: Icons.label_outline,
-  color: AppConstants.borderGray,
-  onColor: AppConstants.secondary,
-);
+const _TagGroup _otherBucketGroup = otherBucketGroup;
 
 const int _maxCustomTagLength = 30;
 

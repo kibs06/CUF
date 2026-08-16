@@ -8,9 +8,18 @@ export function useSellerApplications(status = 'pending') {
   const query = useQuery({
     queryKey: ['seller-applications', status],
     queryFn: async () => {
+      // Every field the application review modal renders: identity docs,
+      // community proof, personal details + location, business docs,
+      // store name/description/tags and the store photos.
       let q = supabase
         .from('profiles')
-        .select('id, full_name, email, seller_status, created_at, avatar_url, role')
+        .select(
+          'id, full_name, email, seller_status, created_at, avatar_url, role, phone, ' +
+            'id_type, id_document_url, selfie_url, cufmai_member_id, barangay_proof_url, ' +
+            'birthday, gender, store_location, store_tags, ' +
+            'store_name, store_description, store_front_url, product_photo_urls, rejection_reason, ' +
+            'seller_business_docs(id, dti_cert_url, bir_cor_url, permit_url, verification_status)',
+        )
         .order('created_at', { ascending: false })
 
       if (status !== 'all') {
@@ -51,6 +60,17 @@ export function useSellerApplications(status = 'pending') {
   return query
 }
 
+// Fire-and-forget: email the applicant the admin's decision via the
+// send-approval-email edge function (Gmail SMTP). Runs after the DB update
+// succeeds; a failed email must never fail the approval/rejection itself.
+const triggerApprovalEmail = (userId, outcome, reason) => {
+  supabase.functions
+    .invoke('send-approval-email', {
+      body: { userId, outcome, ...(reason?.trim() ? { rejectionReason: reason.trim() } : {}) },
+    })
+    .catch((err) => console.error('Approval email trigger failed:', err))
+}
+
 export function useApproveApplication() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -60,6 +80,7 @@ export function useApproveApplication() {
         .update({ role: 'seller', seller_status: 'approved' })
         .eq('id', userId)
       if (error) throw error
+      triggerApprovalEmail(userId, 'approved')
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['seller-applications'] })
@@ -77,6 +98,7 @@ export function useRejectApplication() {
       if (reason?.trim()) update.rejection_reason = reason.trim()
       const { error } = await supabase.from('profiles').update(update).eq('id', userId)
       if (error) throw error
+      triggerApprovalEmail(userId, 'rejected', reason)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['seller-applications'] })

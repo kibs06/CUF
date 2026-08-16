@@ -178,13 +178,19 @@ A `Form` containing, in order:
    `ctrl.emailExistsError` inline. The error is cleared on change.
 4. **Phone Number** — hint `e.g. 09XX-XXX-XXXX`, `Icons.phone_outlined`,
    `AutofillHints.telephoneNumber`, min 10 chars.
-5. **Password** (hidden when re-applying) — `obscureText`, lock icon,
+5. **Birthday** (application v2) — required; read-only `AuthTextField` +
+   `showDatePicker`, 13+ via `validateBirthday` (inline validator).
+6. **Gender (optional)** — `ChoiceChip`s from
+   `AppConstants.customerGenderOptions`; picking "Self-describe" reveals a
+   free-text field guarded by `validateGenderSelfDescribe`. Resolved into
+   `ctrl.gender` at submit via `resolveGenderValue`.
+7. **Password** (hidden when re-applying) — `obscureText`, lock icon,
    `AutofillHints.newPassword`, min 6 chars, followed by
    `PasswordStrengthMeter`.
-6. **Confirm Password** — `Icons.lock_clock_outlined`, must equal password
+8. **Confirm Password** — `Icons.lock_clock_outlined`, must equal password
    field ("Passwords do not match").
-7. **TermsPolicyTile** — bound to `ctrl.termsAccepted`.
-8. **Continue** — `SolePrimaryAuthButton`; on press validates the form,
+9. **TermsPolicyTile** — bound to `ctrl.termsAccepted`.
+10. **Continue** — `SolePrimaryAuthButton`; on press validates the form,
    requires terms accepted, then runs the **duplicate-email check** (spinner
    on the button while checking, `_checkingEmail`), then `ctrl.nextStep()`.
 
@@ -297,15 +303,51 @@ The tile renders whatever state the controller gives it:
     continue).
 - Switching to "member" clears any picked barangay proof
   (`ctrl.removeDocument`).
-- **Continue** requires the barangay proof when non-member (red SnackBar
-  otherwise).
+- **Store location** (required): a read-only field that pushes
+  `StoreLocationPickerScreen` — a lightweight full-screen map picker
+  (MapTiler tiles + geocoding search, Geolocator GPS auto-locate, center
+  pin) with a single "Use this location" confirm. Reuses the customer
+  picker's map/geocoding infrastructure but drops its delivery-address
+  form (no recipient name/phone/label/default). Captures the composed
+  address line + lat/lng into `ctrl.storeLocation`/`storeLat`/`storeLng`
+  via the `StoreLocationResult` record.
+- **Continue** validates in order: store location → barangay proof
+  (red SnackBars).
 
 ---
 
-## Step 4 · Storefront (`_StorefrontStep`)
+## Step 4 · Business verification (`_BusinessStep`)
+
+- Explainer `_InfoBanner` (verified icon): all three documents are
+  required so admins can verify the applicant runs a registered business.
+- Three `DocumentUploadTile`s (uploaded to the private
+  `seller-verification-docs` bucket):
+  - **DTI Business Registration** (`dti_cert`)
+  - **BIR COR** (`bir_cor`)
+  - **Business permit** (mayor's/barangay, `permit`)
+- **Continue** refuses (red SnackBar) until all three are uploaded. On
+  final submit the paths are written to the `seller_business_docs` row
+  (one per profile, status `pending`) by `completeSellerApplication`.
+
+---
+
+## Step 5 · Storefront (`_StorefrontStep`)
 
 - **Store Name** — storefront icon, required.
-- **Store Description** — 4-line multiline field, min 20 chars.
+- **Store Description (optional)** — 4-line multiline field, NO validator:
+  sellers can add their story later from Create/Edit Store (wired to the
+  `stores.description` column, shown on the customer store profile).
+- **Store tags (required — at least one)** — the shared `TagSelector`
+  from `lib/widgets/seller/tag_selector.dart` with `groups: storeTagGroups`
+  (a STORE-specific preset vocabulary — Craft & heritage: Handmade,
+  Family-owned, Multi-generation, Custom orders; Local pride: Local,
+  Carcar-made, Cebu-made, Filipino-made; Services & offers: Custom sizing,
+  Repairs & resoling, Wholesale, Retail / walk-ins). Product tags use the
+  separate `tagGroups` vocabulary. Serialized ids land in
+  `profiles.store_tags` and are copied to `stores.tags` at store creation
+  (`createStore` falls back to the profile value when the Create Store
+  form passes none). `_submit()` refuses ("Please choose at least one
+  store tag.") when the selection is empty.
 - **Store photos** — a **Store front photo** `DocumentUploadTile` plus a
   **Product photos** section rendered as a compact **horizontal carousel**
   of five 96px square slots (`_ProductPhotoSlot`, keys

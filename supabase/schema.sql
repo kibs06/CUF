@@ -41,6 +41,23 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     avatar_url      TEXT,
     suspended       BOOLEAN DEFAULT false,
     rejection_reason TEXT,
+    -- Tier 1 seller application (migration 20260812000000 + 20260816000000 + 20260816120000):
+    id_type             TEXT,          -- gov ID type selected (philid, passport, ...)
+    id_document_url     TEXT,          -- gov ID photo path (private seller-verification-docs)
+    selfie_url          TEXT,          -- selfie path (private)
+    cufmai_member_id    TEXT,          -- existing CUFMAI member ID, when applicable
+    barangay_proof_url  TEXT,          -- non-member community proof (private)
+    store_name          TEXT,
+    store_description   TEXT,          -- optional, added post-approval via Create/Edit Store
+    store_front_url     TEXT,          -- PUBLIC store-assets path; doubles as store banner
+    product_photo_urls  TEXT[],        -- 5 product photo paths (private, admin review only)
+    -- Seller application v2 (migration 20260817140000):
+    birthday            DATE,          -- personal detail (same column as customer signup)
+    gender              TEXT,          -- personal detail (same column as customer signup)
+    store_location      TEXT,          -- map-picked store address; pre-fills Create Store Location
+    store_lat           DOUBLE PRECISION,
+    store_lng           DOUBLE PRECISION,
+    store_tags          TEXT[] DEFAULT '{}',  -- store tag ids (store-specific preset vocabulary)
     created_at      TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -89,6 +106,45 @@ GRANT  EXECUTE ON FUNCTION public.is_seller_or_admin() TO anon, authenticated;
 COMMENT ON FUNCTION public.is_seller_or_admin() IS
   'True when the current user has role seller or admin. SECURITY DEFINER so policies can call it without re-entering profiles RLS (fixes 42P17 infinite recursion).';
 
+-- Admin-only permanent account delete (migration
+-- 20260817120000_admin_delete_user.sql). SECURITY DEFINER — the is_admin()
+-- check runs inside the function because it writes across schemas (incl.
+-- auth.users). GRANTed to authenticated only, not anon.
+CREATE OR REPLACE FUNCTION public.admin_delete_user(target_user_id uuid)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF NOT public.is_admin() THEN
+    RAISE EXCEPTION 'Only admins can delete accounts';
+  END IF;
+  -- FK-safe order: sales_transactions / gcash_payment_proofs /
+  -- order_payment_events first, then products, stores (orders detached),
+  -- the profile row, then the auth.users row.
+  DELETE FROM public.sales_transactions WHERE seller_id = target_user_id;
+  DELETE FROM public.gcash_payment_proofs WHERE submitted_by = target_user_id;
+  DELETE FROM public.order_payment_events WHERE actor_id = target_user_id;
+  UPDATE public.payment_fee_config SET updated_by = NULL
+    WHERE updated_by = target_user_id;
+  DELETE FROM public.products
+    WHERE store_id IN (SELECT id FROM public.stores WHERE owner_id = target_user_id)
+       OR seller_id = target_user_id;
+  UPDATE public.orders SET store_id = NULL
+    WHERE store_id IN (SELECT id FROM public.stores WHERE owner_id = target_user_id);
+  UPDATE public.customization_requests SET store_id = NULL
+    WHERE store_id IN (SELECT id FROM public.stores WHERE owner_id = target_user_id);
+  DELETE FROM public.stores WHERE owner_id = target_user_id;
+  DELETE FROM public.profiles WHERE id = target_user_id;
+  DELETE FROM auth.users WHERE id = target_user_id;
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.admin_delete_user(uuid) FROM PUBLIC;
+GRANT  EXECUTE ON FUNCTION public.admin_delete_user(uuid) TO authenticated;
+
+
 -- Renamed by 20260715090200_fix_profiles_rls_for_conversations.sql (was
 -- "Public profiles are viewable by everyone").
 CREATE POLICY "Users can view profiles of their conversation partners"
@@ -119,6 +175,8 @@ CREATE TABLE IF NOT EXISTS public.stores (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name            TEXT NOT NULL,
     tagline         TEXT,
+    -- Optional longer "about the store" text (migration 20260817130000).
+    description     TEXT,
     location        TEXT NOT NULL,
     brand_color     TEXT DEFAULT '#8B5A2B',
     banner_url      TEXT,
@@ -133,7 +191,11 @@ CREATE TABLE IF NOT EXISTS public.stores (
     -- by 20260730000000_add_paymongo_gcash_columns.sql.
     gcash_qr_url        TEXT,
     gcash_number        TEXT,
-    gcash_account_name  TEXT
+    gcash_account_name  TEXT,
+    -- Store tags (migration 20260817140000) — store-specific preset
+    -- vocabulary; collected at application, copied from profiles.store_tags
+    -- at store creation, editable via Edit Store.
+    tags                TEXT[] DEFAULT '{}'
 );
 
 ALTER TABLE public.stores ENABLE ROW LEVEL SECURITY;

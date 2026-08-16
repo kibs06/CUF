@@ -16,7 +16,11 @@ class AuthService {
   User? get currentUser => _client.auth.currentUser;
 
   Future<Map<String, dynamic>?> getProfile(String userId) async {
-    // Retry up to 5 times — trigger may need a moment to fire
+    // Retry up to 5 times — the auth trigger may need a moment to fire
+    // the profile row after signup. The sleeps are a SHORT backoff, not a
+    // long hang: the previous 1+2+3+4+5s pattern (15s total) exceeded
+    // AuthGate's 12s profile timeout, so a missing row always surfaced as
+    // a TimeoutException and the fallback below never ran.
     for (int attempt = 1; attempt <= 5; attempt++) {
       final data = await Supabase.instance.client
           .from('profiles')
@@ -27,7 +31,7 @@ class AuthService {
       if (data != null) return data;
 
       // Wait before retrying
-      await Future.delayed(Duration(seconds: attempt));
+      await Future.delayed(Duration(milliseconds: 300 * attempt));
     }
 
     // If still null after retries, create the profile manually
@@ -214,12 +218,42 @@ class AuthService {
           : data.productPhotoPaths,
       'store_name': data.storeName.trim(),
       'store_description': data.storeDescription.trim(),
+      // Application v2 (Step 3 personal details + location, Step 5 tags)
+      'birthday': customer_profile_fields.formatBirthdayForDb(data.birthday),
+      'gender': data.gender,
+      'store_location': data.storeLocation,
+      'store_lat': data.storeLat,
+      'store_lng': data.storeLng,
+      'store_tags': data.storeTags.isEmpty ? null : data.storeTags,
       // Re-applying clears any previous rejection reason — the old verdict
       // no longer applies to the new application.
       'rejection_reason': null,
     };
 
     await _client.from('profiles').upsert(profileData);
+
+    // Step 4 business docs — DTI cert, BIR COR, mayor's/barangay permit
+    // are REQUIRED in the application v2 flow, so write them to
+    // seller_business_docs (one row per profile, owner-insert RLS lets the
+    // applicant create it) and flag the submission as pending review.
+    // Idempotent on retry: upsert on profile_id keeps a single row.
+    if (data.dtiCertPath != null ||
+        data.birCorPath != null ||
+        data.permitPath != null) {
+      await _client.from('seller_business_docs').upsert(
+        {
+          'profile_id': user.id,
+          'dti_cert_url': data.dtiCertPath,
+          'bir_cor_url': data.birCorPath,
+          'permit_url': data.permitPath,
+          'verification_status': AppConstants.bizStatusPending,
+          'submitted_at': DateTime.now().toUtc().toIso8601String(),
+          'verified_at': null,
+        },
+        onConflict: 'profile_id',
+      );
+    }
+
     final profile = await getProfile(user.id) ?? profileData;
 
     return {
@@ -231,7 +265,11 @@ class AuthService {
   Future<List<Map<String, dynamic>>> fetchPendingSellerApplications() async {
     final data = await _client
         .from('profiles')
-        .select()
+        // Include the applicant's required business-docs row (DTI/BIR/
+        // permit) via the FK so the review screen can verify all of them.
+        .select(
+          '*, seller_business_docs(id, dti_cert_url, bir_cor_url, permit_url, verification_status)',
+        )
         .eq('seller_status', AppConstants.statusPending)
         .order('created_at', ascending: false);
     return (data as List).map((row) => Map<String, dynamic>.from(row)).toList();

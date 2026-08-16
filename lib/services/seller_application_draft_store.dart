@@ -22,6 +22,13 @@ class SellerApplicationDraft {
 
   /// Selected government ID type (one of `AppConstants.govIdTypes` values).
   final String? idType;
+
+  /// Personal details + location (application v2, Community step)
+  final DateTime? birthday;
+  final String? gender;
+  final String storeLocation;
+  final List<String> storeTags;
+
   final String storeName;
   final String storeDescription;
 
@@ -31,6 +38,9 @@ class SellerApplicationDraft {
   final String? selfiePath;
   final String? barangayProofPath;
   final String? storeFrontPath;
+  final String? dtiPath;
+  final String? birPath;
+  final String? permitPath;
 
   /// Local paths of the applicant's 5 product photos (best-effort like the
   /// other picked images — the temp files may be purged).
@@ -49,12 +59,19 @@ class SellerApplicationDraft {
     required this.isCufmaiMember,
     required this.cufmaiMemberId,
     this.idType,
+    this.birthday,
+    this.gender,
+    this.storeLocation = '',
+    this.storeTags = const [],
     required this.storeName,
     required this.storeDescription,
     this.idDocumentPath,
     this.selfiePath,
     this.barangayProofPath,
     this.storeFrontPath,
+    this.dtiPath,
+    this.birPath,
+    this.permitPath,
     this.productPhotoPaths = const [],
     required this.savedAt,
   });
@@ -68,12 +85,19 @@ class SellerApplicationDraft {
         'is_cufmai_member': isCufmaiMember,
         'id_type': idType,
         'cufmai_member_id': cufmaiMemberId,
+        'birthday': birthday?.toIso8601String(),
+        'gender': gender,
+        'store_location': storeLocation,
+        'store_tags': storeTags,
         'store_name': storeName,
         'store_description': storeDescription,
         'id_document_path': idDocumentPath,
         'selfie_path': selfiePath,
         'barangay_proof_path': barangayProofPath,
         'store_front_path': storeFrontPath,
+        'dti_path': dtiPath,
+        'bir_path': birPath,
+        'permit_path': permitPath,
         'product_photo_paths': productPhotoPaths,
         'saved_at': savedAt.toIso8601String(),
       };
@@ -90,12 +114,23 @@ class SellerApplicationDraft {
       isCufmaiMember: json['is_cufmai_member'] != false,
       cufmaiMemberId: json['cufmai_member_id']?.toString() ?? '',
       idType: json['id_type']?.toString(),
+      birthday: DateTime.tryParse(json['birthday']?.toString() ?? ''),
+      gender: json['gender']?.toString(),
+      storeLocation: json['store_location']?.toString() ?? '',
+      storeTags: (json['store_tags'] as List?)
+              ?.map((e) => e?.toString() ?? '')
+              .where((e) => e.isNotEmpty)
+              .toList() ??
+          const [],
       storeName: json['store_name']?.toString() ?? '',
       storeDescription: json['store_description']?.toString() ?? '',
       idDocumentPath: json['id_document_path']?.toString(),
       selfiePath: json['selfie_path']?.toString(),
       barangayProofPath: json['barangay_proof_path']?.toString(),
       storeFrontPath: json['store_front_path']?.toString(),
+      dtiPath: json['dti_path']?.toString(),
+      birPath: json['bir_path']?.toString(),
+      permitPath: json['permit_path']?.toString(),
       productPhotoPaths: (json['product_photo_paths'] as List?)
               ?.map((e) => e?.toString())
               .toList() ??
@@ -163,12 +198,19 @@ class SellerApplicationDraftStore {
         isCufmaiMember: draft.isCufmaiMember,
         cufmaiMemberId: draft.cufmaiMemberId,
         idType: draft.idType,
+        birthday: draft.birthday,
+        gender: draft.gender,
+        storeLocation: draft.storeLocation,
+        storeTags: draft.storeTags,
         storeName: draft.storeName,
         storeDescription: draft.storeDescription,
         idDocumentPath: draft.idDocumentPath,
         selfiePath: draft.selfiePath,
         barangayProofPath: draft.barangayProofPath,
         storeFrontPath: draft.storeFrontPath,
+        dtiPath: draft.dtiPath,
+        birPath: draft.birPath,
+        permitPath: draft.permitPath,
         productPhotoPaths: draft.productPhotoPaths,
         savedAt: draft.savedAt,
       );

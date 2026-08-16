@@ -873,6 +873,16 @@ class SupabaseService {
         .eq('id', userId);
   }
 
+  /// Permanently deletes a user (profile + auth account + owned stores).
+  ///
+  /// Runs the admin-only SECURITY DEFINER RPC `admin_delete_user` (migration
+  /// 20260817120000_admin_delete_user.sql) — the anon-key client cannot
+  /// delete auth.users rows directly, so the privilege check happens inside
+  /// the function. Throws if the caller is not an admin.
+  Future<void> deleteUserPermanently(String userId) async {
+    await _client.rpc('admin_delete_user', params: {'target_user_id': userId});
+  }
+
   Future<void> _upsertInventory(dynamic productId, dynamic sizes) async {
     if (sizes == null) return;
     final sizesMap = Map<String, dynamic>.from(sizes as Map);

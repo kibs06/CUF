@@ -64,26 +64,42 @@ void main() {
     expect(find.text('Barangay certificate / proof'), findsNothing);
   });
 
-  testWidgets('Continue as a non-member without a barangay proof is blocked',
+  testWidgets('Continue without a store location is blocked',
       (tester) async {
     await pumpToCommunityStep(tester);
 
-    await tester.ensureVisible(find.text('Not a member'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Not a member'));
-    await tester.pumpAndSettle();
-
-    // No proof uploaded → Continue must refuse and stay on Step 3.
+    // Birthday/gender live on Step 1 (application v2); the first required
+    // gate on Step 3 is the map-picked store location.
     final continueBtn = find.widgetWithText(FilledButton, 'Continue');
     await tester.ensureVisible(continueBtn);
     await tester.pumpAndSettle();
     await tester.tap(continueBtn);
     await tester.pumpAndSettle();
-
     expect(
-      find.text('Please add your barangay proof to continue.'),
+      find.text('Please set your store location on the map to continue.'),
       findsOneWidget,
     );
     expect(find.text('Prove your community link'), findsOneWidget);
+  });
+
+  testWidgets('Step 1 collects birthday and gender before the flow can '
+      'advance', (tester) async {
+    // Dev mode OFF — real Step 1 validation runs (empty form fails
+    // validation before the Continue handler ever touches Supabase).
+    await tester.pumpWidget(const MaterialApp(home: SellerApplicationFlow()));
+    expect(find.text('Create your seller account'), findsOneWidget);
+
+    // The birthday + gender fields render on Step 1.
+    expect(find.text('Birthday *'), findsOneWidget);
+    expect(find.text('Gender (optional)'), findsOneWidget);
+
+    // Without a birthday, Continue refuses (inline form error).
+    final continueBtn = find.widgetWithText(FilledButton, 'Continue');
+    await tester.ensureVisible(continueBtn);
+    await tester.pumpAndSettle();
+    await tester.tap(continueBtn);
+    await tester.pumpAndSettle();
+    expect(find.text('Please select your birthday'), findsOneWidget);
+    expect(find.text('Create your seller account'), findsOneWidget);
   });
 }

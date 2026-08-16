@@ -60,7 +60,7 @@ class AccountEntryScreen extends StatefulWidget {
 }
 
 class _AccountEntryScreenState extends State<AccountEntryScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   static const _transitionDuration = Duration(milliseconds: 280);
 
   // Sign-in form state (controllers live in State, so typed values survive
@@ -81,7 +81,14 @@ class _AccountEntryScreenState extends State<AccountEntryScreen>
 
   /// The mode being replaced — non-null only while a transition is running.
   AuthEntryMode? _previousMode;
+
+  /// Content block controller.
   late final AnimationController _modeController;
+
+  /// Header title block controller — independent of the content block so
+  /// its timing can be tuned separately; both are started together in
+  /// [_switchMode] so they stay in sync.
+  late final AnimationController _headerController;
   bool _reducedMotion = false;
 
   /// Direction of the current transition. create → signin is \"forward\"
@@ -96,12 +103,17 @@ class _AccountEntryScreenState extends State<AccountEntryScreen>
       vsync: this,
       duration: _transitionDuration,
     )..addStatusListener(_onTransitionStatus);
+    _headerController = AnimationController(
+      vsync: this,
+      duration: _transitionDuration,
+    )..addStatusListener(_onTransitionStatus);
     _checkBiometricState();
   }
 
   @override
   void dispose() {
     _modeController.dispose();
+    _headerController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -130,7 +142,11 @@ class _AccountEntryScreenState extends State<AccountEntryScreen>
       _previousMode = _mode;
       _mode = next;
     });
+    // Both blocks animate together — each has its own controller so the
+    // header's timing can be tuned independently of the content, but they
+    // always start on the same frame.
     _modeController.forward(from: 0);
+    _headerController.forward(from: 0);
   }
 
   // ─── Navigation (create mode) ─────────────────────────────────────────
@@ -408,11 +424,16 @@ class _AccountEntryScreenState extends State<AccountEntryScreen>
           ],
         ),
         const SizedBox(height: AuthSpacing.s8),
+        // Header block runs on its own controller (started in sync with the
+        // content controller in _switchMode) so the title swap can be tuned
+        // independently — the two blocks never fight each other's timing.
         _SlideSwap(
-          animation: _modeController,
+          animation: _headerController,
           exitTo: _isForward ? -1.0 : 1.0,
+          alignment: Alignment.topCenter,
           incoming: _titleBlockFor(_mode),
-          outgoing: _previousMode == null ? null : _titleBlockFor(_previousMode!),
+          outgoing:
+              _previousMode == null ? null : _titleBlockFor(_previousMode!),
         ),
       ],
     );
@@ -431,14 +452,22 @@ class _AccountEntryScreenState extends State<AccountEntryScreen>
           ),
         ),
         const SizedBox(height: AuthSpacing.s8),
-        Text(
-          signin
-              ? 'Sign in to your CUFMAI account.'
-              : 'Join the home of Carcar footwear craftsmanship.',
-          style: AppConstants.bodyStyle(
-            fontSize: 14,
-            color: Colors.white.withValues(alpha: 0.85),
-            height: 1.45,
+        // Subtitle in a fixed two-line slot: the two subtitles differ in
+        // line count, and a changing header height made the swap animate in
+        // two phases (slide, then a resize) — the "stops then proceeds"
+        // feel. A constant height means the title block never resizes, so
+        // the slide is purely horizontal with no vertical drift.
+        SizedBox(
+          height: 2 * 14 * 1.45 * MediaQuery.textScalerOf(context).scale(1),
+          child: Text(
+            signin
+                ? 'Sign in to your CUFMAI account.'
+                : 'Join the home of Carcar footwear craftsmanship.',
+            style: AppConstants.bodyStyle(
+              fontSize: 14,
+              color: Colors.white.withValues(alpha: 0.85),
+              height: 1.45,
+            ),
           ),
         ),
       ],
@@ -452,6 +481,13 @@ class _AccountEntryScreenState extends State<AccountEntryScreen>
       animation: _modeController,
       // Content offset is the header's with the sign flipped.
       exitTo: _isForward ? 1.0 : -1.0,
+      // Bottom-anchor the two content blocks: they have very different
+      // heights (the sign-in form is much taller than the create panel), so
+      // a top-aligned Stack would make the buttons jump up/down as the
+      // stack height snaps to the taller child and back. Bottom alignment
+      // keeps the buttons and links pinned to the same spot — only the
+      // empty video space above grows/shrinks.
+      alignment: Alignment.bottomCenter,
       incoming: _contentFor(_mode, auth),
       outgoing:
           _previousMode == null ? null : _contentFor(_previousMode!, auth),
@@ -717,6 +753,11 @@ class _AccountEntryScreenState extends State<AccountEntryScreen>
 
 /// The opposite-direction slide swap.
 ///
+/// Shared curve for both directions of the swap — symmetric so the outgoing
+/// and incoming children mirror each other exactly at every frame (a
+/// mismatched easeIn/easeOut made one child visually lag the other).
+const Curve _swapCurve = Curves.easeInOutCubic;
+
 /// One shared animation drives both blocks; [exitTo] is the horizontal
 /// direction (as a unit vector sign) the OUTGOING child slides toward, and
 /// the incoming child enters from the opposite side (`-exitTo`). The content
@@ -730,6 +771,12 @@ class _SlideSwap extends StatelessWidget {
 
   /// +1 or -1: the direction the outgoing child slides out to.
   final double exitTo;
+
+  /// How the two children (which may have different heights) are anchored
+  /// inside the Stack. Bottom-anchored for the mode content block (buttons
+  /// stay pinned while the panel height changes), top-anchored for the
+  /// header title block.
+  final Alignment alignment;
   final Widget incoming;
   final Widget? outgoing;
 
@@ -737,6 +784,7 @@ class _SlideSwap extends StatelessWidget {
     required this.animation,
     required this.exitTo,
     required this.incoming,
+    this.alignment = Alignment.topCenter,
     this.outgoing,
   });
 
@@ -746,6 +794,7 @@ class _SlideSwap extends StatelessWidget {
     if (outgoing == null) return incoming;
 
     return Stack(
+      alignment: alignment,
       children: [
         // Outgoing: settle → slide away in the exit direction, fading out.
         SlideTransition(
@@ -753,7 +802,10 @@ class _SlideSwap extends StatelessWidget {
             begin: Offset.zero,
             end: Offset(exitTo, 0),
           ).animate(
-            CurvedAnimation(parent: animation, curve: Curves.easeIn),
+            // One shared curve for both directions so the two children
+            // mirror each other exactly — a mismatched easeIn/easeOut made
+            // one child lag the other mid-transition.
+            CurvedAnimation(parent: animation, curve: _swapCurve),
           ),
           child: FadeTransition(
             opacity: Tween<double>(begin: 1, end: 0).animate(animation),
@@ -766,7 +818,7 @@ class _SlideSwap extends StatelessWidget {
             begin: Offset(-exitTo, 0),
             end: Offset.zero,
           ).animate(
-            CurvedAnimation(parent: animation, curve: Curves.easeOut),
+            CurvedAnimation(parent: animation, curve: _swapCurve),
           ),
           child: FadeTransition(
             opacity: Tween<double>(begin: 0, end: 1).animate(animation),

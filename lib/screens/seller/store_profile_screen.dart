@@ -6,6 +6,7 @@ import '../../services/product_service.dart';
 import '../../services/store_service.dart';
 import '../../widgets/sole_primary_button.dart';
 import '../../widgets/sole_switch.dart';
+import '../../widgets/seller/tag_selector.dart';
 import 'edit_store_screen.dart';
 import 'store_schedule_screen.dart';
 
@@ -133,6 +134,18 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
   String? get _logoUrl => _store?['logo_url']?.toString();
   String get _name => _store?['name'] ?? 'My Store';
   String get _tagline => _store?['tagline'] ?? '';
+  String get _description => _store?['description'] ?? '';
+
+  List<String> get _tags {
+    final t = _store?['tags'];
+    if (t is List) {
+      return t
+          .map((e) => e?.toString() ?? '')
+          .where((e) => e.isNotEmpty)
+          .toList();
+    }
+    return const [];
+  }
   String get _location => _store?['location'] ?? '';
   bool get _isOpen => _store?['is_open'] ?? true;
   String get _brandColorHex => _store?['brand_color'] ?? '#8B5A2B';
@@ -367,6 +380,59 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                     ).copyWith(fontStyle: FontStyle.italic),
                   ),
                 ),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ],
+          // Description (optional)
+          if (_description.isNotEmpty) ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.notes_rounded,
+                    size: 16,
+                    color: AppConstants.primary.withValues(alpha: 0.6)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _description,
+                    style: AppConstants.bodyStyle(
+                      fontSize: 13,
+                      color: AppConstants.secondary.withValues(alpha: 0.7),
+                      height: 1.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ],
+          // Store tags (same vocabulary as product tags)
+          if (_tags.isNotEmpty) ...[
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final t in _tags)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppConstants.primary.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: AppConstants.primary.withValues(alpha: 0.25),
+                      ),
+                    ),
+                    child: Text(
+                      tagDisplayLabel(t),
+                      style: AppConstants.bodyStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppConstants.primary,
+                      ),
+                    ),
+                  ),
               ],
             ),
             const SizedBox(height: 12),

@@ -6,7 +6,6 @@ import '../../providers/auth_provider.dart';
 import '../../utils/dev_mode.dart';
 import '../../widgets/auth/signup_scaffold.dart';
 import '../../widgets/auth/sole_primary_auth_button.dart';
-import '../customer/customer_shell.dart';
 
 /// Locked screen for seller applicants awaiting admin approval.
 ///
@@ -138,6 +137,13 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen>
                   ),
                   const SizedBox(height: AuthSpacing.s24),
 
+                  // ── Email notification notice ─────────────────
+                  // Tell the applicant they'll be emailed the decision
+                  // (approve/reject) and, if nothing arrives, to check
+                  // spam — so the email channel isn't a surprise.
+                  const _EmailNoticeCard(),
+                  const SizedBox(height: AuthSpacing.s20),
+
                   // ── What happens next (single instance) ───────
                   const _SectionLabel('WHAT HAPPENS NEXT'),
                   const SizedBox(height: AuthSpacing.s8),
@@ -193,18 +199,16 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen>
                       // Dev preview: this screen was pushed over the app's
                       // landing — "Back to home" pops back to it. Real
                       // pending state: this screen IS the root (AuthGate
-                      // locks the app here), so push the customer home
-                      // instead — the applicant can browse stores while
-                      // their application is under review, and the back
-                      // gesture returns them to this status screen.
+                      // locks the app here), so "home" means the app's very
+                      // start — sign out and AuthGate's auth stream swaps
+                      // this screen for the login/sign-up front door
+                      // automatically. (Pushing AccountEntryScreen directly
+                      // wouldn't work: the stream would route a signed-in
+                      // pending user straight back here.)
                       if (navigator.canPop()) {
                         navigator.pop();
                       } else {
-                        navigator.push(
-                          MaterialPageRoute(
-                            builder: (_) => const CustomerShell(),
-                          ),
-                        );
+                        context.read<AuthProvider>().logout();
                       }
                     },
                   ),
@@ -665,6 +669,73 @@ class _TimelineStepRow extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Explains that the decision (approved / rejected) is emailed to the
+/// applicant's address, and to check spam/promotions if nothing arrives.
+/// Quiet, secondary styling so it supports the timeline without competing
+/// with it.
+class _EmailNoticeCard extends StatelessWidget {
+  const _EmailNoticeCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AuthSpacing.s16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: AppConstants.borderGray.withValues(alpha: 0.4),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppConstants.primary.withValues(alpha: 0.1),
+            ),
+            child: const Icon(
+              Icons.mail_outline_rounded,
+              size: 18,
+              color: AppConstants.primary,
+            ),
+          ),
+          const SizedBox(width: AuthSpacing.s12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'We’ll email you the decision',
+                  style: AppConstants.bodyStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: AppConstants.secondary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'You’ll get an email when your application is '
+                  'approved or rejected. If you don’t see it, check your '
+                  'spam or promotions folder.',
+                  style: AppConstants.bodyStyle(
+                    fontSize: 12,
+                    color: AppConstants.secondary.withValues(alpha: 0.6),
+                    height: 1.45,
+                  ),
+                ),
+              ],
             ),
           ),
         ],

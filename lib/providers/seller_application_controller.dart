@@ -43,11 +43,20 @@ class SellerApplicationController extends ChangeNotifier {
       phone = prefillProfile['phone']?.toString() ?? '';
       cufmaiMemberId =
           prefillProfile['cufmai_member_id']?.toString() ?? '';
+      birthday = DateTime.tryParse(
+          prefillProfile['birthday']?.toString() ?? '');
+      gender = prefillProfile['gender']?.toString();
+      storeLocation = prefillProfile['store_location']?.toString() ?? '';
+      storeLat = (prefillProfile['store_lat'] as num?)?.toDouble();
+      storeLng = (prefillProfile['store_lng'] as num?)?.toDouble();
+      storeTags = _stringListOf(prefillProfile['store_tags']);
       storeName = prefillProfile['store_name']?.toString() ?? '';
+      storeDescription =
+          prefillProfile['store_description']?.toString() ?? '';
     }
   }
 
-  static const int stepCount = 4;
+  static const int stepCount = 5;
 
   /// Re-apply: the user already has a session (rejected seller), so no
   /// password is collected and ensureUser reuses the existing account.
@@ -132,9 +141,53 @@ class SellerApplicationController extends ChangeNotifier {
   String cufmaiMemberId = '';
   final SellerDocState barangayProof = SellerDocState();
 
-  // ── Step 4 · Storefront ───────────────────────────────────────
+  // ── Personal details (Step 1) + store location (Step 3) ────────
+  // Notifying so the steps repaint (and the draft autosaves) the moment
+  // the date/location pickers or gender chips change.
+  DateTime? _birthday;
+  DateTime? get birthday => _birthday;
+  set birthday(DateTime? value) {
+    if (value == _birthday) return;
+    _birthday = value;
+    notifyListeners();
+  }
+
+  String? _gender;
+  String? get gender => _gender;
+  set gender(String? value) {
+    if (value == _gender) return;
+    _gender = value;
+    notifyListeners();
+  }
+
+  String _storeLocation = '';
+  String get storeLocation => _storeLocation;
+  set storeLocation(String value) {
+    if (value == _storeLocation) return;
+    _storeLocation = value;
+    notifyListeners();
+  }
+
+  double? storeLat;
+  double? storeLng;
+
+  // ── Step 4 · Business verification (REQUIRED) ─────────────────
+  final SellerDocState dti = SellerDocState();
+  final SellerDocState bir = SellerDocState();
+  final SellerDocState permit = SellerDocState();
+
+  // ── Step 5 · Storefront ───────────────────────────────────────
   String storeName = '';
   String storeDescription = '';
+
+  /// Store tag ids (same preset vocabulary as product tags — see
+  /// lib/widgets/seller/tag_selector.dart). Serialized by the TagSelector.
+  List<String> _storeTags = [];
+  List<String> get storeTags => List.unmodifiable(_storeTags);
+  set storeTags(List<String> value) {
+    _storeTags = List.of(value);
+    notifyListeners();
+  }
 
   /// Photo of the front of the applicant's store — uploaded to the PUBLIC
   /// `store-assets` bucket (doubles as the store banner) and stored as
@@ -180,11 +233,18 @@ class SellerApplicationController extends ChangeNotifier {
     _isCufmaiMember = draft.isCufmaiMember;
     cufmaiMemberId = draft.cufmaiMemberId;
     _idType = draft.idType;
+    birthday = draft.birthday;
+    gender = draft.gender;
+    storeLocation = draft.storeLocation;
+    storeTags = List.of(draft.storeTags);
     storeName = draft.storeName;
     storeDescription = draft.storeDescription;
     _restoreLocalFile(idDocument, draft.idDocumentPath);
     _restoreLocalFile(selfie, draft.selfiePath);
     _restoreLocalFile(barangayProof, draft.barangayProofPath);
+    _restoreLocalFile(dti, draft.dtiPath);
+    _restoreLocalFile(bir, draft.birPath);
+    _restoreLocalFile(permit, draft.permitPath);
     _restoreLocalFile(storeFront, draft.storeFrontPath);
     for (var i = 0; i < productPhotos.length; i++) {
       final paths = draft.productPhotoPaths;
@@ -237,13 +297,17 @@ class SellerApplicationController extends ChangeNotifier {
   }
 
   /// Number of documents that must be uploaded for the submission view's
-  /// checklist (ID + selfie + store-front + 5 product photos always;
-  /// barangay proof only when the applicant is not a CUFMAI member).
-  int get requiredUploadCount => isCufmaiMember ? 8 : 9;
+  /// checklist (ID + selfie + business docs (DTI/BIR/permit) + store-front
+  /// + 5 product photos always; barangay proof only when the applicant is
+  /// not a CUFMAI member).
+  int get requiredUploadCount => isCufmaiMember ? 11 : 12;
 
   int get completedUploadCount => [
         idDocument,
         selfie,
+        dti,
+        bir,
+        permit,
         storeFront,
         ...productPhotos,
         if (!isCufmaiMember) barangayProof,
@@ -320,6 +384,12 @@ class SellerApplicationController extends ChangeNotifier {
       // 2. Upload documents into the private bucket.
       await _uploadIfNeeded(user.id, 'id_document', idDocument);
       await _uploadIfNeeded(user.id, 'selfie', selfie);
+      // Business verification docs — DTI certificate, BIR COR, and
+      // mayor's/barangay permit (all required in Step 4). Stored in the
+      // private verification bucket; written to seller_business_docs.
+      await _uploadIfNeeded(user.id, 'dti_cert', dti);
+      await _uploadIfNeeded(user.id, 'bir_cor', bir);
+      await _uploadIfNeeded(user.id, 'permit', permit);
       // Store-front photo goes to the PUBLIC store-assets bucket so it can
       // double as the store banner post-approval (StoreService.createStore
       // falls back to profiles.store_front_url).
@@ -358,8 +428,17 @@ class SellerApplicationController extends ChangeNotifier {
             ? cufmaiMemberId.trim()
             : null,
         barangayProofPath: isCufmaiMember ? null : barangayProof.storagePath,
+        birthday: birthday,
+        gender: gender,
+        storeLocation: storeLocation.trim().isEmpty ? null : storeLocation.trim(),
+        storeLat: storeLat,
+        storeLng: storeLng,
+        dtiCertPath: dti.storagePath,
+        birCorPath: bir.storagePath,
+        permitPath: permit.storagePath,
         storeName: storeName,
         storeDescription: storeDescription,
+        storeTags: List.of(storeTags),
       );
 
       final ok = await signUpSeller(data);
@@ -387,5 +466,14 @@ class SellerApplicationController extends ChangeNotifier {
       isSubmitting = false;
       notifyListeners();
     }
+  }
+
+  /// Coerces a PostgREST TEXT[] cell (or a plain list) into a list of
+  /// strings — used when pre-filling a re-apply from the profile row.
+  static List<String> _stringListOf(dynamic value) {
+    if (value is List) {
+      return value.map((e) => e?.toString() ?? '').where((e) => e.isNotEmpty).toList();
+    }
+    return const [];
   }
 }

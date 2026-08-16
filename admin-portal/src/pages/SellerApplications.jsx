@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react'
+import { Eye } from 'lucide-react'
 import Badge from '../components/ui/Badge.jsx'
 import AvatarInitials from '../components/ui/AvatarInitials.jsx'
 import EmptyState from '../components/ui/EmptyState.jsx'
 import Modal from '../components/ui/Modal.jsx'
 import { TableSkeleton } from '../components/ui/Skeleton.jsx'
 import { useToast } from '../components/ui/Toast.jsx'
+import ApplicationDetailModal from '../components/seller-applications/ApplicationDetailModal.jsx'
 import {
   useSellerApplications,
   useApproveApplication,
@@ -25,6 +27,7 @@ export default function SellerApplications() {
   const [loadingId, setLoadingId] = useState(null)
   const [rejectTarget, setRejectTarget] = useState(null)
   const [rejectReason, setRejectReason] = useState('')
+  const [reviewTarget, setReviewTarget] = useState(null)
   const { showToast } = useToast()
 
   const { data, isLoading, isError, error } = useSellerApplications(tab)
@@ -41,6 +44,7 @@ export default function SellerApplications() {
     try {
       await approve.mutateAsync(userId)
       showToast('Seller approved successfully')
+      setReviewTarget(null)
     } catch (err) {
       showToast(err.message ?? 'Approval failed', 'error')
     } finally {
@@ -56,6 +60,7 @@ export default function SellerApplications() {
       showToast('Application rejected')
       setRejectTarget(null)
       setRejectReason('')
+      setReviewTarget(null)
     } catch (err) {
       showToast(err.message ?? 'Rejection failed', 'error')
     } finally {
@@ -127,6 +132,14 @@ export default function SellerApplications() {
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
+                      onClick={() => setReviewTarget(row)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-[#8B5A2B] px-3 py-1.5 text-xs font-semibold text-[#8B5A2B] transition-colors hover:bg-[#8B5A2B]/10"
+                    >
+                      <Eye size={13} />
+                      Review
+                    </button>
+                    <button
+                      type="button"
                       disabled={loadingId === row.id}
                       onClick={() => handleApprove(row.id)}
                       className="rounded-lg bg-[#4ECDC4] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-teal-600 disabled:opacity-50"
@@ -148,6 +161,16 @@ export default function SellerApplications() {
           ))}
         </div>
       )}
+
+      {/* Full application review modal */}
+      <ApplicationDetailModal
+        application={reviewTarget}
+        onClose={() => setReviewTarget(null)}
+        onApprove={handleApprove}
+        onReject={setRejectTarget}
+        approving={!!reviewTarget && loadingId === reviewTarget.id}
+        rejecting={!!reviewTarget && loadingId === reviewTarget.id}
+      />
 
       <Modal
         open={!!rejectTarget}
