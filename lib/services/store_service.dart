@@ -521,11 +521,11 @@ class StoreService {
 
       // Fallback: no FK — do two separate queries
       debugPrint('[StoreService] Join data missing store info, using fallback');
-      return _getFollowedStoresFallback(userId);
+      return await _getFollowedStoresFallback(userId);
     } catch (e) {
       debugPrint('[StoreService] getFollowedStores ERROR: $e');
       // Fallback: no FK — do two separate queries
-      return _getFollowedStoresFallback(userId);
+      return await _getFollowedStoresFallback(userId);
     }
   }
 
