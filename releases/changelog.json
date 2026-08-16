@@ -1,5 +1,16 @@
 [
   {
+    "latest_version": "1.0.11",
+    "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.11/app-release-1.0.11.apk",
+    "released_at": "2026-08-16",
+    "notes": [
+      "Seller application upgrades: add your birthday and gender, required business documents (DTI, BIR, permit), store tags, and pick your store location on a map",
+      "We now email you the approval or rejection decision to your Gmail — if you don't see it, check your spam folder",
+      "New congratulations screen when your application is approved — welcome to the CUFMAI family, with a one-tap Go to dashboard button",
+      "Admins can permanently delete accounts, review full seller applications with documents, and reject with a reason you'll receive by email"
+    ]
+  },
+  {
     "latest_version": "1.0.10",
     "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.10/app-release-1.0.10.apk",
     "released_at": "2026-08-16",
