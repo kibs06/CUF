@@ -72,8 +72,8 @@ shows ~50 migrations as "pending" even though they are applied).
 | `20260816120000_add_seller_store_photos.sql` | ✅ | **Applied Aug 16, 2026** — `store_front_url` + `product_photo_urls`. ⚠️ Was **partially applied** (only `store_front_url` landed; `product_photo_urls` was missing → seller submissions failed with "We could not save your application"). Fixed by re-running the `ALTER TABLE ... ADD COLUMN IF NOT EXISTS product_photo_urls TEXT[]` on Aug 16 |
 | `20260816150000_add_seller_approval_notification.sql` | ✅ | **Applied Aug 16, 2026** — `notification_category` enum + `'approval'` value, `notify_on_seller_approved()` + `trg_notify_on_seller_approved` trigger |
 | `20260817120000_admin_delete_user.sql` | ✅ | **Applied Aug 17, 2026** — `admin_delete_user(uuid)` SECURITY DEFINER RPC (admin-only permanent account delete, FK-safe) |
-| `20260817130000_add_stores_description.sql` | ⏳ | **Ready Aug 17, 2026** — `stores.description`. Fixes PGRST204 "Could not find the 'description' column of 'stores'" on store create/edit. Run in SQL editor, then mark ✅ |
-| `20260817140000_add_seller_application_v2_fields.sql` | ⏳ | **Ready Aug 17, 2026** — `profiles.store_location`/`store_lat`/`store_lng`/`store_tags` + `stores.tags` (application v2: personal details, required business docs, location, store tags). Run in SQL editor, then mark ✅ |
+| `20260817130000_add_stores_description.sql` | ✅ | **Applied Aug 17, 2026** — `stores.description`. Fixes PGRST204 "Could not find the 'description' column of 'stores'" on store create/edit. Verified live: `stores.description` select → HTTP 200 |
+| `20260817140000_add_seller_application_v2_fields.sql` | ✅ | **Applied Aug 17, 2026** — `profiles.store_location`/`store_lat`/`store_lng`/`store_tags` + `stores.tags` (application v2: personal details, required business docs, location, store tags). Verified live: `stores.tags`/`profiles.store_tags`/`profiles.store_lat` selects → HTTP 200 |
 
 ## Deploying a new migration
 
