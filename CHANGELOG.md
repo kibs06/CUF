@@ -1,5 +1,36 @@
 # SoleVision — Changelog
 
+## Session 3: Merged Auth Front Door + Seller Application Upgrades + Dev Mode
+
+### Auth — Merged Front Door (AccountEntryScreen)
+- **`lib/screens/auth/account_entry_screen.dart`** (new) — Replaced `LoginScreen` and `RoleChoiceScreen` with one full-bleed video hero front door that switches in place between **create** (customer / seller role picker) and **signin** (email/password login) modes via a shared `AnimationController`. Video never restarts on mode switch; reduced-motion honored.
+- **`lib/screens/auth/login_screen.dart` / `role_choice_screen.dart`** — Deleted (merged into `account_entry_screen.dart`).
+- **`lib/widgets/auth/full_bleed_video_background.dart`** — Renamed/upgraded to `VideoHeroBackground` with tuned global dim + overlapping top/bottom scrims so every chrome element clears 4.5:1 contrast on the brightest video frame.
+- **`lib/widgets/auth/dark_auth_text_field.dart`** (new) — Cream-on-dark text field variant for the signin mode over video.
+- **`lib/screens/auth_gate.dart`** — Routes to `AccountEntryScreen`; sign-in no longer self-navigates (AuthGate reacts to the auth stream).
+- **`lib/screens/auth/onboarding_screen.dart`, `signup_scaffold.dart`, `step_progress_indicator.dart`** — Updated for the merged entry; step indicator simplified.
+
+### Dev Mode (testing shortcut — REMOVE BEFORE RELEASE)
+- **`lib/utils/dev_mode.dart`** (new) — `DevMode` singleton toggled by the swipe gesture **↑↑↓↓→→←←** on the account entry screen; swipe UI in `dev_mode_swipe_detector.dart`, badge in `dev_mode_badge.dart`.
+- Dev mode lets you mash **Continue** through the whole seller flow (skips validation/terms/duplicate-email), then routes into a real `PendingApprovalScreen` preview with a `DEV PREVIEW` banner.
+- Full removal checklist tracked in `docs/AI/DEV_MODE_ARCHITECTURE.md`.
+
+### Seller Application Flow — Step Upgrades
+- **Step 1** — Password strength meter; terms tile placement.
+- **Step 2 (Identity)** — Seller now picks their **government ID type** first (valid PH IDs: passport, driver's license, UMID, SSS, PhilHealth, PRC, postal ID, voter's ID, TIN, NBI clearance) — the ID photo upload appears only after a type is chosen. Migration `20260816000000_add_seller_id_type.sql` adds `id_type` to `profiles`.
+- **Step 4 (Storefront)** — Removed payout method/details (no longer collected at application). Added required **store front photo** (uploads to the public `store-assets` bucket, stored as `profiles.store_front_url`, becomes the store banner post-approval via `StoreService.createStore`) and **5 required product photos** (`product_photo_urls TEXT[]`, private verification bucket, compact horizontal carousel of square slots on the form, all shown in admin review). Migration `20260816120000_add_seller_store_photos.sql`.
+- Draft autosave/resume (30 min) extended to cover the new ID type + store/product photos; in-memory storage for tests (`flutter_secure_storage_platform_interface` dev dep).
+
+### Pending Approval Screen — Redesign
+- **`lib/screens/auth/pending_approval_screen.dart`** — Rebuilt: dev banner (black + hazard stripes), header card (badge + UNDER ADMIN REVIEW + serif heading), intro paragraph, state-driven **What happens next** timeline (received ✓ green → verification in progress amber → certified member muted, driven by `profiles.seller_status`), divider-separated **What we received** rows, secondary Tier 2 card (dashed border), primary **Back to home** button (pushes customer home so a pending applicant can browse; pops in dev preview) and removed Log out.
+
+### Seller Approval Notification
+- **`supabase/migrations/20260816150000_add_seller_approval_notification.sql`** (new) — Adds `'approval'` to the `notification_category` enum + a `SECURITY DEFINER` trigger on `profiles` that inserts an in-app notification the moment `seller_status` → `approved`. Picked up live by the existing realtime subscription — zero client code needed.
+- **`lib/models/notification_category.dart`, `app_notification.dart`, `notifications_screen.dart`** — Added the `approval` category (badge icon, brand-brown accent).
+
+### Docs
+- New: `docs/AI/SIGN_IN_ARCHITECTURE.md`, `docs/AI/DEV_MODE_ARCHITECTURE.md`; updated `SIGNUP_ARCHITECTURE.md`, `SELLER_APPLICATION_UI_ARCHITECTURE.md`, obsidian auth MOC, Code Map.
+
 ## Session 2: Seller Dashboard Real Data + Users Redesign + Login Freeze Fix
 
 ### Reports Screen — Replace Mock Data with Real Supabase Data

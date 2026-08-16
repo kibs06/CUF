@@ -1,5 +1,17 @@
 [
   {
+    "latest_version": "1.0.10",
+    "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.10/app-release-1.0.10.apk",
+    "released_at": "2026-08-16",
+    "notes": [
+      "Merged front door: one full-bleed video hero screen for Create account + Sign in (replaces the old login and role-choice screens)",
+      "Seller application upgrades: choose your government ID type first, store front photo (becomes your store banner) + 5 product photos required at submission",
+      "In-app notification the moment an admin approves your seller application",
+      "Redesigned Application submitted screen: what-happens-next timeline, What we received checklist, and a Back to home button to browse while you wait",
+      "Developer mode (swipe gesture) for testing the flows — removed before release"
+    ]
+  },
+  {
     "latest_version": "1.0.9",
     "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.9/app-release-1.0.9.apk",
     "released_at": "2026-08-15",
