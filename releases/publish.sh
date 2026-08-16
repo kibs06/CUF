@@ -115,11 +115,18 @@ git push origin main
 
 # ── 5. Create GitHub Release + upload APK ───────────────────────────────
 echo "→ Creating GitHub Release $TAG and uploading $ASSET …"
+# Upload the APK under the versioned name FIRST (gh's `path#displayname`
+# rename syntax is unreliable and silently uploads the asset under its
+# original name — which breaks the apk_url in version.json with a 404).
+# Copy to a temp file so the build output stays untouched, then upload.
+cp "$APK" "$(dirname "$APK")/$ASSET"
+ASSET_PATH="$(dirname "$APK")/$ASSET"
 if [[ -n "$NOTES" ]]; then
-  gh release create "$TAG" "$APK#$ASSET" --title "$TAG" --notes "${NOTES//|/$'\n'}"
+  gh release create "$TAG" "$ASSET_PATH" --title "$TAG" --notes "${NOTES//|/$'\n'}"
 else
-  gh release create "$TAG" "$APK#$ASSET" --title "$TAG" --generate-notes
+  gh release create "$TAG" "$ASSET_PATH" --title "$TAG" --generate-notes
 fi
+rm -f "$ASSET_PATH"
 
 echo "✔ Done — testers can update from the app."
 echo "  Download URL: $APK_URL"
