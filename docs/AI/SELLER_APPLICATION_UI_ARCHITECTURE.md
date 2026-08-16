@@ -15,42 +15,52 @@
 
 ---
 
-## Entry point — RoleChoiceScreen (full-bleed video hero)
+## Entry point — AccountEntryScreen (merged video front door)
 
-`lib/screens/auth/role_choice_screen.dart` is the pre-signup account-type
-picker and the entry point into this flow. It is a **full-bleed video hero**:
-`video/locals.mp4` (2160×3840 portrait, 143s) loops muted behind everything,
-served by the reusable `FullBleedVideoBackground` widget
+`lib/screens/auth/account_entry_screen.dart` is the merged front door
+(replaced the old role-choice screen AND the old `LoginScreen`): one screen
+with two in-place modes — `AuthEntryMode.create` (the role picker below) and
+`AuthEntryMode.signin` (email/password) — sharing a single **full-bleed
+video hero**: `video/locals.mp4` (2160×3840 portrait, 143s) loops muted
+behind everything, composed by the `VideoHeroBackground` widget
 (`lib/widgets/auth/full_bleed_video_background.dart` — autoplay, `cover` fit,
-no controls, dark base while loading so there's never a cream flash).
+no controls, dark base while loading so there's never a cream flash, plus the
+tuned global dim + scrims). Switching modes is an **in-place state change**
+(slide/fade swap via one shared `AnimationController` — header and content
+slide in opposite directions, direction reverses per switch, reduced-motion
+honored), so the video never restarts.
 
-Hierarchy is weighted by usage: the **customer** path is the single primary
-CTA (`SolePrimaryAuthButton`, clay, radius 14, subtle drop shadow) while the
-**seller** path is one compact **link-style row** — "A shoemaker or artisan?
-Apply to sell", centered, "Apply to sell" underlined in warm cream. No
-border, no fill, no separate card: the whole row is the tap target (≥44px,
-`Semantics` `button`) and pushes straight into `SellerApplicationFlow`.
+In **create** mode the hierarchy is weighted by usage: the **customer** path
+is the single primary CTA (`SolePrimaryAuthButton`, clay, radius 14, subtle
+drop shadow) while the **seller** path is one compact **link-style row** —
+"A shoemaker or artisan? Apply to sell", centered, "Apply to sell"
+underlined in warm cream. No border, no fill, no separate card: the whole
+row is the tap target (≥44px, `Semantics` `button`) and pushes straight into
+`SellerApplicationFlow` (all 4 steps — never shortcut). "Already have an
+account? Sign in" switches to `signin` mode in place.
 
-**Layout** — header block (eyebrow `SOLEVISION` / serif 28px white title /
-14px white@85% subtitle) pinned top, actions block pinned bottom, empty
-middle where the video is unobstructed. Rendered through `SignupScaffold`
-in its `lightContent` hero mode (`background:` full-bleed layer, light
-chrome, transparent footer, `showTopBar: false`).
+**Layout** — header block (eyebrow `CUFMAI` / serif 28px white title /
+14px white@85% subtitle) pinned top, content block pinned bottom (inside a
+bottom-anchored scroll view so short screens / large text scroll instead of
+clipping), empty middle where the video is unobstructed.
 
 **Contrast is tuned to the actual asset** (ffmpeg `signalstats` over the
 full clip: full-frame mean luma ≈ 89/255, worst-case ≈ 146 top band / 118
-bottom band). The `_VideoHero` layer composes: a global `surfaceDark` dim
-(0.20), a top scrim `0.95 → 0.70 → 0` over `0 → 32% → 55%` height, and a
-bottom scrim `0 → 0.98` over `25% → 100%` height. Result: every chrome
-element clears ≥ 4.5:1 even on the single brightest frame (≥ 4.6:1 subtitle,
-≥ 4.5:1 cream seller link).
+bottom band / 130 in the 25–55% band where the sign-in fields sit). The
+`VideoHeroBackground` composes: a global `surfaceDark` dim (0.20), a top
+scrim `0.95 → 0.70 → 0` over `0 → 32% → 75%` height, and a bottom scrim
+`0.22 → 0.98` over `18% → 100%` height — the scrims overlap so no band is
+unprotected. Result: every chrome element clears ≥ 4.5:1 even on the single
+brightest frame (≥ 4.8:1 subtitle, ≥ 4.9:1 cream seller link). See
+`docs/AI/SIGN_IN_ARCHITECTURE.md` for the full merged-screen design and the
+sign-in mode's contracts (no self-navigation on login, error toast,
+biometric handling).
 
-On short screens / large accessibility text `SignupScaffold`'s scroll view
-takes over while the footer stays pinned (the documented fallback — nothing
-overlaps the video). The app has no dark theme; this screen is inherently
-dark, so it is light-theme-only like the rest of auth. The shared
-`SolePrimaryAuthButton` lives in `lib/widgets/auth/sole_primary_auth_button.dart`
-(used by both this screen and the seller flow steps).
+The app has no dark theme; this screen is inherently dark, so it is
+light-theme-only like the rest of auth. The shared `SolePrimaryAuthButton`
+lives in `lib/widgets/auth/sole_primary_auth_button.dart` (used by this
+screen and the seller flow steps). The seller flow itself still renders
+through `SignupScaffold` in its `lightContent` mode.
 
 ## What this is
 
@@ -98,7 +108,7 @@ and spacing rhythm are identical across the whole auth module.
 `SellerApplicationFlow` is a `StatefulWidget` that owns:
 
 - One `TextEditingController` per field (name, email, phone, password,
-  confirm, member ID, store name, store desc, payout details)
+  confirm, member ID, store name, store desc)
 - **One `GlobalKey<FormState>` per step that has a Form**
   (`_accountFormKey`, `_storefrontFormKey`). This is deliberate: the
   `AnimatedSwitcher` briefly keeps the outgoing step mounted, and sharing a
@@ -133,8 +143,24 @@ inside the read-and-agree flow would be stored but never repainted.
   - 1 · `Verify your identity` / `Step 2 of 4 — a government ID and a selfie help admins confirm it's really you.`
   - 2 · `Prove your community link` / `Step 3 of 4 — CUFMAI membership, or a barangay proof if you're not a member.`
   - 3 · `Set up your storefront` / `Step 4 of 4 — how customers will find you, and where your earnings go.`
-- `PopScope(canPop: !submitting)` blocks the system back gesture while the
-  final submit is running.
+- **Back moves between steps — it never leaves the flow mid-form.** Both
+  the top-bar back button (`SignupScaffold.onBack`, added for this) and
+  the system back gesture (`PopScope.canPop` + `onPopInvokedWithResult`)
+  route through one `_handleBack()`: step > 0 → `ctrl.backStep()`;
+  submission/error view visible → `dismissSubmission()` (back to the
+  form); only step 1 pops the route back to the landing screen. The route
+  may only pop from step 1 while idle (`canPop: !submitting &&
+  !showSubmission && step == 0`).
+- **30-minute draft resume.** For the fresh "Apply to sell" entry (no
+  `prefillProfile`), the flow autosaves the form to disk debounced (300ms
+  after each controller change — `SellerApplicationDraftStore` in
+  `lib/services/seller_application_draft_store.dart`): fields, current
+  step, toggles, and any still-existing picked image paths. Reopening the
+  flow within 30 minutes restores everything (`ctrl.restoreDraft` +
+  `TextEditingController` re-seed). Expired drafts are discarded on load;
+  the draft is cleared on successful submit. Re-apply (`prefillProfile`)
+  never persists or restores. The password half is written to
+  `FlutterSecureStorage`, never plaintext in SharedPreferences.
 
 ---
 
@@ -280,14 +306,17 @@ The tile renders whatever state the controller gives it:
 
 - **Store Name** — storefront icon, required.
 - **Store Description** — 4-line multiline field, min 20 chars.
-- **PAYOUT METHOD** — uppercase section label, then `SegmentedButton<String>`:
-  `GCash` (smartphone icon) / `Bank account` (balance icon), same
-  selected-style as Step 3. Switching clears the payout details field.
-- **Payout details field** — label + icon + hint swap based on selection
-  (`GCash Number` / `0917 123 4567` vs `Bank Details` /
-  `Bank name + account name + account number`), required.
-- Helper text: "Your earnings from SoleVision sales are sent here. You can
-  update this later."
+- **Store photos** — a **Store front photo** `DocumentUploadTile` plus a
+  **Product photos** section rendered as a compact **horizontal carousel**
+  of five 96px square slots (`_ProductPhotoSlot`, keys
+  `product-slot-1…5`): empty slots show a `+`/number affordance, filled
+  slots show the image with a number chip and a small remove (X) button.
+  The store-front photo uploads to the PUBLIC `store-assets` bucket
+  (`{userId}/storefront.jpg`) so `StoreService.createStore` can reuse it
+  as `banner_url`; the 5 product photos go to the private verification
+  bucket (`product_photo_1…5`, stored as `profiles.product_photo_urls
+  TEXT[]`). `_submit()` gates on the store-front photo first, then all 5
+  product photos ("Please add N more product photos (5 required).").
 - **Submit application** — `SolePrimaryAuthButton`, shows the button spinner
   while `ctrl.isSubmitting`.
 - **Inline terms footnote** — a `Text.rich` with a `WidgetSpan` +
@@ -404,8 +433,10 @@ All from `AppConstants` (`lib/constants/app_constants.dart`):
    `WidgetSpan` + `GestureDetector` (stateless-safe); on Step 1 the link
    uses a disposed `TapGestureRecognizer` in a stateful tile. Both open the
    policy without toggling consent.
-5. **Back navigation** — `PopScope` disables back while submitting; the
-   step content has no in-step "back" affordance (system back only).
+5. **Back navigation** — back goes to the **previous step** (button and
+   system gesture both), only step 1 exits the flow; the submission view
+   is dismissed first if it's on screen. Back is ignored while the final
+   submit is running.
 6. **Success path** — after submit the messenger is captured BEFORE
    `popUntil(route.isFirst)` because the flow's context is disposed as the
    role-choice screen unwinds; the snackbar is then shown from the captured

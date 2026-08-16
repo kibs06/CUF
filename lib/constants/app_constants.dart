@@ -262,9 +262,35 @@ class AppConstants {
   static const String bizStatusVerified = 'verified';
   static const String bizStatusRejected = 'rejected';
 
-  // --- SELLER PAYOUT RAILS (Tier 1 profile fields) ---
-  static const String payoutGcash = 'gcash';
-  static const String payoutBank = 'bank';
+  // --- SELLER IDENTITY — GOVERNMENT ID TYPES (Tier 1 profile field) ---
+  /// Valid Philippine government-issued IDs accepted for seller identity
+  /// verification (all carry the holder's full name + photo). The `value`
+  /// is what gets stored in `profiles.id_type`; `label` is the human-facing
+  /// name shown in the application flow and admin review.
+  static const List<GovIdType> govIdTypes = [
+    GovIdType('philid', 'PhilSys National ID (PhilID / ePhilID)'),
+    GovIdType('passport', 'Philippine Passport'),
+    GovIdType('drivers_license', "Driver's License (LTO)"),
+    GovIdType('umid', 'UMID / SSS Digitized ID'),
+    GovIdType('gsis', 'GSIS eCard'),
+    GovIdType('prc', 'PRC ID'),
+    GovIdType('postal', 'Postal ID (PhilPost)'),
+    GovIdType('voters', "Voter's ID (COMELEC)"),
+    GovIdType('senior', 'Senior Citizen ID (OSCA)'),
+    GovIdType('pwd', 'PWD ID'),
+    GovIdType('tin', 'TIN ID (BIR)'),
+    GovIdType('nbi', 'NBI Clearance'),
+  ];
+
+  /// Human label for a stored [GovIdType.value], or an empty string when
+  /// the value is null/unknown (legacy applications have no ID type).
+  static String govIdTypeLabel(String? value) {
+    if (value == null) return '';
+    for (final type in govIdTypes) {
+      if (type.value == value) return type.label;
+    }
+    return value;
+  }
 
   // --- CUSTOMER SIGN-UP PROFILE FIELDS ---
   /// Gender options offered at customer signup (optional field).
@@ -354,4 +380,17 @@ class _NoisePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+/// A valid Philippine government-issued ID accepted for seller identity
+/// verification. See `AppConstants.govIdTypes` for the full list.
+class GovIdType {
+  /// Stable value stored in `profiles.id_type` (never change after release —
+  /// legacy rows reference it).
+  final String value;
+
+  /// Human-facing label shown in the application flow and admin review.
+  final String label;
+
+  const GovIdType(this.value, this.label);
 }

@@ -41,19 +41,21 @@ class VerificationDocumentService {
     return picked?.path;
   }
 
-  /// Uploads (or overwrites) one verification document.
+  /// Uploads (or overwrites) one document.
   ///
   /// [docKey] names the document (e.g. `id_document`, `selfie`,
   /// `dti_cert`) and becomes the file name, so the storage path is fully
   /// deterministic per user per document: `{userId}/{docKey}.jpg`.
   ///
-  /// Returns the STORAGE PATH (not a public URL — the bucket is private).
-  /// Callers persist this path in `profiles` / `seller_business_docs` and
-  /// view the file later via [signedUrl].
+  /// Returns the STORAGE PATH (not a public URL). Defaults to the private
+  /// verification bucket; pass [bucket] to upload elsewhere (e.g. the
+  /// public `store-assets` bucket for the application's store-front
+  /// photo, which doubles as the store banner).
   Future<String> uploadDocument({
     required String userId,
     required String docKey,
     required String filePath,
+    String bucket = VerificationDocumentService.bucket,
   }) async {
     final file = File(filePath);
     // Keep the extension so the served Content-Type matches the bytes
@@ -98,7 +100,11 @@ class VerificationDocumentService {
   /// Creates a short-lived signed URL for a private verification
   /// document. Requires the caller to pass the object SELECT policy
   /// (the owner, or an admin) — createSignedUrl enforces storage RLS.
-  Future<String> signedUrl(String storagePath, {int expiresInSeconds = 3600}) {
+  Future<String> signedUrl(
+    String storagePath, {
+    int expiresInSeconds = 3600,
+    String bucket = VerificationDocumentService.bucket,
+  }) {
     return Supabase.instance.client.storage
         .from(bucket)
         .createSignedUrl(storagePath, expiresInSeconds);

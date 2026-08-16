@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../constants/app_constants.dart';
-import 'login_screen.dart';
+import 'account_entry_screen.dart';
 
 /// Three-slide onboarding shown on the very first app launch.
 ///
@@ -73,7 +73,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
         pageBuilder: (_, animation, _) =>
-            FadeTransition(opacity: animation, child: const LoginScreen()),
+            FadeTransition(opacity: animation, child: const AccountEntryScreen()),
         transitionDuration: const Duration(milliseconds: 500),
       ),
     );

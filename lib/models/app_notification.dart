@@ -142,6 +142,8 @@ class AppNotification {
         return NotificationCategory.message;
       case 'support':
         return NotificationCategory.support;
+      case 'approval':
+        return NotificationCategory.approval;
       default:
         return NotificationCategory.unpaid;
     }

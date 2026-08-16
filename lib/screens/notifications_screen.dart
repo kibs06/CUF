@@ -704,6 +704,8 @@ class _NotificationCardContent extends StatelessWidget {
         return Icons.chat_bubble_outline;
       case NotificationCategory.support:
         return Icons.support_agent_outlined;
+      case NotificationCategory.approval:
+        return Icons.workspace_premium_outlined;
     }
   }
 
@@ -759,6 +761,8 @@ class _NotificationCardContent extends StatelessWidget {
         return const Color(0xFF4ECDC4); // celadon teal
       case NotificationCategory.support:
         return const Color(0xFF2E7D32); // dark green for support
+      case NotificationCategory.approval:
+        return AppConstants.primary; // brand brown for the approval badge
     }
   }
 }

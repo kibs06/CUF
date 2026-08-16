@@ -9,6 +9,7 @@
 - [ ] 
 
 ## 🔜 Backlog / Next up
+- [ ] ⛔ **REMOVE dev mode before release** — UI-only signup skip (unlock: swipe ↑↑↓↓→→←← on "Create your account"). Files + checklist: [[docs/AI/DEV_MODE_ARCHITECTURE|Dev Mode Architecture]] #auth
 - [ ] 
 
 ## ✅ Done (recent)

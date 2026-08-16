@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -5,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../constants/app_constants.dart';
 import '../models/seller_application_data.dart';
 import '../services/auth_service.dart';
+import '../services/seller_application_draft_store.dart';
 import '../services/verification_document_service.dart';
 import '../utils/auth_error_messages.dart';
 import '../widgets/auth/document_upload_tile.dart';
@@ -41,10 +44,6 @@ class SellerApplicationController extends ChangeNotifier {
       cufmaiMemberId =
           prefillProfile['cufmai_member_id']?.toString() ?? '';
       storeName = prefillProfile['store_name']?.toString() ?? '';
-      if (prefillProfile['payout_method']?.toString() == AppConstants.payoutBank) {
-        payoutMethod = AppConstants.payoutBank;
-      }
-      payoutDetails = prefillProfile['payout_details']?.toString() ?? '';
     }
   }
 
@@ -101,19 +100,51 @@ class SellerApplicationController extends ChangeNotifier {
   }
 
   // ── Step 2 · Identity ─────────────────────────────────────────
+  /// Selected government ID type (one of `AppConstants.govIdTypes`
+  /// values). Required before the ID photo can be accepted.
+  String? _idType;
+  String? get idType => _idType;
+
+  set idType(String? value) {
+    if (value == _idType) return;
+    _idType = value;
+    notifyListeners();
+  }
+
   final SellerDocState idDocument = SellerDocState();
   final SellerDocState selfie = SellerDocState();
 
   // ── Step 3 · Community ────────────────────────────────────────
-  bool isCufmaiMember = true;
+  /// Whether the applicant is a CUFMAI member (vs. a non-member proving
+  /// local residence with a barangay proof). Notifies on change so the
+  /// Community step's segmented toggle AND the barangay/member-ID section
+  /// swap repaint — a plain field here made "Not a member" appear
+  /// unclickable (state changed but the UI never rebuilt).
+  bool _isCufmaiMember = true;
+  bool get isCufmaiMember => _isCufmaiMember;
+
+  set isCufmaiMember(bool value) {
+    if (value == _isCufmaiMember) return;
+    _isCufmaiMember = value;
+    notifyListeners();
+  }
+
   String cufmaiMemberId = '';
   final SellerDocState barangayProof = SellerDocState();
 
   // ── Step 4 · Storefront ───────────────────────────────────────
   String storeName = '';
   String storeDescription = '';
-  String payoutMethod = AppConstants.payoutGcash;
-  String payoutDetails = '';
+
+  /// Photo of the front of the applicant's store — uploaded to the PUBLIC
+  /// `store-assets` bucket (doubles as the store banner) and stored as
+  /// `profiles.store_front_url`.
+  final SellerDocState storeFront = SellerDocState();
+
+  /// The applicant's 5 product photos — private verification docs. All
+  /// five are required so admins can verify the store actually has stock.
+  final List<SellerDocState> productPhotos =
+      List.generate(5, (_) => SellerDocState());
 
   // ── Submission state ──────────────────────────────────────────
   bool isSubmitting = false;
@@ -131,6 +162,51 @@ class SellerApplicationController extends ChangeNotifier {
   void dismissSubmission() {
     _showSubmission = false;
     notifyListeners();
+  }
+
+  /// Restores a persisted draft (from an app restart within the draft's
+  /// expiry window) into this controller — step, text fields, toggles, and
+  /// any picked verification images whose temp files still exist.
+  ///
+  /// Only called for the fresh "Apply to sell" entry (no `prefillProfile`),
+  /// so a re-apply's prefilled account data is never clobbered.
+  void restoreDraft(SellerApplicationDraft draft) {
+    _step = draft.step.clamp(0, stepCount - 1);
+    fullName = draft.fullName;
+    email = draft.email;
+    phone = draft.phone;
+    password = draft.password;
+    _termsAccepted = draft.termsAccepted;
+    _isCufmaiMember = draft.isCufmaiMember;
+    cufmaiMemberId = draft.cufmaiMemberId;
+    _idType = draft.idType;
+    storeName = draft.storeName;
+    storeDescription = draft.storeDescription;
+    _restoreLocalFile(idDocument, draft.idDocumentPath);
+    _restoreLocalFile(selfie, draft.selfiePath);
+    _restoreLocalFile(barangayProof, draft.barangayProofPath);
+    _restoreLocalFile(storeFront, draft.storeFrontPath);
+    for (var i = 0; i < productPhotos.length; i++) {
+      final paths = draft.productPhotoPaths;
+      _restoreLocalFile(
+        productPhotos[i],
+        i < paths.length ? paths[i] : null,
+      );
+    }
+    notifyListeners();
+  }
+
+  void _restoreLocalFile(SellerDocState doc, String? path) {
+    if (path == null || path.isEmpty) return;
+    try {
+      if (File(path).existsSync()) {
+        doc
+          ..localPath = path
+          ..status = DocumentUploadStatus.picked;
+      }
+    } catch (_) {
+      // Unreadable/missing temp file — the user simply re-picks it.
+    }
   }
 
   Future<void> pickDocument(SellerDocState doc, ImageSource source) async {
@@ -161,20 +237,24 @@ class SellerApplicationController extends ChangeNotifier {
   }
 
   /// Number of documents that must be uploaded for the submission view's
-  /// checklist (ID + selfie always; barangay proof only when the applicant
-  /// is not a CUFMAI member).
-  int get requiredUploadCount => isCufmaiMember ? 2 : 3;
+  /// checklist (ID + selfie + store-front + 5 product photos always;
+  /// barangay proof only when the applicant is not a CUFMAI member).
+  int get requiredUploadCount => isCufmaiMember ? 8 : 9;
 
-  int get completedUploadCount =>
-      [idDocument, selfie, if (!isCufmaiMember) barangayProof]
-          .where((doc) => doc.status == DocumentUploadStatus.uploaded)
-          .length;
+  int get completedUploadCount => [
+        idDocument,
+        selfie,
+        storeFront,
+        ...productPhotos,
+        if (!isCufmaiMember) barangayProof,
+      ].where((doc) => doc.status == DocumentUploadStatus.uploaded).length;
 
   Future<void> _uploadIfNeeded(
     String userId,
     String docKey,
-    SellerDocState doc,
-  ) async {
+    SellerDocState doc, {
+    String bucket = VerificationDocumentService.bucket,
+  }) async {
     if (doc.status == DocumentUploadStatus.uploaded) return;
     if (doc.localPath == null) {
       throw StateError('No image picked for $docKey');
@@ -190,6 +270,7 @@ class SellerApplicationController extends ChangeNotifier {
         userId: userId,
         docKey: docKey,
         filePath: doc.localPath!,
+        bucket: bucket,
       );
       doc
         ..storagePath = path
@@ -239,6 +320,22 @@ class SellerApplicationController extends ChangeNotifier {
       // 2. Upload documents into the private bucket.
       await _uploadIfNeeded(user.id, 'id_document', idDocument);
       await _uploadIfNeeded(user.id, 'selfie', selfie);
+      // Store-front photo goes to the PUBLIC store-assets bucket so it can
+      // double as the store banner post-approval (StoreService.createStore
+      // falls back to profiles.store_front_url).
+      await _uploadIfNeeded(
+        user.id,
+        'storefront',
+        storeFront,
+        bucket: 'store-assets',
+      );
+      for (var i = 0; i < productPhotos.length; i++) {
+        await _uploadIfNeeded(
+          user.id,
+          'product_photo_${i + 1}',
+          productPhotos[i],
+        );
+      }
       if (!isCufmaiMember) {
         await _uploadIfNeeded(user.id, 'barangay_proof', barangayProof);
       }
@@ -249,16 +346,20 @@ class SellerApplicationController extends ChangeNotifier {
         email: email,
         phone: phone,
         password: password,
+        idType: idType,
         idDocumentPath: idDocument.storagePath,
         selfiePath: selfie.storagePath,
+        storeFrontPath: storeFront.storagePath,
+        productPhotoPaths: productPhotos
+            .map((doc) => doc.storagePath)
+            .whereType<String>()
+            .toList(),
         cufmaiMemberId: isCufmaiMember && cufmaiMemberId.trim().isNotEmpty
             ? cufmaiMemberId.trim()
             : null,
         barangayProofPath: isCufmaiMember ? null : barangayProof.storagePath,
         storeName: storeName,
         storeDescription: storeDescription,
-        payoutMethod: payoutMethod,
-        payoutDetails: payoutDetails,
       );
 
       final ok = await signUpSeller(data);

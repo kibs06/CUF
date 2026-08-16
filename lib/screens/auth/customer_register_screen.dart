@@ -6,6 +6,7 @@ import '../../providers/auth_provider.dart';
 import '../../services/auth_service.dart';
 import '../../utils/auth_error_messages.dart';
 import '../../utils/customer_profile_fields.dart';
+import '../../utils/dev_mode.dart';
 import '../../widgets/app_error_toast.dart';
 import '../../widgets/auth/auth_text_field.dart';
 import '../../widgets/auth/password_strength_meter.dart';
@@ -91,6 +92,17 @@ class _CustomerRegisterScreenState extends State<CustomerRegisterScreen> {
 
   Future<void> _submit() async {
     if (_isSubmitting) return;
+
+    // ⚠️ DEV MODE — REMOVE BEFORE RELEASE (docs/AI/DEV_MODE_ARCHITECTURE.md).
+    // UI-only skip: bypass validation/terms and jump straight to the next
+    // screen in the flow WITHOUT creating an account (nothing hits Supabase).
+    if (DevMode.instance.isEnabled) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const FootProfileOnboardingScreen()),
+      );
+      return;
+    }
+
     if (!_formKey.currentState!.validate()) return;
     if (!_termsAccepted) {
       _showMessage('Please accept the Terms & Privacy Policy to continue.');

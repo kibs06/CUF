@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../constants/app_constants.dart';
 import '../../providers/order_provider.dart';
+import '../../services/verification_document_service.dart';
 import '../../widgets/admin/verification_doc_viewer.dart';
 import '../../widgets/sole_card.dart';
 import 'seller_business_docs_review_screen.dart';
@@ -11,7 +12,7 @@ import 'seller_business_docs_review_screen.dart';
 ///
 ///   1. **Seller Applications** — pending Tier 1 applications, each with an
 ///      expandable document review (government ID, selfie, CUFMAI member ID
-///      or barangay proof, store name/description, payout details). Tap any
+///      or barangay proof, store name/description). Tap any
 ///      photo to view it full-size (pinch to zoom). Approve/Reject uses the
 ///      unchanged state machine.
 ///   2. **Business Docs** — optional Tier 2 submissions (DTI/BIR/permit),
@@ -351,7 +352,7 @@ class _SellerApprovalScreenState extends State<SellerApprovalScreen> {
 }
 
 /// Expanded Tier 1 review: ID + selfie + community proof thumbnails and the
-/// storefront/payout summary from the applicant's profile row.
+/// storefront summary from the applicant's profile row.
 class _Tier1Review extends StatelessWidget {
   final Map<String, dynamic> applicant;
 
@@ -362,11 +363,18 @@ class _Tier1Review extends StatelessWidget {
     final memberId = _text(applicant['cufmai_member_id']);
     final storeName = _text(applicant['store_name']);
     final storeDescription = _text(applicant['store_description']);
-    final payoutMethod = _text(applicant['payout_method']);
-    final payoutDetails = _text(applicant['payout_details']);
     final hasId = applicant['id_document_url'] != null;
     final hasSelfie = applicant['selfie_url'] != null;
     final hasBarangay = applicant['barangay_proof_url'] != null;
+    final idTypeLabel = AppConstants.govIdTypeLabel(
+      applicant['id_type']?.toString(),
+    );
+    // The 5 product photos live in a Postgres TEXT[] column.
+    final productPaths = (applicant['product_photo_urls'] as List?)
+            ?.map((e) => e?.toString())
+            .where((e) => e != null && e.isNotEmpty)
+            .toList() ??
+        const <String?>[];
 
     return Container(
       width: double.infinity,
@@ -405,6 +413,17 @@ class _Tier1Review extends StatelessWidget {
                 ),
             ],
           ),
+          // Selected government ID type (missing on legacy applications)
+          if (idTypeLabel.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Government ID type: $idTypeLabel',
+              style: AppConstants.bodyStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
 
           // Community proof
@@ -429,7 +448,7 @@ class _Tier1Review extends StatelessWidget {
             const SizedBox(height: 12),
           ],
 
-          // Storefront + payout
+          // Storefront
           if (storeName.isNotEmpty) ...[
             Text(
               'Store: $storeName',
@@ -453,14 +472,39 @@ class _Tier1Review extends StatelessWidget {
             ],
             const SizedBox(height: 8),
           ],
-          if (payoutMethod.isNotEmpty || payoutDetails.isNotEmpty)
+
+          // Store photos (storefront becomes the banner; the 5 product
+          // photos are proof of stock)
+          if (applicant['store_front_url'] != null ||
+              productPaths.isNotEmpty) ...[
             Text(
-              'Payout: ${payoutMethod.toUpperCase()} — ${payoutDetails.isEmpty ? 'not provided' : payoutDetails}',
+              'Store photos',
               style: AppConstants.bodyStyle(
                 fontSize: 12,
-                color: AppConstants.secondary.withValues(alpha: 0.7),
+                fontWeight: FontWeight.w600,
               ),
             ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              children: [
+                _ThumbColumn(
+                  label: 'Store front',
+                  storagePath: applicant['store_front_url']?.toString(),
+                  // The store-front photo lives in the PUBLIC store-assets
+                  // bucket (it doubles as the store banner).
+                  bucket: 'store-assets',
+                ),
+                for (var i = 0; i < productPaths.length; i++)
+                  _ThumbColumn(
+                    label: 'Product ${i + 1}',
+                    storagePath: productPaths[i],
+                  ),
+              ],
+            ),
+            const SizedBox(height: 4),
+          ],
         ],
       ),
     );
@@ -475,8 +519,13 @@ class _Tier1Review extends StatelessWidget {
 class _ThumbColumn extends StatelessWidget {
   final String label;
   final String? storagePath;
+  final String bucket;
 
-  const _ThumbColumn({required this.label, required this.storagePath});
+  const _ThumbColumn({
+    required this.label,
+    required this.storagePath,
+    this.bucket = VerificationDocumentService.bucket,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -486,7 +535,11 @@ class _ThumbColumn extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        VerificationDocThumb(storagePath: storagePath, label: label),
+        VerificationDocThumb(
+          storagePath: storagePath,
+          label: label,
+          bucket: bucket,
+        ),
         const SizedBox(height: 4),
         Text(
           label,

@@ -79,6 +79,23 @@ class StoreService {
         path: '$sellerId/$storeId/banner.jpg',
         file: bannerImage,
       );
+    } else {
+      // Fall back to the store-front photo submitted with the seller
+      // application (uploaded to the PUBLIC store-assets bucket as
+      // `{userId}/storefront.jpg`) so the banner is pre-filled from the
+      // application. The seller can still replace it via Edit Store.
+      final profile = await _client
+          .from('profiles')
+          .select('store_front_url')
+          .eq('id', sellerId)
+          .maybeSingle();
+      final fallback = profile?['store_front_url']?.toString();
+      if (fallback != null && fallback.isNotEmpty) {
+        updates['banner_url'] = _client
+            .storage
+            .from('store-assets')
+            .getPublicUrl(fallback);
+      }
     }
 
     if (updates.isNotEmpty) {

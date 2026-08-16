@@ -1,7 +1,7 @@
 # SoleVision — Sign Up Architecture (Split, Premium, Tiered Verification)
 
 > Condensed reference for AI agents working on authentication / registration.
-> Derived from the live codebase: `lib/screens/auth/role_choice_screen.dart`,
+> Derived from the live codebase: `lib/screens/auth/account_entry_screen.dart`,
 > `lib/screens/auth/customer_register_screen.dart`,
 > `lib/screens/auth/seller_application_flow.dart`,
 > `lib/providers/seller_application_controller.dart`,
@@ -11,7 +11,7 @@
 > `lib/screens/admin/seller_approval_screen.dart`, and
 > `supabase/migrations/20260812000000_add_seller_tiered_verification.sql`.
 >
-> **Where do I start?** `role_choice_screen.dart` for the entry split,
+> **Where do I start?** `account_entry_screen.dart` for the entry split,
 > `seller_application_flow.dart` + `seller_application_controller.dart` for
 > the seller flow, `auth_service.dart` for Supabase calls, and
 > `auth_gate.dart` for post-signup routing.
@@ -21,9 +21,12 @@
 ## Quick Facts
 
 - **The legacy single-form `RegisterScreen` (with the "Apply as a seller"
-  toggle) is GONE.** Registration now starts at a **RoleChoiceScreen** that
+  toggle) is GONE.** Registration starts at the merged **AccountEntryScreen**
+  (`lib/screens/auth/account_entry_screen.dart`) — a full-bleed video front
+  door with an in-place `create` / `signin` mode switch. Its **create** mode
   splits into a slimmed **customer** flow and a 4-step **seller application
-  flow**.
+  flow**; its **signin** mode carries the login contract documented in
+  `docs/AI/SIGN_IN_ARCHITECTURE.md`.
 - **Stack:** Flutter + Supabase (Auth + Postgres `profiles` table +
   private Storage bucket `seller-verification-docs`).
 - **State management:** ChangeNotifier + Provider (`AuthProvider` for
@@ -34,18 +37,23 @@
   `approved`, `rejected`. The role flip `customer → seller` happens ONLY on
   admin approval (unchanged from legacy).
 - **Tiered verification:** Tier 1 (ID, selfie, CUFMAI/barangay proof,
-  store basics, payout) is REQUIRED to apply. Tier 2 (DTI/BIR/permit via
+  store basics) is REQUIRED to apply. Tier 2 (DTI/BIR/permit via
   `seller_business_docs`) is OPTIONAL, post-approval, and never gates
   selling.
 - **Auto-login after sign up** — customers land in `CustomerShell`;
   pending sellers land in `PendingApprovalScreen`.
+- ⛔ **Temporary dev mode exists** (swipe ↑↑↓↓→→←← on the entry screen) —
+  a UI-only signup skip, **no backend writes**, shows a "DEV MODE" chip.
+  **REMOVE BEFORE RELEASE** — see
+  `docs/AI/DEV_MODE_ARCHITECTURE.md` for the full removal checklist.
 
 ---
 
 ## Architecture Layers
 
 ```
-PRESENTATION  RoleChoiceScreen / CustomerRegisterScreen /
+PRESENTATION  AccountEntryScreen (create|signin modes) /
+              CustomerRegisterScreen /
               SellerApplicationFlow / PendingApprovalScreen
 STATE         AuthProvider  +  SellerApplicationController (scoped)
 SERVICE       AuthService  +  VerificationDocumentService
@@ -58,10 +66,10 @@ BACKEND       Supabase Auth + profiles (RLS) + seller_business_docs (RLS)
 ## Entry & routing diagram
 
 ```
-LoginScreen ──"Register"──▶ RoleChoiceScreen
-                                │
-              ┌─────────────────┴──────────────────┐
-              ▼                                    ▼
+AccountEntryScreen (create mode, full-bleed video)
+        │  "Shop as customer?"         "Apply to sell"
+        ├──────────────────────────────┬───────────────────────────►
+        ▼                              ▼
    CustomerRegisterScreen               SellerApplicationFlow (4 steps)
    (name/email/birthday/gender/         Account → Identity → Community → Storefront
     phone/password/terms)                         │
@@ -89,7 +97,7 @@ unchanged in spirit: `pending` → `PendingApprovalScreen`, `seller` +
 
 ## Customer signup (UC001)
 
-1. RoleChoiceScreen → **Continue as customer**.
+1. AccountEntryScreen (create mode) → **Shop as customer?**.
 2. `CustomerRegisterScreen` collects: full name, email, **birthday
    (required, 13+, date picker with a short why-we-ask line)**, **gender
    (optional: Woman / Man / Prefer not to say / Self-describe → free-text
@@ -152,9 +160,9 @@ it disappears for good once the profile snapshot is written.
 | Step | Fields | Validation gate |
 |------|--------|-----------------|
 | 1 · Account | full name, email, phone (required), password, confirm, terms | form + duplicate-email check at Continue |
-| 2 · Identity | government ID photo, liveness selfie | both picked |
+| 2 · Identity | **government ID type** (picker of `AppConstants.govIdTypes` — stored as `profiles.id_type`), government ID photo, liveness selfie | type + both photos picked |
 | 3 · Community | segmented: CUFMAI member ID (optional field) **or** barangay proof upload | at least one |
-| 4 · Storefront | store name, store description (20+ chars), payout method (GCash/Bank), payout details | form |
+| 4 · Storefront | store name, store description (20+ chars), **store-front photo** (public `store-assets` bucket — doubles as the store banner), **5 product photos** (private verification bucket) | form + store-front + all 5 product photos |
 
 **State** lives in `SellerApplicationController` (a ChangeNotifier scoped
 to the flow route via `ChangeNotifierProvider.value`), so navigating
@@ -236,8 +244,11 @@ session exists).
 
 **`profiles` (all additive, nullable → legacy users unaffected):**
 `id_document_url`, `selfie_url`, `cufmai_member_id`, `barangay_proof_url`,
-`store_name`, `store_description`, `payout_method` (check `gcash|bank`),
-`payout_details`.
+`store_front_url` (PUBLIC `store-assets` path — reused as the store banner
+by `StoreService.createStore`), `product_photo_urls` (private `TEXT[]`,
+all 5 required), `store_name`, `store_description`. (The former `payout_method` /
+`payout_details` columns still exist but are no longer written — payout
+setup is out of scope for the application flow.)
 
 **`seller_business_docs`:** `profile_id` (FK, unique), `dti_cert_url`,
 `bir_cor_url`, `permit_url`, `verification_status`, `submitted_at`,
@@ -261,7 +272,7 @@ manually upserts a minimal profile as a safety net.
 
 | Layer | File | Responsibility |
 |-------|------|----------------|
-| Entry | `lib/screens/auth/role_choice_screen.dart` | Role split (customer vs seller) |
+| Entry | `lib/screens/auth/account_entry_screen.dart` | Merged front door (create = role split, signin = login) |
 | UI | `lib/screens/auth/customer_register_screen.dart` | Customer signup (name, email, birthday 13+, optional gender, phone, password, terms) |
 | UI | `lib/screens/auth/foot_profile_onboarding_screen.dart` | Post-signup foot-profile step: AR scan / manual / skip (never a hard gate) |
 | Widget | `lib/widgets/customer_foot_profile_banner.dart` | Dismissible home-screen reminder for skipped/incomplete foot profiles |

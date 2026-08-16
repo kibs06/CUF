@@ -200,6 +200,7 @@ class AuthService {
       'role': AppConstants.roleCustomer,
       'seller_status': AppConstants.statusPending,
       'phone': data.phone.trim().isEmpty ? null : data.phone.trim(),
+      'id_type': data.idType,
       'id_document_url': data.idDocumentPath,
       'selfie_url': data.selfiePath,
       'cufmai_member_id':
@@ -207,10 +208,12 @@ class AuthService {
               ? data.cufmaiMemberId!.trim()
               : null,
       'barangay_proof_url': data.barangayProofPath,
+      'store_front_url': data.storeFrontPath,
+      'product_photo_urls': data.productPhotoPaths.isEmpty
+          ? null
+          : data.productPhotoPaths,
       'store_name': data.storeName.trim(),
       'store_description': data.storeDescription.trim(),
-      'payout_method': data.payoutMethod,
-      'payout_details': data.payoutDetails.trim(),
       // Re-applying clears any previous rejection reason — the old verdict
       // no longer applies to the new application.
       'rejection_reason': null,

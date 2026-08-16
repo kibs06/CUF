@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../constants/app_constants.dart';
+import 'dev_mode_badge.dart';
 
 /// Shared 4px/8px spacing scale for every auth/signup screen, so the
 /// rhythm is identical across the role-choice, customer and seller flows.
@@ -44,6 +45,12 @@ class SignupScaffold extends StatelessWidget {
   final Widget child;
   final Widget? footer;
   final bool showBackButton;
+
+  /// Optional back handler. When provided it replaces the default
+  /// `Navigator.maybePop()` — used by the seller flow so back moves to the
+  /// previous step instead of leaving the flow.
+  final VoidCallback? onBack;
+
   final List<Widget>? appBarActions;
   final EdgeInsetsGeometry contentPadding;
 
@@ -67,6 +74,7 @@ class SignupScaffold extends StatelessWidget {
     required this.child,
     this.footer,
     this.showBackButton = true,
+    this.onBack,
     this.appBarActions,
     this.contentPadding = const EdgeInsets.symmetric(horizontal: 24),
     this.background,
@@ -199,7 +207,8 @@ class SignupScaffold extends StatelessWidget {
           if (showBackButton)
             // 44x44 minimum tap target with a screen-reader label.
             IconButton(
-              onPressed: () => Navigator.of(context).maybePop(),
+              onPressed:
+                  onBack ?? () => Navigator.of(context).maybePop(),
               tooltip: 'Back',
               icon: Icon(
                 Icons.arrow_back_ios_new_rounded,
@@ -216,6 +225,9 @@ class SignupScaffold extends StatelessWidget {
           else
             const SizedBox(width: 44),
           const Spacer(),
+          // ⚠️ DEV MODE — REMOVE BEFORE RELEASE (docs/AI/DEV_MODE_ARCHITECTURE.md):
+          // persistent chip while the UI-only skip mode is active.
+          const DevModeBadge(),
           ...?appBarActions,
         ],
       ),

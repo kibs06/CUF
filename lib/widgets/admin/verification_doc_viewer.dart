@@ -3,20 +3,26 @@ import 'package:flutter/material.dart';
 import '../../constants/app_constants.dart';
 import '../../services/verification_document_service.dart';
 
-/// Resolves a private verification-document storage path to a short-lived
-/// signed URL and opens it in a full-screen zoomable dialog (InteractiveViewer
-/// — pinch/pan). Admin-only context: createSignedUrl succeeds because the
-/// admin passes the storage object SELECT policy.
+/// Resolves a verification-document storage path to a short-lived signed
+/// URL and opens it in a full-screen zoomable dialog (InteractiveViewer
+/// — pinch/pan). Defaults to the private verification bucket; pass
+/// [bucket] for public-bucket assets (e.g. the store-front photo in
+/// `store-assets`). Admin-only context: createSignedUrl succeeds because
+/// the admin passes the storage object SELECT policy.
 Future<void> showVerificationDocZoom(
   BuildContext context, {
   required String? storagePath,
   required String label,
+  String bucket = VerificationDocumentService.bucket,
 }) async {
   if (storagePath == null || storagePath.isEmpty) return;
 
   final String url;
   try {
-    url = await VerificationDocumentService.instance.signedUrl(storagePath);
+    url = await VerificationDocumentService.instance.signedUrl(
+      storagePath,
+      bucket: bucket,
+    );
   } catch (e) {
     debugPrint('[VerificationDoc] signed URL failed for $storagePath: $e');
     if (!context.mounted) return;
@@ -109,11 +115,17 @@ class VerificationDocThumb extends StatefulWidget {
   final String label;
   final double size;
 
+  /// Storage bucket the [storagePath] lives in — defaults to the private
+  /// verification bucket; pass `store-assets` for the public store-front
+  /// photo.
+  final String bucket;
+
   const VerificationDocThumb({
     super.key,
     required this.storagePath,
     required this.label,
     this.size = 64,
+    this.bucket = VerificationDocumentService.bucket,
   });
 
   @override
@@ -132,7 +144,8 @@ class _VerificationDocThumbState extends State<VerificationDocThumb> {
   @override
   void didUpdateWidget(covariant VerificationDocThumb oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.storagePath != widget.storagePath) {
+    if (oldWidget.storagePath != widget.storagePath ||
+        oldWidget.bucket != widget.bucket) {
       _urlFuture = _resolve();
     }
   }
@@ -140,7 +153,10 @@ class _VerificationDocThumbState extends State<VerificationDocThumb> {
   Future<String>? _resolve() {
     final path = widget.storagePath;
     if (path == null || path.isEmpty) return null;
-    return VerificationDocumentService.instance.signedUrl(path);
+    return VerificationDocumentService.instance.signedUrl(
+      path,
+      bucket: widget.bucket,
+    );
   }
 
   @override
@@ -174,6 +190,7 @@ class _VerificationDocThumbState extends State<VerificationDocThumb> {
               context,
               storagePath: widget.storagePath,
               label: widget.label,
+              bucket: widget.bucket,
             ),
             borderRadius: BorderRadius.circular(10),
             child: ClipRRect(

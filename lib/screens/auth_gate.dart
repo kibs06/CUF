@@ -12,7 +12,7 @@ import '../providers/follow_provider.dart';
 import '../services/auth_service.dart';
 import '../widgets/error_retry_widget.dart';
 import 'admin/admin_shell.dart';
-import 'auth/login_screen.dart';
+import 'auth/account_entry_screen.dart';
 import 'auth/onboarding_screen.dart';
 import 'auth/pending_approval_screen.dart';
 import 'customer/customer_shell.dart';
@@ -212,7 +212,8 @@ class _AuthGateState extends State<AuthGate> {
 }
 
 // ─── First Time / Login Router ──────────────────────────────────────
-/// Checks SharedPreferences to decide between OnboardingScreen and LoginScreen.
+/// Checks SharedPreferences to decide between OnboardingScreen and
+/// AccountEntryScreen (the merged create-account / sign-in front door).
 class _FirstTimeOrLoginRouter extends StatefulWidget {
   const _FirstTimeOrLoginRouter();
 
@@ -248,7 +249,7 @@ class _FirstTimeOrLoginRouterState extends State<_FirstTimeOrLoginRouter> {
     // When the stream emits signedIn, AuthGate rebuilds and replaces
     // this widget with the correct shell automatically.
     if (!_hasSeenOnboarding!) return const OnboardingScreen();
-    return const LoginScreen();
+    return const AccountEntryScreen();
   }
 }
 

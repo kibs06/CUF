@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -6,6 +9,9 @@ import '../../providers/auth_provider.dart';
 import '../../providers/seller_application_controller.dart';
 import '../../screens/shared/terms_privacy_screen.dart';
 import '../../services/auth_service.dart';
+import '../../services/seller_application_draft_store.dart';
+import 'pending_approval_screen.dart';
+import '../../utils/dev_mode.dart';
 import '../../widgets/auth/auth_text_field.dart';
 import '../../widgets/auth/document_upload_tile.dart';
 import '../../widgets/auth/password_strength_meter.dart';
@@ -19,12 +25,25 @@ import '../../widgets/auth/terms_policy_tile.dart';
 ///   Step 1 — Account      full name, email, phone, password, terms
 ///   Step 2 — Identity     government ID photo + liveness selfie
 ///   Step 3 — Community    CUFMAI member ID (members) OR barangay proof
-///   Step 4 — Storefront   store name/description + payout details
+///   Step 4 — Storefront   store name + description
 ///
 /// The Supabase Auth user is created ONLY on final submit (see
 /// SellerApplicationController). All form + upload state lives in the
 /// controller, so navigating back/forward (or leaving and re-entering the
 /// flow) never loses entered data.
+///
+/// Two behaviors worth knowing:
+/// - **Back goes to the previous step.** The top-bar back button AND the
+///   system back gesture move back one step (step 4 → 3 → …) instead of
+///   popping the whole flow to the landing screen; only step 1 exits the
+///   flow. During submission back is ignored; on the submission/error view
+///   back dismisses it and returns to the form.
+/// - **30-minute draft resume.** For the fresh "Apply to sell" entry (no
+///   `prefillProfile`), the form is autosaved to disk (debounced) so an
+///   accidentally-closed app restores the filled fields, the current step,
+///   and any still-existing picked images when reopened within 30 minutes
+///   (see SellerApplicationDraftStore). The draft is cleared on successful
+///   submission; re-apply (`prefillProfile`) never persists or restores.
 class SellerApplicationFlow extends StatefulWidget {
   final Map<String, dynamic>? prefillProfile;
 
@@ -45,7 +64,6 @@ class _SellerApplicationFlowState extends State<SellerApplicationFlow> {
   final _memberIdController = TextEditingController();
   final _storeNameController = TextEditingController();
   final _storeDescController = TextEditingController();
-  final _payoutDetailsController = TextEditingController();
 
   // One form key per step — AnimatedSwitcher briefly keeps the outgoing
   // step mounted, so sharing a key between steps would crash with
@@ -53,6 +71,12 @@ class _SellerApplicationFlowState extends State<SellerApplicationFlow> {
   final _accountFormKey = GlobalKey<FormState>();
   final _storefrontFormKey = GlobalKey<FormState>();
   bool _checkingEmail = false;
+
+  // Debounced draft autosave — SharedPreferences is written at most every
+  // 300ms of typing, and never for the re-apply flow (prefillProfile).
+  Timer? _saveTimer;
+
+  bool get _persistDraft => widget.prefillProfile == null;
 
   @override
   void initState() {
@@ -65,21 +89,93 @@ class _SellerApplicationFlowState extends State<SellerApplicationFlow> {
     _phoneController.text = _controller.phone;
     _memberIdController.text = _controller.cufmaiMemberId;
     _storeNameController.text = _controller.storeName;
-    _payoutDetailsController.text = _controller.payoutDetails;
     // The step widgets read controller state directly in their build
     // methods (step index, termsAccepted, document statuses…), so the flow
     // must re-run its own build whenever the controller changes — otherwise
     // a value like termsAccepted is stored but never repainted (e.g. the
     // terms checkbox staying unchecked after the read-and-agree flow).
     _controller.addListener(_onControllerChanged);
+    _restoreDraft();
+  }
+
+  /// Restores a persisted draft (app was closed mid-application and
+  /// reopened within the 30-minute window). Loads asynchronously; the step
+  /// widgets render the (empty) current step first, then repaint once the
+  /// draft lands — fast enough on-device that no loading gate is needed.
+  Future<void> _restoreDraft() async {
+    if (!_persistDraft) return;
+    final draft = await SellerApplicationDraftStore.instance.load();
+    if (!mounted || draft == null) return;
+    _controller.restoreDraft(draft);
+    // Sync the TextEditingControllers so the restored text is editable.
+    _nameController.text = _controller.fullName;
+    _emailController.text = _controller.email;
+    _phoneController.text = _controller.phone;
+    _passwordController.text = _controller.password;
+    _confirmController.text = _controller.password;
+    _memberIdController.text = _controller.cufmaiMemberId;
+    _storeNameController.text = _controller.storeName;
+    _storeDescController.text = _controller.storeDescription;
+    setState(() {});
   }
 
   void _onControllerChanged() {
     if (mounted) setState(() {});
+    _scheduleSave();
+  }
+
+  void _scheduleSave() {
+    if (!_persistDraft) return;
+    _saveTimer?.cancel();
+    _saveTimer = Timer(const Duration(milliseconds: 300), _saveDraft);
+  }
+
+  Future<void> _saveDraft() async {
+    final ctrl = _controller;
+    await SellerApplicationDraftStore.instance.save(
+      SellerApplicationDraft(
+        step: ctrl.step,
+        fullName: ctrl.fullName,
+        email: ctrl.email,
+        phone: ctrl.phone,
+        password: ctrl.password,
+        termsAccepted: ctrl.termsAccepted,
+        isCufmaiMember: ctrl.isCufmaiMember,
+        cufmaiMemberId: ctrl.cufmaiMemberId,
+        idType: ctrl.idType,
+        storeName: ctrl.storeName,
+        storeDescription: ctrl.storeDescription,
+        idDocumentPath: ctrl.idDocument.localPath,
+        selfiePath: ctrl.selfie.localPath,
+        barangayProofPath: ctrl.barangayProof.localPath,
+        storeFrontPath: ctrl.storeFront.localPath,
+        productPhotoPaths:
+            ctrl.productPhotos.map((doc) => doc.localPath).toList(),
+        savedAt: DateTime.now(),
+      ),
+    );
+  }
+
+  /// Shared back handler for the top-bar button and the system back
+  /// gesture: move back one step, dismiss the submission view, or (only on
+  /// step 1) leave the flow.
+  void _handleBack() {
+    final ctrl = _controller;
+    if (ctrl.isSubmitting) return;
+    if (ctrl.showSubmission) {
+      ctrl.dismissSubmission();
+      return;
+    }
+    if (ctrl.step > 0) {
+      ctrl.backStep();
+      return;
+    }
+    Navigator.of(context).maybePop();
   }
 
   @override
   void dispose() {
+    _saveTimer?.cancel();
     _controller.removeListener(_onControllerChanged);
     _controller.dispose();
     _nameController.dispose();
@@ -90,13 +186,20 @@ class _SellerApplicationFlowState extends State<SellerApplicationFlow> {
     _memberIdController.dispose();
     _storeNameController.dispose();
     _storeDescController.dispose();
-    _payoutDetailsController.dispose();
     super.dispose();
   }
 
   // ── Step 1 actions ────────────────────────────────────────────
   Future<void> _continueFromAccount() async {
     if (_checkingEmail) return;
+
+    // ⚠️ DEV MODE — REMOVE BEFORE RELEASE (docs/AI/DEV_MODE_ARCHITECTURE.md).
+    // UI-only skip: bypass validation, terms + duplicate-email check.
+    if (DevMode.instance.isEnabled) {
+      _controller.nextStep();
+      return;
+    }
+
     if (!_accountFormKey.currentState!.validate()) return;
     if (!_controller.termsAccepted) {
       _showError('Please accept the Terms & Privacy Policy to continue.');
@@ -131,13 +234,63 @@ class _SellerApplicationFlowState extends State<SellerApplicationFlow> {
   }
 
   Future<void> _submit() async {
+    // ⚠️ DEV MODE — REMOVE BEFORE RELEASE (docs/AI/DEV_MODE_ARCHITECTURE.md).
+    // UI-only submission: skip storefront validation and show a fake
+    // "submitted" outcome — NO account is created and nothing hits Supabase.
+    if (DevMode.instance.isEnabled) {
+      // Capture messenger + navigator before popping — the flow's context
+      // is disposed by popUntil (flow + entry screen both unwind), so
+      // reading it afterwards is unsafe.
+      final messenger = ScaffoldMessenger.of(context);
+      final navigator = Navigator.of(context);
+      navigator.popUntil((route) => route.isFirst);
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Application submitted! (dev mode — no account was created)',
+          ),
+          backgroundColor: AppConstants.success,
+        ),
+      );
+      // DEV PREVIEW: route into the real pending-approval screen so the
+      // dev can inspect it without creating an account (no session, so
+      // AuthGate can't do it). Remove with the rest of dev mode.
+      navigator.push(
+        MaterialPageRoute(
+          builder: (_) => const PendingApprovalScreen(),
+        ),
+      );
+      return;
+    }
+
     if (!_storefrontFormKey.currentState!.validate()) return;
+    // Store photos are required — admins verify the applicant really runs
+    // a store, and the store-front photo doubles as the store banner.
+    if (_controller.storeFront.status == DocumentUploadStatus.empty) {
+      _showError('Please add a photo of your store front.');
+      return;
+    }
+    final missingProducts = _controller.productPhotos
+        .where((doc) => doc.status == DocumentUploadStatus.empty)
+        .length;
+    if (missingProducts > 0) {
+      _showError(
+        missingProducts == 1
+            ? 'Please add 1 more product photo (5 required).'
+            : 'Please add $missingProducts more product photos (5 required).',
+      );
+      return;
+    }
     final auth = context.read<AuthProvider>();
     final ok = await _controller.submit(
       signUpSeller: (data) => auth.signUpSeller(data: data),
     );
     if (!mounted) return;
     if (ok) {
+      // The application is in — drop the persisted draft so reopening the
+      // flow never resurrects a submitted form.
+      _saveTimer?.cancel();
+      SellerApplicationDraftStore.instance.clear();
       // Capture the messenger before popping — the flow's context is
       // disposed by popUntil (flow + role-choice both unwind), so reading
       // it afterwards is unsafe.
@@ -153,9 +306,13 @@ class _SellerApplicationFlowState extends State<SellerApplicationFlow> {
   }
 
   void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: AppConstants.error),
-    );
+    // Replace any visible snackbar — rapid validation taps on the same
+    // step should update the message, not queue stale ones behind it.
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: AppConstants.error),
+      );
   }
 
   // ── Build ─────────────────────────────────────────────────────
@@ -167,11 +324,18 @@ class _SellerApplicationFlowState extends State<SellerApplicationFlow> {
     return ChangeNotifierProvider.value(
       value: ctrl,
       child: PopScope(
-        canPop: !submitting,
+        // Back moves between steps (or dismisses the submission view), so
+        // the route may only pop from step 1 while idle.
+        canPop: !submitting && !ctrl.showSubmission && ctrl.step == 0,
+        onPopInvokedWithResult: (didPop, _) {
+          if (didPop) return;
+          _handleBack();
+        },
         child: SignupScaffold(
           eyebrow: 'SELLER APPLICATION',
           title: _titleFor(ctrl.step),
           subtitle: _subtitleFor(ctrl.step),
+          onBack: _handleBack,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -214,16 +378,18 @@ class _SellerApplicationFlowState extends State<SellerApplicationFlow> {
     }
   }
 
+  // The "Step X of 4 · Step name" caption below the segmented progress bar
+  // already states the position, so the subtitle keeps only the guidance.
   String _subtitleFor(int step) {
     switch (step) {
       case 0:
-        return 'Step 1 of 4 — your login details for SoleVision.';
+        return 'Your login details for SoleVision.';
       case 1:
-        return 'Step 2 of 4 — a government ID and a selfie help admins confirm it’s really you.';
+        return 'A government ID and a selfie help admins confirm it’s really you.';
       case 2:
-        return 'Step 3 of 4 — CUFMAI membership, or a barangay proof if you’re not a member.';
+        return 'CUFMAI membership, or a barangay proof if you’re not a member.';
       default:
-        return 'Step 4 of 4 — how customers will find you, and where your earnings go.';
+        return 'How customers will find you, and where your earnings go.';
     }
   }
 
@@ -255,7 +421,7 @@ class _SellerApplicationFlowState extends State<SellerApplicationFlow> {
           ctrl: ctrl,
           storeName: _storeNameController,
           storeDescription: _storeDescController,
-          payoutDetails: _payoutDetailsController,
+          onPick: _pickDocument,
           onSubmit: _submit,
         );
     }
@@ -358,8 +524,8 @@ class _AccountStep extends StatelessWidget {
               return null;
             },
           ),
+          const SizedBox(height: AuthSpacing.s16),
           if (!ctrl.isReapply) ...[
-            const SizedBox(height: AuthSpacing.s16),
             AuthTextField(
               label: 'Password',
               hint: 'At least 6 characters',
@@ -428,16 +594,64 @@ class _IdentityStepState extends State<_IdentityStep> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _DocTileLabel('Government-issued ID'),
-          DocumentUploadTile(
-            title: 'Government ID photo',
-            description:
-                'Any valid ID with your full name and photo (UMID, passport, driver’s license, PRC).',
-            status: ctrl.idDocument.status,
-            imagePath: ctrl.idDocument.localPath,
-            errorMessage: ctrl.idDocument.errorMessage,
-            onPick: () => widget.onPick(ctrl.idDocument),
-            onRemove: () => ctrl.removeDocument(ctrl.idDocument),
-            onRetry: () => _retrySubmit(context, ctrl),
+          _buildIdTypePicker(context, ctrl),
+          // The ID photo upload only appears AFTER the seller commits to a
+          // government ID type — picking the type "unlocks" the photo step
+          // (AnimatedSwitcher so the reveal feels like a deliberate step).
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 250),
+            switchInCurve: Curves.easeOut,
+            switchOutCurve: Curves.easeIn,
+            transitionBuilder: (child, animation) => FadeTransition(
+              opacity: animation,
+              child: SizeTransition(
+                sizeFactor: animation,
+                alignment: Alignment.topCenter,
+                child: child,
+              ),
+            ),
+            child: ctrl.idType == null
+                ? Padding(
+                    key: const ValueKey('id-photo-locked'),
+                    padding: const EdgeInsets.only(top: AuthSpacing.s8),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.lock_outline_rounded,
+                          size: 14,
+                          color: AppConstants.secondary.withValues(alpha: 0.45),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'The ID photo step appears once you choose your ID type above.',
+                            style: AppConstants.bodyStyle(
+                              fontSize: 12,
+                              color: AppConstants.secondary.withValues(
+                                alpha: 0.55,
+                              ),
+                              height: 1.4,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : Padding(
+                    key: const ValueKey('id-photo-upload'),
+                    padding: const EdgeInsets.only(top: AuthSpacing.s12),
+                    child: DocumentUploadTile(
+                      title: 'Government ID photo',
+                      description:
+                          'A clear photo of the ID type you selected above — your full name and photo must be readable.',
+                      status: ctrl.idDocument.status,
+                      imagePath: ctrl.idDocument.localPath,
+                      errorMessage: ctrl.idDocument.errorMessage,
+                      onPick: () => widget.onPick(ctrl.idDocument),
+                      onRemove: () => ctrl.removeDocument(ctrl.idDocument),
+                      onRetry: () => _retrySubmit(context, ctrl),
+                    ),
+                  ),
           ),
           const SizedBox(height: AuthSpacing.s16),
           _DocTileLabel('Liveness selfie'),
@@ -462,6 +676,15 @@ class _IdentityStepState extends State<_IdentityStep> {
           SolePrimaryAuthButton(
             label: 'Continue',
             onPressed: () {
+              // ⚠️ DEV MODE — REMOVE BEFORE RELEASE (docs/AI/DEV_MODE_ARCHITECTURE.md).
+              if (DevMode.instance.isEnabled) {
+                ctrl.nextStep();
+                return;
+              }
+              if (ctrl.idType == null) {
+                _showSnack(context, 'Please select your government ID type.');
+                return;
+              }
               if (!idReady) {
                 _showSnack(context, 'Please add your government ID photo.');
                 return;
@@ -477,10 +700,162 @@ class _IdentityStepState extends State<_IdentityStep> {
     );
   }
 
-  void _showSnack(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: AppConstants.error),
+  /// The "what type of government ID is this?" picker — a tappable card
+  /// styled like the upload tiles that opens a bottom sheet listing the
+  /// valid Philippine government IDs (AppConstants.govIdTypes).
+  Widget _buildIdTypePicker(BuildContext context, SellerApplicationController ctrl) {
+    final selected = ctrl.idType;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AuthSpacing.s12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: (selected == null
+                  ? AppConstants.borderGray
+                  : AppConstants.success)
+              .withValues(alpha: 0.55),
+          width: 1,
+        ),
+        boxShadow: AppConstants.warmShadow,
+      ),
+      child: InkWell(
+        onTap: () => _pickIdType(context, ctrl),
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: AuthSpacing.s4),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: AppConstants.primary.withValues(alpha: 0.08),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.badge_outlined,
+                  color: AppConstants.primary,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: AuthSpacing.s12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Government ID type',
+                      style: AppConstants.bodyStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: AuthSpacing.s4),
+                    Text(
+                      selected == null
+                          ? 'Tap to choose — valid PH government IDs only'
+                          : AppConstants.govIdTypeLabel(selected),
+                      style: AppConstants.bodyStyle(
+                        fontSize: 12,
+                        color: AppConstants.secondary.withValues(alpha: 0.55),
+                        height: 1.4,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AuthSpacing.s8),
+              Icon(
+                selected == null
+                    ? Icons.keyboard_arrow_down_rounded
+                    : Icons.check_circle_rounded,
+                color: selected == null
+                    ? AppConstants.secondary.withValues(alpha: 0.4)
+                    : AppConstants.success,
+                size: 22,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
+  }
+
+  Future<void> _pickIdType(
+    BuildContext context,
+    SellerApplicationController ctrl,
+  ) async {
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(sheetContext).size.height * 0.65,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
+                child: Text(
+                  'Choose your government ID type',
+                  style: AppConstants.headlineStyle(fontSize: 18),
+                ),
+              ),
+              const Divider(height: 1),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: AppConstants.govIdTypes.length,
+                  itemBuilder: (context, index) {
+                    final type = AppConstants.govIdTypes[index];
+                    final isSelected = ctrl.idType == type.value;
+                    return ListTile(
+                      title: Text(
+                        type.label,
+                        style: AppConstants.bodyStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      trailing: isSelected
+                          ? const Icon(
+                              Icons.check_circle,
+                              color: AppConstants.primary,
+                              size: 20,
+                            )
+                          : null,
+                      onTap: () => Navigator.of(sheetContext).pop(type.value),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: AuthSpacing.s8),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (selected != null) ctrl.idType = selected;
+  }
+
+  void _showSnack(BuildContext context, String message) {
+    // Replace any visible snackbar — rapid validation taps on the same
+    // step should update the message, not queue stale ones behind it.
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: AppConstants.error),
+      );
   }
 }
 
@@ -593,6 +968,11 @@ class _CommunityStepState extends State<_CommunityStep> {
           SolePrimaryAuthButton(
             label: 'Continue',
             onPressed: () {
+              // ⚠️ DEV MODE — REMOVE BEFORE RELEASE (docs/AI/DEV_MODE_ARCHITECTURE.md).
+              if (DevMode.instance.isEnabled) {
+                ctrl.nextStep();
+                return;
+              }
               if (!ctrl.isCufmaiMember &&
                   ctrl.barangayProof.status == DocumentUploadStatus.empty) {
                 _showSnack(context, 'Please add your barangay proof to continue.');
@@ -606,9 +986,13 @@ class _CommunityStepState extends State<_CommunityStep> {
   }
 
   void _showSnack(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: AppConstants.error),
-    );
+    // Replace any visible snackbar — rapid validation taps on the same
+    // step should update the message, not queue stale ones behind it.
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: AppConstants.error),
+      );
   }
 }
 
@@ -620,7 +1004,7 @@ class _StorefrontStep extends StatelessWidget {
   final SellerApplicationController ctrl;
   final TextEditingController storeName;
   final TextEditingController storeDescription;
-  final TextEditingController payoutDetails;
+  final void Function(SellerDocState doc) onPick;
   final VoidCallback onSubmit;
 
   const _StorefrontStep({
@@ -628,14 +1012,12 @@ class _StorefrontStep extends StatelessWidget {
     required this.ctrl,
     required this.storeName,
     required this.storeDescription,
-    required this.payoutDetails,
+    required this.onPick,
     required this.onSubmit,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isGcash = ctrl.payoutMethod == AppConstants.payoutGcash;
-
     return Form(
       key: formKey,
       child: Column(
@@ -666,63 +1048,49 @@ class _StorefrontStep extends StatelessWidget {
             },
           ),
           const SizedBox(height: AuthSpacing.s24),
+          _DocTileLabel('Store photos'),
+          DocumentUploadTile(
+            title: 'Store front photo',
+            description:
+                'A photo of the front of your store — this becomes your store banner.',
+            status: ctrl.storeFront.status,
+            imagePath: ctrl.storeFront.localPath,
+            errorMessage: ctrl.storeFront.errorMessage,
+            onPick: () => onPick(ctrl.storeFront),
+            onRemove: () => ctrl.removeDocument(ctrl.storeFront),
+            onRetry: () => _retrySubmit(context, ctrl),
+          ),
+          const SizedBox(height: AuthSpacing.s24),
+          _DocTileLabel('Product photos'),
           Text(
-            'PAYOUT METHOD',
+            'All 5 photos are required — they help admins confirm your store has real stock.',
             style: AppConstants.bodyStyle(
               fontSize: 12,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 1.2,
-              color: AppConstants.secondary.withValues(alpha: 0.6),
+              color: AppConstants.secondary.withValues(alpha: 0.55),
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: AuthSpacing.s12),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (var i = 0; i < 5; i++) ...[
+                  _ProductPhotoSlot(
+                    key: ValueKey('product-slot-${i + 1}'),
+                    index: i + 1,
+                    doc: ctrl.productPhotos[i],
+                    onPick: () => onPick(ctrl.productPhotos[i]),
+                    onRemove: () => ctrl.removeDocument(ctrl.productPhotos[i]),
+                  ),
+                  if (i < 4) const SizedBox(width: AuthSpacing.s12),
+                ],
+              ],
             ),
           ),
           const SizedBox(height: AuthSpacing.s8),
-          SegmentedButton<String>(
-            segments: const [
-              ButtonSegment(
-                value: 'gcash',
-                label: Text('GCash'),
-                icon: Icon(Icons.smartphone_outlined, size: 18),
-              ),
-              ButtonSegment(
-                value: 'bank',
-                label: Text('Bank account'),
-                icon: Icon(Icons.account_balance_outlined, size: 18),
-              ),
-            ],
-            selected: {ctrl.payoutMethod},
-            onSelectionChanged: (selection) {
-              ctrl.payoutMethod = selection.first;
-              ctrl.payoutDetails = '';
-              payoutDetails.clear();
-            },
-            showSelectedIcon: false,
-            style: SegmentedButton.styleFrom(
-              selectedBackgroundColor:
-                  AppConstants.primary.withValues(alpha: 0.12),
-              selectedForegroundColor: AppConstants.primary,
-              side: BorderSide(
-                color: AppConstants.borderGray.withValues(alpha: 0.6),
-              ),
-            ),
-          ),
-          const SizedBox(height: AuthSpacing.s16),
-          AuthTextField(
-            label: isGcash ? 'GCash Number' : 'Bank Details',
-            hint: isGcash
-                ? 'e.g. 0917 123 4567'
-                : 'Bank name + account name + account number',
-            controller: payoutDetails,
-            prefixIcon: isGcash
-                ? Icons.phone_android_outlined
-                : Icons.account_balance_outlined,
-            onChanged: (v) => ctrl.payoutDetails = v,
-            validator: (val) => (val == null || val.trim().isEmpty)
-                ? 'Please enter your payout details'
-                : null,
-          ),
-          const SizedBox(height: AuthSpacing.s12),
           Text(
-            'Your earnings from SoleVision sales are sent here. You can update this later.',
+            'Swipe to see all 5 — tap a slot to add or replace a photo.',
             style: AppConstants.bodyStyle(
               fontSize: 12,
               color: AppConstants.secondary.withValues(alpha: 0.55),
@@ -784,6 +1152,136 @@ class _StorefrontStep extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// One compact square slot in the product-photos carousel. Empty slots
+/// show a "+ / number" affordance; filled slots show the picked image
+/// with a number chip and a small remove (X) button.
+class _ProductPhotoSlot extends StatelessWidget {
+  final int index;
+  final SellerDocState doc;
+  final VoidCallback onPick;
+  final VoidCallback onRemove;
+
+  const _ProductPhotoSlot({
+    super.key,
+    required this.index,
+    required this.doc,
+    required this.onPick,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final path = doc.localPath;
+
+    return SizedBox(
+      width: 96,
+      height: 96,
+      child: path == null
+          ? _buildEmpty(context)
+          : _buildFilled(context, path),
+    );
+  }
+
+  Widget _buildEmpty(BuildContext context) {
+    return InkWell(
+      onTap: onPick,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: AppConstants.borderGray.withValues(alpha: 0.6),
+            width: 1,
+          ),
+          boxShadow: AppConstants.warmShadow,
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.add_a_photo_outlined,
+              color: AppConstants.primary,
+              size: 20,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '$index',
+              style: AppConstants.bodyStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: AppConstants.primary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilled(BuildContext context, String path) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: Image.file(
+            File(path),
+            fit: BoxFit.cover,
+            errorBuilder: (_, _, _) => Container(
+              color: AppConstants.primary.withValues(alpha: 0.08),
+              child: const Icon(
+                Icons.broken_image_outlined,
+                color: AppConstants.primary,
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          top: 4,
+          right: 4,
+          child: InkWell(
+            onTap: onRemove,
+            customBorder: const CircleBorder(),
+            child: Container(
+              width: 22,
+              height: 22,
+              decoration: const BoxDecoration(
+                color: Colors.black54,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.close_rounded,
+                color: Colors.white,
+                size: 14,
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          left: 6,
+          bottom: 6,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.black54,
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              '$index',
+              style: AppConstants.bodyStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -853,6 +1351,27 @@ class _SubmissionView extends StatelessWidget {
                   error: ctrl.barangayProof.status ==
                       DocumentUploadStatus.error,
                 ),
+              _CheckRow(
+                label: 'Upload store front photo',
+                done: ctrl.storeFront.status ==
+                    DocumentUploadStatus.uploaded,
+                active: ctrl.storeFront.status ==
+                    DocumentUploadStatus.uploading,
+                error: ctrl.storeFront.status ==
+                    DocumentUploadStatus.error,
+              ),
+              _CheckRow(
+                label: 'Upload product photos (5)',
+                done: ctrl.productPhotos.every(
+                  (doc) => doc.status == DocumentUploadStatus.uploaded,
+                ),
+                active: ctrl.productPhotos.any(
+                  (doc) => doc.status == DocumentUploadStatus.uploading,
+                ),
+                error: ctrl.productPhotos.any(
+                  (doc) => doc.status == DocumentUploadStatus.error,
+                ),
+              ),
               _CheckRow(
                 label: 'Save your application',
                 done: ctrl.applicationSaved,

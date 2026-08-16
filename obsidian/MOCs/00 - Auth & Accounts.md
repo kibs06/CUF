@@ -6,7 +6,7 @@
 
 ## 📌 Overview
 
-Three user roles (`customer`, `seller`, `admin`) live in `profiles.role`. The **role split starts at `RoleChoiceScreen`**: customers get a slim one-form signup, sellers get a **4-step application flow**. Auth is handled by Supabase Auth (email/password) with a **5-retry profile fetch** in `AuthService.getProfile` to survive the profile-trigger race. Post-auth routing is owned by `AuthGate`'s `StreamBuilder` (`_routeByRole`): pending sellers → `PendingApprovalScreen`, approved sellers → `SellerShell`, admins → `AdminShell`, everyone else → `CustomerShell`.
+Three user roles (`customer`, `seller`, `admin`) live in `profiles.role`. The **role split starts at `AccountEntryScreen`** (the merged full-bleed-video front door with in-place `create`/`signin` modes): in create mode, customers get a slim one-form signup, sellers get a **4-step application flow**. Auth is handled by Supabase Auth (email/password) with a **5-retry profile fetch** in `AuthService.getProfile` to survive the profile-trigger race. Post-auth routing is owned by `AuthGate`'s `StreamBuilder` (`_routeByRole`): pending sellers → `PendingApprovalScreen`, approved sellers → `SellerShell`, admins → `AdminShell`, everyone else → `CustomerShell`.
 
 Account state is a hard on/off switch: **suspension** (`profiles.suspended`) is enforced in three layers — Flutter AuthGate, admin portal `useAuth`, and Supabase RLS.
 
@@ -15,7 +15,8 @@ Account state is a hard on/off switch: **suspension** (`profiles.suspended`) is 
 ## 🗺️ Entry & routing diagram
 
 ```
-LoginScreen ──"Register"──▶ RoleChoiceScreen
+AccountEntryScreen (create mode) ──"Shop as customer?"──▶ CustomerRegisterScreen
+                        ──"Apply to sell"──▶ SellerApplicationFlow
                                 │
               ┌─────────────────┴──────────────────┐
               ▼                                    ▼
@@ -41,7 +42,7 @@ LoginScreen ──"Register"──▶ RoleChoiceScreen
 
 | Layer | File | Responsibility |
 |-------|------|----------------|
-| Entry | `lib/screens/auth/role_choice_screen.dart` | Role split (customer vs seller) |
+| Entry | `lib/screens/auth/account_entry_screen.dart` | Merged front door (full-bleed video): create mode = role split, signin mode = login |
 | UI | `lib/screens/auth/customer_register_screen.dart` | Customer signup: name, email, **birthday (13+, required)**, gender (optional, self-describe), phone, password + strength meter, terms checkbox |
 | UI | `lib/screens/auth/foot_profile_onboarding_screen.dart` | Post-signup foot-profile step — AR scan / manual / skip (never blocks) |
 | Widget | `lib/widgets/customer_foot_profile_banner.dart` | Dismissible home-screen reminder when `foot_profile_source` is NULL/'skipped' |
@@ -60,7 +61,9 @@ LoginScreen ──"Register"──▶ RoleChoiceScreen
 
 ## 📝 Seller application (the important part)
 
-- **4 steps**: Account → Identity (gov ID photo + liveness selfie) → Community (CUFMAI member ID **or** barangay proof — at least one) → Storefront (store name, description 20+ chars, payout method GCash/Bank + details).
+- **4 steps**: Account → Identity (gov ID type + photo + liveness selfie) → Community (CUFMAI member ID **or** barangay proof — at least one) → Storefront (store name, description 20+ chars, **store-front photo** = future store banner + **5 product photos**).
+- **Back goes to the previous step** (top-bar button + system gesture; only Step 1 exits the flow; submission view is dismissed first).
+- **30-minute draft resume**: fresh "Apply to sell" autosaves to disk (debounced; `SellerApplicationDraftStore` — password half in `FlutterSecureStorage`, rest in SharedPreferences) and restores fields/step/images on reopen within the window; cleared on successful submit; re-apply (`prefillProfile`) never persists.
 - **No orphaned accounts**: the Supabase auth user + profile are created **only at final submit** (Step 4). Abandoning mid-flow leaves nothing behind.
 - Submit sequence: `ensureUser` (create or reuse session) → upload docs to **private** bucket `seller-verification-docs` (`{userId}/{docKey}.jpg`, upsert) → `completeSellerApplication` upserts profile with Tier 1 fields + `seller_status: 'pending'` (**role stays `customer`**) → AuthGate routes to PendingApproval.
 - **Idempotent**: retries skip already-uploaded docs; failed docs keep per-doc error + retry (never a bare SnackBar).
@@ -103,6 +106,7 @@ LoginScreen ──"Register"──▶ RoleChoiceScreen
 
 ## ⚠️ Gotchas
 
+0. ⛔ **Dev mode is temporary test scaffolding** — swipe ↑↑↓↓→→←← on the entry screen enables a UI-only signup skip (no backend writes, "DEV MODE" chip shown). **REMOVE BEFORE RELEASE** — see [[docs/AI/DEV_MODE_ARCHITECTURE|Dev Mode Architecture]].
 1. **Legacy users have NULL Tier-1 / foot fields** — never treat missing data as an error state.
 2. Duplicate email surfaces inline at Step 1 **and** authoritatively at `auth.signUp` (final submit).
 3. `AnimatedSwitcher` + GlobalKeys: each seller step needs its **own** Form key — sharing one crashes with "Duplicate GlobalKey".
