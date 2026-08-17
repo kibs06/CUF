@@ -6,6 +6,11 @@ import '../../providers/product_provider.dart';
 import '../../widgets/sole_card.dart';
 import '../../widgets/sole_metric_card.dart';
 import 'seller_approval_screen.dart';
+import 'admin_orders_screen.dart';
+import 'admin_transactions_screen.dart';
+import 'admin_reports_screen.dart';
+import 'admin_analytics_screen.dart';
+import 'admin_settings_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -148,6 +153,63 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 
                 const SizedBox(height: 28),
 
+                // Admin tools — the web-portal sections not pinned to the
+                // bottom nav (Orders, Transactions, Reports, Analytics,
+                // Settings) are reached from here as standalone pages.
+                Text('Admin Tools', style: AppConstants.headlineStyle(fontSize: 18)),
+                const SizedBox(height: 12),
+                GridView.count(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  childAspectRatio: 1.9,
+                  children: [
+                    _toolTile(
+                      icon: Icons.receipt_long_outlined,
+                      label: 'Orders',
+                      color: AppConstants.primary,
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const AdminOrdersScreen()),
+                      ),
+                    ),
+                    _toolTile(
+                      icon: Icons.account_balance_wallet_outlined,
+                      label: 'Transactions',
+                      color: AppConstants.accent,
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const AdminTransactionsScreen()),
+                      ),
+                    ),
+                    _toolTile(
+                      icon: Icons.flag_outlined,
+                      label: 'Reports',
+                      color: const Color(0xFFE8A020),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const AdminReportsScreen()),
+                      ),
+                    ),
+                    _toolTile(
+                      icon: Icons.insights_outlined,
+                      label: 'Analytics',
+                      color: const Color(0xFF8B5CF6),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const AdminAnalyticsScreen()),
+                      ),
+                    ),
+                    _toolTile(
+                      icon: Icons.settings_outlined,
+                      label: 'Settings',
+                      color: AppConstants.secondary,
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const AdminSettingsScreen()),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 28),
+
                 // System info card
                 Text('Workshop Health', style: AppConstants.headlineStyle(fontSize: 18)),
                 const SizedBox(height: 12),
@@ -168,6 +230,41 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _toolTile({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: SoleCard(
+        color: Colors.white,
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, size: 20, color: color),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: AppConstants.bodyStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+            ),
+            Icon(Icons.chevron_right, size: 18, color: color.withValues(alpha: 0.6)),
+          ],
+        ),
       ),
     );
   }
