@@ -120,13 +120,13 @@ class StoreHeroCard extends StatelessWidget {
                             vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: store.isOpen
+                            color: store.isOpenNow
                                 ? AppConstants.success
                                 : AppConstants.borderGray,
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
-                            store.isOpen ? 'OPEN' : 'CLOSED',
+                            store.isOpenNow ? 'OPEN' : 'CLOSED',
                             style: AppConstants.monoStyle(
                               fontSize: 9,
                               fontWeight: FontWeight.bold,

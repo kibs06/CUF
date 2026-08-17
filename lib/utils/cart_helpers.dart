@@ -52,6 +52,57 @@ String normalizeSize(String size) {
   return size.replaceAll(RegExp(r'[A-Za-z]+'), '');
 }
 
+// ─── SIZE UNIT SWITCHER (US / EU / UK) ────────────────────────────
+
+/// Shoe-size units a shopper can switch between on the product page.
+const List<String> sizeUnits = ['US', 'EU', 'UK'];
+
+/// Extract the numeric part of a size string: 'US 7.5' → 7.5, 'EU40' → 40.
+double? sizeNumber(String size) {
+  return double.tryParse(size.replaceAll(RegExp(r'[^0-9.]'), ''));
+}
+
+/// Detect the unit prefix of a stored size string. Bare numbers (no
+/// prefix) default to US — the app's canonical scale.
+String unitOf(String size) {
+  final upper = size.trim().toUpperCase();
+  if (upper.startsWith('EU')) return 'EU';
+  if (upper.startsWith('UK')) return 'UK';
+  return 'US';
+}
+
+/// Convert a numeric shoe size between units on the men's scale.
+/// US is used as the base: EU = US + 33, UK = US − 0.5.
+double convertSizeNumber(double value, String from, String to) {
+  final us = switch (from) {
+    'EU' => value - 33,
+    'UK' => value + 0.5,
+    _ => value,
+  };
+  return switch (to) {
+    'EU' => us + 33,
+    'UK' => us - 0.5,
+    _ => us,
+  };
+}
+
+/// Format a numeric size, dropping the decimal for whole numbers:
+/// 40.0 → '40', 6.5 → '6.5'.
+String formatSizeNumber(double value) {
+  if (value == value.roundToDouble()) return value.toInt().toString();
+  return value.toString();
+}
+
+/// Render a stored (canonical) size string in the given unit without
+/// changing the stored value: 'US 7' + 'EU' → 'EU 40'.
+/// Falls back to the raw string when the number can't be parsed.
+String displaySizeInUnit(String canonical, String unit) {
+  final n = sizeNumber(canonical);
+  if (n == null) return canonical;
+  final converted = convertSizeNumber(n, unitOf(canonical), unit);
+  return '$unit ${formatSizeNumber(converted)}';
+}
+
 /// Normalize a size string for display purposes.
 /// If the size is purely numeric, returns it as-is.
 /// If it has a prefix like "EU", returns the prefix + number.

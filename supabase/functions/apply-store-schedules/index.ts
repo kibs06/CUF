@@ -1,13 +1,18 @@
 // supabase/functions/apply-store-schedules/index.ts
 //
 // Automated store open/close scheduler.
-// Invoked every 5 minutes by pg_cron via SELECT net.http_post().
+// The live path is the pg_cron job 'apply-store-schedules' (pure SQL, see
+// migration 20260817150000_add_store_auto_schedule_cron.sql) which runs
+// every 5 minutes. This function is kept for manual/external invocation
+// (e.g. `supabase functions serve` or an out-of-band cron) and mirrors the
+// same schedule logic.
 // Uses the service_role key to bypass RLS.
 //
 // Timezone: Asia/Manila (UTC+8). Store open_time/close_time are local wall-clock.
 // Overnight schedules: close_time < open_time means the window spans midnight.
-// Manual override: cleared when the current time crosses either the next open_time
-//                  or close_time boundary (whichever comes first).
+// Manual override: respected until the schedule itself agrees with the manual
+//                  state (e.g. a manual close persists only until the posted
+//                  close time passes), then cleared so automatic control resumes.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -49,25 +54,6 @@ function isWithinSchedule(
   }
 }
 
-/**
- * Check if we've crossed a boundary since the last run.
- * Returns true if the next natural transition point is at or past current time.
- * Used to decide when to clear manual_override.
- */
-function hasCrossedBoundary(
-  currentMinutes: number,
-  openMinutes: number,
-  closeMinutes: number,
-): boolean {
-  if (openMinutes <= closeMinutes) {
-    // Normal: boundary at openMinutes and closeMinutes
-    return currentMinutes === openMinutes || currentMinutes === closeMinutes;
-  } else {
-    // Overnight: boundary at openMinutes and closeMinutes
-    return currentMinutes === openMinutes || currentMinutes === closeMinutes;
-  }
-}
-
 Deno.serve(async (_req) => {
   try {
     const localNow = getLocalNow();
@@ -104,8 +90,13 @@ Deno.serve(async (_req) => {
       const shouldBeOpen = isWithinSchedule(currentMinutes, openMinutes, closeMinutes);
 
       if (manual_override) {
-        // Respect manual override until we hit a natural boundary
-        if (hasCrossedBoundary(currentMinutes, openMinutes, closeMinutes)) {
+        // Seller manually forced a state that differs from the schedule.
+        // Keep it until the schedule itself agrees with that state — at
+        // that point the override is moot and automatic control resumes.
+        // (A previous exact-minute equality check missed boundaries the
+        // 5-minute cron never hit on the dot, leaving overrides stuck.)
+        const agreesWithSchedule = store.is_open === shouldBeOpen;
+        if (agreesWithSchedule) {
           // Clear override and apply schedule
           const { error: updateError } = await supabase
             .from("stores")

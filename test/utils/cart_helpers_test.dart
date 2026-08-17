@@ -175,4 +175,62 @@ void main() {
       expect(stock, 0);
     });
   });
+
+  group('size unit conversion (US / EU / UK)', () {
+    test('US to EU adds 33 (men\'s scale)', () {
+      expect(convertSizeNumber(7, 'US', 'EU'), 40);
+      expect(convertSizeNumber(10, 'US', 'EU'), 43);
+    });
+
+    test('US to UK subtracts 0.5', () {
+      expect(convertSizeNumber(7, 'US', 'UK'), 6.5);
+      expect(convertSizeNumber(10, 'US', 'UK'), 9.5);
+    });
+
+    test('EU to US subtracts 33', () {
+      expect(convertSizeNumber(40, 'EU', 'US'), 7);
+    });
+
+    test('UK to US adds 0.5', () {
+      expect(convertSizeNumber(6.5, 'UK', 'US'), 7);
+    });
+
+    test('round trips are lossless for half sizes', () {
+      expect(convertSizeNumber(convertSizeNumber(7.5, 'US', 'EU'), 'EU', 'US'), 7.5);
+      expect(convertSizeNumber(convertSizeNumber(7.5, 'US', 'UK'), 'UK', 'US'), 7.5);
+    });
+
+    test('same unit is identity', () {
+      expect(convertSizeNumber(9, 'US', 'US'), 9);
+      expect(convertSizeNumber(42, 'EU', 'EU'), 42);
+    });
+
+    test('formatSizeNumber drops decimals for whole numbers', () {
+      expect(formatSizeNumber(40.0), '40');
+      expect(formatSizeNumber(6.5), '6.5');
+    });
+
+    test('sizeNumber extracts the numeric part', () {
+      expect(sizeNumber('US 7.5'), 7.5);
+      expect(sizeNumber('EU40'), 40);
+      expect(sizeNumber('7'), 7);
+      expect(sizeNumber('garbage'), isNull);
+    });
+
+    test('unitOf detects the prefix; bare numbers default to US', () {
+      expect(unitOf('US 7'), 'US');
+      expect(unitOf('EU40'), 'EU');
+      expect(unitOf('UK 6.5'), 'UK');
+      expect(unitOf('7'), 'US');
+    });
+
+    test('displaySizeInUnit converts without touching the canonical string', () {
+      expect(displaySizeInUnit('US 7', 'EU'), 'EU 40');
+      expect(displaySizeInUnit('US 7', 'UK'), 'UK 6.5');
+      expect(displaySizeInUnit('US 7', 'US'), 'US 7');
+      expect(displaySizeInUnit('EU 40', 'US'), 'US 7');
+      // Unparseable → falls back to the raw string.
+      expect(displaySizeInUnit('garbage', 'EU'), 'garbage');
+    });
+  });
 }

@@ -199,6 +199,21 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
     ],
   };
 
+  /// Preset color swatches for the variant sheet's color picker. Names are
+  /// stored verbatim on the variant and match the customer-side name→swatch
+  /// mapping, so a picked color renders the same swatch in the storefront.
+  static const List<({String name, Color color})> _presetColors = [
+    (name: 'Black', color: Color(0xFF26221E)),
+    (name: 'Brown', color: Color(0xFF8B5A2B)),
+    (name: 'Carob', color: Color(0xFF3E2723)),
+    (name: 'Cream', color: Color(0xFFF1E8DC)),
+    (name: 'Burgundy', color: Color(0xFF9B3B2E)),
+    (name: 'Gold', color: Color(0xFFB8860B)),
+    (name: 'Olive', color: Color(0xFF5D6B45)),
+    (name: 'Navy', color: Color(0xFF3F4A63)),
+    (name: 'Grey', color: Color(0xFF9E948A)),
+  ];
+
   /// Detect the sizing system from an existing size string.
   /// Returns the system key (e.g. 'EU', 'US') or 'Other' if unrecognized.
   String _detectSizingSystem(String size) {
@@ -254,12 +269,75 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
     // (custom systems have no size presets).
     final customSizeCtrl = TextEditingController(text: customSystemSizeText);
 
-    final colorCtrl = TextEditingController(text: existing?.color ?? '');
-    final stockCtrl =
-        TextEditingController(text: existing?.stock.toString() ?? '0');
-    final priceCtrl = TextEditingController(
-        text: existing?.additionalPrice.toString() ?? '0');
-    final skuCtrl = TextEditingController(text: existing?.sku ?? '');
+    // Per-size list of color+stock entries. Each size can have
+    // multiple colors, each with its own stock, price, and SKU.
+    final perSizeColorStocks = <String, List<_ColorStockEntry>>{};
+    // Seed per-size entries from any pre-selected sizes (edit/prefill).
+    if (existing != null) {
+      final color = existing.color ?? '';
+      final stock = existing.stock.toString();
+      final price = existing.additionalPrice.toString();
+      final sku = existing.sku ?? '';
+      for (final s
+          in selectedSizes.map((s) => s.trim()).where((s) => s.isNotEmpty)) {
+        perSizeColorStocks[s] = [
+          _ColorStockEntry(
+              color: color, stock: stock, price: price, sku: sku),
+        ];
+      }
+    } else {
+      for (final s
+          in selectedSizes.map((s) => s.trim()).where((s) => s.isNotEmpty)) {
+        perSizeColorStocks[s] ??= [_ColorStockEntry()];
+      }
+    }
+    // Live sum across all color+stock entries — powers the "Total stock"
+    // summary and updates as steppers/fields change.
+    final totalStock = ValueNotifier<int>(0);
+    void refreshTotal() {
+      var sum = 0;
+      for (final entries in perSizeColorStocks.values) {
+        for (final entry in entries) {
+          sum += int.tryParse(entry.stockCtrl.text) ?? 0;
+        }
+      }
+      totalStock.value = sum;
+    }
+    refreshTotal();
+    // Adjust one entry's stock by [delta] (−1 / +1), never below 0.
+    void adjustStock(String sizeValue, int entryIndex, int delta) {
+      final entries = perSizeColorStocks[sizeValue];
+      if (entries == null || entryIndex >= entries.length) return;
+      final c = entries[entryIndex].stockCtrl;
+      final current = int.tryParse(c.text) ?? 0;
+      c.text = (current + delta < 0 ? 0 : current + delta).toString();
+      refreshTotal();
+    }
+    // Compact circular +/− button used by each size's stepper.
+    Widget stockStepButton(IconData icon, VoidCallback onTap) {
+      return InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.white,
+            border: Border.all(color: AppConstants.borderGray),
+          ),
+          child: Icon(icon, size: 18, color: AppConstants.primary),
+        ),
+      );
+    }
+
+    // ── Guide keys & state ──────────────────────────────────────
+    final sizingSystemKey = GlobalKey();
+    final sizeSelectorKey = GlobalKey();
+    final stockSectionKey = GlobalKey();
+    final saveButtonKey = GlobalKey();
+    bool showGuide = false;
+    int guideStep = 0;
 
     showModalBottomSheet(
       context: context,
@@ -275,7 +353,47 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
           final sizeCount = _sizingSystems.containsKey(selectedSystem)
               ? selectedSizes.length
               : (customSizeCtrl.text.trim().isNotEmpty ? 1 : 0);
-          return Padding(
+
+          // Build the guide step list dynamically based on current state.
+          final guideSteps = <_GuideStep>[
+            _GuideStep(
+              key: sizingSystemKey,
+              title: 'Step 1 — Sizing System',
+              description:
+                  'Choose US, EU, UK or type a custom system name. '
+                  'This determines which sizes are available.',
+              icon: Icons.straighten,
+            ),
+            _GuideStep(
+              key: sizeSelectorKey,
+              title: 'Step 2 — Select Sizes',
+              description:
+                  'Tap one or more sizes. Each size can have multiple '
+                  'colors with separate stocks.',
+              icon: Icons.grid_view,
+            ),
+            _GuideStep(
+              key: stockSectionKey,
+              title: 'Step 3 — Colors & Stock',
+              description:
+                  'Pick a color, set stock with +/−, and optionally add '
+                  'price & SKU. Tap “Add Color” to give a size multiple '
+                  'color variants, each with its own stock.',
+              icon: Icons.inventory_2_outlined,
+            ),
+            _GuideStep(
+              key: saveButtonKey,
+              title: 'Step 4 — Save',
+              description:
+                  'Tap the button to save all your variants. '
+                  'You can always come back to edit them later.',
+              icon: Icons.check_circle_outline,
+            ),
+          ];
+
+          return Stack(
+          children: [
+          Padding(
           padding: EdgeInsets.fromLTRB(
               24, 20, 24, MediaQuery.of(ctx).viewInsets.bottom + 24),
           child: SingleChildScrollView(
@@ -283,15 +401,40 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  editIndex != null
-                      ? (sizeCount > 1
-                          ? 'Edit $sizeCount Variants'
-                          : 'Edit Variant')
-                      : (sizeCount > 1
-                          ? 'Add $sizeCount Variants'
-                          : 'Add Variant'),
-                  style: AppConstants.headlineStyle(fontSize: 20),
+                // Title row with info icon
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        editIndex != null
+                            ? (sizeCount > 1
+                                ? 'Edit $sizeCount Variants'
+                                : 'Edit Variant')
+                            : (sizeCount > 1
+                                ? 'Add $sizeCount Variants'
+                                : 'Add Variant'),
+                        style: AppConstants.headlineStyle(fontSize: 20),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => setSheetState(() {
+                        showGuide = true;
+                        guideStep = 0;
+                      }),
+                      child: Container(
+                        padding: const EdgeInsets.all(7),
+                        decoration: BoxDecoration(
+                          color: AppConstants.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Icon(
+                          Icons.help_outline_rounded,
+                          size: 20,
+                          color: AppConstants.primary,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 16),
                 // Sizing System — single-select chips (+ Other for custom
@@ -303,9 +446,11 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                       fontWeight: FontWeight.bold, fontSize: 14),
                 ),
                 const SizedBox(height: 6),
-                _PresetChipSelector(
-                  key: const ValueKey('sizing-system'),
-                  initialValue: selectedSystem,
+                KeyedSubtree(
+                  key: sizingSystemKey,
+                  child: _PresetChipSelector(
+                    key: const ValueKey('sizing-system'),
+                    initialValue: selectedSystem,
                   presets: const ['US', 'EU', 'UK'],
                   presetLabels: const {
                     'US': 'US (American)',
@@ -320,9 +465,11 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                     setSheetState(() {
                       selectedSystem = value;
                       selectedSizes = [];
+                      perSizeColorStocks.clear();
                       customSizeCtrl.clear();
                     });
                   },
+                ),
                 ),
                 const SizedBox(height: 12),
                 // Size value selector — MULTI-select chips (each selected
@@ -336,19 +483,41 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                   ),
                   const SizedBox(height: 6),
                   if (_sizingSystems.containsKey(selectedSystem))
-                    _SizeMultiSelector(
-                      // Re-created whenever the system changes so sizes
-                      // picked for one system can't leak into another.
-                      key: ValueKey('sizes-$selectedSystem'),
-                      initialSelected: selectedSizes,
-                      presets: _sizingSystems[selectedSystem] ?? const [],
-                      otherHint: 'e.g. 48, Kids 12',
-                      emptyError: 'Type a size first.',
-                      duplicateError:
-                          'That is already a size — tap it above instead.',
-                      onChanged: (values) {
-                        setSheetState(() => selectedSizes = values);
+                    KeyedSubtree(
+                      key: sizeSelectorKey,
+                      child: _SizeMultiSelector(
+                        // Re-created whenever the system changes so sizes
+                        // picked for one system can't leak into another.
+                        key: ValueKey('sizes-$selectedSystem'),
+                        initialSelected: selectedSizes,
+                        presets: _sizingSystems[selectedSystem] ?? const [],
+                        otherHint: 'e.g. 48, Kids 12',
+                        emptyError: 'Type a size first.',
+                        duplicateError:
+                            'That is already a size — tap it above instead.',
+                        onChanged: (values) {
+                        setSheetState(() {
+                          selectedSizes = values;
+                          // Keep a color+stock list per selected size.
+                          // Preserve entries already entered; new sizes
+                          // start with one empty entry.
+                          final trimmed = values
+                              .map((s) => s.trim())
+                              .where((s) => s.isNotEmpty)
+                              .toList();
+                          final kept = <String, List<_ColorStockEntry>>{
+                            for (final s in trimmed)
+                              s: perSizeColorStocks[s] ?? [
+                                    _ColorStockEntry()
+                                  ],
+                          };
+                          perSizeColorStocks
+                            ..clear()
+                            ..addAll(kept);
+                          refreshTotal();
+                        });
                       },
+                      ),
                     )
                   else ...[
                     SoleTextField(
@@ -359,48 +528,419 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                   ],
                 ],
                 const SizedBox(height: 12),
-                SoleTextField(
-                  labelText: 'Color (optional)',
-                  hintText: 'e.g. Black, Brown',
-                  controller: colorCtrl,
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: SoleTextField(
-                        labelText: 'Stock *',
-                        hintText: '0',
-                        controller: stockCtrl,
-                        keyboardType: TextInputType.number,
-                      ),
+                // Stock — one compact row per selected size (brown size
+                // badge + stepper with direct entry) when several sizes are
+                // picked; a single shared field otherwise.
+                if (sizeCount > 1) ...[
+                  KeyedSubtree(
+                    key: stockSectionKey,
+                    child: Text(
+                      'Stock, Color & Price per Size *',
+                      style: AppConstants.bodyStyle(
+                          fontWeight: FontWeight.bold, fontSize: 14),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: SoleTextField(
-                        labelText: 'Extra Price (₱)',
-                        hintText: '0',
-                        controller: priceCtrl,
-                        keyboardType: TextInputType.number,
+                  ),
+                  const SizedBox(height: 10),
+                  for (final (sizeIdx, sizeValue)
+                      in selectedSizes
+                          .map((s) => s.trim())
+                          .where((s) => s.isNotEmpty)
+                          .indexed) ...[
+                    if (sizeIdx > 0)
+                      Divider(
+                        height: 18,
+                        thickness: 0.5,
+                        color: AppConstants.borderGray.withValues(alpha: 0.5),
+                      ),
+                    // Size badge header
+                    Row(
+                      children: [
+                        Container(
+                          width: 36,
+                          height: 36,
+                          alignment: Alignment.center,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: AppConstants.primary,
+                          ),
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 5),
+                              child: Text(
+                                sizeValue,
+                                style: AppConstants.monoStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppConstants.surfaceLight,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    // List of color+stock entries for this size
+                    for (final (entryIdx, entry)
+                        in (perSizeColorStocks[sizeValue] ?? [])
+                            .indexed) ...[
+                      if (entryIdx > 0)
+                        const SizedBox(height: 6),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Color swatches
+                          Expanded(
+                            flex: 4,
+                            child: _SizeColorSelector(
+                              initialValue: entry.color,
+                              presets: _presetColors,
+                              onChanged: (color) => setSheetState(
+                                  () => entry.color = color),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          // Stock stepper (− / count / +)
+                          SizedBox(
+                            width: 110,
+                            child: Row(
+                              children: [
+                                stockStepButton(Icons.remove_rounded, () {
+                                  adjustStock(sizeValue, entryIdx, -1);
+                                }),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: TextField(
+                                    controller: entry.stockCtrl,
+                                    textAlign: TextAlign.center,
+                                    keyboardType: TextInputType.number,
+                                    style: AppConstants.monoStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppConstants.secondary,
+                                    ),
+                                    decoration: const InputDecoration(
+                                      isDense: true,
+                                      border: InputBorder.none,
+                                      contentPadding:
+                                          EdgeInsets.symmetric(vertical: 8),
+                                    ),
+                                    onChanged: (_) => refreshTotal(),
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                stockStepButton(Icons.add_rounded, () {
+                                  adjustStock(sizeValue, entryIdx, 1);
+                                }),
+                              ],
+                            ),
+                          ),
+                          // Remove button (only if more than one entry)
+                          if ((perSizeColorStocks[sizeValue]?.length ?? 0) >
+                              1)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 4, top: 4),
+                              child: GestureDetector(
+                                onTap: () => setSheetState(() {
+                                  perSizeColorStocks[sizeValue]!
+                                      .removeAt(entryIdx);
+                                  refreshTotal();
+                                }),
+                                child: Icon(Icons.close_rounded,
+                                    size: 18,
+                                    color: AppConstants.error
+                                        .withValues(alpha: 0.6)),
+                              ),
+                            ),
+                        ],
+                      ),
+                      // Extra Price & SKU for this color entry
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: _CompactSheetField(
+                                hint: '₱',
+                                controller: entry.priceCtrl,
+                                keyboardType: TextInputType.number,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: _CompactSheetField(
+                                hint: 'SKU',
+                                controller: entry.skuCtrl,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    // Add Color button for this size
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: GestureDetector(
+                        onTap: () => setSheetState(() {
+                          perSizeColorStocks[sizeValue]
+                              ?.add(_ColorStockEntry());
+                        }),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.add_circle_outline,
+                                size: 16, color: AppConstants.primary),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Add Color',
+                              style: AppConstants.bodyStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: AppConstants.primary,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ],
-                ),
-                const SizedBox(height: 12),
-                SoleTextField(
-                  labelText: 'SKU (optional)',
-                  hintText: 'e.g. SV-OXF-BLK-42',
-                  controller: skuCtrl,
-                ),
+                  const SizedBox(height: 10),
+                  // Live running total across all sizes.
+                  ValueListenableBuilder<int>(
+                    valueListenable: totalStock,
+                    builder: (context, total, _) => Text(
+                      'Total stock: $total',
+                      style: AppConstants.bodyStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: AppConstants.secondary,
+                      ),
+                    ),
+                  ),
+                ] else ...[
+                  // Single-size: show list of color+stock entries.
+                  // Ensures the size is initialized in the map.
+                  if (sizeCount > 0) ...[
+                    Text(
+                      'Colors & Stock',
+                      style: AppConstants.bodyStyle(
+                          fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                    const SizedBox(height: 8),
+                    // Ensure the single size has an entry
+                    if (perSizeColorStocks.isEmpty)
+                      Builder(builder: (_) {
+                        final sv = _sizingSystems
+                                    .containsKey(selectedSystem)
+                                ? (selectedSizes.isNotEmpty
+                                    ? selectedSizes.first.trim()
+                                    : '')
+                                : customSizeCtrl.text.trim();
+                        if (sv.isNotEmpty &&
+                            !perSizeColorStocks.containsKey(sv)) {
+                          WidgetsBinding.instance
+                              .addPostFrameCallback((_) {
+                            setSheetState(() {
+                              perSizeColorStocks[sv] = [
+                                _ColorStockEntry()
+                              ];
+                            });
+                          });
+                        }
+                        return const SizedBox.shrink();
+                      }),
+                    for (final sizeValue
+                        in perSizeColorStocks.keys) ...[
+                      for (final (entryIdx, entry)
+                          in perSizeColorStocks[sizeValue]!
+                              .indexed) ...[
+                        if (entryIdx > 0)
+                          const SizedBox(height: 6),
+                        Row(
+                          crossAxisAlignment:
+                              CrossAxisAlignment.start,
+                          children: [
+                            // Color swatches
+                            Expanded(
+                              flex: 4,
+                              child: _SizeColorSelector(
+                                initialValue: entry.color,
+                                presets: _presetColors,
+                                onChanged: (color) =>
+                                    setSheetState(() =>
+                                        entry.color = color),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            // Stock stepper
+                            SizedBox(
+                              width: 110,
+                              child: Row(
+                                children: [
+                                  stockStepButton(
+                                      Icons.remove_rounded,
+                                      () {
+                                    adjustStock(
+                                        sizeValue, entryIdx, -1);
+                                  }),
+                                  const SizedBox(width: 4),
+                                  Expanded(
+                                    child: TextField(
+                                      controller:
+                                          entry.stockCtrl,
+                                      textAlign:
+                                          TextAlign.center,
+                                      keyboardType:
+                                          TextInputType.number,
+                                      style: AppConstants
+                                          .monoStyle(
+                                        fontSize: 15,
+                                        fontWeight:
+                                            FontWeight.bold,
+                                        color: AppConstants
+                                            .secondary,
+                                      ),
+                                      decoration:
+                                          const InputDecoration(
+                                        isDense: true,
+                                        border:
+                                            InputBorder.none,
+                                        contentPadding:
+                                            EdgeInsets.symmetric(
+                                                vertical: 8),
+                                      ),
+                                      onChanged: (_) =>
+                                          refreshTotal(),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  stockStepButton(
+                                      Icons.add_rounded,
+                                      () {
+                                    adjustStock(
+                                        sizeValue, entryIdx, 1);
+                                  }),
+                                ],
+                              ),
+                            ),
+                            // Remove button
+                            if ((perSizeColorStocks[
+                                        sizeValue]
+                                    ?.length ?? 0) >
+                                1)
+                              Padding(
+                                padding:
+                                    const EdgeInsets.only(
+                                        left: 4, top: 4),
+                                child: GestureDetector(
+                                  onTap: () =>
+                                      setSheetState(() {
+                                    perSizeColorStocks[
+                                            sizeValue]!
+                                        .removeAt(entryIdx);
+                                    refreshTotal();
+                                  }),
+                                  child: Icon(
+                                      Icons
+                                          .close_rounded,
+                                      size: 18,
+                                      color: AppConstants
+                                          .error
+                                          .withValues(
+                                              alpha:
+                                                  0.6)),
+                                ),
+                              ),
+                          ],
+                        ),
+                        // Extra Price & SKU
+                        Padding(
+                          padding: const EdgeInsets.only(
+                              top: 2),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child:
+                                    _CompactSheetField(
+                                  hint: '₱',
+                                  controller:
+                                      entry.priceCtrl,
+                                  keyboardType:
+                                      TextInputType.number,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child:
+                                    _CompactSheetField(
+                                  hint: 'SKU',
+                                  controller:
+                                      entry.skuCtrl,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                    // Add Color button
+                    Padding(
+                      padding:
+                          const EdgeInsets.only(top: 6),
+                      child: GestureDetector(
+                        onTap: () => setSheetState(() {
+                          // Add to the first (only) size
+                          final sv = perSizeColorStocks
+                                  .isNotEmpty
+                              ? perSizeColorStocks.keys.first
+                              : '';
+                          if (sv.isNotEmpty) {
+                            perSizeColorStocks[sv]
+                                ?.add(_ColorStockEntry());
+                          }
+                        }),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.add_circle_outline,
+                                size: 16,
+                                color: AppConstants.primary),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Add Color',
+                              style: AppConstants.bodyStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: AppConstants.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
                 const SizedBox(height: 20),
-                SolePrimaryButton(
-                  label: editIndex != null
-                      ? (sizeCount > 1
-                          ? 'Update $sizeCount Variants'
-                          : 'Update Variant')
-                      : (sizeCount > 1
-                          ? 'Add $sizeCount Variants'
-                          : 'Add Variant'),
+                // Count total variants that will be created (sizes × colors).
+                Builder(builder: (ctx2) {
+                  var totalVariants = 0;
+                  for (final entries
+                      in perSizeColorStocks.values) {
+                    totalVariants += entries.isEmpty ? 1 : entries.length;
+                  }
+                  if (totalVariants == 0) totalVariants = 1;
+                  return KeyedSubtree(
+                    key: saveButtonKey,
+                    child: SolePrimaryButton(
+                      label: editIndex != null
+                          ? (totalVariants > 1
+                              ? 'Update $totalVariants Variants'
+                              : 'Update Variant')
+                          : (totalVariants > 1
+                              ? 'Add $totalVariants Variants'
+                              : 'Add Variant'),
                   onPressed: () {
                     // Resolve sizing system — preset code or custom text from
                     // the chip selector (single source of truth).
@@ -409,9 +949,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                       _showSnackBar('Sizing system is required.', isError: true);
                       return;
                     }
-                    // Resolve size values — each selected chip (or the custom
-                    // free-text size for custom systems) becomes its own
-                    // variant, sharing color/stock/price/sku.
+                    // Resolve size values.
                     final sizeValues = _sizingSystems.containsKey(system)
                         ? selectedSizes
                             .map((s) => s.trim())
@@ -425,32 +963,31 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                           isError: true);
                       return;
                     }
-                    final color = colorCtrl.text.trim().isNotEmpty
-                        ? colorCtrl.text.trim()
-                        : null;
-                    final stock = int.tryParse(stockCtrl.text) ?? 0;
-                    final additionalPrice =
-                        double.tryParse(priceCtrl.text) ?? 0;
-                    final sku = skuCtrl.text.trim().isNotEmpty
-                        ? skuCtrl.text.trim()
-                        : null;
-                    // Format each as 'SYSTEM SIZE' (e.g. 'EU 40', 'US 8').
-                    // When one entry creates several sizes, each variant
-                    // suffixes its size onto the shared SKU so SKUs stay
-                    // unique (e.g. SV-OXF-BLK-42-8 / -9 / -10).
-                    final makeSku = sku != null && sizeValues.length > 1
-                        ? (String size) => '$sku-$size'
-                        : (String _) => sku;
-                    final variants = [
-                      for (final sizeValue in sizeValues)
-                        ProductVariant(
+                    // Build one variant per (size, color) pair.
+                    final variants = <ProductVariant>[];
+                    for (final sizeValue in sizeValues) {
+                      final entries =
+                          perSizeColorStocks[sizeValue] ?? [_ColorStockEntry()];
+                      for (final entry in entries) {
+                        final c = entry.color.trim().isNotEmpty
+                            ? entry.color.trim()
+                            : null;
+                        final stock =
+                            int.tryParse(entry.stockCtrl.text) ?? 0;
+                        final price =
+                            double.tryParse(entry.priceCtrl.text) ?? 0;
+                        final sku = entry.skuCtrl.text.trim().isNotEmpty
+                            ? entry.skuCtrl.text.trim()
+                            : null;
+                        variants.add(ProductVariant(
                           size: '$system $sizeValue',
-                          color: color,
+                          color: c,
                           stock: stock,
-                          additionalPrice: additionalPrice,
-                          sku: makeSku(sizeValue),
-                        ),
-                    ];
+                          additionalPrice: price,
+                          sku: sku,
+                        ));
+                      }
+                    }
 
                     setState(() {
                       if (editIndex != null) {
@@ -464,9 +1001,29 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                     Navigator.of(ctx).pop();
                   },
                 ),
+              );
+            }),
               ],
             ),
           ),
+        ),
+          // Coach-mark guide overlay
+          if (showGuide && guideSteps.isNotEmpty)
+            _VariantGuideOverlay(
+              currentStep: guideStep.clamp(0, guideSteps.length - 1),
+              steps: guideSteps,
+              onNext: () => setSheetState(() {
+                if (guideStep < guideSteps.length - 1) guideStep++;
+              }),
+              onBack: guideStep > 0
+                  ? () => setSheetState(() => guideStep--)
+                  : null,
+              onDone: () => setSheetState(() {
+                showGuide = false;
+                guideStep = 0;
+              }),
+            ),
+          ],
           );
         },
       ),
@@ -1472,24 +2029,8 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
               child: ListTile(
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              leading: Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: AppConstants.primary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Center(
-                  child: Text(
-                    v.size,
-                    style: AppConstants.monoStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: AppConstants.primary,
-                    ),
-                  ),
-                ),
-              ),
+              // No leading badge — the size is already stated in the title
+              // ('Size US 7.5'), so a duplicate badge would be redundant.
               title: Text(
                 'Size ${v.size}${v.color != null ? ' · ${v.color}' : ''}',
                 style: AppConstants.bodyStyle(
@@ -2710,6 +3251,580 @@ class _PresetChipSelectorState extends State<_PresetChipSelector> {
   }
 }
 
+/// Compact per-size color selector used inside the stock rows.
+///
+/// Preset colors render as small tappable dots (a ring marks the selected
+/// one), with the dashed "+ Other" chip opening an inline text input for
+/// custom colors. Reports the active color text up via [onChanged] — '' means
+/// no color for that size.
+class _SizeColorSelector extends StatefulWidget {
+  final String initialValue;
+  final List<_ColorPreset> presets;
+  final ValueChanged<String> onChanged;
+
+  const _SizeColorSelector({
+    required this.initialValue,
+    required this.presets,
+    required this.onChanged,
+  });
+
+  @override
+  State<_SizeColorSelector> createState() => _SizeColorSelectorState();
+}
+
+class _SizeColorSelectorState extends State<_SizeColorSelector> {
+  // Matches the rest of the seller UI's selected chips (burnished clay fill).
+  static const Color _color = AppConstants.primary;
+
+  late String _selected = widget.initialValue;
+  late String? _custom = widget.initialValue.isEmpty ||
+          widget.presets.any((p) => p.name == widget.initialValue)
+      ? null
+      : widget.initialValue;
+
+  bool _otherOpen = false;
+  String? _otherError;
+  final TextEditingController _ctrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _selectPreset(_ColorPreset preset) {
+    setState(() {
+      // Tapping the active swatch again clears the selection (color is
+      // optional per variant/size).
+      final isActive = _selected == preset.name;
+      _selected = isActive ? '' : preset.name;
+      _custom = null;
+      _otherOpen = false;
+      _otherError = null;
+    });
+    _ctrl.clear();
+    widget.onChanged(_selected);
+  }
+
+  void _toggleOther() {
+    setState(() {
+      _otherOpen = !_otherOpen;
+      _otherError = null;
+      if (_otherOpen) _ctrl.text = _custom ?? '';
+    });
+  }
+
+  void _submitCustom() {
+    final text = _ctrl.text.trim();
+    if (text.isEmpty) {
+      setState(() => _otherError = 'Type a color first.');
+      return;
+    }
+    if (text.length > _maxCustomTagLength) {
+      setState(() => _otherError =
+          'Keep it under $_maxCustomTagLength characters.');
+      return;
+    }
+    final lower = text.toLowerCase();
+    if (widget.presets.any((p) => p.name.toLowerCase() == lower)) {
+      setState(() => _otherError =
+          'That is already a color — tap it above instead.');
+      return;
+    }
+    setState(() {
+      _selected = text;
+      _custom = text;
+      _otherOpen = false;
+      _otherError = null;
+    });
+    _ctrl.clear();
+    widget.onChanged(text);
+  }
+
+  void _removeCustom() {
+    // Color is optional per size — removing clears that size's color.
+    setState(() {
+      _selected = '';
+      _custom = null;
+      _otherOpen = false;
+      _otherError = null;
+    });
+    _ctrl.clear();
+    widget.onChanged('');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final custom = _custom;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            for (final preset in widget.presets)
+              _SmallColorDot(
+                preset: preset,
+                selected: _selected == preset.name,
+                onTap: () => _selectPreset(preset),
+              ),
+            _OtherTagChip(
+              color: _color,
+              open: _otherOpen,
+              onTap: _toggleOther,
+            ),
+            if (custom != null)
+              _CustomTagChip(
+                label: custom,
+                color: _color,
+                onColor: AppConstants.surfaceLight,
+                onRemove: _removeCustom,
+              ),
+          ],
+        ),
+        if (_otherOpen) ...[const SizedBox(height: 8), _buildOtherInput()],
+      ],
+    );
+  }
+
+  Widget _buildOtherInput() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _ctrl,
+                autofocus: true,
+                maxLength: _maxCustomTagLength,
+                style: AppConstants.bodyStyle(fontSize: 14),
+                decoration: InputDecoration(
+                  counterText: '',
+                  isDense: true,
+                  hintText: 'e.g. Burnished Clay',
+                  filled: true,
+                  fillColor: Colors.white,
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  border: OutlineInputBorder(
+                    borderRadius: AppConstants.buttonRadius,
+                    borderSide:
+                        const BorderSide(color: AppConstants.borderGray),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: AppConstants.buttonRadius,
+                    borderSide:
+                        const BorderSide(color: AppConstants.borderGray),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: AppConstants.buttonRadius,
+                    borderSide: BorderSide(color: _color, width: 1.5),
+                  ),
+                ),
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _submitCustom(),
+              ),
+            ),
+            const SizedBox(width: 8),
+            _AddCustomButton(
+              color: _color,
+              onColor: AppConstants.surfaceLight,
+              onPressed: _submitCustom,
+            ),
+          ],
+        ),
+        if (_otherError != null) ...[const SizedBox(height: 6), _buildError()],
+      ],
+    );
+  }
+
+  Widget _buildError() {
+    return Text(
+      _otherError!,
+      style: AppConstants.bodyStyle(fontSize: 12, color: AppConstants.error),
+    );
+  }
+}
+
+/// Compact hint-only input used in the per-size rows (Extra Price / SKU).
+/// Dense and borderless-label so the two fields fit on one line per size.
+class _CompactSheetField extends StatelessWidget {
+  final String hint;
+  final TextEditingController controller;
+  final TextInputType? keyboardType;
+
+  const _CompactSheetField({
+    required this.hint,
+    required this.controller,
+    this.keyboardType,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      keyboardType: keyboardType,
+      style: AppConstants.bodyStyle(fontSize: 13, color: AppConstants.secondary),
+      decoration: InputDecoration(
+        isDense: true,
+        hintText: hint,
+        hintStyle: AppConstants.bodyStyle(
+          fontSize: 13,
+          color: AppConstants.secondary.withValues(alpha: 0.5),
+        ),
+        filled: true,
+        fillColor: Colors.white,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+        border: OutlineInputBorder(
+          borderRadius: AppConstants.buttonRadius,
+          borderSide:
+              BorderSide(color: AppConstants.borderGray.withValues(alpha: 0.5)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: AppConstants.buttonRadius,
+          borderSide:
+              BorderSide(color: AppConstants.borderGray.withValues(alpha: 0.5)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: AppConstants.buttonRadius,
+          borderSide: BorderSide(color: AppConstants.primary, width: 1.5),
+        ),
+      ),
+    );
+  }
+}
+
+/// A single tappable color dot used in the per-size rows: the swatch inside
+/// a thin ring that highlights when selected.
+class _SmallColorDot extends StatelessWidget {
+  final _ColorPreset preset;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _SmallColorDot({
+    required this.preset,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      customBorder: const CircleBorder(),
+      child: Container(
+        width: 30,
+        height: 30,
+        padding: const EdgeInsets.all(3),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: selected ? AppConstants.primary : Colors.transparent,
+            width: 1.5,
+          ),
+        ),
+        child: Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: preset.color,
+            border: Border.all(
+              color: AppConstants.borderGray.withValues(alpha: 0.5),
+              width: 1,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A preset color name paired with the swatch color shown on its chip.
+typedef _ColorPreset = ({String name, Color color});
+
+/// Single-select color swatch picker for the variant sheet.
+///
+/// Tapping a swatch selects that color name; the dashed "+ Other" chip opens
+/// an inline text input for colors not in the presets (e.g. 'Burnished
+/// Clay'). Picking a preset replaces any custom value, and removing the
+/// active custom value clears the color entirely (it is optional). Reports
+/// the active color text up via [onChanged] — '' means no color selected.
+class _ColorSwatchPicker extends StatefulWidget {
+  final String initialValue;
+  final List<_ColorPreset> presets;
+  final String otherHint;
+  final ValueChanged<String> onChanged;
+
+  const _ColorSwatchPicker({
+    required this.initialValue,
+    required this.presets,
+    this.otherHint = 'Add your own…',
+    required this.onChanged,
+  });
+
+  @override
+  State<_ColorSwatchPicker> createState() => _ColorSwatchPickerState();
+}
+
+class _ColorSwatchPickerState extends State<_ColorSwatchPicker> {
+  // Matches the rest of the seller UI's selected chips (burnished clay fill).
+  static const Color _color = AppConstants.primary;
+
+  late String _selected = widget.initialValue;
+  late String? _custom = widget.initialValue.isEmpty ||
+          widget.presets.any((p) => p.name == widget.initialValue)
+      ? null
+      : widget.initialValue;
+
+  bool _otherOpen = false;
+  String? _otherError;
+  final TextEditingController _ctrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _selectPreset(_ColorPreset preset) {
+    setState(() {
+      // Tapping the active swatch again clears the selection (color is
+      // optional per variant/size).
+      final isActive = _selected == preset.name;
+      _selected = isActive ? '' : preset.name;
+      _custom = null;
+      _otherOpen = false;
+      _otherError = null;
+    });
+    _ctrl.clear();
+    widget.onChanged(_selected);
+  }
+
+  void _toggleOther() {
+    setState(() {
+      _otherOpen = !_otherOpen;
+      _otherError = null;
+      if (_otherOpen) _ctrl.text = _custom ?? '';
+    });
+  }
+
+  void _submitCustom() {
+    final text = _ctrl.text.trim();
+    if (text.isEmpty) {
+      setState(() => _otherError = 'Type a color first.');
+      return;
+    }
+    if (text.length > _maxCustomTagLength) {
+      setState(() => _otherError =
+          'Keep it under $_maxCustomTagLength characters.');
+      return;
+    }
+    final lower = text.toLowerCase();
+    if (widget.presets.any((p) => p.name.toLowerCase() == lower)) {
+      setState(() => _otherError =
+          'That is already a color — tap it above instead.');
+      return;
+    }
+    setState(() {
+      _selected = text;
+      _custom = text;
+      _otherOpen = false;
+      _otherError = null;
+    });
+    _ctrl.clear();
+    widget.onChanged(text);
+  }
+
+  void _removeCustom() {
+    // Color is optional — removing a custom color clears the selection.
+    setState(() {
+      _selected = '';
+      _custom = null;
+      _otherOpen = false;
+      _otherError = null;
+    });
+    _ctrl.clear();
+    widget.onChanged('');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final custom = _custom;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            for (final preset in widget.presets)
+              _ColorSwatchChip(
+                preset: preset,
+                selected: _selected == preset.name,
+                onTap: () => _selectPreset(preset),
+              ),
+            _OtherTagChip(
+              color: _color,
+              open: _otherOpen,
+              onTap: _toggleOther,
+            ),
+          ],
+        ),
+        // Active custom color chip — animates in/out on add/remove.
+        _CustomChipSwitcher(
+          keyValue: custom?.toLowerCase(),
+          child: custom == null
+              ? const SizedBox.shrink()
+              : _CustomTagChip(
+                  label: custom,
+                  color: _color,
+                  onColor: AppConstants.surfaceLight,
+                  onRemove: _removeCustom,
+                ),
+        ),
+        if (_otherOpen) ...[const SizedBox(height: 10), _buildOtherInput()],
+      ],
+    );
+  }
+
+  Widget _buildOtherInput() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _ctrl,
+                autofocus: true,
+                maxLength: _maxCustomTagLength,
+                style: AppConstants.bodyStyle(fontSize: 14),
+                decoration: InputDecoration(
+                  counterText: '',
+                  isDense: true,
+                  hintText: widget.otherHint,
+                  filled: true,
+                  fillColor: Colors.white,
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  border: OutlineInputBorder(
+                    borderRadius: AppConstants.buttonRadius,
+                    borderSide:
+                        const BorderSide(color: AppConstants.borderGray),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: AppConstants.buttonRadius,
+                    borderSide:
+                        const BorderSide(color: AppConstants.borderGray),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: AppConstants.buttonRadius,
+                    borderSide: BorderSide(color: _color, width: 1.5),
+                  ),
+                ),
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _submitCustom(),
+              ),
+            ),
+            const SizedBox(width: 8),
+            _AddCustomButton(
+              color: _color,
+              onColor: AppConstants.surfaceLight,
+              onPressed: _submitCustom,
+            ),
+          ],
+        ),
+        if (_otherError != null) ...[const SizedBox(height: 6), _buildError()],
+      ],
+    );
+  }
+
+  Widget _buildError() {
+    return Text(
+      _otherError!,
+      style: AppConstants.bodyStyle(fontSize: 12, color: AppConstants.error),
+    );
+  }
+}
+
+/// A single color swatch: a filled circle with its name below. Selected
+/// swatches get a primary-tinted background, a primary border, and a check.
+class _ColorSwatchChip extends StatelessWidget {
+  final _ColorPreset preset;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ColorSwatchChip({
+    required this.preset,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Dark check on light swatches (cream), white on dark ones.
+    final checkColor =
+        ThemeData.estimateBrightnessForColor(preset.color) == Brightness.light
+            ? Colors.black54
+            : Colors.white;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        width: 60,
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        decoration: BoxDecoration(
+          color: selected
+              ? AppConstants.primary.withValues(alpha: 0.08)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected ? AppConstants.primary : Colors.transparent,
+            width: 1.2,
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: preset.color,
+                border: Border.all(
+                  color: AppConstants.borderGray.withValues(alpha: 0.6),
+                  width: 1,
+                ),
+              ),
+              child: selected
+                  ? Icon(Icons.check_rounded, size: 16, color: checkColor)
+                  : null,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              preset.name,
+              overflow: TextOverflow.ellipsis,
+              style: AppConstants.bodyStyle(
+                fontSize: 11,
+                fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                color: selected
+                    ? AppConstants.primary
+                    : AppConstants.secondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// Multi-select size chip row for the variant sheet.
 ///
 /// Checkbox-style: any number of preset sizes can be selected at once (each
@@ -2919,6 +4034,326 @@ class _SizeMultiSelectorState extends State<_SizeMultiSelector> {
       _otherError!,
       style: AppConstants.bodyStyle(fontSize: 12, color: AppConstants.error),
     );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// VARIANT GUIDE — spotlight coach-mark overlay for the variant sheet
+// ═══════════════════════════════════════════════════════════════
+
+class _GuideStep {
+  final GlobalKey key;
+  final String title;
+  final String description;
+  final IconData icon;
+
+  const _GuideStep({
+    required this.key,
+    required this.title,
+    required this.description,
+    required this.icon,
+  });
+}
+
+class _VariantGuideOverlay extends StatefulWidget {
+  final int currentStep;
+  final List<_GuideStep> steps;
+  final VoidCallback onNext;
+  final VoidCallback? onBack;
+  final VoidCallback onDone;
+
+  const _VariantGuideOverlay({
+    required this.currentStep,
+    required this.steps,
+    required this.onNext,
+    this.onBack,
+    required this.onDone,
+  });
+
+  @override
+  State<_VariantGuideOverlay> createState() => _VariantGuideOverlayState();
+}
+
+class _VariantGuideOverlayState extends State<_VariantGuideOverlay>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animCtrl;
+  late Animation<double> _fadeIn;
+
+  @override
+  void initState() {
+    super.initState();
+    _animCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 250),
+    );
+    _fadeIn = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut);
+    _animCtrl.forward();
+  }
+
+  @override
+  void dispose() {
+    _animCtrl.dispose();
+    super.dispose();
+  }
+
+  Rect? _targetRect() {
+    final key = widget.steps[widget.currentStep].key;
+    final rb = key.currentContext?.findRenderObject() as RenderBox?;
+    if (rb == null || !rb.attached) return null;
+    final pos = rb.localToGlobal(Offset.zero);
+    return Rect.fromLTWH(
+      pos.dx - 10,
+      pos.dy - 10,
+      rb.size.width + 20,
+      rb.size.height + 20,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final step = widget.steps[widget.currentStep];
+    final rect = _targetRect();
+    final screen = MediaQuery.of(context).size;
+    final isLast = widget.currentStep == widget.steps.length - 1;
+    final isFirst = widget.currentStep == 0;
+
+    // Position tooltip below the target when possible, above when near bottom.
+    double tooltipTop;
+    if (rect != null && rect.bottom < screen.height * 0.55) {
+      tooltipTop = rect.bottom + 16;
+    } else if (rect != null) {
+      tooltipTop = rect.top - 220;
+    } else {
+      tooltipTop = screen.height * 0.35;
+    }
+    tooltipTop = tooltipTop.clamp(80.0, screen.height - 260);
+
+    return FadeTransition(
+      opacity: _fadeIn,
+      child: Stack(
+        children: [
+          // Dark overlay with spotlight cutout
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {},
+              child: CustomPaint(
+                painter: _SpotlightPainter(
+                  target: rect,
+                  overlayColor: Colors.black.withOpacity(0.65),
+                  borderColor: AppConstants.primary,
+                ),
+              ),
+            ),
+          ),
+          // Tooltip card
+          Positioned(
+            left: 20,
+            right: 20,
+            top: tooltipTop,
+            child: _buildCard(step, isFirst, isLast),
+          ),
+          // Skip button (top-right)
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 4,
+            right: 16,
+            child: GestureDetector(
+              onTap: widget.onDone,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.92),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Text(
+                  'Skip',
+                  style: AppConstants.bodyStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppConstants.secondary,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCard(_GuideStep step, bool isFirst, bool isLast) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.15),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppConstants.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(step.icon, size: 20, color: AppConstants.primary),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  step.title,
+                  style: AppConstants.headlineStyle(fontSize: 16),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            step.description,
+            style: AppConstants.bodyStyle(
+              fontSize: 14,
+              color: SellerTheme.textSecondary,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              // Step-indicator dots
+              ...List.generate(widget.steps.length, (i) {
+                return AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  width: i == widget.currentStep ? 20 : 6,
+                  height: 6,
+                  margin: const EdgeInsets.only(right: 4),
+                  decoration: BoxDecoration(
+                    color: i == widget.currentStep
+                        ? AppConstants.primary
+                        : AppConstants.borderGray,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                );
+              }),
+              const Spacer(),
+              if (!isFirst)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: TextButton(
+                    onPressed: widget.onBack,
+                    child: Text(
+                      'Back',
+                      style: AppConstants.bodyStyle(
+                        fontSize: 14,
+                        color: AppConstants.secondary,
+                      ),
+                    ),
+                  ),
+                ),
+              ElevatedButton(
+                onPressed: isLast ? widget.onDone : widget.onNext,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppConstants.primary,
+                  foregroundColor: Colors.white,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  elevation: 0,
+                ),
+                child: Text(
+                  isLast ? 'Got it!' : 'Next',
+                  style: const TextStyle(
+                      fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Custom painter that draws a full-screen dark overlay with a transparent
+/// rounded-rect cutout (spotlight) around the target widget.
+class _SpotlightPainter extends CustomPainter {
+  final Rect? target;
+  final Color overlayColor;
+  final Color borderColor;
+
+  _SpotlightPainter({
+    this.target,
+    required this.overlayColor,
+    required this.borderColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final fullPath = Path()
+      ..addRect(Rect.fromLTWH(0, 0, size.width, size.height));
+
+    if (target != null) {
+      // Cut out the spotlight area (evenOdd fill rule)
+      fullPath.addRRect(
+        RRect.fromRectAndRadius(target!, const Radius.circular(14)),
+      );
+      fullPath.fillType = PathFillType.evenOdd;
+
+      // Draw a border around the spotlight
+      final borderPaint = Paint()
+        ..color = borderColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.5;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(target!, const Radius.circular(14)),
+        borderPaint,
+      );
+    }
+
+    // Draw the dark overlay
+    canvas.drawPath(fullPath, Paint()..color = overlayColor);
+  }
+
+  @override
+  bool shouldRepaint(covariant _SpotlightPainter old) =>
+      old.target != target || old.overlayColor != overlayColor;
+}
+
+// ─── Color+stock entry per size ────────────────────────────────
+/// A single color/stock/price/sku row within a size's color list.
+class _ColorStockEntry {
+  String color;
+  final TextEditingController stockCtrl;
+  final TextEditingController priceCtrl;
+  final TextEditingController skuCtrl;
+
+  _ColorStockEntry({
+    this.color = '',
+    String stock = '0',
+    String price = '0',
+    String sku = '',
+  })  : stockCtrl = TextEditingController(text: stock),
+        priceCtrl = TextEditingController(text: price),
+        skuCtrl = TextEditingController(text: sku);
+
+  void dispose() {
+    stockCtrl.dispose();
+    priceCtrl.dispose();
+    skuCtrl.dispose();
   }
 }
 

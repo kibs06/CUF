@@ -19,6 +19,7 @@ import 'checkout_screen.dart';
 import 'write_review_screen.dart';
 import '../../widgets/cart_icon_button.dart';
 import '../../widgets/seller/fly_to_order_animation.dart';
+import '../../widgets/seller/tag_selector.dart';
 import '../../widgets/size_guide_modal.dart';
 import '../../widgets/hanging_sale_tag.dart';
 import '../../widgets/sale_price_tape.dart';
@@ -259,10 +260,22 @@ class _ReviewsSectionState extends State<_ReviewsSection> {
 class _ProductDetailScreenState extends State<ProductDetailScreen>
     with SingleTickerProviderStateMixin {
   String? _selectedSize;
-  String _selectedColor = 'Burnished Clay';
+
+  /// Selected variant color NAME (real data from product_variants).
+  /// Null until the shopper picks one — the first available color is used
+  /// by default via [_effectiveColor].
+  String? _selectedColor;
   bool _isDescriptionExpanded = false;
   bool _isLoadingSizes = false;
   bool _isAddingToCart = false;
+
+  // Quantity selected by the shopper (stepper below the size grid).
+  int _quantity = 1;
+
+  // Active size unit for display (US / EU / UK switcher in the header).
+  // Display-only: `_selectedSize` always keeps the canonical DB string so
+  // variant lookup and cart keys keep matching the inventory rows.
+  String _sizeUnit = 'US';
 
   // Image carousel state
   final PageController _imagePageController = PageController();
@@ -276,13 +289,93 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
   final GlobalKey _productImageKey = GlobalKey();
   final GlobalKey _cartIconKey = GlobalKey();
 
-  final List<String> _colors = ['Burnished Clay', 'Carob Dark', 'Off-White Suede', 'Saddle Brown'];
-  final List<Color> _colorValues = [
-    AppConstants.primary,
-    AppConstants.secondary,
-    AppConstants.surfaceLight,
-    const Color(0xFFB8860B),
-  ];
+  /// Product tag ids from products.tags (real data), in stored order.
+  List<String> get _productTags {
+    final raw = widget.product['tags'] as List? ?? [];
+    return raw
+        .map((e) => e?.toString().trim() ?? '')
+        .where((e) => e.isNotEmpty)
+        .toList();
+  }
+
+  /// Product tag id → display label, using the shared tag vocabulary
+  /// (tag_selector.dart). Falls back to a readable title-cased form for
+  /// legacy free-text tags: 'eco_friendly' → 'Eco friendly'.
+  String _tagLabel(String id) {
+    for (final group in tagGroups) {
+      for (final preset in group.presets) {
+        if (preset.id == id) return preset.label;
+      }
+    }
+    return id
+        .split('_')
+        .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}')
+        .join(' ');
+  }
+
+  /// Distinct color names from this product's variants (real data), in
+  /// first-seen order. Empty when the product has no color variants — the
+  /// "Select Color / Leather" section then stays hidden.
+  List<String> get _variantColorNames {
+    final variants = widget.product['product_variants'] as List<dynamic>? ?? [];
+    final seen = <String>{};
+    final colors = <String>[];
+    for (final v in variants) {
+      final c = v['color']?.toString().trim() ?? '';
+      if (c.isNotEmpty && seen.add(c)) colors.add(c);
+    }
+    return colors;
+  }
+
+  /// The color used for ordering: the shopper's pick, or the first
+  /// available color when none is picked yet.
+  String? get _effectiveColor {
+    final colors = _variantColorNames;
+    if (colors.isEmpty) return null;
+    if (_selectedColor != null && colors.contains(_selectedColor)) {
+      return _selectedColor;
+    }
+    return colors.first;
+  }
+
+  /// Map a variant color NAME (free text from sellers) to a swatch color.
+  /// Falls back to a deterministic warm tone from the name when unknown.
+  Color _swatchColorFor(String name) {
+    final n = name.toLowerCase();
+    if (n.contains('brown') || n.contains('tan') || n.contains('camel') ||
+        n.contains('cognac') || n.contains('clay') || n.contains('leather')) {
+      if (n.contains('dark')) return const Color(0xFF4E342E);
+      if (n.contains('light')) return const Color(0xFFA1887F);
+      return AppConstants.primary;
+    }
+    if (n.contains('black') || n.contains('charcoal')) {
+      return const Color(0xFF26221E);
+    }
+    if (n.contains('carob')) return const Color(0xFF3E2723);
+    if (n.contains('white') || n.contains('cream') || n.contains('beige') ||
+        n.contains('off-white') || n.contains('suede')) {
+      return const Color(0xFFF1E8DC);
+    }
+    if (n.contains('gold') || n.contains('mustard') || n.contains('yellow')) {
+      return const Color(0xFFB8860B);
+    }
+    if (n.contains('red') || n.contains('burgundy') || n.contains('maroon')) {
+      return const Color(0xFF9B3B2E);
+    }
+    if (n.contains('green') || n.contains('olive')) return const Color(0xFF5D6B45);
+    if (n.contains('blue') || n.contains('navy')) return const Color(0xFF3F4A63);
+    if (n.contains('grey') || n.contains('gray')) return const Color(0xFF9E948A);
+    // Deterministic warm fallback keyed off the name.
+    const palette = [
+      Color(0xFF8B5A2B),
+      Color(0xFF6B4A2F),
+      Color(0xFFA9703C),
+      Color(0xFF4E342E),
+      Color(0xFF7C5A38),
+      Color(0xFFB8860B),
+    ];
+    return palette[name.hashCode.abs() % palette.length];
+  }
 
   /// Build a map of {size: stock} from both inventory and product_variants.
   /// If a size exists in both tables, the higher stock value wins.
@@ -348,6 +441,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
           break;
         }
       }
+      // The store-list query only selects size/stock for variants — make
+      // sure full rows (with color) are loaded so the swatches reflect
+      // real product data instead of a mock list.
+      if (_variantColorNames.isEmpty) {
+        _fetchVariantColors();
+      }
     } else {
       // Inventory data missing — fetch it from Supabase
       _fetchInventory();
@@ -388,6 +487,27 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
     }
   }
 
+  /// Fetch full variant rows (incl. color) when the product payload only
+  /// carried size/stock. Colors drive the swatches, so we need them even
+  /// when sizes already loaded. Never shows the loading skeleton.
+  Future<void> _fetchVariantColors() async {
+    try {
+      final productId = widget.product['id'].toString();
+      final data = await Supabase.instance.client
+          .from('products')
+          .select('product_variants(*)')
+          .eq('id', productId)
+          .single();
+      if (!mounted) return;
+      setState(() {
+        widget.product['product_variants'] = data['product_variants'];
+      });
+    } catch (_) {
+      // Keep whatever variants we have — the swatch section hides when
+      // there are no colors.
+    }
+  }
+
   void _addToCart() {
     if (_selectedSize == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -422,7 +542,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
     final (:variantId, :additionalPrice) = resolveVariant(
       variants: variants,
       size: _selectedSize!,
-      color: _selectedColor,
+      color: _effectiveColor,
     );
 
     // Add to cart with variant + pricing info for Supabase persistence.
@@ -437,11 +557,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
       imageUrl: imageUrl ?? '',
       price: price,
       size: _selectedSize!,
-      color: _selectedColor,
+      color: _effectiveColor,
       storeId: widget.product['store_id']?.toString(),
       storeName: widget.product['store_name']?.toString(),
       variantId: variantId,
       additionalPrice: additionalPrice,
+      // Quantity set via the stepper below the size grid.
+      quantity: _quantity,
     );
 
     // Pack-the-box fly-to-cart overlay animation (same as the POS): the box
@@ -583,9 +705,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
       // The hanging tag pokes ~7px past the left edge — don't clip it.
       clipBehavior: Clip.none,
       children: [
-        // Main swipeable image area
-        AspectRatio(
-          aspectRatio: 1.0,
+        // Main swipeable image area — fills the whole hero edge-to-edge.
+        // (Previously wrapped in AspectRatio(1.0), which couldn't fill the
+        // flexible space when the hero height (380) didn't match the screen
+        // width — the SliverAppBar's brown background showed through as a
+        // gap on the right of wider phones.) Images use BoxFit.cover, so
+        // they always cover the full area.
+        SizedBox.expand(
           child: PageView.builder(
             controller: _imagePageController,
             itemCount: imageUrls.length,
@@ -702,6 +828,66 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
           size: 64,
           color: AppConstants.borderGray,
         ),
+      ),
+    );
+  }
+
+  // ─── QUANTITY ───────────────────────────────────────────────────
+
+  /// Quantity stepper (− / count / +) so shoppers can set quantity ahead
+  /// of adding to cart. Wired into [_addToCart] via `_quantity`.
+  Widget _buildQuantityStepper() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          'Quantity',
+          style: AppConstants.bodyStyle(fontWeight: FontWeight.bold, fontSize: 13),
+        ),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: AppConstants.borderGray.withValues(alpha: 0.5),
+              width: 1,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _stepperButton(Icons.remove_rounded, () {
+                if (_quantity > 1) setState(() => _quantity--);
+              }),
+              Container(
+                width: 44,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  '$_quantity',
+                  textAlign: TextAlign.center,
+                  style: AppConstants.monoStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              _stepperButton(Icons.add_rounded, () {
+                setState(() => _quantity++);
+              }),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _stepperButton(IconData icon, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Icon(icon, size: 18, color: AppConstants.primary),
       ),
     );
   }
@@ -919,44 +1105,50 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                             color: AppConstants.primary,
                           ),
                         ),
+                      // Product tags — real data from products.tags.
+                      if (_productTags.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              for (final tag in _productTags)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: SoleBadge(
+                                    label: _tagLabel(tag),
+                                    backgroundColor: AppConstants.primary
+                                        .withValues(alpha: 0.1),
+                                    textColor: AppConstants.primary,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 24),
 
-                      // Size Selector Label
+                      // Size Selector Label + unit switcher, with the
+                      // Size guide link aligned on the same row.
                       Row(
                         children: [
                           Text(
-                            'Select Size (EU)',
+                            'Select Size',
                             style: AppConstants.bodyStyle(fontWeight: FontWeight.bold, fontSize: 15),
                           ),
+                          const SizedBox(width: 10),
+                          _UnitSwitcher(
+                            current: _sizeUnit,
+                            onChanged: (unit) => setState(() => _sizeUnit = unit),
+                          ),
                           const Spacer(),
-                          GestureDetector(
+                          _SizeHelperLink(
+                            icon: Icons.straighten_outlined,
+                            label: 'Size guide',
                             onTap: () => SizeGuideModal.show(context),
-                            child: Padding(
-                              padding: const EdgeInsets.only(left: 8),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.straighten_outlined,
-                                    size: 14,
-                                    color: AppConstants.primary,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    'Size guide',
-                                    style: AppConstants.bodyStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                      color: AppConstants.primary,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
                       // Size Selector row
                       if (_isLoadingSizes)
                         _buildSizeSkeleton()
@@ -986,140 +1178,169 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                           ),
                         )
                       else
-                        SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child:                      Row(
-                        children: sizesMap.entries.map((entry) {
-                          final size = entry.key;
-                          final stock = entry.value;
-                              final isAvailable = stock > 0;
-                              final isSelected = _selectedSize == size;
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                        // Pull the size grid up so it tucks under the label.
+                        // (Transform, not a negative margin — Container
+                        // asserts margins must be non-negative.)
+                        Transform.translate(
+                          offset: const Offset(0, -6),
+                          child: GridView.count(
+                          crossAxisCount: 4,
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          mainAxisSpacing: 6,
+                          crossAxisSpacing: 6,
+                          // Cells are narrower with 4 columns — ease the
+                          // ratio so buttons keep a comfortable height.
+                          childAspectRatio: 2.6,
+                          // Let the corner badge poke past the button edge.
+                          clipBehavior: Clip.none,
+                          children: sizesMap.entries.map((entry) {
+                            final size = entry.key;
+                            final stock = entry.value;
+                            final isAvailable = stock > 0;
+                            final isSelected = _selectedSize == size;
 
-                              final isLowStock = isAvailable && stock <= 5;
+                            final isLowStock = isAvailable && stock <= 5;
+                            // Label respects the active unit; the canonical
+                            // string stays untouched so variant lookup and
+                            // cart keys keep matching the DB rows.
+                            final label = displaySizeInUnit(size, _sizeUnit);
 
-                              return GestureDetector(
-                                onTap: isAvailable
-                                    ? () {
-                                        setState(() {
-                                          _selectedSize = size;
-                                        });
-                                      }
-                                    : null,
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Container(
-                                      width: 48,
-                                      height: 48,
-                                      margin: const EdgeInsets.only(right: 8),
-                                      decoration: BoxDecoration(
+                            return GestureDetector(
+                              onTap: isAvailable
+                                  ? () {
+                                      setState(() {
+                                        // Map the tapped label back to the
+                                        // canonical size for this product
+                                        // (bijective conversion, so this
+                                        // always resolves to the same size).
+                                        _selectedSize = sizesMap.keys.firstWhere(
+                                          (s) => displaySizeInUnit(s, _sizeUnit) == label,
+                                          orElse: () => size,
+                                        );
+                                      });
+                                    }
+                                  : null,
+                              child: Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  // Inset the button inside its grid cell so
+                                  // the width stays a bit tighter than the
+                                  // cell while the gap between buttons stays
+                                  // small.
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 4,
+                                    ),
+                                    child: Container(
+                                    height: double.infinity,
+                                    decoration: BoxDecoration(
+                                      color: isSelected
+                                          ? AppConstants.primary
+                                          : (isAvailable
+                                              ? const Color(0xFFF7F5F2)
+                                              : AppConstants.borderGray.withValues(alpha: 0.2)),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
                                         color: isSelected
                                             ? AppConstants.primary
-                                            : (isAvailable ? Colors.white : AppConstants.borderGray.withValues(alpha: 0.2)),
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(
-                                          color: isSelected
-                                              ? AppConstants.primary
-                                              : AppConstants.borderGray.withValues(alpha: 0.5),
-                                          width: 1.5,
-                                        ),
-                                      ),
-                                      child: Center(
-                                        child: Stack(
-                                          alignment: Alignment.center,
-                                          children: [
-                                            Text(
-                                              size,
-                                              style: AppConstants.monoStyle(
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.bold,
-                                                color: isSelected
-                                                    ? AppConstants.surfaceLight
-                                                    : (isAvailable
-                                                        ? AppConstants.secondary
-                                                        : AppConstants.secondary.withValues(alpha: 0.3)),
-                                              ),
-                                            ),
-                                            if (!isAvailable)
-                                              // Strikethrough for unavailable sizes
-                                              Transform.rotate(
-                                                angle: -0.5,
-                                                child: Container(
-                                                  width: 32,
-                                                  height: 2,
-                                                  color: AppConstants.error.withValues(alpha: 0.5),
-                                                ),
-                                              ),
-                                          ],
-                                        ),
+                                            : AppConstants.borderGray.withValues(alpha: 0.4),
+                                        width: 1,
                                       ),
                                     ),
-                                    // Low stock label below the size chip
-                                    if (isLowStock)
-                                      Padding(
-                                        padding: const EdgeInsets.only(top: 2, right: 8),
+                                    child: Center(
+                                      child: Stack(
+                                        alignment: Alignment.center,
+                                        children: [
+                                          Text(
+                                            label,
+                                            style: AppConstants.monoStyle(
+                                              fontSize: 11,
+                                              color: isSelected
+                                                  ? AppConstants.surfaceLight
+                                                  : (isAvailable
+                                                      ? AppConstants.secondary
+                                                      : AppConstants.secondary.withValues(alpha: 0.3)),
+                                            ),
+                                          ),
+                                          if (!isAvailable)
+                                            // Strikethrough for unavailable sizes
+                                            Transform.rotate(
+                                              angle: -0.5,
+                                              child: Container(
+                                                width: 32,
+                                                height: 2,
+                                                color: AppConstants.error.withValues(alpha: 0.5),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                    ),
+                                  ),
+                                  // Low-stock orange corner badge (like the
+                                  // reference): '2 left' overlapping the
+                                  // top-right corner of the button.
+                                  if (isLowStock)
+                                    Positioned(
+                                      top: -6,
+                                      right: -6,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 5,
+                                          vertical: 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: AppConstants.statusPendingColor,
+                                          borderRadius: BorderRadius.circular(3),
+                                        ),
                                         child: Text(
-                                          'Only $stock left',
+                                          '$stock left',
                                           style: AppConstants.bodyStyle(
-                                            fontSize: 9,
-                                            color: AppConstants.error,
+                                            fontSize: 8,
                                             fontWeight: FontWeight.bold,
+                                            color: Colors.white,
                                           ),
                                         ),
                                       ),
-                                  ],
-                                ),
-                              );
-                            }).toList(),
+                                    ),
+                                ],
+                              ),
+                            );
+                          }).toList(),
                           ),
+                        ),
+                        const SizedBox(height: 8),
+                        _buildQuantityStepper(),
+                          ],
                         ),
                       const SizedBox(height: 24),
 
-                      // Color variant swatches
-                      Text(
-                        'Select Color / Leather',
-                        style: AppConstants.bodyStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: List.generate(_colors.length, (index) {
-                          final colorName = _colors[index];
-                          final colorVal = _colorValues[index];
-                          final isSelected = _selectedColor == colorName;
-
-                          return GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                _selectedColor = colorName;
-                              });
-                            },
-                            child: Container(
-                              margin: const EdgeInsets.only(right: 12),
-                              padding: const EdgeInsets.all(3),
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: isSelected ? AppConstants.primary : Colors.transparent,
-                                  width: 2,
-                                ),
+                      // Color variant swatches — real colors from the
+                      // product's variants; hidden when none are set.
+                      if (_variantColorNames.isNotEmpty) ...[
+                        Text(
+                          'Select Color / Leather',
+                          style: AppConstants.bodyStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            for (final colorName in _variantColorNames)
+                              _ColorSwatch(
+                                name: colorName,
+                                color: _swatchColorFor(colorName),
+                                selected: _effectiveColor == colorName,
+                                onTap: () => setState(() {
+                                  _selectedColor = colorName;
+                                }),
                               ),
-                              child: CircleAvatar(
-                                radius: 14,
-                                backgroundColor: colorVal,
-                                child: isSelected
-                                    ? Icon(
-                                        Icons.check,
-                                        size: 14,
-                                        color: colorVal == AppConstants.surfaceLight
-                                            ? AppConstants.secondary
-                                            : Colors.white,
-                                      )
-                                    : null,
-                              ),
-                            ),
-                          );
-                        }),
-                      ),
+                          ],
+                        ),
+                      ],
                       const SizedBox(height: 24),
 
                       // Description section
@@ -1273,6 +1494,164 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Small inline helper link (icon + label) used in the size section.
+class _SizeHelperLink extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _SizeHelperLink({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: AppConstants.primary),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: AppConstants.bodyStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: AppConstants.primary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Circular color swatch for a variant color name.
+class _ColorSwatch extends StatelessWidget {
+  final String name;
+  final Color color;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ColorSwatch({
+    required this.name,
+    required this.color,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(right: 12),
+        padding: const EdgeInsets.all(3),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: selected ? AppConstants.primary : Colors.transparent,
+            width: 2,
+          ),
+        ),
+        child: CircleAvatar(
+          radius: 14,
+          backgroundColor: color,
+          child: selected
+              ? Icon(
+                  Icons.check,
+                  size: 14,
+                  color: color == AppConstants.surfaceLight
+                      ? AppConstants.secondary
+                      : Colors.white,
+                )
+              : null,
+        ),
+      ),
+    );
+  }
+}
+
+/// Tappable unit switcher chip (US / EU / UK) next to the size label.
+/// Opens a small menu — the reference's chevron affordance.
+class _UnitSwitcher extends StatelessWidget {
+  final String current;
+  final ValueChanged<String> onChanged;
+
+  const _UnitSwitcher({
+    required this.current,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      initialValue: current,
+      onSelected: onChanged,
+      tooltip: 'Switch size unit',
+      itemBuilder: (context) => [
+        for (final unit in sizeUnits)
+          PopupMenuItem(
+            value: unit,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  unit,
+                  style: AppConstants.bodyStyle(
+                    fontSize: 13,
+                    fontWeight:
+                        unit == current ? FontWeight.bold : FontWeight.normal,
+                    color: unit == current
+                        ? AppConstants.primary
+                        : AppConstants.secondary,
+                  ),
+                ),
+                if (unit == current) ...[
+                  const SizedBox(width: 6),
+                  Icon(Icons.check, size: 14, color: AppConstants.primary),
+                ],
+              ],
+            ),
+          ),
+      ],
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: AppConstants.borderGray.withValues(alpha: 0.5),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              current,
+              style: AppConstants.bodyStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: AppConstants.primary,
+              ),
+            ),
+            const SizedBox(width: 2),
+            const Icon(
+              Icons.arrow_drop_down,
+              size: 16,
+              color: AppConstants.primary,
+            ),
+          ],
+        ),
       ),
     );
   }

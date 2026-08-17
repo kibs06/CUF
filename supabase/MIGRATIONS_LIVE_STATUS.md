@@ -74,6 +74,7 @@ shows ~50 migrations as "pending" even though they are applied).
 | `20260817120000_admin_delete_user.sql` | ✅ | **Applied Aug 17, 2026** — `admin_delete_user(uuid)` SECURITY DEFINER RPC (admin-only permanent account delete, FK-safe) |
 | `20260817130000_add_stores_description.sql` | ✅ | **Applied Aug 17, 2026** — `stores.description`. Fixes PGRST204 "Could not find the 'description' column of 'stores'" on store create/edit. Verified live: `stores.description` select → HTTP 200 |
 | `20260817140000_add_seller_application_v2_fields.sql` | ✅ | **Applied Aug 17, 2026** — `profiles.store_location`/`store_lat`/`store_lng`/`store_tags` + `stores.tags` (application v2: personal details, required business docs, location, store tags). Verified live: `stores.tags`/`profiles.store_tags`/`profiles.store_lat` selects → HTTP 200 |
+| `20260817150000_add_store_auto_schedule_cron.sql` | ⏳ **Not yet applied** | Schedules the `apply-store-schedules` pg_cron job (every 5 min) so `stores.is_open` auto-flips per `open_time`/`close_time`. Fixes stores stuck showing "Open Now" after their posted close time. Apply via Dashboard → SQL Editor |
 
 ## Deploying a new migration
 

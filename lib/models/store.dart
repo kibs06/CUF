@@ -84,6 +84,48 @@ class Store {
     return '$open – $close';
   }
 
+  /// Effective "is the store open right now" for customers.
+  ///
+  /// Combines the seller's manual toggle with the posted hours:
+  /// 1. `manual_override == true` → the seller explicitly forced a state
+  ///    against the schedule; respect their choice (`isOpen`).
+  /// 2. Hours configured (open_time/close_time set) → computed from the
+  ///    current local wall-clock time (overnight schedules supported,
+  ///    e.g. 6 PM – 2 AM).
+  /// 3. Otherwise → the raw `is_open` flag (manual toggle / no schedule).
+  ///
+  /// This exists because `is_open` in the DB is only refreshed by the
+  /// `apply-store-schedules` cron (every 5 min) — showing the raw flag
+  /// could display a stale status outside posted hours.
+  bool get isOpenNow => isOpenAt(DateTime.now());
+
+  /// Same as [isOpenNow] but evaluated at an explicit wall-clock [now]
+  /// — lets tests pin the clock instead of relying on `DateTime.now()`.
+  bool isOpenAt(DateTime now) {
+    if (manualOverride) return isOpen;
+    final open = _timeToMinutes(openTime);
+    final close = _timeToMinutes(closeTime);
+    if (open == null || close == null) return isOpen;
+    final nowMinutes = now.hour * 60 + now.minute;
+    if (open <= close) {
+      // Normal schedule: 8:00 AM–5:30 PM
+      return nowMinutes >= open && nowMinutes < close;
+    }
+    // Overnight schedule: 6:00 PM–2:00 AM (close < open)
+    return nowMinutes >= open || nowMinutes < close;
+  }
+
+  /// 'HH:MM:SS' → minutes since midnight, or null when unparseable.
+  static int? _timeToMinutes(String? time) {
+    if (time == null) return null;
+    final parts = time.split(':');
+    if (parts.length < 2) return null;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) return null;
+    return hour * 60 + minute;
+  }
+
   /// 'HH:MM:SS' → '9:00 AM' (12-hour clock, matches seller schedule UI).
   String? _formatTime(String? time) {
     if (time == null) return null;

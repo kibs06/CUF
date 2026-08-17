@@ -71,10 +71,10 @@ class StoreFocusedInfo extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  store.isOpen ? '🟢 Open Now' : '⚫ Closed',
+                  store.isOpenNow ? '🟢 Open Now' : '⚫ Closed',
                   style: AppConstants.bodyStyle(
                     fontSize: 13,
-                    color: store.isOpen
+                    color: store.isOpenNow
                         ? AppConstants.success
                         : AppConstants.secondary.withAlpha(127),
                     fontWeight: FontWeight.w600,
