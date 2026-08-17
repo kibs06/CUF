@@ -1,8 +1,12 @@
 {
-  "latest_version": "1.0.12",
-  "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.12/app-release-1.0.12.apk",
-  "released_at": "2026-08-17",
+  "latest_version": "1.0.13",
+  "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.13/app-release-1.0.13.apk",
+  "released_at": "2026-08-18",
   "notes": [
-    "Release v1.0.12"
+    "Admins: full Orders console - search, filter by status and date, and update order status from the app",
+    "Admins: Transactions ledger - payment summaries, status/store/date filters, CSV export, and webhook event timelines for GCash/PayMongo payments",
+    "Admins: Reports console - review user reports, set status and action taken, add notes, and notify reporters",
+    "Admins: Analytics dashboards - orders, revenue, top products, new users, and seller application trends over 7/30/90 days",
+    "Admins: Settings - edit your profile, change password, and sign out of all sessions"
   ]
 }
