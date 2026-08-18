@@ -338,6 +338,19 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
     return colors.first;
   }
 
+  /// Get the first image URL for a color from product_color_images.
+  /// Returns null if no color images exist for this color.
+  String? _colorThumbnailUrl(String colorName) {
+    final colorImagesRaw = widget.product['product_color_images'] as List? ?? [];
+    for (final img in colorImagesRaw) {
+      if (img is Map && (img['color_name']?.toString() ?? '') == colorName) {
+        final url = img['url']?.toString();
+        if (url != null && url.isNotEmpty) return url;
+      }
+    }
+    return null;
+  }
+
   /// Map a variant color NAME (free text from sellers) to a swatch color.
   /// Falls back to a deterministic warm tone from the name when unknown.
   Color _swatchColorFor(String name) {
@@ -382,10 +395,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
   /// Sizes are sorted numerically (EU sizing).
   Map<String, int> _buildSizesMap() {
     final Map<String, int> sizes = {};
+    final activeColor = _effectiveColor;
 
-    // From inventory table
-    final inventory = widget.product['inventory'] as List<dynamic>? ?? [];
-    for (final row in inventory) {
+    // When a color is selected, filter variants to only that color
+    // so the size picker shows only sizes available for that color.
+    final variants = widget.product['product_variants'] as List<dynamic>? ?? [];
+    for (final row in variants) {
+      final rowColor = row['color']?.toString().trim() ?? '';
+      // If a color is selected, skip variants that don't match
+      if (activeColor != null && rowColor != activeColor) continue;
       final size = row['size']?.toString();
       final stock = row['stock'] as int? ?? 0;
       if (size != null && size.isNotEmpty) {
@@ -393,14 +411,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
       }
     }
 
-    // From product_variants table
-    final variants = widget.product['product_variants'] as List<dynamic>? ?? [];
-    for (final row in variants) {
-      final size = row['size']?.toString();
-      final stock = row['stock'] as int? ?? 0;
-      if (size != null && size.isNotEmpty) {
-        // Take the higher stock value if size already exists from inventory
-        sizes[size] = ((sizes[size] ?? 0) < stock) ? stock : (sizes[size] ?? 0);
+    // If no color filter applied, also include inventory table data
+    if (activeColor == null) {
+      final inventory = widget.product['inventory'] as List<dynamic>? ?? [];
+      for (final row in inventory) {
+        final size = row['size']?.toString();
+        final stock = row['stock'] as int? ?? 0;
+        if (size != null && size.isNotEmpty) {
+          sizes[size] = (sizes[size] ?? 0) + stock;
+        }
       }
     }
 
@@ -632,7 +651,22 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
   /// Sorted product images for the carousel.
   /// Reads from `product_images` (list of maps) or falls back to `images` (list of strings).
   List<String> get _sortedImageUrls {
-    // Try product_images first (list of {image_url, display_order} maps)
+    // If a color is selected and has color images, use those
+    final color = _effectiveColor;
+    if (color != null) {
+      final colorImagesRaw = widget.product['product_color_images'] as List? ?? [];
+      final colorImages = colorImagesRaw
+          .where((img) => img is Map && (img['color_name']?.toString() ?? '') == color)
+          .toList();
+      if (colorImages.isNotEmpty) {
+        final images = List<Map<String, dynamic>>.from(colorImages.map((e) => Map<String, dynamic>.from(e as Map)));
+        images.sort((a, b) =>
+            (a['display_order'] as int? ?? 0).compareTo(b['display_order'] as int? ?? 0));
+        return images.map((e) => e['url'].toString()).toList();
+      }
+    }
+
+    // Fall back to general product images
     final raw = widget.product['product_images'] as List? ?? [];
     if (raw.isNotEmpty && raw.first is Map) {
       final images = List<Map<String, dynamic>>.from(raw);
@@ -1321,24 +1355,33 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
 
                       // Color variant swatches — real colors from the
                       // product's variants; hidden when none are set.
+                      // Shows thumbnail images when color images exist,
+                      // falls back to color dots.
                       if (_variantColorNames.isNotEmpty) ...[
                         Text(
                           'Select Color / Leather',
                           style: AppConstants.bodyStyle(fontWeight: FontWeight.bold, fontSize: 15),
                         ),
                         const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            for (final colorName in _variantColorNames)
-                              _ColorSwatch(
-                                name: colorName,
-                                color: _swatchColorFor(colorName),
-                                selected: _effectiveColor == colorName,
-                                onTap: () => setState(() {
-                                  _selectedColor = colorName;
-                                }),
-                              ),
-                          ],
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              for (final colorName in _variantColorNames)
+                                _ColorThumbnailSwatch(
+                                  name: colorName,
+                                  fallbackColor: _swatchColorFor(colorName),
+                                  selected: _effectiveColor == colorName,
+                                  imageUrl: _colorThumbnailUrl(colorName),
+                                  onTap: () => setState(() {
+                                    _selectedColor = colorName;
+                                    // Reset image carousel when color changes
+                                    _currentImageIndex = 0;
+                                    _imagePageController.jumpToPage(0);
+                                  }),
+                                ),
+                            ],
+                          ),
                         ),
                       ],
                       const SizedBox(height: 24),
@@ -1535,16 +1578,20 @@ class _SizeHelperLink extends StatelessWidget {
 }
 
 /// Circular color swatch for a variant color name.
-class _ColorSwatch extends StatelessWidget {
+/// Thumbnail-based color swatch — shows the color's first image as a
+/// small square thumbnail. Falls back to a colored dot when no images exist.
+class _ColorThumbnailSwatch extends StatelessWidget {
   final String name;
-  final Color color;
+  final Color fallbackColor;
   final bool selected;
+  final String? imageUrl;
   final VoidCallback onTap;
 
-  const _ColorSwatch({
+  const _ColorThumbnailSwatch({
     required this.name,
-    required this.color,
+    required this.fallbackColor,
     required this.selected,
+    this.imageUrl,
     required this.onTap,
   });
 
@@ -1553,27 +1600,54 @@ class _ColorSwatch extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.only(right: 12),
-        padding: const EdgeInsets.all(3),
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(
-            color: selected ? AppConstants.primary : Colors.transparent,
-            width: 2,
-          ),
-        ),
-        child: CircleAvatar(
-          radius: 14,
-          backgroundColor: color,
-          child: selected
-              ? Icon(
-                  Icons.check,
-                  size: 14,
-                  color: color == AppConstants.surfaceLight
-                      ? AppConstants.secondary
-                      : Colors.white,
-                )
-              : null,
+        margin: const EdgeInsets.only(right: 10),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Thumbnail with selection ring
+            Container(
+              width: 48,
+              height: 48,
+              padding: const EdgeInsets.all(2),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: selected ? AppConstants.primary : Colors.transparent,
+                  width: 2,
+                ),
+              ),
+              child: ClipOval(
+                child: imageUrl != null
+                    ? CachedNetworkImage(
+                        imageUrl: imageUrl!,
+                        fit: BoxFit.cover,
+                        placeholder: (_, _) => Container(
+                          color: fallbackColor,
+                        ),
+                        errorWidget: (_, _, _) => Container(
+                          color: fallbackColor,
+                          child: const Icon(Icons.image, size: 16, color: Colors.white),
+                        ),
+                      )
+                    : Container(
+                        color: fallbackColor,
+                        child: selected
+                            ? const Icon(Icons.check, size: 16, color: Colors.white)
+                            : null,
+                      ),
+              ),
+            ),
+            const SizedBox(height: 4),
+            // Color name label
+            Text(
+              name,
+              style: AppConstants.bodyStyle(
+                fontSize: 10,
+                fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                color: selected ? AppConstants.primary : AppConstants.secondary,
+              ),
+            ),
+          ],
         ),
       ),
     );

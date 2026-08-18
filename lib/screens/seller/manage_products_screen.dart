@@ -45,6 +45,10 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
   StreamSubscription<bool>? _connectivitySub;
   bool _wasOffline = false;
 
+  // Alert banner auto-slide state
+  Timer? _alertTimer;
+  int _alertIndex = 0;
+
   @override
   void initState() {
     super.initState();
@@ -57,13 +61,26 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
       _wasOffline = !isOnline;
     });
     _loadProducts();
+    _startAlertTimer();
   }
 
   @override
   void dispose() {
+    _alertTimer?.cancel();
     _connectivitySub?.cancel();
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _startAlertTimer() {
+    _alertTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (!mounted) return;
+      final alerts = _buildAlerts();
+      if (alerts.isEmpty) return;
+      setState(() {
+        _alertIndex = (_alertIndex + 1) % alerts.length;
+      });
+    });
   }
 
   Future<void> _loadProducts() async {
@@ -431,8 +448,16 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
       ),
     );
 
+    // Defer disposal so the TextField inside the dialog has fully
+    // unregistered its listener before the controller is disposed.
+    void safeDisposeCtrl() {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        saleCtrl.dispose();
+      });
+    }
+
     if (ok != true) {
-      saleCtrl.dispose();
+      safeDisposeCtrl();
       return;
     }
 
@@ -446,7 +471,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
           ),
         );
       }
-      saleCtrl.dispose();
+      safeDisposeCtrl();
       return;
     }
     if (salePrice >= basePrice) {
@@ -458,7 +483,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
           ),
         );
       }
-      saleCtrl.dispose();
+      safeDisposeCtrl();
       return;
     }
 
@@ -478,7 +503,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
         _loadProducts();
       }
     } catch (_) {}
-    saleCtrl.dispose();
+    safeDisposeCtrl();
   }
 
   void _showProductActions(Map<String, dynamic> product) {
@@ -1198,6 +1223,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
       body: Column(
         children: [
           _buildFilterBar(),
+          _buildAlertBanner(),
           Expanded(child: _buildBody()),
         ],
       ),
@@ -1477,9 +1503,143 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
     );
   }
 
+  // ─── ALERT BANNER ──────────────────────────────────────────────
+
+  /// Alert data for the auto-sliding banner.
+  List<_AlertData> _buildAlerts() {
+    if (_products == null || _products!.isEmpty) return [];
+    final alerts = <_AlertData>[];
+
+    final lowStock = _products!.where((p) {
+      final stock = _totalStock(p);
+      return stock > 0 && stock <= 5;
+    }).length;
+    final outOfStock = _products!.where((p) => _totalStock(p) == 0).length;
+    final onSale = _products!.where((p) => _isOnSale(p)).length;
+    final featured = _products!.where((p) => _isFeatured(p)).length;
+    final inactive = _products!.where((p) => !_isActive(p)).length;
+
+    if (lowStock > 0) {
+      alerts.add(_AlertData(
+        icon: Icons.warning_amber_rounded,
+        label: '$lowStock product${lowStock != 1 ? 's' : ''} low on stock',
+        color: const Color(0xFFE8A317),
+        bgColor: const Color(0xFFFFF8E1),
+        filter: 'Low Stock',
+      ));
+    }
+    if (outOfStock > 0) {
+      alerts.add(_AlertData(
+        icon: Icons.inventory_2_outlined,
+        label: '$outOfStock product${outOfStock != 1 ? 's' : ''} out of stock',
+        color: AppConstants.error,
+        bgColor: AppConstants.error.withValues(alpha: 0.08),
+        filter: 'Out of Stock',
+      ));
+    }
+    if (onSale > 0) {
+      alerts.add(_AlertData(
+        icon: Icons.local_offer_outlined,
+        label: '$onSale product${onSale != 1 ? 's' : ''} on sale',
+        color: AppConstants.primary,
+        bgColor: AppConstants.primary.withValues(alpha: 0.08),
+        filter: 'On Sale',
+      ));
+    }
+    if (featured > 0) {
+      alerts.add(_AlertData(
+        icon: Icons.star_outline,
+        label: '$featured featured product${featured != 1 ? 's' : ''}',
+        color: AppConstants.statusPendingColor,
+        bgColor: AppConstants.statusPendingColor.withValues(alpha: 0.1),
+        filter: 'Featured',
+      ));
+    }
+    if (inactive > 0) {
+      alerts.add(_AlertData(
+        icon: Icons.visibility_off_outlined,
+        label: '$inactive inactive product${inactive != 1 ? 's' : ''}',
+        color: AppConstants.secondary,
+        bgColor: AppConstants.secondary.withValues(alpha: 0.06),
+        filter: 'Inactive',
+      ));
+    }
+    return alerts;
+  }
+
+  Widget _buildAlertBanner() {
+    final alerts = _buildAlerts();
+    if (alerts.isEmpty) return const SizedBox.shrink();
+
+    // Clamp index in case alerts changed since last timer tick
+    final idx = _alertIndex.clamp(0, alerts.length - 1);
+    final alert = alerts[idx];
+
+    return GestureDetector(
+      onTap: () => setState(() => _activeFilter = alert.filter),
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 400),
+        child: Container(
+          key: ValueKey(idx),
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: alert.bgColor,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: alert.color.withValues(alpha: 0.2),
+              width: 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(alert.icon, size: 18, color: alert.color),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  alert.label,
+                  style: AppConstants.bodyStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: alert.color,
+                  ),
+                ),
+              ),
+              // Dots indicator
+              if (alerts.length > 1)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: List.generate(alerts.length, (i) {
+                    return Container(
+                      width: i == idx ? 16 : 5,
+                      height: 5,
+                      margin: const EdgeInsets.symmetric(horizontal: 2),
+                      decoration: BoxDecoration(
+                        color: i == idx
+                            ? alert.color
+                            : alert.color.withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    );
+                  }),
+                ),
+              const SizedBox(width: 6),
+              Icon(
+                Icons.chevron_right,
+                size: 18,
+                color: alert.color.withValues(alpha: 0.6),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   // ─── FILTER BAR ─────────────────────────────────────────────────
 
   Widget _buildFilterBar() {
+    // Short labels to prevent text cutoff on smaller screens
     const filters = [
       'All',
       'On Sale',
@@ -1492,27 +1652,41 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
       height: 54,
       color: Colors.white,
       child: ListView.separated(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
         scrollDirection: Axis.horizontal,
         itemCount: filters.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        separatorBuilder: (_, _) => const SizedBox(width: 6),
         itemBuilder: (context, index) {
           final filter = filters[index];
           final selected = _activeFilter == filter;
           final count = _countFor(filter);
 
-          return FilterChip(
-            label: Text('$filter ($count)'),
-            selected: selected,
-            showCheckmark: false,
-            selectedColor: AppConstants.primary,
-            backgroundColor: AppConstants.sellerSurface,
-            labelStyle: AppConstants.bodyStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: selected ? Colors.white : AppConstants.secondary,
+          return GestureDetector(
+            onTap: () => setState(() => _activeFilter = filter),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: selected ? AppConstants.primary : AppConstants.sellerSurface,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: selected ? AppConstants.primary : AppConstants.borderGray,
+                  width: 1,
+                ),
+              ),
+              child: Center(
+                child: Text(
+                  '$filter ($count)',
+                  style: AppConstants.bodyStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: selected ? Colors.white : AppConstants.secondary,
+                  ),
+                  overflow: TextOverflow.clip,
+                  maxLines: 1,
+                ),
+              ),
             ),
-            onSelected: (_) => setState(() => _activeFilter = filter),
           );
         },
       ),
@@ -1702,4 +1876,21 @@ class _QuickActionButtonState extends State<_QuickActionButton> {
       ),
     );
   }
+}
+
+/// Data for a single alert banner entry.
+class _AlertData {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final Color bgColor;
+  final String filter;
+
+  const _AlertData({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.bgColor,
+    required this.filter,
+  });
 }

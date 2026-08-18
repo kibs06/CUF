@@ -176,7 +176,7 @@ class SupabaseService {
     var query = _client
         .from('products')
         .select(
-          '*, stores(name), product_images(image_url, display_order), inventory(size, stock), product_variants(size, stock)',
+          '*, stores(name), product_images(image_url, display_order), inventory(size, stock), product_variants(size, stock, color), product_color_images(url, color_name, display_order)',
         );
 
     if (storeId != null) {
@@ -205,7 +205,7 @@ class SupabaseService {
     final data = await _client
         .from('products')
         .select(
-          '*, stores(name), product_images(image_url, display_order), inventory(size, stock), product_variants(size, stock)',
+          '*, stores(name), product_images(image_url, display_order), inventory(size, stock), product_variants(size, stock, color), product_color_images(url, color_name, display_order)',
         )
         .eq('id', productId)
         .maybeSingle()

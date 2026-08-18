@@ -52,7 +52,12 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
   // stay distinguishable. See _ProductTagSelector for parse/serialize.
   final List<String> _tags = [];
 
-  // Variants
+  // Colors (top-level entity — each color owns its photos and variants)
+  final List<ProductColor> _colors = [];
+
+  // Temporary buffer used by _showVariantSheet() — not persisted directly.
+  // The color sheet swaps this in/out when opening the variant sheet scoped
+  // to a specific color.
   final List<ProductVariant> _variants = [];
 
   // Customizations
@@ -118,10 +123,45 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
       }
     }
 
-    // Variants
+    // Colors — build from product_variants (grouped by color) + product_color_images
     if (p['product_variants'] is List) {
-      for (final v in p['product_variants']) {
-        _variants.add(ProductVariant.fromMap(Map<String, dynamic>.from(v)));
+      final variantsRaw = List<Map<String, dynamic>>.from(
+          (p['product_variants'] as List).map((v) => Map<String, dynamic>.from(v as Map)));
+
+      // Build color → images map from product_color_images
+      final Map<String, List<ProductColorImage>> colorImagesMap = {};
+      if (p['product_color_images'] is List) {
+        for (final img in p['product_color_images']) {
+          final imgMap = Map<String, dynamic>.from(img as Map);
+          final colorName = imgMap['color_name']?.toString() ?? '';
+          if (colorName.isEmpty) continue;
+          colorImagesMap.putIfAbsent(colorName, () => []);
+          colorImagesMap[colorName]!.add(ProductColorImage(
+            id: imgMap['id']?.toString(),
+            url: imgMap['url']?.toString(),
+            displayOrder: (imgMap['display_order'] as num?)?.toInt() ?? 0,
+          ));
+        }
+      }
+
+      // Group variants by color
+      final Map<String, List<ProductVariant>> colorVariantsMap = {};
+      for (final v in variantsRaw) {
+        final variant = ProductVariant.fromMap(v);
+        final colorName = variant.color ?? '';
+        colorVariantsMap.putIfAbsent(colorName, () => []);
+        colorVariantsMap[colorName]!.add(variant);
+      }
+
+      // Build ProductColor objects
+      // If no color images exist (legacy products), create colors from variant colors
+      final allColorNames = colorVariantsMap.keys.toList();
+      for (final colorName in allColorNames) {
+        _colors.add(ProductColor(
+          name: colorName,
+          images: colorImagesMap[colorName] ?? [],
+          variants: colorVariantsMap[colorName] ?? [],
+        ));
       }
     }
 
@@ -240,7 +280,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
     return size.replaceAll(RegExp(r'[^0-9.]'), '');
   }
 
-  void _showVariantSheet({ProductVariant? existing, int? editIndex}) {
+  Future<void> _showVariantSheet({ProductVariant? existing, int? editIndex, String? colorOverride}) async {
     // Determine initial sizing system and size from an existing variant.
     // Sizes are stored as 'SYSTEM SIZE' (e.g. 'EU 40', 'JP 25').
     final existingSize = existing?.size ?? '';
@@ -339,7 +379,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
     bool showGuide = false;
     int guideStep = 0;
 
-    showModalBottomSheet(
+    await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: AppConstants.sellerCardBg,
@@ -535,7 +575,9 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                   KeyedSubtree(
                     key: stockSectionKey,
                     child: Text(
-                      'Stock, Color & Price per Size *',
+                      colorOverride != null
+                          ? 'Stock & Price per Size *'
+                          : 'Stock, Color & Price per Size *',
                       style: AppConstants.bodyStyle(
                           fontWeight: FontWeight.bold, fontSize: 14),
                     ),
@@ -591,20 +633,22 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Color swatches
-                          Expanded(
-                            flex: 4,
-                            child: _SizeColorSelector(
-                              initialValue: entry.color,
-                              presets: _presetColors,
-                              onChanged: (color) => setSheetState(
-                                  () => entry.color = color),
+                          // Color swatches — hidden when colorOverride is set
+                          if (colorOverride == null)
+                            Expanded(
+                              flex: 4,
+                              child: _SizeColorSelector(
+                                initialValue: entry.color,
+                                presets: _presetColors,
+                                onChanged: (color) => setSheetState(
+                                    () => entry.color = color),
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 6),
+                          if (colorOverride == null)
+                            const SizedBox(width: 6),
                           // Stock stepper (− / count / +)
                           SizedBox(
-                            width: 110,
+                            width: colorOverride != null ? 160 : 110,
                             child: Row(
                               children: [
                                 stockStepButton(Icons.remove_rounded, () {
@@ -679,32 +723,33 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                         ),
                       ),
                     ],
-                    // Add Color button for this size
-                    Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: GestureDetector(
-                        onTap: () => setSheetState(() {
-                          perSizeColorStocks[sizeValue]
-                              ?.add(_ColorStockEntry());
-                        }),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.add_circle_outline,
-                                size: 16, color: AppConstants.primary),
-                            const SizedBox(width: 4),
-                            Text(
-                              'Add Color',
-                              style: AppConstants.bodyStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: AppConstants.primary,
+                    // Add Color button — hidden when colorOverride is set
+                    if (colorOverride == null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: GestureDetector(
+                          onTap: () => setSheetState(() {
+                            perSizeColorStocks[sizeValue]
+                                ?.add(_ColorStockEntry());
+                          }),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.add_circle_outline,
+                                  size: 16, color: AppConstants.primary),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Add Color',
+                                style: AppConstants.bodyStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppConstants.primary,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
-                    ),
                   ],
                   const SizedBox(height: 10),
                   // Live running total across all sizes.
@@ -724,7 +769,9 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                   // Ensures the size is initialized in the map.
                   if (sizeCount > 0) ...[
                     Text(
-                      'Colors & Stock',
+                      colorOverride != null
+                          ? 'Stock & Price'
+                          : 'Colors & Stock',
                       style: AppConstants.bodyStyle(
                           fontWeight: FontWeight.bold, fontSize: 14),
                     ),
@@ -762,21 +809,23 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                           crossAxisAlignment:
                               CrossAxisAlignment.start,
                           children: [
-                            // Color swatches
-                            Expanded(
-                              flex: 4,
-                              child: _SizeColorSelector(
-                                initialValue: entry.color,
-                                presets: _presetColors,
-                                onChanged: (color) =>
-                                    setSheetState(() =>
-                                        entry.color = color),
+                            // Color swatches — hidden when colorOverride is set
+                            if (colorOverride == null)
+                              Expanded(
+                                flex: 4,
+                                child: _SizeColorSelector(
+                                  initialValue: entry.color,
+                                  presets: _presetColors,
+                                  onChanged: (color) =>
+                                      setSheetState(() =>
+                                          entry.color = color),
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 6),
+                            if (colorOverride == null)
+                              const SizedBox(width: 6),
                             // Stock stepper
                             SizedBox(
-                              width: 110,
+                              width: colorOverride != null ? 160 : 110,
                               child: Row(
                                 children: [
                                   stockStepButton(
@@ -884,42 +933,41 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                           ),
                         ),
                       ],
-                    ],
-                    // Add Color button
-                    Padding(
-                      padding:
-                          const EdgeInsets.only(top: 6),
-                      child: GestureDetector(
-                        onTap: () => setSheetState(() {
-                          // Add to the first (only) size
-                          final sv = perSizeColorStocks
-                                  .isNotEmpty
-                              ? perSizeColorStocks.keys.first
-                              : '';
-                          if (sv.isNotEmpty) {
-                            perSizeColorStocks[sv]
-                                ?.add(_ColorStockEntry());
-                          }
-                        }),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.add_circle_outline,
-                                size: 16,
-                                color: AppConstants.primary),
-                            const SizedBox(width: 4),
-                            Text(
-                              'Add Color',
-                              style: AppConstants.bodyStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: AppConstants.primary,
+                    ],                    // Add Color button — hidden when colorOverride is set
+                    if (colorOverride == null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: GestureDetector(
+                          onTap: () => setSheetState(() {
+                            // Add to the first (only) size
+                            final sv = perSizeColorStocks
+                                    .isNotEmpty
+                                ? perSizeColorStocks.keys.first
+                                : '';
+                            if (sv.isNotEmpty) {
+                              perSizeColorStocks[sv]
+                                  ?.add(_ColorStockEntry());
+                            }
+                          }),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.add_circle_outline,
+                                  size: 16,
+                                  color: AppConstants.primary),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Add Color',
+                                style: AppConstants.bodyStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppConstants.primary,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
-                    ),
                   ],
                 ],
                 const SizedBox(height: 20),
@@ -964,14 +1012,16 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                       return;
                     }
                     // Build one variant per (size, color) pair.
+                    // When colorOverride is set, all variants get that color
+                    // (used by the color sheet's "Add Sizes" flow).
                     final variants = <ProductVariant>[];
                     for (final sizeValue in sizeValues) {
-                      final entries =
-                          perSizeColorStocks[sizeValue] ?? [_ColorStockEntry()];
-                      for (final entry in entries) {
-                        final c = entry.color.trim().isNotEmpty
-                            ? entry.color.trim()
-                            : null;
+                      if (colorOverride != null) {
+                        // Color-scoped mode: read stock/price/sku from the
+                        // single color entry for this size (or default).
+                        final entries =
+                            perSizeColorStocks[sizeValue] ?? [_ColorStockEntry()];
+                        final entry = entries.first;
                         final stock =
                             int.tryParse(entry.stockCtrl.text) ?? 0;
                         final price =
@@ -981,11 +1031,35 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                             : null;
                         variants.add(ProductVariant(
                           size: '$system $sizeValue',
-                          color: c,
+                          color: colorOverride,
                           stock: stock,
                           additionalPrice: price,
                           sku: sku,
                         ));
+                      } else {
+                        // Standalone mode (legacy): each size can have
+                        // multiple color entries.
+                        final entries =
+                            perSizeColorStocks[sizeValue] ?? [_ColorStockEntry()];
+                        for (final entry in entries) {
+                          final c = entry.color.trim().isNotEmpty
+                              ? entry.color.trim()
+                              : null;
+                          final stock =
+                              int.tryParse(entry.stockCtrl.text) ?? 0;
+                          final price =
+                              double.tryParse(entry.priceCtrl.text) ?? 0;
+                          final sku = entry.skuCtrl.text.trim().isNotEmpty
+                              ? entry.skuCtrl.text.trim()
+                              : null;
+                          variants.add(ProductVariant(
+                            size: '$system $sizeValue',
+                            color: c,
+                            stock: stock,
+                            additionalPrice: price,
+                            sku: sku,
+                          ));
+                        }
                       }
                     }
 
@@ -1239,8 +1313,20 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
       _showSnackBar('Please add at least 1 product image.', isError: true);
       return;
     }
-    if (_variants.isEmpty) {
-      _showSnackBar('Please add at least 1 size/variant.', isError: true);
+    if (_colors.isEmpty) {
+      _showSnackBar('Please add at least 1 color.', isError: true);
+      return;
+    }
+    // Every color must have at least 1 photo
+    final colorsWithoutPhotos =
+        _colors.where((c) => !c.hasImages).toList();
+    if (colorsWithoutPhotos.isNotEmpty) {
+      final names = colorsWithoutPhotos.map((c) => '"${c.name}"').join(', ');
+      _showSnackBar(
+        'The following colors are missing photos: $names. '
+        'Each color needs at least 1 photo.',
+        isError: true,
+      );
       return;
     }
     if (_storeId == null) {
@@ -1275,6 +1361,13 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
       final existingUrls =
           _imageItems.where((i) => i.url != null).map((i) => i.url!).toList();
 
+      // Flatten all colors' variants into a single list for the service
+      // (product_variants still stores color on each row for flat queries)
+      final allVariants = <ProductVariant>[];
+      for (final color in _colors) {
+        allVariants.addAll(color.variants);
+      }
+
       if (isEdit) {
         final productId = widget.product!['id'].toString();
         await _productService.updateProduct(
@@ -1286,8 +1379,9 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
           tags: _tags,
           newImages: newImages,
           existingImageUrls: existingUrls,
-          variants: _variants,
+          variants: allVariants,
           customizations: _customizations,
+          colors: _colors,
           isActive: _isActive,
           isFeatured: _isFeatured,
           barcode: _barcodeController.text,
@@ -1314,8 +1408,9 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
           category: _category,
           tags: _tags,
           images: newImages,
-          variants: _variants,
+          variants: allVariants,
           customizations: _customizations,
+          colors: _colors,
           isActive: _isActive,
           isFeatured: _isFeatured,
           barcode: _barcodeController.text,
@@ -2012,10 +2107,24 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
 
   Widget _buildVariantsSection() {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ..._variants.asMap().entries.map((entry) {
+        // Color cards
+        ..._colors.asMap().entries.map((entry) {
           final index = entry.key;
-          final v = entry.value;
+          final color = entry.value;
+          final totalStock = color.totalStock;
+          final sizeCount = color.sizeCount;
+          final photoCount = color.images.length;
+          // Primary thumbnail for this color
+          final existingImages = color.images
+              .where((i) => i.isExisting)
+              .toList()
+            ..sort((a, b) => a.displayOrder.compareTo(b.displayOrder));
+          final thumbnailUrl = existingImages.isNotEmpty
+              ? existingImages.first.url
+              : null;
+
           return Container(
             margin: const EdgeInsets.only(bottom: 8),
             decoration: BoxDecoration(
@@ -2026,51 +2135,151 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
             ),
             child: Material(
               color: Colors.transparent,
-              child: ListTile(
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              // No leading badge — the size is already stated in the title
-              // ('Size US 7.5'), so a duplicate badge would be redundant.
-              title: Text(
-                'Size ${v.size}${v.color != null ? ' · ${v.color}' : ''}',
-                style: AppConstants.bodyStyle(
-                    fontWeight: FontWeight.bold, fontSize: 14),
-              ),
-              subtitle: Text(
-                'Stock: ${v.stock}${v.additionalPrice > 0 ? '  ·  +₱${v.additionalPrice.toStringAsFixed(0)}' : ''}${v.sku != null ? '  ·  ${v.sku}' : ''}',
-                style: AppConstants.monoStyle(
-                    fontSize: 11,
-                    color: AppConstants.secondary.withValues(alpha: 0.6)),
-              ),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.edit_outlined,
-                        size: 18, color: AppConstants.primary),
-                    onPressed: () => _showVariantSheet(
-                        existing: v, editIndex: index),
+              child: InkWell(
+                borderRadius: AppConstants.cardRadius,
+                onTap: () => _showColorSheet(editIndex: index),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      // Thumbnail strip (up to 3 images)
+                      SizedBox(
+                        width: 56,
+                        height: 56,
+                        child: color.images.isNotEmpty
+                            ? ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: thumbnailUrl != null
+                                    ? CachedNetworkImage(
+                                        imageUrl: thumbnailUrl,
+                                        fit: BoxFit.cover,
+                                        placeholder: (_, _) => Container(
+                                          color: AppConstants.borderGray
+                                              .withValues(alpha: 0.3),
+                                        ),
+                                        errorWidget: (_, _, _) => Container(
+                                          color: AppConstants.borderGray
+                                              .withValues(alpha: 0.3),
+                                          child: const Icon(Icons.image,
+                                              size: 20,
+                                              color: AppConstants.borderGray),
+                                        ),
+                                      )
+                                    : // New unpicked images: show placeholder
+                                      Container(
+                                        color: AppConstants.borderGray
+                                            .withValues(alpha: 0.3),
+                                        child: const Icon(Icons.image,
+                                            size: 20,
+                                            color: AppConstants.borderGray),
+                                      ),
+                              )
+                            : // No images — dashed placeholder
+                              Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: AppConstants.error
+                                        .withValues(alpha: 0.5),
+                                    width: 1.5,
+                                    style: BorderStyle.solid,
+                                  ),
+                                ),
+                                child: const Center(
+                                  child: Icon(Icons.add_a_photo_outlined,
+                                      size: 20,
+                                      color: AppConstants.error),
+                                ),
+                              ),
+                      ),
+                      const SizedBox(width: 12),
+                      // Color info
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Color name with swatch dot
+                            Row(
+                              children: [
+                                Container(
+                                  width: 12,
+                                  height: 12,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: _swatchColorForName(color.name),
+                                    border: Border.all(
+                                      color: AppConstants.borderGray,
+                                      width: 1,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    color.name,
+                                    style: AppConstants.bodyStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            // Summary line
+                            Text(
+                              '$photoCount photo${photoCount != 1 ? 's' : ''} · '
+                              '$sizeCount size${sizeCount != 1 ? 's' : ''} · '
+                              '$totalStock in stock',
+                              style: AppConstants.monoStyle(
+                                fontSize: 11,
+                                color: AppConstants.secondary
+                                    .withValues(alpha: 0.6),
+                              ),
+                            ),
+                            // Warning if no photos
+                            if (!color.hasImages) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                '⚠ Add photos required',
+                                style: AppConstants.bodyStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppConstants.error,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      // Edit / Delete buttons
+                      IconButton(
+                        icon: const Icon(Icons.edit_outlined,
+                            size: 18, color: AppConstants.primary),
+                        onPressed: () => _showColorSheet(editIndex: index),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline,
+                            size: 18, color: AppConstants.error),
+                        onPressed: () => setState(() => _colors.removeAt(index)),
+                      ),
+                    ],
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline,
-                        size: 18, color: AppConstants.error),
-                    onPressed: () =>
-                        setState(() => _variants.removeAt(index)),
-                  ),
-                ],
+                ),
               ),
-            ),
             ),
           );
         }),
         const SizedBox(height: 8),
+        // Add color button
         SizedBox(
           width: double.infinity,
           child: OutlinedButton.icon(
-            onPressed: () => _showVariantSheet(),
+            onPressed: () => _showColorSheet(),
             icon: const Icon(Icons.add, color: AppConstants.primary),
             label: Text(
-              'Add Variant',
+              'Add Color',
               style: AppConstants.bodyStyle(
                 fontWeight: FontWeight.w600,
                 color: AppConstants.primary,
@@ -2086,6 +2295,494 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
         ),
       ],
     );
+  }
+
+  /// Map a color name to a swatch Color for the seller UI.
+  Color _swatchColorForName(String name) {
+    final n = name.toLowerCase();
+    if (n.contains('black')) return const Color(0xFF26221E);
+    if (n.contains('brown')) return const Color(0xFF8B5A2B);
+    if (n.contains('carob')) return const Color(0xFF3E2723);
+    if (n.contains('cream') || n.contains('beige')) return const Color(0xFFF1E8DC);
+    if (n.contains('burgundy')) return const Color(0xFF9B3B2E);
+    if (n.contains('gold')) return const Color(0xFFB8860B);
+    if (n.contains('olive')) return const Color(0xFF5D6B45);
+    if (n.contains('navy')) return const Color(0xFF3F4A63);
+    if (n.contains('grey') || n.contains('gray')) return const Color(0xFF9E948A);
+    if (n.contains('white')) return const Color(0xFFF5F5F5);
+    return AppConstants.primary;
+  }
+
+  // ─── COLOR SHEET ────────────────────────────────────────────────
+
+  /// Add or edit a color: pick color name, upload photos, set sizes/stock.
+  void _showColorSheet({int? editIndex}) {
+    final existing = editIndex != null ? _colors[editIndex] : null;
+
+    // State for the sheet
+    String colorName = existing?.name ?? '';
+    final List<ProductColorImage> colorImages =
+        existing != null ? List<ProductColorImage>.from(existing.images) : [];
+    final List<ProductVariant> colorVariants =
+        existing != null ? List<ProductVariant>.from(existing.variants) : [];
+
+    final imagePicker = ImagePicker();
+    const maxColorImages = 6;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppConstants.sellerCardBg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          final totalStock = colorVariants.fold<int>(
+              0, (sum, v) => sum + v.stock);
+
+          return Padding(
+            padding: EdgeInsets.fromLTRB(
+                24, 20, 24, MediaQuery.of(ctx).viewInsets.bottom + 24),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Title
+                  Text(
+                    editIndex != null ? 'Edit Color' : 'Add Color',
+                    style: AppConstants.headlineStyle(fontSize: 20),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Step 1: Color name
+                  Text(
+                    'Color Name *',
+                    style: AppConstants.bodyStyle(
+                        fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                  const SizedBox(height: 6),
+                  _PresetChipSelector(
+                    key: const ValueKey('color-name'),
+                    initialValue: colorName,
+                    presets: const [
+                      'Black', 'Brown', 'Carob', 'Cream', 'Burgundy',
+                      'Gold', 'Olive', 'Navy', 'Grey', 'White', 'Beige',
+                    ],
+                    otherHint: 'e.g. Burnished Clay, Khaki',
+                    emptyError: 'Type a color name first.',
+                    duplicateError:
+                        'That is already a color — tap it above instead.',
+                    allowDeselect: true,
+                    onChanged: (value) {
+                      setSheetState(() => colorName = value);
+                    },
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Step 2: Photos for this color
+                  Text(
+                    'Photos * (at least 1 required)',
+                    style: AppConstants.bodyStyle(
+                        fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                  const SizedBox(height: 6),
+                  if (colorImages.isEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppConstants.error.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: AppConstants.error.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.warning_amber_rounded,
+                              size: 16, color: AppConstants.error),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'This color needs at least 1 photo before it can be saved.',
+                              style: AppConstants.bodyStyle(
+                                fontSize: 12,
+                                color: AppConstants.error,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  const SizedBox(height: 8),
+                  // Photo grid
+                  SizedBox(
+                    height: 90,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      children: [
+                        ...colorImages.asMap().entries.map((entry) {
+                          final i = entry.key;
+                          final img = entry.value;
+                          return Container(
+                            width: 80,
+                            height: 80,
+                            margin: const EdgeInsets.only(right: 8),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: i == 0
+                                    ? AppConstants.primary
+                                    : AppConstants.borderGray,
+                                width: i == 0 ? 2 : 1,
+                              ),
+                            ),
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(7),
+                                  child: img.isExisting && img.url != null
+                                      ? CachedNetworkImage(
+                                          imageUrl: img.url!,
+                                          fit: BoxFit.cover,
+                                          placeholder: (_, _) => Container(
+                                            color: AppConstants.borderGray
+                                                .withValues(alpha: 0.3),
+                                          ),
+                                          errorWidget: (_, _, _) => Container(
+                                            color: AppConstants.borderGray
+                                                .withValues(alpha: 0.3),
+                                            child: const Icon(Icons.broken_image,
+                                                size: 16),
+                                          ),
+                                        )
+                                      : img.isNew && img.file != null
+                                          ? FutureBuilder<List<int>>(
+                                              future: img.file!.readAsBytes(),
+                                              builder: (_, snapshot) {
+                                                if (snapshot.hasData) {
+                                                  return Image.memory(
+                                                    snapshot.data! as dynamic,
+                                                    fit: BoxFit.cover,
+                                                  );
+                                                }
+                                                return Container(
+                                                  color: AppConstants.borderGray
+                                                      .withValues(alpha: 0.3),
+                                                );
+                                              },
+                                            )
+                                          : const SizedBox.shrink(),
+                                ),
+                                // Remove button
+                                Positioned(
+                                  top: 2,
+                                  right: 2,
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      setSheetState(() {
+                                        final removed = colorImages.removeAt(i);
+                                        // Remove from Storage if existing
+                                        if (removed.isExisting &&
+                                            removed.id != null &&
+                                            removed.url != null) {
+                                          _productService.removeColorImage(
+                                              removed.id!, removed.url!);
+                                        }
+                                      });
+                                    },
+                                    child: Container(
+                                      width: 18,
+                                      height: 18,
+                                      decoration: const BoxDecoration(
+                                        color: AppConstants.error,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(Icons.close,
+                                          size: 10, color: Colors.white),
+                                    ),
+                                  ),
+                                ),
+                                // Primary badge
+                                if (i == 0)
+                                  Positioned(
+                                    bottom: 0,
+                                    left: 0,
+                                    right: 0,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 2),
+                                      decoration: const BoxDecoration(
+                                        color: AppConstants.primary,
+                                        borderRadius: BorderRadius.only(
+                                          bottomLeft: Radius.circular(7),
+                                          bottomRight: Radius.circular(7),
+                                        ),
+                                      ),
+                                      child: Text(
+                                        'Main',
+                                        textAlign: TextAlign.center,
+                                        style: AppConstants.bodyStyle(
+                                          fontSize: 8,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          );
+                        }),
+                        // Add photo tile
+                        if (colorImages.length < maxColorImages)
+                          GestureDetector(
+                            onTap: () async {
+                              final remaining =
+                                  maxColorImages - colorImages.length;
+                              if (remaining <= 0) return;
+                              final picked =
+                                  await imagePicker.pickMultiImage(
+                                maxWidth: 1200,
+                                maxHeight: 1200,
+                                imageQuality: 85,
+                              );
+                              if (picked.isNotEmpty) {
+                                setSheetState(() {
+                                  for (final file
+                                      in picked.take(remaining)) {
+                                    colorImages.add(ProductColorImage(
+                                      file: file,
+                                      displayOrder:
+                                          colorImages.length,
+                                    ));
+                                  }
+                                });
+                              }
+                            },
+                            child: Container(
+                              width: 80,
+                              height: 80,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                    color: AppConstants.borderGray),
+                              ),
+                              child: Column(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.center,
+                                children: [
+                                  const Icon(
+                                      Icons.add_a_photo_outlined,
+                                      color: AppConstants.primary,
+                                      size: 20),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Add',
+                                    style: AppConstants.bodyStyle(
+                                      fontSize: 9,
+                                      color: AppConstants.primary,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Step 3: Sizes & stock for this color
+                  Text(
+                    'Sizes & Stock',
+                    style: AppConstants.bodyStyle(
+                        fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                  const SizedBox(height: 6),
+                  if (colorVariants.isNotEmpty) ...[
+                    for (final (i, v) in colorVariants.indexed) ...[
+                      if (i > 0)
+                        const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          // Size badge
+                          Container(
+                            width: 36,
+                            height: 36,
+                            alignment: Alignment.center,
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: AppConstants.primary,
+                            ),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 4),
+                                child: Text(
+                                  v.size,
+                                  style: AppConstants.monoStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppConstants.surfaceLight,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          // Stock
+                          Text(
+                            'Stock: ${v.stock}',
+                            style: AppConstants.bodyStyle(fontSize: 13),
+                          ),
+                          if (v.additionalPrice > 0) ...[
+                            const SizedBox(width: 8),
+                            Text(
+                              '+₱${v.additionalPrice.toStringAsFixed(0)}',
+                              style: AppConstants.monoStyle(
+                                fontSize: 11,
+                                color: AppConstants.primary,
+                              ),
+                            ),
+                          ],
+                          const Spacer(),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline,
+                                size: 16, color: AppConstants.error),
+                            onPressed: () => setSheetState(
+                                () => colorVariants.removeAt(i)),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ] else
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppConstants.borderGray
+                            .withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        'No sizes added yet. Tap below to add sizes with stock.',
+                        style: AppConstants.bodyStyle(
+                          fontSize: 12,
+                          color: AppConstants.secondary
+                              .withValues(alpha: 0.5),
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 8),
+                  // Add sizes button — opens the existing variant sheet
+                  // scoped to this color
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      // Open the variant sheet and collect results
+                      final result = await _showVariantSheetForColor(
+                        colorName: colorName,
+                        existingVariants: colorVariants,
+                      );
+                      if (result != null) {
+                        setSheetState(() {
+                          colorVariants
+                            ..clear()
+                            ..addAll(result);
+                        });
+                      }
+                    },
+                    icon: const Icon(Icons.add, size: 16,
+                        color: AppConstants.primary),
+                    label: Text(
+                      'Add Sizes',
+                      style: AppConstants.bodyStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppConstants.primary,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: AppConstants.primary),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: AppConstants.buttonRadius),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  // Total stock summary
+                  if (colorVariants.isNotEmpty)
+                    Text(
+                      'Total stock: $totalStock',
+                      style: AppConstants.bodyStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: AppConstants.secondary,
+                      ),
+                    ),
+                  const SizedBox(height: 20),
+
+                  // Save color button
+                  SolePrimaryButton(
+                    label: editIndex != null
+                        ? 'Update Color'
+                        : 'Add Color',
+                    isLoading: false,
+                    onPressed: (colorName.trim().isEmpty ||
+                            colorImages.isEmpty)
+                        ? null
+                        : () {
+                            final color = ProductColor(
+                              name: colorName.trim(),
+                              images: List<ProductColorImage>.from(
+                                  colorImages),
+                              variants: List<ProductVariant>.from(
+                                  colorVariants),
+                            );
+                            setState(() {
+                              if (editIndex != null) {
+                                _colors[editIndex] = color;
+                              } else {
+                                _colors.add(color);
+                              }
+                            });
+                            Navigator.of(ctx).pop();
+                          },
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  /// Open the variant sheet scoped to a specific color.
+  /// Returns the updated list of ProductVariant on save, or null on cancel.
+  Future<List<ProductVariant>?> _showVariantSheetForColor({
+    required String colorName,
+    required List<ProductVariant> existingVariants,
+  }) async {
+    // Reuse the existing _showVariantSheet by temporarily swapping _variants
+    // and restoring after the sheet closes. This avoids duplicating the
+    // complex variant sheet logic.
+    final savedVariants = List<ProductVariant>.from(_variants);
+    _variants
+      ..clear()
+      ..addAll(existingVariants);
+
+    await _showVariantSheet(colorOverride: colorName);
+
+    final result = List<ProductVariant>.from(_variants);
+    _variants
+      ..clear()
+      ..addAll(savedVariants);
+
+    return result.isEmpty ? null : result;
   }
 
   // ── Customizations ──
@@ -3039,6 +3736,11 @@ class _PresetChipSelector extends StatefulWidget {
 
   final ValueChanged<String> onChanged;
 
+  /// When true, tapping the already-selected chip clears the selection
+  /// (reports empty string via onChanged). Used by the color name picker
+  /// so sellers can unselect a color.
+  final bool allowDeselect;
+
   const _PresetChipSelector({
     super.key,
     required this.initialValue,
@@ -3049,6 +3751,7 @@ class _PresetChipSelector extends StatefulWidget {
     this.duplicateError =
         'That is already an option — tap it above instead.',
     required this.onChanged,
+    this.allowDeselect = false,
   });
 
   @override
@@ -3087,6 +3790,18 @@ class _PresetChipSelectorState extends State<_PresetChipSelector> {
   }
 
   void _selectPreset(String value) {
+    // When allowDeselect is on, tapping the already-selected chip clears it.
+    if (widget.allowDeselect && _selected == value) {
+      setState(() {
+        _selected = '';
+        _custom = null;
+        _otherOpen = false;
+        _otherError = null;
+      });
+      _ctrl.clear();
+      widget.onChanged('');
+      return;
+    }
     setState(() {
       _selected = value;
       _preset = value;
@@ -4345,7 +5060,7 @@ class _ColorStockEntry {
     this.color = '',
     String stock = '0',
     String price = '0',
-    String sku = '',
+    String sku = '10',
   })  : stockCtrl = TextEditingController(text: stock),
         priceCtrl = TextEditingController(text: price),
         skuCtrl = TextEditingController(text: sku);

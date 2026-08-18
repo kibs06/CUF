@@ -29,6 +29,7 @@ class ProductService {
     required List<XFile> images,
     required List<ProductVariant> variants,
     required List<ProductCustomization> customizations,
+    List<ProductColor> colors = const [],
     bool isActive = true,
     bool isFeatured = false,
     String? barcode,
@@ -110,6 +111,15 @@ class ProductService {
           );
     }
 
+    // 7. Upload and insert per-color images
+    for (final color in colors) {
+      await _syncColorImages(
+        productId: productId,
+        colorName: color.name,
+        images: color.images,
+      );
+    }
+
     return productId;
   }
 
@@ -127,6 +137,7 @@ class ProductService {
     required List<String> existingImageUrls,
     required List<ProductVariant> variants,
     required List<ProductCustomization> customizations,
+    List<ProductColor> colors = const [],
     required bool isActive,
     required bool isFeatured,
     String? barcode,
@@ -208,6 +219,19 @@ class ProductService {
             customizations.map((c) => c.toInsertMap(productId)).toList(),
           );
     }
+
+    // 6. Replace per-color images (delete + re-insert)
+    await _client
+        .from('product_color_images')
+        .delete()
+        .eq('product_id', productId);
+    for (final color in colors) {
+      await _syncColorImages(
+        productId: productId,
+        colorName: color.name,
+        images: color.images,
+      );
+    }
   }
 
   // ─── DELETE ─────────────────────────────────────────────────────
@@ -264,6 +288,21 @@ class ProductService {
           .delete()
           .eq('product_id', productId);
 
+      // Delete per-color images + storage files
+      final colorImages = await _client
+          .from('product_color_images')
+          .select('id, url')
+          .eq('product_id', productId);
+
+      for (final img in colorImages) {
+        final url = img['url'] as String;
+        await _removeStorageFile(url);
+      }
+      await _client
+          .from('product_color_images')
+          .delete()
+          .eq('product_id', productId);
+
       await _client
           .from('product_customizations')
           .delete()
@@ -283,6 +322,12 @@ class ProductService {
     _removeStorageFile(imageUrl);
   }
 
+  /// Remove a single color image from storage and the database.
+  Future<void> removeColorImage(String imageId, String imageUrl) async {
+    await _client.from('product_color_images').delete().eq('id', imageId);
+    _removeStorageFile(imageUrl);
+  }
+
   // ─── READ ───────────────────────────────────────────────────────
 
   /// Get all products belonging to the current seller's store, with all relations.
@@ -298,7 +343,7 @@ class ProductService {
     final data = await _client
         .from('products')
         .select(
-            '*, product_images(*), product_variants(*), product_customizations(*), inventory(*)')
+            '*, product_images(*), product_variants(*), product_customizations(*), inventory(*), product_color_images(*)')
         .eq('seller_id', sellerId)
         .eq('store_id', storeId)
         .order('created_at', ascending: false);
@@ -310,7 +355,7 @@ class ProductService {
     return await _client
         .from('products')
         .select(
-            '*, product_images(*), product_variants(*), product_customizations(*), inventory(*)')
+            '*, product_images(*), product_variants(*), product_customizations(*), inventory(*), product_color_images(*)')
         .eq('id', productId)
         .single();
   }
@@ -543,6 +588,74 @@ class ProductService {
       }
     } catch (e) {
       debugPrint('[ProductService] low_stock notification failed: $e');
+    }
+  }
+
+  /// Sync per-color images: upload new files, insert DB rows.
+  ///
+  /// Called during both create and update flows. On update, the caller
+  /// deletes all existing product_color_images rows for this product
+  /// before calling this method (delete + re-insert strategy).
+  Future<void> _syncColorImages({
+    required String productId,
+    required String colorName,
+    required List<ProductColorImage> images,
+  }) async {
+    if (images.isEmpty) return;
+
+    final sellerId = _client.auth.currentUser!.id;
+    final bucketName = 'product-images';
+    final rowsToInsert = <Map<String, dynamic>>[];
+
+    for (int i = 0; i < images.length; i++) {
+      final img = images[i];
+
+      if (img.isExisting && img.url != null) {
+        // Existing image — keep its URL as-is
+        rowsToInsert.add({
+          'product_id': productId,
+          'color_name': colorName,
+          'url': img.url!,
+          'display_order': img.displayOrder,
+        });
+      } else if (img.isNew && img.file != null) {
+        // New image — upload to Storage
+        final file = img.file!;
+        final bytes = await file.readAsBytes();
+        if (bytes.isEmpty) continue;
+
+        final ext = file.path.split('.').last.toLowerCase();
+        final safeExt = ext == 'jpg' ? 'jpeg' : ext;
+        final timestamp = DateTime.now().millisecondsSinceEpoch;
+        // Per-color path: {sellerId}/{productId}/colors/{colorName}/{timestamp}_{i}.{ext}
+        final safeColorName = colorName.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+        final path = '$sellerId/$productId/colors/$safeColorName/${timestamp}_$i.$ext';
+
+        await _client.storage.from(bucketName).uploadBinary(
+              path,
+              bytes,
+              fileOptions: FileOptions(
+                contentType: 'image/$safeExt',
+                upsert: true,
+              ),
+            );
+
+        final url = _client.storage.from(bucketName).getPublicUrl(path);
+        if (url.isEmpty) {
+          throw Exception('Color image upload returned empty URL for $colorName image $i');
+        }
+
+        rowsToInsert.add({
+          'product_id': productId,
+          'color_name': colorName,
+          'url': url,
+          'display_order': img.displayOrder,
+        });
+      }
+    }
+
+    if (rowsToInsert.isNotEmpty) {
+      await _client.from('product_color_images').insert(rowsToInsert);
     }
   }
 
