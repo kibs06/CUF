@@ -352,18 +352,11 @@ class _MoreFromStoreSectionState extends State<_MoreFromStoreSection> {
           ],
         ),
         const SizedBox(height: 12),
-        SizedBox(
-          height: 200,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: _products.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 10),
-            itemBuilder: (context, index) {
-              final p = _products[index];
-              return _StoreProductCard(product: p);
-            },
-          ),
-        ),
+        // Masonry grid of store products
+        ..._products.map((p) => Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: _StoreProductCard(product: p),
+        )),
       ],
     );
   }
@@ -393,6 +386,11 @@ class _StoreProductCard extends StatelessWidget {
     final onSale = isOnSale(product);
     final displayPrice = onSale ? effectivePrice(product) : price;
 
+    // Deterministic aspect ratio per product for masonry rhythm
+    const ratios = [1.0, 0.78, 1.22, 0.95];
+    final id = product['id']?.toString() ?? '';
+    final ratio = ratios[id.isEmpty ? 0 : id.hashCode.abs() % ratios.length];
+
     return GestureDetector(
       onTap: () {
         Navigator.of(context).push(
@@ -401,16 +399,29 @@ class _StoreProductCard extends StatelessWidget {
           ),
         );
       },
-      child: SizedBox(
-        width: 140,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Image
-            AspectRatio(
-              aspectRatio: 1.0,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(10),
+            ClipRRect(
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(12),
+                topRight: Radius.circular(12),
+              ),
+              child: AspectRatio(
+                aspectRatio: ratio,
                 child: imageUrl != null
                     ? CachedNetworkImage(
                         imageUrl: imageUrl,
@@ -420,55 +431,56 @@ class _StoreProductCard extends StatelessWidget {
                         ),
                         errorWidget: (_, _, _) => Container(
                           color: AppConstants.borderGray.withValues(alpha: 0.3),
-                          child: const Icon(Icons.image, color: AppConstants.borderGray, size: 20),
+                          child: const Icon(Icons.image, color: AppConstants.borderGray, size: 24),
                         ),
                       )
                     : Container(
                         color: AppConstants.borderGray.withValues(alpha: 0.3),
-                        child: const Icon(Icons.image_outlined, color: AppConstants.borderGray, size: 20),
+                        child: const Icon(Icons.image_outlined, color: AppConstants.borderGray, size: 24),
                       ),
               ),
             ),
-            const SizedBox(height: 6),
-            // Name
-            Text(
-              product['name'] ?? '',
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: AppConstants.bodyStyle(fontSize: 12, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 2),
-            // Price
-            if (onSale)
-              Row(
+            // Info
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '₱${displayPrice.toStringAsFixed(0)}',
-                    style: AppConstants.monoStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: AppConstants.error,
+                    product['name'] ?? '',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppConstants.bodyStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 4),
+                  if (onSale) ...[
+                    Text(
+                      '₱${displayPrice.toStringAsFixed(2)}',
+                      style: AppConstants.monoStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: AppConstants.error,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    '₱${price.toStringAsFixed(0)}',
-                    style: AppConstants.monoStyle(
-                      fontSize: 10,
-                      color: AppConstants.secondary.withValues(alpha: 0.5),
-                    ).copyWith(decoration: TextDecoration.lineThrough),
-                  ),
+                    Text(
+                      '₱${price.toStringAsFixed(2)}',
+                      style: AppConstants.monoStyle(
+                        fontSize: 11,
+                        color: AppConstants.secondary.withValues(alpha: 0.5),
+                      ).copyWith(decoration: TextDecoration.lineThrough),
+                    ),
+                  ] else
+                    Text(
+                      '₱${price.toStringAsFixed(2)}',
+                      style: AppConstants.monoStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: AppConstants.primary,
+                      ),
+                    ),
                 ],
-              )
-            else
-              Text(
-                '₱${price.toStringAsFixed(0)}',
-                style: AppConstants.monoStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: AppConstants.primary,
-                ),
               ),
+            ),
           ],
         ),
       ),
