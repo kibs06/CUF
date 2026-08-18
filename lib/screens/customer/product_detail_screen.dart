@@ -16,6 +16,7 @@ import '../../widgets/sole_review_card.dart';
 import '../../widgets/sole_star_rating.dart';
 import 'ar_fitting_screen.dart';
 import 'checkout_screen.dart';
+import 'tag_products_screen.dart';
 import 'write_review_screen.dart';
 import '../../widgets/cart_icon_button.dart';
 import '../../widgets/seller/fly_to_order_animation.dart';
@@ -1140,6 +1141,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                           ),
                         ),
                       // Product tags — real data from products.tags.
+                      // Tappable: navigates to a screen showing all products with that tag.
                       if (_productTags.isNotEmpty) ...[
                         const SizedBox(height: 12),
                         SingleChildScrollView(
@@ -1149,11 +1151,20 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                               for (final tag in _productTags)
                                 Padding(
                                   padding: const EdgeInsets.only(right: 8),
-                                  child: SoleBadge(
-                                    label: _tagLabel(tag),
-                                    backgroundColor: AppConstants.primary
-                                        .withValues(alpha: 0.1),
-                                    textColor: AppConstants.primary,
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute(
+                                          builder: (_) => TagProductsScreen(tagId: tag),
+                                        ),
+                                      );
+                                    },
+                                    child: SoleBadge(
+                                      label: _tagLabel(tag),
+                                      backgroundColor: AppConstants.primary
+                                          .withValues(alpha: 0.1),
+                                      textColor: AppConstants.primary,
+                                    ),
                                   ),
                                 ),
                             ],
