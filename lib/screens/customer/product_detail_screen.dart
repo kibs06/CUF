@@ -9,6 +9,7 @@ import '../../providers/cart_provider.dart';
 import '../../providers/review_provider.dart';
 import '../../utils/cart_helpers.dart';
 import '../../utils/recently_viewed.dart';
+import '../../services/supabase_service.dart';
 import '../../utils/sale_price.dart';
 import '../../widgets/sole_badge.dart';
 import '../../widgets/sole_ar_pill.dart';
@@ -253,6 +254,223 @@ class _ReviewsSectionState extends State<_ReviewsSection> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// "More from Store" section — horizontal scroll of other products from the
+/// same store, shown below the reviews on the product detail screen.
+class _MoreFromStoreSection extends StatefulWidget {
+  final String storeId;
+  final String storeName;
+  final String currentProductId;
+
+  const _MoreFromStoreSection({
+    required this.storeId,
+    required this.storeName,
+    required this.currentProductId,
+  });
+
+  @override
+  State<_MoreFromStoreSection> createState() => _MoreFromStoreSectionState();
+}
+
+class _MoreFromStoreSectionState extends State<_MoreFromStoreSection> {
+  List<Map<String, dynamic>> _products = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStoreProducts();
+  }
+
+  Future<void> _loadStoreProducts() async {
+    if (widget.storeId.isEmpty) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
+    try {
+      final all = await SupabaseService.instance.fetchProducts(storeId: widget.storeId);
+      // Exclude the current product
+      final others = all
+          .where((p) => p['id']?.toString() != widget.currentProductId)
+          .toList();
+      if (mounted) {
+        setState(() {
+          _products = others;
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const SizedBox(
+        height: 180,
+        child: Center(
+          child: SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2, color: AppConstants.primary),
+          ),
+        ),
+      );
+    }
+    if (_products.isEmpty) return const SizedBox.shrink();
+
+    final displayName = widget.storeName.isNotEmpty ? widget.storeName : 'this store';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: AppConstants.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(Icons.storefront_outlined, size: 16, color: AppConstants.primary),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              'More from $displayName',
+              style: AppConstants.bodyStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: AppConstants.secondary,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 200,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: _products.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 10),
+            itemBuilder: (context, index) {
+              final p = _products[index];
+              return _StoreProductCard(product: p);
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Compact product card used in the "More from Store" horizontal list.
+class _StoreProductCard extends StatelessWidget {
+  final Map<String, dynamic> product;
+  const _StoreProductCard({required this.product});
+
+  @override
+  Widget build(BuildContext context) {
+    // Primary image
+    final images = product['product_images'] as List? ?? [];
+    String? imageUrl;
+    if (images.isNotEmpty && images.first is Map) {
+      final sorted = List<Map<String, dynamic>>.from(images);
+      sorted.sort((a, b) =>
+          (a['display_order'] as int? ?? 0).compareTo(b['display_order'] as int? ?? 0));
+      imageUrl = sorted.first['image_url']?.toString();
+    } else {
+      final flat = product['images'] as List? ?? [];
+      if (flat.isNotEmpty) imageUrl = flat.first.toString();
+    }
+
+    final price = (product['price'] as num?)?.toDouble() ?? 0;
+    final onSale = isOnSale(product);
+    final displayPrice = onSale ? effectivePrice(product) : price;
+
+    return GestureDetector(
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => ProductDetailScreen(product: product),
+          ),
+        );
+      },
+      child: SizedBox(
+        width: 140,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Image
+            AspectRatio(
+              aspectRatio: 1.0,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: imageUrl != null
+                    ? CachedNetworkImage(
+                        imageUrl: imageUrl,
+                        fit: BoxFit.cover,
+                        placeholder: (_, _) => Container(
+                          color: AppConstants.borderGray.withValues(alpha: 0.3),
+                        ),
+                        errorWidget: (_, _, _) => Container(
+                          color: AppConstants.borderGray.withValues(alpha: 0.3),
+                          child: const Icon(Icons.image, color: AppConstants.borderGray, size: 20),
+                        ),
+                      )
+                    : Container(
+                        color: AppConstants.borderGray.withValues(alpha: 0.3),
+                        child: const Icon(Icons.image_outlined, color: AppConstants.borderGray, size: 20),
+                      ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            // Name
+            Text(
+              product['name'] ?? '',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: AppConstants.bodyStyle(fontSize: 12, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 2),
+            // Price
+            if (onSale)
+              Row(
+                children: [
+                  Text(
+                    '₱${displayPrice.toStringAsFixed(0)}',
+                    style: AppConstants.monoStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: AppConstants.error,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    '₱${price.toStringAsFixed(0)}',
+                    style: AppConstants.monoStyle(
+                      fontSize: 10,
+                      color: AppConstants.secondary.withValues(alpha: 0.5),
+                    ).copyWith(decoration: TextDecoration.lineThrough),
+                  ),
+                ],
+              )
+            else
+              Text(
+                '₱${price.toStringAsFixed(0)}',
+                style: AppConstants.monoStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: AppConstants.primary,
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -1444,6 +1662,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                       _ReviewsSection(
                         productId: widget.product['id'].toString(),
                         productName: widget.product['name'] ?? '',
+                      ),
+                      const SizedBox(height: 24),
+
+                      // ── More from Store ─────────────────────
+                      _MoreFromStoreSection(
+                        storeId: widget.product['store_id']?.toString() ?? '',
+                        storeName: widget.product['store_name']?.toString() ?? widget.product['stores']?['name']?.toString() ?? '',
+                        currentProductId: widget.product['id'].toString(),
                       ),
                     ],
                   ),
