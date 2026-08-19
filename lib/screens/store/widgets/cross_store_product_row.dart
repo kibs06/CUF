@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../constants/app_constants.dart';
+import '../../../utils/product_grid_ratio.dart';
 import '../../customer/product_detail_screen.dart';
 import '../../../widgets/sole_product_card.dart';
 
@@ -15,14 +16,6 @@ class CrossStoreProductRow extends StatelessWidget {
     required this.products,
     this.storeName = 'all stores',
   });
-
-  /// Deterministic image aspect ratio per card keyed off product id.
-  double _imageAspectRatioFor(dynamic product) {
-    const ratios = [1.0, 0.78, 1.22, 0.95];
-    final id = product['id']?.toString() ?? '';
-    final key = id.isEmpty ? 0 : id.hashCode;
-    return ratios[key.abs() % ratios.length];
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -84,7 +77,7 @@ class CrossStoreProductRow extends StatelessWidget {
                   width: cardWidth,
                   child: SoleProductCard(
                     product: product,
-                    imageAspectRatio: _imageAspectRatioFor(product),
+                    imageAspectRatio: productGridRatio(product),
                     onTap: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(

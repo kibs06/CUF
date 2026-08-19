@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../constants/app_constants.dart';
 import '../../models/store.dart';
 import '../../providers/follow_provider.dart';
+import '../../utils/product_grid_ratio.dart';
 import '../../widgets/seller/tag_selector.dart';
 import '../../providers/product_provider.dart';
 import '../../providers/review_provider.dart';
@@ -43,14 +44,6 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
   bool _isLoading = true;
   String _sortMode = 'Newest';
   int _followerCount = 0;
-
-  /// Deterministic image aspect ratio per card keyed off product id.
-  double _imageAspectRatioFor(dynamic product) {
-    const ratios = [1.0, 0.78, 1.22, 0.95];
-    final id = product['id']?.toString() ?? '';
-    final key = id.isEmpty ? 0 : id.hashCode;
-    return ratios[key.abs() % ratios.length];
-  }
 
   final PageController _featuredController = PageController(
     viewportFraction: 0.88,
@@ -673,7 +666,7 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                     final prod = sorted[index];
                     return SoleProductCard(
                       product: prod,
-                      imageAspectRatio: _imageAspectRatioFor(prod),
+                      imageAspectRatio: productGridRatio(prod),
                       onTap: () {
                         Navigator.of(context).push(
                           MaterialPageRoute(

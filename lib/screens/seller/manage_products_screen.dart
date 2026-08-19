@@ -11,6 +11,7 @@ import '../../services/connectivity_service.dart';
 import '../../services/product_service.dart';
 import '../../services/store_service.dart';
 import '../../utils/sale_price.dart';
+import '../../utils/product_grid_ratio.dart';
 import '../../widgets/seller/seller_inventory_row.dart';
 import 'add_edit_product_screen.dart';
 import 'create_store_screen.dart';
@@ -1265,17 +1266,6 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
     );
   }
 
-  /// Deterministic image aspect ratio per card so the grid reads as a real
-  /// masonry layout rather than uniform cards with a fancy name. Cycles
-  /// through a small set of ratios keyed off the product id (not the list
-  /// index) so a card's height stays stable across filtering/re-sorting.
-  double _imageAspectRatioFor(Map<String, dynamic> product) {
-    const ratios = [1.0, 0.78, 1.22, 0.95];
-    final id = product['id']?.toString() ?? '';
-    final key = id.isEmpty ? 0 : id.hashCode;
-    return ratios[key.abs() % ratios.length];
-  }
-
   // ─── PRODUCT CARD ───────────────────────────────────────────────
 
   /// Compact badge label for stock count — abbreviates large values
@@ -1293,7 +1283,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
     final price = (product['price'] as num?)?.toDouble() ?? 0;
     final onSale = _isOnSale(product);
     final displayPrice = onSale ? effectivePrice(product) : price;
-    final imageRatio = _imageAspectRatioFor(product);
+    final imageRatio = productGridRatio(product);
 
     final isDeleting = _deletingProductId == product['id'];
 

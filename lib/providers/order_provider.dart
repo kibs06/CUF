@@ -69,6 +69,10 @@ class OrderProvider extends ChangeNotifier {
   String get myOrdersFilter => _myOrdersFilter;
   bool get hasLoadedMyOrders => _myOrdersLoaded;
 
+  /// Raw (unfiltered) customer orders, newest first. Used by the profile's
+  /// "Buy Again" strip regardless of the active My Orders filter tab.
+  List<Map<String, dynamic>> get allMyOrders => _myOrders;
+
   /// Counts of the customer's orders per My Orders tab, computed from the
   /// same in-memory orders (and the same [matchesMyOrdersFilter] predicates)
   /// as the tab lists themselves — so the Profile "My Orders" panel badges

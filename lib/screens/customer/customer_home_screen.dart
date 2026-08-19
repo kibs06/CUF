@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../utils/recently_viewed.dart';
 import '../../utils/sale_price.dart';
+import '../../utils/product_grid_ratio.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/message_provider.dart';
@@ -14,8 +14,6 @@ import '../../services/push_notification_service.dart';
 import '../../widgets/floating_message_button.dart';
 import '../../widgets/no_internet_view.dart';
 import '../../widgets/sole_product_card.dart';
-import '../../widgets/sale_price_tape.dart';
-import '../../widgets/sale_countdown_overlay.dart';
 import '../../widgets/shimmer_group.dart';
 import '../../widgets/cart_icon_button.dart';
 import '../../widgets/customer_foot_profile_banner.dart';
@@ -40,9 +38,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   StreamSubscription? _connectivitySub;
   bool _wasOffline = false;
 
-  // Recently viewed products
-  List<Map<String, dynamic>> _recentlyViewed = [];
-
   // Featured items mock data for the banner PageView
   final List<Map<String, String>> _featuredArrivals = [
     {
@@ -65,7 +60,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   @override
   void initState() {
     super.initState();
-    _loadRecentlyViewed();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<ProductProvider>(context, listen: false).loadProducts(hideOutOfStock: true);
       // Load conversations for the floating message button badge
@@ -98,13 +92,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     });
   }
 
-  Future<void> _loadRecentlyViewed() async {
-    final items = await RecentlyViewedService.instance.load();
-    if (mounted) {
-      setState(() => _recentlyViewed = items);
-    }
-  }
-
   @override
   void dispose() {
     _connectivitySub?.cancel();
@@ -112,15 +99,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     _bannerController.dispose();
     _bannerTimer?.cancel();
     super.dispose();
-  }
-
-  /// Deterministic image aspect ratio per card keyed off product id
-  /// so a card's height stays stable across filtering/re-sorting.
-  double _imageAspectRatioFor(dynamic product) {
-    const ratios = [1.0, 0.78, 1.22, 0.95];
-    final id = product['id']?.toString() ?? '';
-    final key = id.isEmpty ? 0 : id.hashCode;
-    return ratios[key.abs() % ratios.length];
   }
 
   Future<void> _loadConversations() async {
@@ -262,13 +240,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     final filteredProducts = productProvider.getFilteredProducts(_searchKeyword);
     // Products currently on sale — powers the dedicated "On Sale" sliver.
     final saleProducts = productProvider.products.where(isOnSale).toList();
-    // Recently-viewed items still in the live catalog. Out-of-stock (now
-    // hidden from browse) and deleted products are excluded so the strip
-    // never shows a stale price with a dead tap.
-    final recentlyViewedItems = _recentlyViewed
-        .where((item) => productProvider.products.any(
-            (p) => p['id']?.toString() == item['id']))
-        .toList();
 
     return Scaffold(
       backgroundColor: AppConstants.surfaceLight,
@@ -408,244 +379,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                     ),
                   ),
                 ),
-
-                // Recently viewed (only when search is empty)
-                if (_searchKeyword.isEmpty && recentlyViewedItems.isNotEmpty)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.only(left: 20, right: 20, bottom: 8),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Recently Viewed',
-                            style: AppConstants.bodyStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          SizedBox(
-                            height: 180,
-                            child: ListView.separated(
-                              scrollDirection: Axis.horizontal,
-                              itemCount: recentlyViewedItems.length,
-                              separatorBuilder: (_, _) => const SizedBox(width: 12),
-                              itemBuilder: (context, index) {
-                                final item = recentlyViewedItems[index];
-                                // Resolve the live product (if it's still in
-                                // the catalog) so the strip shows the current
-                                // effective (sale-aware) price.
-                                final fullProduct = productProvider.products
-                                    .cast<Map<String, dynamic>?>()
-                                    .firstWhere(
-                                  (p) => p?['id']?.toString() == item['id'],
-                                  orElse: () => null,
-                                );
-                                final DateTime? stripEnd = fullProduct == null
-                                    ? null
-                                    : DateTime.tryParse(
-                                        fullProduct['sale_ends_at']
-                                                ?.toString() ??
-                                            '');
-                                // The expiry watcher re-renders this strip
-                                // item with a `now` past the sale end, so the
-                                // compact countdown and the sale price fall
-                                // back to non-sale together when it expires.
-                                return SaleEndWatcher(
-                                  product: fullProduct ?? const {},
-                                  builder: (context, now) {
-                                    final bool stripOnSale =
-                                        fullProduct != null &&
-                                            isOnSale(fullProduct, now: now);
-                                    final double liveStripPrice =
-                                        fullProduct != null
-                                            ? effectivePrice(fullProduct,
-                                                now: now)
-                                            : ((item['price'] is num)
-                                                    ? (item['price'] as num)
-                                                    : 0)
-                                                .toDouble();
-                                    final double originalPrice =
-                                        fullProduct != null
-                                            ? ((fullProduct['price'] is num)
-                                                    ? (fullProduct['price']
-                                                        as num)
-                                                    : 0)
-                                                .toDouble()
-                                            : 0;
-                                    return SizedBox(
-                                      width: 130,
-                                      child: GestureDetector(
-                                    onTap: () {
-                                      // Use the full product from the loaded list
-                                      final productProvider = context.read<ProductProvider>();
-                                      final fullProduct = productProvider.products.cast<Map<String, dynamic>?>().firstWhere(
-                                        (p) => p?['id']?.toString() == item['id'],
-                                        orElse: () => null,
-                                      );
-                                      if (fullProduct != null) {
-                                        Navigator.of(context).push(
-                                          MaterialPageRoute(
-                                            builder: (_) => ProductDetailScreen(product: fullProduct),
-                                          ),
-                                        );
-                                      }
-                                    },
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        // Thumbnail + compact countdown band
-                                        // across its bottom edge (only for
-                                        // sales that actually end).
-                                        ClipRRect(
-                                          borderRadius: BorderRadius.circular(12),
-                                          child: Stack(
-                                            fit: StackFit.passthrough,
-                                            children: [
-                                              Image.network(
-                                                item['imageUrl'] ?? '',
-                                                width: 130,
-                                                height: 124,
-                                                fit: BoxFit.cover,
-                                                errorBuilder: (_, _, _) => Container(
-                                                  width: 130,
-                                                  height: 124,
-                                                  color: AppConstants.borderGray.withValues(alpha: 0.2),
-                                                  child: Icon(
-                                                    Icons.image_outlined,
-                                                    color: AppConstants.borderGray,
-                                                  ),
-                                                ),
-                                              ),
-                                              if (stripOnSale &&
-                                                  stripEnd != null)
-                                                Positioned(
-                                                  left: 0,
-                                                  right: 0,
-                                                  bottom: 0,
-                                                  child: SaleCountdownOverlay(
-                                                    saleEndsAt: stripEnd,
-                                                    compact: true,
-                                                  ),
-                                                ),
-                                            ],
-                                          ),
-                                        ),
-                                        const SizedBox(height: 6),
-                                        // Text block — Expanded + FittedBox
-                                        // (scaleDown) guarantees the card never
-                                        // overflows the 180px strip, even when
-                                        // an on-sale item renders two price
-                                        // lines or the device text scale is
-                                        // large.
-                                        Expanded(
-                                          child: FittedBox(
-                                            fit: BoxFit.scaleDown,
-                                            alignment: Alignment.topLeft,
-                                            child: Column(
-                                              mainAxisSize: MainAxisSize.min,
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  item['name'] ?? '',
-                                                  style: AppConstants.bodyStyle(
-                                                    fontSize: 12,
-                                                    fontWeight: FontWeight.bold,
-                                                  ),
-                                                  maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
-                                                ),
-                                                const SizedBox(height: 2),
-                                                if (stripOnSale) ...[
-                                                  // Sale price hides behind a
-                                                  // peel-away tape (same reveal
-                                                  // state as the cards' tags).
-                                                  SalePriceTape(
-                                                    productId: item['id']
-                                                            ?.toString() ??
-                                                        '',
-                                                    // 11px text → slightly
-                                                    // more padding to keep
-                                                    // the ~40px tap target.
-                                                    hitPadding: const EdgeInsets
-                                                        .fromLTRB(
-                                                            10, 20, 10, 9),
-                                                    child: Text(
-                                                      '₱${liveStripPrice.toStringAsFixed(2)}',
-                                                      style:
-                                                          AppConstants.monoStyle(
-                                                        fontSize: 11,
-                                                        color: AppConstants
-                                                            .primary,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  Text(
-                                                    '₱${originalPrice.toStringAsFixed(2)}',
-                                                    style: AppConstants.monoStyle(
-                                                      fontSize: 9,
-                                                      color: AppConstants.secondary
-                                                          .withValues(alpha: 0.5),
-                                                    ).copyWith(
-                                                        decoration: TextDecoration
-                                                            .lineThrough),
-                                                  ),
-                                                ] else
-                                                  Text(
-                                                    '₱${liveStripPrice.toStringAsFixed(2)}',
-                                                    style: AppConstants.monoStyle(
-                                                      fontSize: 11,
-                                                      color: AppConstants.primary,
-                                                      fontWeight: FontWeight.bold,
-                                                    ),
-                                                  ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                    );
-                                  },
-                                );
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                const SliverToBoxAdapter(child: SizedBox(height: 12)),
-
-                // Recently Viewed empty state (first-time users)
-                if (_searchKeyword.isEmpty && _recentlyViewed.isEmpty)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.history_outlined,
-                            size: 14,
-                            color: AppConstants.secondary.withValues(alpha: 0.3),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Products you view will show up here',
-                            style: AppConstants.bodyStyle(
-                              fontSize: 12,
-                              color: AppConstants.secondary.withValues(alpha: 0.35),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
 
                 // On Sale section — dedicated masonry sliver. Shown only in
                 // the default browse state (no search, no category filter):
@@ -915,7 +648,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                         final prod = filteredProducts[index];
                         return SoleProductCard(
                           product: prod,
-                          imageAspectRatio: _imageAspectRatioFor(prod),
+                          imageAspectRatio: productGridRatio(prod),
                           onTap: () {
                             Navigator.of(context).push(
                               MaterialPageRoute(

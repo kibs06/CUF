@@ -3,17 +3,10 @@ import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:provider/provider.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/product_provider.dart';
+import '../../utils/product_grid_ratio.dart';
 import '../../widgets/cart_icon_button.dart';
 import '../../widgets/sole_product_card.dart';
 import '../customer/product_detail_screen.dart';
-
-/// Deterministic image aspect ratio per card keyed off product id.
-double _imageAspectRatioFor(dynamic product) {
-  const ratios = [1.0, 0.78, 1.22, 0.95];
-  final id = product['id']?.toString() ?? '';
-  final key = id.isEmpty ? 0 : id.hashCode;
-  return ratios[key.abs() % ratios.length];
-}
 
 class CollectionScreen extends StatelessWidget {
   final String collectionName;
@@ -97,7 +90,7 @@ class CollectionScreen extends StatelessWidget {
                       final prod = filtered[index];
                       return SoleProductCard(
                         product: prod,
-                        imageAspectRatio: _imageAspectRatioFor(prod),
+                        imageAspectRatio: productGridRatio(prod),
                         onTap: () {
                           Navigator.of(context).push(
                             MaterialPageRoute(

@@ -6,6 +6,9 @@ import '../../providers/auth_provider.dart';
 import '../../providers/follow_provider.dart';
 import '../../providers/order_provider.dart';
 import '../../utils/notification_formatters.dart';
+import '../../utils/recently_viewed.dart';
+import '../../widgets/buy_again_section.dart';
+import '../../widgets/recently_viewed_section.dart';
 import 'following_list_dialog.dart';
 import '../../services/auth_service.dart';
 import '../../services/profile_service.dart';
@@ -56,15 +59,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<String>? _businessVerificationFuture;
   DateTime? _businessFetchedAt;
 
-  /// Guards the one-shot "My Orders" panel count load so it fires at most
-  /// once per screen lifetime (even if the first attempt fails).
-  bool _ordersCountsRequested = false;
+  /// Tracks when the customer's orders were last requested so the
+  /// "My Orders" panel and "Buy Again" strip refresh on tab re-entry
+  /// without hammering the DB on every build.
+  DateTime? _ordersLastRequestedAt;
+
+  // ── Recently viewed (customers) ────────────────────────────────
+  List<Map<String, dynamic>> _recentlyViewed = [];
+  bool _loadingRecentlyViewed = false;
+  DateTime? _recentlyViewedLoadedAt;
 
   @override
   void initState() {
     super.initState();
     _nameController = TextEditingController();
     _phoneController = TextEditingController();
+    _loadRecentlyViewed();
+  }
+
+  Future<void> _loadRecentlyViewed() async {
+    if (_loadingRecentlyViewed) return;
+    _loadingRecentlyViewed = true;
+    final items = await RecentlyViewedService.instance.load();
+    _loadingRecentlyViewed = false;
+    _recentlyViewedLoadedAt = DateTime.now();
+    if (mounted) {
+      setState(() => _recentlyViewed = items);
+    }
+  }
+
+  Future<void> _loadMyOrders() async {
+    await context.read<OrderProvider>().loadMyOrders();
   }
 
   @override
@@ -315,6 +340,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
       });
     }
 
+    // Refresh recently viewed when the profile tab is re-entered (same
+    // IndexedStack constraint — initState runs once, so re-entry re-runs
+    // build; a TTL keeps the strip fresh without reloading every frame).
+    if (auth.userRole == AppConstants.roleCustomer &&
+        (_recentlyViewedLoadedAt == null ||
+            DateTime.now().difference(_recentlyViewedLoadedAt!) >
+                const Duration(seconds: 5))) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _loadRecentlyViewed();
+      });
+    }
+
+    // Refresh the customer's orders on tab re-entry — powers the My Orders
+    // badge counts and the Buy Again strip, so a new purchase shows up
+    // without visiting the My Orders screen first.
+    if (auth.userRole != AppConstants.roleSeller &&
+        (_ordersLastRequestedAt == null ||
+            DateTime.now().difference(_ordersLastRequestedAt!) >
+                const Duration(seconds: 30))) {
+      _ordersLastRequestedAt = DateTime.now();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        context.read<OrderProvider>().loadMyOrders();
+      });
+    }
+
     return Scaffold(
       backgroundColor: AppConstants.surfaceLight,
       appBar: AppBar(
@@ -378,6 +429,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(height: 16),
                   ],
                   _buildNotificationsPanel(),
+                  const SizedBox(height: 16),
+                ],
+                if (auth.userRole == AppConstants.roleCustomer) ...[
+                  BuyAgainSection(
+                    orders: context.watch<OrderProvider>().allMyOrders,
+                    onProductOpened: _loadMyOrders,
+                  ),
+                  const SizedBox(height: 16),
+                  RecentlyViewedSection(
+                    items: _recentlyViewed,
+                    onProductOpened: _loadRecentlyViewed,
+                  ),
                   const SizedBox(height: 16),
                 ],
                 _buildSettingsCard(auth),
@@ -750,15 +813,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     // (previously they were unread-notification counts and drifted).
     final orderProvider = context.watch<OrderProvider>();
 
-    // This panel only renders for non-sellers, so the lazy load below never
-    // fires for sellers. Schedule at most once per screen lifetime.
-    if (!orderProvider.hasLoadedMyOrders && !_ordersCountsRequested) {
-      _ordersCountsRequested = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        context.read<OrderProvider>().loadMyOrders();
-      });
-    }
+    // Orders are loaded once per screen lifetime by the build-level TTL
+    // refresh below (keeps My Orders badge counts + the Buy Again strip
+    // fresh), so this panel has no load of its own.
 
     final counts = orderProvider.myOrdersCounts;
 
