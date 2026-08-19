@@ -23,10 +23,8 @@ import 'help_menu_screen.dart';
 import '../seller/create_store_screen.dart';
 import '../seller/store_profile_screen.dart';
 import '../seller/gcash_payment_settings_screen.dart';
-import '../customer/foot_instructions_screen.dart';
 import 'whats_new_screen.dart';
-import 'terms_privacy_screen.dart';
-import 'about_cufmai_screen.dart';
+import 'settings_screen.dart';
 import '../auth/seller_application_flow.dart';
 import '../seller/seller_business_verification_screen.dart';
 
@@ -275,51 +273,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  // ── Password reset ────────────────────────────────────────────
-  Future<void> _sendReset(AuthProvider auth) async {
-    final success = await auth.resetPassword(auth.displayEmail);
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          success
-              ? 'Password reset email sent to ${auth.displayEmail}'
-              : auth.errorMessage ?? 'Unable to send reset email.',
-        ),
-        backgroundColor: success ? AppConstants.success : AppConstants.error,
-      ),
-    );
-  }
-
-  // ── Logout ────────────────────────────────────────────────────
-  Future<void> _confirmLogout(AuthProvider auth) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Log Out'),
-        content: const Text('Are you sure you want to log out?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text(
-              'Log Out',
-              style: TextStyle(color: AppConstants.error),
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm == true) {
-      await auth.logout();
-    }
-  }
-
   // ════════════════════════════════════════════════════════════════
   // BUILD
   // ════════════════════════════════════════════════════════════════
@@ -392,8 +345,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 );
               } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Settings coming soon')),
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const SettingsScreen(),
+                  ),
                 );
               }
             },
@@ -445,7 +400,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ],
                 _buildSettingsCard(auth),
                 const SizedBox(height: 32),
-                _buildLogoutButton(auth),
               ],
             ),
           ),
@@ -982,50 +936,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   builder: (_) => const SellerBusinessVerificationScreen(),
                 ),
               );
-              // Refresh the pill with the status the seller just saw.
               if (mounted) _refreshBusinessStatus();
             },
           ),
           const Divider(height: 1, color: Color(0xFFE5E7EB)),
         ],
-          _settingsRow(
-            icon: Icons.straighten_outlined,
-            title: 'Get Your Foot Size',
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const FootInstructionsScreen(),
-                ),
-              );
-            },
-          ),
-          const Divider(height: 1, color: Color(0xFFE5E7EB)),
-          _settingsRow(
-            icon: Icons.lock_outline,
-            title: 'Change Password',
-            onTap: () => _sendReset(auth),
-          ),
-          const Divider(height: 1, color: Color(0xFFE5E7EB)),
-          _settingsRow(
-            icon: Icons.description_outlined,
-            title: 'Terms & Privacy',
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  // Role-aware: sellers see the seller document, admins see
-                  // both combined, everyone else sees the customer document.
-                  builder: (_) => TermsPrivacyScreen(
-                    policy: auth.userRole == AppConstants.roleSeller
-                        ? CUFMAITermsPolicy.seller
-                        : (auth.userRole == AppConstants.roleAdmin
-                            ? CUFMAITermsPolicy.all
-                            : CUFMAITermsPolicy.customer),
-                  ),
-                ),
-              );
-            },
-          ),
-          const Divider(height: 1, color: Color(0xFFE5E7EB)),
           _settingsRow(
             icon: Icons.headset_mic_outlined,
             title: 'Help & Support',
@@ -1063,18 +978,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (_) => const WhatsNewScreen(),
-                ),
-              );
-            },
-          ),
-          const Divider(height: 1, color: Color(0xFFE5E7EB)),
-          _settingsRow(
-            icon: Icons.info_outline,
-            title: 'About CUFMAI',
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const AboutCufmaiScreen(),
                 ),
               );
             },
@@ -1223,25 +1126,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ),
       ],
-    );
-  }
-
-  // ════════════════════════════════════════════════════════════════
-  // LOGOUT
-  // ════════════════════════════════════════════════════════════════
-  Widget _buildLogoutButton(AuthProvider auth) {
-    return OutlinedButton.icon(
-      icon: const Icon(Icons.logout, color: AppConstants.error),
-      label: Text(
-        'Log Out',
-        style: AppConstants.bodyStyle(color: AppConstants.error),
-      ),
-      style: OutlinedButton.styleFrom(
-        side: BorderSide(color: AppConstants.error.withValues(alpha: 0.4)),
-        minimumSize: const Size.fromHeight(48),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-      onPressed: () => _confirmLogout(auth),
     );
   }
 
