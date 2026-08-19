@@ -19,10 +19,10 @@ import '../../widgets/sole_card.dart';
 import '../../widgets/sole_status_chip.dart';
 import '../../widgets/sole_switch.dart';
 import '../customer/my_orders_screen.dart';
-import 'help_menu_screen.dart';
 import '../seller/create_store_screen.dart';
 import '../seller/store_profile_screen.dart';
 import '../seller/gcash_payment_settings_screen.dart';
+import 'help_menu_screen.dart';
 import 'whats_new_screen.dart';
 import 'settings_screen.dart';
 import '../auth/seller_application_flow.dart';
@@ -366,7 +366,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         children: [
           AppConstants.noiseOverlay(opacity: 0.03),
           SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 80),
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -399,7 +399,53 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const SizedBox(height: 16),
                 ],
                 _buildSettingsCard(auth),
-                const SizedBox(height: 32),
+                const SizedBox(height: 24),
+                // Support and Updates section
+                Text(
+                  'SUPPORT & UPDATES',
+                  style: AppConstants.bodyStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade500,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SoleCard(
+                  color: Colors.white,
+                  padding: EdgeInsets.zero,
+                  child: Column(
+                    children: [
+                      _settingsRow(
+                        icon: Icons.headset_mic_outlined,
+                        title: 'Help & Support',
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const HelpMenuScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                      const Divider(height: 1, color: Color(0xFFE5E7EB)),
+                      _settingsRow(
+                        icon: Icons.new_releases_outlined,
+                        title: "What's New",
+                        subtitle: context.watch<UpdateProvider>().installedVersion != null
+                            ? 'v${context.watch<UpdateProvider>().installedVersion}'
+                            : null,
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const WhatsNewScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
               ],
             ),
           ),
@@ -900,10 +946,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // SETTINGS CARD
   // ════════════════════════════════════════════════════════════════
   Widget _buildSettingsCard(AuthProvider auth) {
-    final updateProvider = context.watch<UpdateProvider>();
-    final installedVersion = updateProvider.installedVersion;
-    final hasUnviewedUpdate = updateProvider.hasUnviewedUpdate;
-
     return SoleCard(
       color: Colors.white,
       padding: EdgeInsets.zero,
@@ -911,77 +953,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
         children: [
           // Sellers set up their GCash static QR here (shown at POS checkout).
           if (auth.userRole == AppConstants.roleSeller) ...[
-          _settingsRow(
-            icon: Icons.qr_code_2,
-            title: 'Payment Methods',
-            subtitle: 'Set up your GCash QR code',
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const GcashPaymentSettingsScreen(),
-                ),
-              );
-            },
-          ),
-          const Divider(height: 1, color: Color(0xFFE5E7EB)),
-          // Tier 2 — optional business verification (never gates selling).
-          _settingsRow(
-            icon: Icons.business_center_outlined,
-            title: 'Business Verification',
-            subtitle: 'Optional: DTI, BIR COR & permits',
-            trailing: _buildBusinessStatusChip(),
-            onTap: () async {
-              await Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const SellerBusinessVerificationScreen(),
-                ),
-              );
-              if (mounted) _refreshBusinessStatus();
-            },
-          ),
-          const Divider(height: 1, color: Color(0xFFE5E7EB)),
-        ],
-          _settingsRow(
-            icon: Icons.headset_mic_outlined,
-            title: 'Help & Support',
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const HelpMenuScreen(),
-                ),
-              );
-            },
-          ),
-          const Divider(height: 1, color: Color(0xFFE5E7EB)),
-          _settingsRow(
-            icon: Icons.new_releases_outlined,
-            title: "What's New",
-            subtitle: installedVersion != null ? 'v$installedVersion' : null,
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (hasUnviewedUpdate) ...[
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: const BoxDecoration(
-                      color: AppConstants.accent,
-                      shape: BoxShape.circle,
-                    ),
+            _settingsRow(
+              icon: Icons.qr_code_2,
+              title: 'Payment Methods',
+              subtitle: 'Set up your GCash QR code',
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const GcashPaymentSettingsScreen(),
                   ),
-                  const SizedBox(width: 8),
-                ],
-                const Icon(Icons.chevron_right, color: AppConstants.borderGray),
-              ],
+                );
+              },
             ),
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const WhatsNewScreen(),
-                ),
-              );
-            },
-          ),
+            const Divider(height: 1, color: Color(0xFFE5E7EB)),
+            // Tier 2 — optional business verification (never gates selling).
+            _settingsRow(
+              icon: Icons.business_center_outlined,
+              title: 'Business Verification',
+              subtitle: 'Optional: DTI, BIR COR & permits',
+              trailing: _buildBusinessStatusChip(),
+              onTap: () async {
+                await Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const SellerBusinessVerificationScreen(),
+                  ),
+                );
+                if (mounted) _refreshBusinessStatus();
+              },
+            ),
+          ],
         ],
       ),
     );
