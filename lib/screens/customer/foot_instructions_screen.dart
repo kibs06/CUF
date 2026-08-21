@@ -2,7 +2,12 @@ import 'package:flutter/material.dart';
 import '../../constants/app_constants.dart';
 import '../../widgets/sole_switch.dart';
 import 'foot_capture_screen.dart';
-import 'foot_manual_measure_screen.dart';
+import 'foot_wall_calibration_screen.dart';
+
+/// Feature flag for paper scan mode.
+/// Gate behind a const so it can be flipped on when the CV pipeline is ready.
+/// TODO(paper-scan): Remove this gate once the real paper scan CV pipeline is implemented.
+const bool kPaperScanEnabled = false;
 
 /// Instructions screen for the AR foot sizing feature.
 ///
@@ -12,8 +17,9 @@ import 'foot_manual_measure_screen.dart';
 /// - ARCore tracks your phone's position in real-world space
 ///
 /// Lets the user choose between:
-/// - Live AR scan (ARCore world tracking — no paper needed)
-/// - Paper-based scan (uses A4/Letter paper as scale reference)
+/// - Live AR scan with Guided Tap (recommended, default)
+/// - Live AR scan with Auto Scan (fully automatic)
+/// - Paper-based scan (uses A4/Letter paper as scale reference — feature-flagged off)
 class FootInstructionsScreen extends StatefulWidget {
   const FootInstructionsScreen({super.key});
 
@@ -21,14 +27,24 @@ class FootInstructionsScreen extends StatefulWidget {
   State<FootInstructionsScreen> createState() => _FootInstructionsScreenState();
 }
 
+/// AR sub-mode selection: Guided Tap (manual) or Auto Scan (automatic pipeline).
+enum ArMode { guidedTap, autoScan }
+
 class _FootInstructionsScreenState extends State<FootInstructionsScreen> {
   String _paperSize = 'a4'; // 'a4' or 'letter'
   String _footCondition = 'bare'; // 'bare' or 'socks'
   bool _useLiveAr = true; // true = live AR scan, false = paper-based
 
+  /// Which AR sub-mode the user selected (Guided Tap or Auto Scan).
+  ArMode _arMode = ArMode.guidedTap;
+
   /// Smart-assist toggle (§6): auto-suggested initial points in the manual AR
   /// flow. On by default; users who prefer full manual control can disable it.
   bool _smartAssistEnabled = true;
+
+  /// Shopping preference: men's / women's / kids' sizing.
+  /// Stored on the measurement so euToUs uses the correct offset.
+  String _shoeCategory = 'men';
 
   @override
   Widget build(BuildContext context) {
@@ -72,20 +88,35 @@ class _FootInstructionsScreenState extends State<FootInstructionsScreen> {
                     title: 'Stand on a flat floor',
                     description: 'Find a well-lit area with a textured floor (not glossy white tile). Point your camera at your feet.',
                   ),
+                  if (_arMode == ArMode.guidedTap) ...[
+                    _buildStep(
+                      number: 2,
+                      icon: Icons.touch_app_outlined,
+                      title: 'Tap the widest points',
+                      description: 'Front view: tap the widest point on each side of your foot. Like using a tape measure — but in AR.',
+                    ),
+                    _buildStep(
+                      number: 3,
+                      icon: Icons.open_with,
+                      title: 'Tap heel and toe',
+                      description: 'Side view: tap your heel, then the tip of your longest toe. Drag any point to fine-tune it.',
+                    ),
+                  ] else ...[
+                    _buildStep(
+                      number: 2,
+                      icon: Icons.center_focus_strong,
+                      title: 'Hold phone over your foot',
+                      description: 'The app detects your foot automatically — just keep it in the guide box.',
+                    ),
+                    _buildStep(
+                      number: 3,
+                      icon: Icons.play_circle_outline,
+                      title: 'Tap Start and hold steady',
+                      description: 'The scan runs for a few seconds while we collect measurement samples from different angles.',
+                    ),
+                  ],
                   _buildStep(
-                    number: 2,
-                    icon: Icons.touch_app_outlined,
-                    title: 'Tap the widest points',
-                    description: 'Front view: tap the widest point on each side of your foot. Like using a tape measure — but in AR.',
-                  ),
-                  _buildStep(
-                    number: 3,
-                    icon: Icons.open_with,
-                    title: 'Tap heel and toe',
-                    description: 'Side view: tap your heel, then the tip of your longest toe. Drag any point to fine-tune it.',
-                  ),
-                  _buildStep(
-                    number: 4,
+                    number: _arMode == ArMode.guidedTap ? 4 : 4,
                     icon: Icons.check_circle_outline,
                     title: 'Both feet measured',
                     description: 'We measure left and right foot separately — feet can differ in size!',
@@ -141,21 +172,60 @@ class _FootInstructionsScreenState extends State<FootInstructionsScreen> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildScanModeOption(
-                        key: false,
-                        icon: Icons.description_outlined,
-                        label: 'Paper Scan',
-                        description: 'Uses A4/Letter paper as scale reference',
-                        isSelected: !_useLiveAr,
+                    if (kPaperScanEnabled)
+                      Expanded(
+                        child: _buildScanModeOption(
+                          key: false,
+                          icon: Icons.description_outlined,
+                          label: 'Paper Scan',
+                          description: 'Uses A4/Letter paper as scale reference',
+                          isSelected: !_useLiveAr,
+                        ),
                       ),
-                    ),
                   ],
                 ),
                 const SizedBox(height: 28),
 
+                // ── AR Sub-Mode Selection (only when Live AR is selected) ──
+                if (_useLiveAr) ...[
+                  _buildSectionTitle('AR Measurement Style'),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Choose between guided tapping or fully automatic scanning.',
+                    style: AppConstants.bodyStyle(
+                      fontSize: 13,
+                      color: AppConstants.secondary.withValues(alpha: 0.6),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildArModeOption(
+                          mode: ArMode.guidedTap,
+                          icon: Icons.touch_app_outlined,
+                          label: 'Guided Tap',
+                          description: 'Tap key points on your foot — most control',
+                          isSelected: _arMode == ArMode.guidedTap,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildArModeOption(
+                          mode: ArMode.autoScan,
+                          icon: Icons.auto_awesome,
+                          label: 'Auto Scan',
+                          description: 'Hold phone steady — app detects automatically',
+                          isSelected: _arMode == ArMode.autoScan,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 28),
+                ],
+
                 // ── Paper Size Selection (only for paper mode) ──
-                if (!_useLiveAr) ...[
+                if (!_useLiveAr && kPaperScanEnabled) ...[
                   _buildSectionTitle('Paper Size'),
                   const SizedBox(height: 4),
                   Text(
@@ -189,6 +259,46 @@ class _FootInstructionsScreenState extends State<FootInstructionsScreen> {
                   ),
                   const SizedBox(height: 28),
                 ],
+                const SizedBox(height: 28),
+
+                // ── Shoe Category Selection ──
+                _buildSectionTitle('Shopping Size'),
+                const SizedBox(height: 4),
+                Text(
+                  'Which sizing system are you shopping in? This affects US size conversion.',
+                  style: AppConstants.bodyStyle(
+                    fontSize: 13,
+                    color: AppConstants.secondary.withValues(alpha: 0.6),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildShoeCategoryOption(
+                        key: 'men',
+                        label: "Men's",
+                        isSelected: _shoeCategory == 'men',
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _buildShoeCategoryOption(
+                        key: 'women',
+                        label: "Women's",
+                        isSelected: _shoeCategory == 'women',
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _buildShoeCategoryOption(
+                        key: 'kids',
+                        label: "Kids'",
+                        isSelected: _shoeCategory == 'kids',
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 28),
 
                 // ── Foot Condition Selection ──
@@ -225,8 +335,8 @@ class _FootInstructionsScreenState extends State<FootInstructionsScreen> {
                 ),
                 const SizedBox(height: 32),
 
-                // ── Smart Assist Toggle (Live AR mode only) ──
-                if (_useLiveAr) ...[
+                // ── Smart Assist Toggle (Guided Tap mode only) ──
+                if (_useLiveAr && _arMode == ArMode.guidedTap) ...[
                   _buildSectionTitle('Smart Assist'),
                   const SizedBox(height: 12),
                   _buildSmartAssistToggle(),
@@ -249,27 +359,7 @@ class _FootInstructionsScreenState extends State<FootInstructionsScreen> {
               width: double.infinity,
               height: 52,
               child: FilledButton(
-                onPressed: () {
-                  if (_useLiveAr) {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => FootManualMeasureScreen(
-                          footCondition: _footCondition,
-                          smartAssistEnabled: _smartAssistEnabled,
-                        ),
-                      ),
-                    );
-                  } else {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => FootCaptureScreen(
-                          paperSize: _paperSize,
-                          footCondition: _footCondition,
-                        ),
-                      ),
-                    );
-                  }
-                },
+                onPressed: _startScan,
                 style: FilledButton.styleFrom(
                   backgroundColor: AppConstants.accent,
                   foregroundColor: AppConstants.secondary,
@@ -291,6 +381,33 @@ class _FootInstructionsScreenState extends State<FootInstructionsScreen> {
         ],
       ),
     );
+  }
+
+  /// Navigate to the selected scan mode screen.
+  /// For AR modes, routes through wall calibration first.
+  void _startScan() {
+    if (_useLiveAr) {
+      // Wall calibration precedes both Guided Tap and Auto Scan.
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => FootWallCalibrationScreen(
+            footCondition: _footCondition,
+            shoeCategory: _shoeCategory,
+            smartAssistEnabled: _smartAssistEnabled,
+            arMode: _arMode,
+          ),
+        ),
+      );
+    } else {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => FootCaptureScreen(
+            paperSize: _paperSize,
+            footCondition: _footCondition,
+          ),
+        ),
+      );
+    }
   }
 
   Widget _buildHeader() {
@@ -319,8 +436,9 @@ class _FootInstructionsScreenState extends State<FootInstructionsScreen> {
               color: AppConstants.secondary,
             ),
           ),
-          const SizedBox(height: 8),                Text(
-                  'Tap a few points on your foot to measure it — no special hardware needed.',
+          const SizedBox(height: 8),
+          Text(
+            'Tap a few points on your foot to measure it — no special hardware needed.',
             textAlign: TextAlign.center,
             style: AppConstants.bodyStyle(
               fontSize: 14,
@@ -544,7 +662,110 @@ class _FootInstructionsScreenState extends State<FootInstructionsScreen> {
     );
   }
 
-  /// Smart-assist toggle card (Live AR only): auto-propose initial point
+  /// AR sub-mode card: Guided Tap vs Auto Scan.
+  Widget _buildArModeOption({
+    required ArMode mode,
+    required IconData icon,
+    required String label,
+    required String description,
+    required bool isSelected,
+  }) {
+    return GestureDetector(
+      onTap: () => setState(() => _arMode = mode),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isSelected ? AppConstants.accent.withValues(alpha: 0.08) : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? AppConstants.accent : AppConstants.borderGray.withValues(alpha: 0.5),
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Column(
+          children: [
+            Icon(
+              icon,
+              color: isSelected ? AppConstants.accent : AppConstants.secondary.withValues(alpha: 0.4),
+              size: 28,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              style: AppConstants.bodyStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: isSelected ? AppConstants.accent : AppConstants.secondary,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              description,
+              textAlign: TextAlign.center,
+              style: AppConstants.bodyStyle(
+                fontSize: 11,
+                color: AppConstants.secondary.withValues(alpha: 0.5),
+              ),
+            ),
+            if (mode == ArMode.guidedTap) ...[
+              const SizedBox(height: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppConstants.success.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  'Recommended',
+                  style: AppConstants.bodyStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: AppConstants.success,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Shoe category (men's / women's / kids') picker.
+  Widget _buildShoeCategoryOption({
+    required String key,
+    required String label,
+    required bool isSelected,
+  }) {
+    return GestureDetector(
+      onTap: () => setState(() => _shoeCategory = key),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: isSelected ? AppConstants.accent.withValues(alpha: 0.08) : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? AppConstants.accent : AppConstants.borderGray.withValues(alpha: 0.5),
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: AppConstants.bodyStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: isSelected ? AppConstants.accent : AppConstants.secondary,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Smart-assist toggle card (Guided Tap only): auto-propose initial point
   /// positions from the segmentation detector. Users who prefer full manual
   /// control can turn this off.
   Widget _buildSmartAssistToggle() {

@@ -13,7 +13,9 @@ import '../../utils/ar_foot_measurement_pipeline.dart';
 import '../../utils/foot_detector.dart';
 import '../../utils/foot_measurement_utils.dart';
 import '../../utils/mlkit_segmentation_foot_detector.dart';
+import 'foot_manual_measure_screen.dart';
 import 'foot_results_screen.dart';
+import 'foot_wall_calibration_screen.dart' show WallReference;
 
 /// Live AR foot scanning screen.
 ///
@@ -36,9 +38,17 @@ import 'foot_results_screen.dart';
 class FootArScanScreen extends StatefulWidget {
   final String footCondition; // 'bare' or 'socks'
 
+  /// Shopping preference for EU→US conversion ('men', 'women', 'kids').
+  final String shoeCategory;
+
+  /// Optional wall-floor reference plane captured during calibration.
+  final WallReference? wallReference;
+
   const FootArScanScreen({
     super.key,
     required this.footCondition,
+    this.shoeCategory = 'men',
+    this.wallReference,
   });
 
   @override
@@ -55,6 +65,11 @@ class _FootArScanScreenState extends State<FootArScanScreen>
   static const double _maxPlausibleLiveLengthCm = 40;
   static const double _minPlausibleLiveWidthCm = 4;
   static const double _maxPlausibleLiveWidthCm = 18;
+
+  // §8: Stall/fallback timeout — if no detection after this duration,
+  // prompt the user to switch to guided tap mode.
+  static const Duration _stallTimeout = Duration(seconds: 12);
+  Timer? _stallTimer;
 
   /// TEMP-DEBUG: stage-by-stage sample pipeline logging for the "Foot
   /// detected but 0 samples" diagnosis (§1 of ZERO_SAMPLES_DIAGNOSTIC_PROMPT).
@@ -196,6 +211,7 @@ class _FootArScanScreenState extends State<FootArScanScreen>
     _eventSubscription?.cancel();
     _sampleTimer?.cancel();
     _areaCheckTimer?.cancel();
+    _stallTimer?.cancel();
     _detector?.dispose();
     _pulseController.dispose();
     _progressController.dispose();
@@ -397,6 +413,18 @@ class _FootArScanScreenState extends State<FootArScanScreen>
     Timer(scanDuration, () {
       if (mounted && _scanActive) {
         _endScan();
+      }
+    });
+
+    // §8: Stall/fallback timer — if TemporalFootGate hasn't confirmed a
+    // detection within _stallTimeout, prompt the user to switch to tap mode.
+    _stallTimer?.cancel();
+    _stallTimer = Timer(_stallTimeout, () {
+      if (mounted && _scanActive && _validDetectionsThisPass == 0) {
+        setState(() {
+          _guidanceState = 'error';
+          _guidanceText = 'Having trouble detecting your foot? Try Guided Tap instead.';
+        });
       }
     });
   }
@@ -676,8 +704,23 @@ class _FootArScanScreenState extends State<FootArScanScreen>
     }
   }
 
+  /// §8: Stall fallback — navigate to Guided Tap mode carrying over the
+  /// already-selected foot/side/options so the user doesn't restart.
+  void _switchToGuidedTap() {
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => FootManualMeasureScreen(
+          footCondition: widget.footCondition,
+          shoeCategory: widget.shoeCategory,
+          smartAssistEnabled: true,
+        ),
+      ),
+    );
+  }
+
   void _endScan() {
     _sampleTimer?.cancel();
+    _stallTimer?.cancel();
     _progressController.stop();
 
     // ── §4/§1.3: If NO frame in this capture pass produced a shape-validated
@@ -794,11 +837,29 @@ class _FootArScanScreenState extends State<FootArScanScreen>
       return;
     }
 
-    // Use the larger foot for size recommendation (standard convention)
-    final lengthMm = _chooseLarger(leftResult?.lengthMm, rightResult?.lengthMm);
-    final euSize = footLengthMmToEuSize(lengthMm);
-    final usSize = euSize != null ? euToUs(euSize) : null;
+    // §4: Apply sock-thickness compensation.
+    final isSocks = widget.footCondition == 'socks';
+    final leftLengthComp = applySockCompensation(
+      leftResult?.lengthMm ?? 0, isLength: true, isSocks: isSocks);
+    final leftWidthComp = applySockCompensation(
+      leftResult?.widthMm ?? 0, isLength: false, isSocks: isSocks);
+    final rightLengthComp = applySockCompensation(
+      rightResult?.lengthMm ?? 0, isLength: true, isSocks: isSocks);
+    final rightWidthComp = applySockCompensation(
+      rightResult?.widthMm ?? 0, isLength: false, isSocks: isSocks);
+
+    // §3: Determine sizing foot (longer foot wins). Use compensated lengths.
+    final sizingSide = (leftLengthComp >= rightLengthComp) ? 'left' : 'right';
+    final sizingLengthMm = sizingSide == 'left' ? leftLengthComp : rightLengthComp;
+    final euSize = footLengthMmToEuSize(sizingLengthMm);
+    final usSize = euSize != null
+        ? euToUs(euSize, category: widget.shoeCategory)
+        : null;
     final ukSize = euSize != null ? euToUk(euSize) : null;
+
+    // §6: Width-to-fit category.
+    final sizingWidthMm = sizingSide == 'left' ? leftWidthComp : rightWidthComp;
+    final widthCategory = widthMmToFitCategory(sizingWidthMm, sizingLengthMm);
 
     // Compute overall confidence
     final leftConf = leftResult?.confidenceScore ?? 0.0;
@@ -807,6 +868,16 @@ class _FootArScanScreenState extends State<FootArScanScreen>
     final confLevel = overallConf >= 0.75 ? 'high'
         : overallConf >= 0.45 ? 'medium'
         : 'low';
+
+    // §A.4: Generate size recommendation reasoning.
+    final reason = euSize != null
+        ? generateSizeRecommendationReason(
+            compensatedLengthMm: sizingLengthMm,
+            euSize: euSize,
+            measurementSource: 'ar_auto_scan',
+            confidenceLevel: confLevel,
+          )
+        : null;
 
     if (!mounted) return;
 
@@ -821,7 +892,7 @@ class _FootArScanScreenState extends State<FootArScanScreen>
           euSize: euSize,
           usSize: usSize,
           ukSize: ukSize,
-          paperSize: 'ar', // Live AR scan
+          paperSize: 'ar',
           footCondition: widget.footCondition,
           paperConfidence: overallConf,
           lightingQuality: 0.9,
@@ -829,15 +900,19 @@ class _FootArScanScreenState extends State<FootArScanScreen>
           confidenceScore: overallConf,
           leftSampleCount: leftResult?.finalSampleCount ?? 0,
           rightSampleCount: rightResult?.finalSampleCount ?? 0,
+          // v2 fields
+          measurementSource: 'ar_auto_scan',
+          shoeCategory: widget.shoeCategory,
+          sizingFootSide: sizingSide,
+          widthCategory: widthCategory,
+          leftLengthComp: leftLengthComp,
+          leftWidthComp: leftWidthComp,
+          rightLengthComp: rightLengthComp,
+          rightWidthComp: rightWidthComp,
+          sizeRecommendationReason: reason,
         ),
       ),
     );
-  }
-
-  double _chooseLarger(double? a, double? b) {
-    if (a == null) return b ?? 0;
-    if (b == null) return a;
-    return a > b ? a : b;
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -1292,6 +1367,23 @@ class _FootArScanScreenState extends State<FootArScanScreen>
                     label: const Text('Try Again'),
                     style: FilledButton.styleFrom(
                       backgroundColor: AppConstants.accent,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 12,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                ],
+                // §8: Stall fallback — switch to Guided Tap mode
+                if (_validDetectionsThisPass == 0) ...[
+                  FilledButton.icon(
+                    onPressed: _switchToGuidedTap,
+                    icon: const Icon(Icons.touch_app_outlined, size: 18),
+                    label: const Text('Switch to Guided Tap'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppConstants.success,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(
                         horizontal: 24,

@@ -7,6 +7,10 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../constants/app_constants.dart';
 import 'foot_processing_screen.dart';
 
+/// TODO(paper-scan): This screen currently uses simulated measurements.
+/// The real paper detection CV pipeline (corner detection, foot segmentation,
+/// scale-factor computation) is not yet implemented.
+///
 /// Real camera capture screen for the AR foot sizing feature.
 ///
 /// Shows a live camera feed with guidance overlay for positioning

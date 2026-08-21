@@ -14,6 +14,7 @@ import '../../utils/foot_detector.dart';
 import '../../utils/foot_measurement_utils.dart';
 import '../../utils/mlkit_segmentation_foot_detector.dart';
 import 'foot_results_screen.dart';
+import 'foot_wall_calibration_screen.dart' show WallReference;
 
 /// Live AR manual tap-to-measure screen.
 ///
@@ -38,8 +39,7 @@ import 'foot_results_screen.dart';
 /// - Drag either point to adjust after placement — the distance label updates
 ///   live while dragging.
 /// - Trash icon clears/redoes the current pair; Confirm advances the flow.
-///
-/// Taps that don't hit a tracked surface show a brief "can't measure there"
+////// Taps that don't hit a tracked surface show a brief "can't measure there"
 /// message and don't register a point (§3.3).
 class FootManualMeasureScreen extends StatefulWidget {
   final String footCondition; // 'bare' or 'socks'
@@ -50,10 +50,20 @@ class FootManualMeasureScreen extends StatefulWidget {
   /// a toggle for this.
   final bool smartAssistEnabled;
 
+  /// Shopping preference for EU→US conversion ('men', 'women', 'kids').
+  final String shoeCategory;
+
+  /// Optional wall-floor reference plane captured during calibration.
+  /// When provided, measurements can be computed relative to this locked
+  /// reference instead of ARCore's live floor estimate (reduces drift).
+  final WallReference? wallReference;
+
   const FootManualMeasureScreen({
     super.key,
     required this.footCondition,
     this.smartAssistEnabled = true,
+    this.shoeCategory = 'men',
+    this.wallReference,
   });
 
   @override
@@ -71,13 +81,11 @@ class _ManualPoint {
 class _FootManualMeasureScreenState extends State<FootManualMeasureScreen>
     with TickerProviderStateMixin {
   // ── Plausibility bounds (cm) for the live readout and confirm guard ──
-  // A light sanity net only — the user places points deliberately, so the
-  // only hard validation is a valid surface hit (§3.4). These just catch
-  // obvious mistakes (e.g. heel/tip landing on the leg) without "scoring".
-  static const double _minPlausibleLengthCm = 10;
-  static const double _maxPlausibleLengthCm = 40;
-  static const double _minPlausibleWidthCm = 4;
-  static const double _maxPlausibleWidthCm = 18;
+  // Tiered: soft-warn (edge-case) and hard-reject (implausible) per §7.
+  static const double _minPlausibleLengthCm = kHardRejectMinLengthCm;
+  static const double _maxPlausibleLengthCm = kHardRejectMaxLengthCm;
+  static const double _minPlausibleWidthCm = kHardRejectMinWidthCm;
+  static const double _maxPlausibleWidthCm = kHardRejectMaxWidthCm;
 
   // ── ARCore State ──
   final ArCoreChannel _arCore = ArCoreChannel.instance;
@@ -116,6 +124,12 @@ class _FootManualMeasureScreenState extends State<FootManualMeasureScreen>
   /// phase already advanced to 1 and places B). The plausibility guard catches
   /// the ~0cm result at confirm, but this prevents the confusion outright.
   bool _placementInProgress = false;
+
+  /// Burst sampling: number of hitTest samples to fire per tap for jitter
+  /// smoothing. ~200ms window at typical frame rate.
+  static const int _burstSampleCount = 5;
+  /// Maximum spread (mm) across a burst sample before showing a soft hint.
+  static const double _burstSpreadHintMm = 4.0;
 
   // ── Smart-Assist (§6 of MANUAL_MEASUREMENT_PIVOT_PROMPT) ──
   // The paused automatic detection is reused as an optional suggestion layer:
@@ -404,17 +418,23 @@ class _FootManualMeasureScreenState extends State<FootManualMeasureScreen>
 
   /// Handle a tap on the preview. Places point A (phase 0) or point B
   /// (phase 1); ignores taps that don't hit a tracked surface (§3.3).
+  ///
+  /// §2 improvement: fires burst sampling (multiple hitTests at the same
+  /// coordinate, ~200ms window) and takes the median for jitter smoothing.
   Future<void> _handleTapAt(Offset local, Size viewSize) async {
     if (_guidanceState == 'error' || _guidanceState == 'initializing') return;
     if (_pairPhase == 2) return; // Locked — drag or confirm/trash
     if (_placementInProgress) return; // No overlapping placements
     _placementInProgress = true;
 
-    // No pre-gate on plane/area tracking (REMOVE_FLOOR_SCAN_WAIT): taps are
-    // available as soon as the session runs. A tap that misses a tracked
-    // surface falls through to the hitTest null → §3.3 message below, which
-    // coaches the user per-tap instead of blocking the whole screen.
-
+    // §2 Tracking-quality gate: reject taps when ARCore isn't tracking.
+    final trackingState = await _arCore.getTrackingState();
+    if (!mounted) { _placementInProgress = false; return; }
+    if (trackingState != ArTrackingState.tracking) {
+      _placementInProgress = false;
+      _showFeedback('Move phone slowly — tracking is limited');
+      return;
+    }
 
     final normalized = mapViewToNormalized(
       local,
@@ -422,17 +442,37 @@ class _FootManualMeasureScreenState extends State<FootManualMeasureScreen>
       frameWidth: _uprightW,
       frameHeight: _uprightH,
     );
-    final world = await _arCore.hitTest(x: normalized.dx, y: normalized.dy);
-    if (!mounted) {
-      _placementInProgress = false;
-      return;
-    }
 
-    if (world == null) {
+    // §2 Burst sampling: fire multiple hitTests at the same coordinate
+    // across a ~200ms window, then take the median world point.
+    final worldPoints = <ArWorldPoint>[];
+    for (int i = 0; i < _burstSampleCount; i++) {
+      final hit = await _arCore.hitTest(x: normalized.dx, y: normalized.dy);
+      if (hit != null) worldPoints.add(hit);
+      // Small delay between samples (except after the last one)
+      if (i < _burstSampleCount - 1) {
+        await Future.delayed(const Duration(milliseconds: 40));
+      }
+    }
+    if (!mounted) { _placementInProgress = false; return; }
+
+    if (worldPoints.isEmpty) {
       _placementInProgress = false;
       _showFeedback(
           "Can't measure there — tap on the tracked floor near your foot");
       return;
+    }
+
+    // Take the median of the burst samples for jitter smoothing.
+    final world = _medianWorldPoint(worldPoints);
+
+    // §2 Burst spread check: if the spread exceeds _burstSpreadHintMm,
+    // show a soft "hold steady" hint — never blocks the flow.
+    if (worldPoints.length >= 3) {
+      final spread = _burstSpreadMm(worldPoints);
+      if (spread > _burstSpreadHintMm) {
+        _showFeedback('Hold steady — detected some movement');
+      }
     }
 
     setState(() {
@@ -457,6 +497,35 @@ class _FootManualMeasureScreenState extends State<FootManualMeasureScreen>
       }
     });
     _placementInProgress = false;
+  }
+
+  /// Compute the median world point from a list of burst samples.
+  /// Averages each coordinate independently for robustness.
+  ArWorldPoint _medianWorldPoint(List<ArWorldPoint> points) {
+    if (points.length == 1) return points[0];
+    final xs = points.map((p) => p.x).toList()..sort();
+    final ys = points.map((p) => p.y).toList()..sort();
+    final zs = points.map((p) => p.z).toList()..sort();
+    final ds = points.map((p) => p.distanceFromCamera).toList()..sort();
+    final mid = points.length ~/ 2;
+    final medianX = points.length.isOdd ? xs[mid] : (xs[mid - 1] + xs[mid]) / 2;
+    final medianY = points.length.isOdd ? ys[mid] : (ys[mid - 1] + ys[mid]) / 2;
+    final medianZ = points.length.isOdd ? zs[mid] : (zs[mid - 1] + zs[mid]) / 2;
+    final medianD = points.length.isOdd ? ds[mid] : (ds[mid - 1] + ds[mid]) / 2;
+    return ArWorldPoint(x: medianX, y: medianY, z: medianZ, distanceFromCamera: medianD);
+  }
+
+  /// Compute the max spread (mm) across burst samples.
+  double _burstSpreadMm(List<ArWorldPoint> points) {
+    if (points.length < 2) return 0;
+    double maxDist = 0;
+    for (int i = 0; i < points.length; i++) {
+      for (int j = i + 1; j < points.length; j++) {
+        final d = points[i].distanceTo(points[j]) * 1000; // meters → mm
+        if (d > maxDist) maxDist = d;
+      }
+    }
+    return maxDist;
   }
 
   /// §2.3 live measurement: while placing point B, poll the ARCore hitTest at
@@ -803,11 +872,40 @@ class _FootManualMeasureScreenState extends State<FootManualMeasureScreen>
       return;
     }
 
-    // Use the larger foot for size recommendation (standard convention).
-    final lengthMm = _chooseLarger(leftLength, rightLength);
-    final euSize = footLengthMmToEuSize(lengthMm);
-    final usSize = euSize != null ? euToUs(euSize) : null;
+    // §4: Apply sock-thickness compensation to raw measurements.
+    final isSocks = widget.footCondition == 'socks';
+    final leftLengthComp = applySockCompensation(
+      leftLength ?? 0, isLength: true, isSocks: isSocks);
+    final leftWidthComp = applySockCompensation(
+      _leftWidthMm ?? 0, isLength: false, isSocks: isSocks);
+    final rightLengthComp = applySockCompensation(
+      rightLength ?? 0, isLength: true, isSocks: isSocks);
+    final rightWidthComp = applySockCompensation(
+      _rightWidthMm ?? 0, isLength: false, isSocks: isSocks);
+
+    // §3: Determine sizing foot (longer foot wins). Use compensated lengths.
+    final sizingSide = (leftLengthComp >= rightLengthComp) ? 'left' : 'right';
+
+    // Use the sizing foot's compensated length for EU size lookup.
+    final sizingLengthMm = sizingSide == 'left' ? leftLengthComp : rightLengthComp;
+    final euSize = footLengthMmToEuSize(sizingLengthMm);
+    final usSize = euSize != null
+        ? euToUs(euSize, category: widget.shoeCategory)
+        : null;
     final ukSize = euSize != null ? euToUk(euSize) : null;
+
+    // §6: Width-to-fit category from sizing foot's compensated dimensions.
+    final sizingWidthMm = sizingSide == 'left' ? leftWidthComp : rightWidthComp;
+    final widthCategory = widthMmToFitCategory(sizingWidthMm, sizingLengthMm);
+
+    // §A.4: Generate size recommendation reasoning.
+    final reason = euSize != null
+        ? generateSizeRecommendationReason(
+            compensatedLengthMm: sizingLengthMm,
+            euSize: euSize,
+            measurementSource: 'ar_guided_tap',
+          )
+        : null;
 
     if (!mounted) return;
 
@@ -822,22 +920,24 @@ class _FootManualMeasureScreenState extends State<FootManualMeasureScreen>
           euSize: euSize,
           usSize: usSize,
           ukSize: ukSize,
-          paperSize: 'ar', // Live AR measurement
+          paperSize: 'ar',
           footCondition: widget.footCondition,
           paperConfidence: 1.0,
           lightingQuality: 0.9,
-          // Manual flow: no automatic confidence scoring — the results screen
-          // shows the honesty framing instead of a confidence card (§2.6).
           manualMode: true,
+          // v2 fields
+          measurementSource: 'ar_guided_tap',
+          shoeCategory: widget.shoeCategory,
+          sizingFootSide: sizingSide,
+          widthCategory: widthCategory,
+          leftLengthComp: leftLengthComp,
+          leftWidthComp: leftWidthComp,
+          rightLengthComp: rightLengthComp,
+          rightWidthComp: rightWidthComp,
+          sizeRecommendationReason: reason,
         ),
       ),
     );
-  }
-
-  double _chooseLarger(double? a, double? b) {
-    if (a == null) return b ?? 0;
-    if (b == null) return a;
-    return a > b ? a : b;
   }
 
   // ═══════════════════════════════════════════════════════════════

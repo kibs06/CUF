@@ -6,6 +6,11 @@ import '../../constants/app_constants.dart';
 import '../../utils/foot_measurement_utils.dart';
 import 'foot_results_screen.dart';
 
+/// TODO(paper-scan): This screen currently uses SIMULATED measurements
+/// and a SIMULATED timer-based detection progression. The real CV pipeline
+/// (paper corner detection, foot segmentation, scale-factor computation)
+/// is not yet implemented. Do not ship this as a working feature.
+///
 /// Processing screen that runs the ML pipeline on a captured foot image.
 ///
 /// This screen:

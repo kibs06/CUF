@@ -32,18 +32,26 @@ class FootResultsScreen extends StatefulWidget {
   final double paperConfidence;
   final double lightingQuality;
 
-  // Live AR confidence (§7 of the implementation prompt)
+  // Live AR confidence
   final String? confidenceLevel; // 'high', 'medium', 'low'
   final double? confidenceScore; // 0.0–1.0
   final int? leftSampleCount;
   final int? rightSampleCount;
 
-  /// True when the measurement came from the MANUAL tap-to-measure flow
-  /// (MANUAL_MEASUREMENT_PIVOT_PROMPT). No automatic confidence scoring
-  /// exists in that flow — instead of a confidence card, the results screen
-  /// shows an honesty/trust framing: the values are based on where the user
-  /// placed the points, and they can redo any that don't look right (§2.6).
+  /// True when the measurement came from the MANUAL tap-to-measure flow.
+  /// No automatic confidence scoring — shows honesty/trust framing instead.
   final bool manualMode;
+
+  // ── v2 fields ──
+  final String measurementSource; // 'ar_guided_tap', 'ar_auto_scan', 'paper'
+  final String? shoeCategory;     // 'men', 'women', 'kids'
+  final String? sizingFootSide;   // 'left' | 'right'
+  final String? widthCategory;    // 'narrow' | 'standard' | 'wide'
+  final double? leftLengthComp;   // sock-compensated
+  final double? leftWidthComp;
+  final double? rightLengthComp;
+  final double? rightWidthComp;
+  final String? sizeRecommendationReason;
 
   const FootResultsScreen({
     super.key,
@@ -64,6 +72,15 @@ class FootResultsScreen extends StatefulWidget {
     this.leftSampleCount,
     this.rightSampleCount,
     this.manualMode = false,
+    this.measurementSource = 'paper',
+    this.shoeCategory,
+    this.sizingFootSide,
+    this.widthCategory,
+    this.leftLengthComp,
+    this.leftWidthComp,
+    this.rightLengthComp,
+    this.rightWidthComp,
+    this.sizeRecommendationReason,
   });
 
   @override
@@ -109,11 +126,23 @@ class _FootResultsScreenState extends State<FootResultsScreen> {
       footWidthLeftMm: _isDualFoot ? widget.footWidthMm : (widget.footSide == 'left' ? widget.footWidthMm : null),
       footLengthRightMm: _isDualFoot ? widget.footLengthRightMm : (widget.footSide == 'right' ? widget.footLengthMm : null),
       footWidthRightMm: _isDualFoot ? widget.footWidthRightMm : (widget.footSide == 'right' ? widget.footWidthMm : null),
+      // v2: compensated measurements
+      footLengthLeftCompensatedMm: widget.leftLengthComp,
+      footWidthLeftCompensatedMm: widget.leftWidthComp,
+      footLengthRightCompensatedMm: widget.rightLengthComp,
+      footWidthRightCompensatedMm: widget.rightWidthComp,
       recommendedEuSize: widget.euSize,
       recommendedUsSize: widget.usSize,
       recommendedUkSize: widget.ukSize,
+      // v2: sizing metadata
+      sizingFootSide: widget.sizingFootSide,
+      recommendedWidthCategory: widget.widthCategory,
+      measurementSource: widget.measurementSource,
+      algorithmVersion: 'v2',
+      sizeRecommendationReason: widget.sizeRecommendationReason,
       paperSizeUsed: widget.paperSize,
       footCondition: widget.footCondition,
+      shoeCategory: widget.shoeCategory,
       userAdjustedEuSize: _hasAdjusted ? _selectedEuSize : null,
       paperDetectionConfidence: widget.paperConfidence,
       lightingQuality: widget.lightingQuality,
@@ -221,6 +250,12 @@ class _FootResultsScreenState extends State<FootResultsScreen> {
                   const SizedBox(height: 24),
                 ],
 
+                // ── Size Recommendation Reasoning ──
+                if (widget.sizeRecommendationReason != null) ...[
+                  _buildReasoningCard(widget.sizeRecommendationReason!),
+                  const SizedBox(height: 24),
+                ],
+
                 // ── Measurement Details ──
                 _buildSectionTitle('Measurement Details'),
                 const SizedBox(height: 12),
@@ -230,10 +265,36 @@ class _FootResultsScreenState extends State<FootResultsScreen> {
                   _buildFootMeasurements('Right Foot', widget.footLengthRightMm ?? 0, widget.footWidthRightMm ?? 0),
                   const SizedBox(height: 8),
                   _buildMeasurementRow(
-                    label: 'Larger Foot Used',
-                    value: widget.footLengthMm >= (widget.footLengthRightMm ?? 0) ? 'Left' : 'Right',
+                    label: 'Sizing Foot',
+                    value: widget.sizingFootSide != null
+                        ? '${widget.sizingFootSide == 'left' ? 'Left' : 'Right'} (longer foot)'
+                        : (widget.footLengthMm >= (widget.footLengthRightMm ?? 0) ? 'Left' : 'Right'),
                     subValue: '',
                   ),
+                  // §A.3: Asymmetry callout
+                  if (_isDualFoot && widget.footLengthRightMm != null) ...[
+                    ..._buildAsymmetryCallout(),
+                  ],
+                  if (widget.widthCategory != null) ...[
+                    const SizedBox(height: 4),
+                    _buildMeasurementRow(
+                      label: 'Width Category',
+                      value: widget.widthCategory!.toUpperCase(),
+                      subValue: '',
+                    ),
+                  ],
+                  if (widget.measurementSource.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    _buildMeasurementRow(
+                      label: 'Measurement Source',
+                      value: widget.measurementSource == 'ar_guided_tap'
+                          ? 'AR Guided Tap'
+                          : widget.measurementSource == 'ar_auto_scan'
+                              ? 'AR Auto Scan'
+                              : 'Paper Scan',
+                      subValue: '',
+                    ),
+                  ],
                 ] else ...[
                   _buildMeasurementRow(
                     label: '${widget.footSide == 'left' ? 'Left' : 'Right'} Foot Length',
@@ -370,7 +431,7 @@ class _FootResultsScreenState extends State<FootResultsScreen> {
   Widget _buildSizeCard() {
     final displayEu = _selectedEuSize ?? widget.euSize ?? '—';
     final displayUs = _hasAdjusted && _selectedEuSize != null
-        ? euToUs(_selectedEuSize!)
+        ? euToUs(_selectedEuSize!, category: widget.shoeCategory ?? 'men')
         : widget.usSize;
     final displayUk = _hasAdjusted && _selectedEuSize != null
         ? euToUk(_selectedEuSize!)
@@ -449,6 +510,89 @@ class _FootResultsScreenState extends State<FootResultsScreen> {
         ],
       ),
     );
+  }
+
+  /// §A.4: Human-readable reasoning for the size recommendation.
+  Widget _buildReasoningCard(String reason) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppConstants.accent.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppConstants.accent.withValues(alpha: 0.2),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.lightbulb_outline, color: AppConstants.accent, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              reason,
+              style: AppConstants.bodyStyle(
+                fontSize: 13,
+                color: AppConstants.secondary.withValues(alpha: 0.8),
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// §A.3: Show foot asymmetry when the difference exceeds the threshold.
+  List<Widget> _buildAsymmetryCallout() {
+    const thresholdMm = 2.0;
+    final left = widget.footLengthMm;
+    final right = widget.footLengthRightMm ?? 0;
+    final diff = (left - right).abs();
+
+    if (diff <= thresholdMm) return [];
+
+    final longer = left > right ? 'left' : 'right';
+    final shorter = left > right ? 'right' : 'left';
+    final diffCm = (diff / 10).toStringAsFixed(1);
+
+    return [
+      const SizedBox(height: 8),
+      Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppConstants.accent.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: AppConstants.accent.withValues(alpha: 0.15),
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              Icons.compare_arrows,
+              size: 16,
+              color: AppConstants.accent,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Your $longer foot is ${diffCm}cm longer than your $shorter foot — '
+                'we\'ve sized to your larger foot for the best fit.',
+                style: AppConstants.bodyStyle(
+                  fontSize: 12,
+                  color: AppConstants.secondary.withValues(alpha: 0.7),
+                  height: 1.4,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ];
   }
 
   /// Honesty/trust framing for manual-mode results (§2.6 of the pivot brief):

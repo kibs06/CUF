@@ -5,6 +5,9 @@
 /// - Pixels-to-millimeters conversion using known paper dimensions
 /// - Foot outline segmentation (pixel bounding box → mm)
 /// - EU/US/UK shoe size chart mapping
+/// - Sock-thickness compensation
+/// - Width-to-fit category
+/// - Plausibility guards (soft-warn / hard-reject tiers)
 /// - Safety margin application
 ///
 /// All functions are deterministic and independently testable.
@@ -263,14 +266,33 @@ String? footLengthMmToEuSize(double footLengthMm) {
   return null;
 }
 
-/// Convert an EU size string to a US Men's size.
+/// Convert an EU size string to a US size with category-specific offset.
 ///
-/// Standard approximation: US Men ≈ EU - 33 (for adult sizes).
-String? euToUs(String euSize) {
+/// Offsets sourced from standard conversion charts:
+/// - Men: EU - 33
+/// - Women: EU - 31.5 (women's US runs ~1.5 sizes higher for same EU)
+/// - Kids: EU - 33 (same as men's for kids' sizes)
+///
+/// TODO(human-review): Verify these offset values against an authoritative
+/// conversion chart. The women's offset is approximate and may need per-range tuning.
+String? euToUs(String euSize, {String category = 'men'}) {
   final eu = double.tryParse(euSize);
   if (eu == null) return null;
-  final usMen = (eu - 33).round();
-  return '$usMen';
+  double offset;
+  switch (category) {
+    case 'women':
+      offset = 31.5;
+      break;
+    case 'kids':
+      offset = 33.0;
+      break;
+    case 'men':
+    default:
+      offset = 33.0;
+      break;
+  }
+  final us = (eu - offset).round();
+  return '$us';
 }
 
 /// Convert an EU size string to a UK size.
@@ -281,6 +303,185 @@ String? euToUk(String euSize) {
   if (eu == null) return null;
   final uk = (eu - 33.5).round();
   return '$uk';
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SIZE RECOMMENDATION REASONING
+// ═══════════════════════════════════════════════════════════════════
+
+/// Minimum distance (mm) from a size boundary to consider the measurement
+/// "near" a boundary rather than clearly within a size range.
+const double kBoundaryProximityMm = 2.0;
+
+/// Generate a human-readable reason for the EU size recommendation.
+///
+/// [compensatedLengthMm] is the post-sock-compensation foot length used
+/// for the EU lookup. [euSize] is the recommended EU size string.
+/// [measurementSource] is 'ar_guided_tap', 'ar_auto_scan', or 'paper'.
+/// [confidenceLevel] is 'high', 'medium', or 'low' (nullable for manual).
+///
+/// Returns an honest reasoning string based on what the data actually supports.
+String generateSizeRecommendationReason({
+  required double compensatedLengthMm,
+  required String euSize,
+  required String measurementSource,
+  String? confidenceLevel,
+}) {
+  final eu = double.tryParse(euSize);
+  if (eu == null) return 'Based on your measurement, we recommend EU $euSize.';
+
+  // Find the size boundary this EU size sits on, and the next size down.
+  // EU sizes are 1 unit apart; the threshold for this size is
+  // (eu - comfort_allowance_offset) mapped back to mm.
+  // We use the size chart: each EU size spans ~6.67mm (2/3 cm).
+  // The lower bound for this EU size is when (length + 8mm) enters this size's range.
+  final sizeLowerBoundMm = eu * (20.0 / 3.0) - comfortAllowanceMm;
+  final prevSizeLowerBoundMm = (eu - 1) * (20.0 / 3.0) - comfortAllowanceMm;
+
+  // Distance from the lower boundary of the current size
+  final distanceFromLowerBound = compensatedLengthMm - sizeLowerBoundMm;
+  // Distance from the upper boundary of the previous size
+  final distanceFromPrevUpper = compensatedLengthMm - prevSizeLowerBoundMm;
+
+  final cmStr = (compensatedLengthMm / 10).toStringAsFixed(1);
+
+  // Near a boundary?
+  final nearPrevBoundary = distanceFromPrevUpper.abs() < kBoundaryProximityMm;
+
+  // Auto-scan with high confidence: prefer confidence-based phrasing
+  if (measurementSource == 'ar_auto_scan' && confidenceLevel == 'high') {
+    if (nearPrevBoundary && eu > 35) {
+      return 'You\'re close to the line between EU ${(eu - 1).round()} and EU $euSize '
+          '($cmStr cm) — based on a steady scan with high confidence, we recommend EU $euSize, '
+          'but if you prefer a snugger fit, EU ${(eu - 1).round()} may also work.';
+    }
+    return 'Based on a steady scan with high measurement confidence, we recommend EU $euSize '
+        '($cmStr cm).';
+  }
+
+  // Near a size boundary: mention the adjacent size
+  if (nearPrevBoundary && eu > 35) {
+    return 'You\'re close to the line between EU ${(eu - 1).round()} and EU $euSize '
+        '($cmStr cm) — if you prefer a snugger fit, EU ${(eu - 1).round()} may also work.';
+  }
+
+  // Clear fit, no boundary proximity
+  final pastBoundary = distanceFromLowerBound > 0
+      ? distanceFromLowerBound.toStringAsFixed(1)
+      : '0.0';
+  if (distanceFromLowerBound > 1.0) {
+    return 'Your foot measures $cmStr cm — that\'s ${pastBoundary}mm past the EU $euSize '
+        'threshold, so we\'ve rounded up for room to move.';
+  }
+
+  return 'Based on your measurement ($cmStr cm), we recommend EU $euSize.';
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SOCK-THICKNESS COMPENSATION (§4)
+// ═══════════════════════════════════════════════════════════════════
+
+/// Sock thickness offset for length measurement (mm).
+/// When the user scans with socks, the measured length includes the sock
+/// material. Subtract this to approximate bare-foot length for sizing.
+const double kSockLengthOffsetMm = 3.0;
+
+/// Sock thickness offset for width measurement (mm).
+/// Socks add less width than length (foot compresses laterally in socks).
+const double kSockWidthOffsetMm = 2.0;
+
+/// Apply sock-thickness compensation to a raw measurement.
+///
+/// [rawMm] is the measured value in millimeters.
+/// [isLength] distinguishes length (larger offset) from width (smaller offset).
+/// [isSocks] is true when `foot_condition == 'socks'`.
+///
+/// Returns the compensated measurement (raw minus sock offset if applicable).
+double applySockCompensation(double rawMm, {required bool isLength, required bool isSocks}) {
+  if (!isSocks) return rawMm;
+  return rawMm - (isLength ? kSockLengthOffsetMm : kSockWidthOffsetMm);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// WIDTH → FIT CATEGORY (§6)
+// ═══════════════════════════════════════════════════════════════════
+
+/// Width-to-length ratio thresholds for fit category.
+/// Ratios below 0.36 indicate a narrow foot; above 0.42 indicate a wide foot.
+///
+/// TODO(human-review): These thresholds are starting points. If the project
+/// has existing sizing chart data or reference tables for width categories,
+/// use those instead and adjust.
+const double kNarrowWidthRatioThreshold = 0.36;
+const double kWideWidthRatioThreshold = 0.42;
+
+/// Classify a foot width measurement into a fit category.
+///
+/// Uses a width-to-length ratio rather than a flat width threshold,
+/// so the category scales sensibly across foot sizes.
+///
+/// [widthMm] and [lengthMm] should be the COMPENSATED (post-sock) values
+/// from the sizing foot.
+///
+/// Returns 'narrow', 'standard', or 'wide'.
+String widthMmToFitCategory(double widthMm, double lengthMm) {
+  if (lengthMm <= 0) return 'standard'; // Guard against division by zero
+  final ratio = widthMm / lengthMm;
+  if (ratio < kNarrowWidthRatioThreshold) return 'narrow';
+  if (ratio > kWideWidthRatioThreshold) return 'wide';
+  return 'standard';
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PLAUSIBILITY GUARDS (§7 — soft-warn / hard-reject tiers)
+// ═══════════════════════════════════════════════════════════════════
+
+/// Hard-reject bounds (cm). Measurements outside these are discarded.
+const double kHardRejectMinLengthCm = 12;
+const double kHardRejectMaxLengthCm = 34;
+const double kHardRejectMinWidthCm = 4.5;
+const double kHardRejectMaxWidthCm = 15;
+
+/// Soft-warn bounds (cm). Measurements outside these but within hard-reject
+/// trigger a "does this look right?" confirmation step.
+const double kSoftWarnMinLengthCm = 15;
+const double kSoftWarnMaxLengthCm = 30;
+const double kSoftWarnMinWidthCm = 6;
+const double kSoftWarnMaxWidthCm = 13.5;
+
+/// Result of a plausibility check on a measurement.
+enum PlausibilityResult {
+  /// Measurement is within normal bounds — accept silently.
+  ok,
+
+  /// Measurement is edge-case but plausible — show confirmation step.
+  softWarn,
+
+  /// Measurement is implausible — reject and prompt retry.
+  hardReject,
+}
+
+/// Check a measurement (length or width) against the two-tier plausibility
+/// bounds.
+///
+/// [valueCm] is the measurement in centimeters.
+/// [isLength] distinguishes length from width bounds.
+///
+/// Returns [PlausibilityResult.ok], [PlausibilityResult.softWarn], or
+/// [PlausibilityResult.hardReject].
+PlausibilityResult checkPlausibility(double valueCm, {required bool isLength}) {
+  final minHard = isLength ? kHardRejectMinLengthCm : kHardRejectMinWidthCm;
+  final maxHard = isLength ? kHardRejectMaxLengthCm : kHardRejectMaxWidthCm;
+  final minSoft = isLength ? kSoftWarnMinLengthCm : kSoftWarnMinWidthCm;
+  final maxSoft = isLength ? kSoftWarnMaxLengthCm : kSoftWarnMaxWidthCm;
+
+  if (valueCm < minHard || valueCm > maxHard) {
+    return PlausibilityResult.hardReject;
+  }
+  if (valueCm < minSoft || valueCm > maxSoft) {
+    return PlausibilityResult.softWarn;
+  }
+  return PlausibilityResult.ok;
 }
 
 // ═══════════════════════════════════════════════════════════════════
