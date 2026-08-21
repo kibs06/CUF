@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../constants/app_constants.dart';
 import '../providers/product_provider.dart';
+import '../screens/customer/buy_again_screen.dart';
 import '../screens/customer/product_detail_screen.dart';
 import 'horizontal_product_card.dart';
 
@@ -86,12 +87,40 @@ class BuyAgainSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Buy Again',
-          style: AppConstants.bodyStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.bold,
-          ),
+        // ── Header with "View Details >" link ──
+        Row(
+          children: [
+            Text(
+              'Buy Again',
+              style: AppConstants.bodyStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const Spacer(),
+            GestureDetector(
+              onTap: () => _openAll(context),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'View Details',
+                    style: AppConstants.bodyStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: AppConstants.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.chevron_right,
+                    size: 18,
+                    color: AppConstants.primary,
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 10),
         SizedBox(
@@ -117,6 +146,18 @@ class BuyAgainSection extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  /// Navigate to the full-screen purchased products grid.
+  void _openAll(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => BuyAgainScreen(
+          orders: orders,
+          onProductOpened: onProductOpened,
+        ),
+      ),
     );
   }
 }

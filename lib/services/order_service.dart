@@ -341,13 +341,15 @@ class OrderService {
   }
 
   /// Fetch all orders for the currently logged-in customer.
-  /// Returns orders with their items (product name, size, quantity) joined.
+  /// Returns orders with their items (product name, size, quantity) joined,
+  /// plus the store name for display in order cards.
   Future<List<Map<String, dynamic>>> fetchMyOrders() async {
     final data = await _client
         .from('orders')
         .select(
           'id, customer_id, status, total_amount, payment_method, '
           'payment_status, created_at, store_id, '
+          'stores(name), '
           'order_items(id, product_id, size, quantity, unit_price, '
           'products(name, category, product_images(image_url, display_order)))',
         )
