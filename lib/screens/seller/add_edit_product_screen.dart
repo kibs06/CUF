@@ -3921,7 +3921,7 @@ class _PresetChipSelectorState extends State<_PresetChipSelector> {
                 decoration: InputDecoration(
                   counterText: '',
                   isDense: true,
-                  hintText: widget.otherHint,
+                  hintText: 'Add your own…',
                   filled: true,
                   fillColor: Colors.white,
                   contentPadding:
@@ -4271,13 +4271,11 @@ typedef _ColorPreset = ({String name, Color color});
 class _ColorSwatchPicker extends StatefulWidget {
   final String initialValue;
   final List<_ColorPreset> presets;
-  final String otherHint;
   final ValueChanged<String> onChanged;
 
   const _ColorSwatchPicker({
     required this.initialValue,
     required this.presets,
-    this.otherHint = 'Add your own…',
     required this.onChanged,
   });
 
@@ -4422,7 +4420,7 @@ class _ColorSwatchPickerState extends State<_ColorSwatchPicker> {
                 decoration: InputDecoration(
                   counterText: '',
                   isDense: true,
-                  hintText: widget.otherHint,
+                  hintText: 'Add your own…',
                   filled: true,
                   fillColor: Colors.white,
                   contentPadding:
@@ -4707,7 +4705,7 @@ class _SizeMultiSelectorState extends State<_SizeMultiSelector> {
                 decoration: InputDecoration(
                   counterText: '',
                   isDense: true,
-                  hintText: widget.otherHint,
+                  hintText: 'Add your own…',
                   filled: true,
                   fillColor: Colors.white,
                   contentPadding:
@@ -4855,7 +4853,7 @@ class _VariantGuideOverlayState extends State<_VariantGuideOverlay>
               child: CustomPaint(
                 painter: _SpotlightPainter(
                   target: rect,
-                  overlayColor: Colors.black.withOpacity(0.65),
+                  overlayColor: Colors.black.withValues(alpha: 0.65),
                   borderColor: AppConstants.primary,
                 ),
               ),
@@ -4878,7 +4876,7 @@ class _VariantGuideOverlayState extends State<_VariantGuideOverlay>
                 padding:
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.92),
+                  color: Colors.white.withValues(alpha: 0.92),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Text(
@@ -4905,7 +4903,7 @@ class _VariantGuideOverlayState extends State<_VariantGuideOverlay>
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.15),
+            color: Colors.black.withValues(alpha: 0.15),
             blurRadius: 24,
             offset: const Offset(0, 8),
           ),
