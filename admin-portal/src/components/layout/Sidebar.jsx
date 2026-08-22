@@ -15,6 +15,7 @@ import {
   BarChart2,
   Settings,
   LogOut,
+  Image,
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -26,6 +27,7 @@ const NAV_ITEMS = [
   { to: '/transactions', label: 'Transactions', icon: Wallet },
   { to: '/reports', label: 'Reports', icon: Flag },
   { to: '/analytics', label: 'Analytics', icon: BarChart2 },
+  { to: '/banners', label: 'Banners', icon: Image },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
 

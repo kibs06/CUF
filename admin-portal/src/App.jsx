@@ -11,6 +11,7 @@ import Transactions from './pages/Transactions.jsx'
 import Reports from './pages/Reports.jsx'
 import Analytics from './pages/Analytics.jsx'
 import Settings from './pages/Settings.jsx'
+import Banners from './pages/Banners.jsx'
 
 export default function App() {
   return (
@@ -26,6 +27,7 @@ export default function App() {
           <Route path="transactions" element={<Transactions />} />
           <Route path="reports" element={<Reports />} />
           <Route path="analytics" element={<Analytics />} />
+          <Route path="banners" element={<Banners />} />
           <Route path="settings" element={<Settings />} />
         </Route>
       </Route>

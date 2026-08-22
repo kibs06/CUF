@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../utils/sale_price.dart';
 import '../../utils/product_grid_ratio.dart';
 import '../../constants/app_constants.dart';
+import '../../providers/banner_provider.dart';
 import '../../providers/cart_provider.dart';
 import '../../providers/message_provider.dart';
 import '../../providers/product_provider.dart';
@@ -22,6 +23,7 @@ import 'product_detail_screen.dart';
 import 'tracking_screen.dart';
 import 'my_reports_screen.dart';
 import 'widgets/home_hero.dart';
+import 'widgets/home_sticky_search_bar.dart';
 
 class CustomerHomeScreen extends StatefulWidget {
   const CustomerHomeScreen({super.key});
@@ -34,7 +36,9 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   final GlobalKey _catalogKey = GlobalKey();
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
+  final ScrollController _scrollController = ScrollController();
   String _searchKeyword = '';
+  bool _isHeroVisible = true;
   StreamSubscription? _connectivitySub;
   bool _wasOffline = false;
 
@@ -44,11 +48,16 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<ProductProvider>(context, listen: false)
           .loadProducts(hideOutOfStock: true);
+      // Load banners for the hero carousel
+      Provider.of<BannerProvider>(context, listen: false).loadBanners();
       // Load conversations for the floating message button badge
       _loadConversations();
       // Set up push notification deep link handler
       _initPushNotifications();
     });
+
+    // Track scroll position to show/hide the pinned search bar
+    _scrollController.addListener(_onScroll);
 
     // Auto-refresh products when connection is restored after being offline
     _wasOffline = !ConnectivityService.instance.isOnline;
@@ -57,6 +66,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       if (isOnline && _wasOffline && mounted) {
         Provider.of<ProductProvider>(context, listen: false)
             .loadProducts(hideOutOfStock: true);
+        Provider.of<BannerProvider>(context, listen: false).loadBanners();
       }
       _wasOffline = !isOnline;
     });
@@ -64,10 +74,22 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
 
   @override
   void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
     _connectivitySub?.cancel();
     _searchController.dispose();
     _searchFocusNode.dispose();
     super.dispose();
+  }
+
+  /// Show the sticky search bar once the hero (340px) has scrolled out of view.
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final heroHeight = 340.0;
+    final show = _scrollController.offset < heroHeight - 52;
+    if (show != _isHeroVisible) {
+      setState(() => _isHeroVisible = show);
+    }
   }
 
   Future<void> _loadConversations() async {
@@ -234,9 +256,14 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           RefreshIndicator(
             color: AppConstants.primary,
             onRefresh: () async {
-              await Provider.of<ProductProvider>(context, listen: false)
-                  .loadProducts(hideOutOfStock: true);
+              await Future.wait([
+                Provider.of<ProductProvider>(context, listen: false)
+                    .loadProducts(hideOutOfStock: true),
+                Provider.of<BannerProvider>(context, listen: false)
+                    .loadBanners(),
+              ]);
             },              child: CustomScrollView(
+              controller: _scrollController,
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
                 // ── Hero (full-bleed, extends behind status bar) ──
@@ -252,24 +279,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                       Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) => const CartScreen(),
-                        ),
-                      );
-                    },
-                    onCtaTap: () {
-                      // Scroll down to the product catalog
-                      final ctx = _catalogKey.currentContext;
-                      if (ctx != null) {
-                        Scrollable.ensureVisible(
-                          ctx,
-                          duration: const Duration(milliseconds: 500),
-                          curve: Curves.easeOut,
-                        );
-                      }
-                    },
-                    onProductTap: (product) {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => ProductDetailScreen(product: product),
                         ),
                       );
                     },
@@ -481,6 +490,21 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
               ],
             ),
           ),
+
+          // Pinned search bar — appears once hero scrolls out of view
+          if (!_isHeroVisible)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: HomeStickySearchBar(
+                searchController: _searchController,
+                searchFocusNode: _searchFocusNode,
+                onSearchChanged: (val) {
+                  setState(() => _searchKeyword = val);
+                },
+              ),
+            ),
 
           // Floating chat button — only on Home tab
           const FloatingMessageButton(),

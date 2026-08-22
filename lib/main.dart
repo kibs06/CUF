@@ -22,6 +22,7 @@ import 'providers/review_provider.dart';
 import 'providers/foot_measurement_provider.dart';
 import 'providers/update_provider.dart';
 import 'providers/sale_tag_provider.dart';
+import 'providers/banner_provider.dart';
 import 'services/store_service.dart';
 import 'screens/auth/splash_screen.dart';
 import 'screens/customer/gcash_payment_screen.dart';
@@ -125,6 +126,7 @@ class CUFMAIApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => FootMeasurementProvider()),
         ChangeNotifierProvider(create: (_) => UpdateProvider()),
         ChangeNotifierProvider(create: (_) => SaleTagProvider()),
+        ChangeNotifierProvider(create: (_) => BannerProvider()),
       ],
       child: MaterialApp(
         title: 'CUFMAI',

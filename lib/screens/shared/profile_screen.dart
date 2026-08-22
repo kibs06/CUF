@@ -335,26 +335,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
         automaticallyImplyLeading: false,
         actions: [
           IconButton(
-            // Sellers: the gear opens Payment Methods (GCash QR setup) — the
-            // most-used settings action. Other roles get the placeholder.
-            onPressed: () {
-              if (auth.userRole == AppConstants.roleSeller) {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const GcashPaymentSettingsScreen(),
-                  ),
-                );
-              } else {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const SettingsScreen(),
-                  ),
-                );
-              }
-            },
-            tooltip: auth.userRole == AppConstants.roleSeller
-                ? 'Payment Methods'
-                : 'Settings',
+            // Sellers: the gear is non-functional for now.
+            // Other roles still navigate to Settings.
+            onPressed: auth.userRole == AppConstants.roleSeller
+                ? null
+                : () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const SettingsScreen(),
+                      ),
+                    );
+                  },
+            tooltip: 'Settings',
             icon: const Icon(
               Icons.settings_outlined,
               color: AppConstants.secondary,

@@ -33,6 +33,18 @@ export const ORDER_STATUSES = [
   'cancelled',
 ]
 
+export const BANNER_LINK_TYPES = [
+  { value: 'none', label: 'No link' },
+  { value: 'category', label: 'Category' },
+  { value: 'product', label: 'Product' },
+  { value: 'url', label: 'URL' },
+]
+
+export const BANNER_CATEGORIES = [
+  'Boots', 'Sandals', 'Sneakers', 'Formal', 'Casual',
+  'Slip-ons', 'Sports', 'Heels', 'Loafers', 'Mules', 'Platforms',
+]
+
 export const PAYMENT_INTENT_STATUSES = [
   'pending',
   'succeeded',

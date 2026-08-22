@@ -183,5 +183,5 @@ $$;
 GRANT EXECUTE ON FUNCTION public.reject_deletion_request(uuid, text) TO authenticated;
 
 COMMENT ON FUNCTION public.reject_deletion_request(uuid, text) IS
-  'Admin-only: rejects a pending deletion request. The user\'s account
+  'Admin-only: rejects a pending deletion request. The users account
    remains active.';
