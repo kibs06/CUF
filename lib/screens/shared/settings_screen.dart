@@ -4,8 +4,12 @@ import 'package:provider/provider.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/update_provider.dart';
+import '../../services/supabase_service.dart';
+import '../auth/account_entry_screen.dart';
 import '../customer/address_book_screen.dart';
 import '../customer/foot_instructions_screen.dart';
+import 'account_security_screen.dart';
+import 'account_switcher_screen.dart';
 import 'help_menu_screen.dart';
 import 'terms_privacy_screen.dart';
 import 'whats_new_screen.dart';
@@ -49,6 +53,18 @@ class SettingsScreen extends StatelessWidget {
             _buildSection([
               _settingsRow(
                 context: context,
+                icon: Icons.security_outlined,
+                title: 'Account & Security',
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const AccountSecurityScreen(),
+                    ),
+                  );
+                },
+              ),
+              _settingsRow(
+                context: context,
                 icon: Icons.straighten_outlined,
                 title: 'Get Your Foot Size',
                 onTap: () {
@@ -73,9 +89,9 @@ class SettingsScreen extends StatelessWidget {
               ),
               _settingsRow(
                 context: context,
-                icon: Icons.lock_outline,
-                title: 'Change Password',
-                onTap: () => _sendReset(context, auth),
+                icon: Icons.swap_horiz,
+                title: 'Switch Account',
+                onTap: () => _openSwitchAccount(context),
               ),
             ]),
             const SizedBox(height: 16),
@@ -83,6 +99,18 @@ class SettingsScreen extends StatelessWidget {
             // ── Legal Section ────────────────────────────────────
             _sectionHeader('Legal'),
             _buildSection([
+              _settingsRow(
+                context: context,
+                icon: Icons.info_outline,
+                title: 'About CUFMAI',
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const AboutCufmaiScreen(),
+                    ),
+                  );
+                },
+              ),
               _settingsRow(
                 context: context,
                 icon: Icons.description_outlined,
@@ -103,12 +131,13 @@ class SettingsScreen extends StatelessWidget {
               ),
               _settingsRow(
                 context: context,
-                icon: Icons.info_outline,
-                title: 'About CUFMAI',
+                icon: Icons.new_releases_outlined,
+                title: "What's New",
+                subtitle: installedVersion != null ? 'v$installedVersion' : null,
                 onTap: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) => const AboutCufmaiScreen(),
+                      builder: (_) => const WhatsNewScreen(),
                     ),
                   );
                 },
@@ -133,16 +162,9 @@ class SettingsScreen extends StatelessWidget {
               ),
               _settingsRow(
                 context: context,
-                icon: Icons.new_releases_outlined,
-                title: "What's New",
-                subtitle: installedVersion != null ? 'v$installedVersion' : null,
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const WhatsNewScreen(),
-                    ),
-                  );
-                },
+                icon: Icons.delete_outline,
+                title: 'Request Account Deletion',
+                onTap: () => _confirmAccountDeletion(context, auth),
               ),
             ]),
             const SizedBox(height: 32),
@@ -255,23 +277,6 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  // ── Password reset ───────────────────────────────────────────
-  Future<void> _sendReset(BuildContext context, AuthProvider auth) async {
-    final success = await auth.resetPassword(auth.displayEmail);
-    if (!context.mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          success
-              ? 'Password reset email sent to ${auth.displayEmail}'
-              : auth.errorMessage ?? 'Unable to send reset email.',
-        ),
-        backgroundColor: success ? AppConstants.success : AppConstants.error,
-      ),
-    );
-  }
-
   // ── Logout confirm ───────────────────────────────────────────
   Future<void> _confirmLogout(BuildContext context, AuthProvider auth) async {
     final confirm = await showDialog<bool>(
@@ -297,6 +302,94 @@ class SettingsScreen extends StatelessWidget {
 
     if (confirm == true) {
       await auth.logout();
+    }
+  }
+
+  // ── Account deletion confirm ──────────────────────────────────
+  Future<void> _confirmAccountDeletion(BuildContext context, AuthProvider auth) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Request Account Deletion'),
+        content: const Text(
+          'Are you sure you want to request account deletion?\n\n'
+          'This will permanently remove all your data including:\n'
+          '• Profile information\n'
+          '• Orders and purchase history\n'
+          '• Saved addresses\n'
+          '• Foot sizing data\n\n'
+          'This action cannot be undone.\n'
+          'Please contact support if you need assistance.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text(
+              'Request Deletion',
+              style: TextStyle(color: AppConstants.error),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      if (!context.mounted) return;
+
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const Center(child: CircularProgressIndicator()),
+      );
+
+      try {
+        final result = await SupabaseService.instance.requestAccountDeletion();
+        if (!context.mounted) return;
+        Navigator.of(context).pop(); // dismiss loading
+
+        final success = result['success'] == true;
+        final message = result['message'] as String? ?? 'Something went wrong';
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: success ? null : AppConstants.error,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      } catch (e) {
+        if (!context.mounted) return;
+        Navigator.of(context).pop(); // dismiss loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: AppConstants.error,
+          ),
+        );
+      }
+    }
+  }
+
+  // ── Switch Account ───────────────────────────────────────────
+  Future<void> _openSwitchAccount(BuildContext context) async {
+    final result = await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const AccountSwitcherScreen(),
+      ),
+    );
+
+    // If 'add_account' was returned, navigate to login
+    if (result == 'add_account' && context.mounted) {
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const AccountEntryScreen(),
+        ),
+      );
     }
   }
 }

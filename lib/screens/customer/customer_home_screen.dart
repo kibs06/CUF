@@ -6,7 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../utils/sale_price.dart';
 import '../../utils/product_grid_ratio.dart';
 import '../../constants/app_constants.dart';
-import '../../providers/auth_provider.dart';
+import '../../providers/cart_provider.dart';
 import '../../providers/message_provider.dart';
 import '../../providers/product_provider.dart';
 import '../../services/connectivity_service.dart';
@@ -15,12 +15,13 @@ import '../../widgets/floating_message_button.dart';
 import '../../widgets/no_internet_view.dart';
 import '../../widgets/sole_product_card.dart';
 import '../../widgets/shimmer_group.dart';
-import '../../widgets/cart_icon_button.dart';
 import '../../widgets/customer_foot_profile_banner.dart';
 import '../../widgets/chat/chat_view.dart';
+import 'cart_screen.dart';
 import 'product_detail_screen.dart';
 import 'tracking_screen.dart';
 import 'my_reports_screen.dart';
+import 'widgets/home_hero.dart';
 
 class CustomerHomeScreen extends StatefulWidget {
   const CustomerHomeScreen({super.key});
@@ -30,38 +31,19 @@ class CustomerHomeScreen extends StatefulWidget {
 }
 
 class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
+  final GlobalKey _catalogKey = GlobalKey();
   final TextEditingController _searchController = TextEditingController();
-  final PageController _bannerController = PageController();
-  int _bannerIndex = 0;
-  Timer? _bannerTimer;
+  final FocusNode _searchFocusNode = FocusNode();
   String _searchKeyword = '';
   StreamSubscription? _connectivitySub;
   bool _wasOffline = false;
-
-  // Featured items mock data for the banner PageView
-  final List<Map<String, String>> _featuredArrivals = [
-    {
-      'title': 'The Carcar Craft Revolution',
-      'subtitle': 'Discover vegetable-tanned custom designs',
-      'image': 'https://images.unsplash.com/photo-1549298916-b41d501d3772?q=80&w=800&auto=format&fit=crop',
-    },
-    {
-      'title': 'Signature Cordwainer Series',
-      'subtitle': 'Double welted artisan soles built for steps',
-      'image': 'https://images.unsplash.com/photo-1533867617858-e7b97e060509?q=80&w=800&auto=format&fit=crop',
-    },
-    {
-      'title': 'Summertime Leather Sandals',
-      'subtitle': 'Crafted using sustainable leather cuts',
-      'image': 'https://images.unsplash.com/photo-1543163521-1bf539c55dd2?q=80&w=800&auto=format&fit=crop',
-    }
-  ];
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<ProductProvider>(context, listen: false).loadProducts(hideOutOfStock: true);
+      Provider.of<ProductProvider>(context, listen: false)
+          .loadProducts(hideOutOfStock: true);
       // Load conversations for the floating message button badge
       _loadConversations();
       // Set up push notification deep link handler
@@ -70,25 +52,13 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
 
     // Auto-refresh products when connection is restored after being offline
     _wasOffline = !ConnectivityService.instance.isOnline;
-    _connectivitySub = ConnectivityService.instance.isOnlineStream.listen((isOnline) {
+    _connectivitySub =
+        ConnectivityService.instance.isOnlineStream.listen((isOnline) {
       if (isOnline && _wasOffline && mounted) {
-        Provider.of<ProductProvider>(context, listen: false).loadProducts(hideOutOfStock: true);
+        Provider.of<ProductProvider>(context, listen: false)
+            .loadProducts(hideOutOfStock: true);
       }
       _wasOffline = !isOnline;
-    });
-
-    // Auto-scroll PageView banner every 4 seconds
-    _bannerTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
-      if (_bannerController.hasClients) {
-        setState(() {
-          _bannerIndex = (_bannerIndex + 1) % _featuredArrivals.length;
-        });
-        _bannerController.animateToPage(
-          _bannerIndex,
-          duration: const Duration(milliseconds: 600),
-          curve: Curves.easeInOut,
-        );
-      }
     });
   }
 
@@ -96,8 +66,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   void dispose() {
     _connectivitySub?.cancel();
     _searchController.dispose();
-    _bannerController.dispose();
-    _bannerTimer?.cancel();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 
@@ -117,7 +86,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
 
   /// Set up the push notification deep-link handlers.
   void _initPushNotifications() {
-    PushNotificationService.instance.onNavigateToChat = (conversationId, storeName) {
+    PushNotificationService.instance.onNavigateToChat =
+        (conversationId, storeName) {
       if (!mounted) return;
       Navigator.of(context).push(
         MaterialPageRoute(
@@ -130,7 +100,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       );
     };
 
-    PushNotificationService.instance.onNavigateToScreen = (screen, referenceId) {
+    PushNotificationService.instance.onNavigateToScreen =
+        (screen, referenceId) {
       if (!mounted) return;
       switch (screen) {
         case 'order_tracking':
@@ -207,16 +178,22 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                   child: ListTile(
                     dense: true,
                     leading: Icon(
-                      isActive ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-                      color: isActive ? AppConstants.primary : AppConstants.borderGray,
+                      isActive
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_unchecked,
+                      color:
+                          isActive ? AppConstants.primary : AppConstants.borderGray,
                       size: 20,
                     ),
                     title: Text(
                       sortModeLabel(mode),
                       style: AppConstants.bodyStyle(
                         fontSize: 14,
-                        fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-                        color: isActive ? AppConstants.primary : AppConstants.secondary,
+                        fontWeight:
+                            isActive ? FontWeight.bold : FontWeight.normal,
+                        color: isActive
+                            ? AppConstants.primary
+                            : AppConstants.secondary,
                       ),
                     ),
                     onTap: () {
@@ -235,436 +212,273 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthProvider>();
     final productProvider = context.watch<ProductProvider>();
-    final filteredProducts = productProvider.getFilteredProducts(_searchKeyword);
+    final cartCount = context.select<CartProvider, int>((p) => p.itemCount);
+    final allProducts = productProvider.products;
+    final filteredProducts =
+        productProvider.getFilteredProducts(_searchKeyword);
     // Products currently on sale — powers the dedicated "On Sale" sliver.
-    final saleProducts = productProvider.products.where(isOnSale).toList();
+    final saleProducts =
+        allProducts.where(isOnSale).toList();
 
     return Scaffold(
       backgroundColor: AppConstants.surfaceLight,
-      appBar: AppBar(
-        title: Text(
-          'CUFMAI',
-          style: AppConstants.headlineStyle(fontSize: 20),
-        ),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        automaticallyImplyLeading: false,
-        actions: const [CartIconButton()],
-      ),
+      // No AppBar — the HomeHero provides its own icon row that bleeds
+      // behind the status bar for the full-bleed effect.
       body: Stack(
         children: [
+          // Noise texture overlay (base layer)
           AppConstants.noiseOverlay(opacity: 0.03),
-          SafeArea(
-            child: RefreshIndicator(
-              color: AppConstants.primary,
-              onRefresh: () async {
-                await Provider.of<ProductProvider>(context, listen: false).loadProducts(hideOutOfStock: true);
-              },              child: CustomScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                slivers: [
-                // Top section: Greeting + Search Pinned
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Continue Browsing chip (Change 6b)
-                        Text(
-                          'Good morning, ${auth.displayName.split(" ").first} 👋',
-                          style: AppConstants.bodyStyle(
-                            fontSize: 14,
-                            color: AppConstants.secondary.withValues(alpha: 0.6),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        
-                        // Search bar
-                        TextField(
-                          controller: _searchController,
-                          onChanged: (val) {
-                            setState(() {
-                              _searchKeyword = val;
-                            });
-                          },
-                          style: AppConstants.bodyStyle(fontSize: 15),
-                          decoration: InputDecoration(
-                            hintText: 'Search products or tags — handmade, leather, boots…',
-                            hintStyle: AppConstants.bodyStyle(
-                              fontSize: 14,
-                              color: AppConstants.secondary.withValues(alpha: 0.4),
-                            ),
-                            filled: true,
-                            fillColor: Colors.white,
-                            prefixIcon: const Icon(Icons.search, color: AppConstants.primary, size: 20),
-                            suffixIcon: _searchKeyword.isNotEmpty
-                                ? IconButton(
-                                    icon: const Icon(Icons.clear, size: 18),
-                                    onPressed: () {
-                                      setState(() {
-                                        _searchController.clear();
-                                        _searchKeyword = '';
-                                      });
-                                    },
-                                  )
-                                : null,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(30),
-                              borderSide: BorderSide.none,
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(30),
-                              borderSide: BorderSide.none,
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(30),
-                              borderSide: const BorderSide(color: AppConstants.primary, width: 1.5),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
 
-                // Foot-profile reminder (skipped/incomplete profiles only).
-                // Quiet, dismissible-for-session, never a pop-up — one
-                // placement on the home screen.
+          // Main scrollable content: hero behind, sheet overlapping on top
+          RefreshIndicator(
+            color: AppConstants.primary,
+            onRefresh: () async {
+              await Provider.of<ProductProvider>(context, listen: false)
+                  .loadProducts(hideOutOfStock: true);
+            },              child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                // ── Hero (full-bleed, extends behind status bar) ──
                 SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-                    child: const CustomerFootProfileBanner(),
-                  ),
-                ),
-
-                // Category selection scrollbar
-                SliverToBoxAdapter(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    child: Row(
-                      children: productProvider.categories.map((cat) {
-                        final isSelected = productProvider.selectedCategory == cat;
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                          child: ChoiceChip(
-                            label: Text(
-                              cat,
-                              style: AppConstants.bodyStyle(
-                                fontSize: 13,
-                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                color: isSelected ? AppConstants.surfaceLight : AppConstants.secondary,
-                              ),
-                            ),
-                            selected: isSelected,
-                            showCheckmark: false,
-                            onSelected: (selected) {
-                              if (selected) {
-                                productProvider.selectCategory(cat);
-                              }
-                            },
-                            selectedColor: AppConstants.primary,
-                            backgroundColor: Colors.white,
-                            side: BorderSide(
-                              color: isSelected ? Colors.transparent : AppConstants.borderGray.withValues(alpha: 0.4),
-                              width: 1,
-                            ),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                          ),
+                  child: HomeHero(
+                    cartCount: cartCount,
+                    searchController: _searchController,
+                    searchFocusNode: _searchFocusNode,
+                    onSearchChanged: (val) {
+                      setState(() => _searchKeyword = val);
+                    },
+                    onCartTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const CartScreen(),
+                        ),
+                      );
+                    },
+                    onCtaTap: () {
+                      // Scroll down to the product catalog
+                      final ctx = _catalogKey.currentContext;
+                      if (ctx != null) {
+                        Scrollable.ensureVisible(
+                          ctx,
+                          duration: const Duration(milliseconds: 500),
+                          curve: Curves.easeOut,
                         );
-                      }).toList(),
-                    ),
+                      }
+                    },
+                    onProductTap: (product) {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => ProductDetailScreen(product: product),
+                        ),
+                      );
+                    },
                   ),
                 ),
 
-                // On Sale section — dedicated masonry sliver. Shown only in
-                // the default browse state (no search, no category filter):
-                // when the 'On Sale' chip is selected the grid below already
-                // shows all sale items, so the sliver would duplicate it.
-                if (_searchKeyword.isEmpty &&
-                    saleProducts.isNotEmpty &&
-                    (productProvider.selectedCategory == null ||
-                        productProvider.selectedCategory == 'All')) ...[
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 10),
-                      child: Row(
-                        children: [
-                          Text(
-                            'On Sale',
-                            style: AppConstants.headlineStyle(fontSize: 16),
-                          ),
-                          const SizedBox(width: 10),
-                          const _PriceTagBadge(label: 'HOT DEALS'),
-                        ],
-                      ),
+                // ── Sheet (overlaps hero bottom, rounded top corners) ──
+                SliverToBoxAdapter(
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(22),
                     ),
-                  ),
-                  SliverPadding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    // NOTE: deliberately a plain SliverGrid, NOT masonry.
-                    // Two SliverMasonryGrids in one CustomScrollView trigger a
-                    // scroll-offset-correction loop in flutter_staggered_grid_view
-                    // 0.7.0 that yanks the viewport back partway down the page
-                    // — making the bottom of a long catalog unreachable. The
-                    // catalog grid below keeps masonry; this small section uses
-                    // a deterministic grid (exact extent, no estimation).
-                    // Cards omit imageAspectRatio so the image is an Expanded
-                    // fill — the card adapts to any cell height without
-                    // overflowing.
-                    sliver: SliverGrid(
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        crossAxisSpacing: 16,
-                        mainAxisSpacing: 16,
-                        // 0.58 ≈ the catalog masonry cards' average image
-                        // height, so the two sections read similarly.
-                        childAspectRatio: 0.58,
-                      ),
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                          final prod = saleProducts[index];
-                          return SoleProductCard(
-                            product: prod,
-                            onTap: () {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (context) =>
-                                      ProductDetailScreen(product: prod),
-                                ),
-                              );
-                            },
-                          );
-                        },
-                        childCount: saleProducts.length,
-                      ),
-                    ),
-                  ),
-                  const SliverToBoxAdapter(child: SizedBox(height: 16)),
-                ],
-
-                // Featured PageView Banner (when search query is empty)
-                if (_searchKeyword.isEmpty)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                    child: ColoredBox(
+                      color: AppConstants.surfaceLight,
                       child: Column(
                         children: [
-                          Container(
-                            height: 160,
-                            decoration: BoxDecoration(
-                              borderRadius: AppConstants.cardRadius,
-                              boxShadow: AppConstants.warmShadow,
-                            ),
-                            child: ClipRRect(
-                              borderRadius: AppConstants.cardRadius,
-                              child: Stack(
+                          const SizedBox(height: 6),
+
+                          // Foot-profile reminder (conditional)
+                          const Padding(
+                            padding: EdgeInsets.fromLTRB(20, 4, 20, 8),
+                            child: CustomerFootProfileBanner(),
+                          ),
+
+                          // ── On Sale section ──
+                          if (_searchKeyword.isEmpty &&
+                              saleProducts.isNotEmpty &&
+                              (productProvider.selectedCategory == null ||
+                                  productProvider.selectedCategory ==
+                                      'All')) ...[
+                            Padding(
+                              padding:
+                                  const EdgeInsets.fromLTRB(20, 4, 20, 10),
+                              child: Row(
                                 children: [
-                                  PageView.builder(
-                                    controller: _bannerController,
-                                    onPageChanged: (index) {
-                                      setState(() {
-                                        _bannerIndex = index;
-                                      });
-                                    },
-                                    itemCount: _featuredArrivals.length,
-                                    itemBuilder: (context, index) {
-                                      final item = _featuredArrivals[index];
-                                      return Stack(
-                                        fit: StackFit.expand,
-                                        children: [
-                                          Image.network(
-                                            item['image']!,
-                                            fit: BoxFit.cover,
-                                          ),
-                                          // Dark gradient overlay
-                                          Container(
-                                            decoration: BoxDecoration(
-                                              gradient: LinearGradient(
-                                                colors: [
-                                                  Colors.black.withValues(alpha: 0.6),
-                                                  Colors.black.withValues(alpha: 0.1),
-                                                ],
-                                                begin: Alignment.bottomCenter,
-                                                end: Alignment.topCenter,
-                                              ),
-                                            ),
-                                          ),
-                                          // Banner texts
-                                          Positioned(
-                                            bottom: 16,
-                                            left: 20,
-                                            right: 20,
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  item['title']!,
-                                                  style: AppConstants.headlineStyle(
-                                                    fontSize: 20,
-                                                    color: AppConstants.surfaceLight,
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 4),
-                                                Text(
-                                                  item['subtitle']!,
-                                                  style: AppConstants.bodyStyle(
-                                                    fontSize: 12,
-                                                    color: AppConstants.surfaceLight.withValues(alpha: 0.8),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ],
-                                      );
-                                    },
+                                  Text(
+                                    'On Sale',
+                                    style: AppConstants.headlineStyle(
+                                        fontSize: 16),
                                   ),
+                                  const SizedBox(width: 10),
+                                  const _PriceTagBadge(label: 'HOT DEALS'),
                                 ],
                               ),
                             ),
-                          ),
-                          const SizedBox(height: 8),
-                          // Dots Indicator
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: List.generate(_featuredArrivals.length, (index) {
-                              return AnimatedContainer(
-                                duration: const Duration(milliseconds: 300),
-                                width: _bannerIndex == index ? 16 : 6,
-                                height: 6,
-                                margin: const EdgeInsets.symmetric(horizontal: 2.0),
-                                decoration: BoxDecoration(
-                                  color: _bannerIndex == index
-                                      ? AppConstants.primary
-                                      : AppConstants.borderGray,
-                                  borderRadius: BorderRadius.circular(3),
+                            Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 20),
+                              // NOTE: deliberately a plain SliverGrid, NOT masonry.
+                              // Two SliverMasonryGrids in one CustomScrollView trigger a
+                              // scroll-offset-correction loop in flutter_staggered_grid_view
+                              // 0.7.0 that yanks the viewport back partway down the page
+                              // — making the bottom of a long catalog unreachable. The
+                              // catalog grid below keeps masonry; this small section uses
+                              // a deterministic grid (exact extent, no estimation).
+                              child: GridView.builder(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                gridDelegate:
+                                    const SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 2,
+                                  crossAxisSpacing: 16,
+                                  mainAxisSpacing: 16,
+                                  childAspectRatio: 0.58,
                                 ),
-                              );
-                            }),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                const SliverToBoxAdapter(child: SizedBox(height: 20)),
-
-                // Product Grid header
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            _searchKeyword.isEmpty ? 'Artisan Catalog' : 'Search Results',
-                            style: AppConstants.headlineStyle(fontSize: 20),
-                          ),
-                        ),
-                        GestureDetector(
-                          onTap: () => _showSortSheet(context),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: AppConstants.primary.withValues(alpha: 0.08),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: AppConstants.primary.withValues(alpha: 0.15),
+                                itemCount: saleProducts.length,
+                                itemBuilder: (context, index) {
+                                  final prod = saleProducts[index];
+                                  return SoleProductCard(
+                                    product: prod,
+                                    onTap: () {
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              ProductDetailScreen(
+                                                  product: prod),
+                                        ),
+                                      );
+                                    },
+                                  );
+                                },
                               ),
                             ),
+                            const SizedBox(height: 16),
+                          ],
+
+                          // ── Catalog header + sort ──
+                          Padding(
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 20.0),
                             child: Row(
-                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(
-                                  Icons.sort_outlined,
-                                  size: 14,
-                                  color: AppConstants.primary,
+                                Expanded(
+                                  child:                                  Text(
+                                    'Artisan Catalog',
+                                    style: AppConstants.headlineStyle(
+                                        fontSize: 20),
+                                  ),
                                 ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  sortModeLabel(productProvider.sortMode),
-                                  style: AppConstants.bodyStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppConstants.primary,
+                                GestureDetector(
+                                  onTap: () => _showSortSheet(context),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 10, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: AppConstants.primary
+                                          .withValues(alpha: 0.08),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: AppConstants.primary
+                                            .withValues(alpha: 0.15),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.sort_outlined,
+                                          size: 14,
+                                          color: AppConstants.primary,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          sortModeLabel(
+                                              productProvider.sortMode),
+                                          style: AppConstants.bodyStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                            color: AppConstants.primary,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
 
-                const SliverToBoxAdapter(child: SizedBox(height: 12)),
-
-                // Catalog Grid — skeleton product cards while loading
-                if (productProvider.isLoading)
-                  ConnectivityService.instance.isOnline
-                      ? const SliverToBoxAdapter(
-                          child: _CatalogSkeletonGrid(),
-                        )
-                      : SliverFillRemaining(
-                          hasScrollBody: false,
-                          child: NoInternetView(
-                            onRetry: () => Provider.of<ProductProvider>(
-                                context,
-                                listen: false)
-                                .loadProducts(hideOutOfStock: true),
-                          ),
-                        )
-                else if (filteredProducts.isEmpty)
-                  SliverFillRemaining(
-                    child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.search_off, size: 48, color: AppConstants.primary.withValues(alpha: 0.5)),
                           const SizedBox(height: 12),
-                          Text(
-                            'No shoes match your criteria.',
-                            style: AppConstants.bodyStyle(color: AppConstants.secondary.withValues(alpha: 0.6)),
-                          ),
+
+                          // ── Product grid ──
+                          if (productProvider.isLoading)
+                            ConnectivityService.instance.isOnline
+                                ? const _CatalogSkeletonGrid()
+                                : NoInternetView(
+                                    onRetry: () =>
+                                        Provider.of<ProductProvider>(
+                                            context,
+                                            listen: false)
+                                            .loadProducts(
+                                                hideOutOfStock: true),
+                                  )
+                          else if (allProducts.isEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 48),
+                              child: Column(
+                                children: [
+                                  Icon(Icons.search_off,
+                                      size: 48,
+                                      color: AppConstants.primary
+                                          .withValues(alpha: 0.5)),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    'No shoes match your criteria.',
+                                    style: AppConstants.bodyStyle(
+                                        color: AppConstants.secondary
+                                            .withValues(alpha: 0.6)),
+                                  ),
+                                ],
+                              ),
+                            )
+                          else
+                            MasonryGridView.count(
+                              key: _catalogKey,
+                              crossAxisCount: 2,
+                              crossAxisSpacing: 16,
+                              mainAxisSpacing: 16,
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 20),
+                              physics: const NeverScrollableScrollPhysics(),
+                              shrinkWrap: true,
+                              itemCount: filteredProducts.length,
+                              itemBuilder: (context, index) {
+                                final prod = filteredProducts[index];
+                                return SoleProductCard(
+                                  product: prod,
+                                  imageAspectRatio: productGridRatio(prod),
+                                  onTap: () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            ProductDetailScreen(
+                                                product: prod),
+                                      ),
+                                    );
+                                  },
+                                );
+                              },
+                            ),
+
+                          // Bottom spacing for nav bar
+                          const SizedBox(height: 100),
                         ],
                       ),
                     ),
-                  )
-                else
-                  SliverPadding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    sliver: SliverMasonryGrid.count(
-                      crossAxisCount: 2,
-                      crossAxisSpacing: 16,
-                      mainAxisSpacing: 16,
-                      childCount: filteredProducts.length,
-                      itemBuilder: (context, index) {
-                        final prod = filteredProducts[index];
-                        return SoleProductCard(
-                          product: prod,
-                          imageAspectRatio: productGridRatio(prod),
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (context) => ProductDetailScreen(product: prod),
-                              ),
-                            );
-                          },
-                        );
-                      },
-                    ),
                   ),
-
-                // Spacing bottom
-                const SliverToBoxAdapter(child: SizedBox(height: 80)),
+                ),
               ],
-            ),
             ),
           ),
 
@@ -674,6 +488,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       ),
     );
   }
+
 }
 
 /// A price-tag shaped badge (punched hole + pointed right edge) used to
@@ -796,4 +611,3 @@ class _CatalogSkeletonGrid extends StatelessWidget {
     );
   }
 }
-

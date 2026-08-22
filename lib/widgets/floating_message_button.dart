@@ -52,7 +52,9 @@ class _FloatingMessageButtonState extends State<FloatingMessageButton>
   static const double _buttonSize = 50;
   static const double _badgeSize = 18;
   static const double _edgePadding = 12;
-  static const double _appBarHeight = kToolbarHeight; // 56dp
+  // No AppBar on the home screen (full-bleed hero redesign), so the
+  // button must not subtract AppBar height from its position calc.
+  static const double _appBarHeight = 0;
   static const String _prefsKey = 'floating_chat_button_position';
 
   @override

@@ -372,6 +372,15 @@ class AuthService {
     await _client.auth.resetPasswordForEmail(email.trim());
   }
 
+  /// Update the user's email address.
+  ///
+  /// Supabase sends a confirmation link to the new email. The email won't
+  /// actually change until the user clicks that link. Throws if the user
+  /// is not signed in or the new email is already taken.
+  Future<void> updateEmail(String newEmail) async {
+    await _client.auth.updateUser(UserAttributes(email: newEmail.trim()));
+  }
+
   Future<void> signOut() async {
     await _client.auth.signOut();
   }

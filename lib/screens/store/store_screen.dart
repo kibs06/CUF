@@ -27,6 +27,11 @@ class _StoreScreenState extends State<StoreScreen> {
   int _focusedIndex = 0;
   bool _isLoading = true;
 
+  // ── Cached per-store index (avoids O(n) scan on every build) ──
+  List<Map<String, dynamic>> _indexedFrom = const [];
+  Map<String, int> _productCounts = {};
+  Map<String, List<Map<String, dynamic>>> _topPicksByStore = {};
+
   @override
   void initState() {
     super.initState();
@@ -56,33 +61,37 @@ class _StoreScreenState extends State<StoreScreen> {
     });
   }
 
-  /// Build product count map from all products.
-  Map<String, int> _buildProductCounts(List<Map<String, dynamic>> products) {
+  /// Rebuild the per-store product index only when the list reference changes.
+  void _reindexIfNeeded(List<Map<String, dynamic>> products) {
+    if (identical(products, _indexedFrom)) return;
+
     final counts = <String, int>{};
+    final byStore = <String, List<Map<String, dynamic>>>{};
+
     for (final p in products) {
-      final storeId = p['store_id'] as String? ?? '';
+      final storeId = p['store_id']?.toString() ?? '';
       counts[storeId] = (counts[storeId] ?? 0) + 1;
+      byStore.putIfAbsent(storeId, () => []).add(p);
     }
-    return counts;
+    for (final list in byStore.values) {
+      list.sort((a, b) => '${b['id']}'.compareTo('${a['id']}'));
+    }
+
+    _indexedFrom = products;
+    _productCounts = counts;
+    _topPicksByStore = byStore;
   }
 
   @override
   Widget build(BuildContext context) {
-    final productProvider = context.watch<ProductProvider>();
-    final allProducts = productProvider.products;
-    final productCounts = _buildProductCounts(allProducts);
+    final allProducts = context.select<ProductProvider, List<Map<String, dynamic>>>(
+      (p) => p.products,
+    );
+    _reindexIfNeeded(allProducts);
 
-    // Top picks: newest products from the focused store only
-    final focusedStoreId = _stores.isNotEmpty
-        ? _stores[_focusedIndex].id
-        : '';
-    final topPicks = allProducts
-        .where((p) => p['store_id']?.toString() == focusedStoreId)
-        .toList()
-      ..sort((a, b) => '${b['id']}'.compareTo('${a['id']}'));
-    final topPicksLimited = topPicks.length > 12
-        ? topPicks.sublist(0, 12)
-        : topPicks;
+    final focusedStoreId = _stores.isNotEmpty ? _stores[_focusedIndex].id : '';
+    final topPicks = _topPicksByStore[focusedStoreId] ?? const [];
+    final topPicksLimited = topPicks.length > 12 ? topPicks.sublist(0, 12) : topPicks;
 
     return Scaffold(
       backgroundColor: AppConstants.surfaceLight,
@@ -130,14 +139,14 @@ class _StoreScreenState extends State<StoreScreen> {
                         pageController: _pageController,
                         onStoreChanged: _onStoreChanged,
                         currentIndex: _focusedIndex,
-                        productCounts: productCounts,
+                        productCounts: _productCounts,
                       ),
 
                       // Section 2 — Focused Store Info Strip
                       StoreFocusedInfo(
                         store: _stores[_focusedIndex],
                         productCount:
-                            productCounts[_stores[_focusedIndex].id] ?? 0,
+                            _productCounts[_stores[_focusedIndex].id] ?? 0,
                       ),
 
                       // Section 3 — Top Picks from focused store

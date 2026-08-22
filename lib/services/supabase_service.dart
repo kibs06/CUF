@@ -107,12 +107,18 @@ class SupabaseService {
     String fullName, {
     String? phone,
     String? avatarUrl,
+    String? bio,
+    String? gender,
+    String? birthday,
   }) async {
     final update = <String, dynamic>{
       'full_name': fullName.trim(),
       'phone': phone,
     };
     if (avatarUrl != null) update['avatar_url'] = avatarUrl;
+    if (bio != null) update['bio'] = bio;
+    if (gender != null) update['gender'] = gender;
+    if (birthday != null) update['birthday'] = birthday;
 
     final data = await _client
         .from('profiles')
@@ -1085,5 +1091,20 @@ class SupabaseService {
     if (value.contains('gcash')) return 'gcash';
     if (value.contains('card')) return 'card';
     return 'cash';
+  }
+
+  // ── Account Deletion ──────────────────────────────────────────
+
+  /// Submit an account deletion request via Edge Function.
+  /// Returns a map with `success` (bool) and `message` (String).
+  Future<Map<String, dynamic>> requestAccountDeletion({String? reason}) async {
+    final res = await _client.functions.invoke(
+      'request-account-deletion',
+      body: {'reason': reason},
+    );
+    if (res.data is Map<String, dynamic>) {
+      return res.data as Map<String, dynamic>;
+    }
+    return {'success': false, 'message': 'Unexpected response'};
   }
 }

@@ -11,6 +11,7 @@ import 'admin_transactions_screen.dart';
 import 'admin_reports_screen.dart';
 import 'admin_analytics_screen.dart';
 import 'admin_settings_screen.dart';
+import 'manage_deletion_requests_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -204,6 +205,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       color: AppConstants.secondary,
                       onTap: () => Navigator.of(context).push(
                         MaterialPageRoute(builder: (_) => const AdminSettingsScreen()),
+                      ),
+                    ),
+                    _toolTile(
+                      icon: Icons.delete_sweep_outlined,
+                      label: 'Deletion Requests',
+                      color: AppConstants.error,
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const ManageDeletionRequestsScreen()),
                       ),
                     ),
                   ],

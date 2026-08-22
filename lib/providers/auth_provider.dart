@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../constants/app_constants.dart';
 import '../models/seller_application_data.dart';
+import '../services/account_manager.dart';
 import '../services/auth_service.dart';
 import '../services/biometric_service.dart';
 import '../services/supabase_service.dart';
@@ -77,6 +78,14 @@ class AuthProvider extends ChangeNotifier {
       _currentUser = res['user'];
       _profile = res['profile'];
       onLoginHook?.call(_currentUser!['id'] as String);
+
+      // Save session for multi-account switching
+      try {
+        await AccountManager.instance.saveCurrentSession(profile: _profile);
+      } catch (_) {
+        // Best-effort — don't block login if account saving fails
+      }
+
       return true;
     } catch (e, st) {
       _errorMessage = friendlyAuthErrorMessage(e, stackTrace: st);
@@ -115,6 +124,14 @@ class AuthProvider extends ChangeNotifier {
       _currentUser = res['user'];
       _profile = res['profile'];
       onLoginHook?.call(_currentUser!['id'] as String);
+
+      // Save session for multi-account switching
+      try {
+        await AccountManager.instance.saveCurrentSession(profile: _profile);
+      } catch (_) {
+        // Best-effort
+      }
+
       return true;
     } catch (e, st) {
       _errorMessage = friendlyAuthErrorMessage(e, stackTrace: st);
@@ -150,6 +167,14 @@ class AuthProvider extends ChangeNotifier {
       _currentUser = res['user'];
       _profile = res['profile'];
       onLoginHook?.call(_currentUser!['id'] as String);
+
+      // Save session for multi-account switching
+      try {
+        await AccountManager.instance.saveCurrentSession(profile: _profile);
+      } catch (_) {
+        // Best-effort
+      }
+
       return true;
     } catch (e, st) {
       _errorMessage = friendlyAuthErrorMessage(e, stackTrace: st);
@@ -205,6 +230,9 @@ class AuthProvider extends ChangeNotifier {
     required String fullName,
     String? phone,
     String? newAvatarUrl,
+    String? bio,
+    String? gender,
+    String? birthday,
   }) async {
     if (_profile == null) return false;
 
@@ -218,6 +246,9 @@ class AuthProvider extends ChangeNotifier {
         fullName,
         phone: phone,
         avatarUrl: newAvatarUrl,
+        bio: bio,
+        gender: gender,
+        birthday: birthday,
       );
       _profile = updated;
       _isLoading = false;
@@ -243,8 +274,25 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  /// Update the user's email address. Supabase sends a confirmation email
+  /// to the new address — the email won't change until confirmed.
+  Future<bool> updateEmail(String newEmail) async {
+    _errorMessage = null;
+    try {
+      await _auth.updateEmail(newEmail);
+      return true;
+    } catch (e, st) {
+      _errorMessage = friendlyAuthErrorMessage(e, stackTrace: st);
+      notifyListeners();
+      return false;
+    }
+  }
+
   // Logout (UC029)
   Future<void> logout() async {
+    // Capture userId before clearing state
+    final userId = _currentUser?['id'] as String?;
+
     // Clear all state BEFORE calling signOut to prevent stale data
     // from being visible during the sign-out / redirect flow.
     _currentUser = null;
@@ -253,6 +301,15 @@ class AuthProvider extends ChangeNotifier {
     _isLoading = false;
     onLogoutHook?.call();
     notifyListeners();
+
+    // Remove this account from the multi-account store
+    try {
+      if (userId != null) {
+        await AccountManager.instance.removeAccount(userId);
+      }
+    } catch (_) {
+      // Best-effort
+    }
 
     try {
       await _auth.signOut();
@@ -266,6 +323,34 @@ class AuthProvider extends ChangeNotifier {
     } catch (_) {
       // Best-effort — don't let biometric cleanup block logout.
     }
+  }
+
+  /// Refreshes the in-memory state after an account switch.
+  /// Called by AccountSwitcherScreen after switching to a different stored
+  /// account — re-fetches the profile for the now-active user.
+  Future<void> refreshAfterSwitch() async {
+    final user = _db.currentUser;
+    if (user == null) {
+      _currentUser = null;
+      _profile = null;
+      notifyListeners();
+      return;
+    }
+
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final profile = await _db.getProfile(user.id);
+      _currentUser = {'id': user.id, 'email': user.email};
+      _profile = profile;
+      onLoginHook?.call(user.id);
+    } catch (e, st) {
+      _errorMessage = friendlyAuthErrorMessage(e, stackTrace: st);
+    }
+
+    _isLoading = false;
+    notifyListeners();
   }
 
 
