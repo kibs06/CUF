@@ -3,7 +3,10 @@
   "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.15/app-release-1.0.15.apk",
   "released_at": "2026-08-22",
   "notes": [
-    "Fixed logout bug — users now properly return to the login screen after logging out",
-    "Added logout button for sellers directly on their profile screen"
+    "v1.0.15",
+    "Release v1.0.15 — Logout fix & seller logout button",
+    "Fixed:",
+    "- Logout now properly returns users to the login screen",
+    "- Added logout button for sellers on their profile screen"
   ]
 }
