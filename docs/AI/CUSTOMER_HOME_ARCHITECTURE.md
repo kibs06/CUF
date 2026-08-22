@@ -34,16 +34,20 @@ The bottom nav reads `NotificationProvider.totalUnread` via `Consumer` for the b
 
 **File:** `lib/screens/customer/customer_home_screen.dart`
 
-A `CustomScrollView` with slivers, wrapped in `RefreshIndicator`. Layout top-to-bottom:
+A `CustomScrollView` with slivers, wrapped in `RefreshIndicator`. No AppBar — the hero bleeds behind the status bar for a full-bleed effect.
 
-1. **Greeting + Search bar** — `SliverToBoxAdapter`. Search filters the product list in-memory via `ProductProvider.getFilteredProducts(keyword)`.
-2. **Foot profile banner** — `CustomerFootProfileBanner`, shown only for incomplete foot profiles.
-3. **Category chips** — horizontal `SingleChildScrollView` of `ChoiceChip`s from `ProductProvider.categories`.
-4. **On Sale section** — `SliverGrid` (fixed 2-col, NOT masonry — avoids a staggered-grid scroll bug). Only shown when no search + no category filter + sale items exist.
-5. **Featured banner** — `PageView.builder` with hardcoded featured arrivals, auto-scrolls every 4s.
-6. **Catalog header** — "Artisan Catalog" / "Search Results" + sort button (opens bottom sheet with `SortMode` options).
-7. **Product grid** — `SliverMasonryGrid.count` (2-col) of `SoleProductCard`s. Shows skeleton shimmer while loading, empty state if no results, `NoInternetView` if offline.
-8. **Floating chat button** — `FloatingMessageButton`, overlay positioned in the `Stack`.
+### Layout (top to bottom)
+
+1. **HomeHero** — `SliverToBoxAdapter` (344px). Full-bleed hero with gradient background, containing:
+   - Icon row: real search `TextField` + cart icon with badge
+   - Category text tabs with underline indicator
+   - "NEW ARRIVALS / CRAFTED FOR FALL" headline + floating product cards + "SHOP NOW" CTA + page dots
+2. **Sheet** — `SliverToBoxAdapter` with rounded top corners (`ClipRRect` `borderRadius: 22`), containing:
+   - Foot profile banner (conditional — only for incomplete profiles)
+   - On Sale section (conditional — only when no search + no category filter + sale items exist)
+   - Catalog header + sort button
+   - Product grid (`MasonryGridView.count`, 2-col)
+   - Bottom spacing for nav bar
 
 ### Data flow
 
@@ -52,12 +56,41 @@ A `CustomScrollView` with slivers, wrapped in `RefreshIndicator`. Layout top-to-
 - On connectivity restore (was offline → now online): auto-refreshes products.
 - On `_loadConversations()`: loads chat conversations for the floating message badge + subscribes to realtime inbox.
 - Push notification deep-link handlers: navigates to `ChatView`, `OrderTrackingScreen`, or `MyReportsScreen`.
+- Search: hero search bar drives inline filtering via `ProductProvider.getFilteredProducts(_searchKeyword)`.
 
 ### Key providers consumed
 
-- `AuthProvider` — `context.watch` for `displayName` (greeting).
 - `ProductProvider` — `context.watch` for: `products`, `categories`, `selectedCategory`, `sortMode`, `isLoading`, `getFilteredProducts()`, `selectCategory()`, `setSortMode()`.
+- `CartProvider` — `context.select` for `itemCount` (cart badge on hero icon).
 - `MessageProvider` — `context.read` for conversation loading (no watch).
+
+## HomeHero widget
+
+**File:** `lib/screens/customer/widgets/home_hero.dart`
+
+A self-contained `StatefulWidget` (344px) that renders the full-bleed hero section:
+
+- **Background**: 3-stop gradient (warm sand → golden brown → deep chocolate) with radial glow and dark overlay for text readability
+- **Icon row**: Real search `TextField` (frosted pill, focus state with primary border/shadow) + cart icon with item count badge
+- **Category tabs**: Text tabs with animated underline indicator. Drives `ProductProvider.selectCategory()`
+- **Featured banner carousel**: `PageView.builder` with 3 editorial items, auto-scrolls every 4s
+- **Floating product cards**: Two overlapping, slightly rotated cards showing real products from `ProductProvider.products`
+- **"Shop now" CTA**: "NEW ARRIVALS" eyebrow + "CRAFTED FOR FALL" serif headline + underlined CTA
+- **Page indicator dots**: Animated dots reflecting `_bannerIndex`
+
+### Callbacks
+
+| Callback | Trigger | Action in CustomerHomeScreen |
+|----------|---------|------------------------------|
+| `onCartTap` | Tap cart icon | Push `CartScreen` |
+| `onCtaTap` | Tap "SHOP NOW →" | `Scrollable.ensureVisible` to product grid |
+| `onProductTap` | Tap floating card | Push `ProductDetailScreen` |
+| `onSearchChanged` | Type in search bar | `setState(_searchKeyword)` → inline grid filter |
+
+### State passed from parent
+
+- `searchController` / `searchFocusNode` — owned by `CustomerHomeScreen`, passed down for the real search TextField
+- `cartCount` — from `CartProvider.itemCount`
 
 ## StoreScreen — multi-store discovery tab
 
@@ -167,6 +200,8 @@ lib/
 │   │   ├── write_review_screen.dart
 │   │   ├── customization_screen.dart
 │   │   └── ar_fitting / foot_*        # AR foot scanning flow
+│   │   └── widgets/
+│   │       └── home_hero.dart         # Full-bleed hero (search, chips, cards, CTA)
 │   ├── store/
 │   │   ├── store_screen.dart          # Store discovery tab
 │   │   └── widgets/                   # Carousel, card, info, product row

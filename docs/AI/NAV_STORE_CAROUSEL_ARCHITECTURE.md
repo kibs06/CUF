@@ -46,7 +46,7 @@ Bottom Nav (SoleBottomNav)
 All wrapped in a `SingleChildScrollView` with a noise texture overlay (`AppConstants.noiseOverlay`).
 
 ### Product Counts & Top Picks
-A `_buildProductCounts()` helper tallies products per `store_id` from `ProductProvider.products`. The "Top Picks" section shows the newest products (by ID descending) from the **focused** store only, capped at 12.
+A cached per-store index (`_reindexIfNeeded()`) tallies products per `store_id` and sorts top-picks by ID descending. The index is only rebuilt when the `products` list reference changes (checked via `identical()`), avoiding O(n) scans on every store swipe. The "Top Picks" section shows the newest products from the **focused** store only, capped at 12.
 
 ---
 

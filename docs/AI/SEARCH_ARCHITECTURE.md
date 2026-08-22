@@ -2,38 +2,30 @@
 
 ## Overview
 
-Search is split across two layers: a **hero entry point** (decorative tap target) and a **full-screen search overlay** (functional filtering). There is no inline search on the home screen — all filtering happens in the overlay.
+Search is **inline** on the home screen — the hero search bar is a real, functional `TextField` that filters the product grid in real time as the user types. There is no separate search screen or overlay. Clearing the text field restores the full catalog.
 
 ## Components
 
 ```
 CustomerHomeScreen
   └─ HomeHero (hero section)
-       └─ Icon row → decorative search bar (GestureDetector)
-            └─ onSearchTap → pushes HomeSearchScreen
-
-HomeSearchScreen (full-screen overlay)
-  ├─ AppBar with auto-focused TextField
-  ├─ Category chips (horizontal scroll)
-  ├─ Results count + "Clear all"
-  └─ MasonryGridView of filtered products
+       └─ Icon row → real TextField (searchController + searchFocusNode from parent)
+            └─ onChanged → setState(_searchKeyword)
+                 └─ triggers getFilteredProducts(_searchKeyword) in build()
+                      └─ MasonryGridView in the sheet rebuilds with filtered results
 ```
 
 ## Data flow
 
 ```
-User taps hero search bar
-  → Navigator.push(HomeSearchScreen)
-    → TextField auto-focuses (keyboard opens)
-    → User types → setState(_keyword)
-    → context.watch<ProductProvider>()
-    → ProductProvider.getFilteredProducts(_keyword)
-      → 1. Category filter (from _selectedCategory)
-      → 2. Keyword filter (name substring + tag per-word match)
-      → 3. Sort (from _sortMode)
-    → MasonryGridView rebuilds with filtered results
-    → User taps product → Navigator.push(ProductDetailScreen)
-    → User taps back → Navigator.pop (returns to home)
+User taps hero search bar → FocusNode focuses (keyboard opens, bar visually changes)
+  → User types → onChanged fires → setState(_searchKeyword)
+  → build() calls ProductProvider.getFilteredProducts(_searchKeyword)
+    → 1. Category filter (from _selectedCategory)
+    → 2. Keyword filter (name substring + tag per-word match)
+    → 3. Sort (from _sortMode)
+  → MasonryGridView rebuilds with filtered results
+  → User clears text → _searchKeyword = '' → full catalog restored
 ```
 
 ## Key behaviors
@@ -49,46 +41,45 @@ Matching rules:
 
 ### Category filtering
 
-Category chips in the search overlay call `ProductProvider.selectCategory()`, which is an **app-root singleton** — the same `selectedCategory` state shared with the hero's frosted chips and the home screen's On Sale conditional.
+Category tabs in the hero call `ProductProvider.selectCategory()`, which is an **app-root singleton** — the same `selectedCategory` state shared with the On Sale section conditional.
 
 Filtering logic in `getFilteredProducts`:
 1. `'On Sale'` pseudo-category → filters by `isOnSale()` rule (sale price active + not expired)
 2. `'All'` or `null` → no category filter
 3. Any other value → exact match on `product['category']`
 
-**Cross-screen state sharing**: Changing category in the search overlay also changes it on the home screen (and vice versa), because both read/write the same `ProductProvider._selectedCategory`.
+**Cross-section state sharing**: Changing category in the hero tabs also affects the On Sale section visibility and the filtered grid, because all read/write the same `ProductProvider._selectedCategory`.
 
 ### Sort
 
-`ProductProvider._sortMode` is shared across the search overlay and the home screen's sort button. The search overlay does NOT have its own sort control — it inherits whatever sort mode is active on the home screen.
+`ProductProvider._sortMode` is shared across the home screen's sort button. The search has no separate sort control — it inherits whatever sort mode is active.
 
 Available modes: `featured` (shuffled), `priceLowToHigh`, `priceHighToLow`, `nameAZ`, `nameZA`.
 
-### Clear all
+### Clearing search
 
-The "Clear all" button in the search overlay:
-1. Clears the TextField (`_controller.clear()`)
-2. Resets local keyword state (`_keyword = ''`)
-3. Resets global category to `'All'` (`selectCategory('All')`)
-
-This restores the full unfiltered catalog in the overlay. Returning to the home screen also shows the full catalog (since the overlay's keyword was local state, not shared).
+When the user backspaces the text field to empty:
+- `_searchKeyword` becomes `''`
+- `getFilteredProducts('')` returns the full category-filtered (or unfiltered) catalog
+- On Sale section reappears (if no category filter is active and sale items exist)
+- Featured banner reappears (if no category filter is active)
 
 ## State ownership
 
-| State | Owner | Shared? | Reset on overlay close? |
-|-------|-------|---------|------------------------|
-| `_keyword` (search text) | HomeSearchScreen (local) | No | Yes (destroyed with widget) |
-| `_selectedCategory` | ProductProvider (global) | Yes — hero chips, home On Sale, overlay chips | No (persists) |
-| `_sortMode` | ProductProvider (global) | Yes — home sort button | No (persists) |
-| `_products` (catalog) | ProductProvider (global) | Yes — all screens | No (persists) |
+| State | Owner | Shared? | Persists when search cleared? |
+|-------|-------|---------|-------------------------------|
+| `_keyword` (search text) | CustomerHomeScreen (local) | No | No (local state) |
+| `searchController` / `searchFocusNode` | CustomerHomeScreen (local) | No | Yes (text field stays focused) |
+| `_selectedCategory` | ProductProvider (global) | Yes — hero tabs, On Sale conditional | Yes |
+| `_sortMode` | ProductProvider (global) | Yes — sort button | Yes |
+| `_products` (catalog) | ProductProvider (global) | Yes — all screens | Yes |
 
 ## File map
 
 | File | Role |
 |------|------|
-| `lib/screens/customer/widgets/home_hero.dart` | Hero section with decorative search bar (GestureDetector → `onSearchTap` callback) |
-| `lib/screens/customer/home_search_screen.dart` | Full-screen search overlay with TextField, category chips, filtered masonry grid |
-| `lib/screens/customer/customer_home_screen.dart` | Parent screen — passes `onSearchTap: () => Navigator.push(HomeSearchScreen())` to HomeHero |
+| `lib/screens/customer/widgets/home_hero.dart` | Hero section with real search TextField (controller + focusNode from parent) |
+| `lib/screens/customer/customer_home_screen.dart` | Parent screen — owns search state, passes controller/focusNode/onChanged to HomeHero, filters grid |
 | `lib/providers/product_provider.dart` | App-root singleton — owns `products`, `selectedCategory`, `sortMode`, `getFilteredProducts()` |
 
 ## Filtering pipeline (inside ProductProvider.getFilteredProducts)
@@ -122,5 +113,6 @@ This restores the full unfiltered catalog in the overlay. Returning to the home 
 - **Empty keyword + category selected**: Shows all products in that category.
 - **Keyword + no category**: Searches across all categories.
 - **Keyword + category**: Searches within the filtered category.
-- **No results**: Shows `search_off` icon + "No shoes match your search."
-- **Overlay dismissed without clearing**: Keyword is lost (local state), but category persists globally. Home screen shows the category-filtered catalog.
+- **No results**: Shows `search_off` icon + "No shoes match your criteria."
+- **Search bar focused**: Visual state changes (solid white background, primary border, shadow). Unfocused returns to frosted pill.
+- **Category changed while searching**: Grid immediately re-filters with the new category + existing keyword.
