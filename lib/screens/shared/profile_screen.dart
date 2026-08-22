@@ -438,12 +438,66 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
+                // ── Logout Button (sellers only — customers use SettingsScreen) ──
+                if (auth.userRole == AppConstants.roleSeller) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 0),
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.logout, color: AppConstants.error),
+                      label: Text(
+                        'Log Out',
+                        style: AppConstants.bodyStyle(color: AppConstants.error),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: AppConstants.error.withValues(alpha: 0.4)),
+                        minimumSize: const Size.fromHeight(48),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      onPressed: () => _confirmLogout(context, auth),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
               ],
             ),
           ),
         ],
       ),
     );
+  }
+
+  // ── Logout confirm ───────────────────────────────────────────
+  Future<void> _confirmLogout(BuildContext context, AuthProvider auth) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Log Out'),
+        content: const Text('Are you sure you want to log out?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text(
+              'Log Out',
+              style: TextStyle(color: AppConstants.error),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await auth.logout();
+      // Pop all routes back to root so AuthGate can show the login screen.
+      if (context.mounted) {
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
+    }
   }
 
   // ════════════════════════════════════════════════════════════════

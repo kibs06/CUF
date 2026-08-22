@@ -302,6 +302,10 @@ class SettingsScreen extends StatelessWidget {
 
     if (confirm == true) {
       await auth.logout();
+      // Pop all routes back to root so AuthGate can show the login screen.
+      if (context.mounted) {
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
     }
   }
 
