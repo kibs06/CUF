@@ -1,189 +1,185 @@
-# Customer Home Screen — Architecture Reference
+# Customer Home — Architecture Overview
 
-**Date:** August 4, 2026
+## Routing flow
+
+```
+main.dart
+  → AuthGate (StreamBuilder<AuthState> on Supabase auth)
+    → fetches profile from Supabase (with 12s timeout)
+    → _routeByRole(profile):
+        role == 'admin'        → AdminShell
+        role == 'seller'       → SellerShell (+ one-time celebration screen)
+        seller_status == 'pending' → PendingApprovalScreen
+        default                → CustomerShell  ←── this doc
+```
+
+AuthGate also handles suspended accounts, onboarding vs. login routing, and profile error/retry screens.
+
+## CustomerShell — tab host
+
+**File:** `lib/screens/customer/customer_shell.dart`
+
+Uses `IndexedStack` (all 4 tabs stay alive in memory) with a `SoleBottomNav` bottom bar:
+
+| Index | Label | Screen | Notes |
+|-------|-------|--------|-------|
+| 0 | Home | `CustomerHomeScreen` | Browse + search + sale items |
+| 1 | Store | `StoreScreen` | Multi-store carousel discovery |
+| 2 | Notifications | `NotificationsScreen` | Push + in-app notifications |
+| 3 | Profile | `ProfileScreen` | Shared across customer/seller roles |
+
+The bottom nav reads `NotificationProvider.totalUnread` via `Consumer` for the bell badge.
+
+## CustomerHomeScreen — the main browse tab
+
 **File:** `lib/screens/customer/customer_home_screen.dart`
-**Purpose:** Enough context for another AI (or developer) to understand and safely modify the customer home screen without re-reading the whole file.
 
----
+A `CustomScrollView` with slivers, wrapped in `RefreshIndicator`. Layout top-to-bottom:
 
-## 1. What this screen is
+1. **Greeting + Search bar** — `SliverToBoxAdapter`. Search filters the product list in-memory via `ProductProvider.getFilteredProducts(keyword)`.
+2. **Foot profile banner** — `CustomerFootProfileBanner`, shown only for incomplete foot profiles.
+3. **Category chips** — horizontal `SingleChildScrollView` of `ChoiceChip`s from `ProductProvider.categories`.
+4. **On Sale section** — `SliverGrid` (fixed 2-col, NOT masonry — avoids a staggered-grid scroll bug). Only shown when no search + no category filter + sale items exist.
+5. **Featured banner** — `PageView.builder` with hardcoded featured arrivals, auto-scrolls every 4s.
+6. **Catalog header** — "Artisan Catalog" / "Search Results" + sort button (opens bottom sheet with `SortMode` options).
+7. **Product grid** — `SliverMasonryGrid.count` (2-col) of `SoleProductCard`s. Shows skeleton shimmer while loading, empty state if no results, `NoInternetView` if offline.
+8. **Floating chat button** — `FloatingMessageButton`, overlay positioned in the `Stack`.
 
-`CustomerHomeScreen` is the **customer's landing tab** in the app shell. It is a scrollable catalog page that:
+### Data flow
 
-1. Greets the logged-in customer by first name.
-2. Provides a **search bar** that filters the product grid live.
-3. Shows **category filter chips** (All / Casual / Sandals / …).
-4. Shows a horizontal **Recently Viewed** strip (from `SharedPreferences`).
-5. Shows an auto-rotating **featured banner** (`PageView`, 4s interval, mock data).
-6. Shows a **masonry product grid** ("Artisan Catalog" / "Search Results") with a **sort** control.
-7. Hosts a floating **message button** with an unread badge, and wires **push-notification deep links**.
+- On `initState` (post-frame): calls `ProductProvider.loadProducts(hideOutOfStock: true)` to fetch the full catalog from Supabase, then shuffles it.
+- On pull-to-refresh: re-calls `loadProducts(hideOutOfStock: true)`.
+- On connectivity restore (was offline → now online): auto-refreshes products.
+- On `_loadConversations()`: loads chat conversations for the floating message badge + subscribes to realtime inbox.
+- Push notification deep-link handlers: navigates to `ChatView`, `OrderTrackingScreen`, or `MyReportsScreen`.
 
----
+### Key providers consumed
 
-## 2. Data flow — who feeds the screen
+- `AuthProvider` — `context.watch` for `displayName` (greeting).
+- `ProductProvider` — `context.watch` for: `products`, `categories`, `selectedCategory`, `sortMode`, `isLoading`, `getFilteredProducts()`, `selectCategory()`, `setSortMode()`.
+- `MessageProvider` — `context.read` for conversation loading (no watch).
 
-```
-Supabase (products table)
-        │  RLS-scoped to active products
-        ▼
-SupabaseService.instance  (lib/services/supabase_service.dart)
-        │
-        ▼
-ProductProvider  (ChangeNotifier, lib/providers/product_provider.dart)
-        │  exposes: products, isLoading, categories, selectedCategory,
-        │           sortMode, getFilteredProducts(keyword), selectCategory(),
-        │           setSortMode(), loadProducts()
-        │
-        ▼
-CustomerHomeScreen  (context.watch<ProductProvider> / context.read<...>)
-```
+## StoreScreen — multi-store discovery tab
 
-- **Reads state** via `context.watch<ProductProvider>()` in `build()` — the grid re-renders whenever the provider notifies.
-- **Mutates state** via `context.read<ProductProvider>(...)` in event handlers (`onSelected`, `onTap`).
-- **Other providers touched:** `AuthProvider` (greeting name), `MessageProvider` (inbox badge + realtime subscription).
+**File:** `lib/screens/store/store_screen.dart`
 
----
+A vertical `SingleChildScrollView` with three sections:
 
-## 3. Provider API used (from `lib/providers/product_provider.dart`)
+1. **StoreHeroCarousel** — `PageView.builder` with peek viewport (0.85). Shows store cards with scale animation driven by a `PageController` listener. `onStoreChanged` fires on page settle.
+2. **StoreFocusedInfo** — store name, tagline, product count for the currently focused store.
+3. **CrossStoreProductRow** — horizontal scroll of top-picks (newest 12 products) from the focused store.
 
-| Member | Type | Purpose |
+### Performance notes
+
+- Uses `context.select<ProductProvider>` (not `context.watch`) to only rebuild when the `products` list reference changes.
+- Per-store product counts and top-picks are cached via `_reindexIfNeeded()` — only recomputed when the product list reference changes (checked via `identical()`), not on every swipe.
+
+### Store sub-widgets
+
+| Widget | File | Purpose |
 |--------|------|---------|
-| `products` | `List<Map<String, dynamic>>` | Raw product rows from Supabase |
-| `isLoading` | `bool` | True while fetching |
-| `categories` | `List<String>` | `{'All', ...}` derived from product rows |
-| `selectedCategory` | `String?` | Current category filter (`'All'` default) |
-| `sortMode` | `SortMode` | Current sort (default `newest`) |
-| `getFilteredProducts(keyword)` | `List<...>` | Applies category filter → search keyword → sort |
-| `selectCategory(cat)` | void | Sets filter + notifies |
-| `setSortMode(mode)` | void | Sets sort + notifies |
-| `loadProducts()` | `Future<void>` | Refetches from Supabase |
+| `StoreHeroCarousel` | `widgets/store_hero_carousel.dart` | PageView carousel + page dots. Scale animation via own `PageController` listener (does NOT trigger parent rebuilds). |
+| `StoreHeroCard` | `widgets/store_hero_card.dart` | Single card: brand gradient/banner, logo, open/closed chip, stat pills. Uses `CachedNetworkImage`. |
+| `StoreFocusedInfo` | `widgets/store_focused_info.dart` | Store name, tagline, product count strip. |
+| `CrossStoreProductRow` | `widgets/cross_store_product_row.dart` | Horizontal scroll of product cards for focused store. |
 
-`SortMode` enum: `newest`, `priceLowToHigh`, `priceHighToLow`, `nameAZ`, `nameZA`. Label helper: `sortModeLabel(mode)`.
+## ProfileScreen — shared across roles
 
-**Important:** `getFilteredProducts` does the filtering/sorting in memory — the screen does **not** re-query Supabase per keystroke or per chip tap.
+**File:** `lib/screens/shared/profile_screen.dart`
 
----
+Not customer-specific — same screen renders for customers and sellers (role-conditional sections).
 
-## 4. Build structure (top → bottom)
+**Customer sections:**
+- Avatar + name + email + role badge
+- Edit panel (collapsible name/phone form)
+- Following count + following list dialog
+- My Orders panel (Unpaid / Processing / Shipped / Review / Returns with badge counts from `OrderProvider`)
+- Buy Again section
+- Recently Viewed section
+- Settings card → `SettingsScreen`
+- Help & Support → `HelpMenuScreen`
+- What's New → `WhatsNewScreen`
+
+**Seller-only sections:**
+- Store info (open/closed toggle, status, link to `StoreProfileScreen`)
+- Payment Methods → `GcashPaymentSettingsScreen`
+- Business Verification → `SellerBusinessVerificationScreen`
+
+Uses TTL-based refresh: re-fetches orders, recently-viewed, and business status on tab re-entry (via `DateTime` diff in `build()`).
+
+## Key providers
+
+| Provider | File | Scope | What it owns |
+|----------|------|-------|-------------|
+| `AuthProvider` | `providers/auth_provider.dart` | App-root | User session, profile, login/signup/logout, profile updates, email change |
+| `ProductProvider` | `providers/product_provider.dart` | App-root | Product catalog (all/seller-scoped), categories, sort mode, filtered products |
+| `OrderProvider` | `providers/order_provider.dart` | App-root | Customer orders, order counts by status |
+| `CartProvider` | `providers/cart_provider.dart` | App-root | Cart items, totals |
+| `FollowProvider` | `providers/follow_provider.dart` | App-root | Followed stores |
+| `MessageProvider` | `providers/message_provider.dart` | App-root | Chat conversations, realtime subscription |
+| `NotificationProvider` | `providers/notification_provider.dart` | App-root | Unread notification count |
+| `UpdateProvider` | `providers/update_provider.dart` | App-root | App version info |
+
+All providers are app-root singletons, created in `main.dart` and consumed via `Provider.of` / `context.watch` / `context.select` / `context.read`.
+
+## Notable services
+
+| Service | File | Purpose |
+|---------|------|---------|
+| `AuthService` | `services/auth_service.dart` | Supabase auth wrapper, profile CRUD |
+| `SupabaseService` | `services/supabase_service.dart` | Raw Supabase queries (products, orders, etc.) |
+| `StoreService` | `services/store_service.dart` | Store CRUD, fetch all stores |
+| `ProfileService` | `services/profile_service.dart` | Avatar pick + upload |
+| `ConnectivityService` | `services/connectivity_service.dart` | Online/offline stream |
+| `PushNotificationService` | `services/push_notification_service.dart` | FCM setup, deep-link callbacks |
+| `RecentlyViewedService` | `utils/recently_viewed.dart` | Local recently-viewed product history |
+
+## Key widgets (shared)
+
+| Widget | File | Used by |
+|--------|------|---------|
+| `SoleProductCard` | `widgets/sole_product_card.dart` | Home grid, sale section, cross-store row |
+| `SoleBottomNav` | `widgets/sole_bottom_nav.dart` | All shells (customer, seller, admin) |
+| `CartIconButton` | `widgets/cart_icon_button.dart` | Home, Store app bars |
+| `FloatingMessageButton` | `widgets/floating_message_button.dart` | Home tab overlay |
+| `ShimmerGroup` / `SkeletonBox` | `widgets/shimmer_group.dart` | Loading skeletons |
+| `NoInternetView` | `widgets/no_internet_view.dart` | Offline state |
+| `CustomerFootProfileBanner` | `widgets/customer_foot_profile_banner.dart` | Home — foot sizing reminder |
+
+## File tree summary
 
 ```
-Scaffold
-├─ AppBar — title "CUFMAI", actions: [CartIconButton]
-└─ body: Stack
-   ├─ noiseOverlay (decorative texture, IgnorePointer)
-   ├─ SafeArea → RefreshIndicator (pull-to-refresh → loadProducts())
-   │   └─ CustomScrollView (AlwaysScrollableScrollPhysics)
-   │       ├─ [0] Greeting + Search bar            (SliverToBoxAdapter)
-   │       ├─ [1] Category chips                   (SliverToBoxAdapter, horizontal ChoiceChips)
-   │       ├─ [2] Recently Viewed strip            (if no search + items exist)
-   │       │      — "Products you view will show up here" empty hint otherwise
-   │       ├─ [3] Featured banner PageView + dots  (if search empty)
-   │       ├─ [4] "Artisan Catalog" header + Sort button
-   │       ├─ [5] Catalog grid                     (3 states — see below)
-   │       └─ [6] bottom spacing (SizedBox 80)
-   └─ FloatingMessageButton (unread badge, home tab only)
+lib/
+├── main.dart                          # App entry, providers, Supabase init
+├── screens/
+│   ├── auth_gate.dart                 # Auth state → role routing
+│   ├── customer/
+│   │   ├── customer_shell.dart        # IndexedStack + bottom nav (4 tabs)
+│   │   ├── customer_home_screen.dart  # Main browse tab (this doc's focus)
+│   │   ├── product_detail_screen.dart
+│   │   ├── cart_screen.dart
+│   │   ├── checkout_screen.dart
+│   │   ├── my_orders_screen.dart
+│   │   ├── buy_again_screen.dart
+│   │   ├── recently_viewed_screen.dart
+│   │   ├── tag_products_screen.dart
+│   │   ├── tracking_screen.dart
+│   │   ├── write_review_screen.dart
+│   │   ├── customization_screen.dart
+│   │   └── ar_fitting / foot_*        # AR foot scanning flow
+│   ├── store/
+│   │   ├── store_screen.dart          # Store discovery tab
+│   │   └── widgets/                   # Carousel, card, info, product row
+│   ├── shared/
+│   │   ├── profile_screen.dart        # Cross-role profile
+│   │   ├── settings_screen.dart
+│   │   └── ...
+│   ├── seller/                        # Seller shell + screens
+│   └── admin/                         # Admin shell + screens
+├── providers/                         # 15 ChangeNotifier providers
+├── services/                          # Supabase, auth, stores, etc.
+├── widgets/                           # Shared UI components
+├── constants/
+│   └── app_constants.dart             # Colors, styles, role strings, categories
+└── utils/                             # Helpers (sale_price, recently_viewed, etc.)
 ```
-
-### Catalog grid states (`[5]`)
-- `productProvider.isLoading` → spinner, **or** `NoInternetView` with retry when offline (`ConnectivityService`).
-- `filteredProducts.isEmpty` → "No shoes match your criteria."
-- else → `SliverPadding(horizontal: 20)` wrapping **`SliverMasonryGrid.count`**:
-  - `crossAxisCount: 2`, `crossAxisSpacing: 16`, `mainAxisSpacing: 16`
-  - each item = `SoleProductCard(product, imageAspectRatio: _imageAspectRatioFor(prod), onTap → ProductDetailScreen, onTryOnTap → ARVirtualFitScreen)`
-
----
-
-## 5. Masonry grid — the two-piece contract
-
-The staggered layout works because **both** halves agree:
-
-1. **Grid = `SliverMasonryGrid.count`** (from `flutter_staggered_grid_view`) — packs columns by natural item height.
-2. **Card = `SoleProductCard` with `imageAspectRatio` non-null** (`lib/widgets/sole_product_card.dart`) — becomes **self-sizing**:
-   - `imageAspectRatio != null` → `AspectRatio` image + `MainAxisSize.min` column.
-   - `imageAspectRatio == null` → `Expanded` image (fills parent height; for uniform grids).
-
-`_imageAspectRatioFor(product)` picks a deterministic ratio from `[1.0, 0.78, 1.22, 0.95]` **keyed off the product id hash**, so card heights are stable across filtering/re-sorting (index-based assignment would shift heights).
-
-> ⚠️ **Gotcha:** never put these self-sizing cards into a fixed `SliverGrid`/`GridView` (`childAspectRatio`) — short images leave gaps, tall ones overflow. This bug was fixed in the store screens by converting them to `SliverMasonryGrid`/`MasonryGridView` too.
-
-See `docs/AI/HOME_MASONRY_GRID_WIDGETS.md` for the exact widget code.
-
----
-
-## 6. Local state in the State class
-
-| Field | Purpose |
-|-------|---------|
-| `_searchController` | Search `TextField` controller |
-| `_bannerController` / `_bannerIndex` / `_bannerTimer` | Featured banner auto-rotate (4s) |
-| `_searchKeyword` | Live search query (triggers `setState`) |
-| `_connectivitySub` / `_wasOffline` | Auto-refresh products when connectivity returns |
-| `_recentlyViewed` | Items from `RecentlyViewedService` (SharedPreferences, capped) |
-| `_featuredArrivals` | **Mock** banner data (3 hardcoded Unsplash items) |
-
----
-
-## 7. Lifecycle & side effects
-
-`initState()`:
-- Loads recently viewed (async).
-- Post-frame: `ProductProvider.loadProducts()`, `_loadConversations()`, `_initPushNotifications()`.
-- Subscribes to `ConnectivityService.isOnlineStream`; on restore-from-offline, reloads products.
-- Starts the 4s banner timer.
-
-`dispose()`: cancels the connectivity sub, disposes controllers, cancels the timer.
-
-**Side-effect services used:**
-- `ConnectivityService.instance.isOnline / isOnlineStream`
-- `MessageProvider.subscribeToInbox(customerId)` + `loadConversationsForCustomer(customerId)`
-- `PushNotificationService.instance.onNavigateToChat / onNavigateToScreen` — set here so taps on push notifications navigate to `ChatView`, `OrderTrackingScreen`, or `MyReportsScreen`.
-
----
-
-## 8. Navigation targets
-
-| Action | Route |
-|--------|-------|
-| Tap product card | `ProductDetailScreen(product)` |
-| Tap "Try On" badge | `ARVirtualFitScreen(preselectedProduct)` |
-| Tap recently-viewed item | `ProductDetailScreen(fullProduct)` (resolved from provider list) |
-| Push → chat | `ChatView(conversationId, viewerRole: 'customer', otherPartyName)` |
-| Push → order tracking | `OrderTrackingScreen(order)` (fetches order by id first) |
-| Push → reports | `MyReportsScreen()` |
-
----
-
-## 9. Styling conventions
-
-- Colors/typography from `AppConstants` (`primary`, `secondary`, `accent`, `surfaceLight`, `borderGray`, `headlineStyle`, `bodyStyle`, `monoStyle`).
-- Cards: `SoleProductCard`; containers use `AppConstants.cardRadius` + `warmShadow`.
-- `noiseOverlay(opacity: 0.03)` is the standard background texture.
-- Category chips: `ChoiceChip` with `showCheckmark: false` (highlight-only selection), selected = primary fill + white text.
-- Search bar: white pill (`radius 30`), primary focus border.
-
----
-
-## 10. Common modification checklist
-
-When changing this screen, keep in mind:
-1. **Search + category filtering happens in the provider** (`getFilteredProducts`) — if you add a new filter, extend the provider, not the widget.
-2. **Don't mix masonry cards with fixed grids** — keep `SliverMasonryGrid.count` + `imageAspectRatio` (or remove the ratio and use a uniform grid).
-3. **`_featuredArrivals` is mock data** — the banner is decorative; wire it to a real endpoint if it needs to become dynamic.
-4. **The greeting uses `auth.displayName`** — guard against empty/null if you touch it.
-5. Chips/banners conditionally render on `_searchKeyword.isEmpty` — keep that coupling consistent.
-
----
-
-## Key files
-
-| File | Role |
-|------|------|
-| `lib/screens/customer/customer_home_screen.dart` | This screen |
-| `lib/providers/product_provider.dart` | Products, categories, sort, filtered list |
-| `lib/widgets/sole_product_card.dart` | Masonry-capable product card |
-| `lib/utils/recently_viewed.dart` | SharedPreferences-backed recently viewed |
-| `lib/widgets/floating_message_button.dart` | Floating chat button + badge |
-| `lib/widgets/cart_icon_button.dart` | Cart shortcut in AppBar |
-| `lib/services/connectivity_service.dart` | Offline detection |
-| `lib/services/push_notification_service.dart` | Deep-link handlers |
-| `lib/widgets/chat/chat_view.dart` | Chat destination |
