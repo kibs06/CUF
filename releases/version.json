@@ -1,12 +1,9 @@
 {
-  "latest_version": "1.0.15",
-  "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.15/app-release-1.0.15.apk",
-  "released_at": "2026-08-22",
+  "latest_version": "1.0.16",
+  "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.16/app-release-1.0.16.apk",
+  "released_at": "2026-08-27",
   "notes": [
-    "v1.0.15",
-    "Release v1.0.15 — Logout fix & seller logout button",
-    "Fixed:",
-    "- Logout now properly returns users to the login screen",
-    "- Added logout button for sellers on their profile screen"
+    "New update overlay — premium in-app notification when a new version is available",
+    "Shows release notes and one-tap download directly from the overlay"
   ]
 }
