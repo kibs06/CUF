@@ -1,5 +1,31 @@
 # SoleVision — Changelog
 
+## v1.0.16 (2026-08-26) — Get Your Foot Size 2.0: Precision + Premium Scan UX
+
+### Scan precision (v2 only)
+- 5 s capture window (was 4 s) → ~25% more samples per pass
+- Min sample confidence floor: 0.50 (weak frames shown live, never recorded)
+- Anatomical width gate: measured width/length ratio must be 0.20–0.60
+- Exposed `passSampleCount` for live scan animation
+
+### Premium scan experience
+- **Animated instruction overlay** (`scan_instruction_overlay.dart`) — looping CustomPaint demo per step: TOP view phone descends to overhead, SIDE view phone orbits down to floor level with arc trail. Auto-plays once per step, dismissible, replayable via "How to scan" chip.
+- **Live foot-trace overlay** (`foot_trace_overlay.dart`) — stylized footprint draws progressively as samples accumulate, sweeping scan line with intersection sparkles, accent fill deepening with progress.
+
+### Premium results screen
+- Staggered section entrances, count-up cm/mm values
+- Animated confidence ring (percentage sweeps to actual `confidenceScore`, colored by level)
+- **Per-factor "Why this score" breakdown**: sample volume, reading consistency (IQR), measured-vs-estimated width, both-feet coverage, sock compensation
+- **Half-size adjustment stepper**: ±0.5 EU clamped to ±2 sizes of recommendation, live US/UK re-derivation via `euToUs`/`euToUk`, haptics, Reset chip, "Adjusted by you" badge; adjustment recorded in saved reason
+- Sticky save bar using adjusted sizes
+
+### Tests & docs
+- 527 tests pass (`flutter test`), `flutter analyze` clean
+- 4 new precision-gate controller tests; 4 results-screen widget tests (hero + confidence, +stepper, −clamp, no-EU fallback)
+- CHANGELOG updated
+
+---
+
 ## Session: Get Your Foot Size 2.0 — Clean-Rewrite AR Auto Scan (Beta)
 
 ### New v2 feature (coexists with v1; Settings → "Get Your Foot Size 2.0")
