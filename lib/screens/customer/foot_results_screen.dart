@@ -5,6 +5,8 @@ import '../../constants/app_constants.dart';
 import '../../models/foot_measurement.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/foot_measurement_provider.dart';
+// TEMP-DEBUG [NAV-DEBUG]: phase 1b diagnosis — remove after fix verified.
+import '../../services/diag_logger.dart' show navDiag;
 import '../../utils/foot_measurement_utils.dart';
 
 /// Results screen displaying foot measurements and size recommendations.
@@ -98,6 +100,9 @@ class _FootResultsScreenState extends State<FootResultsScreen> {
   @override
   void initState() {
     super.initState();
+    // TEMP-DEBUG [NAV-DEBUG]: phase 1b diagnosis — remove after fix verified.
+    navDiag('[NAV-DEBUG] FootResultsScreen initState '
+        '(source=${widget.measurementSource}, canPop=${Navigator.of(context).canPop()})');
     _selectedEuSize = widget.euSize;
   }
 

@@ -34,9 +34,10 @@
 
 > What am I working on right now? Update this daily so the next session (human or AI) picks up where you left off.
 
-- **Current focus:** —
-- **Last session:** —
+- **Current focus:** Obsidian vault audit & refresh (MOCs, Code Map, tasks)
+- **Last session:** v1.0.15 release (logout fix), banner system, home hero, account management
 - **Blockers:** —
+- **Version:** 1.0.15+17 (Aug 22, 2026)
 
 ## 🗂️ Reference
 

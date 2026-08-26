@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../constants/app_constants.dart';
+// TEMP-DEBUG [NAV-DEBUG]: phase 1b diagnosis — remove after fix verified.
+import '../../services/diag_logger.dart'
+    show navDiag, kNavDiagEnabled, DiagLogger;
 import '../../widgets/sole_switch.dart';
 import 'foot_capture_screen.dart';
-import 'foot_wall_calibration_screen.dart';
+import 'foot_floor_detection_screen.dart';
 
 /// Feature flag for paper scan mode.
 /// Gate behind a const so it can be flipped on when the CV pipeline is ready.
@@ -65,6 +68,16 @@ class _FootInstructionsScreenState extends State<FootInstructionsScreen> {
           icon: const Icon(Icons.arrow_back, color: AppConstants.secondary),
           onPressed: () => Navigator.of(context).pop(),
         ),
+        // TEMP-DEBUG (Phase 1b diagnostics): share-sheet export of nav_diag.log.
+        // Remove with diag_logger.dart.
+        actions: [
+          if (kNavDiagEnabled)
+            IconButton(
+              icon: const Icon(Icons.bug_report, color: AppConstants.secondary),
+              tooltip: 'Export diagnostics log',
+              onPressed: () => DiagLogger.instance.export(),
+            ),
+        ],
       ),
       body: Stack(
         children: [
@@ -384,13 +397,16 @@ class _FootInstructionsScreenState extends State<FootInstructionsScreen> {
   }
 
   /// Navigate to the selected scan mode screen.
-  /// For AR modes, routes through wall calibration first.
+  /// For AR modes, routes through floor detection first.
   void _startScan() {
+    // TEMP-DEBUG [NAV-DEBUG]: phase 1b diagnosis — remove after fix verified.
+    navDiag('[NAV-DEBUG] Instructions push → FootFloorDetectionScreen '
+        '(canPop=${Navigator.of(context).canPop()})');
     if (_useLiveAr) {
-      // Wall calibration precedes both Guided Tap and Auto Scan.
+      // Floor detection precedes both Guided Tap and Auto Scan.
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => FootWallCalibrationScreen(
+          builder: (_) => FootFloorDetectionScreen(
             footCondition: _footCondition,
             shoeCategory: _shoeCategory,
             smartAssistEnabled: _smartAssistEnabled,

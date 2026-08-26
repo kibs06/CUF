@@ -17,12 +17,13 @@
 
 | Folder | What's in it | → MOC |
 |--------|-------------|-------|
-| `screens/customer/` | The full customer shell — 4-tab `CustomerShell` + home, product detail, cart, checkout, GCash payment, tracking, customization, AR/foot scan, addresses, reviews, my-orders, inbox | [[obsidian/MOCs/02 - Customer App|📱 Customer App]] |
-| `screens/seller/` | 5-tab `SellerShell`: dashboard, orders, products, POS (+ barcode scanner, receipt detail), reports, GCash queue/settings, inbox, notification center, store profile/schedule/reviews, business verification, store CRUD | [[obsidian/MOCs/03 - Seller Module|👞 Seller Module]] |
-| `screens/admin/` | Mobile admin: `admin_shell`, `admin_dashboard_screen`, `manage_users_screen`, `monitor_products_screen`, `seller_approval_screen` (Tier 1 queue + Business Docs tab), `seller_business_docs_review_screen` | [[obsidian/MOCs/04 - Admin Portal|🛡️ Admin Portal]] + [[obsidian/MOCs/00 - Auth & Accounts|🔐 Auth]] |
-| `screens/auth/` | `account_entry_screen` (merged create/signin), `customer_register_screen`, `seller_application_flow`, `foot_profile_onboarding_screen`, `pending_approval_screen`, splash, onboarding, edit_profile | [[obsidian/MOCs/00 - Auth & Accounts|🔐 Auth]] |
-| `screens/shared/` | `profile_screen`, `terms_privacy_screen`, `about_cufmai_screen`, `faq_screen`, `whats_new_screen`, `help_menu_screen`, `support_chat_screen`, `wrong_account_screen`, `following_list_dialog` | [[obsidian/MOCs/02 - Customer App|📱 Customer App]] (+ [[obsidian/MOCs/06 - Notifications & Messaging|🔔 Messaging]] for support chat) |
-| `screens/store/` | `store_screen`, `store_profile_screen`, `collection_screen`, `rate_store_screen` + `widgets/` | [[obsidian/MOCs/07 - Products, Stores & Features|🛍️ Products & Stores]] |
+| `screens/customer/` | 4-tab `CustomerShell` + home (hero, sticky search), product detail, cart, checkout, GCash payment, tracking, customization, AR/foot scan (wall calibration), addresses, reviews, my-orders, inbox, buy-again, recently viewed, tag products | [[obsidian/MOCs/02 - Customer App|📱 Customer App]] |
+| `screens/seller/` | 5-tab `SellerShell`: dashboard, orders, products, POS (+ barcode scanner, receipt, history), reports, GCash queue/settings/ref-scanner, inbox, notification center, store profile/schedule/reviews, business verification, store CRUD (create/edit/location picker) | [[obsidian/MOCs/03 - Seller Module|👞 Seller Module]] |
+| `screens/admin/` | Mobile admin: `admin_shell`, `admin_dashboard_screen`, `manage_users_screen`, `monitor_products_screen`, `seller_approval_screen` (Tier 1 queue + Business Docs tab), `seller_business_docs_review_screen`, `admin_analytics_screen`, `admin_orders_screen`, `admin_reports_screen`, `admin_transactions_screen`, `admin_settings_screen`, `manage_deletion_requests_screen` | [[obsidian/MOCs/04 - Admin Portal|🛡️ Admin Portal]] + [[obsidian/MOCs/00 - Auth & Accounts|🔐 Auth]] |
+| `screens/auth/` | `account_entry_screen` (merged create/signin), `customer_register_screen`, `seller_application_flow`, `foot_profile_onboarding_screen`, `pending_approval_screen`, splash, onboarding, edit_profile, `seller_approved_celebration_screen` | [[obsidian/MOCs/00 - Auth & Accounts|🔐 Auth]] |
+| `screens/shared/` | `profile_screen`, `settings_screen`, `account_switcher_screen`, `account_security_screen`, `manage_login_device_screen`, `terms_privacy_screen`, `about_cufmai_screen`, `faq_screen`, `whats_new_screen`, `help_menu_screen`, `support_chat_screen`, `wrong_account_screen`, `following_list_dialog` | [[obsidian/MOCs/02 - Customer App|📱 Customer App]] + [[obsidian/MOCs/00 - Auth & Accounts|🔐 Auth]] (account management) |
+| `screens/customer/widgets/` | `home_hero.dart` (full-bleed hero), `home_sticky_search_bar.dart` (sticky search) | 📱 Customer |
+| `screens/store/` | `store_screen`, `store_profile_screen`, `collection_screen`, `rate_store_screen` + `widgets/` (hero card/carousel, cross-store product row, stitch painter) | [[obsidian/MOCs/07 - Products, Stores & Features|🛍️ Products & Stores]] |
 | `screens/auth_gate.dart` | Post-auth role routing + suspended-account screen | [[obsidian/MOCs/00 - Auth & Accounts|🔐 Auth]] |
 | `screens/notifications_screen.dart` | Customer notification feed (category tabs) | [[obsidian/MOCs/06 - Notifications & Messaging|🔔 Notifications]] |
 
@@ -53,6 +54,8 @@
 | `connectivity_service.dart` | Online/offline stream | 🏠 Home (cross-cutting) |
 | `update_checker.dart` | Release notes / update info | 🗺️ Roadmap & Logs |
 | `upload_service.dart` | Generic Storage upload/delete | 🗄️ DB |
+| `profile_service.dart` | Profile CRUD, avatar upload, account management | 🔐 Auth |
+| `seller_application_draft_store.dart` | 30-min draft resume for seller application (SharedPreferences + FlutterSecureStorage) | 🔐 Auth |
 
 ## 🧠 Providers (`lib/providers/` — state management)
 
@@ -73,6 +76,7 @@
 | `message_provider.dart` | Inbox-level chat state + unread badge | 🔔 Messaging |
 | `chat_attachment_provider.dart` | Failed-attachment persistence | 🔔 Messaging |
 | `update_provider.dart` | What's-new / release notes | 🗺️ Roadmap & Logs |
+| `banner_provider.dart` | Home screen banner carousel data | 📱 Customer |
 
 ## 🧩 Models (`lib/models/`)
 
@@ -93,6 +97,8 @@
 | `auth_error_messages.dart` | Friendly auth error mapping | 🔐 Auth |
 | `foot_detector.dart` / `mlkit_*` / `qr_image_crop.dart` / `ar_foot_measurement_pipeline.dart` / `foot_measurement_utils.dart` | Foot scan/AR pipeline | 📱 Customer |
 | `notification_formatters.dart` | Notification display formatting | 🔔 Notifications |
+| `product_grid_ratio.dart` | Grid aspect-ratio helper for product grids | 📱 Customer |
+| `dev_mode.dart` | Dev-mode bypass (swipe gesture) — REMOVE BEFORE RELEASE | 🔐 Auth |
 
 ## 🧱 Widgets (`lib/widgets/`)
 
@@ -106,6 +112,23 @@
 | `sole_status_chip.dart` | Styles `awaiting_payment`, `payment_conflict`, etc. | 💳 Checkout |
 | `customer_foot_profile_banner.dart` | Foot-profile reminder on Home | 🔐 Auth |
 | `pending_gcash_checkout_sheet.dart`, `order_cancellation_sheet.dart`, `order_change_request_sheet.dart`, `order_quick_message_sheet.dart`, `messages_quick_preview_sheet.dart`, `report_modal.dart`, `size_guide_modal.dart`, `sale_countdown_overlay.dart`, `hanging_sale_tag.dart` | Feature sheets/overlays | Spread (checkout/customer/products) |
+| `buy_again_section.dart` | Buy-again products section (order history → cart) | 📱 Customer |
+| `recently_viewed_section.dart` | Recently-viewed products row on home | 📱 Customer |
+| `connectivity_banner.dart` | Offline/online status banner | 🏠 Home (cross-cutting) |
+| `horizontal_product_card.dart` | Horizontal product card for lists | 📱 Customer |
+| `sole_badge.dart` | Badge/notification dot | 🏠 Home (app-wide) |
+| `sole_switch.dart` | Toggle switch | 🏠 Home (app-wide) |
+| `sole_ar_pill.dart` | AR fitting pill button | 📱 Customer |
+| `error_retry_widget.dart` | Error state with retry | 🏠 Home (cross-cutting) |
+| `shimmer_group.dart` | Grouped shimmer loading placeholder | 🏠 Home (cross-cutting) |
+| `no_internet_view.dart` | Full-screen offline view | 🏠 Home (cross-cutting) |
+| `countdown_delete_button.dart` | Timer-based delete confirmation | 🏠 Home (cross-cutting) |
+| `floating_message_button.dart` | Floating action button for messages | 🔔 Messaging |
+| `fly_to_cart_animation.dart` | Add-to-cart fly animation | 📱 Customer |
+| `custom_popup_menu.dart` | Custom popup menu | 🏠 Home (app-wide) |
+| `sale_price_tape.dart` | Sale price tape overlay | 🛍️ Products |
+| `release_note_card.dart` | What's-new release note card | 🗺️ Roadmap & Logs |
+| `app_error_toast.dart` | Error toast notification | 🏠 Home (cross-cutting) |
 
 ## ⚙️ Constants & exceptions
 

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
@@ -28,6 +30,8 @@ import 'screens/auth/splash_screen.dart';
 import 'screens/customer/gcash_payment_screen.dart';
 import 'screens/customer/product_detail_screen.dart';
 import 'services/connectivity_service.dart';
+// TEMPORARY (Phase 1b diagnostics) — remove with diag_logger.dart.
+import 'services/diag_logger.dart';
 import 'services/deep_link_service.dart';
 import 'services/supabase_service.dart';
 import 'services/gcash_payment_service.dart';
@@ -53,6 +57,10 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // TEMPORARY (Phase 1b diagnostics): start the in-app nav log capture.
+  // No-op unless kNavDiagEnabled — remove with diag_logger.dart.
+  unawaited(DiagLogger.instance.init());
 
   // Allow google_fonts to fetch fonts at runtime if not bundled locally.
   // This ensures fonts load correctly even if assets are missing.

@@ -6,9 +6,13 @@
 
 ## 📌 Overview
 
-Web-only React SPA sharing the same Supabase backend as the Flutter app. **SPA only, no SSR**; all data fetching client-side. **Security boundary is Supabase RLS** — the app never uses the service-role key; it authenticates as the signed-in admin with the anon key. Charts are client-computed from raw query results (no SQL aggregation endpoints).
+**Two admin surfaces** sharing the same Supabase backend:
+1. **React Web SPA** (`admin-portal/`) — Vite + Tailwind + TanStack Query; charts client-computed.
+2. **Flutter Mobile Admin** (`lib/screens/admin/`) — `AdminShell` with dashboard, user management, product monitoring, seller approval, analytics, orders, reports, transactions, deletion requests, settings.
 
-**Stack:** React 18 (JSX) · Vite 6 · react-router-dom v6 · TanStack Query v5 (server state) · React Context (Auth/Toast) · Supabase JS v2 · Tailwind 3 · lucide-react · recharts · motion · class-based `ErrorBoundary`.
+**Security boundary is Supabase RLS** — neither surface uses the service-role key.
+
+**Stack:** React 18 (JSX) · Vite 6 · react-router-dom v6 · TanStack Query v5 · React Context (Auth/Toast) · Supabase JS v2 · Tailwind 3 · lucide-react · recharts · motion · class-based `ErrorBoundary`.
 
 ---
 
@@ -37,7 +41,7 @@ Pages (src/pages/*) ──> Hooks (src/hooks/*) ──> lib/supabase.js ──> 
 
 ---
 
-## 🗺️ Routes
+## 🗺️ Routes (React Web SPA)
 
 | Route | Page | Purpose |
 |-------|------|---------|
@@ -51,6 +55,23 @@ Pages (src/pages/*) ──> Hooks (src/hooks/*) ──> lib/supabase.js ──> 
 | `/reports` | Reports | Report moderation (priority badge in sidebar, 60s poll) |
 | `/analytics` | Analytics | Orders/revenue/users over time, status pie, top products, seller trend |
 | `/settings` | Settings | Admin profile & password |
+
+## 📱 Flutter Mobile Admin (`lib/screens/admin/`)
+
+| Screen | File | Purpose |
+|--------|------|---------|
+| Admin Shell | `admin_shell.dart` | Tab host for all admin screens |
+| Dashboard | `admin_dashboard_screen.dart` | Overview stats, quick actions |
+| Manage Users | `manage_users_screen.dart` | User list with role filters, suspension |
+| Monitor Products | `monitor_products_screen.dart` | Product catalog oversight |
+| Seller Approval | `seller_approval_screen.dart` | Tier 1 queue + Business Docs tab |
+| Business Docs Review | `seller_business_docs_review_screen.dart` | Tier 2 doc review (signed URLs) |
+| Analytics | `admin_analytics_screen.dart` | Orders/revenue/users over time |
+| Orders | `admin_orders_screen.dart` | Order management and status updates |
+| Reports | `admin_reports_screen.dart` | Report moderation |
+| Transactions | `admin_transactions_screen.dart` | GCash/PayMongo transaction history |
+| Deletion Requests | `manage_deletion_requests_screen.dart` | Account deletion request management |
+| Settings | `admin_settings_screen.dart` | Admin profile & password |
 
 ---
 

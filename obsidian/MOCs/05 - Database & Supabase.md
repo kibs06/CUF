@@ -33,6 +33,11 @@ Supabase (PostgreSQL + RLS + Auth + Storage) on project `psczvbfoybqhjeqssimw.su
 | `payment_intents` / `payment_webhook_events` / `payment_fee_config` | Online GCash (attempt #6) | see [[obsidian/MOCs/01 - Checkout, Orders & Payments|💳 Checkout MOC]] |
 | `seller_business_docs` | Tier 2 verification docs | `profile_id` unique |
 | `device_tokens` | FCM push tokens | — |
+| `banners` | Home screen banner carousel (image, link, display order) | — |
+| `deletion_requests` | Account deletion requests (customer-initiated) | `user_id → profiles` |
+| `product_color_images` | Per-color photo galleries (one gallery per product color) | `product_id → products` CASCADE |
+| `order_status_history` | Order status change audit trail | `order_id` (BIGINT, different table!) |
+| `reports` | User-submitted reports (product/user/order) | `reporter_id → profiles` |
 
 ### FK delete rules (do not change)
 `order_items`/`sales_transaction_items`/`customization_requests.base_product_id` → **SET NULL** (preserve history) · `inventory`/`product_variants`/`product_images`/`product_customizations`/`cart_items` → **CASCADE**. ⚠️ `products.store_id` / `orders.store_id` / `customization_requests.store_id` have **NO cascade** (NO ACTION) — deleting a store requires reassigning children first.
@@ -53,6 +58,12 @@ Supabase (PostgreSQL + RLS + Auth + Storage) on project `psczvbfoybqhjeqssimw.su
 | `guard_seller_business_docs_status` | `seller_business_docs` | Blocks owner self-certification (verified/rejected) |
 | `prevent_admin_self_lockout` / `protect_last_admin` | `profiles` UPDATE | Refuse demote/suspend of yourself or the last active admin |
 | Profile auto-create | `auth.users` INSERT (handle_new_user) | Creates the `profiles` row after signup |
+| `trg_record_order_status_change` | `orders` UPDATE OF status | Records status changes in `order_status_history` |
+| `trg_compute_report_priority` | `reports` INSERT/UPDATE | Auto-computes priority based on report type + severity |
+| `trg_check_duplicate_report` | `reports` INSERT | Prevents duplicate reports from same reporter |
+| `trg_notify_on_seller_approved` | `profiles` UPDATE OF seller_status | Sends notification when seller is approved |
+| `trg_set_customer_name` / `trg_sync_customer_name` | `conversations` / `profiles` | Syncs customer name to conversation records |
+| `trg_update_conversation_on_message_delete` | `messages` DELETE | Updates conversation last message on delete |
 
 Both inventory triggers are `SECURITY DEFINER` (July 4 2026 fix — RLS was blocking the trigger's UPDATE) and normalize size via `regexp_replace(size, '\D', '', 'g')`.
 
@@ -79,8 +90,8 @@ Both inventory triggers are `SECURITY DEFINER` (July 4 2026 fix — RLS was bloc
 - Migration files: `supabase/migrations/` — numeric names (`20260702_…`, `20260813…`), applied to the live DB. ⚠️ **CLI migration tracking is unreliable** — verify via `supabase/MIGRATIONS_LIVE_STATUS.md`, not `supabase migration list`.
 - **The #1 cause of past failed fixes**: SQL written but never applied to the live DB. Always verify a migration landed.
 - Realtime: `ALTER PUBLICATION supabase_realtime ADD TABLE public.profiles` (and others) must be enabled in the dashboard for live features.
-- Storage buckets: `avatars`, `product-images`, `store-assets` (public) · `seller-verification-docs`, `payment-proofs`, `chat-attachments` (private, signed URLs).
-- Edge Functions: `create-gcash-payment-intent`, `gcash-webhook`, `get-payment-status`, `send-message-push`, `product-preview` (share OG images).
+- Storage buckets: `avatars`, `product-images`, `store-assets`, `banners` (public) · `seller-verification-docs`, `payment-proofs`, `chat-attachments` (private, signed URLs).
+- Edge Functions: `create-gcash-payment-intent`, `gcash-webhook`, `get-payment-status`, `send-message-push`, `send-notification-push`, `product-preview` (share OG images), `apply-store-schedules`, `create-gcash-payment`, `request-account-deletion`, `send-approval-email`.
 
 ## ⚠️ Gotchas
 

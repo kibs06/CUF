@@ -43,6 +43,11 @@ AccountEntryScreen (create mode) ──"Shop as customer?"──▶ CustomerRegi
 | Layer | File | Responsibility |
 |-------|------|----------------|
 | Entry | `lib/screens/auth/account_entry_screen.dart` | Merged front door (full-bleed video): create mode = role split, signin mode = login |
+| Account | `lib/screens/shared/account_switcher_screen.dart` | Switch between customer/seller accounts |
+| Account | `lib/screens/shared/account_security_screen.dart` | Password change, login device management |
+| Account | `lib/screens/shared/manage_login_device_screen.dart` | View/revoke active login sessions |
+| Account | `lib/screens/shared/settings_screen.dart` | Dedicated settings: security, notifications, support, about, logout |
+| Service | `lib/services/profile_service.dart` | Profile CRUD, avatar upload, account management |
 | UI | `lib/screens/auth/customer_register_screen.dart` | Customer signup: name, email, **birthday (13+, required)**, gender (optional, self-describe), phone, password + strength meter, terms checkbox |
 | UI | `lib/screens/auth/foot_profile_onboarding_screen.dart` | Post-signup foot-profile step — AR scan / manual / skip (never blocks) |
 | Widget | `lib/widgets/customer_foot_profile_banner.dart` | Dismissible home-screen reminder when `foot_profile_source` is NULL/'skipped' |

@@ -8,6 +8,7 @@ import '../../services/supabase_service.dart';
 import '../auth/account_entry_screen.dart';
 import '../customer/address_book_screen.dart';
 import '../customer/foot_instructions_screen.dart';
+import '../customer/foot_size_v2/foot_scan_setup_screen_v2.dart';
 import 'account_security_screen.dart';
 import 'account_switcher_screen.dart';
 import 'help_menu_screen.dart';
@@ -77,6 +78,19 @@ class SettingsScreen extends StatelessWidget {
               ),
               _settingsRow(
                 context: context,
+                icon: Icons.new_releases_outlined,
+                title: 'Get Your Foot Size 2.0',
+                subtitle: 'New · Auto Scan (Beta)',
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const FootScanSetupScreenV2(),
+                    ),
+                  );
+                },
+              ),
+              _settingsRow(
+                context: context,
                 icon: Icons.location_on_outlined,
                 title: 'My Addresses',
                 onTap: () {
@@ -134,6 +148,7 @@ class SettingsScreen extends StatelessWidget {
                 icon: Icons.new_releases_outlined,
                 title: "What's New",
                 subtitle: installedVersion != null ? 'v$installedVersion' : null,
+                showDotBadge: updateProvider.hasUnviewedUpdate,
                 onTap: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
@@ -235,6 +250,7 @@ class SettingsScreen extends StatelessWidget {
     required String title,
     required VoidCallback onTap,
     String? subtitle,
+    bool showDotBadge = false,
     Widget? trailing,
   }) {
     return Material(
@@ -251,9 +267,28 @@ class SettingsScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      title,
-                      style: AppConstants.bodyStyle(fontSize: 15),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            title,
+                            style: AppConstants.bodyStyle(fontSize: 15),
+                          ),
+                        ),
+                        // Unviewed-update indicator dot (e.g. a newer What's
+                        // New entry).
+                        if (showDotBadge) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              color: AppConstants.error,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     if (subtitle != null) ...[
                       const SizedBox(height: 2),

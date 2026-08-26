@@ -1,0 +1,23 @@
+{
+  "id": "conv-1787416672507-e8ee6zvpe",
+  "providerId": "claude",
+  "title": "hey",
+  "titleGenerationStatus": "failed",
+  "createdAt": 1787416672517,
+  "lastActivityAt": 1787416686782,
+  "sessionId": "f8a116ac-9b1d-4d51-9adf-aab07459286f",
+  "selectedModel": "opus",
+  "providerState": {
+    "providerSessionId": "f8a116ac-9b1d-4d51-9adf-aab07459286f"
+  },
+  "usage": {
+    "model": "opus",
+    "inputTokens": 0,
+    "cacheCreationInputTokens": 0,
+    "cacheReadInputTokens": 0,
+    "contextWindow": 1000000,
+    "contextTokens": 0,
+    "percentage": 0,
+    "contextWindowIsAuthoritative": false
+  }
+}

@@ -42,6 +42,16 @@ class MeasurementSample {
   /// legacy value for tests that don't track capture angle.
   final String captureAngle;
 
+  /// Whether [widthMm] was actually measured from detected width points.
+  ///
+  /// E7 fix: when the detector supplies no width points, callers may record a
+  /// proportional estimate (`length * ~0.38`) for the live readout — but that
+  /// fabricated number must not pollute the width median, which would skew the
+  /// narrow/standard/wide fit category for non-average feet. Estimates are
+  /// tagged `widthMeasured: false` and excluded from width statistics.
+  /// Defaults to `true` so existing call sites keep their behavior.
+  final bool widthMeasured;
+
   const MeasurementSample({
     required this.lengthMm,
     required this.widthMm,
@@ -49,12 +59,14 @@ class MeasurementSample {
     required this.segmentationConfidence,
     required this.timestamp,
     this.captureAngle = 'both',
+    this.widthMeasured = true,
   });
 
   @override
   String toString() =>
       'Sample(${lengthMm.toStringAsFixed(1)}mm × ${widthMm.toStringAsFixed(1)}mm, '
-      'angle=$captureAngle, track=${trackingQuality.toStringAsFixed(2)}, '
+      'angle=$captureAngle, measuredW=$widthMeasured, '
+      'track=${trackingQuality.toStringAsFixed(2)}, '
       'seg=${segmentationConfidence.toStringAsFixed(2)})';
 }
 
@@ -295,9 +307,24 @@ MeasurementResult? combineGuidedSamples(List<MeasurementSample> samples) {
       ? frontSamples
       : qualitySamples;
 
+  // E7 fix: width statistics use only samples whose width was actually
+  // measured from detected width points. Proportional estimates (tagged
+  // `widthMeasured: false`) are excluded so an average-foot ratio can't skew
+  // the median — and therefore the narrow/standard/wide fit category. Fall
+  // back to the full width source when too few measured widths exist, so a
+  // scan that never detected width points still produces a (low-confidence)
+  // result instead of failing outright.
+  final measuredWidthSource = widthSource
+      .where((s) => s.widthMeasured)
+      .toList();
+  final effectiveWidthSource =
+      measuredWidthSource.length >= minValidSamples
+          ? measuredWidthSource
+          : widthSource;
+
   // Step 3: Extract per-dimension arrays
   final lengths = lengthSource.map((s) => s.lengthMm).toList();
-  final widths = widthSource.map((s) => s.widthMm).toList();
+  final widths = effectiveWidthSource.map((s) => s.widthMm).toList();
 
   // Step 4: Filter outliers
   final filteredLengths = filterOutliersIqr(lengths);

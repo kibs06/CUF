@@ -35,6 +35,13 @@ android {
         coreLibraryDesugaringEnabled true
     }
 
+    // Keep the Kotlin JVM target aligned with the Java compile options above.
+    // AGP's built-in Kotlin support defaults to JVM 17, which fails the build
+    // with "Inconsistent JVM Target Compatibility" against VERSION_21.
+    kotlinOptions {
+        jvmTarget = '21'
+    }
+
     // ARCore requires OpenGL ES 3.0 or later
     defaultConfig {
         // Ensure minSdk is at least 24 for ARCore

@@ -18,9 +18,11 @@ This MOC indexes the project's **history and trajectory**: the roadmap, the chan
 - [[docs/PROJECT_HANDOFF|📄 Project Handoff]] — decisions, known issues, "What's Next" (v1.1.0, July 2; partially stale)
 
 ### Known roadmap priorities (from handoff + summary)
-**High**: real-time order updates (Supabase Realtime — available, not integrated), push notifications (FCM — in progress), payment gateway (PayMongo/GCash — attempt #6 implemented, sandbox verification pending), image gallery zoom, search filters.
-**Medium**: real AR fitting (currently simulated), seller analytics, reviews/ratings (partially live), wishlist, store-follow feed.
+**High**: real-time order updates (Supabase Realtime — available, not integrated), payment gateway (PayMongo/GCash — attempt #6 implemented, sandbox verification pending), image gallery zoom.
+**Medium**: real AR fitting (currently simulated, wall calibration added), seller analytics, reviews/ratings (partially live), wishlist, store-follow feed.
 **Low**: multi-language, offline caching, seller-customer chat (**live** — see [[obsidian/MOCs/06 - Notifications & Messaging|🔔 Messaging]]), admin role delegation, CSV/PDF export (CSV is a stub).
+
+**Recently completed**: push notifications (FCM — live), search filters (live), account management & settings redesign, home hero redesign, banner system, sticky search, buy-again flow, per-color photo galleries, foot sizing v2 (wall calibration).
 
 ---
 
@@ -47,8 +49,12 @@ This MOC indexes the project's **history and trajectory**: the roadmap, the chan
 
 ## 📦 Releases
 
-- `releases/version.json` + `releases/changelog.json` — machine-readable release metadata (latest: v1.0.8 — admin suspension + enforcement).
-- Recent commits (git): seller tiered verification · CUFMAI terms gating · seller espresso/cream redesign · admin suspension management · paymongo webhook push on confirmed online GCash.
+- `releases/version.json` + `releases/changelog.json` — machine-readable release metadata (latest: v1.0.15 — logout fix).
+- **v1.0.15** (Aug 22): Fixed logout bug (pop all routes → AuthGate), seller profile logout button.
+- **v1.0.14** (Aug 22): Banner system, sticky search bar, seller settings icon disabled.
+- **v1.0.13** (Aug 21): Full-bleed home hero, store performance fix, account management, profile redesign.
+- Earlier: seller tiered verification · CUFMAI terms gating · seller espresso/cream redesign · admin suspension management · paymongo webhook push on confirmed online GCash.
+- Recent features: AR wall calibration (foot sizing v2), buy-again-to-cart, settings redesign, per-color photo galleries, masonry grid, product tags, recently viewed.
 
 ## 📚 Master docs (near-duplicates — consolidation candidate)
 

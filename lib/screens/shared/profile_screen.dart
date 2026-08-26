@@ -426,6 +426,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         subtitle: context.watch<UpdateProvider>().installedVersion != null
                             ? 'v${context.watch<UpdateProvider>().installedVersion}'
                             : null,
+                        showDotBadge:
+                            context.watch<UpdateProvider>().hasUnviewedUpdate,
                         onTap: () {
                           Navigator.of(context).push(
                             MaterialPageRoute(
@@ -1303,6 +1305,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     required String title,
     required VoidCallback onTap,
     String? subtitle,
+    bool showDotBadge = false,
     Widget? trailing,
   }) {
     return Material(
@@ -1310,7 +1313,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
       child: ListTile(
         dense: subtitle == null,
         leading: Icon(icon, color: AppConstants.primary, size: 22),
-        title: Text(title, style: AppConstants.bodyStyle(fontSize: 14)),
+        title: Row(
+          children: [
+            Flexible(
+              child: Text(title, style: AppConstants.bodyStyle(fontSize: 14)),
+            ),
+            // Unviewed-update indicator dot (e.g. a newer What's New entry).
+            if (showDotBadge) ...[
+              const SizedBox(width: 6),
+              Container(
+                width: 8,
+                height: 8,
+                decoration: const BoxDecoration(
+                  color: AppConstants.error,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ],
+          ],
+        ),
         subtitle: subtitle == null
             ? null
             : Text(

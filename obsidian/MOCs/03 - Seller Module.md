@@ -52,6 +52,13 @@ SellerShell → Tab 0: SellerDashboardScreen
 | `lib/screens/seller/store_profile_screen.dart` | Store branding, stories, ratings |
 | `lib/screens/seller/store_schedule_screen.dart` | Open/closed toggle + schedule |
 | `lib/screens/seller/store_reviews_screen.dart` | Store review list + seller replies |
+| `lib/screens/seller/create_store_screen.dart` | Create new store |
+| `lib/screens/seller/edit_store_screen.dart` | Edit store details |
+| `lib/screens/seller/store_location_picker_screen.dart` | Map-based store location picker |
+| `lib/screens/seller/pos_history_screen.dart` | POS transaction history |
+| `lib/screens/seller/pos_receipt_detail_screen.dart` | POS receipt detail view |
+| `lib/screens/seller/gcash_ref_scanner_screen.dart` | GCash reference number scanner |
+| `lib/screens/seller/order_detail_screen.dart` | Individual order detail view |
 | `lib/services/sales_service.dart` | Revenue/today/weekly/monthly/trend queries (online+POS combined) |
 | `lib/services/order_service.dart` | `getRecentOrders`, `getOrderCountByStatus`, store order filtering |
 | `lib/services/product_service.dart` | Product CRUD, images, variants, `_syncInventoryFromVariants()`, `syncProductActiveStatus()` |

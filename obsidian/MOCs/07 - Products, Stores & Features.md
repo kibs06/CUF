@@ -25,6 +25,8 @@ Two write paths keep them in sync, in opposite directions:
 
 **Read paths**: customer browse/product detail/checkout read `inventory` (higher-wins merge with variants) · POS/seller screens read both · edit form reads `product_variants`. `purchasableProducts()` (`lib/utils/product_stock.dart`) hides products exactly when unpurchasable — restock makes them reappear on next fetch.
 
+**Per-color photo galleries**: each `ProductColor` owns its own photo gallery and size/stock variants. Sellers add colors, then sizes under each color — see [[docs/AI/SIZE_VARIANT_FLOW|Size/variant flow]].
+
 **products columns** (key): `id TEXT PK`, `store_id`, `seller_id` (**nullable!**), `price` (always original), `category`, `tags TEXT[]`, `collection`, `sku`, `is_active` (auto-synced to stock), `is_featured`, `is_published`, `sale_price` + `sale_starts_at`/`sale_ends_at` (on-sale). Storage bucket `product-images` (public read).
 
 **RLS**: anyone SELECT; only `role IN ('seller','admin')` INSERT/UPDATE/DELETE with `store_id` ownership verification (`20260712_tighten_products_rls.sql`).
@@ -37,7 +39,7 @@ Two write paths keep them in sync, in opposite directions:
 - **Rating is trigger-maintained**: `refresh_store_rating()` (SECURITY DEFINER) fires on every insert/update/delete of `reviews` + `product_reviews` + `store_reviews`, recomputing from all three (weighted by count), resolving legacy `product_reviews` via `products.store_id`. Migrations: `20260807000000_add_store_rating_aggregation.sql` + `20260808000000_add_store_reviews.sql`.
 - **`store_reviews`** — direct "Rate this store": `UNIQUE(store_id, customer_id)`, rating 1–5, comment; `getStoreLevelReviews(storeId)` + `submitStoreReview({storeId, rating, comment})` in `ReviewProvider`.
 - **Follows** — `store_follows` (composite PK); async `isFollowingAsync()` is the real check (**`isFollowing()` sync is a stub returning false**).
-- Screens: `lib/screens/store/store_screen.dart`, `store_profile_screen.dart` (stories, reviews, masonry→standard grid fix), `collection_screen.dart`, `seller/store_reviews_screen.dart` (list + seller replies + in-page display avg), `seller/store_schedule_screen.dart`.
+- Screens: `lib/screens/store/store_screen.dart`, `store_profile_screen.dart` (stories, reviews, masonry→standard grid fix), `collection_screen.dart`, `rate_store_screen.dart` (submit/edit store review), `seller/store_reviews_screen.dart` (list + seller replies + in-page display avg), `seller/store_schedule_screen.dart`.
 - ⚠️ **FKs**: `products.store_id` / `orders.store_id` have NO cascade — deleting a store requires reassigning children first (`20260709_one_store_per_seller.sql` dedupes duplicates).
 
 ---

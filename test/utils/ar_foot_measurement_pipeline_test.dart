@@ -251,6 +251,68 @@ void main() {
       expect(result.widthMm, greaterThanOrEqualTo(99));
       expect(result.widthMm, lessThanOrEqualTo(101));
     });
+
+    group('widthMeasured exclusion (E7)', () {
+      // Build a front-capture set where every sample has a real measured
+      // width of ~96mm and a proportional ESTIMATE width of ~101mm
+      // (265mm × 0.38). If estimates leak into the statistics the median
+      // lands near 101; with the E7 fix it must stay at ~96.
+      List<MeasurementSample> samplesWith({
+        required bool measured,
+      }) =>
+          List.generate(10, (i) => MeasurementSample(
+                lengthMm: 265.0 + i * 0.1,
+                widthMm: measured ? 96.0 + i * 0.05 : 100.8 + i * 0.05,
+                trackingQuality: 0.95,
+                segmentationConfidence: 0.9,
+                timestamp: DateTime.now(),
+                captureAngle: 'front',
+                widthMeasured: measured,
+              ));
+
+      test('proportional width estimates are excluded from width median', () {
+        // Mix: 6 measured + 4 estimated (estimates are the majority of raw
+        // rows but must not move the median).
+        final result = combineGuidedSamples([
+          ...samplesWith(measured: true),
+          ...samplesWith(measured: false).take(4),
+        ]);
+        expect(result, isNotNull);
+        expect(result!.widthMm, lessThan(98.0),
+            reason: 'width median must come from measured widths (~96), '
+                'not proportional estimates (~101)');
+        expect(result.widthMm, greaterThanOrEqualTo(95.5));
+      });
+
+      test(
+          'falls back to all widths when too few measured widths exist '
+          '(scan never detected width points)', () {
+        final result = combineGuidedSamples([
+          ...samplesWith(measured: false),
+        ]);
+        expect(result, isNotNull,
+            reason: 'all-estimate scans still produce a low-confidence '
+                'result rather than failing');
+        // Fallback includes the estimates (~101).
+        expect(result!.widthMm, greaterThanOrEqualTo(99));
+      });
+
+      test('defaults to widthMeasured=true so legacy call sites are unchanged', () {
+        final result = combineGuidedSamples(samplesWith(measured: true)
+            .map((s) => MeasurementSample(
+                  lengthMm: s.lengthMm,
+                  widthMm: s.widthMm,
+                  trackingQuality: s.trackingQuality,
+                  segmentationConfidence: s.segmentationConfidence,
+                  timestamp: s.timestamp,
+                  captureAngle: s.captureAngle,
+                ))
+            .toList());
+        expect(result, isNotNull);
+        expect(result!.widthMm, greaterThanOrEqualTo(95.5));
+        expect(result.widthMm, lessThan(97.0));
+      });
+    });
   });
 
   // ═══════════════════════════════════════════════════════════════

@@ -33,6 +33,12 @@ const MethodChannel _methodChannel =
 const EventChannel _eventChannel =
     EventChannel('com.solevision/ar_foot_sizing/events');
 
+/// TEMPORARY (Phase 1b diagnostics): raw invoke escape hatch for the diag
+/// logger's `setDiagLogFile` relay registration. Remove together with
+/// diag_logger.dart.
+Future<T?> invokeArFootMethod<T>(String method, [dynamic arguments]) =>
+    _methodChannel.invokeMethod<T>(method, arguments);
+
 // ═══════════════════════════════════════════════════════════════════
 // DATA CLASSES
 // ═══════════════════════════════════════════════════════════════════
@@ -130,6 +136,48 @@ class ArCameraFrame {
   }
 }
 
+/// Outcome of requesting an AR session start (E3/E12 fix).
+///
+/// [started] is true only when the native ARCore session actually reached
+/// "created + configured + resumed". When false, [reason] mirrors the native
+/// `error` event's reason codes ('unsupported_device', 'user_opted_out',
+/// 'needs_install', 'timeout', 'unsupported', 'error') and [message] carries a
+/// human-readable explanation suitable for surfacing directly in the UI.
+class ArSessionStartResult {
+  final bool started;
+  final String? reason;
+  final String? message;
+
+  const ArSessionStartResult({
+    required this.started,
+    this.reason,
+    this.message,
+  });
+
+  factory ArSessionStartResult.fromNative(Object? native) {
+    if (native is bool) {
+      // Legacy native response (plain `true`) — treat as started.
+      return ArSessionStartResult(started: native);
+    }
+    if (native is Map) {
+      return ArSessionStartResult(
+        started: (native['started'] as bool?) ?? false,
+        reason: native['reason']?.toString(),
+        message: native['message']?.toString(),
+      );
+    }
+    return const ArSessionStartResult(
+      started: false,
+      reason: 'error',
+      message: 'Unexpected startSession response from native side',
+    );
+  }
+
+  @override
+  String toString() =>
+      'ArSessionStartResult(started: $started, reason: $reason, message: $message)';
+}
+
 /// Detected horizontal plane (floor).
 class ArPlane {
   final double centerX;
@@ -190,12 +238,14 @@ class ArSessionEvent {
 /// Usage:
 /// ```dart
 /// final arCore = ArCoreChannel.instance;
-/// final result = await arCore.startSession();
-/// if (result) {
-///   // Listen for events
+/// final start = await arCore.startSession();
+/// if (start.started) {
+///   // Listen for events (already attached by startSession)
 ///   arCore.events.listen((event) { ... });
 ///   // Hit test a point
 ///   final point = await arCore.hitTest(x: 0.5, y: 0.5);
+/// } else {
+///   // Surface start.reason / start.message to the user
 /// }
 /// await arCore.stopSession();
 /// ```
@@ -218,45 +268,68 @@ class ArCoreChannel {
 
   /// Start a new ARCore session.
   ///
-  /// The native side will:
-  /// 1. Create an ARCore Session
-  /// 2. Configure for plane detection (horizontal)
-  /// 3. Start the camera feed
-  /// 4. Begin tracking
+  /// The native side creates the session asynchronously (the platform view's
+  /// background executor) and this future resolves only when a TERMINAL
+  /// outcome is known — success, or a failure with a reason code.
   ///
-  /// Returns `true` if the session started successfully.
-  /// Returns `false` if ARCore is not supported or permission denied.
-  Future<bool> startSession() async {
-    if (_sessionActive) return true;
+  /// Start a new ARCore session.
+  ///
+  /// The native side creates the session asynchronously (the platform view's
+  /// background executor) and this future resolves only when a TERMINAL
+  /// outcome is known — success, or a failure with a reason code.
+  ///
+  /// E12 fix: the EventChannel listener is attached BEFORE the method call is
+  /// dispatched. The native side emits `session_started`/`error` events as
+  /// soon as its async creation resolves; attaching afterwards would race and
+  /// drop those early events.
+  ///
+  /// D1 fix: there is deliberately NO `_sessionActive` short-circuit anymore.
+  /// Every caller gets an honest handshake against the CURRENT platform view:
+  /// native replies immediately if that view's session is already up, else
+  /// parks until its outcome resolves. A cached "active" flag would lie across
+  /// screen transitions, where one view's session dies with its widget while
+  /// the next view's session hasn't started yet.
+  Future<ArSessionStartResult> startSession() async {
+    _startListening();
 
     try {
-      final result = await _methodChannel.invokeMethod<bool>('startSession');
-      _sessionActive = result ?? false;
-
-      if (_sessionActive) {
-        _startListening();
-      }
-
-      return _sessionActive;
+      final result = await _methodChannel.invokeMethod<Object>('startSession');
+      final start = ArSessionStartResult.fromNative(result);
+      // Honest state: only a genuinely-started session marks us active, so
+      // hitTest/acquireCameraFrame are properly gated instead of silently
+      // no-oping against a nonexistent native view.
+      _sessionActive = start.started;
+      return start;
     } on PlatformException catch (e) {
       debugPrint('[ArCoreChannel] startSession error: ${e.message}');
-      return false;
+      return ArSessionStartResult(
+        started: false,
+        reason: 'error',
+        message: e.message,
+      );
     }
   }
 
-  /// Stop the current ARCore session and release resources.
+  /// Detach Dart-side session state (event listening + active flag).
+  ///
+  /// D1 fix: this deliberately does NOT invoke the native `stopSession`
+  /// method anymore. Native view/session teardown is single-owned by Flutter's
+  /// PlatformView disposal — when a screen's AR widget unmounts (pop or
+  /// pushReplacement), the engine disposes the platform view, which closes the
+  /// native session. An explicit Dart-initiated teardown here raced that
+  /// disposal: by the time it landed, `currentView` on the native side had
+  /// already been overwritten by the INCOMING screen's brand-new view, so the
+  /// new view was destroyed mid-creation (the Phase 1b transition crash).
   Future<void> stopSession() async {
-    if (!_sessionActive) return;
+    if (!_sessionActive) {
+      // Still detach any listener so a stale EventChannel subscription can't
+      // outlive the screen that owns us.
+      _stopListening();
+      return;
+    }
 
     _stopListening();
-
-    try {
-      await _methodChannel.invokeMethod('stopSession');
-    } on PlatformException catch (e) {
-      debugPrint('[ArCoreChannel] stopSession error: ${e.message}');
-    } finally {
-      _sessionActive = false;
-    }
+    _sessionActive = false;
   }
 
   // ── Hit Testing ──

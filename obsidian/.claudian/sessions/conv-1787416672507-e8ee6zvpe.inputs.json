@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "conversationId": "conv-1787416672507-e8ee6zvpe",
+  "records": [
+    {
+      "schemaVersion": 1,
+      "id": "msg-1787416672634-h1xk2sf",
+      "userTurnOrdinal": 1,
+      "state": "accepted",
+      "localMessageId": "msg-1787416672498-ta02pqz",
+      "timestamp": 1787416672498,
+      "rawDisplayText": "hey",
+      "canonicalText": "hey",
+      "images": [],
+      "contentDigest": "ba8b7026adffa6a3ea7b749c12bfd034db9eb33609c94ee923fc55edc7de0847",
+      "providerUserMessageId": "fa4a5adb-6356-4de1-8944-8a68aa830171"
+    },
+    {
+      "schemaVersion": 1,
+      "id": "msg-1787416686746-mry540q",
+      "userTurnOrdinal": 2,
+      "state": "accepted",
+      "localMessageId": "msg-1787416686743-3ums7jb",
+      "timestamp": 1787416686743,
+      "rawDisplayText": "/usage",
+      "canonicalText": "/usage",
+      "images": [],
+      "contentDigest": "186699303358f7ad52f7b956f88624b70f1a3fb40ddd53db597a2180c9e7bcb2",
+      "providerUserMessageId": "f7c29c5c-9ddf-4e13-a875-b14fdf849fbf",
+      "providerAssistantMessageId": "7b55f20a-fc95-4be4-84fc-6cef4b50509f"
+    }
+  ]
+}

@@ -47,6 +47,12 @@ class ArFootSizingView(
         private const val TAG = "ArFootSizingView"
         private const val MAX_AVAILABILITY_RETRIES = 5
 
+        // E5 fix: delay between ARCore availability retries (ms). The remote
+        // compatibility check typically resolves within a few hundred ms, so
+        // 500ms x 5 retries gives ~2.5s of real waiting instead of burning
+        // all retries instantly against a cached result.
+        private const val AVAILABILITY_RETRY_DELAY_MS = 500L
+
         // How often to capture a CPU camera frame for ML detection (ms).
         // Matches the ~200ms sampling interval, so a fresh frame is always
         // available when Flutter requests one. ARCore produces a separate
@@ -83,6 +89,14 @@ class ArFootSizingView(
 
     // Written on the session executor thread, read on the GL renderer thread.
     @Volatile private var session: Session? = null
+
+    // E3 fix: true only after createSession() has fully succeeded (session
+    // created, configured AND resumed). Lets the plugin answer `startSession`
+    // method calls with the REAL state instead of an unconditional `true`.
+    @Volatile private var sessionStarted = false
+
+    /** Whether the ARCore session has actually reached "created + resumed". */
+    fun isSessionStarted(): Boolean = sessionStarted
 
     // Guards the session assignment in createSession() against destroySession()
     // in dispose() — makes the disposed-check-then-assign atomic so an
@@ -143,7 +157,15 @@ class ArFootSizingView(
     // ── View / Lifecycle ──
 
     override fun getView(): View {
-        if (glSurfaceView == null) {
+        // D2 fix: never resurrect the surface or dispatch another
+        // createSession() once dispose() has run.
+        if (glSurfaceView == null && !disposed) {
+            // TEMPORARY (Phase 1b diagnostics) — remove with DiagRelay.kt.
+            // Logged ONLY on actual creation: the platform layer calls getView()
+            // ~30x/sec on the existing view, and logging every call would flood
+            // the shared diag file (~1,800 lines/min) and distort the timing
+            // this instrumentation exists to observe.
+            DiagRelay.log("view", "getView CREATING GLSurfaceView")
             glSurfaceView = ArGLSurfaceView(activity).apply {
                 setEGLContextClientVersion(2)
                 preserveEGLContextOnPause = true
@@ -157,22 +179,51 @@ class ArFootSizingView(
             // the session exists (see onDrawFrame).
             sessionExecutor.execute { createSession() }
         }
-        return glSurfaceView!!
+        // Disposed views have no surface to hand back; a detached empty View
+        // keeps the engine contract (non-null) without recreating anything.
+        return glSurfaceView ?: View(activity)
     }
 
     override fun dispose() {
-        disposed = true
-        sessionExecutor.shutdownNow()
-        // Same lock as createSession's assignment — closes the session without
-        // racing an in-flight async creation.
-        synchronized(sessionLock) {
-            destroySession()
+        // TEMPORARY (Phase 1b diagnostics) — remove with DiagRelay.kt.
+        DiagRelay.log("view", "dispose BEGIN")
+        // D2 fix (E14): dispose must be a no-op on second and later calls.
+        // All dispose callers run serialized on the platform thread, so this
+        // flag alone makes re-entry impossible.
+        if (disposed) {
+            DiagRelay.log("view", "dispose ignored — already disposed")
+            return
         }
-        glSurfaceView?.onPause()
-        glSurfaceView = null
+        disposed = true
+        // Register with the plugin's teardown gate FIRST so any view created
+        // concurrently blocks its session creation until we fully finish.
+        plugin.beginViewTeardown()
+        try {
+            // D2 fix: pause the GL surface BEFORE closing the session. The GL
+            // renderer thread inside onDrawFrame() holds `session` in a local
+            // and calls update()/acquireCameraImage() on it; GLSurfaceView
+            // .onPause() does not return until that thread acknowledges, which
+            // guarantees no renderer code is touching the session by the time
+            // destroySession() pauses/closes it below. The previous order
+            // (close first, pause after) was a use-after-close native crash.
+            glSurfaceView?.onPause()
+            glSurfaceView = null
+            sessionExecutor.shutdownNow()
+            // Same lock as createSession's assignment — closes the session without
+            // racing an in-flight async creation.
+            synchronized(sessionLock) {
+                destroySession()
+            }
+        } finally {
+            plugin.endViewTeardown()
+        }
+        // TEMPORARY (Phase 1b diagnostics) — remove with DiagRelay.kt.
+        DiagRelay.log("view", "dispose END")
     }
 
     fun onResume() {
+        // TEMPORARY (Phase 1b diagnostics) — remove with DiagRelay.kt.
+        DiagRelay.log("view", "onResume")
         session?.resume()
         glSurfaceView?.onResume()
         // Re-apply display geometry AFTER resume so ARCore has the correct
@@ -182,6 +233,8 @@ class ArFootSizingView(
     }
 
     fun onPause() {
+        // TEMPORARY (Phase 1b diagnostics) — remove with DiagRelay.kt.
+        DiagRelay.log("view", "onPause")
         session?.pause()
         glSurfaceView?.onPause()
     }
@@ -238,6 +291,13 @@ class ArFootSizingView(
 
     private fun createSession() {
         try {
+            // D3 fix: never start creating an ARCore session while another
+            // view's teardown is still closing its session (ARCore supports
+            // one Session per process). Blocks until the plugin's teardown
+            // gate opens; runs on this view's background executor, so blocking
+            // cannot stall the UI.
+            plugin.awaitViewTeardowns()
+
             // ── Step 1: Check ARCore availability ──
             // On Android 11+ this requires <queries> for com.google.ar.core in the manifest.
             // On first call the result may be UNKNOWN_CHECKING (remote verification in flight)
@@ -250,19 +310,30 @@ class ArFootSizingView(
                 availabilityRetryCount++
                 if (availabilityRetryCount > MAX_AVAILABILITY_RETRIES) {
                     Log.e(TAG, "ARCore availability check timed out after $MAX_AVAILABILITY_RETRIES retries")
-                    plugin.sendEvent("error", mapOf(
-                        "message" to "ARCore availability check timed out. Please try again.",
-                        "reason" to "timeout"
-                    ))
+                    // E3 fix: route through the plugin so parked startSession
+                    // replies are resolved with the same reason code.
+                    plugin.onSessionFailed(
+                        "timeout",
+                        "ARCore availability check timed out. Please try again."
+                    )
                     return
                 }
                 Log.i(TAG, "ARCore availability still checking — retry $availabilityRetryCount/$MAX_AVAILABILITY_RETRIES")
-                // Re-dispatch on the session executor (NOT the main looper, which
-                // would re-block the UI during the next checkAvailability).
-                // Guard against dispatching after dispose() shut the executor
-                // down (execute() would throw RejectedExecutionException).
+                // E5 fix: back off before retrying. checkAvailability caches its
+                // result, so an immediate re-dispatch burns all retries within
+                // milliseconds and falsely reports a timeout on slow networks.
+                // We are already on the backgrounded session executor thread,
+                // so sleeping here never blocks the UI or the platform thread.
+                // Re-check `disposed` after the sleep so dispose() during the
+                // backoff window doesn't touch a torn-down session/plugin.
                 if (!disposed) {
-                    sessionExecutor.execute { createSession() }
+                    try {
+                        Thread.sleep(AVAILABILITY_RETRY_DELAY_MS)
+                    } catch (e: InterruptedException) {
+                        Thread.currentThread().interrupt()
+                        return
+                    }
+                    if (!disposed) createSession()
                 }
                 return
             }
@@ -275,11 +346,7 @@ class ArFootSizingView(
                     else -> "unsupported"
                 }
                 Log.e(TAG, "ARCore not supported: $availability (reason=$reason)")
-                plugin.sendEvent("error", mapOf(
-                    "message" to "ARCore is not supported on this device",
-                    "reason" to reason,
-                    "availability" to availability.toString()
-                ))
+                plugin.onSessionFailed(reason, "ARCore is not supported on this device")
                 return
             }
 
@@ -291,18 +358,18 @@ class ArFootSizingView(
                 com.google.ar.core.ArCoreApk.InstallStatus.INSTALLED -> { /* proceed */ }
                 com.google.ar.core.ArCoreApk.InstallStatus.INSTALL_REQUESTED -> {
                     Log.w(TAG, "ARCore installation requested — waiting for Play Store")
-                    plugin.sendEvent("error", mapOf(
-                        "message" to "ARCore is being installed from Google Play. Please try again shortly.",
-                        "reason" to "needs_install"
-                    ))
+                    plugin.onSessionFailed(
+                        "needs_install",
+                        "ARCore is being installed from Google Play. Please try again shortly."
+                    )
                     return
                 }
                 else -> {
                     Log.e(TAG, "Unexpected ARCore install status: $installStatus")
-                    plugin.sendEvent("error", mapOf(
-                        "message" to "ARCore needs to be installed from Google Play",
-                        "reason" to "needs_install"
-                    ))
+                    plugin.onSessionFailed(
+                        "needs_install",
+                        "ARCore needs to be installed from Google Play"
+                    )
                     return
                 }
             }
@@ -331,9 +398,14 @@ class ArFootSizingView(
                 if (disposed) {
                     Log.w(TAG, "Disposed during async session creation — closing new session")
                     arSession.close()
+                    plugin.onSessionFailed(
+                        "error",
+                        "AR session was cancelled before it finished starting"
+                    )
                     return
                 }
                 session = arSession
+                sessionStarted = true
             }
             trackingState = "searching"
             hasSetCameraTexture = false // Reset so camera texture binds on new session
@@ -342,10 +414,22 @@ class ArFootSizingView(
             reapplyDisplayGeometry()
 
             Log.i(TAG, "ARCore session created successfully")
-            plugin.sendEvent("session_started", emptyMap())
+            // TEMPORARY (Phase 1b diagnostics) — remove with DiagRelay.kt.
+            DiagRelay.log("view", "createSession SUCCESS")
+            // E3 fix: single source of truth for "session actually started".
+            // The plugin both emits the `session_started` event AND resolves any
+            // startSession method calls parked waiting for this outcome.
+            plugin.onSessionStarted()
+        } catch (e: InterruptedException) {
+            // Executor shut down while waiting on the teardown gate — the view
+            // is being disposed; fail quietly instead of reporting a phantom
+            // session failure.
+            Log.i(TAG, "createSession cancelled while awaiting prior teardown")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to create ARCore session", e)
-            plugin.sendEvent("error", mapOf("message" to "Failed to initialize AR: ${e.message}"))
+            // TEMPORARY (Phase 1b diagnostics) — remove with DiagRelay.kt.
+            DiagRelay.log("view", "createSession FAILED: ${e.message}")
+            plugin.onSessionFailed("error", "Failed to initialize AR: ${e.message}")
         }
     }
 
@@ -355,6 +439,7 @@ class ArFootSizingView(
             hasValidUvs = false
             hasSetCameraTexture = false // Reset so texture rebinds on session recreation
             cachedFrameBytes = null
+            sessionStarted = false // E3: the started state dies with the session
             session?.pause()
             session?.close()
         } catch (e: Exception) {
@@ -598,19 +683,13 @@ class ArFootSizingView(
                         }
                     }
                 } catch (e: Exception) {
+                    // E10 fix: no fabricated fallback plane. The previous code
+                    // invented a 3m x 3m plane here, letting the UI show "ready"
+                    // while hitTests against the nonexistent polygon still failed
+                    // — the confusing "ready + 0 samples" state. Surface the
+                    // failure honestly instead: stay in "searching" until a real
+                    // plane is found on a later frame.
                     Log.w(TAG, "Plane detection failed: ${e.message}")
-                    // Fallback: report plane detected after tracking is stable
-                    if (!planeDetected && trackingState == "tracking") {
-                        planeDetected = true
-                        floorDistance = camera.pose.ty().toDouble()
-                        val planeData: MutableMap<String, Any> = mutableMapOf(
-                            "centerX" to 0.0 as Any, "centerY" to 0.0 as Any, "centerZ" to 0.0 as Any,
-                            "extentX" to 3.0 as Any, "extentZ" to 3.0 as Any,
-                            "normalX" to 0.0 as Any, "normalY" to 1.0 as Any, "normalZ" to 0.0 as Any
-                        )
-                        floorPlane = planeData
-                        plugin.sendEvent("plane", planeData)
-                    }
                 }
             }
 
@@ -666,20 +745,41 @@ class ArFootSizingView(
 
             val hitResults = frame.hitTest(px, py)
             Log.d(TAG, "hitTest norm=($x,$y) -> viewport=($px,$py) hits=${hitResults.size}")
+            // E4 fix: the session detects VERTICAL planes too
+            // (PlaneFindingMode.HORIZONTAL_AND_VERTICAL), so a ray that clips a
+            // wall or box side used to return a point on that vertical surface.
+            // A heel/toe/width point landing on a wall inflates the computed
+            // length/width while still passing the sanity bounds (≤500mm),
+            // silently polluting the median. Only HORIZONTAL_UPWARD_FACING
+            // planes are valid measurement surfaces.
+            //
+            // When hits exist but none qualify, we deliberately return `null`
+            // (distinguishable "no floor hit" — NOT a fabricated point and NOT
+            // a silent acceptance of a bad plane). The Dart side already treats
+            // a null batch entry as "raycast missed the floor plane": the
+            // sample is rejected (no crash, no zeroed measurement) and the
+            // [SAMPLE-DEBUG] trace logs `raycast=REJECT`.
             for (hit in hitResults) {
                 val trackable = hit.trackable
-                if (trackable is Plane && trackable.isPoseInPolygon(hit.hitPose)) {
-                    val pose = hit.hitPose
-                    val dist = Math.sqrt(
-                        (pose.tx() * pose.tx() + pose.ty() * pose.ty() + pose.tz() * pose.tz()).toDouble()
-                    )
-                    return mapOf(
-                        "x" to pose.tx().toDouble(),
-                        "y" to pose.ty().toDouble(),
-                        "z" to pose.tz().toDouble(),
-                        "distance" to dist
-                    )
-                }
+                if (trackable !is Plane) continue
+                if (trackable.type != Plane.Type.HORIZONTAL_UPWARD_FACING) continue
+                if (!trackable.isPoseInPolygon(hit.hitPose)) continue
+
+                val pose = hit.hitPose
+                val dist = Math.sqrt(
+                    (pose.tx() * pose.tx() + pose.ty() * pose.ty() + pose.tz() * pose.tz()).toDouble()
+                )
+                return mapOf(
+                    "x" to pose.tx().toDouble(),
+                    "y" to pose.ty().toDouble(),
+                    "z" to pose.tz().toDouble(),
+                    "distance" to dist
+                )
+            }
+            // Reaching here means every hit was rejected by the floor filter.
+            // Distinguishable in logcat from "ray never touched any plane".
+            if (hitResults.isNotEmpty()) {
+                Log.d(TAG, "hitTest rejected ${hitResults.size} hit(s) — none on a horizontal-upward-facing floor plane")
             }
         } catch (e: Exception) {
             Log.e(TAG, "hitTest error", e)
