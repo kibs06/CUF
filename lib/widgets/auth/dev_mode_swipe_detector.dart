@@ -42,13 +42,17 @@ class _DevModeSwipeDetectorState extends State<DevModeSwipeDetector> {
 
     final nowOn = !DevMode.instance.isEnabled;
     DevMode.instance.toggle();
+    if (nowOn) {
+      // Clear all lockout data so the developer is never blocked
+      DevMode.instance.clearAllLockouts();
+    }
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
           content: Text(
             nowOn
-                ? 'Developer mode ON — Continue buttons now skip the flows.'
+                ? 'Developer mode ON — lockout cleared, Continue buttons skip flows.'
                 : 'Developer mode OFF',
           ),
           duration: const Duration(seconds: 2),

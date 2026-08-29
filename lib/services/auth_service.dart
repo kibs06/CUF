@@ -586,6 +586,27 @@ class AuthService {
         .eq('user_id', userId);
   }
 
+  /// Admin: fetch all failed-login rows with the user's email/name.
+  Future<List<Map<String, dynamic>>> fetchAllFailedLogins() async {
+    final data = await _client
+        .from('failed_logins')
+        .select('*, profiles(id, full_name, email, role)')
+        .order('failed_at', ascending: false);
+    return (data as List).map((row) => Map<String, dynamic>.from(row)).toList();
+  }
+
+  /// Admin: clear all lockouts (reset all rows to active).
+  Future<void> clearAllLockouts() async {
+    await _client
+        .from('failed_logins')
+        .update({
+          'status': 'active',
+          'attempt_count': 0,
+          'locked_until': null,
+        })
+        .neq('status', 'active');
+  }
+
   /// Send account lockout notification email to the account owner.
   /// Uses the existing email-sending function (Supabase resetPasswordForEmail)
   /// which sends a password reset link. The reset form will check for

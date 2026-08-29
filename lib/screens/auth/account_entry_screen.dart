@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../constants/app_constants.dart';
 import '../../providers/auth_provider.dart';
@@ -13,6 +14,7 @@ import '../../widgets/auth/dev_mode_swipe_detector.dart';
 import '../../widgets/auth/full_bleed_video_background.dart';
 import '../../widgets/auth/signup_scaffold.dart';
 import '../../widgets/auth/sole_primary_auth_button.dart';
+import '../../widgets/lockout_overlay.dart';
 import 'customer_register_screen.dart';
 import 'seller_application_flow.dart';
 
@@ -108,6 +110,27 @@ class _AccountEntryScreenState extends State<AccountEntryScreen>
       duration: _transitionDuration,
     )..addStatusListener(_onTransitionStatus);
     _checkBiometricState();
+    _checkLockoutOverlay();
+  }
+
+  /// If the user tapped a lockout push notification, show the overlay
+  /// on first load.
+  Future<void> _checkLockoutOverlay() async {
+    final prefs = await SharedPreferences.getInstance();
+    final shouldShow = prefs.getBool('show_lockout_overlay') ?? false;
+    if (shouldShow) {
+      await prefs.remove('show_lockout_overlay');
+      if (!mounted) return;
+      // Wait for the first frame so the overlay renders on top
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        LockoutOverlay.show(
+          context,
+          email: '',
+          remainingMinutes: 30,
+        );
+      });
+    }
   }
 
   @override
@@ -190,7 +213,36 @@ class _AccountEntryScreenState extends State<AccountEntryScreen>
         // here — AuthGate reacts to the auth state change and swaps the root.
         _offerBiometricEnrollment(email, password);
       } else if (!success && mounted) {
-        _showError(auth.errorMessage ?? 'Authentication failed.');
+        // Check if a lockout overlay should be shown
+        final lockout = auth.pendingLockout;
+        if (lockout != null && mounted) {
+          auth.clearPendingLockout();
+          final lockoutEmail = lockout['email'] as String;
+          LockoutOverlay.show(
+            context,
+            email: lockoutEmail,
+            remainingMinutes: lockout['remainingMinutes'] as int,
+            device: lockout['device'] as String?,
+            ipAddress: lockout['ipAddress'] as String?,
+            onResetPassword: (email) async {
+              final success = await auth.resetPassword(email);
+              if (success && mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Check your email for a reset link.'),
+                    backgroundColor: AppConstants.success,
+                  ),
+                );
+              }
+              return success;
+            },
+            onReportIntrusion: (email) async {
+              return await auth.reportIntrusion(email);
+            },
+          );
+        } else {
+          _showError(auth.errorMessage ?? 'Authentication failed.');
+        }
       }
     } catch (e) {
       if (!mounted) return;

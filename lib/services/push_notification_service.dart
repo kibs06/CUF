@@ -5,6 +5,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:app_badge_plus/app_badge_plus.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../utils/notification_formatters.dart';
@@ -357,6 +358,15 @@ class PushNotificationService {
       if (conversationId != null) {
         onNavigateToChat?.call(conversationId, storeName);
       }
+      return;
+    }
+
+    // Lockout notification → set a flag so the login screen shows the
+    // lockout overlay when it loads.
+    if (type == 'lockout') {
+      SharedPreferences.getInstance().then((prefs) {
+        prefs.setBool('show_lockout_overlay', true);
+      });
       return;
     }
 

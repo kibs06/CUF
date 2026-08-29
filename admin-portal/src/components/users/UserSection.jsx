@@ -29,6 +29,7 @@ export default function UserSection({
   users,
   emptyMessage,
   showSellerStatus,
+  failedLogins,
   onView,
 }) {
   const c = SECTION_COLORS[color] ?? SECTION_COLORS.amber
@@ -61,6 +62,7 @@ export default function UserSection({
               key={user.id}
               user={user}
               showSellerStatus={showSellerStatus}
+              lockout={failedLogins?.[user.id]}
               onView={onView}
             />
           ))

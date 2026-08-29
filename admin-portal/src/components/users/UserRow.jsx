@@ -24,7 +24,7 @@ function getAvatarColor(name) {
   return AVATAR_COLORS[charCode % AVATAR_COLORS.length] || AVATAR_COLORS[0]
 }
 
-export default function UserRow({ user, showSellerStatus, onView }) {
+export default function UserRow({ user, showSellerStatus, lockout, onView }) {
   const initials = getInitials(user.full_name, user.email)
   const avatarColor = getAvatarColor(user.full_name)
   const suspended = !!user.suspended
@@ -48,9 +48,13 @@ export default function UserRow({ user, showSellerStatus, onView }) {
     }
   }
 
+  const isLocked = lockout?.status === 'locked'
+  const attemptCount = lockout?.attemptCount ?? 0
+  const hasFailedAttempts = attemptCount > 0
+
   return (
     <>
-      <div className={`group flex items-center gap-4 px-5 py-4 transition-colors hover:bg-[#FDFAF7] ${suspended ? 'bg-red-50/40' : ''}`}>
+      <div className={`group flex items-center gap-4 px-5 py-4 transition-colors hover:bg-[#FDFAF7] ${suspended ? 'bg-red-50/40' : isLocked ? 'bg-red-50/30' : ''}`}>
         {/* Avatar */}
         <div className="flex-shrink-0">
           {user.avatar_url ? (
@@ -72,9 +76,19 @@ export default function UserRow({ user, showSellerStatus, onView }) {
         <div className="min-w-0 flex-1">
           <p className="flex items-center gap-2 truncate text-sm font-semibold text-[#3B2314]">
             {user.full_name || 'Unnamed User'}
-            {suspended && (
+            {isLocked && (
+              <span className="flex-shrink-0 rounded-full border border-red-300 bg-red-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-700">
+                🔒 Locked
+              </span>
+            )}
+            {!isLocked && suspended && (
               <span className="flex-shrink-0 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-600">
                 Suspended
+              </span>
+            )}
+            {!isLocked && !suspended && hasFailedAttempts && (
+              <span className="flex-shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-600">
+                ⚠ {attemptCount} attempt{attemptCount === 1 ? '' : 's'}
               </span>
             )}
           </p>

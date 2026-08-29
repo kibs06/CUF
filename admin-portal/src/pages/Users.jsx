@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Search, ShoppingBag, Store, Shield } from 'lucide-react'
 import { useUsers } from '../hooks/useUsers.js'
+import { useFailedLogins } from '../hooks/useFailedLogins.js'
 import UserSection from '../components/users/UserSection.jsx'
 import UserDetailModal from '../components/users/UserDetailModal.jsx'
 
@@ -28,6 +29,7 @@ function UsersSkeleton() {
 
 export default function Users() {
   const { data, isLoading, isError, error } = useUsers()
+  const { data: failedLogins = {} } = useFailedLogins()
   const [activeTab, setActiveTab] = useState('All')
   const [statusFilter, setStatusFilter] = useState('All')
   const [search, setSearch] = useState('')
@@ -143,6 +145,7 @@ export default function Users() {
                 icon={<ShoppingBag size={16} />}
                 users={filteredCustomers}
                 emptyMessage="No customers yet"
+                failedLogins={failedLogins}
                 onView={setSelectedUser}
               />
               <UserSection
@@ -152,6 +155,7 @@ export default function Users() {
                 users={filteredSellers}
                 emptyMessage="No approved sellers yet"
                 showSellerStatus
+                failedLogins={failedLogins}
                 onView={setSelectedUser}
               />
             </div>
@@ -165,6 +169,7 @@ export default function Users() {
                 icon={<Shield size={16} />}
                 users={filteredAdmins}
                 emptyMessage="No admins"
+                failedLogins={failedLogins}
                 onView={setSelectedUser}
               />
             </div>
@@ -199,6 +204,7 @@ export default function Users() {
               }
               showSellerStatus={activeTab === 'Sellers'}
               emptyMessage={`No ${activeTab.toLowerCase()} found`}
+              failedLogins={failedLogins}
               onView={setSelectedUser}
             />
           )}

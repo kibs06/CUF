@@ -1,6 +1,7 @@
 import 'dart:ui' show Offset;
 
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // ⚠️⚠️⚠️ DEV-ONLY SCAFFOLDING — REMOVE BEFORE RELEASE ⚠️⚠️⚠️
 //
@@ -42,6 +43,19 @@ class DevMode {
   bool get isEnabled => _enabled.value;
 
   void toggle() => _enabled.value = !_enabled.value;
+
+  /// Clears all local lockout data from SharedPreferences.
+  /// Called when dev mode is toggled ON so the developer is never blocked
+  /// by the brute-force lockout during testing.
+  Future<void> clearAllLockouts() async {
+    final prefs = await SharedPreferences.getInstance();
+    final keys = prefs.getKeys();
+    for (final key in keys) {
+      if (key.startsWith('lockout_') || key.startsWith('fail_count_')) {
+        await prefs.remove(key);
+      }
+    }
+  }
 }
 
 /// One directional swipe in the unlock sequence.

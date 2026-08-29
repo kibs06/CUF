@@ -1,5 +1,10 @@
+import 'dart:convert';
+import 'dart:io' show HttpClient, Platform;
+
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../constants/app_constants.dart';
 import '../models/seller_application_data.dart';
 import '../services/account_manager.dart';
@@ -7,6 +12,8 @@ import '../services/auth_service.dart';
 import '../services/biometric_service.dart';
 import '../services/supabase_service.dart';
 import '../utils/auth_error_messages.dart';
+import '../utils/dev_mode.dart';
+import '../widgets/lockout_overlay.dart';
 
 class AuthProvider extends ChangeNotifier {
   final AuthService _auth = AuthService.instance;
@@ -16,6 +23,11 @@ class AuthProvider extends ChangeNotifier {
   Map<String, dynamic>? _profile;
   bool _isLoading = false;
   String? _errorMessage;
+
+  /// Set when a lockout triggers. The UI watches this to show the
+  /// [LockoutOverlay]. After showing, call [clearPendingLockout].
+  Map<String, dynamic>? _pendingLockout;
+  Map<String, dynamic>? get pendingLockout => _pendingLockout;
 
   /// Hooks set by the app root after construction.
   void Function(String userId)? onLoginHook;
@@ -64,6 +76,11 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Called by the UI after showing the lockout overlay.
+  void clearPendingLockout() {
+    _pendingLockout = null;
+  }
+
   // ── Local lockout tracking (SharedPreferences) ──────────────
   // Works immediately without database migrations or RLS policies.
   // Keyed by email so different accounts lock independently.
@@ -107,6 +124,51 @@ class AuthProvider extends ChangeNotifier {
     await prefs.remove(_lockoutKey(key));
   }
 
+  // ── Device info collection ────────────────────────────────────
+  /// Collects device model, OS version, and public IP address.
+  /// Returns a map with 'userAgent' and 'ipAddress' keys.
+  Future<Map<String, String>> _collectDeviceInfo() async {
+    String deviceModel = 'Unknown';
+    String osInfo = '';
+
+    try {
+      final deviceInfo = DeviceInfoPlugin();
+      if (Platform.isAndroid) {
+        final android = await deviceInfo.androidInfo;
+        deviceModel = '${android.manufacturer} ${android.model}';
+        osInfo = 'Android ${android.version.release} (SDK ${android.version.sdkInt})';
+      } else if (Platform.isIOS) {
+        final ios = await deviceInfo.iosInfo;
+        deviceModel = ios.name;
+        osInfo = 'iOS ${ios.systemVersion}';
+      } else {
+        deviceModel = Platform.operatingSystem;
+        osInfo = Platform.operatingSystemVersion;
+      }
+    } catch (_) {
+      deviceModel = Platform.operatingSystem;
+    }
+
+    final userAgent = '$deviceModel ($osInfo)'.trim();
+
+    // Fetch public IP (best-effort, timeout 3s)
+    String ipAddress = '';
+    try {
+      final client = HttpClient();
+      client.connectionTimeout = const Duration(seconds: 3);
+      final req = await client.getUrl(Uri.parse('https://api.ipify.org?format=json'));
+      final res = await req.close().timeout(const Duration(seconds: 3));
+      final body = await res.transform(utf8.decoder).join();
+      final json = jsonDecode(body) as Map<String, dynamic>;
+      ipAddress = json['ip'] as String? ?? '';
+      client.close(force: true);
+    } catch (_) {
+      // IP lookup is best-effort
+    }
+
+    return {'userAgent': userAgent, 'ipAddress': ipAddress};
+  }
+
   // Login (UC002)
   Future<bool> login(String email, String password) async {
     // Reset all state before the attempt so stale data from a
@@ -118,18 +180,32 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     // ── Pre-login lockout check (local) ────────────────────────
+    // Skip lockout check entirely in dev mode.
     final trimmedEmail = email.trim().toLowerCase();
-    final lockoutExpiry = await _getLocalLockoutExpiry(trimmedEmail);
-    if (lockoutExpiry != null && DateTime.now().toUtc().isBefore(lockoutExpiry)) {
-      final remaining = lockoutExpiry.difference(DateTime.now().toUtc());
-      final mins = remaining.inMinutes < 1 ? 1 : remaining.inMinutes;
-      _isLoading = false;
-      _errorMessage = 'Account locked due to too many failed attempts. Try again in $mins minute${mins == 1 ? '' : 's'}.';
-      notifyListeners();
-      return false;
-    }
-    // Lockout expired — clear it
-    if (lockoutExpiry != null) {
+    if (!DevMode.instance.isEnabled) {
+      final lockoutExpiry = await _getLocalLockoutExpiry(trimmedEmail);
+      if (lockoutExpiry != null && DateTime.now().toUtc().isBefore(lockoutExpiry)) {
+        final remaining = lockoutExpiry.difference(DateTime.now().toUtc());
+        final mins = remaining.inMinutes < 1 ? 1 : remaining.inMinutes;
+        _isLoading = false;
+        _errorMessage = 'Account locked due to too many failed attempts. Try again in $mins minute${mins == 1 ? '' : 's'}.';
+        // Show the lockout overlay with device details
+        final deviceInfo = await _collectDeviceInfo();
+        _pendingLockout = {
+          'email': trimmedEmail,
+          'remainingMinutes': mins,
+          'device': deviceInfo['userAgent'] ?? '',
+          'ipAddress': deviceInfo['ipAddress'] ?? '',
+        };
+        notifyListeners();
+        return false;
+      }
+      // Lockout expired — clear it
+      if (lockoutExpiry != null) {
+        await _clearLocalLockout(trimmedEmail);
+      }
+    } else {
+      // Dev mode: clear any existing lockout so login always works
       await _clearLocalLockout(trimmedEmail);
     }
 
@@ -158,28 +234,77 @@ class AuthProvider extends ChangeNotifier {
 
       return true;
     } catch (e, st) {
-      // ❌ Failed login — record the failure locally
-      await _recordLocalFailure(trimmedEmail);
+      // ❌ Failed login — record the failure locally (skip in dev mode)
+      if (!DevMode.instance.isEnabled) {
+        await _recordLocalFailure(trimmedEmail);
+      }
 
       final failCount = await _getLocalFailCount(trimmedEmail);
-      if (failCount >= _maxFailedAttempts) {
+      if (!DevMode.instance.isEnabled && failCount >= _maxFailedAttempts) {
         final expiry = await _getLocalLockoutExpiry(trimmedEmail);
         final mins = expiry != null
             ? (expiry.difference(DateTime.now().toUtc()).inMinutes).clamp(1, _lockoutMinutes)
             : _lockoutMinutes;
         _errorMessage = 'Account locked due to too many failed attempts. Try again in $mins minute${mins == 1 ? '' : 's'}.';
-        // Also try to record on the server (best-effort)
+        // Collect device info so the admin can see the attacker's device
+        // and the overlay can show it to the user.
+        final deviceInfo = await _collectDeviceInfo();
+        _pendingLockout = {
+          'email': trimmedEmail,
+          'remainingMinutes': mins,
+          'device': deviceInfo['userAgent'] ?? '',
+          'ipAddress': deviceInfo['ipAddress'] ?? '',
+        };
+        // ── Fire-and-forget: email + push notification + server tracking ──
         try {
           final profileData = await _db.getProfileByEmail(trimmedEmail);
-          if (profileData != null && profileData['id'] != null) {
-            await _auth.advanceFailedCounter(
-              userId: profileData['id'] as String,
-              ipAddress: '',
-              userAgent: '',
+          final userId = profileData?['id'] as String?;
+
+          // 1) Email notification (includes device details)
+          try {
+            await Supabase.instance.client.functions.invoke(
+              'send-lockout-email',
+              body: {
+                'email': trimmedEmail,
+                'device': deviceInfo['userAgent'],
+                'ip': deviceInfo['ipAddress'],
+              },
             );
+          } catch (_) {
+            // Best-effort
+          }
+
+          // 2) Push notification to user
+          if (userId != null) {
+            try {
+              await Supabase.instance.client.functions.invoke(
+                'send-notification-push',
+                body: {
+                  'recipientUserId': userId,
+                  'title': '🔒 Account Locked',
+                  'body': 'Too many failed login attempts. Your account is locked for 30 minutes.',
+                  'type': 'lockout',
+                },
+              );
+            } catch (_) {
+              // Best-effort
+            }
+          }
+
+          // 3) Server-side tracking (with device info)
+          if (userId != null) {
+            try {
+              await _auth.advanceFailedCounter(
+                userId: userId,
+                ipAddress: deviceInfo['ipAddress'] ?? '',
+                userAgent: deviceInfo['userAgent'] ?? '',
+              );
+            } catch (_) {
+              // Best-effort
+            }
           }
         } catch (_) {
-          // Server tracking is best-effort
+          // Profile lookup failed — all notifications are best-effort
         }
       } else {
         final remaining = _maxFailedAttempts - failCount;
@@ -367,6 +492,23 @@ class AuthProvider extends ChangeNotifier {
     } catch (e, st) {
       _errorMessage = friendlyAuthErrorMessage(e, stackTrace: st);
       notifyListeners();
+      return false;
+    }
+  }
+
+  /// Report a lockout event as unauthorized ("This wasn't me").
+  /// Sends the email + device info to the server for admin review.
+  Future<bool> reportIntrusion(String email) async {
+    try {
+      await Supabase.instance.client.functions.invoke(
+        'send-lockout-email',
+        body: {
+          'email': email,
+          'report': true,
+        },
+      );
+      return true;
+    } catch (_) {
       return false;
     }
   }
