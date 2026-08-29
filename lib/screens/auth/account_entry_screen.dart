@@ -198,6 +198,31 @@ class _AccountEntryScreenState extends State<AccountEntryScreen>
     }
   }
 
+  /// Sends a password-reset email via Supabase for the address in the
+  /// email field. Shows a confirmation SnackBar or an error toast.
+  Future<void> _forgotPassword() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      _showError('Please enter your email address first.');
+      return;
+    }
+
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final success = await auth.resetPassword(email);
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          success
+              ? 'Password reset link sent to $email'
+              : auth.errorMessage ?? 'Unable to send reset email.',
+        ),
+        backgroundColor: success ? AppConstants.success : AppConstants.error,
+      ),
+    );
+  }
+
   void _showError(String message) {
     // Root-overlay toast — floats above the video/content and the keyboard.
     AppErrorToast.show(context, message: message);
@@ -588,21 +613,13 @@ class _AccountEntryScreenState extends State<AccountEntryScreen>
               },
             ),
             const SizedBox(height: AuthSpacing.s12),
-            // Forgot password — unchanged stub from the legacy login screen
-            // (simulated SnackBar; the real reset RPC is not wired here).
+            // Forgot password — sends a real Supabase reset link to the
+            // email typed in the field above. If the field is empty the
+            // user is prompted to fill it first.
             Align(
               alignment: Alignment.centerRight,
               child: TextButton(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'Password reset link sent (simulated).',
-                      ),
-                      backgroundColor: AppConstants.success,
-                    ),
-                  );
-                },
+                onPressed: _forgotPassword,
                 style: TextButton.styleFrom(
                   padding: EdgeInsets.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,

@@ -86,8 +86,30 @@ class AuthProvider extends ChangeNotifier {
         // Best-effort — don't block login if account saving fails
       }
 
+      // Reset failed login counter on successful login
+      if (_currentUser != null && _profile != null) {
+        await _auth.resetFailedCounter(_currentUser!['id'] as String);
+      }
+
       return true;
     } catch (e, st) {
+      // This is a failed login — track the attempt
+      final userEmail = email.trim();
+      // We need the user_id; if sign-in failed, we may not have a user row yet.
+      // Try to look up the user by email to record the failed attempt.
+      try {
+        final profileData = await _db.getProfileByEmail(userEmail);
+        if (profileData != null && profileData['id'] != null) {
+          await _auth.recordFailedLogin(
+            profileData['id'] as String,
+            ipAddress: '', // IP not easily available in Flutter client
+            userAgent: '',
+          );
+        }
+      } catch (_) {
+        // User not found — that's fine, the account may not exist yet
+      }
+
       _errorMessage = friendlyAuthErrorMessage(e, stackTrace: st);
       return false;
     } finally {

@@ -271,6 +271,11 @@ class SoleBottomNav extends StatelessWidget {
             label: 'Monitor',
           ),
           _NavDest(
+            icon: Icons.flag_outlined,
+            selectedIcon: Icons.flag,
+            label: 'Intruder',
+          ),
+          _NavDest(
             icon: Icons.person_outline,
             selectedIcon: Icons.person,
             label: 'Profile',

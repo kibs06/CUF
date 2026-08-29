@@ -21,6 +21,7 @@ class UpdateProvider extends ChangeNotifier {
   String? _installedVersion;
   bool _isChecking = false;
   bool _checkFailed = false;
+  bool _updateOverlayShown = false;
 
   /// The newest available release, or null if up to date / unknown.
   UpdateInfo? get latestUpdate => _latestUpdate;
@@ -34,6 +35,18 @@ class UpdateProvider extends ChangeNotifier {
   /// True if the last check could not reach the update host (network error,
   /// malformed manifest, etc.) — distinct from "up to date".
   bool get checkFailed => _checkFailed;
+
+  /// True if a newer release exists and the overlay hasn't been shown yet
+  /// this session. Shell screens watch this to trigger the premium overlay.
+  bool get shouldShowUpdateOverlay =>
+      _latestUpdate != null && !_updateOverlayShown;
+
+  /// Marks the update overlay as shown so it doesn't reappear until the
+  /// next app restart.
+  void markUpdateOverlayShown() {
+    _updateOverlayShown = true;
+    notifyListeners();
+  }
 
   /// True if a newer release exists that the user hasn't viewed yet.
   bool get hasUnviewedUpdate =>

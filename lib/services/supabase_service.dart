@@ -158,6 +158,15 @@ class SupabaseService {
     await _client.auth.resetPasswordForEmail(email.trim());
   }
 
+  Future<Map<String, dynamic>?> getProfileByEmail(String email) async {
+    final data = await _client
+        .from('profiles')
+        .select()
+        .eq('email', email.trim().toLowerCase())
+        .maybeSingle();
+    return data == null ? null : Map<String, dynamic>.from(data);
+  }
+
   Future<void> signOut() async {
     await _client.auth.signOut();
   }

@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../constants/app_constants.dart';
 import '../../constants/seller_theme_constants.dart';
+import '../../models/update_info.dart';
+import '../../providers/update_provider.dart';
 import '../../services/push_notification_service.dart';
 import '../../widgets/sole_bottom_nav.dart';
+import '../../widgets/update_overlay.dart';
 import '../../widgets/chat/chat_view.dart';
 import 'seller_dashboard_screen.dart';
 import 'pos_screen.dart';
@@ -91,8 +95,23 @@ class _SellerShellState extends State<SellerShell> {
     };
   }
 
+  void _showUpdateOverlay(UpdateInfo update) {
+    final provider = context.read<UpdateProvider>();
+    provider.markUpdateOverlayShown();
+    UpdateOverlay.show(context, update: update);
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Show update overlay once if a newer version is available.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final provider = context.read<UpdateProvider>();
+      if (provider.shouldShowUpdateOverlay) {
+        _showUpdateOverlay(provider.latestUpdate!);
+      }
+    });
+
     return Scaffold(
       backgroundColor: SellerTheme.creamBg,
       body: _screens.isEmpty
