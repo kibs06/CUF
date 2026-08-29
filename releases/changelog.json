@@ -1,5 +1,17 @@
 [
   {
+    "latest_version": "1.0.19",
+    "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.19/app-release-1.0.19.apk",
+    "released_at": "2026-08-29",
+    "notes": [
+      "Fix: lockout now works locally without database dependency",
+      "- Tracks failed attempts per email in SharedPreferences",
+      "- Locks account after 5 failures for 30 minutes",
+      "- Shows attempts remaining on each failure",
+      "- Auto-clears expired lockouts"
+    ]
+  },
+  {
     "latest_version": "1.0.16",
     "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.16/app-release-1.0.16.apk",
     "released_at": "2026-08-26",
