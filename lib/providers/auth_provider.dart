@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/app_constants.dart';
 import '../models/seller_application_data.dart';
 import '../services/account_manager.dart';
@@ -63,6 +64,49 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ── Local lockout tracking (SharedPreferences) ──────────────
+  // Works immediately without database migrations or RLS policies.
+  // Keyed by email so different accounts lock independently.
+  static const _maxFailedAttempts = 5;
+  static const _lockoutMinutes = 30;
+  static const _lockoutPrefix = 'lockout_';
+  static const _failCountPrefix = 'fail_count_';
+
+  /// Returns the SharedPreferences key for a given email.
+  String _lockoutKey(String email) => '$_lockoutPrefix${email.trim().toLowerCase()}';
+  String _failCountKey(String email) => '$_failCountPrefix${email.trim().toLowerCase()}';
+
+  /// Check if [email] is currently locked out locally.
+  Future<int> _getLocalFailCount(String email) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_failCountKey(email)) ?? 0;
+  }
+
+  Future<DateTime?> _getLocalLockoutExpiry(String email) async {
+    final prefs = await SharedPreferences.getInstance();
+    final ts = prefs.getInt(_lockoutKey(email));
+    if (ts == null) return null;
+    return DateTime.fromMillisecondsSinceEpoch(ts, isUtc: true);
+  }
+
+  Future<void> _recordLocalFailure(String email) async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = email.trim().toLowerCase();
+    final count = (prefs.getInt(_failCountKey(key)) ?? 0) + 1;
+    await prefs.setInt(_failCountKey(key), count);
+    if (count >= _maxFailedAttempts) {
+      final expiry = DateTime.now().toUtc().add(Duration(minutes: _lockoutMinutes));
+      await prefs.setInt(_lockoutKey(key), expiry.millisecondsSinceEpoch);
+    }
+  }
+
+  Future<void> _clearLocalLockout(String email) async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = email.trim().toLowerCase();
+    await prefs.remove(_failCountKey(key));
+    await prefs.remove(_lockoutKey(key));
+  }
+
   // Login (UC002)
   Future<bool> login(String email, String password) async {
     // Reset all state before the attempt so stale data from a
@@ -73,25 +117,23 @@ class AuthProvider extends ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
 
-    try {
-      // ── Pre-login lockout check ────────────────────────────────
-      // Before hitting Supabase auth, verify the account isn't locked.
-      try {
-        final profileData = await _db.getProfileByEmail(email.trim());
-        if (profileData != null && profileData['id'] != null) {
-          final lockout = await _auth.checkLockout(profileData['id'] as String);
-          if (lockout != null && lockout['wasLocked'] == true && lockout['justUnlocked'] != true) {
-            final mins = lockout['remainingMinutes'] as int? ?? 0;
-            _isLoading = false;
-            _errorMessage = 'Account locked due to too many failed attempts. Try again in $mins minute${mins == 1 ? '' : 's'}.';
-            notifyListeners();
-            return false;
-          }
-        }
-      } catch (_) {
-        // Profile lookup failed — continue with normal auth flow
-      }
+    // ── Pre-login lockout check (local) ────────────────────────
+    final trimmedEmail = email.trim().toLowerCase();
+    final lockoutExpiry = await _getLocalLockoutExpiry(trimmedEmail);
+    if (lockoutExpiry != null && DateTime.now().toUtc().isBefore(lockoutExpiry)) {
+      final remaining = lockoutExpiry.difference(DateTime.now().toUtc());
+      final mins = remaining.inMinutes < 1 ? 1 : remaining.inMinutes;
+      _isLoading = false;
+      _errorMessage = 'Account locked due to too many failed attempts. Try again in $mins minute${mins == 1 ? '' : 's'}.';
+      notifyListeners();
+      return false;
+    }
+    // Lockout expired — clear it
+    if (lockoutExpiry != null) {
+      await _clearLocalLockout(trimmedEmail);
+    }
 
+    try {
       final res = await _auth.signIn(email: email, password: password);
       _currentUser = res['user'];
       _profile = res['profile'];
@@ -104,43 +146,46 @@ class AuthProvider extends ChangeNotifier {
         // Best-effort — don't block login if account saving fails
       }
 
-      // Reset failed login counter on successful login
+      // ✅ Success — clear all failure tracking (local + remote)
+      await _clearLocalLockout(trimmedEmail);
       if (_currentUser != null && _profile != null) {
-        await _auth.resetFailedCounter(_currentUser!['id'] as String);
+        try {
+          await _auth.resetFailedCounter(_currentUser!['id'] as String);
+        } catch (_) {
+          // Best-effort — local lockout already cleared
+        }
       }
 
       return true;
     } catch (e, st) {
-      // This is a failed login — advance the failure counter and
-      // possibly lock the account after 5 consecutive failures.
-      final userEmail = email.trim();
-      try {
-        final profileData = await _db.getProfileByEmail(userEmail);
-        if (profileData != null && profileData['id'] != null) {
-          final result = await _auth.advanceFailedCounter(
-            userId: profileData['id'] as String,
-            ipAddress: '',
-            userAgent: '',
-          );
-          final newStatus = result['status'] as String?;
-          if (newStatus == 'locked') {
-            final lockedUntilStr = result['locked_until'] as String?;
-            int mins = 30;
-            if (lockedUntilStr != null) {
-              final lockedUntil = DateTime.parse(lockedUntilStr).toUtc();
-              mins = lockedUntil.difference(DateTime.now().toUtc()).inMinutes;
-              if (mins < 1) mins = 1;
-            }
-            _errorMessage = 'Account locked due to too many failed attempts. Try again in $mins minute${mins == 1 ? '' : 's'}.';
-            notifyListeners();
-            return false;
-          }
-        }
-      } catch (_) {
-        // User not found — continue with normal error display
-      }
+      // ❌ Failed login — record the failure locally
+      await _recordLocalFailure(trimmedEmail);
 
-      _errorMessage = friendlyAuthErrorMessage(e, stackTrace: st);
+      final failCount = await _getLocalFailCount(trimmedEmail);
+      if (failCount >= _maxFailedAttempts) {
+        final expiry = await _getLocalLockoutExpiry(trimmedEmail);
+        final mins = expiry != null
+            ? (expiry.difference(DateTime.now().toUtc()).inMinutes).clamp(1, _lockoutMinutes)
+            : _lockoutMinutes;
+        _errorMessage = 'Account locked due to too many failed attempts. Try again in $mins minute${mins == 1 ? '' : 's'}.';
+        // Also try to record on the server (best-effort)
+        try {
+          final profileData = await _db.getProfileByEmail(trimmedEmail);
+          if (profileData != null && profileData['id'] != null) {
+            await _auth.advanceFailedCounter(
+              userId: profileData['id'] as String,
+              ipAddress: '',
+              userAgent: '',
+            );
+          }
+        } catch (_) {
+          // Server tracking is best-effort
+        }
+      } else {
+        final remaining = _maxFailedAttempts - failCount;
+        _errorMessage = '${friendlyAuthErrorMessage(e, stackTrace: st)} ($remaining attempt${remaining == 1 ? '' : 's'} remaining before lockout)';
+      }
+      notifyListeners();
       return false;
     } finally {
       _isLoading = false;
