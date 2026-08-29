@@ -74,6 +74,24 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      // ── Pre-login lockout check ────────────────────────────────
+      // Before hitting Supabase auth, verify the account isn't locked.
+      try {
+        final profileData = await _db.getProfileByEmail(email.trim());
+        if (profileData != null && profileData['id'] != null) {
+          final lockout = await _auth.checkLockout(profileData['id'] as String);
+          if (lockout != null && lockout['wasLocked'] == true && lockout['justUnlocked'] != true) {
+            final mins = lockout['remainingMinutes'] as int? ?? 0;
+            _isLoading = false;
+            _errorMessage = 'Account locked due to too many failed attempts. Try again in $mins minute${mins == 1 ? '' : 's'}.';
+            notifyListeners();
+            return false;
+          }
+        }
+      } catch (_) {
+        // Profile lookup failed — continue with normal auth flow
+      }
+
       final res = await _auth.signIn(email: email, password: password);
       _currentUser = res['user'];
       _profile = res['profile'];
@@ -93,21 +111,33 @@ class AuthProvider extends ChangeNotifier {
 
       return true;
     } catch (e, st) {
-      // This is a failed login — track the attempt
+      // This is a failed login — advance the failure counter and
+      // possibly lock the account after 5 consecutive failures.
       final userEmail = email.trim();
-      // We need the user_id; if sign-in failed, we may not have a user row yet.
-      // Try to look up the user by email to record the failed attempt.
       try {
         final profileData = await _db.getProfileByEmail(userEmail);
         if (profileData != null && profileData['id'] != null) {
-          await _auth.recordFailedLogin(
-            profileData['id'] as String,
-            ipAddress: '', // IP not easily available in Flutter client
+          final result = await _auth.advanceFailedCounter(
+            userId: profileData['id'] as String,
+            ipAddress: '',
             userAgent: '',
           );
+          final newStatus = result['status'] as String?;
+          if (newStatus == 'locked') {
+            final lockedUntilStr = result['locked_until'] as String?;
+            int mins = 30;
+            if (lockedUntilStr != null) {
+              final lockedUntil = DateTime.parse(lockedUntilStr).toUtc();
+              mins = lockedUntil.difference(DateTime.now().toUtc()).inMinutes;
+              if (mins < 1) mins = 1;
+            }
+            _errorMessage = 'Account locked due to too many failed attempts. Try again in $mins minute${mins == 1 ? '' : 's'}.';
+            notifyListeners();
+            return false;
+          }
         }
       } catch (_) {
-        // User not found — that's fine, the account may not exist yet
+        // User not found — continue with normal error display
       }
 
       _errorMessage = friendlyAuthErrorMessage(e, stackTrace: st);
