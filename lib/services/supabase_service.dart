@@ -843,12 +843,18 @@ class SupabaseService {
     // ── Notification: custom_order_request ──────────────────────────
     // Fire-and-forget: notify the seller about a new custom order request.
     // storeId is guaranteed non-null (checked + thrown above).
+    // Use SECURITY DEFINER RPC — after profiles RLS tightening, sellers
+    // can no longer SELECT from profiles for other users.
     final customerName = await _client
-        .from('profiles')
-        .select('full_name')
-        .eq('id', userId)
-        .maybeSingle()
-        .then<String>((p) => p?['full_name']?.toString() ?? 'Customer');
+        .rpc('get_user_name_email', params: {
+          'user_ids': [userId],
+        })
+        .then<String>((result) {
+          if (result is List && result.isNotEmpty) {
+            return (result.first as Map)['full_name']?.toString() ?? 'Customer';
+          }
+          return 'Customer';
+        });
     SellerNotificationService.instance.createCustomOrderRequest(
       storeId: storeId,
       requestId: result['id'].toString(),

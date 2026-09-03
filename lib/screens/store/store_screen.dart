@@ -13,7 +13,8 @@ import 'widgets/cross_store_product_row.dart';
 /// Multi-store discovery tab — the "walking through a market" experience.
 /// Hero carousel → focused info → cross-store products.
 class StoreScreen extends StatefulWidget {
-  const StoreScreen({super.key});
+  final bool hideAppBar;
+  const StoreScreen({super.key, this.hideAppBar = false});
 
   @override
   State<StoreScreen> createState() => _StoreScreenState();
@@ -95,13 +96,15 @@ class _StoreScreenState extends State<StoreScreen> {
 
     return Scaffold(
       backgroundColor: AppConstants.surfaceLight,
-      appBar: AppBar(
-        title: Text('Stores', style: AppConstants.headlineStyle(fontSize: 22)),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        automaticallyImplyLeading: false,
-        actions: const [CartIconButton()],
-      ),
+      appBar: widget.hideAppBar
+          ? null
+          : AppBar(
+              title: Text('Stores', style: AppConstants.headlineStyle(fontSize: 22)),
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              automaticallyImplyLeading: false,
+              actions: const [CartIconButton()],
+            ),
       body: Stack(
         children: [
           AppConstants.noiseOverlay(opacity: 0.03),

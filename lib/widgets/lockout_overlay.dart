@@ -4,16 +4,20 @@ import 'package:flutter/material.dart';
 
 import '../constants/app_constants.dart';
 
-/// A non-dismissable security alert dialog shown when the user's account
-/// is locked due to too many failed login attempts.
-///
-/// Shows device details (if provided) and offers three actions:
-/// - Reset password (primary)
-/// - This wasn't me (secondary danger)
-/// - Wait X minutes instead (tertiary)
-///
-/// Usage: call [LockoutOverlay.show] from any context. The dialog can
-/// only be dismissed via one of its own actions.
+  /// A non-dismissable security alert dialog shown when the user's account
+  /// is locked due to too many failed login attempts.
+  ///
+  /// Shows device details (if provided) and offers three actions:
+  /// - Reset password (primary)
+  /// - This wasn't me (secondary danger)
+  /// - Wait X minutes instead (tertiary)
+  ///
+  /// When the lockout timer expires while the overlay is showing,
+  /// the UI automatically transitions to an expired state informing
+  /// the user that their account is unlocked and they can try again.
+  ///
+  /// Usage: call [LockoutOverlay.show] from any context. The dialog can
+  /// only be dismissed via one of its own actions.
 class LockoutOverlay {
   LockoutOverlay._();
 
@@ -99,6 +103,7 @@ class _LockoutOverlayDialogState extends State<_LockoutOverlayDialog> {
   // ── Countdown timer ──
   late int _remainingSeconds;
   Timer? _countdownTimer;
+  bool _isExpired = false;
 
   bool get _anyLoading => _resetLoading || _reportLoading;
 
@@ -186,6 +191,7 @@ class _LockoutOverlayDialogState extends State<_LockoutOverlayDialog> {
           _remainingSeconds--;
         } else {
           _countdownTimer?.cancel();
+          _isExpired = true;
         }
       });
     });
@@ -206,11 +212,14 @@ class _LockoutOverlayDialogState extends State<_LockoutOverlayDialog> {
   @override
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
-        (widget.device != null && widget.device!.isNotEmpty) ||
-            (widget.ipAddress != null && widget.ipAddress!.isNotEmpty);
+    (widget.device != null && widget.device!.isNotEmpty) ||
+        (widget.ipAddress != null && widget.ipAddress!.isNotEmpty);
 
-    // If lockout already expired, adjust copy
     final mins = widget.remainingMinutes <= 0 ? 1 : widget.remainingMinutes;
+
+    if (_isExpired) {
+      return _buildExpiredState();
+    }
 
     return PopScope(
       canPop: false,
@@ -252,6 +261,141 @@ class _LockoutOverlayDialogState extends State<_LockoutOverlayDialog> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  // ── Expired state ──────────────────────────────────────────
+  Widget _buildExpiredState() {
+    return PopScope(
+      canPop: false,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: 400,
+            maxHeight: 4096,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: AppConstants.surfaceLight,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildExpiredIcon(),
+                        _buildExpiredTitle(),
+                        _buildExpiredMessage(),
+                        _buildExpiredActions(),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildExpiredIcon() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 28, 24, 0),
+      child: Container(
+        width: 64,
+        height: 64,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: AppConstants.success.withValues(alpha: 0.1),
+        ),
+        child: Icon(
+          Icons.lock_open_outlined,
+          size: 32,
+          color: AppConstants.success,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildExpiredTitle() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+      child: Column(
+        children: [
+          Text(
+            'Lockout expired',
+            textAlign: TextAlign.center,
+            style: AppConstants.headlineStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '${widget.email} \u00b7 your account is now unlocked',
+            textAlign: TextAlign.center,
+            style: AppConstants.bodyStyle(
+              fontSize: 13,
+              color: AppConstants.secondary.withValues(alpha: 0.6),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExpiredMessage() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+      child: Text(
+        'You can now try to log in again.',
+        textAlign: TextAlign.center,
+        style: AppConstants.bodyStyle(
+          fontSize: 13,
+          color: AppConstants.secondary,
+          height: 1.5,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildExpiredActions() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+      child: Column(
+        children: [
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: FilledButton(
+              onPressed: () => _dismiss(LockoutAction.wait),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppConstants.primary,
+                shape: RoundedRectangleBorder(
+                  borderRadius: AppConstants.buttonRadius,
+                ),
+                elevation: 0,
+              ),
+              child: Text(
+                'Try again',
+                style: AppConstants.bodyStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFFF5EDE4),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

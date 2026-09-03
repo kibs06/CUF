@@ -1,7 +1,7 @@
 # Live Database Migration Status
 
 **Project:** `psczvbfoybqhjeqssimw` (Supabase)
-**Last verified:** August 16, 2026 (object-level audit via `supabase db query --linked`)
+**Last verified:** September 3, 2026 (T3 hardening migrations applied via SQL Editor + verified live via PostgREST probes)
 **Source of truth:** this table — **not** `supabase migration list`, whose remote
 tracking table is out of sync (old records use pre-rename filenames, so the CLI
 shows ~50 migrations as "pending" even though they are applied).
@@ -75,6 +75,9 @@ shows ~50 migrations as "pending" even though they are applied).
 | `20260817130000_add_stores_description.sql` | ✅ | **Applied Aug 17, 2026** — `stores.description`. Fixes PGRST204 "Could not find the 'description' column of 'stores'" on store create/edit. Verified live: `stores.description` select → HTTP 200 |
 | `20260817140000_add_seller_application_v2_fields.sql` | ✅ | **Applied Aug 17, 2026** — `profiles.store_location`/`store_lat`/`store_lng`/`store_tags` + `stores.tags` (application v2: personal details, required business docs, location, store tags). Verified live: `stores.tags`/`profiles.store_tags`/`profiles.store_lat` selects → HTTP 200 |
 | `20260817150000_add_store_auto_schedule_cron.sql` | ⏳ **Not yet applied** | Schedules the `apply-store-schedules` pg_cron job (every 5 min) so `stores.is_open` auto-flips per `open_time`/`close_time`. Fixes stores stuck showing "Open Now" after their posted close time. Apply via Dashboard → SQL Editor |
+| `20260903000000_lock_seller_application_after_submit.sql` | ✅ | **Applied Sep 3, 2026** — T3: extends `guard_profiles_sensitive_columns` so applicants cannot edit application-content columns (store details, verification-doc URLs, `rejection_reason`) once `seller_status` is `pending`/`approved`; `rejected`/`none` stay editable (re-apply/draft). Verified live: content PATCH on pending row → 400; on `none`/`rejected` → 204 |
+| `20260903010000_add_seller_application_audit_log.sql` | ✅ | **Applied Sep 3, 2026** — T3: `seller_application_audit_log` table + `AFTER UPDATE OF seller_status` trigger (only writer; SECURITY DEFINER). RLS admin-SELECT-only; direct INSERT/UPDATE/DELETE revoked from every role incl. service_role. Verified live: admin approve/reject wrote rows with correct actor + notes; direct INSERT blocked (403) for admin & non-admin |
+| `20260903020000_audit_initial_application_submission.sql` | ✅ | **Applied Sep 3, 2026** — T3 follow-up: `AFTER INSERT` trigger logs the initial `submitted` event (project has no signup trigger creating profiles, so first-time submissions take the INSERT branch and the UPDATE trigger never saw them). Verified live: fresh submit wrote `submitted` row with applicant as actor |
 
 ## Deploying a new migration
 

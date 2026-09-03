@@ -14,8 +14,9 @@ import 'order_detail_screen.dart';
 
 class ManageOrdersScreen extends StatefulWidget {
   final String? initialFilter;
+  final bool hideAppBar;
 
-  const ManageOrdersScreen({super.key, this.initialFilter});
+  const ManageOrdersScreen({super.key, this.initialFilter, this.hideAppBar = false});
 
   @override
   State<ManageOrdersScreen> createState() => _ManageOrdersScreenState();
@@ -702,19 +703,21 @@ class _ManageOrdersScreenState extends State<ManageOrdersScreen>
 
     return Scaffold(
       backgroundColor: AppConstants.sellerSurface,
-      appBar: AppBar(
-        backgroundColor: AppConstants.secondary,
-        elevation: 0,
-        automaticallyImplyLeading: false,
-        title: Text(
-          'Orders',
-          style: AppConstants.bodyStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
-      ),
+      appBar: widget.hideAppBar
+          ? null
+          : AppBar(
+              backgroundColor: AppConstants.secondary,
+              elevation: 0,
+              automaticallyImplyLeading: false,
+              title: Text(
+                'Orders',
+                style: AppConstants.bodyStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ),
       body: Column(
         children: [
           // Tab bar

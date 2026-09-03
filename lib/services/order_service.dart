@@ -92,13 +92,18 @@ class OrderService {
 
     Map<dynamic, Map<String, dynamic>> profilesMap = {};
     if (customerIds.isNotEmpty) {
-      final profiles = await _client
-          .from('profiles')
-          .select('id, full_name, email')
-          .inFilter('id', customerIds);
-      for (final row in profiles as List) {
-        final map = Map<String, dynamic>.from(row);
-        profilesMap[map['id']] = map;
+      // Use SECURITY DEFINER RPC instead of direct profiles SELECT.
+      // After the profiles RLS tightening (migration 20260901010000),
+      // sellers can no longer SELECT * FROM profiles for other users.
+      final rpcResult = await _client
+          .rpc('get_user_name_email', params: {
+            'user_ids': customerIds.map((id) => id.toString()).toList(),
+          });
+      if (rpcResult is List) {
+        for (final row in rpcResult) {
+          final map = Map<String, dynamic>.from(row as Map);
+          profilesMap[map['id']] = map;
+        }
       }
     }
 
@@ -183,13 +188,16 @@ class OrderService {
 
     Map<dynamic, String> nameMap = {};
     if (customerIds.isNotEmpty) {
-      final profiles = await _client
-          .from('profiles')
-          .select('id, full_name')
-          .inFilter('id', customerIds);
-      for (final row in profiles as List) {
-        final map = Map<String, dynamic>.from(row);
-        nameMap[map['id']] = map['full_name'] ?? 'Customer';
+      // Use SECURITY DEFINER RPC for cross-user name lookup.
+      final rpcResult = await _client
+          .rpc('get_user_name_email', params: {
+            'user_ids': customerIds.map((id) => id.toString()).toList(),
+          });
+      if (rpcResult is List) {
+        for (final row in rpcResult) {
+          final map = Map<String, dynamic>.from(row as Map);
+          nameMap[map['id']] = map['full_name'] ?? 'Customer';
+        }
       }
     }
 

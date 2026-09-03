@@ -26,7 +26,8 @@ import 'widgets/home_hero.dart';
 import 'widgets/home_sticky_search_bar.dart';
 
 class CustomerHomeScreen extends StatefulWidget {
-  const CustomerHomeScreen({super.key});
+  final bool hideAppBar;
+  const CustomerHomeScreen({super.key, this.hideAppBar = false});
 
   @override
   State<CustomerHomeScreen> createState() => _CustomerHomeScreenState();

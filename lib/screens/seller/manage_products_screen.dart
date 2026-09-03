@@ -25,8 +25,9 @@ class ManageProductsScreen extends StatefulWidget {
   /// Optional filter chip to preselect on open (e.g. 'Low Stock') — used by
   /// the dashboard metric and low-stock notifications to deep-link here.
   final String? initialFilter;
+  final bool hideAppBar;
 
-  const ManageProductsScreen({super.key, this.initialFilter});
+  const ManageProductsScreen({super.key, this.initialFilter, this.hideAppBar = false});
 
   @override
   State<ManageProductsScreen> createState() => _ManageProductsScreenState();
@@ -1160,67 +1161,69 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppConstants.sellerSurface,
-      appBar: AppBar(
-        backgroundColor: AppConstants.secondary,
-        elevation: 0,
-        automaticallyImplyLeading: false,
-        title: _isSearching
-            ? TextField(
-                controller: _searchController,
-                autofocus: true,
-                onChanged: (value) => setState(() => _search = value),
-                style: AppConstants.bodyStyle(
-                    color: Colors.white, fontSize: 15),
-                cursorColor: Colors.white,
-                decoration: InputDecoration(
-                  hintText: 'Search products...',
-                  hintStyle: AppConstants.bodyStyle(
-                      color: Colors.white60, fontSize: 15),
-                  border: InputBorder.none,
-                ),
-              )
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Products',
-                    style: AppConstants.bodyStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white),
-                  ),
-                  if (_activeFilter != 'All')
-                    Text(
-                      '$_activeFilter (${_countFor(_activeFilter)})',
+      appBar: widget.hideAppBar
+          ? null
+          : AppBar(
+              backgroundColor: AppConstants.secondary,
+              elevation: 0,
+              automaticallyImplyLeading: false,
+              title: _isSearching
+                  ? TextField(
+                      controller: _searchController,
+                      autofocus: true,
+                      onChanged: (value) => setState(() => _search = value),
                       style: AppConstants.bodyStyle(
-                          fontSize: 11, color: Colors.white70),
+                          color: Colors.white, fontSize: 15),
+                      cursorColor: Colors.white,
+                      decoration: InputDecoration(
+                        hintText: 'Search products...',
+                        hintStyle: AppConstants.bodyStyle(
+                            color: Colors.white60, fontSize: 15),
+                        border: InputBorder.none,
+                      ),
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Products',
+                          style: AppConstants.bodyStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white),
+                        ),
+                        if (_activeFilter != 'All')
+                          Text(
+                            '$_activeFilter (${_countFor(_activeFilter)})',
+                            style: AppConstants.bodyStyle(
+                                fontSize: 11, color: Colors.white70),
+                          ),
+                      ],
                     ),
-                ],
-              ),
-        actions: [
-          IconButton(
-            tooltip: 'Search',
-            icon: Icon(
-              _isSearching ? Icons.close : Icons.search,
-              color: Colors.white,
+              actions: [
+                IconButton(
+                  tooltip: 'Search',
+                  icon: Icon(
+                    _isSearching ? Icons.close : Icons.search,
+                    color: Colors.white,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      if (_isSearching) {
+                        _searchController.clear();
+                        _search = '';
+                      }
+                      _isSearching = !_isSearching;
+                    });
+                  },
+                ),
+                IconButton(
+                  tooltip: 'Add product',
+                  icon: const Icon(Icons.add, color: Colors.white),
+                  onPressed: () => _navigateToAddEdit(),
+                ),
+              ],
             ),
-            onPressed: () {
-              setState(() {
-                if (_isSearching) {
-                  _searchController.clear();
-                  _search = '';
-                }
-                _isSearching = !_isSearching;
-              });
-            },
-          ),
-          IconButton(
-            tooltip: 'Add product',
-            icon: const Icon(Icons.add, color: Colors.white),
-            onPressed: () => _navigateToAddEdit(),
-          ),
-        ],
-      ),
       body: Column(
         children: [
           _buildFilterBar(),

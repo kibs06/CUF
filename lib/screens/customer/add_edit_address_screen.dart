@@ -44,7 +44,6 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
   bool _isReverseGeocoding = false;
   bool _isLocating = true; // true while GPS fix is being obtained on open
   String? _locationMessage; // friendly status/error message shown on map
-  final _maptilerKey = AppConstants.maptilerKey;
 
   // ── Address search state ──────────────────────────────────────
   final TextEditingController _searchController = TextEditingController();
@@ -134,17 +133,6 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
   Future<void> _fetchPredictions(String query) async {
     if (!mounted) return;
 
-    // Guard: check API key is configured (not empty or placeholder)
-    if (_maptilerKey.isEmpty || _maptilerKey.contains('YOUR_')) {
-      if (mounted) {
-        setState(() {
-          _searchError = 'Search is not configured — add a valid MapTiler API key';
-          _isSearchLoading = false;
-        });
-      }
-      return;
-    }
-
     setState(() {
       _isSearchLoading = true;
       _searchError = null;
@@ -152,11 +140,10 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
 
     try {
       final encodedQuery = Uri.encodeComponent(query);
+      // Search goes through the geocode-proxy Edge Function (holds the
+      // MapTiler key server-side + rate-limits per IP — Threat T6).
       final url = Uri.parse(
-        'https://api.maptiler.com/geocoding/$encodedQuery.json'
-        '?key=$_maptilerKey'
-        '&bbox=116.927,4.587,126.603,21.119'
-        '&limit=5',
+        '${AppConstants.geocodeProxyBaseUrl}/search?q=$encodedQuery',
       );
 
       debugPrint('[SEARCH] Geocoding request for: "$query"');
@@ -177,8 +164,8 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
         if (response.statusCode != 200) {
           debugPrint('[SEARCH] Error body: $body');
           setState(() {
-            _searchError = response.statusCode == 401 || response.statusCode == 403
-                ? 'Invalid API key — check your MapTiler configuration'
+            _searchError = response.statusCode == 429
+                ? 'Search is busy right now — try again in a moment.'
                 : 'Search unavailable right now (HTTP ${response.statusCode})';
             _isSearchLoading = false;
           });
@@ -523,7 +510,9 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
               ),
           children: [
             TileLayer(
-              urlTemplate: 'https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=${AppConstants.maptilerKey}',
+              // Tiles proxy through geocode-proxy so the MapTiler key
+              // never ships in the app (Threat T6).
+              urlTemplate: '${AppConstants.geocodeProxyBaseUrl}/tiles/{z}/{x}/{y}.png',
               userAgentPackageName: 'com.solevision.app',
             ),
             // MapTiler attribution (required by usage policy)

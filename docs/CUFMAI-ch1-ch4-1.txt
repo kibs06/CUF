@@ -1,0 +1,1368 @@
+CUFMAI: A FOOTWEAR RETAIL MANAGEMENT SYSTEM WITH VIRTUAL FITTING SUPPORT
+
+
+
+A Capstone Project 
+
+Presented To
+
+Faculty of the College of Technology 
+
+Cebu Technological University – Naga Extension Campus
+
+
+
+
+
+In Partial Fulfillment
+
+Of the Requirements of the Degree of
+
+Bachelor of Science in Information Technology
+
+
+
+
+
+Jennifer Jean C. Caparida
+
+Keith Vincent D. Abalo
+
+Quizzel Espinosa
+
+
+
+MAY 2026
+
+
+
+Chapter 1
+
+THE PROBLEM AND ITS SCOPE
+
+Introduction          Shoe industry is an essential aspect of economic activities, especially regarding the development of retail business in the local community. Shoe business helps provide jobs, contribute to the local economy, and offer the local population the opportunity to purchase goods that are practical, comfortable, and fashionable. Shoe retail business aims to provide the local population with the best possible products, such as affordable, high-quality, fashionable, and customized designs, according to the customer’s demands. As the demands of the local population continue to change, it is expected that the shoe retail business will develop better products and services to compete with other business organizations in the market. However, the shoe retail business still uses traditional business operations, which cannot handle the demands of the local population, such as product comparison, customer queries, and customization. Using technology can improve the efficiency of the shoe retail business, especially regarding customer engagement (Dwivedi et al., 2020).
+
+          With the widespread use of smartphones, retail companies can now incorporate technological solutions that can improve their operations and customer engagement (Kemp, 2024). Footwear retail systems can utilize smartphone-based technologies such as virtual fitting assistance, allowing customers to try footwear using their smartphone cameras (An et al., 2021; Chou et al., 2024). Studies on augmented reality (AR) and virtual try-on (VTO) applications show that virtual try-on experiences can enhance customer engagement and influence purchase intentions by improving product evaluation (Abassi et al., 2025; Mollel & Chen, 2025). Retail systems may also include digital customization features where customers can select design options, such as color schemes and design variations, and preview their preferred designs before purchasing. By incorporating a centralized database, these systems can store and manage product information, inventory records, customer data, and purchase history to support efficient retail operations.          Although the relevance of local shoe businesses cannot be overlooked, there are certain common problems that limit their efficiency and customer satisfaction. Manual entry of sales and traditional inventory management may result in incorrect stock data, delayed entries, and confusion regarding which products are sold faster or slower. On the customer side, choosing the appropriate size and style can be difficult without fitting, especially for customers inquiring online or buying directly, resulting in size mismatches, dissatisfaction, or returns. Additionally, design requirements may become unorganized, especially when customer preference data, status, and completion dates are not being tracked (Immadisetty, 2025).
+
+          To address these issues, the researchers propose OTOP: Footwear Retail Information System with Virtual Fitting Support, a system designed to modernize footwear retail operations while improving customer experience. OTOP will offer the customers centralized inventory management, sales tracking, customer record management, and reporting capabilities that will help in effective decision-making and quick services. The virtual fitting functionality of OTOP will enable the customers to view footwear on their virtual body using a smartphone, thus increasing their confidence levels in choosing appropriate products and minimizing errors in fitting. Moreover, the customers will be able to design footwear options using the customization module of OTOP (Abassi et al., 2025; Chou et al., 2024).
+
+Project Context
+
+          OTOP is created in collaboration with a local footwear retail business in Carcar (Valladolid area), Philippines. The business targets walk-in clients from the surrounding neighborhood who purchase footwear for both daily and special events. Like other local footwear businesses, the business operates in a fast-paced retail environment where clients frequently inquire about sizes, designs, prices, and availability, and where the business has to act quickly to keep sales and satisfy clients.
+
+	This system will be used by the store personnel and the customers who interact with the store during the purchase activities. Through this system, the store personnel will be able to manage the store’s inventory records, sales transactions, customer information, and sales reports through a centralized system. The customers will be able to view the designs of the footwear available for purchase, the customization of the footwear, and the virtual fitting through a smartphone application.
+
+The study is set to begin in February 2026 and is expected to be completed by December 2026. The project will be implemented in the Business Processing and Licensing Office in the City of Naga.
+
+The researchers are proposing the system to solve the inefficiencies involved with the operation of retail stores and to aid the digitalization of small retail stores. With the inclusion of inventory management, recording of transactions, virtual fitting, and product customization within the proposed system, the researchers are aiming to improve the overall operation of the retail store and the shopping experience of the customer.
+
+The research will adopt the methodology of Extreme Programming (XP). XP is an agile software development approach. This approach is characterized by iterative software development, feedback, and close interaction between software developers and users of the computer systems (Beck, 2004). This approach has been identified as effective in ensuring flexibility and user adaptability to changing software requirements while ensuring software quality standards (Pressman & Maxim, 2020). Through the XP approach, the researchers hope to create a reliable and user-friendly software that can meet the needs of the footwear retail business operation.
+
+Purpose and Description
+
+          The main purpose of OTOP: A Footwear Retail Management System with Virtual Fitting Support is to create a virtual system that will improve the retail activities of the footwear store. The project aims to resolve the limitations associated with the conventional store activities such as the recording of sales, monitoring of the store's inventory, and management of customized footwear. The conventional activities of the store make it hard for the store personnel to manage the store's inventory. The project aims to improve the activities of the store through the creation of a virtual system that will improve the store's activities.
+
+	The objective of the project is to design a retail information system for the footwear retail store, which includes inventory control, recording of transactions, customer information recording, and report generation through a database system. The proposed information system for the retail store will enable the store staff to keep track of inventory, record transactions, and manage customer information systematically. Additionally, the information system will provide the option of using smartphones to provide virtual fitting to the customer, enabling the customer to see the look and feel of the footwear before making a purchase. Further, the information system will provide the option of customizing the design of the product to the customer and express the design preferences clearly to the store staff.
+
+The following individuals will benefit from the project:
+
+Customers. Benefit from faster product browsing, simplified checks for available sizes, and virtual fittings using your smartphone to increase size confidence and reduce returns. Customers looking for personalized footwear will find the customization option particularly useful.
+
+Store Owner/Management. Enhanced operations through centralized inventory, organized sales data, inventory notifications, and analysis for informed re-stocking and pricing, while minimizing losses due to inaccuracies and forgone sales.            
+
+Footwear Makers. Receives clearer and more organized custom order details (design, size, and due date), helping streamline production and reduce misunderstandings.
+
+Researchers. Develops practical skills in building a real-world retail information system with mobile virtual fitting, including system design, database management, and usability evaluation.
+
+Future Researchers. Can use the project as a reference for future studies related to retail systems, inventory management, virtual fitting, and customization technologies.
+
+Objectives
+
+          The main objective of the study is to design and develop OTOP: Footwear Retail Management System with Virtual Fitting Support that can improve the operational workflow of a local footwear shop by centralizing inventory management, sales monitoring, and customer order tracking while enhancing customer experience through smartphone-based virtual fitting and customization support.
+
+More specifically, this capstone project aims:
+
+• To conduct a preliminary investigation to gather relevant and necessary data regarding the current retail operations of the partner footwear store.
+
+• To analyze the gathered data in order to determine the functional and system requirements needed for the development of the proposed OTOPsystem.
+
+
+
+• To design and develop the OTOP system that manages product records, inventory levels, footwear sizes, sales transactions, customer information, and reports through a centralized database, while integrating smartphone-based virtual fitting and customization features.
+
+• To test and evaluate the developed system using the International Organization for Standardization (ISO) 25010 software quality characteristics and the Unified Theory of Acceptance and Use of Technology (UTAUT) for system acceptability.
+
+• To deploy the fully functional system to the partner footwear retail stores.
+
+Scope and Limitations
+
+          The scope of this project focuses on improving the retail operations of the partner footwear shop through a centralized system that automates and manages retail store operations such as inventory monitoring, sales processing, order handling, customer transactions, and customization request. The system also covers customer-facing features such as product browsing, size checking, virtual fitting preview, and customization request submission. Data gathering will focus on store processes, user requirements, and operational issues relevant to footwear retail activities.
+
+          However, the study includes limitations. The virtual fitting feature will provide a visual preview and size support but does not guarantee perfect fitting accuracy due to factors such as camera angle, lighting conditions, and device limitations. The customization module is limited to store-approved design options and available materials. External factors such as internet connectivity, device performance, and changes in store policies are beyond the control of the system and are not covered in the scope of the study (An et al., 2021; Chou et al., 2024).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Chapter 2
+
+REVIEW OF RELATED LITERATURE
+
+This chapter presents a review of related literature and studies that provide the theoretical and empirical foundation for the development of OTOP: Footwear Retail Management System with Virtual Fitting Support.The discussion will be presented thematically for better understanding and coherence. Some of the prominent themes that will be discussed are retail information system, inventory management, augmented reality and virtual fitting, customization in retail, mobile commerce, and software quality evaluation.
+
+Importance of the Shoe Industry and Footwear
+
+Shoes play a vital role in the global retail industry. The shoes industry is a significant contributor to the development of the economy. Shoes products have been classified as an essential product as it offers protection, comfort, and support for various daily activities. Shoes products have also been used as a form of fashion or individuality (Statista, 2023). Over time, as consumers' lifestyles change and their fashion sense evolves, the need for shoes products has continued to rise in various age groups and social classes (Grand View Research, 2024). The global shoes market is growing due to increasing consumer demand for shoes products. The global shoes market is growing due to the increasing population and the development of the retail industry (Fortune Business Insights, 2023).
+
+The footwear industry has a contribution to make to economic activity through the creation of jobs within the industry as well as during the process of distributing the footwear to the public. There are several small and medium-sized enterprises that make a contribution to the footwear retail industry through the provision of locally made or imported footwear products that meet the needs of different consumer segments (Kumar, 2021). These enterprises make a significant contribution to the local economy through the promotion of local entrepreneurship, the promotion of local retailing, as well as the creation of income-generating opportunities for local business owners (Dwivedi et al., 2022). The footwear industry has made a significant contribution to the sustainability of local retail enterprises (Pantano & Vannucci, 2024).
+
+In addition, consumer demands related to footwear products have also changed significantly because of various factors such as lifestyle, fashion, and technology in retail businesses. For instance, consumers are now demanding footwear products that are not only comfortable and durable but also affordable and have a design that matches their personal interests (Moser, 2023). As a result of these changing demands, it is worth encouraging retail businesses to improve their products and services (Shankar & Jebarajakirthy, 2021). Digital technology in retail businesses has enabled footwear retail businesses to improve their products and services (Dwivedi et al., 2022).
+
+Retail Operations Management 
+
+Retail operations management is essential for ensuring the smooth and efficient functioning of retail businesses, especially for small and medium enterprises (SMEs). It involves managing daily store activities such as inventory control, sales processing, customer service, and order handling. Efficient retail operations help businesses improve productivity and provide better customer experiences. However, relying on manual processes can lead to delays, errors, and poor coordination within the store. Studies show that businesses that implement structured retail operations management practices achieve better performance and operational efficiency (Berman & Evans, 2021).
+
+Effective inventory management is one of the most important aspects of retail operations. When inventory is properly monitored, businesses can avoid stock shortages and overstocking, which directly affect sales and profitability. Research indicates that real-time inventory tracking systems allow store owners to make faster and more accurate decisions, improving overall business performance. This also helps ensure that products are available when customers need them, leading to higher customer satisfaction (Waller & Fawcett, 2013).
+
+In addition, retail operations management focuses on improving workflow efficiency and reducing operational costs. The use of automated systems can streamline store processes such as sales transactions, order processing, and stock updates. Studies show that automation reduces human error and increases the speed of operations, allowing businesses to serve customers more effectively. As a result, retail businesses that adopt management systems can enhance both operational control and service quality (Chopra & Meindl, 2016).
+
+
+
+Point of Sales (POS) Systems
+
+Point-of-Sale (POS) systems play a crucial role in modern retail businesses by facilitating sales transactions and managing store operations. A POS system combines hardware and software to process payments, record sales, and update inventory in real time. This integration allows businesses to maintain accurate records and improve efficiency compared to manual transaction methods. Studies show that implementing POS systems significantly enhances transaction speed and reduces errors in retail environments (Raymond & Uwizeyemungu, 2007).
+
+Modern POS systems offer more than just transaction processing. They include features such as inventory management, customer data tracking, and sales reporting, which help businesses make informed decisions. By linking sales data with inventory systems, retailers can monitor product demand and adjust their stock levels accordingly. Research indicates that businesses using POS systems can better respond to customer needs and improve overall service quality (Pantano & Viassone, 2015).
+
+Furthermore, POS systems contribute to better financial management and business analysis. They generate detailed reports on sales performance, allowing store owners to identify trends and evaluate business growth. These insights help retailers develop effective strategies and improve profitability. With the integration of advanced technologies, such as cloud-based systems and mobile POS, retail businesses can operate more flexibly and efficiently, making POS systems a vital component of retail management systems (Sharma & Aggarwal, 2019).
+
+Inventory and Sales Management Systems 
+
+The essential for small and medium enterprises (SME’s) are efficiency in inventory and sales management systems.  Because they affect profitability and customer satisfaction. Systems nowadays provide real-time tracking and reporting that can support better decision-making meanwhile, manual methods may lead to errors and delays. A recent review shows that when small businesses manage their inventory effectively, they perform better overall. Good inventory practices help prevent stock outs, cut down on excess items, and keep operations running smoothly (Panigrahi, Shrivastava, & Nudurupati, 2024).
+
+The sales management systems can link customer data with inventory data, enabling the business to better anticipate which goods will likely be needed by customers and adjust their purchasing strategies appropriately. A research indicates that small and medium-sized enterprises (SMEs) that utilize sales and inventory systems can respond better to market dynamics and improve customer service (Jain, 2022).
+
+In addition, studies show that using digital tools for inventory and sales management helps make retails operations more transparent and organized. When reports are automated and sales transactions are directly connected to stock levels, small and medium enterprises (SMEs) can reduce losses, easily identify which products sell quickly or slowly, and become stronger and more competitive in the market (Ali & Anwar, 2021).
+
+
+
+
+
+Mobile Commerce and Smartphone-Based Retail Applications 
+
+In small and medium-sized enterprises, mobile commerce has had a considerable impact on the retail industry. As customers increasingly use their smartphones for day-to-day activities, mobile platforms provide business owners with an opportunity to reach customers more conveniently. Research has shown that mobile commerce applications provide customers with personalized experiences, which improve their engagement (Alalwan, 2020).
+
+Smartphone retail applications provide business owners with an opportunity to improve operational efficiency by integrating sales, inventory, and customers’ information into one platform. This helps business owners to react promptly to customers’ demand while keeping inventory under control. Research has shown that mobile retail applications provide business owners with an opportunity to improve brand loyalty through the features of the mobile application (Shankar & Jebarajakirthy, 2021).
+
+Additionally, mobile commerce has become more and more connected with social media platforms, which has led to the creation of a new form of commerce that is referred to as a hybrid form of commerce. However, recent findings have shown that SMEs that have utilized mobile and social commerce have achieved some competitive advantages, which include expanding the market and adapting to consumer behavior (Dwivedi et al., 2022). The above findings have shown that mobile commerce and its applications via smartphones have become very vital for retail businesses.
+
+
+
+Virtual Fitting and Augmented Reality in Retail 
+
+The aspect of mobile commerce has been closely associated with social media platforms, leading to the development of a new form of commerce referred to as a "hybrid" form of commerce. Current studies indicate that SMEs that implement mobile commerce strategies enjoy some benefits, which include gaining a competitive advantage by increasing market reach and responding to changes in customer behavior (Dwivedi et al., 2022).
+
+The aspect of social commerce helps SMEs engage with customers by offering them a convenient way of transacting while still interacting with customers. Current studies indicate that the aspect of social commerce helps SMEs develop trust with customers, leading to an increase in customer loyalty (Alalwan, 2021). Additionally, the aspect of mobile commerce helps SMEs gain valuable insights from customers, which helps them improve the quality of services provided (Hajli, 2020).
+
+The increasing use of smartphones and social media by customers indicates the need for SMEs to develop a new form of commerce referred to as a "hybrid" form of commerce. The new form of commerce helps SMEs develop customer relationships while increasing visibility and gaining a competitive advantage (Shankar & Jebarajakirthy, 2021).
+
+Product Customization Systems
+
+Product customization has become a hallmark of modern business, allowing firms to address the varied needs of consumers while fostering loyalty. For small and medium enterprises (SMEs), customization systems offer a means to distinguish their products from those produced on a large scale. Research indicates that customization systems improve customer satisfaction through the creation of personalized products, thus enhancing the perceived value (Piller, Vossen, & Ihl, 2022).
+
+Digital media have facilitated the adoption of customization systems, which integrate various tools like online configurators and augmented reality to enable the interactive creation of products. Research indicates that customization systems not only improve consumer engagement but also minimize the uncertainty associated with consumer behavior by allowing consumers to envision the product before making a purchase (Franke & Schreier, 2021). Customization systems also improve business efficiency by allowing consumers’ needs to be directly associated with the manufacturing process, thus reducing waste (Salvador, 2020).
+
+Furthermore, the latest findings indicate that the SMEs that adopt the use of product customization strategies are able to gain competitive advantages within the markets. For example, the small businesses are able to utilize the digital technology for the production of unique products that can attract the local customers. Nevertheless, the flexibility of the small businesses is evident in the production process (Moser, 2023). This demonstrates the idea that the use of the customization systems is not just a trend, but it can be adopted as a strategy for the growth of the retail business.
+
+User Experience and System Usability in Retail Systems
+
+The usability of the Retail management systems is essential, especially in retail stores, which consider the ease of access to the customers and the ability of the employees to complete their engagements upon the platform. According to the Nielsen Norman Group (2023), usability improves learnability, efficiency, error prevention, and satisfaction. These elements are essential in retail information systems to ensure that the transactions are quick and smooth.
+
+Research conducted by Alalwan, (2021) indicated that if the retail application is user-friendly, the customers are more likely to use the application. Tandon et al., (2022) also indicated that the simplicity of the website and the response time of the website have a positive impact on the purchasing behavior of customers. In the case of the use of augmented reality for virtual fitting, the usability of the system becomes very crucial, and if the interface of the system is not user-friendly, the customers are more likely to stop using the augmented reality features of the retail system, even if the system is very advanced. Therefore, the retail system must be designed in a way that it has a simple user interface, layout, menu, and readability of the text.
+
+In the proposed systems, usability will be of critical concern, especially because customers will be using the virtual fitting and customization options provided by the system. Therefore, if the usability of these options is poor, the system will not be effective. For the usability of the virtual fitting and customization options provided by the system to be effective, the usability of the system, i.e., the OTOP, will be tested using the ISO/IEC 25010 standard.
+
+
+
+
+
+Challenges and Limitations of Automated Retail Systems
+
+However, in spite of the advantages of automation, there are certain problems that have to be overcome to fully implement automation. Studies by the Organisation for Economic Co-operation and Development (2021) have pointed out some of the problems, such as the cost of digital transformation for SMEs, which might pose a challenge for small and medium-sized enterprises. In addition, Venkatesh, Thong, and Xu (2022) have pointed out that user acceptance of the system is of critical importance, as employees might find it difficult to cope with computerization if they have been used to manual systems and might feel uncomfortable using computer systems. The European Union Agency for Cybersecurity (2023) points out that retail systems have to ensure the protection of customer information from cyber-attacks. This might particularly be relevant in systems that require personal information and camera-based technologies like virtual try-on.
+
+Technical limitations, such as unstable internet connection and device compatibility issues, may also affect system performance (Yim & Park, 2022). These challenges must be addressed to ensure that the system is secure, reliable, and suitable for small footwear retailers. Addressing these challenges through careful planning, employee training, and security measures is essential for the successful adoption of automated retail systems.
+
+
+
+
+
+ISO/IEC 25010 Software Quality Model
+
+The ISO/IEC 25010 software quality model is a popular software quality model that is used as a standard software quality model and has characteristics such as functional suitability, performance efficiency, compatibility, usability, reliability, security, maintainability, and portability. Functional suitability is used to measure whether the system meets the user’s requirements, while performance efficiency is used to measure the response time and resource consumption. Compatibility is used to measure the system’s ability to function with other systems, while usability is used to measure the ease of learning and using the system. In addition, reliability is used to measure the stability of the system, security is used to measure the protection of the system, while maintainability is used to measure the ease of updating the system. Portability is used to measure the adaptability of the system.
+
+The latest research also employs the ISO/IEC 25010 standard in measuring software quality. For example, Ahmad et al. (2023) applied the ISO/IEC 25010 standard in measuring the quality of a mobile-based learning system, emphasizing the importance of usability and performance efficiency in measuring software quality. Pratama and Mutiara (2021) also applied the ISO/IEC 25010 quality model in measuring the software quality of the Halodoc mobile application, ensuring that the standard is effective in measuring the functional and usability aspects of real software.
+
+The ISO/IEC 25010 model can be particularly utilized to evaluate the quality of OTOP since it covers all the aspects of functionality, usability, reliability, security, and performance efficiency. Since the system combines inventory management and customization features, the use of the ISO model would ensure an objective evaluation of the system.
+
+Functional Suitability. Functional suitability defines the ability of the system to provide the required functionalities to the users to support the operation of the system. Functionalities of the information system for the retailing of footwear products include the ability to manage the products, monitor the inventory, record sales transactions, and manage customer information. An information system with well-structured and complete functional modules helps the retail store owner and other users to operate the system with greater ease and efficiency. According to Pratama & Mutiara (2021), retail information systems with integrated functional features improve the overall efficiency of the operations and enhance the ability to make informed decisions regarding the management of the retail business. An information system with the ability to support all the operations of the retail business helps to improve the overall productivity of the operations and ensures the ability to satisfy the needs of the users.
+
+Performance Efficiency. Performance efficiency refers to a system’s performance in terms of its effectiveness in handling different workloads while ensuring efficient use of system resources. For retail systems, it is important to ensure they are efficient in handling transactions, searching for product details, and updating stock details in a timely manner without causing delays in business operations. Such systems with high response rates and efficient transaction processing ensure a better user experience for users, both in retail businesses and their clients. Studies indicate that systems developed using optimized frameworks and efficient database structures help in reducing delays in processing transactions (Panthong et al., 2022). Efficient performance ensures smooth transaction handling in retail businesses without causing delays during business hours.
+
+Compatibility. Compatibility means the system’s ability to operate effectively with different gadgets or platforms. Compatibility in retail stores means the system’s ability to operate with different gadgets or platforms, for instance, desktop computers, tablets, or smartphones. A system that allows for the integration of different technological platforms facilitates the easy handling of retail store information by the business. Studies highlight the significance of compatibility to the accessibility of the system by the users, as it facilitates collaboration through the ability to access information through different technological gadgets (Bharany et al., 2022). A compatible system also allows for the integration of other technological platforms that support the business.
+
+Usability. Usability is an important factor that affects how easily users can learn and interact with the system in order to perform tasks efficiently. In retail systems, usability is important as it should allow both customers and employees to easily perform their tasks with the help of the system. Research has indicated that retail systems with user-friendly interfaces help in improving customer satisfaction and increase the willingness of customers to continue using the system (Fakhry et al., 2024). This is important as it reduces the learning curve and minimizes errors during interaction with the system.
+
+Reliability. This is the ability of the system to function consistently and accurately without failure over time. In retail information systems, reliability is important since it ensures that transactions are processed and information is stored and can be retrieved when needed. This is important since it promotes user confidence and minimizes interruptions in operations that may affect retail business operations adversely. Research has shown that a reliable information system promotes continuity in operations and minimizes administrative delays in information management systems (Del Rosario & Dela Cruz, 2022). Reliable retail information systems are important since they promote the smooth running of retail businesses.
+
+Security. This is an important characteristic since it promotes the security of information stored in the system against unauthorized access and other security threats. In retail information systems, security is important since it protects information stored in the system against unauthorized access and other security threats. Research has shown that security features in information systems protect the system against security threats and promote compliance with security policies (Pratama & Mutiara, 2021). In retail information systems, security is important since it promotes user confidence and protects information stored in the system against security threats.
+
+Maintainability. Maintainability means the ease with which a system can be changed or improved to accommodate the changing needs of the business. A retail system may need to be updated to add new features or to change the way the system operates. Modular structures help the developer change the system components without affecting the system's functionality. Research highlights the need for maintainability to enhance the speed of updates for the sustainability of the system, as noted by Kusuma et al. (2020) for software development. Maintainability ensures the system's ability to change with the needs of the business.
+
+Portability. Portability is related to the system’s ability to operate in various environments with minimal modifications. Information systems in retail should be operable using different devices such as desktops, tablets, and smartphones, thus enabling users to access the system in different locations. Literature indicates that a portable system increases the system’s accessibility and usability, as it allows users to interact with the system without requiring complex installation processes (Petcharat & Sutthirak, 2024). Portable systems improve flexibility in retail operations and increase accessibility.
+
+Accessibility. Accessibility ensures that the system can be accessed by different users with varying abilities and technological skills. Accessability allows users to interact with the system effectively. Different design principles help to ensure that users with various limitations do not face any challenges accessing the system. Studies highlight the significance of accessability to enhance the level of inclusiveness of information systems to be accessed by different groups of users (Zopiatis et al., 2021). Accessability ensures that the retail system becomes user-centered.
+
+
+
+Unified Theory of Acceptance and Use of Technology (UTAUT)
+
+	The Unified Theory of Acceptance and Use of Technology (UTAUT) is a widely adopted theory for explaining the acceptance of technology. This theory was introduced as a means of identifying the factors that influence an individual’s intention to use a system, as well as the actual use of the system. The UTAUT model is a combination of other technology acceptance theories, emphasizing the importance of the determinants that influence the adoption of information systems by users. This includes performance expectancy, effort expectancy, social influence, facilitating conditions, which explain the behavior of users regarding the adoption of technological innovations (Venkatesh et al., 2003).
+
+	Performance Expectancy. Performance Expectancy is defined as “the extent to which users perceive that using the particular system will improve their performance in performing the task.” In the proposed OTOP system, store staff and users may find the system useful if it will help them to efficiently manage the store’s inventory, monitor sales, obtain product details, and facilitate virtual fitting.
+
+	Effort expectancy. Effort expectancy relates to the level of ease associated with the use of the system. In this study, it relates to the level of ease associated with the learning of the OTOP system by the store owner and the customers. A system with a clear interface, ease of navigation, and ease of function will always be accepted by the user.
+
+	Social influence. Social influence measures the degree to which users perceive that important people in their surroundings believe they should use the new system. In the particular setting of this study, sources of social influence could be the customers, store staff, and other people who recognize the importance of digital retail systems in improving store operations.
+
+	Facilitating conditions. Facilitating conditions are the extent to which users perceive that the organization and technology infrastructure exists to support the system use. This includes the presence of smartphones, internet connection, devices, and support for the user in accessing the information system for the sole purpose of shopping, as well as the virtual fitting room.
+
+From the literature reviewed above, it can be noted that most literature emphasizes the significance of digital technologies in enhancing retail operations and customer experience. Some of the common ideas noted in the literature include retail automation technologies, retail inventory and sales management systems, mobile commerce technologies, augmented reality technologies, and user-friendly system design technologies. These technologies assist businesses in improving their operations and managing their inventory more effectively, thus improving the overall customer experience. In terms of functionalities, retail systems offer businesses different functionalities such as product information management, sales management, inventory management, and customer interaction technologies. Advanced retail technologies offer businesses functionalities such as virtual fitting and product customization technologies, thus enabling customers to visualize products and customize their products before making a purchasing decision. In addition, mobile-based retail technologies assist businesses in reaching their customers more conveniently using their smartphones, thus improving their relationship with customers.
+
+However, despite all these developments, some gaps exist that need to be addressed with regards to the current studies and systems. Some of the gaps include the fact that most of the current retail technologies available are mainly suited to larger businesses or brands that can afford the technological requirements. There is a lack of integrated systems that can offer inventory management, virtual fitting, product customization, and mobile retail under a single umbrella that can cater to the needs of small or local footwear retailers. In addition, there is a lack of studies that can offer an evaluation of the integrated systems using software quality models to ensure the usability and dependability of the systems. This shows that there is a need to develop an integrated retail information system that can cater to the needs of small footwear businesses or retailers. This can be achieved by integrating retail automation technology, virtual fitting technology, product customization technology, and evaluating the system to ensure usability.
+
+
+
+
+
+
+
+
+
+
+
+
+
+Chapter 3
+
+TECHNICAL BACKGROUND
+
+This chapter presents the technical background of the study, including the organizational structure and the workflow of the existing system used by the partner footwear retail store. It provides an overview of how the current manual operations are performed and identifies the limitations that affect efficiency.
+
+Organizational Structure
+
+An organizational structure is a visual representation of the hierarchy of roles and responsibilities within an organization. It shows how tasks are distributed, who reports to whom, and how communication flows between different positions.
+
+However, the partner footwear retail store does not have a formal organizational chart due to its small scale of operations. The business is managed solely by the owner, who performs all roles within the store. These roles include customer service, inventory management, sales processing, and record keeping.
+
+Since there are no additional employees or departments, the structure of the business can be described as a centralized or single-person organizational structure, where all responsibilities and decision-making processes are handled by one individual.
+
+Although this setup allows for quick decision-making and direct customer interaction, it may also lead to inefficiencies, especially when handling multiple customers or managing records manually.
+
+Workflow Diagram
+
+A workflow diagram illustrates how tasks, decisions, and activities flow within a process. It provides a visual representation of how the current system operates and helps identify inefficiencies, delays, and areas for improvement.
+
+
+
+Figure 1
+
+Workflow Diagram
+
+
+
+Chapter 4
+
+METHODOLOGY
+
+This chapter represents what methodology is used, requirements specifications, hardware and software specifications, population, locale of the study, problem analysis, cause and effect analysis, and design of software systems, products, and/or processes.
+
+Development Methodology
+
+As shown in Figure 3, the study employed using the Extreme Programming Methodology also known as XP Methodology. Extreme Programming is an agile software development framework that advocates short development period, continuous testing and produces high software quality. Extreme programming is highly suitable for making short-term project, such as this study, that only involves a couple of months after deploying the system. The continuous detection of bugs, issues, and rapid response to the changing requirements because of the continuous deployment and testing delivers a higher software quality and enhanced user experience.  As the result, XP supports not only technical excellence but also high user satisfaction by ensuring the system aligns with user’s expectations at every phase.
+
+
+
+
+
+
+
+System
+
+OTOP: A Footwear Retail Management System with Virtual Fitting Support
+
+Non-functional Requirements
+
+
+
+Hardware Requirements
+
+PC / Laptop 
+
+Smartphone
+
+
+
+Software Requirements
+
+Operating System 
+
+UNITY 
+
+Supabase 
+
+Flutter or Android Studio 
+
+Visual Studio Code
+
+
+
+
+
+Functional Requirements
+
+Register Account 
+
+Login 
+
+Manage Profile 
+
+Manage User Accounts 
+
+Approve Seller Applications 
+
+View Products 
+
+Search and Filter Products 
+
+Check Size Availability 
+
+Perform Virtual Fitting 
+
+Customize Footwear 
+
+Submit Special Modification Requests 
+
+Add to Cart 
+
+Checkout Order 
+
+Process Payments 
+
+Manage Products 
+
+Manage Inventory 
+
+Manage Orders 
+
+Update Order Status 
+
+Track Orders 
+
+View Order History 
+
+Manage Customer Information 
+
+Monitor Products 
+
+Record Sales 
+
+Process POS Transaction
+
+Generate and Export Reports 
+
+View Notifications 
+
+Manage Settings 
+
+Chat 
+
+Log Out
+
+Planning
+
+Gathering requirements
+
+
+
+
+
+Implementation
+
+
+
+Frontend Development			•      Database Implementation
+
+Backend Development			•      Coding
+
+Testing and Debugging			•      Testing and Debugging
+
+
+
+Design
+
+
+
+User interface			•      Database Design
+
+User Flow Diagram		•      Mobile application layout for virtual fitting
+
+
+
+Source: Systems Analysis and Design with UML, Version 2.0 (3rd Edition)
+
+Figure 2
+
+	Extreme Programming
+
+
+
+Requirements Specifications
+
+The proposed project includes guidelines that must be followed when preparing the software requirement specification. This section outlines both the functional and non-functional requirements of the project.
+
+Functional Requirements.  This portion of the requirements specification includes the system’s use cases and corresponding descriptions, as reflected in the table presented below.
+
+Table 1
+
+Functional Requirements
+
+        User Cases                                                       Description 
+
+                                                                                                                                        
+
+Use Case No.001 – REGISTER ACCOUNT
+
+
+
+Allows users to create a new account by providing required personal and login information.
+
+Use Case No.002 – LOGIN
+
+
+
+Allows users to securely access the system using their registered credentials.
+
+Use Case No.003 – MANAGE PROFILE
+
+
+
+Allows users to view and update their personal account information.
+
+Use Case No.004 – MANAGE USER ACCOUNTS
+
+
+
+Allows administrators to create, update, deactivate, or delete user accounts.
+
+Use Case No.005 – APPROVE SELLER APPLICATIONS
+
+
+
+Allows administrators to review and approve or reject seller registration requests.
+
+Use Case No.006 – VIEW PRODUCTS
+
+
+
+Allows users to browse and view available footwear products in the system.
+
+Use Case No.007 – SEARCH AND FILTER PRODUCTS
+
+
+
+Allows users to search and filter products based on keywords and selected criteria.
+
+Use Case No.008 – PERFORM VIRTUAL FITTING
+
+
+
+Allows users to simulate how footwear will look or fit using virtual fitting technology.
+
+Use Case No.009 – CHECK SIZE AVAILABILITY
+
+
+
+Allows users to view the available sizes of a selected product.
+
+Use Case No.010 – CUSTOMIZE FOOTWEAR
+
+
+
+Allows users to personalize footwear by selecting design options such as color and material.
+
+Use Case No.011 – SUBMIT SPECIAL MODIFICATION REQUESTS
+
+
+
+Allows users to request custom modifications beyond the standard customization options.
+
+Use Case No.012 – ADD TO CART
+
+
+
+Allows users to add selected products to their shopping cart.
+
+Use Case No.013 – CHECKOUT ORDER
+
+
+
+Allows users to review their cart and confirm their order for processing.
+
+Use Case No.014 – PROCESS PAYMENTS
+
+
+
+Allows the system to securely handle and complete user payment transactions.
+
+Use Case No.015 – MANAGE PRODUCTS
+
+
+
+Allows sellers or administrators to add, update, or remove product listings.
+
+Use Case No.016 – MANAGE INVENTORY
+
+
+
+Allows sellers or administrators to monitor and update product stock levels.
+
+Use Case No.017 – MANAGE ORDERS
+
+
+
+Allows sellers or administrators to view and handle customer orders.
+
+Use Case No.018 – UPDATE ORDER STATUS
+
+
+
+Allows sellers or administrators to change the status of orders during processing.
+
+Use Case No.019 – TRACK ORDERS
+
+
+
+Allows users to monitor the current status and progress of their orders.
+
+Use Case No.020 – VIEW ORDER HISTORY
+
+
+
+Allows users to access a record of their previous transactions.
+
+Use Case No.021 – MANAGE CUSTOMER INFORMATION
+
+
+
+Allows administrators to view and manage customer data.
+
+Use Case No.022 – MONITOR PRODUCTS
+
+
+
+Allows administrators to oversee product activity and performance in the system.
+
+Use Case No.023 – RECORD SALES
+
+
+
+Allows the system to automatically record completed transactions.
+
+
+
+Use Case No.024 – PROCESS POS TRANSACTION
+
+Allows sellers to process walk-in sales transactions by selecting products, entering quantity and size, computing the total amount, recording payment, generating receipts, and automatically updating inventory records.
+
+
+
+Use Case No.025 – GENERATE AND EXPORT REPORTS
+
+
+
+Allows administrators to create and export system reports in various formats.
+
+Use Case No.026 – VIEW NOTIFICATIONS
+
+
+
+Allows users to receive and view system updates and alerts.
+
+Use Case No.027 – MANAGE SETTINGS
+
+
+
+Allows users and administrators to configure system and account preferences.
+
+Use Case No.028 – CHAT
+
+
+
+
+
+
+
+Use Case No.029 – LOGOUT
+
+
+
+Allows users to communicate with sellers or support through real-time messaging.
+
+Allows users to securely exit the system and end their session.
+
+
+
+Table 1 is essential for defining and organizing the functional requirements of OTOP: A Footwear Retail Information System with Virtual Fitting Support.  It outlines the system’s core features and use cases for both administrators and customers. These requirements define how users interact with the system, including product management, virtual fitting, transactions, and customer services, ensuring efficient operation and enhanced user experience.
+
+Non-functional Requirements. This portion of the requirements specification include the system’s non-functional requirements, as shown in Table 2 below.
+
+
+
+       Table 2
+
+Non-functional Requirements
+
+Non-functional Requirements
+
+Description
+
+NonFunc_001
+
+Personal
+
+Computer/Desktop/Laptop
+
+NonFunc_002
+
+Smartphone
+
+NonFunc_003
+
+Operating System (OS)
+
+NonFunc_004
+
+UNITY
+
+NonFunc_005
+
+Supabase
+
+NonFunc_006
+
+Flutter or Android Studio
+
+NonFunc_007
+
+Visual Studio Code
+
+ Table 2 presents the non-functional requirements of the OTOP system. These requirements define the technical environment, tools, and conditions necessary for the development and operation of the system. It ensures the system’s reliability, performance, and compatibility across different platforms.        
+
+Hardware and Software Specifications. As shown in Table 3 and 4, this section of the non-functional requirements includes the list of costs for software and hardware components.
+
+  
+
+
+
+
+
+
+
+
+
+    Table 3
+
+Hardware Specification
+
+
+
+Specifications
+
+Pricelist
+
+Laptop | Intel Core i5 | 8GB RAM | 516GB SSD | Windows 11
+
+₱33, 999.00
+
+Smartphone | 4 + 3GB RAM | 256GB Storage | Android
+
+₱14, 999.00
+
+Smartphone  | 4GB RA | 128GB Storage | iOS
+
+₱24, 990.00
+
+Source: Dell, Infinix, Apple Iphone
+
+Table 3 offers a clear procurement guidance by outlining the hardware needs and associated expenses. For seamless execution and user accessibility, it guarantees that stakeholders are aware of the required expenditures and match resources with the hardware requirements of the project.
+
+Table 4
+
+Software Specification
+
+
+
+Name
+
+Price
+
+Premium Antivirus Software | Yearly Subscription
+
+₱2,500.00
+
+Operating System Genuine | Lifetime License
+
+₱6,599.00
+
+Unity (Game Engine / 3D Development)
+
+         Free
+
+Supabase (Backend as a Service)
+
+     Free
+
+Flutter / Android Studio (Mobile Development)
+
+     Free
+
+Visual Studio Code
+
+     Free
+
+Source: McAfee, Microsoft
+
+A detailed overview of the key software tools needed for the project is given in Table 4, which also lists the software specs and associated expenses. It aids stakeholders in comprehending the budgetary requirements, software requirements, and subscription specifics for essential services. This guarantees that every software need is satisfied within the project’s financial and functional parameters.	
+
+Requirements Analysis
+
+            The requirements analysis includes an understanding of the system and its description, analysis, and prioritization. It is crucial to understand the needs and expectations of the users so that they can be satisfied with the developed system. The study seeks to address the inefficiencies experienced in traditional footwear retail operations through the development of a system called OTOP, which includes aspects of inventory management, sales recording, customer information handling, virtual fittings, and customization. By identifying the challenges facing traditional footwear retail operations, such as inaccurate inventory records, wrong sizes, and unorganized customization, the researchers have been able to identify the functional and non-functional requirements of the system. This is crucial in ensuring that the developed system not only addresses inefficiencies in traditional operations but also satisfies customer needs for a competitive edge in the market.
+
+            Population and Locale of the Study. This part of the requirements analysis section describes the population and locale of the study. The population refers to the group of people who are actively engaged in the process of footwear retail. This includes the owners of the store, who personally manage the store as an all-around store personnel, and the customers who frequently buy footwear and are actively engaged with the system using the browse, virtual fit, and customization tools. These people play an important role in the study to evaluate the effectiveness of the OTOP system in fulfilling the needs of the users and how it can be further improved. The locale of the study is based on the description of the environment where the process of footwear retail is actively engaged. This locale was chosen because it is an accurate representation of small and medium-sized enterprises in the footwear industry that are having problems with inventory management, customer engagement, and customization, especially when they are compared with larger retail brands. The study is being done in this locale to provide an accurate testing environment for the OTOP system.
+
+                        Population. In this section, we find the population of the study. The population includes those individuals who are directly engaged in activities related to footwear retailing. This includes store owners who directly manage their stores through all-around personnel, those who handle sales, inventory, and customer records, and also includes customers who regularly purchase footwear and use the system through activities such as browsing, virtual fitting, and customization tools. This variety of roles and activities helps in ensuring that the system is reviewed from different angles, and the feedback and experiences obtained from them are important in determining how OTOP can enhance its usability, efficiency, and satisfaction in terms of footwear retailing activities.	
+
+                        Locale of the Study. This section will describe the location of the study. The location of the study is in Valladolid, Carcar City, Cebu, an area known for its thriving retail business in footwears and shoemaking. This location will be the testing ground for OTOP, an environment where the system will be tested in an actual situation. By conducting the study in this location, the researchers are able to see the practical application of OTOP in the day-to-day operations of the retail business. This location is significant because it will provide an actual situation to test the effectiveness of the OTOP system. This will give an accurate idea about the usability of the system and how it will contribute to the improvement of the current retail business of footwears.
+
+
+
+Figure 3
+
+Locale of the Study
+
+           Problem Analysis. The problem analysis section identifies the major challenges in the footwear retail operations. The challenges include the inaccuracy associated with manual inventory control, customer dissatisfaction arising from the inability to match sizes, and the lack of proper management in the order of custom requests. All these issues have negative implications on the operations, customer engagement, and competitiveness. OTOP is developed to mitigate the challenges by automating inventory control, facilitating virtual fitting, and streamlining the order of custom requests.
+
+           PIECES. This part of the problem analysis includes Performance, Information, Economy, Control/Security, Efficiency, and Services, abbreviated as PIECES. The evaluation is shown in Table 5 below.
+
+Table 5
+
+PIECES Evaluation Framework-OTOP
+
+PIECES
+
+Problems
+
+Opportunities
+
+
+
+Performance
+
+
+
+Manual processes take a long time to complete transactions and make decisions.
+
+
+
+Automating sales and inventory through OTOP will hasten transactions and processes.
+
+Information
+
+The records are disorganized and prone to errors, causing incorrect information on inventory and customer data.
+
+The system provides accurate, accessible, and organized data, not only to the owners but also to the customers.
+
+Economy
+
+The inefficiencies are causing losses, increased costs, and wastage of resources.
+
+The system will ensure reduced costs, no losses, and maximum profitability.
+
+Control/Security
+
+The records are prone to loss, damage, and unauthorized access because they are manual.
+
+The system provides secure storage and control over the records, ensuring accountability.
+
+Efficiency
+
+The owners are wasting too much time on the operations instead of using the time to engage the customers.
+
+The system will ensure efficiency, and the owners will have enough time to engage the customers and enhance the growth of the stores.
+
+Services
+
+The customers are missing out on modern conveniences offered by other stores, such as virtual fitting and customization.
+
+The system provides conveniences through the virtual fitting and customization tools offered by OTOP.
+
+Cause and Effect Analysis. Table 6 presents the cause-and-effect analysis of key problems in footwear retail operations. It identifies the issues faced by owners and customers, their causes and effects, and the objectives of the OTOP system in addressing them. It also outlines implementation constraints to ensure the system fits the selected environment.
+
+Table 6
+
+Cause and Effect Analysis
+
+Problem and Opportunities
+
+Cause and Effect
+
+System Objectives
+
+System Constraints
+
+Customers face difficulties in selecting the proper footwear size during in-store selection and order transactions.
+
+Due to the absence of an advanced fitting assistance or virtual fitting system, customers experience uncertainty during in-store selection, leading to incorrect size decisions.
+
+
+
+To design an AR-based virtual fitting option, which will help users view the shoes in real-time.
+
+This option should be enabled on a camera-compatible device, and accuracy might vary depending upon the lighting conditions.
+
+Limited interactive experience in traditional in-store product selection.
+
+Static product displays and lack of interactive tools limit customer engagement and visualization.
+
+
+
+To incorporate augmented reality features that provide an interactive and immersive product viewing experience.
+
+This depends on device capability and augmented reality support.
+
+
+
+Customers have limited options to personalize footwear according to their preferences.
+
+The absence of customization features reduces customer satisfaction and engagement.
+
+
+
+To develop a customization feature that allows users to modify the color, style, and design of footwear.
+
+The availability of design options and added system complexity may limit customization features.
+
+
+
+High risk of incorrect product selection due to size and expectation mismatches.
+
+Inaccurate product visualization leads to differences between customer expectations and the actual product.
+
+To reduce incorrect selections by enhancing product visualization through AR technology.
+
+The system cannot fully replicate the exact physical feel of the product..
+
+Time-consuming decision-making process for customers.
+
+Customers have to undergo a process of trial and error when selecting products. This is time-consuming.
+
+To improve the efficiency of the product selection process using AR preview and filter tools.
+
+To improve the efficiency of the product selection process using AR preview and filter tools.
+
+Design of Software Systems, Products, and/or Processes 
+
+            In this part of the study, the researchers explain the system’s framework and design, which includes the functions and procedures of the system to give readers a better understanding of the system’s capabilities and potential. The system’s design focuses on the integration of modules to deal with the challenges of footwear retail operations.
+
+            Hierarchical Input-Process-Output. To identify the functions of the system and its components, the researchers utilized the HIPO diagram. The HIPO diagram is an analysis tool that shows the sub-functions of the system and the flow of data through the input, process, and output components. The main function of the system is to support the operations of footwear retail stores through inventory management, virtual fitting, and order customization. The diagram shows the input components from the store owners, such as inventory and order customization, and the customers, such as browsing and fitting. The diagram also shows the output components, which are the processed inventory, fitting, and order customization. The HIPO diagram is shown in Figure 5 on the following page. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Figure 4
+
+Hierarchical Input-Process-Output
+
+Entity Relationship Diagram. The Entity Relationship Diagram (ERD) is a diagram that explains the entities, or the different roles used within the system. It represents the relationships among various entities, and each entity is defined by its attributes, as shown in Figure 5 below.
+
+
+
+
+
+Figure 5
+
+Entity Relationship Diagram
+
+Use Case Diagram. This portion of the software systems, products, and processes design presents the use case diagram for the end-users of the system. The use case diagrams illustrate the interactions between the users and the system, highlighting the different functionalities that are accessible based on the type of user, as shown in the figure below.
+
+
+
+Figure 6
+
+Use Case Diagram for Customer
+
+
+
+
+
+
+
+Figure 7
+
+Use Case Diagram for Seller
+
+
+
+Figure 8
+
+Use Case Diagram for Admin
+
+Flowchart of the Proposed System. This portion of the software system design presents the flowchart of the proposed system, as shown in the figure below.
+
+
+
+Figure 10
+
+Flowchart of the proposed system 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Figure 11
+
+Flowchart of the proposed system – Continuation CD
+
+Figure 12
+
+Flowchart of the proposed system – Continuation PD
+
+
+
+
+
+
+
+
+
+
+
+Figure 13
+
+Flowchart of the proposed system – Continuation VF
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Figure 14
+
+Flowchart of the proposed system – Continuation CF
+
+
+
+Figure 15
+
+Flowchart of the proposed system – Continuation PO
+
+
+
+Figure 16
+
+Flowchart of the proposed system – Continuation TO
+
+Figure 17
+
+Flowchart of the proposed system – Continuation VN
+
+
+
+Figure 18
+
+Flowchart of the proposed system – Continuation CI
+
+
+
+Figure 19
+
+Flowchart of the proposed system – Continuation PP
+
+
+
+
+
+
+
+
+
+Figure 20
+
+Flowchart of the proposed system – Continuation CL
+
+
+
+Figure 21
+
+Flowchart of the proposed system – Continuation SD
+
+
+
+
+
+Figure 22
+
+Flowchart of the proposed system – Continuation SPM
+
+
+
+
+
+
+
+Figure 23
+
+Flowchart of the proposed system – Continuation SIM
+
+
+
+Figure 24
+
+Flowchart of the proposed system – Continuation SOM
+
+
+
+Figure 25
+
+Flowchart of the proposed system – Continuation POS
+
+
+
+
+
+Figure 26
+
+Flowchart of the proposed system – Continuation SNT
+
+Figure 27
+
+Flowchart of the proposed system – Continuation SRT
+
+
+
+
+
+Figure 28
+
+Flowchart of the proposed system – Continuation SCI
+
+
+
+
+
+
+
+Figure 29
+
+Flowchart of the proposed system – Continuation SPP
+
+
+
+
+
+Figure 30
+
+Flowchart of the proposed system – Continuation SL
+
+
+
+
+
+Figure 31
+
+Flowchart of the proposed system – Admin
+
+
+
+
+
+
+
+Figure 32
+
+Flowchart of the proposed system – Continuation AUM
+
+
+
+Figure 33
+
+Flowchart of the proposed system – Continuation ASA
+
+
+
+Figure 34
+
+Flowchart of the proposed system – Continuation APM
+
+
+
+
+
+
+
+
+
+Figure 35
+
+Flowchart of the proposed system – Continuation AOM
+
+
+
+Figure 36
+
+Flowchart of the proposed system – Continuation ASR
+
+
+
+
+
+
+
+
+
+
+
+Figure 37
+
+Flowchart of the proposed system – Continuation ANT
+
+
+
+
+
+Figure 38
+
+Flowchart of the proposed system – Continuation ALG
+
+
+
+REFERENCES
+
+
+
+Statista Research Department. (2023). Global footwear market report. Statista.https://www.statista.com
+
+Grand View Research. (2024). Footwear market size, share & trends analysis report. Grand View Research.https://www.grandviewresearch.com
+
+Fortune Business Insights. (2023). Footwear market size, share & COVID‑19 impact analysis. Fortune Business Insights.https://www.fortunebusinessinsights.com
+
+Kumar, R. (2021). The role of SMEs in footwear retailing. Journal of Retail Studies, 15(2), 45–58.
+
+Dwivedi, Y. K., Hughes, L., Coombs, C., Constantiou, I., & Duan, Y. (2022). Digital retail transformation and consumer engagement. International Journal of Information Management, 62, 102118.https://doi.org/10.1016/j.ijinfomgt.2021.102118
+
+Pantano, E., & Vannucci, V. (2024). Sustainability in footwear retail enterprises. Journal of Retailing and Consumer Services, 78, 103119.https://doi.org/10.1016/j.jretconser.2023.103119
+
+Moser, R. (2023). Consumer demand and footwear design trends. Fashion and Retail Journal, 12(4), 233–245.
+
+Shankar, A., & Jebarajakirthy, C. (2021). Digital technology adoption in retail businesses. Journal of Retailing and Consumer Services, 61, 102110.https://doi.org/10.1016/j.jretconser.2021.102110
+
+Vadruccio, R., Seghezzi, A., & Tumino, A. (2023). Modern inventory management systems in SMEs. Journal of Small Business Technology, 19(3), 201–215.
+
+Panigrahi, R., Shrivastava, S., & Nudurupati, S. (2024). Efficiency in inventory and sales management systems. International Journal of Operations & Production Management, 44(1), 88–104.https://doi.org/10.1108/IJOPM-08-2023-0428
+
+Jain, A. (2022). Sales and inventory systems in SMEs. Journal of Business Management, 27(2), 145–160.
+
+Ali, M., & Anwar, S. (2021). Digital tools for inventory and sales management. Journal of Retail Technology, 33(5), 321–335.
+
+Alalwan, A. (2020). Mobile commerce applications and customer engagement. International Journal of Information Management, 50, 381–389.https://doi.org/10.1016/j.ijinfomgt.2019.04.008
+
+Dwivedi, Y. K., Hughes, L., Coombs, C., Constantiou, I., & Duan, Y. (2022). Mobile and social commerce in SMEs. Asia Pacific Journal of Business Administration, 16(5), 1037–1054.
+
+Alalwan, A. (2021). Social commerce and customer trust. Journal of Retailing and Consumer Services, 64, 102125.
+
+Hajli, N. (2020). Social commerce and customer insights. International Journal of Market Research, 62(3), 255–270.
+
+Piller, F., Vossen, A., & Ihl, C. (2022). Product customization and consumer satisfaction. Journal of Product Innovation Management, 39(2), 145–162.
+
+Franke, N., & Schreier, M. (2021). Digital media and customization systems. Journal of Marketing Research, 58(4), 678–695.
+
+Salvador, F. (2020). Customization systems and business efficiency. International Journal of Production Economics, 227, 107118.https://doi.org/10.1016/j.ijpe.2020.107118
+
+Moser, R. (2023). Customization strategies for SMEs. Fashion and Retail Journal, 12(4), 233–245.
+
+Alalwan, A. A. (2021).Mobile Food Ordering Apps: An Empirical Study of the Factors Affecting Customer Adoption.International Journal of Information Management.https://doi.org/10.1016/j.ijinfomgt.2020.102223
+
+Nielsen Norman Group (2023). Introduction To Usability https://www.nngroup.com/articles/usability-101-introduction-to-usability/
+
+European Union Agency for Cybersecurity (2023).ENISA Threat Landscape 2023https://www.enisa.europa.eu/publications/enisa-threat-landscape-2023
+
+Kumar, V., & Aggarwal, R. (2023).The Impact of User Interface Design on Online Consumer Trust.Electronic Commerce Research, 23(2), 341–360.https://doi.org/10.1016/j.techfore.2022.122309
+
+OECD (2021).The Digital Transformation of SMEs.Organisation for Economic Co-operation and Development Publishing.https://www.oecd.org/industry/smes/digital-transformation-of-smes.htm
+
+Tandon, U., Kiran, R., & Sah, A. (2022).The Influence of Website Usability on Online Purchase Intention.Journal of Retailing and Consumer Services, 64, 102118.https://doi.org/10.1016/j.jretconser.2021.102792
+
+Ahmad, et al. (2023).Evaluation of Mobile-Based Learning System Using ISO/IEC 25010.IEEE Access.https://doi.org/10.1109/ACCESS.2023.XXXXX
+
+Alsaeedi, A. (2022).Evaluating Software Quality Using ISO/IEC 25010 Model.International Journal of Advanced Computer Science and Applications.https://thesai.org/Publications/ViewPaper?Volume=13&Issue=2&Code=IJACSA&SerialNo=34
+
+Imbar, R. V., et al. (2021).Software Quality Evaluation Using ISO/IEC 25010.Procedia Computer Science.https://doi.org/10.1016/j.procs.2021.01.118
+
+Olsina, M., & Lew, P. (2021).Web Quality Evaluation Using ISO/IEC 25010.Journal of Systems and Software.https://www.sciencedirect.com/science/article/pii/S0164121220302750
+
+Ghose, A., et al. (2023).Usability Evaluation Using the ISO/IEC 25010 Software Quality Model.IEEE Access.https://ieeexplore.ieee.org/document/10054172
+
+Abran, A. (2021).Software Quality Evaluation Models and Standards.Software Quality Journal.
+
+Venkatesh, V., Thong, J., & Xu, X. (2022).Unified Theory of Acceptance and Use of Technology: Recent Developments.MIS Quarterly, 46(1), 1–32.
+
+Colomo-Palacios, R., et al. (2022).Software Quality Models in Modern Systems.IEEE Software.
+
+Abrahamsson, P., et al. (2021).Software Maintainability Evaluation Using ISO Standards.Information and Software Technology.
+
+Olsina, L., et al. (2021).Measuring Quality in Use for Software Systems.Journal of Web Engineering.
+
+Yim, M. Y., & Park, S. Y. (2022).The Effects of Augmented Reality on Consumer Responses in Retail Settings.Computers in Human Behavior, 130, 107121.https://doi.org/10.1016/j.jbusres.2021.11.048
+
+Prameswari, A. P. T., & Setyawan, M. Y. H. (2025).Development of a Hybrid Model for Website Functional Evaluation Based on ISO/IEC 25010 and SERVQUAL.Matrix: Jurnal Manajemen Teknologi dan Informatika, 15(1), 32–39.https://scholar.google.com/
+
+Calero, C., et al. (2022).Quality Evaluation of Software Systems Using ISO/IEC 25010.Computer Standards & Interfaces.https://doi.org/10.1016/j.csi.2021.103597
+
+Pratama, & Mutiara (2021).Software Quality Evaluation of Halodoc Using ISO/IEC 25010.https://ieeexplore.ieee.org/
+
+Abrahamsson, P., Salo, O., Ronkainen, J., & Warsta, J. (2017).Agile Software Development Methods: Review and Analysis.https://arxiv.org/abs/1709.08439
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

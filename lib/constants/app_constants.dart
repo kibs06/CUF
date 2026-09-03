@@ -23,8 +23,15 @@ class AppConstants {
   static String productShareUrl(String productId) =>
       '$productShareBaseUrl/$productId';
 
-  // --- MAPTILER ---
-  static const String maptilerKey = 'ZsHghTkRWCoZDpjMxUir';
+  // --- GEOCODING / MAP TILES (proxied — see supabase/functions/geocode-proxy) ---
+  // Address search + map tiles go through the geocode-proxy Edge Function
+  // so the MapTiler API key never ships inside the app (Threat T6). The
+  // proxy holds the key as the MAPTILER_API_KEY server secret and
+  // rate-limits per client IP. Call shapes:
+  //   GET $geocodeProxyBaseUrl/search?q=<address>      → JSON features
+  //   GET $geocodeProxyBaseUrl/tiles/{z}/{x}/{y}.png   → PNG tile bytes
+  static const String geocodeProxyBaseUrl =
+      'https://psczvbfoybqhjeqssimw.supabase.co/functions/v1/geocode-proxy';
 
   // --- UPDATE CHECKER (self-hosted) ---
   // Hosted release manifest + changelog for the DIY in-app update checker.

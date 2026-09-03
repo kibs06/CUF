@@ -307,8 +307,7 @@ class AuthProvider extends ChangeNotifier {
           // Profile lookup failed — all notifications are best-effort
         }
       } else {
-        final remaining = _maxFailedAttempts - failCount;
-        _errorMessage = '${friendlyAuthErrorMessage(e, stackTrace: st)} ($remaining attempt${remaining == 1 ? '' : 's'} remaining before lockout)';
+        _errorMessage = friendlyAuthErrorMessage(e, stackTrace: st);
       }
       notifyListeners();
       return false;

@@ -26,6 +26,7 @@
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { checkRateLimit, rateLimitedResponse } from "../_shared/rate_limit.ts";
 
 /// Branded 1200×630 fallback image (solid espresso) for products without
 /// a photo. Base64 PNG so no storage setup is required — served from this
@@ -220,6 +221,16 @@ function isValidProductId(id: string): boolean {
 }
 
 serve(async (req: Request) => {
+  // T6: per-IP rate limit. Link-preview scrapers fetch each shared URL
+  // once or twice; 120/min per IP is far beyond any legit pattern but
+  // stops scripted hotlinking that would hammer the DB per request.
+  const rl = await checkRateLimit(req, "product-preview", 120);
+  if (!rl.allowed) {
+    return rateLimitedResponse(rl, {
+      "Access-Control-Allow-Origin": "*",
+    });
+  }
+
   const url = new URL(req.url);
   const segments = url.pathname.split("/").filter(Boolean); // e.g. [functions, v1, product-preview, {id}]
 

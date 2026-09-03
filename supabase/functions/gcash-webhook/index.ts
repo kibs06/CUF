@@ -37,6 +37,7 @@
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { checkRateLimit, rateLimitedResponse } from "../_shared/rate_limit.ts";
 import {
   verifyWebhookSignature,
   parseWebhookEvent,
@@ -89,6 +90,12 @@ serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
+
+  // T6: additional per-IP layer on top of the HMAC signature check.
+  // 600/min per IP never trips PayMongo's real deliveries/retries but
+  // caps scripted hammering that would otherwise burn CPU parsing junk.
+  const rl = await checkRateLimit(req, "gcash-webhook", 600);
+  if (!rl.allowed) return rateLimitedResponse(rl, corsHeaders);
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";

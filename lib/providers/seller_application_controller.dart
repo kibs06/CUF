@@ -270,11 +270,26 @@ class SellerApplicationController extends ChangeNotifier {
   }
 
   Future<void> pickDocument(SellerDocState doc, ImageSource source) async {
-    final path = await VerificationDocumentService.instance
+    final result = await VerificationDocumentService.instance
         .pickDocumentImage(source: source);
-    if (path == null) return;
+    // User dismissed the picker without selecting a file — leave current
+    // state unchanged (no repainted empty state or stale error).
+    if (result.isCancelled) return;
+    if (result.isFailed) {
+      // Validation rejected the file — show the error inline so the
+      // applicant knows what to fix (reuses the existing error-state
+      // pattern in DocumentUploadTile).
+      doc
+        ..localPath = null
+        ..storagePath = null
+        ..status = DocumentUploadStatus.error
+        ..errorMessage = result.error;
+      notifyListeners();
+      return;
+    }
+    // Validation passed — accept the file for upload at submit time.
     doc
-      ..localPath = path
+      ..localPath = result.path!
       ..storagePath = null
       ..status = DocumentUploadStatus.picked
       ..errorMessage = null;
@@ -336,6 +351,28 @@ class SellerApplicationController extends ChangeNotifier {
         filePath: doc.localPath!,
         bucket: bucket,
       );
+
+      // Layer 3: server-side magic-byte verification. The Edge Function
+      // reads the actual file bytes and checks them against JPEG/PNG
+      // signatures — independent of the extension or Content-Type header.
+      // If validation fails, the function deletes the file from storage.
+      final valid = await VerificationDocumentService.instance
+          .validateUploadedFile(storagePath: path, bucket: bucket);
+      if (!valid) {
+        // File was rejected server-side and deleted. Show the error so
+        // the applicant can retry with a real image. Do NOT rethrow —
+        // the doc state is set to error below, and rethrowing would
+        // interrupt the submission sequence for other docs.
+        doc
+          ..storagePath = null
+          ..status = DocumentUploadStatus.error
+          ..errorMessage =
+              'This file doesn\'t appear to be a valid image. '
+              'Please choose a photo taken with your camera or a proper scan.';
+        notifyListeners();
+        return;
+      }
+
       doc
         ..storagePath = path
         ..status = DocumentUploadStatus.uploaded;

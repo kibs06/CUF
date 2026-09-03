@@ -4,6 +4,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../constants/app_constants.dart';
 import '../../constants/seller_theme_constants.dart';
 import '../../models/update_info.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/message_provider.dart';
+import '../../providers/seller_notification_provider.dart';
 import '../../providers/update_provider.dart';
 import '../../services/push_notification_service.dart';
 import '../../widgets/sole_bottom_nav.dart';
@@ -15,6 +18,9 @@ import 'manage_products_screen.dart';
 import 'manage_orders_screen.dart';
 import 'order_detail_screen.dart';
 import 'custom_orders_screen.dart';
+import 'seller_inbox_screen.dart';
+import 'seller_notification_center_screen.dart';
+import 'pos_history_screen.dart';
 import '../shared/profile_screen.dart';
 
 /// Seller shell with 5-tab bottom navigation:
@@ -28,18 +34,20 @@ class SellerShell extends StatefulWidget {
 
 class _SellerShellState extends State<SellerShell> {
   int _currentIndex = 0;
+  late final PageController _pageController;
 
   final List<Widget> _screens = [
-    const SellerDashboardScreen(),
-    const POSScreen(),
-    const ManageProductsScreen(),
-    const ManageOrdersScreen(),
-    const ProfileScreen(),
+    const SellerDashboardScreen(hideAppBar: true),
+    const POSScreen(hideAppBar: true),
+    const ManageProductsScreen(hideAppBar: true),
+    const ManageOrdersScreen(hideAppBar: true),
+    const ProfileScreen(hideAppBar: true),
   ];
 
   @override
   void initState() {
     super.initState();
+    _pageController = PageController();
     // Wire up push notification deep-link for sellers
     PushNotificationService.instance.onNavigateToChat =
         (conversationId, storeName) {
@@ -114,9 +122,17 @@ class _SellerShellState extends State<SellerShell> {
 
     return Scaffold(
       backgroundColor: SellerTheme.creamBg,
+      appBar: _buildAppBar(),
       body: _screens.isEmpty
           ? const Center(child: Text('Unable to load screen'))
-          : IndexedStack(index: _currentIndex, children: _screens),
+          : PageView(
+              controller: _pageController,
+              physics: const PageScrollPhysics(),
+              onPageChanged: (index) {
+                setState(() => _currentIndex = index);
+              },
+              children: _screens,
+            ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           border: Border(top: BorderSide(color: SellerTheme.cardBorder)),
@@ -127,7 +143,7 @@ class _SellerShellState extends State<SellerShell> {
           role: AppConstants.roleSeller,
           currentIndex: _currentIndex,
           onTap: (index) {
-            setState(() => _currentIndex = index);
+            _pageController.jumpToPage(index);
           },
           backgroundColor: SellerTheme.card,
           activeColor: SellerTheme.rustDeep,
@@ -137,6 +153,243 @@ class _SellerShellState extends State<SellerShell> {
           barHeight: 65,
         ),
       ),
+    );
+  }
+
+  // ─── SHARED APP BAR ─────────────────────────────────────────────
+  PreferredSizeWidget _buildAppBar() {
+    final auth = context.watch<AuthProvider>();
+    final hour = DateTime.now().hour;
+    String greeting;
+    if (hour >= 5 && hour < 12) {
+      greeting = 'Good morning';
+    } else if (hour >= 12 && hour < 18) {
+      greeting = 'Good afternoon';
+    } else {
+      greeting = 'Good evening';
+    }
+    final firstName = auth.displayName.split(' ').first;
+
+    switch (_currentIndex) {
+      case 0: // Dashboard
+        return AppBar(
+          backgroundColor: AppConstants.secondary,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          surfaceTintColor: Colors.transparent,
+          automaticallyImplyLeading: false,
+          toolbarHeight: 64,
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'CUFMAI',
+                style: AppConstants.bodyStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '$greeting, $firstName',
+                style: AppConstants.bodyStyle(
+                  fontSize: 12,
+                  color: Colors.white.withAlpha(180),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            _buildMessageIcon(),
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: _buildNotificationBell(),
+            ),
+          ],
+        );
+      case 1: // POS
+        return AppBar(
+          backgroundColor: AppConstants.secondary,
+          elevation: 0,
+          automaticallyImplyLeading: false,
+          iconTheme: const IconThemeData(color: Colors.white),
+          title: Text(
+            'POS',
+            style: AppConstants.bodyStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          actions: [
+            IconButton(
+              tooltip: 'History',
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const PosHistoryScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.history, color: Colors.white),
+            ),
+          ],
+        );
+      case 2: // Products
+        return AppBar(
+          backgroundColor: AppConstants.secondary,
+          elevation: 0,
+          automaticallyImplyLeading: false,
+          title: Text(
+            'Products',
+            style: AppConstants.bodyStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+        );
+      case 3: // Orders
+        return AppBar(
+          backgroundColor: AppConstants.secondary,
+          elevation: 0,
+          automaticallyImplyLeading: false,
+          title: Text(
+            'Orders',
+            style: AppConstants.bodyStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+        );
+      case 4: // Profile
+        return AppBar(
+          backgroundColor: AppConstants.surfaceLight,
+          elevation: 0,
+          automaticallyImplyLeading: false,
+          title: Text(
+            'My Profile',
+            style: AppConstants.bodyStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: AppConstants.secondary,
+            ),
+          ),
+          actions: [
+            IconButton(
+              onPressed: null,
+              tooltip: 'Settings',
+              icon: const Icon(
+                Icons.settings_outlined,
+                color: AppConstants.secondary,
+              ),
+            ),
+          ],
+        );
+      default:
+        return AppBar(
+          backgroundColor: AppConstants.secondary,
+          elevation: 0,
+          automaticallyImplyLeading: false,
+        );
+    }
+  }
+
+  // ─── Message Icon with Badge ──────────────────────────────────
+  Widget _buildMessageIcon() {
+    final msgProvider = context.watch<MessageProvider>();
+    final badge = msgProvider.unreadBadge;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        IconButton(
+          icon: const Icon(Icons.chat_bubble_outline, color: Colors.white),
+          onPressed: () async {
+            await msgProvider.refreshInbox();
+            if (!mounted || !context.mounted) return;
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const SellerInboxScreen(),
+              ),
+            );
+          },
+        ),
+        if (badge.isNotEmpty)
+          Positioned(
+            top: 6,
+            right: 6,
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: const BoxDecoration(
+                color: AppConstants.statusConfirmedColor,
+                shape: BoxShape.circle,
+              ),
+              constraints: const BoxConstraints(
+                minWidth: 18,
+                minHeight: 18,
+              ),
+              child: Text(
+                badge,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  // ─── Notification Bell with Badge ──────────────────────────────
+  Widget _buildNotificationBell() {
+    final notifProvider = context.watch<SellerNotificationProvider>();
+    final badge = notifProvider.unreadBadge;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        IconButton(
+          icon: const Icon(Icons.notifications_outlined, color: Colors.white),
+          onPressed: () async {
+            await notifProvider.refreshNotifications();
+            if (!mounted || !context.mounted) return;
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const SellerNotificationCenterScreen(),
+              ),
+            );
+          },
+        ),
+        if (badge.isNotEmpty)
+          Positioned(
+            top: 6,
+            right: 6,
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: const BoxDecoration(
+                color: AppConstants.statusConfirmedColor,
+                shape: BoxShape.circle,
+              ),
+              constraints: const BoxConstraints(
+                minWidth: 18,
+                minHeight: 18,
+              ),
+              child: Text(
+                badge,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

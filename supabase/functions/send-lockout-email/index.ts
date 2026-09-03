@@ -22,6 +22,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendPushToUser, corsHeaders } from "../_shared/push.ts";
+import { checkRateLimit, rateLimitedResponse } from "../_shared/rate_limit.ts";
 
 // ---------------------------------------------------------------------------
 // Minimal SMTP client (reused from send-approval-email)
@@ -175,6 +176,11 @@ serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
+
+  // T6: per-IP rate limit (30/min — lockout events are rare and
+  // human-paced; this only trips scripted abuse).
+  const rl = await checkRateLimit(req, "send-lockout-email", 30);
+  if (!rl.allowed) return rateLimitedResponse(rl, corsHeaders);
 
   try {
     const payload: LockoutEmailPayload = await req.json();

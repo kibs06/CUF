@@ -24,8 +24,9 @@ import 'customer/my_reports_screen.dart';
 class NotificationsScreen extends StatefulWidget {
   /// If non-null, the feed highlights notifications matching this category.
   final NotificationCategory? initialCategory;
+  final bool hideAppBar;
 
-  const NotificationsScreen({super.key, this.initialCategory});
+  const NotificationsScreen({super.key, this.initialCategory, this.hideAppBar = false});
 
   @override
   State<NotificationsScreen> createState() => _NotificationsScreenState();
@@ -101,10 +102,36 @@ class _NotificationsScreenState extends State<NotificationsScreen>
 
     return Scaffold(
       backgroundColor: AppConstants.surfaceLight,
-      appBar: provider.isSelectionMode
-          ? _buildSelectionAppBar(provider)
-          : _buildNormalAppBar(provider),
-      body: Stack(
+      appBar: widget.hideAppBar
+          ? null
+          : (provider.isSelectionMode
+              ? _buildSelectionAppBar(provider)
+              : _buildNormalAppBar(provider)),
+      body: Column(
+        children: [
+          // Show TabBar inline when AppBar is hidden (shell owns the title)
+          if (widget.hideAppBar)
+            Container(
+              color: AppConstants.surfaceLight,
+              child: TabBar(
+                controller: _tabController,
+                indicatorColor: AppConstants.primary,
+                labelColor: AppConstants.primary,
+                unselectedLabelColor: AppConstants.secondary.withValues(alpha: 0.5),
+                labelStyle: AppConstants.bodyStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                ),
+                onTap: (_) => _clearCategoryFilter(),
+                tabs: const [
+                  Tab(text: 'All'),
+                  Tab(text: 'Catalog'),
+                  Tab(text: 'Custom'),
+                ],
+              ),
+            ),
+          Expanded(
+          child: Stack(
         children: [
           AppConstants.noiseOverlay(opacity: 0.03),
           provider.isLoading
@@ -161,6 +188,9 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                         ),
                       ),
                     ),
+        ],
+      ),
+          ), // Expanded
         ],
       ),
     );

@@ -87,10 +87,18 @@ class _SellerBusinessVerificationScreenState
       return;
     }
 
-    final path =
+    final result =
         await VerificationDocumentService.instance.pickDocumentImage(source: source);
-    if (path == null) return;
-
+    if (result.isCancelled) return;
+    
+    if (result.isFailed) {
+      _showMessage(result.error ?? 'Failed to pick document.', error: true);
+      return;
+    }
+    
+    final path = result.path;
+    if (path == null) return; // Should not happen if isSuccess is true, but defensive
+    
     await _upload(doc, docKey, userId, path);
   }
 

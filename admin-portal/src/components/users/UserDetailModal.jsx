@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Ban, KeyRound, Package, RotateCcw, Store } from 'lucide-react'
+import { Ban, Eye, KeyRound, Package, RotateCcw, Store } from 'lucide-react'
 import Badge from '../ui/Badge.jsx'
 import Modal from '../ui/Modal.jsx'
 import { useToast } from '../ui/Toast.jsx'
 import { useUpdateUserRole, useUpdateUserStatus } from '../../hooks/useUsers.js'
 import { useSellerPortfolio, useUserOrders } from '../../hooks/useUserDetail.js'
+import { useUserDocuments } from '../../hooks/useUserDocuments.js'
 import { formatCurrency, formatDate } from '../../lib/constants'
 
 function getInitials(name) {
@@ -47,6 +48,7 @@ export default function UserDetailModal({ user, onClose }) {
   // Always call hooks (they self-disable when user is null).
   const ordersQ = useUserOrders(user?.id)
   const portfolioQ = useSellerPortfolio(user?.id)
+  const documentsQ = useUserDocuments(user?.id)
 
   useEffect(() => {
     setTab('account')
@@ -160,6 +162,12 @@ export default function UserDetailModal({ user, onClose }) {
             Business
           </TabButton>
         )}
+        <TabButton
+          active={tab === 'documents'}
+          onClick={() => setTab('documents')}
+        >
+          Documents
+        </TabButton>
       </div>
 
       {/* ── Account tab ────────────────────────────────────────── */}
@@ -363,6 +371,156 @@ export default function UserDetailModal({ user, onClose }) {
         </div>
       )}
 
+      {/* ── Documents tab ─────────────────────────────────────── */}
+      {tab === 'documents' && documentsQ.isLoading && (
+        <p className="py-6 text-center text-sm text-[#6B5C4E]">Loading documents…</p>
+      )}
+      {tab === 'documents' && documentsQ.data && (
+        <div className="space-y-6">
+          {/* Personal Information */}
+          <DocumentSection title="Personal Information">
+            <div className="grid grid-cols-2 gap-3">
+              <InfoField label="Full Name" value={documentsQ.data.personal.fullName} />
+              <InfoField label="Email" value={documentsQ.data.personal.email} />
+              <InfoField label="Phone" value={documentsQ.data.personal.phone} />
+              <InfoField label="Birthday" value={documentsQ.data.personal.birthday ? formatDate(documentsQ.data.personal.birthday) : null} />
+              <InfoField label="Gender" value={documentsQ.data.personal.gender} />
+              <InfoField label="Member Since" value={formatDate(documentsQ.data.personal.createdAt)} />
+            </div>
+          </DocumentSection>
+
+          {/* Store Information */}
+          <DocumentSection title="Store Information">
+            <div className="grid grid-cols-2 gap-3">
+              <InfoField label="Store Name" value={documentsQ.data.store.name} />
+              <InfoField label="Location" value={documentsQ.data.store.location} />
+              {documentsQ.data.store.lat && documentsQ.data.store.lng && (
+                <InfoField
+                  label="Coordinates"
+                  value={`${documentsQ.data.store.lat}, ${documentsQ.data.store.lng}`}
+                />
+              )}
+            </div>
+            {documentsQ.data.store.description && (
+              <div className="mt-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">Description</p>
+                <p className="mt-1 text-sm text-[#3B2314]">{documentsQ.data.store.description}</p>
+              </div>
+            )}
+            {documentsQ.data.store.tags.length > 0 && (
+              <div className="mt-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">Tags</p>
+                <div className="mt-1 flex flex-wrap gap-2">
+                  {documentsQ.data.store.tags.map((tag, idx) => (
+                    <span
+                      key={idx}
+                      className="rounded-full bg-[#8B5A2B]/10 px-2.5 py-1 text-xs font-medium text-[#8B5A2B]"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {documentsQ.data.application.rejectionReason && (
+              <div className="mt-3 rounded-xl border border-[#D64545]/30 bg-red-50 p-3">
+                <p className="text-xs font-bold uppercase tracking-wider text-[#D64545]">Rejection Reason</p>
+                <p className="mt-1 text-sm text-[#6B5C4E]">{documentsQ.data.application.rejectionReason}</p>
+              </div>
+            )}
+          </DocumentSection>
+
+          {/* Identity Documents */}
+          <DocumentSection title="Identity Documents">
+            <DocumentGrid>
+              <DocumentCard
+                label={documentsQ.data.identity.idDocument.label}
+                url={documentsQ.data.identity.idDocument.url}
+                subtitle={documentsQ.data.identity.idDocument.type ? `Type: ${documentsQ.data.identity.idDocument.type}` : null}
+                sensitive={true}
+              />
+              <DocumentCard
+                label={documentsQ.data.identity.selfie.label}
+                url={documentsQ.data.identity.selfie.url}
+                sensitive={true}
+              />
+              <DocumentCard
+                label={documentsQ.data.identity.barangay.label}
+                url={documentsQ.data.identity.barangay.url}
+                sensitive={true}
+              />
+            </DocumentGrid>
+            {documentsQ.data.identity.cufmaiMemberId && (
+              <div className="mt-3">
+                <InfoField label="CUFMAI Member ID" value={documentsQ.data.identity.cufmaiMemberId} />
+              </div>
+            )}
+          </DocumentSection>
+
+          {/* Business Documents (Tier 2) */}
+          <DocumentSection title="Business Documents (Tier 2)">
+            {documentsQ.data.business ? (
+              <>
+                <div className="mb-3">
+                  <Badge
+                    label={`Status: ${documentsQ.data.business.status}`}
+                    variant={documentsQ.data.business.status}
+                  />
+                </div>
+                <DocumentGrid>
+                  <DocumentCard
+                    label={documentsQ.data.business.dti.label}
+                    url={documentsQ.data.business.dti.url}
+                    sensitive={true}
+                  />
+                  <DocumentCard
+                    label={documentsQ.data.business.bir.label}
+                    url={documentsQ.data.business.bir.url}
+                    sensitive={true}
+                  />
+                  <DocumentCard
+                    label={documentsQ.data.business.permit.label}
+                    url={documentsQ.data.business.permit.url}
+                    sensitive={true}
+                  />
+                </DocumentGrid>
+                {documentsQ.data.business.submittedAt && (
+                  <p className="mt-3 text-xs text-[#6B5C4E]">
+                    Submitted: {formatDate(documentsQ.data.business.submittedAt)}
+                    {documentsQ.data.business.verifiedAt && (
+                      <> · Verified: {formatDate(documentsQ.data.business.verifiedAt)}</>
+                    )}
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="text-sm text-[#6B5C4E]">No business documents submitted.</p>
+            )}
+          </DocumentSection>
+
+          {/* Store Photos */}
+          <DocumentSection title="Store Photos">
+            <DocumentGrid>
+              <DocumentCard
+                label={documentsQ.data.store.storefront.label}
+                url={documentsQ.data.store.storefront.url}
+                bucket="store-assets"
+              />
+              {documentsQ.data.store.products.map((product, idx) => (
+                <DocumentCard
+                  key={idx}
+                  label={product.label}
+                  url={product.url}
+                />
+              ))}
+            </DocumentGrid>
+            {documentsQ.data.store.products.length === 0 && !documentsQ.data.store.storefront.url && (
+              <p className="text-sm text-[#6B5C4E]">No store photos submitted.</p>
+            )}
+          </DocumentSection>
+        </div>
+      )}
+
       {/* ── Suspend / reactivate confirmation ──────────────────── */}
       <Modal
         open={suspendOpen}
@@ -517,5 +675,151 @@ function SectionTitle({ children }) {
     <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">
       {children}
     </p>
+  )
+}
+
+function DocumentSection({ title, children }) {
+  return (
+    <div>
+      <SectionTitle>{title}</SectionTitle>
+      {children}
+    </div>
+  )
+}
+
+function DocumentGrid({ children }) {
+  return (
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      {children}
+    </div>
+  )
+}
+
+function DocumentCard({ label, url, subtitle, bucket, sensitive = false }) {
+  const [showModal, setShowModal] = useState(false)
+  const [isRevealed, setIsRevealed] = useState(false)
+
+  if (!url) {
+    return (
+      <div className="rounded-xl border border-dashed border-[#D9D0C7] bg-[#F5F0EB] p-3">
+        <p className="text-xs font-medium text-[#6B5C4E]">{label}</p>
+        <p className="mt-1 text-xs text-[#6B5C4E]/60">Not submitted</p>
+      </div>
+    )
+  }
+
+  // Sensitive document - show blur overlay with reveal button
+  if (sensitive && !isRevealed) {
+    return (
+      <div className="relative rounded-xl border border-[#D64545]/30 bg-white p-3">
+        <div className="mb-2 aspect-square overflow-hidden rounded-lg bg-[#F5F0EB] blur-md">
+          <img
+            src={url}
+            alt={label}
+            className="h-full w-full object-cover"
+            loading="lazy"
+          />
+        </div>
+        <p className="text-xs font-medium text-[#3B2314]">{label}</p>
+        {subtitle && (
+          <p className="mt-0.5 text-xs text-[#6B5C4E]">{subtitle}</p>
+        )}
+        <div className="absolute inset-0 flex flex-col items-center justify-center rounded-xl bg-black/5">
+          <div className="rounded-full bg-[#D64545] p-2 mb-2">
+            <Eye size={16} className="text-white" />
+          </div>
+          <p className="text-xs font-semibold text-[#D64545]">Sensitive</p>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              setIsRevealed(true)
+            }}
+            className="mt-2 rounded-lg bg-[#D64545] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#B33A3A]"
+          >
+            Reveal
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setShowModal(true)}
+        className="group rounded-xl border border-[#D9D0C7] bg-white p-3 text-left transition-colors hover:border-[#8B5A2B] hover:shadow-sm"
+      >
+        <div className="mb-2 aspect-square overflow-hidden rounded-lg bg-[#F5F0EB]">
+          <img
+            src={url}
+            alt={label}
+            className="h-full w-full object-cover transition-transform group-hover:scale-105"
+            loading="lazy"
+          />
+        </div>
+        <p className="text-xs font-medium text-[#3B2314]">{label}</p>
+        {subtitle && (
+          <p className="mt-0.5 text-xs text-[#6B5C4E]">{subtitle}</p>
+        )}
+        {sensitive && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              setIsRevealed(false)
+            }}
+            className="mt-2 text-xs font-semibold text-[#D64545] hover:text-[#B33A3A]"
+          >
+            Hide
+          </button>
+        )}
+      </button>
+
+      {/* Full-screen modal */}
+      {showModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setShowModal(false)}
+        >
+          <div className="relative max-h-[90vh] max-w-[90vw]">
+            <img
+              src={url}
+              alt={label}
+              className="max-h-[85vh] rounded-lg object-contain shadow-2xl"
+            />
+            <div className="absolute left-4 top-4 rounded-full bg-black/60 px-3 py-1 text-sm text-white">
+              {label}
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowModal(false)}
+              className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-black/80"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+function InfoField({ label, value }) {
+  if (!value) {
+    return (
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">{label}</p>
+        <p className="mt-1 text-sm text-[#6B5C4E]/60">—</p>
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">{label}</p>
+      <p className="mt-1 text-sm font-medium text-[#3B2314]">{value}</p>
+    </div>
   )
 }

@@ -15,6 +15,7 @@
 //                  close time passes), then cleared so automatic control resumes.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { checkRateLimit, rateLimitedResponse } from "../_shared/rate_limit.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -54,7 +55,12 @@ function isWithinSchedule(
   }
 }
 
-Deno.serve(async (_req) => {
+Deno.serve(async (req) => {
+  // T6: per-IP rate limit (30/min — the pg_cron job fires every 5 min;
+  // this only stops scripted HTTP invocation of the scheduler).
+  const rl = await checkRateLimit(req, "apply-store-schedules", 30);
+  if (!rl.allowed) return rateLimitedResponse(rl, {});
+
   try {
     const localNow = getLocalNow();
     const currentMinutes = localNow.getHours() * 60 + localNow.getMinutes();

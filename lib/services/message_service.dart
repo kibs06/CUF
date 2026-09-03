@@ -705,13 +705,15 @@ class MessageService {
       // Determine recipient based on sender type
       if (senderType == 'customer') {
         // Notify the seller — via SellerNotificationService (deduplication built in)
-        // Look up customer name for the notification title
-        final senderProfile = await _client
-            .from('profiles')
-            .select('full_name')
-            .eq('id', senderId)
-            .maybeSingle();
-        final senderName = senderProfile?['full_name']?.toString() ?? 'Customer';
+        // Look up customer name for the notification title via SECURITY DEFINER RPC.
+        // After profiles RLS tightening, sellers can no longer SELECT from profiles.
+        final senderRpcResult = await _client
+            .rpc('get_user_name_email', params: {
+              'user_ids': [senderId],
+            });
+        final senderName = (senderRpcResult is List && senderRpcResult.isNotEmpty)
+            ? (senderRpcResult.first as Map)['full_name']?.toString() ?? 'Customer'
+            : 'Customer';
         SellerNotificationService.instance.createNewMessage(
           storeId: storeId,
           conversationId: conversationId,

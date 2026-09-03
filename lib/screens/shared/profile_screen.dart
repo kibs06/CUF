@@ -29,7 +29,8 @@ import '../auth/seller_application_flow.dart';
 import '../seller/seller_business_verification_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+  final bool hideAppBar;
+  const ProfileScreen({super.key, this.hideAppBar = false});
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -321,39 +322,39 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     return Scaffold(
       backgroundColor: AppConstants.surfaceLight,
-      appBar: AppBar(
-        title: Text(
-          'My Profile',
-          style: AppConstants.bodyStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: AppConstants.secondary,
-          ),
-        ),
-        backgroundColor: AppConstants.surfaceLight,
-        elevation: 0,
-        automaticallyImplyLeading: false,
-        actions: [
-          IconButton(
-            // Sellers: the gear is non-functional for now.
-            // Other roles still navigate to Settings.
-            onPressed: auth.userRole == AppConstants.roleSeller
-                ? null
-                : () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const SettingsScreen(),
-                      ),
-                    );
-                  },
-            tooltip: 'Settings',
-            icon: const Icon(
-              Icons.settings_outlined,
-              color: AppConstants.secondary,
+      appBar: widget.hideAppBar
+          ? null
+          : AppBar(
+              title: Text(
+                'My Profile',
+                style: AppConstants.bodyStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: AppConstants.secondary,
+                ),
+              ),
+              backgroundColor: AppConstants.surfaceLight,
+              elevation: 0,
+              automaticallyImplyLeading: false,
+              actions: [
+                IconButton(
+                  onPressed: auth.userRole == AppConstants.roleSeller
+                      ? null
+                      : () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const SettingsScreen(),
+                            ),
+                          );
+                        },
+                  tooltip: 'Settings',
+                  icon: const Icon(
+                    Icons.settings_outlined,
+                    color: AppConstants.secondary,
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
-      ),
       body: Stack(
         children: [
           AppConstants.noiseOverlay(opacity: 0.03),

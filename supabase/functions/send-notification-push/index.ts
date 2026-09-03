@@ -15,6 +15,7 @@ import {
   sendPushToUser,
   corsHeaders,
 } from "../_shared/push.ts";
+import { checkRateLimit, rateLimitedResponse } from "../_shared/rate_limit.ts";
 
 interface NotificationPayload {
   recipientUserId: string;
@@ -30,6 +31,11 @@ serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
+
+  // T6: per-IP rate limit (600/min — order/notification events can
+  // burst when several fire in a row; this only caps scripted abuse).
+  const rl = await checkRateLimit(req, "send-notification-push", 600);
+  if (!rl.allowed) return rateLimitedResponse(rl, corsHeaders);
 
   try {
     const payload: NotificationPayload = await req.json();

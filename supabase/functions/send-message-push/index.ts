@@ -17,6 +17,7 @@ import {
   sendPushToUser,
   corsHeaders,
 } from "../_shared/push.ts";
+import { checkRateLimit, rateLimitedResponse } from "../_shared/rate_limit.ts";
 
 interface MessagePayload {
   conversation_id: string;
@@ -34,6 +35,12 @@ serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
+
+  // T6: per-IP rate limit (600/min — the DB pg_net trigger fires once
+  // per message insert and chat can burst; this only caps scripted
+  // direct HTTP abuse of the function).
+  const rl = await checkRateLimit(req, "send-message-push", 600);
+  if (!rl.allowed) return rateLimitedResponse(rl, corsHeaders);
 
   try {
     const payload: MessagePayload = await req.json();

@@ -434,6 +434,48 @@ verify_jwt = false
 [functions.product-preview]
 verify_jwt = false
 
+# geocode-proxy is called by the Flutter app for address search + map
+# tiles — including DURING the seller application flow, BEFORE an auth
+# account exists — so JWT verification is disabled. The MapTiler key is
+# a server-side secret (MAPTILER_API_KEY) and the function rate-limits
+# per client IP (Threat T6). See supabase/functions/geocode-proxy.
+[functions.geocode-proxy]
+verify_jwt = false
+
+# The following functions are invoked without a user JWT in the live
+# app, so they are deployed with verify_jwt = false (matches the live
+# deployments — do NOT remove these entries or a plain `supabase
+# functions deploy <name>` will flip JWT verification on and break the
+# DB-trigger / pre-auth callers):
+#   - send-message-push / send-notification-push: FCM push invoked by
+#     pg_net DB triggers and fire-and-forget client calls
+#   - send-approval-email / send-lockout-email: fire-and-forget client
+#     calls after approve/reject/lockout
+#   - validate-upload: called by the Flutter app right after a storage
+#     upload (may happen pre-auth during the seller flow)
+#   - create-gcash-payment: legacy QR payment path called from the app
+#     (FLAG: candidate to flip to verify_jwt = true — see docs/fixes)
+#   - apply-store-schedules: pg_cron scheduler
+# ⚠️ SECURITY NOTE (flagged, out of scope for T6): send-message-push /
+# send-notification-push / create-gcash-payment / send-approval-email /
+# send-lockout-email have NO internal authorization — an anonymous
+# caller can invoke them with forged bodies. They need JWT verification
+# or internal identity checks in a separate task.
+[functions.send-message-push]
+verify_jwt = false
+[functions.send-notification-push]
+verify_jwt = false
+[functions.send-approval-email]
+verify_jwt = false
+[functions.send-lockout-email]
+verify_jwt = false
+[functions.validate-upload]
+verify_jwt = false
+[functions.create-gcash-payment]
+verify_jwt = false
+[functions.apply-store-schedules]
+verify_jwt = false
+
 # create-gcash-payment-intent and get-payment-status use the default
 # (verify_jwt = true) — they require the customer's JWT.
 

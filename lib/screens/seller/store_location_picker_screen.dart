@@ -49,7 +49,6 @@ class _StoreLocationPickerScreenState extends State<StoreLocationPickerScreen> {
   bool _isSearchLoading = false;
   String? _searchError;
   Timer? _searchDebounce;
-  final String _maptilerKey = AppConstants.maptilerKey;
 
   @override
   void initState() {
@@ -145,13 +144,6 @@ class _StoreLocationPickerScreenState extends State<StoreLocationPickerScreen> {
 
   Future<void> _fetchPredictions(String query) async {
     if (!mounted) return;
-    if (_maptilerKey.isEmpty || _maptilerKey.contains('YOUR_')) {
-      setState(() {
-        _searchError = 'Search is not configured — add a valid MapTiler API key';
-        _isSearchLoading = false;
-      });
-      return;
-    }
 
     setState(() {
       _isSearchLoading = true;
@@ -160,11 +152,10 @@ class _StoreLocationPickerScreenState extends State<StoreLocationPickerScreen> {
 
     try {
       final encodedQuery = Uri.encodeComponent(query);
+      // Search goes through the geocode-proxy Edge Function (holds the
+      // MapTiler key server-side + rate-limits per IP — Threat T6).
       final url = Uri.parse(
-        'https://api.maptiler.com/geocoding/$encodedQuery.json'
-        '?key=$_maptilerKey'
-        '&bbox=116.927,4.587,126.603,21.119'
-        '&limit=5',
+        '${AppConstants.geocodeProxyBaseUrl}/search?q=$encodedQuery',
       );
 
       final client = HttpClient();
@@ -178,8 +169,8 @@ class _StoreLocationPickerScreenState extends State<StoreLocationPickerScreen> {
 
         if (response.statusCode != 200) {
           setState(() {
-            _searchError = response.statusCode == 401 || response.statusCode == 403
-                ? 'Invalid API key — check your MapTiler configuration'
+            _searchError = response.statusCode == 429
+                ? 'Search is busy right now — try again in a moment.'
                 : 'Search unavailable right now (HTTP ${response.statusCode})';
             _isSearchLoading = false;
           });
@@ -348,8 +339,10 @@ class _StoreLocationPickerScreenState extends State<StoreLocationPickerScreen> {
             ),
             children: [
               TileLayer(
+                // Tiles proxy through geocode-proxy so the MapTiler key
+                // never ships in the app (Threat T6).
                 urlTemplate:
-                    'https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=${AppConstants.maptilerKey}',
+                    '${AppConstants.geocodeProxyBaseUrl}/tiles/{z}/{x}/{y}.png',
                 userAgentPackageName: 'com.solevision.app',
               ),
               const RichAttributionWidget(

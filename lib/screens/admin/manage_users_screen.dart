@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/order_provider.dart';
 import '../../widgets/sole_card.dart';
+import 'admin_user_documents_screen.dart';
 
 class ManageUsersScreen extends StatefulWidget {
   const ManageUsersScreen({super.key});
@@ -27,6 +28,17 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _viewDocuments(String userId, String name) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => AdminUserDocumentsScreen(
+          userId: userId,
+          userName: name,
+        ),
+      ),
+    );
   }
 
   void _deactivateUser(String userId, String name) async {
@@ -365,9 +377,21 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                                             _changeRole(userId, role);
                                           } else if (val == 'reset') {
                                             _deactivateUser(userId, name);
+                                          } else if (val == 'view_docs') {
+                                            _viewDocuments(userId, name);
                                           }
                                         },
                                         itemBuilder: (context) => [
+                                          PopupMenuItem(
+                                            value: 'view_docs',
+                                            child: Row(
+                                              children: [
+                                                const Icon(Icons.description_outlined, size: 16, color: AppConstants.primary),
+                                                const SizedBox(width: 8),
+                                                Text('View Documents', style: AppConstants.bodyStyle(fontSize: 13)),
+                                              ],
+                                            ),
+                                          ),
                                           PopupMenuItem(
                                             value: 'role',
                                             child: Text('Edit Role', style: AppConstants.bodyStyle(fontSize: 13)),

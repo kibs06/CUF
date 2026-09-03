@@ -79,7 +79,8 @@ class _DashboardData {
 /// Seller Dashboard — "Morning Briefing" concept.
 /// Answers 4 questions instantly: sales, attention, orders, stock.
 class SellerDashboardScreen extends StatefulWidget {
-  const SellerDashboardScreen({super.key});
+  final bool hideAppBar;
+  const SellerDashboardScreen({super.key, this.hideAppBar = false});
 
   @override
   State<SellerDashboardScreen> createState() => _SellerDashboardScreenState();
@@ -334,44 +335,44 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
 
     return Scaffold(
       backgroundColor: SellerTheme.creamBg,
-      appBar: AppBar(
-        backgroundColor: AppConstants.secondary,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        surfaceTintColor: Colors.transparent,
-        automaticallyImplyLeading: false,
-        toolbarHeight: 64,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'CUFMAI',
-              style: AppConstants.bodyStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
+      appBar: widget.hideAppBar
+          ? null
+          : AppBar(
+              backgroundColor: AppConstants.secondary,
+              elevation: 0,
+              scrolledUnderElevation: 0,
+              surfaceTintColor: Colors.transparent,
+              automaticallyImplyLeading: false,
+              toolbarHeight: 64,
+              title: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'CUFMAI',
+                    style: AppConstants.bodyStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '$greeting, $firstName',
+                    style: AppConstants.bodyStyle(
+                      fontSize: 12,
+                      color: Colors.white.withAlpha(180),
+                    ),
+                  ),
+                ],
               ),
+              actions: [
+                _buildMessageIcon(),
+                Padding(
+                  padding: const EdgeInsets.only(right: 4),
+                  child: _buildNotificationBell(),
+                ),
+              ],
             ),
-            const SizedBox(height: 2),
-            Text(
-              '$greeting, $firstName',
-              style: AppConstants.bodyStyle(
-                fontSize: 12,
-                color: Colors.white.withAlpha(180),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          _buildMessageIcon(),
-          // Right padding lives on the last action now that the
-          // initials avatar is gone.
-          Padding(
-            padding: const EdgeInsets.only(right: 4),
-            child: _buildNotificationBell(),
-          ),
-        ],
-      ),
       body: _storeId == null
           ? _buildStoreLookupState()
           : FutureBuilder<_DashboardData>(
@@ -504,20 +505,15 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Metrics grid placeholder
+          // Today's Sales hero card placeholder (full width, taller)
+          ShimmerBox(width: double.infinity, height: 160, borderRadius: 20),
+          const SizedBox(height: 12),
+          // Low Stock & Custom Orders — small boxes below
           Row(
             children: [
-              Expanded(flex: 58, child: ShimmerBox(width: double.infinity, height: 138)),
-              const SizedBox(width: 8),
-              Expanded(flex: 42, child: ShimmerBox(width: double.infinity, height: 112)),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(flex: 42, child: ShimmerBox(width: double.infinity, height: 112)),
-              const SizedBox(width: 8),
-              Expanded(flex: 58, child: ShimmerBox(width: double.infinity, height: 138)),
+              Expanded(child: ShimmerBox(width: double.infinity, height: 112, borderRadius: 20)),
+              const SizedBox(width: 10),
+              Expanded(child: ShimmerBox(width: double.infinity, height: 112, borderRadius: 20)),
             ],
           ),
           const SizedBox(height: 16),
@@ -652,7 +648,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     );
   }
 
-  // ─── Block 1: Metrics Grid (real data) ──────────────────────────
+  // ─── Block 1: Bento Metrics Grid (real data) ─────────────────────
   Widget _buildMetricsGrid(_DashboardData data) {
     final storeRating = data.store?['rating'];
     // Only surface the star once the store actually has reviews
@@ -667,43 +663,150 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
 
     return Column(
       children: [
-        Row(
-          children: [
-            // Today's Revenue — hero card (large, left)
-            Expanded(
-              flex: 58,
-              child: SellerMetricCard(
-                label: "TODAY'S SALES",
-                value: _formatCurrency(data.todayRevenue),
-                isLarge: true,
-                valueColor: SellerTheme.rustDeep,
-                subtitle: ratingStr,
-                subtitleColor: SellerTheme.amber,
+        // Today's Sales — full-width hero card with This Week embedded
+        GestureDetector(
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const ReportsScreen()),
+            );
+          },
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [SellerTheme.card, SellerTheme.cardHeroEnd],
               ),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: SellerTheme.cardBorder),
+              boxShadow: SellerTheme.cardShadow,
             ),
-            const SizedBox(width: 8),
-            // Weekly Sales (small, right)
-            Expanded(
-              flex: 42,
-              child: SellerMetricCard(
-                label: 'THIS WEEK',
-                value: _formatCurrency(weeklyTotal),
-                subtitle: _getWeekDateRange(),
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const ReportsScreen()),
-                  );
-                },
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Eyebrow label
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 5,
+                      height: 5,
+                      decoration: const BoxDecoration(
+                        color: SellerTheme.rust,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      "TODAY'S SALES",
+                      style: AppConstants.bodyStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: SellerTheme.textMuted,
+                      ).copyWith(letterSpacing: 1.2),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                // Today's value
+                Text(
+                  _formatCurrency(data.todayRevenue),
+                  style: AppConstants.monoStyle(
+                    fontSize: 36,
+                    fontWeight: FontWeight.bold,
+                    color: SellerTheme.rustDeep,
+                  ),
+                ),
+                if (ratingStr != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    ratingStr,
+                    style: AppConstants.bodyStyle(
+                      fontSize: 11,
+                      color: SellerTheme.amber,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 16),
+                // This Week embedded at top right (wider), text left-aligned inside
+                Align(
+                  alignment: Alignment.topRight,
+                  child: Container(
+                    constraints: const BoxConstraints(minWidth: 180),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: SellerTheme.card,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: SellerTheme.cardBorder),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.06),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 4,
+                              height: 4,
+                              decoration: const BoxDecoration(
+                                color: SellerTheme.rust,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              'THIS WEEK',
+                              style: AppConstants.bodyStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: SellerTheme.textMuted,
+                              ).copyWith(letterSpacing: 1.0),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          _formatCurrency(weeklyTotal),
+                          style: AppConstants.monoStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: AppConstants.secondary,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _getWeekDateRange(),
+                          style: AppConstants.bodyStyle(
+                            fontSize: 9,
+                            color: SellerTheme.textMuted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 12),
+        // Low Stock & Custom Orders — small boxes below
         Row(
           children: [
             // Low Stock (small, left)
             Expanded(
-              flex: 42,
               child: SellerMetricCard(
                 label: 'LOW STOCK',
                 value: '${data.lowStockCount}',
@@ -723,10 +826,9 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                 },
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 10),
             // Custom Orders (small, right)
             Expanded(
-              flex: 58,
               child: SellerMetricCard(
                 label: 'CUSTOM ORDERS',
                 value: '${data.pendingCustoms}',

@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createQrPhPayment } from "../_shared/paymongo.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { checkRateLimit, rateLimitedResponse } from "../_shared/rate_limit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,6 +13,11 @@ serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
+
+  // T6: per-IP rate limit. One checkout creates 1–2 QR payment attempts;
+  // 30/min per IP only trips scripted abuse.
+  const rl = await checkRateLimit(req, "create-gcash-payment", 30);
+  if (!rl.allowed) return rateLimitedResponse(rl, corsHeaders);
 
   try {
     const { orderId, amount } = await req.json();

@@ -31,6 +31,7 @@
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { checkRateLimit, rateLimitedResponse } from "../_shared/rate_limit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -198,6 +199,10 @@ serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
+
+  // T6: per-IP rate limit (60/min — admin approve/reject is human-paced).
+  const rl = await checkRateLimit(req, "send-approval-email", 60);
+  if (!rl.allowed) return rateLimitedResponse(rl, corsHeaders);
 
   try {
     const payload: ApprovalEmailPayload = await req.json();

@@ -23,8 +23,9 @@ import 'pos_history_screen.dart';
 
 class POSScreen extends StatefulWidget {
   final bool isStandalonePage;
+  final bool hideAppBar;
 
-  const POSScreen({super.key, this.isStandalonePage = false});
+  const POSScreen({super.key, this.isStandalonePage = false, this.hideAppBar = false});
 
   @override
   State<POSScreen> createState() => _POSScreenState();
@@ -628,33 +629,35 @@ class _POSScreenState extends State<POSScreen>
 
     return Scaffold(
       backgroundColor: AppConstants.sellerSurface,
-      appBar: AppBar(
-        backgroundColor: AppConstants.secondary,
-        elevation: 0,
-        automaticallyImplyLeading: widget.isStandalonePage,
-        iconTheme: const IconThemeData(color: Colors.white),
-        title: Text(
-          'POS',
-          style: AppConstants.bodyStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'History',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const PosHistoryScreen(),
+      appBar: widget.hideAppBar
+          ? null
+          : AppBar(
+              backgroundColor: AppConstants.secondary,
+              elevation: 0,
+              automaticallyImplyLeading: widget.isStandalonePage,
+              iconTheme: const IconThemeData(color: Colors.white),
+              title: Text(
+                'POS',
+                style: AppConstants.bodyStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
                 ),
-              );
-            },
-            icon: const Icon(Icons.history, color: Colors.white),
-          ),
-        ],
-      ),
+              ),
+              actions: [
+                IconButton(
+                  tooltip: 'History',
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const PosHistoryScreen(),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.history, color: Colors.white),
+                ),
+              ],
+            ),
       body: Stack(
         children: [
           Column(
