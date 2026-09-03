@@ -370,10 +370,10 @@ class _AdminIntruderSuspiciousLoginScreenState
                 color: attemptCount >= 5 ? AppConstants.error : Colors.orange,
               ),
               const SizedBox(width: 12),
-              if (ipAddress != null && (ipAddress as String).isNotEmpty)
+              if (ipAddress != null && ipAddress.isNotEmpty)
                 _DetailChip(
                   icon: Icons.language,
-                  label: ipAddress as String,
+                  label: ipAddress,
                   color: AppConstants.secondary,
                 ),
             ],
