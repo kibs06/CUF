@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/update_info.dart';
 import '../services/update_checker.dart';
+import '../utils/emulator_detector.dart';
 
 /// Holds the app-wide update state: whether a newer version exists and whether
 /// the user has already viewed it (so the Settings badge dot can clear).
@@ -23,6 +24,21 @@ class UpdateProvider extends ChangeNotifier {
   bool _checkFailed = false;
   bool _updateOverlayShown = false;
 
+  /// Whether the device is an emulator. Resolved during [checkForUpdate];
+  /// emulators never get the intrusive update overlay (real devices do).
+  bool _isEmulator = false;
+
+  /// Test-only sticky override — when set, [checkForUpdate] keeps this value
+  /// instead of resolving from [EmulatorDetector] (which is host-dependent in
+  /// unit tests).
+  bool? _emulatorOverride;
+
+  bool get isEmulator => _isEmulator;
+
+  /// Test-only override for [_isEmulator].
+  @visibleForTesting
+  void setEmulatorForTesting(bool value) => _emulatorOverride = value;
+
   /// The newest available release, or null if up to date / unknown.
   UpdateInfo? get latestUpdate => _latestUpdate;
 
@@ -38,8 +54,12 @@ class UpdateProvider extends ChangeNotifier {
 
   /// True if a newer release exists and the overlay hasn't been shown yet
   /// this session. Shell screens watch this to trigger the premium overlay.
+  ///
+  /// Emulators are exempt: dev/test builds run straight from `flutter run`,
+  /// so the download popup would only interrupt testing. The What's New
+  /// screen still surfaces the release info there.
   bool get shouldShowUpdateOverlay =>
-      _latestUpdate != null && !_updateOverlayShown;
+      _latestUpdate != null && !_updateOverlayShown && !_isEmulator;
 
   /// Marks the update overlay as shown so it doesn't reappear until the
   /// next app restart.
@@ -72,6 +92,9 @@ class UpdateProvider extends ChangeNotifier {
         knownInstalledVersion: _installedVersion,
       );
       _checkFailed = false;
+
+      // Resolve once per check — emulators never see the intrusive overlay.
+      _isEmulator = _emulatorOverride ?? await EmulatorDetector.isEmulator();
 
       // Load the previously-viewed version so the badge dot logic works.
       final prefs = await SharedPreferences.getInstance();

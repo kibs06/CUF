@@ -129,6 +129,9 @@ class _WhatsNewScreenState extends State<WhatsNewScreen> {
             else if (updateProvider.latestUpdate != null)
               _UpdateBanner(
                 update: updateProvider.latestUpdate!,
+                // Emulators: show the release info but never push the APK
+                // download — dev builds are updated via `flutter run`.
+                showDownload: !updateProvider.isEmulator,
                 onDownload: () =>
                     _downloadApk(updateProvider.latestUpdate!.apkUrl),
               )
@@ -258,14 +261,21 @@ class _InstalledVersionHeader extends StatelessWidget {
 
 /// Prominent card shown when a newer version is available.
 class _UpdateBanner extends StatelessWidget {
-  const _UpdateBanner({required this.update, required this.onDownload});
+  const _UpdateBanner({
+    required this.update,
+    required this.onDownload,
+    this.showDownload = true,
+  });
 
   final UpdateInfo update;
   final VoidCallback onDownload;
 
+  /// False on emulators: the release info stays visible, but the download
+  /// CTA is replaced by a passive note (dev builds update via `flutter run`).
+  final bool showDownload;
+
   @override
   Widget build(BuildContext context) {
-    final isAndroid = !Platform.isIOS;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
@@ -323,15 +333,7 @@ class _UpdateBanner extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 16),
-          if (isAndroid)
-            SolePrimaryButton(
-              label: 'Download v${update.version}',
-              backgroundColor: AppConstants.accent,
-              textColor: AppConstants.secondary,
-              icon: const Icon(Icons.download_rounded, size: 18, color: AppConstants.secondary),
-              onPressed: onDownload,
-            )
-          else
+          if (Platform.isIOS)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 10),
@@ -347,6 +349,31 @@ class _UpdateBanner extends StatelessWidget {
                   color: const Color(0xFFF5EDE4),
                 ),
               ),
+            )
+          else if (!showDownload)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.12),
+                borderRadius: AppConstants.buttonRadius,
+              ),
+              child: Text(
+                'Emulator detected — update via flutter run. No download needed.',
+                textAlign: TextAlign.center,
+                style: AppConstants.bodyStyle(
+                  fontSize: 12,
+                  color: const Color(0xFFF5EDE4),
+                ),
+              ),
+            )
+          else
+            SolePrimaryButton(
+              label: 'Download v${update.version}',
+              backgroundColor: AppConstants.accent,
+              textColor: AppConstants.secondary,
+              icon: const Icon(Icons.download_rounded, size: 18, color: AppConstants.secondary),
+              onPressed: onDownload,
             ),
         ],
       ),
