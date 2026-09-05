@@ -1880,6 +1880,17 @@ class _CheckoutSheetState extends State<_CheckoutSheet> {
       });
 
       widget.onConfirm('GCash', 0, orderId: orderId);
+    } on PostgrestException catch (e) {
+      // T5 dedupe: the partial unique index (paid orders, non-empty ref)
+      // rejects a reference already used on another paid order. Surface
+      // a clear, specific message so the seller corrects the reference
+      // (or cancels) instead of retrying a dead write.
+      if (!mounted) return;
+      setState(() {
+        _gcashError = e.code == '23505'
+            ? 'That GCash reference number has already been used on another order. Verify the reference in your GCash app and try again.'
+            : 'Could not confirm payment: ${e.message}';
+      });
     } catch (e) {
       if (!mounted) return;
       setState(() => _gcashError = 'Could not confirm payment: $e');

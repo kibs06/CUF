@@ -498,6 +498,11 @@ class _OrderCard extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 14),
+            // T5: the expected amount, prominent and directly above the
+            // seller's decision buttons — the number to cross-check against
+            // their own GCash app, not memory or the screenshot alone.
+            GcashExpectedAmountBanner(total: total),
+            const SizedBox(height: 10),
             Row(
               children: [
                 Expanded(
@@ -587,5 +592,60 @@ class _OrderCard extends StatelessWidget {
     final h = local.hour > 12 ? local.hour - 12 : (local.hour == 0 ? 12 : local.hour);
     final ampm = local.hour >= 12 ? 'PM' : 'AM';
     return '${local.month}/${local.day} $h:${local.minute.toString().padLeft(2, '0')} $ampm';
+  }
+}
+
+/// Prominent expected-amount display placed directly above the seller's
+/// Confirm/Reject buttons (Threat T5 mitigation — reduces seller error by
+/// giving the seller the exact number to cross-check against their own
+/// GCash app, instead of relying on memory or the screenshot alone).
+///
+/// This is a mitigation, not a technical control: there is no way to
+/// cryptographically verify a manual, off-platform GCash transfer.
+class GcashExpectedAmountBanner extends StatelessWidget {
+  final double total;
+
+  const GcashExpectedAmountBanner({super.key, required this.total});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppConstants.primary.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: AppConstants.primary.withValues(alpha: 0.18),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.payments_outlined,
+            size: 18,
+            color: AppConstants.primary,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Verify this exact amount in your GCash app',
+              style: AppConstants.bodyStyle(
+                fontSize: 12,
+                color: AppConstants.secondary,
+              ),
+            ),
+          ),
+          Text(
+            '₱${total.toStringAsFixed(2)}',
+            style: AppConstants.monoStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: AppConstants.primary,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
