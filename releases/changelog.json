@@ -1,5 +1,17 @@
 [
   {
+    "latest_version": "1.0.23",
+    "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.23/app-release-1.0.23.apk",
+    "released_at": "2026-09-05",
+    "notes": [
+      "Two-factor authentication (2FA) for every account",
+      "- Optional 2FA via any authenticator app (Google Authenticator, Authy, 1Password…) — QR code or manual secret",
+      "- When enabled, sign-in asks for a 6-digit code",
+      "- Covers customers, sellers, and admins",
+      "- Admin portal: enable 2FA in Settings; portal sign-in includes the code step"
+    ]
+  },
+  {
     "latest_version": "1.0.22",
     "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.22/app-release-1.0.22.apk",
     "released_at": "2026-09-05",
