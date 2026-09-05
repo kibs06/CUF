@@ -1,5 +1,32 @@
 [
   {
+    "latest_version": "1.0.22",
+    "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.22/app-release-1.0.22.apk",
+    "released_at": "2026-09-05",
+    "notes": [
+      "v1.0.22 — manual GCash payment fraud hardening (T5)",
+      "- Closed the remote route into the manual GCash confirmation flow by",
+      "revoking EXECUTE on the dormant create_gcash_checkout RPC (no new",
+      "manual awaiting_payment_confirmation orders can be created from",
+      "anywhere; legacy Aug 8–9 orders still resolve).",
+      "- POS GCash reference-number dedupe: partial unique index on",
+      "orders.gcash_reference_number scoped to paid, non-empty references —",
+      "a reference can never confirm a second paid order. The seller's",
+      "GCash confirm now surfaces a clear \"reference already used\" error.",
+      "- New admin-only gcash_payment_decision_audit table: RLS via",
+      "is_admin() SELECT-only, all write grants revoked including",
+      "service_role; written server-side by a POS confirm trigger and the",
+      "confirm/reject RPCs, capturing the reference number and the order",
+      "total at decision time. Retrospective pattern detection only — not",
+      "alerting.",
+      "- Seller queue screen: prominent expected-amount banner directly",
+      "above the Confirm/Reject buttons (mitigation to reduce seller error,",
+      "not a technical control — no gateway in this flow).",
+      "🤖 Generated with Codebuff",
+      "Co-Authored-By: Codebuff <noreply@codebuff.com>"
+    ]
+  },
+  {
     "latest_version": "1.0.21",
     "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.21/app-release-1.0.21.apk",
     "released_at": "2026-09-05",
