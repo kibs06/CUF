@@ -1,5 +1,19 @@
 [
   {
+    "latest_version": "1.0.21",
+    "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.21/app-release-1.0.21.apk",
+    "released_at": "2026-09-05",
+    "notes": [
+      "v1.0.21 — Security hardening & seller application integrity",
+      "- Seller applications now lock once submitted — no editing store details or swapping verification documents while pending review",
+      "- Every seller approval/rejection is logged with who, when, and notes",
+      "- Admin portal: view seller verification documents (ID, selfie, product photos)",
+      "- Map API key removed from the app — maps and geocoding now run through a secure server proxy",
+      "- Rate limiting added to public services to block abuse and overload",
+      "- Tighter upload rules for storage (file type + size checks)"
+    ]
+  },
+  {
     "latest_version": "1.0.20",
     "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.20/app-release-1.0.20.apk",
     "released_at": "2026-08-29",

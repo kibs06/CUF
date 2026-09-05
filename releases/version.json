@@ -1,15 +1,14 @@
 {
-  "latest_version": "1.0.20",
-  "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.20/app-release-1.0.20.apk",
-  "released_at": "2026-08-29",
+  "latest_version": "1.0.21",
+  "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.21/app-release-1.0.21.apk",
+  "released_at": "2026-09-05",
   "notes": [
-    "Security lockout overlay with device details & admin reports",
-    "- Non-dismissable security alert with live mm:ss countdown",
-    "- Shows attacker device model, OS, and IP address",
-    "- Reset password / This wasn't me / Wait actions with loading states",
-    "- This wasn't me creates high-priority report in admin Reports tab",
-    "- Dev mode bypasses lockout and clears lockout data",
-    "- Admin portal shows lockout badges on user rows",
-    "- Push notifications to user and all admins on lockout"
+    "v1.0.21 — Security hardening & seller application integrity",
+    "- Seller applications now lock once submitted — no editing store details or swapping verification documents while pending review",
+    "- Every seller approval/rejection is logged with who, when, and notes",
+    "- Admin portal: view seller verification documents (ID, selfie, product photos)",
+    "- Map API key removed from the app — maps and geocoding now run through a secure server proxy",
+    "- Rate limiting added to public services to block abuse and overload",
+    "- Tighter upload rules for storage (file type + size checks)"
   ]
 }
