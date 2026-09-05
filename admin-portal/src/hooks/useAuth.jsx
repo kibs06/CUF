@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { ROLES } from '../lib/constants'
+import { needsMfa } from '../lib/mfa'
 
 const AuthContext = createContext(null)
 
@@ -137,6 +138,7 @@ export function AuthProvider({ children }) {
       loading,
       accessDenied,
       isAdmin: profile?.role === ROLES.ADMIN,
+      mfaRequired: needsMfa(session),
       signIn,
       signOut,
       refreshProfile,

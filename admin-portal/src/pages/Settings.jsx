@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth.jsx'
 import { useToast } from '../components/ui/Toast.jsx'
+import MfaCard from '../components/MfaCard.jsx'
 import { User, Lock, AlertTriangle } from 'lucide-react'
 
 export default function Settings() {
@@ -109,6 +110,9 @@ export default function Settings() {
           </button>
         </form>
       </div>
+
+      {/* Two-Factor Authentication section */}
+      <MfaCard />
 
       {/* Change Password section */}
       <div className="overflow-hidden rounded-2xl border border-[#D9D0C7] bg-white shadow-sm">

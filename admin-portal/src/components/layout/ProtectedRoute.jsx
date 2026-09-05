@@ -1,5 +1,6 @@
 import { Navigate, Outlet } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth.jsx'
+import { needsMfa } from '../../lib/mfa'
 
 export default function ProtectedRoute() {
   const { session, loading, isAdmin } = useAuth()
@@ -14,6 +15,12 @@ export default function ProtectedRoute() {
 
   if (!session || !isAdmin) {
     return <Navigate to="/login" replace />
+  }
+
+  // Admins with MFA enrolled must complete the code step before any
+  // portal page renders.
+  if (needsMfa(session)) {
+    return <Navigate to="/mfa-verify" replace />
   }
 
   return <Outlet />

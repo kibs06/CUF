@@ -4,9 +4,11 @@ import 'package:provider/provider.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/biometric_service.dart';
+import '../../services/mfa_service.dart';
 import '../../widgets/sole_switch.dart';
 import '../auth/edit_profile_screen.dart';
 import 'manage_login_device_screen.dart';
+import 'mfa_settings_screen.dart';
 
 /// Account & Security screen — Shopee-style settings layout with
 /// Account and Security sections.
@@ -20,11 +22,13 @@ class AccountSecurityScreen extends StatefulWidget {
 class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
   bool _biometricAvailable = false;
   bool _biometricEnabled = false;
+  bool? _mfaEnabled; // null = still loading
 
   @override
   void initState() {
     super.initState();
     _loadBiometricState();
+    _loadMfaState();
   }
 
   Future<void> _loadBiometricState() async {
@@ -37,6 +41,27 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
         _biometricEnabled = enabled;
       });
     }
+  }
+
+  Future<void> _loadMfaState() async {
+    try {
+      final enabled = await MfaService.instance.isMfaEnabled();
+      if (mounted) {
+        setState(() => _mfaEnabled = enabled);
+      }
+    } catch (e) {
+      // Leave unknown — the row still navigates and the settings
+      // screen itself shows the real state.
+      debugPrint('[account_security] mfa status failed: $e');
+    }
+  }
+
+  Future<void> _openMfaSettings() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const MfaSettingsScreen()),
+    );
+    // Refresh the row status when returning from the settings screen.
+    _loadMfaState();
   }
 
   Future<void> _toggleBiometric(bool value) async {
@@ -364,6 +389,14 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
                     ),
                   );
                 },
+              ),
+              _settingsRow(
+                title: 'Two-Factor Authentication (2FA)',
+                subtitle: 'Add a code from your authenticator app when signing in',
+                value: _mfaEnabled == null
+                    ? null
+                    : (_mfaEnabled! ? 'On' : 'Off'),
+                onTap: _openMfaSettings,
               ),
             ]),
             const SizedBox(height: 24),

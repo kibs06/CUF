@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import ProtectedRoute from './components/layout/ProtectedRoute.jsx'
 import AppLayout from './components/layout/AppLayout.jsx'
 import Login from './pages/Login.jsx'
+import MfaVerify from './pages/MfaVerify.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import Users from './pages/Users.jsx'
 import SellerApplications from './pages/SellerApplications.jsx'
@@ -17,6 +18,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/mfa-verify" element={<MfaVerify />} />
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>
           <Route index element={<Dashboard />} />

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { SHOE_SOLE_SVG } from '../lib/constants'
 import { useAuth } from '../hooks/useAuth.jsx'
+import { needsMfa } from '../lib/mfa'
 
 export default function Login() {
   const { signIn, session, isAdmin, loading, accessDenied } = useAuth()
@@ -11,6 +12,10 @@ export default function Login() {
   const [submitting, setSubmitting] = useState(false)
 
   if (!loading && session && isAdmin) {
+    // Admins with 2FA land on the code step instead of the dashboard.
+    if (needsMfa(session)) {
+      return <Navigate to="/mfa-verify" replace />
+    }
     return <Navigate to="/" replace />
   }
 

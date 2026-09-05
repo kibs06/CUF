@@ -10,7 +10,9 @@ import '../constants/app_constants.dart';
 import '../providers/auth_provider.dart';
 import '../providers/follow_provider.dart';
 import '../services/auth_service.dart';
+import '../services/mfa_service.dart';
 import '../widgets/error_retry_widget.dart';
+import 'shared/mfa_verify_screen.dart';
 import 'admin/admin_shell.dart';
 import 'auth/account_entry_screen.dart';
 import 'auth/onboarding_screen.dart';
@@ -244,15 +246,100 @@ class _AuthGateState extends State<AuthGate> {
       target = const CustomerShell();
     }
 
+    // Every shell (customer, seller, admin) sits behind the same MFA
+    // step-up gate: if the session is still AAL1 and the user has a
+    // verified TOTP factor, the code screen shows before the shell.
+    // MFA is per-user at Supabase Auth, so one gate covers all roles.
+    // The gate is keyed by shell type so role switches still animate.
     // Smooth fade-in transition (Change 6c)
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 500),
       transitionBuilder: (child, animation) =>
           FadeTransition(opacity: animation, child: child),
-      child: KeyedSubtree(
+      child: _MfaGate(
         key: ValueKey(target.runtimeType),
         child: target,
       ),
+    );
+  }
+}
+
+/// MFA step-up gate: shows [MfaVerifyScreen] when the session is still
+/// AAL1 (password verified, MFA not yet completed) and the user has an
+/// enrolled, verified TOTP factor. On success Supabase upgrades the
+/// session to AAL2 and emits `mfaChallengeVerified`; AuthGate's stream
+/// rebuilds and [didUpdateWidget] re-evaluates, unmounting this gate.
+///
+/// Fails open (no extra network waits): the factor list is read from
+/// the session user's embedded `factors` claim, so a user with no MFA
+/// never blocks on a round-trip here. Worst case is the challenge
+/// appearing on the user's NEXT sign-in.
+class _MfaGate extends StatefulWidget {
+  final Widget child;
+
+  const _MfaGate({super.key, required this.child});
+
+  @override
+  State<_MfaGate> createState() => _MfaGateState();
+}
+
+class _MfaGateState extends State<_MfaGate> {
+  // null = checking (synchronous in practice), true = shell may show,
+  // false = challenge required.
+  bool? _open;
+  String? _factorId;
+  String? _lastAal;
+
+  @override
+  void initState() {
+    super.initState();
+    _evaluate();
+  }
+
+  @override
+  void didUpdateWidget(covariant _MfaGate oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Fires after a verify success (auth stream → AuthGate rebuild →
+    // new shell child): the AAL changed to aal2, so reopen.
+    final aal = _currentAal();
+    if (aal != _lastAal) _evaluate();
+  }
+
+  String _currentAal() => MfaService.aalFromJwtPayload(
+        MfaService.jwtPayload(
+          Supabase.instance.client.auth.currentSession?.accessToken ?? '',
+        ),
+      );
+
+  void _evaluate() {
+    _lastAal = _currentAal();
+    final aal = _lastAal!;
+    if (!MfaService.mfaRequiredForAal(aal)) {
+      setState(() {
+        _open = true;
+        _factorId = null;
+      });
+      return;
+    }
+
+    final factors = Supabase.instance.client.auth.currentUser?.factors ?? const [];
+    final verifiedTotp = factors.where(
+      (f) => f.factorType == FactorType.totp && f.status == FactorStatus.verified,
+    );
+    final factor = verifiedTotp.isEmpty ? null : verifiedTotp.first;
+    setState(() {
+      _open = factor == null;
+      _factorId = factor?.id;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_open == null) return const _LoadingScreen();
+    if (_open == true) return widget.child;
+    return MfaVerifyScreen(
+      factorId: _factorId ?? '',
+      onVerified: _evaluate,
     );
   }
 }

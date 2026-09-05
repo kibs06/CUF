@@ -1,6 +1,6 @@
 # GO-LIVE PRELAUNCH CHECKLIST (before real users)
 
-**Date:** September 3, 2026
+**Date:** September 3, 2026 (updated Sep 5, 2026 — T5 manual-GCash closure added to pending applies + done list)
 **Status:** Open — items below must be resolved before the app takes real customers.
 **Context:** Compiled from the T6 hardening, gcash-webhook secret outage, and reconciliation session. The live PayMongo account ("Carcar United Footwear") exists with `sk_live_`/`pk_live_` keys, but the app has only ever processed TEST-mode payments.
 
@@ -24,7 +24,7 @@
 
 ## 🟡 Should fix before launch
 
-4. **Rate-limit migration not confirmed applied.** `20260903030000_add_rate_limiting.sql` must be run (SQL Editor) + recorded in the migration ledger, or all the new rate limiters **fail open** (functions work, but there is no protection). Also confirm the T3 ledger inserts (20260903000000–20260903020000) were recorded.
+4. **Rate-limit + T5 migrations not confirmed applied.** `20260903030000_add_rate_limiting.sql` must be run (SQL Editor) + recorded in the migration ledger, or all the new rate limiters **fail open** (functions work, but there is no protection). **Also apply `20260905000000_fix_t5_manual_gcash_dedupe_audit.sql`** — until it runs, the manual-GCash reference dedupe and seller decision audit trail do not exist server-side (code shipped Sep 5, commit `6dee84b`). Also confirm the T3 ledger inserts (20260903000000–20260903020000) were recorded.
 5. **Seller re-apply regression (T3):** the Sep 1 status guard blocks a rejected seller's re-submission (`rejected → pending` raises `Cannot change your own seller_status.`). Real rejected applicants cannot re-apply until fixed.
 6. **Stale `awaiting_payment` orders are never expired.** The test order from Aug 19 sat in `awaiting_payment` for 2 weeks (no expiry sweep ran for PayMongo checkout sessions). Ensure the expiry/cancel cron is applied before launch so abandoned checkouts auto-cancel and stock is never held.
 7. **Admin account hygiene:** the admin login (keithabalo03@gmail.com) was shared in plaintext during this session — change the password before launch.
@@ -35,4 +35,5 @@
 - LIVE webhook endpoint created (verify events/env per item 1).
 - Reconciliation closed: 51 orders, exactly 1 was in `awaiting_payment` — a TEST-mode payment (₱410.25, Aug 19) confirmed paid on PayMongo, **cancelled with a full audit note** (`53194fe1-5633-4066-bda5-c13d6ce8fe1f`). No other orders touched.
 - T6 code shipped: `geocode-proxy` (MapTiler proxy + per-IP rate limiting), shared `_shared/rate_limit.ts`, rate limiting wired into 9 public functions, MapTiler key removed from the Flutter client (`app_constants.dart`), both map screens call the proxy. Rate-limit counters need migration item 4 to be active.
+- **T5 manual-GCash fraud surface closed in code (Sep 5, commit `6dee84b`):** reference-number dedupe on paid orders (23505 → clear seller error), admin-only `gcash_payment_decision_audit` trail written by POS confirm trigger + confirm/reject RPCs, expected-amount banner above the seller's Confirm/Reject buttons, and `create_gcash_checkout` EXECUTE revoked (no new manual orders from anywhere; legacy Aug 8–9 orders can still resolve). Activation requires migration item 4; pgTAP suite `supabase/tests/t5_manual_gcash_dedupe_audit.test.sql` runs in CI.
 - `supabase/config.toml` now documents `verify_jwt = false` for every deployed-public function (prevents accidental JWT flips on redeploy).

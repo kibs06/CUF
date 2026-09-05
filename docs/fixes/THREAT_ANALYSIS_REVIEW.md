@@ -4,7 +4,7 @@
 
 **Source document:** `threat-analysis (2).pdf` (authored ~Aug 31 – Sep 1, 2026)
 **Review date:** September 3, 2026
-**Last updated:** September 3, 2026 (T3 ✅ verified live · T6 ✅ shipped · webhook incident reconciled — see §6 change log)
+**Last updated:** September 5, 2026 (T3 ✅ verified live · T6 ✅ shipped · T5 manual-GCash fraud surface ✅ closed in code — migrations `20260903030000` & `20260905000000` still pending live apply · T1 MFA ✅ shipped for all roles · webhook incident reconciled — see §6 change log)
 **Reviewer:** Codebuff (AI pair-programmer)
 **Scope:** Cross-checked every threat row against the actual codebase (Flutter app, React admin portal, Supabase schema/migrations/Edge Functions).
 
@@ -16,7 +16,7 @@ The PDF is a solid, readable STRIDE-style threat model — the right assets were
 
 **The main issue: it is partially out of date the moment it was written.** Several rows recommend controls that this repo already implements — in some cases with code merged *the same week* (Aug 29 – Sep 1). Either the model was written against an earlier snapshot, or the hardening work landed in parallel. If this document is being submitted or graded, it needs a status column, because as written it understates what is already in place.
 
-It also missed the risks that are *actually* highest today: the manual gateway-free GCash confirmation path and the anonymous push/email functions callable with forged bodies. Two of its blind spots — the hardcoded MapTiler key and the absence of any rate limiting — were remediated on Sep 3 (see T6); the rest remain in §4.
+It also missed the risks that are *actually* highest today: the manual gateway-free GCash confirmation path — **remediated Sep 5, 2026 (see T5)**, migration pending live apply — and the anonymous push/email functions callable with forged bodies (still open, §4 #2). Two of its blind spots — the hardcoded MapTiler key and the absence of any rate limiting — were remediated on Sep 3 (see T6); the rest remain in §4.
 
 ---
 
@@ -37,7 +37,7 @@ The PDF's own suggested control — *"existing 3–5 failed-login-attempt limit 
 
 **Remaining gaps (small):**
 - No minimum password-strength rule found anywhere in the app or client validation. Supabase's default minimum is only 6 chars unless raised in **Auth → Settings → Security** (server-side — do it there, not just in the app).
-- No 2FA / MFA. For a marketplace with seller payout-adjacent data this is the single best next step for this row.
+- ~~No 2FA / MFA~~ — **✅ shipped Sep 5, 2026:** TOTP MFA (authenticator-app codes) is now available app-wide and in the admin portal. Optional per user; enforced server-side by Supabase Auth. See §6.
 
 ### T2 — Seller verification documents: information disclosure (Risk 15 · High)
 
@@ -85,7 +85,7 @@ Two concrete problems existed (confirmed with real PostgREST probes on Sep 3, 20
 
 ### T5 — Payment: financial fraud / unauthorized payment activity (Risk 15 · High)
 
-**Status: ⚠️→✅ The PDF's premise is stale — and since Sep 3 the gateway flow is materially hardened (webhook incident resolved + reconciled, below). The manual gateway-free GCash path remains the top residual fraud surface.**
+**Status: ✅→⚠️ The PDF's premise is stale; the gateway flow is hardened (Sep 3, below) and the manual gateway-free GCash path was remediated in code on Sep 5, 2026 (below) — residual: apply migration `20260905000000` to the live DB and flip to LIVE keys before real money.**
 
 The PDF says the payment mechanism *"is not yet finalized"* — **that is no longer true.** As of the Aug 9 migration `20260809000000_revive_paymongo_online_gcash.sql` and the Edge Functions, the app has a production-grade gateway flow:
 
@@ -98,10 +98,11 @@ The PDF says the payment mechanism *"is not yet finalized"* — **that is no lon
 - A customer can submit a made-up or *reused* reference number (same ref, second order).
 - A ref number is only bound to an amount by the seller's eyeballing of a screenshot.
 
-**Action (highest priority in this whole review):**
-1. Server-side **dedupe on `gcash_reference_number`** — reject a ref already used on a confirmed order (cheap, kills the reuse attack).
-2. Where possible, have the queue screen pre-fill/validate the expected amount next to the seller's confirm action.
-3. Keep pushing customers to the PayMongo-hosted path (it is the auditable one) and treat the manual flow as fallback-only; add an audit trail of seller confirm/reject decisions.
+**Action (was the highest priority in this whole review) — ✅ shipped Sep 5, 2026 (commit `6dee84b`), migration `20260905000000_fix_t5_manual_gcash_dedupe_audit.sql` pending live apply:**
+1. ✅ Server-side **dedupe on `gcash_reference_number`** — partial unique index `uq_orders_gcash_reference_number_paid` over *paid* orders (existing duplicate refs pre-cleaned to NULL); the resulting 23505 is mapped to a clear error on the seller's GCash confirm. A reference can never confirm a second paid order.
+2. ✅ **Expected-amount banner** in the seller queue screen, directly above the Confirm/Reject buttons (mitigation to reduce seller error — no gateway in this flow, so it is not a technical control).
+3. ✅ **Confirm/reject audit trail** — `gcash_payment_decision_audit` table (RLS `is_admin()` SELECT-only, all write grants revoked incl. `service_role`), written server-side by a POS confirm trigger and the confirm/reject RPCs (source = `pos` / `queue`), capturing ref + order total at decision time. Retrospective pattern detection only — not alerting.
+4. ✅ **Beyond the review's asks:** `EXECUTE` on the dormant `create_gcash_checkout` RPC revoked from `authenticated`, so **no new manual (awaiting_payment_confirmation) orders can be created from anywhere**, while legacy Aug 8–9 orders can still resolve through submit/confirm/reject/expire.
 
 **Operational hardening — Sep 3, 2026 (PayMongo webhook incident + reconciliation):**
 
@@ -109,7 +110,7 @@ The PDF says the payment mechanism *"is not yet finalized"* — **that is no lon
 - **Fix (verified).** LIVE webhook registered at `…/functions/v1/gcash-webhook`, subscribed to `checkout_session.payment.paid` + `payment.paid` + `payment.failed`; the secret was restored **project-wide** (so a redeploy can't drop it again) and `gcash-webhook` redeployed. Verified live: bogus signature → **401** `invalid signature` (never 500). The webhook additionally gained a per-IP rate limit (600/min) on top of its mandatory HMAC + idempotency + amount-integrity processing.
 - **Reconciliation (closed, zero collateral).** All 51 orders reviewed; exactly 1 was in `awaiting_payment` — order `53194fe1…` (₱410.25, Aug 19). The PayMongo API confirmed it was **paid in TEST mode** (`livemode: false`, payment `pay_MbYuBj2NEfw7RM6qhB6eerbE` — a developer test checkout, no real money). It was cancelled **with a full audit note** rather than fulfilled, so no phantom sale or stock movement entered the seller pipeline. No other row was modified.
 
-**Residual T5 state (pre-launch):** `PAYMONGO_SECRET_KEY` is still the **test** key (digest-verified) with `PAYMONGO_LIVEMODE` unset, while the registered webhook is in **LIVE** — so sandbox checkouts won't be webhook-confirmed (they'd fall back to the client-side poll, the exact gap that slipped the Aug 19 order). Before real users: set the `sk_live_…` key + `PAYMONGO_LIVEMODE=true`, redeploy the payment functions, and run one real end-to-end payment; while sandbox-testing, register the same endpoint under TEST too. Full account: `docs/fixes/GO_LIVE_PRELAUNCH_CHECKLIST.md`.
+**Residual T5 state (pre-launch):** `PAYMONGO_SECRET_KEY` is still the **test** key (digest-verified) with `PAYMONGO_LIVEMODE` unset, while the registered webhook is in **LIVE** — so sandbox checkouts won't be webhook-confirmed (they'd fall back to the client-side poll, the exact gap that slipped the Aug 19 order). Migration `20260905000000` (dedupe + decision audit) is likewise **not yet applied to the live DB** (ledger ⏳ — until then those controls don't exist server-side). Before real users: apply that migration, set the `sk_live_…` key + `PAYMONGO_LIVEMODE=true`, redeploy the payment functions, and run one real end-to-end payment; while sandbox-testing, register the same endpoint under TEST too. Full account: `docs/fixes/GO_LIVE_PRELAUNCH_CHECKLIST.md`.
 
 ### T6 — System availability: denial of service (Risk 12 · Medium)
 
@@ -134,7 +135,7 @@ Implemented in two parts (root cause first):
 These are things I found in the code that a refresh of the model should include:
 
 1. **🔴 Hardcoded third-party API key (client-side secret) — ✅ remediated Sep 3, 2026.** The MapTiler key was compiled into the app (`AppConstants.maptilerKey`, used by `add_edit_address_screen.dart`); anyone unpacking the APK could extract it and burn geocoding/tile quota. Fixed by moving the key server-side into the `geocode-proxy` Edge Function and deleting it from the client (details in T6). **Residual:** the old key is still in git history (committed Jul 2026) → rotate/delete it in MapTiler; and raster tiles currently 403 through the proxy until a proper server key is set.
-2. **Manual GCash flow fraud surface** (see T5) — the model's payment row should be rewritten around this, not "not yet finalized."
+2. **Manual GCash flow fraud surface** (see T5) — the model's payment row should be rewritten around this, not "not yet finalized." ✅ **Remediated Sep 5, 2026** (dedupe + decision audit + expected-amount banner + `create_gcash_checkout` revoked); migration `20260905000000` pending live apply.
 3. **Deep-link / app-link spoofing.** The app handles `solvision://checkout/gcash/*` deep links and cold-start redirects (`main.dart`). Worth a row: can a crafted link push a user into a payment or phishing-looking screen?
 4. **Push-notification channel abuse** — device-token tampering / notification spoofing is used as a vector (lockout notifications already flow through it); worth a row now that it carries security messaging. Rate limiting (shipped Sep 3) caps volume, but the push/email functions remain anonymous with forged bodies — see §4 #2.
 5. **No generic admin audit log** — the seller-application audit log (T3, shipped Sep 3) covers status changes only; other privileged admin actions (user deletion, suspensions, moderation) are still unlogged.
@@ -151,15 +152,16 @@ These are things I found in the code that a refresh of the model should include:
 | 2 | Authenticate the anonymous Edge Functions (`send-message-push`, `send-notification-push`, `create-gcash-payment`, `send-approval-email`, `send-lockout-email`) — enable JWT or add server-side identity checks | New gap (forged bodies) | Small–Medium |
 | 3 | MapTiler: provision a server key that serves raster tiles (fix the current 403) and rotate the old key still in git history / old builds | T6 + new gap | Small |
 | 4 | Flip payments to LIVE before real users (`PAYMONGO_SECRET_KEY=sk_live_…`, `PAYMONGO_LIVEMODE=true`, redeploy payment functions) + one real end-to-end payment; register the TEST webhook for sandbox testing | T5 (15) | Small · pre-launch |
-| 5 | Harden the manual GCash path: server-side ref-number dedupe, amount binding, confirm/reject audit trail | T5 (15) | Small–Medium |
+| 5 | ~~Harden the manual GCash path~~ **✅ Done Sep 5** (commit `6dee84b`): ref-number dedupe, `gcash_payment_decision_audit` trail, expected-amount banner, `create_gcash_checkout` revoked — **apply `20260905000000` to the live DB to activate** | T5 (15) | ✅ Code done · pending live apply |
 | 6 | Fix the seller re-apply regression (`rejected → pending`) found during T3 verification | T3 (12) | Small |
 | 7 | Add an expiry sweep for stale PayMongo `awaiting_payment` orders | T5 + §3 #7 | Small |
 | 8 | Add a **generic** `admin_audit_log` for privileged admin actions (user deletion, suspensions, moderation) | T4 (10) | Medium |
-| 9 | Enable real password policy + MFA at Supabase Auth level (server-side) | T1 (12) | Small |
+| 9 | Enable real password policy at Supabase Auth level (server-side) — **MFA part done Sep 5** (TOTP for all roles, app + admin portal) | T1 (12) | Small |
 | 10 | Verify storage RLS + signed-URL TTLs for `seller-verification-docs` with a real non-admin test | T2 (15) | Small |
 | 11 | **Refresh the PDF/threat matrix**: add a status column per control, re-score (several Mediums likely drop to Low now), and add the §3 rows so the document reflects the current build | — | Small |
 
-> ✅ **Done on Sep 3** (removed from the backlog): T3 remediation (application lock + audit log — applied live + verified), rate limiting on public Edge Functions + MapTiler key moved server-side (T6 — committed, CI green, live-DB apply still pending per #1), webhook secret restored + LIVE webhook registered, order reconciliation. See §6.
+> ✅ **Done Sep 3** (removed from the backlog): T3 remediation (application lock + audit log — applied live + verified), rate limiting on public Edge Functions + MapTiler key moved server-side (T6 — committed, CI green, live-DB apply still pending per #1), webhook secret restored + LIVE webhook registered, order reconciliation. See §6.
+> ✅ **Done Sep 5** (removed from the backlog): T5 manual-GCash fraud surface closed in code — ref-number dedupe, `gcash_payment_decision_audit` trail, expected-amount banner, `create_gcash_checkout` revoked (commit `6dee84b`; live-DB apply pending per #5).
 
 ---
 
@@ -181,3 +183,5 @@ These are things I found in the code that a refresh of the model should include:
 | Sep 3, 2026 | **T6 remediated** — `20260903030000_add_rate_limiting.sql`, `geocode-proxy`, `_shared/rate_limit.ts` wired into 10 handlers; MapTiler key removed from the client. Committed `eeba2b6`; CI green (flutter analyze + 527 tests; 80-migration apply + RLS canary). Live-DB counter apply still pending (§4 #1). |
 | Sep 3, 2026 | **PayMongo webhook incident resolved + reconciled.** LIVE webhook registered; `PAYMONGO_WEBHOOK_SECRET` restored project-wide (verified: bad signature → 401); 51 orders reviewed, the 1 test-paid order cancelled with a full audit note, nothing else touched. Full account: `docs/fixes/GO_LIVE_PRELAUNCH_CHECKLIST.md`. |
 | Sep 3, 2026 | **CI debt cleared** (`a793505`) — removed ~200 lines of dead, never-wired confirmation-token scaffold in `auth_service.dart` so `flutter analyze` is clean; no behavioral change. |
+| Sep 5, 2026 | **T1 MFA shipped** — TOTP two-factor authentication for every role: `MfaService` + shared gate in `AuthGate` (code step before any shell when the session is AAL1), MFA settings screen (`Account & Security` → Two-Factor Authentication) with QR/secret enrollment, and the admin portal equivalent (`/mfa-verify` gate + Settings card). Optional per user (`lib/services/mfa_service.dart`, `lib/screens/shared/mfa_*`, `admin-portal/src/{pages/MfaVerify.jsx,components/MfaCard.jsx,lib/mfa.js}`). |
+| Sep 5, 2026 | **T5 manual-GCash fraud surface closed in code** (commit `6dee84b`) — partial unique index deduping `gcash_reference_number` on paid orders (23505 mapped to a clear seller error), admin-only `gcash_payment_decision_audit` table + POS confirm trigger + confirm/reject RPC audit writes, expected-amount banner in the queue screen, and `create_gcash_checkout` EXECUTE revoked. Migration `20260905000000` + pgTAP suite `supabase/tests/t5_manual_gcash_dedupe_audit.test.sql` (runs in CI) — **pending live apply**. |
