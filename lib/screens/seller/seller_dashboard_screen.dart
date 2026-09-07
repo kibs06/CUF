@@ -778,8 +778,10 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                   ),
                 ],
                 const SizedBox(height: 12),
-                // Channel breakdown — online vs POS for today
+                // Channel breakdown — online vs POS for today (right-aligned
+                // to balance the left-aligned big number)
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     _todayChannelPill('Online', data.todayOnlineRevenue),
                     const SizedBox(width: 8),
