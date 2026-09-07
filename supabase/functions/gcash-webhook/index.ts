@@ -146,9 +146,13 @@ serve(async (req: Request) => {
   }
 
   // ── 2. Idempotency gate: first INSERT wins; 'failed' rows re-claim ─
-  // (the insert chain is cast to `any` for the repo's untyped schema —
-  //  runtime behavior is identical to the typed form)
-  const { data: claimed } = await (supabase
+  // NOTE: plain INSERT, no chained .onConflict() — supabase-js v2's insert
+  // builder has no .onConflict() method, and chaining it threw
+  // "TypeError: …onConflict is not a function" on EVERY delivery
+  // (incident 2026-09-07), crashing the request to a 500 before any
+  // processing. A duplicate delivery now surfaces as a 23505
+  // unique-violation error instead, handled below.
+  const { data: claimed, error: claimErr } = await supabase
     .from("payment_webhook_events")
     .insert({
       paymongo_event_id: event.id,
@@ -156,13 +160,21 @@ serve(async (req: Request) => {
       status: "processing",
       livemode: event.livemode,
       redacted_payload: event.redacted,
-    }) as any)
-    .onConflict("paymongo_event_id")
+    })
     .select("id, status")
     .maybeSingle();
 
   let proceed = !!claimed;
   if (!claimed) {
+    if (claimErr && (claimErr as any).code !== "23505") {
+      // A genuine DB failure (not a duplicate delivery) — 500 so PayMongo
+      // retries instead of us silently acking an unprocessed event.
+      console.error(
+        "[WEBHOOK] idempotency insert failed:",
+        (claimErr as any).message,
+      );
+      return json(500, { error: "idempotency check failed" });
+    }
     const { data: existing } = await supabase
       .from("payment_webhook_events")
       .select("id, status")

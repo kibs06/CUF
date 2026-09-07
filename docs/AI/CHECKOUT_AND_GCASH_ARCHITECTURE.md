@@ -729,3 +729,98 @@ Guarantees:
   `PAYMONGO_WEBHOOK_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`).
 - **⚠️ Security note:** the human shared live PayMongo keys in chat earlier; they were
   never stored or committed, and should be **rotated** in the PayMongo dashboard.
+
+---
+
+## 11. INCIDENT LOG — 2026-09-07: "Checkout cancelled" on every GCash order
+
+**Symptom:** a customer saw the generic "Checkout cancelled" screen on every
+GCash checkout attempt (screenshot: ₱400.00 + ₱10.25 fee = ₱410.25) and could
+not place any order.
+
+**Root cause (fully data-verified):**
+
+1. A **test-mode** checkout from Aug 19 (order `53194fe1…`, intent amount
+   ₱410.25) was never finalized: `payment_webhook_events` has **zero** rows for
+   it — PayMongo's webhook never delivered `payment.paid` — so its
+   `payment_intents` row stayed `status='pending'` forever.
+2. **pg_cron is not installed on the live DB** (`cron.job` does not exist), so
+   the `expire-online-gcash-payments` sweep was **silently never scheduled**
+   (the migration's `IF EXISTS pg_extension` guard no-ops). The stale intent
+   sat 19 days past its `expires_at`, still `pending`.
+3. Every new checkout: the intent pre-check saw the stale intent as expired
+   and proceeded → created a fresh order → the `payment_intents` INSERT hit
+   the `uq_payment_intents_one_pending_per_customer` partial unique index
+   (it checks only `status='pending'`, not `expires_at`) → 23505 → the fresh
+   order was cancelled `Duplicate checkout detected` (~0.33s alive) → the
+   function returned the **stale intent** as the "winner" (`already_exists`) →
+   the app rendered the OLD test order's payment screen (₱400/₱10.25/₱410.25 —
+   the screenshot) → polling returned the old order's
+   `cancelled`/`Test-mode payment - not fulfilled` → `_phaseFor()`'s fallback
+   branch → generic "Checkout cancelled".
+
+**Classification:** duplicate-race row of the decision table, mechanism =
+stale-pending-intent + dead-sweep (the §3.1-step-4 "prior pending checkout"
+trace). NOT an accidental customer cancel (Path A) and NOT an expiry-timing
+bug (Path B).
+
+**Fixes applied:**
+
+- **Data:** the stuck intent was manually expired (frees the one-pending cap).
+  One-time global cleanup SQL (mirroring the missing sweep's two UPDATEs) is
+  recommended — there may be other customers' `awaiting_payment` orders whose
+  intents expired and were never cancelled on this sweep-less DB.
+- **`create-gcash-payment-intent/index.ts`:** a **per-customer mini-sweep** now
+  runs before the pending-intent lookup — expires all of the customer's
+  `pending` intents past `expires_at` and cancels their still-`awaiting_payment`
+  orders (the exact guarded UPDATEs the cron sweep would run; idempotent). The
+  duplicate-recovery "winner" lookup now also filters on unexpired intents so a
+  stale one can never be resumed.
+- **`gcash_payment_screen.dart`:** `_phaseFor()`'s fallback branch now logs the
+  unrecognized `cancellation_reason` (was silent).
+
+**Follow-up discoveries (same incident, found while verifying live):**
+
+1. **Test-mode webhooks were never delivered** — the registered webhook was a
+   **Live-mode** webhook; test payments need a webhook created in **Test mode**
+   (dashboard avatar → Test mode toggle). Created; its secret is now
+   `PAYMONGO_WEBHOOK_SECRET`.
+2. **Signature verification rejected every test event** — the header carries
+   BOTH `te` (test) and `li` (live) parts with exactly one populated and the
+   other EMPTY-but-present; `parts.get("li") ?? parts.get("te")` did not fall
+   through on `""`. Fixed in `_shared/paymongo.ts` to treat empty strings as
+   absent. (Live-mode events were unaffected by this bug; test events were
+   always rejected.)
+3. **The idempotency gate crashed every processed delivery** — the webhook
+   chained `.onConflict("paymongo_event_id")` on a supabase-js **v2** insert,
+   which has no such method → `TypeError …onConflict is not a function` →
+   request died as a 500 BEFORE any processing or DB write, on every delivery
+   that got past signature verification (visible in function logs as
+   `index.ts:120`). PayMongo retried endlessly (the 7–11-retry storms in the
+   dashboard). **This means no `payment.paid` was ever successfully
+   webhook-processed in this project** — the Aug-19 test order was
+   hand-reconciled. Fixed with a plain INSERT; duplicate deliveries surface
+   as a handled 23505 unique-violation, and genuine DB failures return 500
+   (retryable) instead of being acked.
+
+**Verification (post-fix):** a fresh test checkout must flip the app to
+"Order Confirmed" within seconds, write a `payment.paid` event with status
+`processed`, fire the seller FCM push + in-app notification, and materialize
+order_items/stock. Failed deliveries can be replayed via PayMongo's
+Event Deliveries **Bulk Retry** button; a retry landing on an already-
+expired order correctly becomes `payment_conflict` (money captured after
+cancel → manual review) rather than a silent loss.
+
+**Environment follow-ups (owner decisions, not code):**
+
+- Enable the **pg_cron** extension (Supabase dashboard → Database → Extensions)
+  so the real sweep runs cluster-wide, or accept the mini-sweep +
+  `get-payment-status` on-read expiry as the mechanism.
+- Register/verify the **PayMongo webhook endpoint** for test mode — the test
+  checkout's `payment.paid` was never delivered (§10.8 sandbox verification
+  still pending).
+
+**Test-coverage gap (honest):** the repo has no Deno test harness or Supabase
+client mocks for edge functions, so the mini-sweep is verified by code review
+and the live SQL diagnostics, not by an automated test. The Dart change passes
+`flutter analyze`.

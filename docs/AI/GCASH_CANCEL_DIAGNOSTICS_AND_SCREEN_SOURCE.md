@@ -1,3 +1,140 @@
+# GCash Cancellation — SQL Diagnostics + Payment Screen Source
+
+> **For AI agents:** Companion to `docs/AI/GCASH_CHECKOUT_CANCEL_ARCHITECTURE.md` (the
+> architecture overview). This file has two parts:
+>
+> 1. **SQL diagnostics** — what to query in Supabase, and how to read the
+>    `cancellation_reason` value you get back.
+> 2. **Full source** of `lib/screens/customer/gcash_payment_screen.dart` — the screen
+>    that renders the "Checkout cancelled" UI — annotated with where each phase comes
+>    from.
+>
+> ⚠️ Like `docs/AI/checkout_screen_and_app_constants.md`, the source dump below is a
+> **snapshot**. Treat the live file as the source of truth if they ever diverge.
+
+---
+
+## Part 1 — SQL diagnostics
+
+### The one-liner (fastest check)
+
+```sql
+SELECT status, payment_status, cancellation_reason, cancelled_at
+FROM orders
+WHERE id = '<ORDER_ID>';
+```
+
+The `cancellation_reason` value alone tells you the path:
+
+| `cancellation_reason` value | Path | Meaning |
+|---|---|---|
+| `Cancelled by customer` | **A** | The customer tapped "Cancel this checkout" on the payment screen (or "Cancel Pending" in the 409 dialog). RPC `cancel_my_pending_payment_intent`. |
+| `Payment session expired` | **B** | The 15-minute window closed — pg_cron sweep or the `get-payment-status` poll enforced expiry. |
+| `Payment not completed` (or containing `not completed` / `failed`) | **C** | PayMongo webhook reported failure — customer aborted inside the GCash app. |
+| `Amount mismatch` | — | Money WAS captured but didn't match → order is actually `payment_conflict`, not `cancelled`. Manual review. |
+| `Duplicate checkout detected` | — | Concurrent intent creation raced; the loser order was cancelled (double-tap scenario). |
+| `Payment gateway error` | — | `create-gcash-payment-intent` failed to reach PayMongo; order created then immediately cancelled. |
+| `NULL` while `status='cancelled'` | ⚠️ | Resolved without a reason — legacy/migrated order or a gap. Flag it. |
+
+### Full diagnostic queries
+
+```sql
+-- 1. The order row — ground truth
+SELECT
+  id,
+  status,                 -- awaiting_payment | pending | cancelled | payment_conflict
+  payment_status,         -- pending | paid | failed | unpaid
+  total_amount,           -- items + delivery (fee NOT included)
+  gcash_fee_amount,       -- Model B surcharge snapshot
+  cancellation_reason,
+  cancellation_details,
+  cancelled_at,
+  created_at,
+  customer_id,
+  store_id,
+  source                  -- 'online' for this flow
+FROM orders
+WHERE id = '<ORDER_ID>';
+
+-- 2. The payment intent — expiry + what was charged
+SELECT
+  id,
+  order_id,
+  status,                 -- pending | succeeded | failed | expired | cancelled
+  amount,                 -- charged = total + fee (what the customer authorized)
+  fee_amount,             -- Model B surcharge
+  expires_at,             -- created + 15 min
+  checkout_session_id,    -- cs_… (PayMongo hosted session)
+  checkout_url,
+  items_fingerprint,
+  livemode,
+  created_at
+FROM payment_intents
+WHERE order_id = '<ORDER_ID>'
+ORDER BY created_at DESC;
+
+-- 3. Webhook events — the server-side events for this order (may be empty)
+SELECT
+  paymongo_event_id,      -- evt_… (real) or rej-/err-/dup- prefixed (synthetic)
+  event_type,             -- payment.paid | payment.failed | checkout_session.payment.paid | …
+  status,                 -- processing | succeeded | failed | ignored_stale | amount_mismatch | rejected_signature | …
+  livemode,
+  received_at,
+  processed_at,
+  redacted_payload
+FROM payment_webhook_events
+WHERE order_id = '<ORDER_ID>'
+ORDER BY received_at DESC;
+
+-- 4. Cross-check the customer (if needed)
+SELECT id, role, email
+FROM profiles
+WHERE id = '<CUSTOMER_ID>';
+```
+
+### Reading the three tables together
+
+| orders.status | orders.payment_status | payment_intents.status | webhook_events | Conclusion |
+|---|---|---|---|---|
+| `cancelled` | `failed` | `cancelled` | (empty) | **Path A** — customer cancel RPC. No webhook involved. |
+| `cancelled` | `failed` | `expired` | (empty) | **Path B** — sweep or poll expiry. |
+| `cancelled` | `failed` | `failed` | `payment.failed` row present | **Path C** — PayMongo reported the failure. |
+| `cancelled` | `failed` | `failed` | synthetic `checkout_session.duplicate_cancelled` | Race loser from a double-tap. |
+| `cancelled` | `failed` | `pending` + `expires_at` in the past | (empty) | **Expiry not yet swept** — will resolve on next poll/sweep. |
+| `payment_conflict` | `paid` | `succeeded` | `amount_mismatch` row | Money captured, amount wrong — manual review, NOT a plain cancellation. |
+| `pending` | `paid` | `succeeded` | `payment.paid` row | Order actually PAID — the cancelled screen is a UI bug/timing artifact. Investigate. |
+
+That last row matters: **if the tables show a paid order but the app showed
+"Checkout cancelled", the bug is in the client** (e.g. a stale poll result raced the
+webhook). Check the `payment_webhook_events.received_at` vs when the user saw the
+screen.
+
+---
+
+## Part 2 — `lib/screens/customer/gcash_payment_screen.dart` (full source)
+
+### Where "Checkout cancelled" is rendered
+
+- `_PayPhase.cancelled` is set in **two** places:
+  1. `_cancelCheckout()` → `setState(() => _phase = _PayPhase.cancelled)` — after the
+     customer's own cancel RPC succeeds.
+  2. `_phaseFor(GcashStatusResult s)` — when a poll returns `orders.status='cancelled'`
+     whose reason doesn't match the expired/failed buckets (fallback branch).
+- The header text **"Checkout cancelled"** /
+  *"This checkout was cancelled. No charge was made — you can place a new order
+  anytime."* is the `_PayPhase.cancelled` case of the switch in `_buildPhaseHeader()`.
+- The **"Back to Home"** button is `_buildTerminalCard()`'s non-paid branch.
+- Note: the screenshot shows the cancelled header but the amount card still renders
+  (it always renders) — that's expected, not a bug.
+- ⚠️ **UI mapping quirk:** `_phaseFor` maps by substring. `Payment session expired`
+  contains "expired" → shows "Payment window expired" (different header than the
+  screenshot). The screenshot's generic "Checkout cancelled" therefore means the
+  reason was `Cancelled by customer` **or an unrecognized/NULL reason** (fallback
+  branch). That's a strong hint the user (or the 409 dialog) cancelled it.
+
+### Source snapshot
+
+```dart
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -9,7 +146,6 @@ import '../../constants/app_constants.dart';
 import '../../providers/cart_provider.dart';
 import '../../services/deep_link_service.dart';
 import '../../services/gcash_payment_service.dart';
-import '../../widgets/order_confirmation_view.dart';
 import '../../widgets/sole_card.dart';
 import '../../widgets/sole_primary_button.dart';
 import 'tracking_screen.dart';
@@ -168,14 +304,6 @@ class _GcashPaymentScreenState extends State<GcashPaymentScreen>
       if (reason.contains('not completed') || reason.contains('failed')) {
         return _PayPhase.failed;
       }
-      // Unrecognized reason — log it so novel server-side reasons are
-      // observable instead of silently rendering the generic cancelled
-      // screen (incident 2026-09-07: 'Test-mode payment - not fulfilled'
-      // and 'Duplicate checkout detected' both landed here unseen).
-      debugPrint(
-        '[GCASH-PAY] unrecognized cancellation_reason: "${s.cancellationReason}" '
-        '(order ${s.orderId}) — showing generic cancelled screen',
-      );
       return _PayPhase.cancelled;
     }
     return _PayPhase.confirming;
@@ -324,10 +452,7 @@ class _GcashPaymentScreenState extends State<GcashPaymentScreen>
     return Scaffold(
       backgroundColor: AppConstants.surfaceLight,
       appBar: AppBar(
-        title: Text(
-          _phase == _PayPhase.paid ? 'Order Confirmed' : 'GCash Payment',
-          style: const TextStyle(fontSize: 20),
-        ),
+        title: const Text('GCash Payment', style: TextStyle(fontSize: 20)),
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
@@ -338,19 +463,7 @@ class _GcashPaymentScreenState extends State<GcashPaymentScreen>
       body: Stack(
         children: [
           AppConstants.noiseOverlay(opacity: 0.03),
-          if (_phase == _PayPhase.paid)
-            // Paid (server-verified webhook): show the SAME confirmation
-            // screen as the cash-on-pickup flow — shared widget, same look
-            // and logic (Track My Order → tracking, Back to Home).
-            OrderConfirmationView(
-              orderId: widget.intent.orderId,
-              total: widget.intent.orderTotal,
-              paymentLabel: 'GCash',
-              onTrackOrder: _goToTracking,
-              onBackHome: _goHome,
-            )
-          else
-            SingleChildScrollView(
+          SingleChildScrollView(
             padding: const EdgeInsets.all(20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -591,3 +704,28 @@ class _GcashPaymentScreenState extends State<GcashPaymentScreen>
     );
   }
 }
+```
+
+---
+
+## Part 3 — Tying the screenshot to the code
+
+The screenshot shows:
+- Header: **"Checkout cancelled"** → `_PayPhase.cancelled` case in `_buildPhaseHeader()`
+- Subtitle: *"This checkout was cancelled. No charge was made — you can place a new
+  order anytime."* → exact match of the cancelled subtitle string
+- Amount card with **₱410.25 / Items + Delivery ₱400.00 / GCash Service Fee ₱10.25 /
+  Total Due ₱410.25** → `_buildAmountCard()` (always renders, no countdown row because
+  `_phase != confirming`)
+- **"Back to Home"** → `_buildTerminalCard()` non-paid branch
+
+**Key inference:** because `_phaseFor()` maps any cancelled order whose reason contains
+`expired` to the *separate* "Payment window expired" screen, the screenshot's generic
+"Checkout cancelled" header means the server's `cancellation_reason` was **`Cancelled
+by customer`** (Path A) **or** an unrecognized/NULL reason (the fallback
+`return _PayPhase.cancelled;` branch). If the DB shows anything else, the client/server
+reason strings have drifted — compare against the substring matching in `_phaseFor()`
+(`expired`, `cancelled by customer`, `not completed`, `failed`).
+
+Supporting numbers in the screenshot are consistent with the Model B fee math:
+₱400.00 order total, 2.23% + 12% VAT all-in rate ≈ ₱10.25 surcharge → ₱410.25 charged.

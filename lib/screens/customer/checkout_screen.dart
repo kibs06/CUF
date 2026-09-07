@@ -11,6 +11,7 @@ import '../../providers/order_provider.dart';
 import '../../utils/delivery_date.dart';
 import '../../services/gcash_payment_service.dart';
 import '../../widgets/sole_card.dart';
+import '../../widgets/order_confirmation_view.dart';
 import '../../widgets/sole_primary_button.dart';
 import 'address_book_screen.dart';
 import 'gcash_payment_screen.dart';
@@ -1079,107 +1080,23 @@ class _CheckoutScreenState extends State<CheckoutScreen>
   // ═══════════════════════════════════════════════════════════════
 
   Widget _buildConfirmationStep() {
-    final orderIdDisplay = _placedOrderId != null
-        ? '#${_placedOrderId!.length > 8 ? _placedOrderId!.substring(_placedOrderId!.length - 8) : _placedOrderId}'
-        : 'N/A';
-
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            ScaleTransition(
-              scale: _checkScale,
-              child: Container(
-                width: 90,
-                height: 90,
-                decoration: const BoxDecoration(
-                  color: AppConstants.success,
-                  shape: BoxShape.circle,
+    return OrderConfirmationView(
+      orderId: _placedOrderId ?? '',
+      total: _placedTotal,
+      paymentLabel: _paymentMethod,
+      checkScale: _checkScale,
+      onTrackOrder: _placedOrder != null
+          ? () {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(
+                  builder: (_) => OrderTrackingScreen(order: _placedOrder!),
                 ),
-                child: const Icon(
-                  Icons.check,
-                  size: 48,
-                  color: AppConstants.surfaceLight,
-                ),
-              ),
-            ),
-            const SizedBox(height: 32),
-            Text(
-              'Thank You!',
-              style: AppConstants.headlineStyle(fontSize: 28),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Your order has been successfully placed with the artisan studio.',
-              textAlign: TextAlign.center,
-              style: AppConstants.bodyStyle(
-                fontSize: 14,
-                color: AppConstants.secondary.withValues(alpha: 0.7),
-                height: 1.4,
-              ),
-            ),
-            const SizedBox(height: 24),
-            SoleCard(
-              color: Colors.white,
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                children: [
-                  _confirmationRow('Order ID', orderIdDisplay),
-                  const SizedBox(height: 8),
-                  _confirmationRow('Total', '₱${_placedTotal.toStringAsFixed(2)}'),
-                  const SizedBox(height: 8),
-                  _confirmationRow('Payment Type', _paymentMethod),
-                ],
-              ),
-            ),
-            const SizedBox(height: 40),
-            SolePrimaryButton(
-              label: 'Track My Order',
-              onPressed: _placedOrder != null
-                  ? () {
-                      Navigator.of(context).pushReplacement(
-                        MaterialPageRoute(
-                          builder: (_) => OrderTrackingScreen(order: _placedOrder!),
-                        ),
-                      );
-                    }
-                  : null,
-            ),
-            const SizedBox(height: 16),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).popUntil((route) => route.isFirst);
-              },
-              child: Text(
-                'Back to Home',
-                style: AppConstants.bodyStyle(
-                  color: AppConstants.secondary.withValues(alpha: 0.6),
-                ),
-              ),
-            ),
-            const SizedBox(height: 40),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _confirmationRow(String label, String value) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label, style: AppConstants.bodyStyle(color: Colors.black54)),
-        Text(
-          value,
-          style: AppConstants.monoStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            color: AppConstants.primary,
-          ),
-        ),
-      ],
+              );
+            }
+          : null,
+      onBackHome: () {
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      },
     );
   }
 }

@@ -140,6 +140,51 @@ serve(async (req: Request) => {
 
   const serviceClient = createClient(supabaseUrl, serviceKey);
 
+  // ── Per-customer mini-sweep (runs BEFORE the pending-intent lookup) ─
+  // The pg_cron expiry sweep is NOT guaranteed to exist (incident
+  // 2026-09-07: the extension is absent on the live DB, so the cron job was
+  // silently never scheduled). The one-pending-per-customer partial unique
+  // index checks only status='pending' — an expired-but-still-pending
+  // intent would collide with the insert below (23505), get every fresh
+  // order cancelled as "Duplicate checkout detected", and be returned to
+  // the client as the "winner" — bricking checkout for the customer until
+  // manual data fixes. Mirror the sweep's two guarded UPDATEs here:
+  // idempotent, and no-ops when nothing is stale.
+  const nowIso = new Date().toISOString();
+  const { data: staleIntents } = await serviceClient
+    .from("payment_intents")
+    .select("id, order_id")
+    .eq("customer_id", userId)
+    .eq("status", "pending")
+    .lt("expires_at", nowIso);
+  if (staleIntents && staleIntents.length > 0) {
+    const staleIds = staleIntents.map((s) => s.id);
+    const staleOrderIds = [...new Set(staleIntents.map((s) => s.order_id))];
+    await serviceClient
+      .from("payment_intents")
+      .update({ status: "expired", updated_at: nowIso })
+      .in("id", staleIds)
+      .eq("status", "pending");
+    // Same order-side transition the sweep performs. Orders whose intent
+    // expired while nobody was polling sit in awaiting_payment forever on a
+    // sweep-less DB — this releases them (they hold no stock).
+    await serviceClient
+      .from("orders")
+      .update({
+        status: "cancelled",
+        payment_status: "failed",
+        cancellation_reason: "Payment session expired",
+        cancellation_details:
+          "GCash payment was not completed within the allowed window.",
+        cancelled_at: nowIso,
+      })
+      .in("id", staleOrderIds)
+      .eq("status", "awaiting_payment");
+    console.log(
+      `[CREATE-PI] Mini-sweep: expired ${staleIds.length} stale pending intent(s) for customer ${userId}`,
+    );
+  }
+
   // ── Idempotency: active pending intent for this customer? ───────
   // Prevents double-charge for the same cart across devices/retries.
   const { data: activeIntents, error: activeErr } = await serviceClient
@@ -416,11 +461,17 @@ serve(async (req: Request) => {
     }) as any);
 
     if (isDuplicate) {
+      // Only a FRESH pending intent may be resumed: returning an
+      // expired-but-pending one renders a dead checkout for the wrong
+      // order (incident 2026-09-07). With the mini-sweep above, any
+      // remaining pending intent should be fresh — this guard is defense
+      // in depth for concurrent races.
       const { data: winner } = await serviceClient
         .from("payment_intents")
         .select("order_id, checkout_url, client_key, amount, fee_amount, expires_at")
         .eq("customer_id", userId)
         .eq("status", "pending")
+        .gt("expires_at", new Date().toISOString())
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();

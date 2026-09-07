@@ -201,8 +201,15 @@ export async function verifyWebhookSignature(
   }
 
   const timestamp = parts.get("t");
-  // Prefer the live-mode signature; fall back to test mode (sandbox dev).
-  const provided = parts.get("li") ?? parts.get("te");
+  // PayMongo includes BOTH te (test-mode) and li (live-mode) parts; exactly
+  // one is populated depending on the event's mode — the other is present
+  // but EMPTY (e.g. "t=…,te=abc,li="). Use ?? only after treating empty
+  // strings as absent: an empty li must fall through to te, or every
+  // test-mode event is rejected (incident 2026-09-07).
+  const providedLive = parts.get("li");
+  const providedTest = parts.get("te");
+  const provided =
+    providedLive && providedLive.length > 0 ? providedLive : providedTest;
   if (!timestamp || !provided) return false;
 
   const ts = Number.parseInt(timestamp, 10);
