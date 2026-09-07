@@ -757,17 +757,6 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                // Channel breakdown — online vs POS for today (right-aligned
-                // above the headline number)
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    _todayChannelPill('Online', data.todayOnlineRevenue),
-                    const SizedBox(width: 8),
-                    _todayChannelPill('POS', data.todayPosRevenue),
-                  ],
-                ),
                 const SizedBox(height: 18),
                 // Today's value
                 Text(
@@ -788,6 +777,17 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                     ),
                   ),
                 ],
+                const SizedBox(height: 12),
+                // Channel breakdown — online vs POS for today (right-aligned
+                // to balance the left-aligned big number)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    _todayChannelPill('Online', data.todayOnlineRevenue),
+                    const SizedBox(width: 8),
+                    _todayChannelPill('POS', data.todayPosRevenue),
+                  ],
+                ),
                 const SizedBox(height: 16),
                 // This Week embedded at top right (wider), text left-aligned inside
                 Align(
