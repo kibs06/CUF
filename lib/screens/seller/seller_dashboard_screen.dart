@@ -758,14 +758,25 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                   ],
                 ),
                 const SizedBox(height: 18),
-                // Today's value
-                Text(
-                  _formatCurrency(data.todayRevenue),
-                  style: AppConstants.monoStyle(
-                    fontSize: 36,
-                    fontWeight: FontWeight.bold,
-                    color: SellerTheme.rustDeep,
-                  ),
+                // Today's value, with the Online/POS channel pills on the
+                // right side (bottom-aligned with the headline)
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _formatCurrency(data.todayRevenue),
+                        style: AppConstants.monoStyle(
+                          fontSize: 36,
+                          fontWeight: FontWeight.bold,
+                          color: SellerTheme.rustDeep,
+                        ),
+                      ),
+                    ),
+                    _todayChannelPill('Online', data.todayOnlineRevenue),
+                    const SizedBox(width: 8),
+                    _todayChannelPill('POS', data.todayPosRevenue),
+                  ],
                 ),
                 if (ratingStr != null) ...[
                   const SizedBox(height: 4),
