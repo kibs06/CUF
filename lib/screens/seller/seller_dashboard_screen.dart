@@ -37,9 +37,6 @@ import 'create_store_screen.dart';
 /// Dashboard data model — holds all real data fetched from Supabase.
 class _DashboardData {
   final double todayRevenue;
-  // Today's split by channel (todayRevenue = online + pos).
-  final double todayOnlineRevenue;
-  final double todayPosRevenue;
   final List<double> weeklySalesChart;
   final List<double> monthlySalesChart;
   // Online-only breakdowns
@@ -61,8 +58,6 @@ class _DashboardData {
 
   const _DashboardData({
     required this.todayRevenue,
-    required this.todayOnlineRevenue,
-    required this.todayPosRevenue,
     required this.weeklySalesChart,
     required this.monthlySalesChart,
     required this.onlineWeeklyChart,
@@ -180,7 +175,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     final orderService = OrderService();
 
     final results = await Future.wait([
-      salesService.getOnlineTodayRevenue(storeId),
+      salesService.getTodayRevenue(storeId),
       orderService.getRecentOrders(storeId, limit: 3),
       orderService.getOrderCountByStatus(storeId),
       StoreService.instance.getMyStore(),
@@ -190,9 +185,6 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
       salesService.getPosMonthlyRevenueTrend(storeId),
       salesService.getWeeklyTrend(storeId: storeId, channel: SalesChannelFilter.all),
       salesService.getMonthlyTrend(storeId: storeId, channel: SalesChannelFilter.all),
-      // POS today sales (getTodayRevenue was online + POS; kept split so
-      // the Today's Sales card can show the channel breakdown)
-      salesService.fetchTodaySales(storeId),
       // Load products & orders for low stock / pending customs / alerts
       context.read<ProductProvider>().loadSellerProducts(),
       context.read<OrderProvider>().loadOrders(),
@@ -235,11 +227,9 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     }
 
     // Compute combined charts from online + POS parts
-    // Future.wait indices: 0=todayOnlineRevenue, 1=recentOrders, 2=ordersByStatus,
+    // Future.wait indices: 0=todayRevenue, 1=recentOrders, 2=ordersByStatus,
     // 3=store, 4=onlineWeekly, 5=posWeekly, 6=onlineMonthly, 7=posMonthly,
-    // 8=weeklyTrend, 9=monthlyTrend, 10=todayPosRevenue, 11=loadProducts, 12=loadOrders
-    final todayOnline = results[0] as double;
-    final todayPos = results[10] as double;
+    // 8=weeklyTrend, 9=monthlyTrend, 10=loadProducts, 11=loadOrders
     final onlineWeekly = results[4] as List<double>;
     final posWeekly = results[5] as List<double>;
     final weeklySalesChart = List.generate(7, (i) => onlineWeekly[i] + posWeekly[i]);
@@ -248,9 +238,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     final monthlySalesChart = List.generate(6, (i) => onlineMonthly[i] + posMonthly[i]);
 
     return _DashboardData(
-      todayRevenue: todayOnline + todayPos,
-      todayOnlineRevenue: todayOnline,
-      todayPosRevenue: todayPos,
+      todayRevenue: results[0] as double,
       recentOrders: results[1] as List<Map<String, dynamic>>,
       ordersByStatus: results[2] as Map<String, int>,
       store: results[3] as Map<String, dynamic>?,
@@ -271,8 +259,6 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
 
   static _DashboardData _emptyDashboard() => const _DashboardData(
     todayRevenue: 0,
-    todayOnlineRevenue: 0,
-    todayPosRevenue: 0,
     weeklySalesChart: [0, 0, 0, 0, 0, 0, 0],
     monthlySalesChart: [0, 0, 0, 0, 0, 0],
     onlineWeeklyChart: [0, 0, 0, 0, 0, 0, 0],
@@ -306,41 +292,6 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
       }
     }
     return items;
-  }
-
-  /// Small pill in the Today's Sales hero card showing one channel's
-  /// share of today's revenue ("Online" vs "POS").
-  Widget _todayChannelPill(String label, double amount) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: SellerTheme.card.withValues(alpha: 0.7),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: SellerTheme.cardBorder),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label,
-            style: AppConstants.bodyStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: SellerTheme.textMuted,
-            ),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            _formatCurrency(amount),
-            style: AppConstants.monoStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              color: SellerTheme.rustDeep,
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   String _formatCurrency(double amount) {
@@ -758,25 +709,14 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                   ],
                 ),
                 const SizedBox(height: 18),
-                // Today's value, with the Online/POS channel pills on the
-                // right side (bottom-aligned with the headline)
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        _formatCurrency(data.todayRevenue),
-                        style: AppConstants.monoStyle(
-                          fontSize: 36,
-                          fontWeight: FontWeight.bold,
-                          color: SellerTheme.rustDeep,
-                        ),
-                      ),
-                    ),
-                    _todayChannelPill('Online', data.todayOnlineRevenue),
-                    const SizedBox(width: 8),
-                    _todayChannelPill('POS', data.todayPosRevenue),
-                  ],
+                // Today's value
+                Text(
+                  _formatCurrency(data.todayRevenue),
+                  style: AppConstants.monoStyle(
+                    fontSize: 36,
+                    fontWeight: FontWeight.bold,
+                    color: SellerTheme.rustDeep,
+                  ),
                 ),
                 if (ratingStr != null) ...[
                   const SizedBox(height: 4),
@@ -788,17 +728,6 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                     ),
                   ),
                 ],
-                const SizedBox(height: 12),
-                // Channel breakdown — online vs POS for today (right-aligned
-                // to balance the left-aligned big number)
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    _todayChannelPill('Online', data.todayOnlineRevenue),
-                    const SizedBox(width: 8),
-                    _todayChannelPill('POS', data.todayPosRevenue),
-                  ],
-                ),
                 const SizedBox(height: 16),
                 // This Week embedded at top right (wider), text left-aligned inside
                 Align(
