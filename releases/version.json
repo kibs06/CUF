@@ -1,12 +1,12 @@
 {
-  "latest_version": "1.0.23",
-  "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.23/app-release-1.0.23.apk",
-  "released_at": "2026-09-05",
+  "latest_version": "1.0.24",
+  "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.24/app-release-1.0.24.apk",
+  "released_at": "2026-09-07",
   "notes": [
-    "Two-factor authentication (2FA) for every account",
-    "- Optional 2FA via any authenticator app (Google Authenticator, Authy, 1Password…) — QR code or manual secret",
-    "- When enabled, sign-in asks for a 6-digit code",
-    "- Covers customers, sellers, and admins",
-    "- Admin portal: enable 2FA in Settings; portal sign-in includes the code step"
+    "Fixed: GCash checkout no longer cancels automatically",
+    "Fixed: GCash payments now confirm on their own — the order finalizes right after paying",
+    "Fixed: webhook signature verification for GCash payment events",
+    "Added: GCash orders show the same Order Confirmed screen as Cash on Pickup",
+    "Added: seller gets a push notification when a GCash order is paid"
   ]
 }
