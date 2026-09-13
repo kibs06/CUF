@@ -1,5 +1,17 @@
 [
   {
+    "latest_version": "1.0.25",
+    "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.25/app-release-1.0.25.apk",
+    "released_at": "2026-09-13",
+    "notes": [
+      "Added: bulk reservations (reseller holds) — request large-quantity holds from a product page",
+      "Added: 20% GCash deposit gate — stock is reserved only after the seller verifies your deposit proof",
+      "Added: push notifications for bulk reservations — seller on new requests, customer on approval + deposit window",
+      "Added: This Week and This Month revenue side by side on the seller dashboard",
+      "Fixed: seller welcome screen no longer reappears on every login"
+    ]
+  },
+  {
     "latest_version": "1.0.24",
     "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.24/app-release-1.0.24.apk",
     "released_at": "2026-09-07",
