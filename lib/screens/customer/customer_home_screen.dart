@@ -23,6 +23,7 @@ import 'product_detail_screen.dart';
 import 'product_search_screen.dart';
 import 'tracking_screen.dart';
 import 'my_reports_screen.dart';
+import 'my_reservations_screen.dart';
 import 'widgets/home_hero.dart';
 import 'widgets/home_sticky_search_bar.dart';
 
@@ -170,6 +171,15 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           Navigator.of(context).push(
             MaterialPageRoute(
               builder: (_) => const MyReportsScreen(),
+            ),
+          );
+          break;
+        case 'my_reservations':
+          // Bulk reservation updates (approval + deposit window, etc.)
+          // land on the customer's reservations screen.
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const MyReservationsScreen(),
             ),
           );
           break;

@@ -673,8 +673,10 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
         ? '${(storeRating as num).toDouble().toStringAsFixed(1)} ★'
         : null;
 
-    // Compute weekly total for the metrics card
+    // Compute weekly + monthly totals for the hero-card mini cards.
+    // The monthly trend's last bucket is the current month-to-date.
     final weeklyTotal = data.weeklySalesChart.fold<double>(0, (a, b) => a + b);
+    final monthlyTotal = data.monthlySalesChart.last;
 
     return Column(
       children: [
@@ -744,73 +746,25 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                   ),
                 ],
                 const SizedBox(height: 16),
-                // This Week embedded at top right (wider), text left-aligned inside
-                Align(
-                  alignment: Alignment.topRight,
-                  child: Container(
-                    constraints: const BoxConstraints(minWidth: 180),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 18,
-                      vertical: 12,
+                // This Week (left) + This Month (right), equal widths.
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildPeriodMiniCard(
+                        'THIS WEEK',
+                        weeklyTotal,
+                        _getWeekDateRange(),
+                      ),
                     ),
-                    decoration: BoxDecoration(
-                      color: SellerTheme.card,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: SellerTheme.cardBorder),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.06),
-                          blurRadius: 10,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _buildPeriodMiniCard(
+                        'THIS MONTH',
+                        monthlyTotal,
+                        _getMonthDateRange(),
+                      ),
                     ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 4,
-                              height: 4,
-                              decoration: const BoxDecoration(
-                                color: SellerTheme.rust,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            const SizedBox(width: 5),
-                            Text(
-                              'THIS WEEK',
-                              style: AppConstants.bodyStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                                color: SellerTheme.textMuted,
-                              ).copyWith(letterSpacing: 1.0),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          _formatCurrency(weeklyTotal),
-                          style: AppConstants.monoStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: AppConstants.secondary,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          _getWeekDateRange(),
-                          style: AppConstants.bodyStyle(
-                            fontSize: 9,
-                            color: SellerTheme.textMuted,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  ],
                 ),
               ],
             ),
@@ -1222,6 +1176,73 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
 
 
 
+  // ─── Hero-card period mini card (This Week / This Month) ────────
+  Widget _buildPeriodMiniCard(String label, double value, String range) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 18,
+        vertical: 12,
+      ),
+      decoration: BoxDecoration(
+        color: SellerTheme.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: SellerTheme.cardBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 4,
+                height: 4,
+                decoration: const BoxDecoration(
+                  color: SellerTheme.rust,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: AppConstants.bodyStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: SellerTheme.textMuted,
+                ).copyWith(letterSpacing: 1.0),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _formatCurrency(value),
+            style: AppConstants.monoStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: AppConstants.secondary,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            range,
+            style: AppConstants.bodyStyle(
+              fontSize: 9,
+              color: SellerTheme.textMuted,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ─── Week helpers ───────────────────────────────────────────────
   String _getWeekDateRange() {
     final now = DateTime.now();
@@ -1232,6 +1253,17 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
     ];
     return '${months[startOfWeek.month - 1]} ${startOfWeek.day}–${endOfWeek.day}';
+  }
+
+  /// Current month-to-date range label, e.g. "Sep 1–30".
+  String _getMonthDateRange() {
+    final now = DateTime.now();
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    final endOfMonth = DateTime(now.year, now.month + 1, 0);
+    return '${months[now.month - 1]} 1–${endOfMonth.day}';
   }
 
 

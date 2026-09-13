@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -230,6 +232,11 @@ class ReservationService {
   /// Customer: request a hold on [quantity] units. Returns the new id.
   /// [requestedSizes] is an optional size breakdown for the seller,
   /// e.g. `[{size: 40, quantity: 20}]`.
+  ///
+  /// The RPC inserts the seller's in-app notification row; this method
+  /// additionally fires an FCM push to the store owner's device so the
+  /// request reaches them even with the app backgrounded (same
+  /// fire-and-forget pattern as custom-order requests).
   Future<String> requestReservation({
     required String productId,
     required String storeId,
@@ -244,7 +251,56 @@ class ReservationService {
       'p_requested_sizes': requestedSizes,
       'p_note': note,
     });
-    return data?.toString() ?? '';
+    final reservationId = data?.toString() ?? '';
+
+    // Fire-and-forget: push failures must never fail the request itself.
+    unawaited(_pushSellerNewRequest(
+      reservationId: reservationId,
+      storeId: storeId,
+      productId: productId,
+      quantity: quantity,
+    ));
+
+    return reservationId;
+  }
+
+  /// FCM push to the store owner about a new bulk reservation request.
+  /// Resolves owner + product name client-side (both readable via RLS),
+  /// then invokes the shared `send-notification-push` edge function.
+  /// Mirrors the RPC's in-app message wording so both channels agree.
+  Future<void> _pushSellerNewRequest({
+    required String reservationId,
+    required String storeId,
+    required String productId,
+    required int quantity,
+  }) async {
+    try {
+      final store = await _client
+          .from('stores')
+          .select('owner_id')
+          .eq('id', storeId)
+          .maybeSingle();
+      final ownerId = store?['owner_id']?.toString();
+      if (ownerId == null || ownerId.isEmpty) return;
+
+      final product = await _client
+          .from('products')
+          .select('name')
+          .eq('id', productId)
+          .maybeSingle();
+      final productName = product?['name']?.toString() ?? 'a product';
+
+      await _client.functions.invoke('send-notification-push', body: {
+        'recipientUserId': ownerId,
+        'title': 'New bulk reservation request',
+        'body': 'A customer requested $quantity units of $productName for resale.',
+        'type': 'bulk_reservation_request',
+        if (reservationId.isNotEmpty) 'referenceId': reservationId,
+        'screen': 'seller_reservations',
+      });
+    } catch (e) {
+      debugPrint('[ReservationService] Push trigger failed: $e');
+    }
   }
 
   /// Customer: my reservations, newest first.
@@ -285,6 +341,10 @@ class ReservationService {
   /// Seller: approve (with a [days]-long hold) or reject. Approval opens
   /// the customer's 24-hour deposit window — stock moves only after the
   /// store confirms the deposit proof.
+  ///
+  /// After a successful approval the customer additionally receives an
+  /// FCM push (fire-and-forget) mirroring the RPC's in-app notification,
+  /// so the deposit window is visible even with the app backgrounded.
   Future<void> decideReservation({
     required String reservationId,
     required bool approve,
@@ -297,6 +357,65 @@ class ReservationService {
       'p_days': days,
       'p_rejection_reason': rejectionReason,
     });
+
+    if (approve) {
+      // Fire-and-forget: push failures must never fail the approval.
+      unawaited(_pushCustomerApproved(reservationId: reservationId));
+    }
+  }
+
+  /// FCM push to the customer that the seller approved their bulk
+  /// reservation and a 24-hour GCash deposit window is now open. Reads
+  /// the resolved deposit amount + deadline straight from the row the
+  /// RPC just updated (the approving seller can SELECT it via RLS), so
+  /// the push matches the in-app message exactly.
+  Future<void> _pushCustomerApproved({
+    required String reservationId,
+  }) async {
+    try {
+      final row = await _client
+          .from('bulk_reservations')
+          .select('customer_id, quantity, deposit_amount, deposit_deadline')
+          .eq('id', reservationId)
+          .maybeSingle();
+      final customerId = row?['customer_id']?.toString();
+      if (customerId == null || customerId.isEmpty) return;
+
+      final quantity = (row?['quantity'] as num?)?.toInt() ?? 0;
+      final deposit = (row?['deposit_amount'] as num?)?.toInt() ?? 0;
+      final deadline = row?['deposit_deadline'] == null
+          ? null
+          : DateTime.tryParse(row!['deposit_deadline'].toString());
+
+      await _client.functions.invoke('send-notification-push', body: {
+        'recipientUserId': customerId,
+        'title': 'Bulk reservation approved — deposit required',
+        'body': 'Your reservation of $quantity units was approved. '
+            'Pay the ₱$deposit GCash deposit (20% of the estimated value) by '
+            '${_formatUtcDeadline(deadline)} to hold the stock. '
+            'The deposit is NON-REFUNDABLE once paid.',
+        'type': 'bulk_reservation_approved',
+        'referenceId': reservationId,
+        'screen': 'my_reservations',
+      });
+    } catch (e) {
+      debugPrint('[ReservationService] Push trigger failed: $e');
+    }
+  }
+
+  /// Formats a deposit deadline like the RPC's to_char output
+  /// ("Sep 14, 14:30 UTC"); falls back to a generic phrase when the
+  /// deadline is unexpectedly missing. Supabase returns timestamptz
+  /// values in UTC, so the parsed wall-clock is already UTC.
+  String _formatUtcDeadline(DateTime? deadlineUtc) {
+    if (deadlineUtc == null) return 'the deadline';
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${months[deadlineUtc.month - 1]} ${deadlineUtc.day}, '
+        '${two(deadlineUtc.hour)}:${two(deadlineUtc.minute)} UTC';
   }
 
   /// Seller: mark an approved (deposit-paid) reservation as picked up.

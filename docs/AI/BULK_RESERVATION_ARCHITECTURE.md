@@ -114,7 +114,7 @@ through SECURITY DEFINER RPCs.
 
 | RPC | Actor | Purpose |
 |---|---|---|
-| `request_bulk_reservation(product, store, qty, sizes, note)` | customer | Validates live stock + one-live-request-per-customer-per-product, inserts pending row, notifies seller |
+| `request_bulk_reservation(product, store, qty, sizes, note)` | customer | Validates live stock + one-live-request-per-customer-per-product, inserts pending row, notifies seller. The Dart service additionally fires an FCM push to the store owner via `send-notification-push` (fire-and-forget; deep-links to the queue on tap) |
 | `decide_bulk_reservation(id, approve, days, reason)` | seller (owner) | Reject → terminal + reason. Approve → opens the customer's 24-hour deposit window: stores `deposit_amount` (ceil 20% of estimated value), `deposit_deadline`, `deposit_status='unpaid'`, `expires_at` (operative only after the deposit). NO stock moves. Notifies customer that a deposit is due |
 | `submit_bulk_reservation_deposit_proof(id, ref, screenshot)` | customer | Direct-GCash proof pattern: validates ownership/state/deadline/reference format/screenshot folder, one proof per reservation, platform-wide reference dedupe (incl. order proofs). No status flip, no stock movement |
 | `confirm_bulk_reservation_deposit(id)` | seller (owner) | **The security control** — verifies proof exists + deadline, then runs the relocated stock draw (largest-first, `FOR UPDATE`), sets `approved`/`reserved_stock`/`deposit_status='paid'`/`deposit_proof_id`. Aborts loudly (`INSUFFICIENT_STOCK_MISSING_<n>`) if stock shrank below quantity |
@@ -188,6 +188,21 @@ since any later call finishes the job — the sweep is idempotent.
 - `lib/screens/seller/widgets/deposit_proof_review_sheet.dart` — seller's
   proof verification: expected deposit amount, reference, signed-URL
   screenshot, Confirm (draws stock) / Reject (terminal) actions.
+- **Seller push:** the customer's `requestReservation` invokes the generic
+  `send-notification-push` edge function against the store owner (type
+  `bulk_reservation_request`, screen `seller_reservations`, reference = the
+  reservation id). `seller_shell.dart` deep-links that screen key to the
+  reservation queue. Fire-and-forget — push failures never fail the request.
+- **Customer push:** the seller's `decideReservation` (approve branch)
+  invokes the same edge function against the customer (type
+  `bulk_reservation_approved`, screen `my_reservations`, reference = the
+  reservation id). The body re-states the resolved deposit amount and the
+  24-hour deadline (formatted "Sep 14, 14:30 UTC", matching the RPC's
+  in-app message) read back from the freshly-updated row.
+  `customer_home_screen.dart` deep-links that screen key to My Reservations.
+  Also fire-and-forget. (Lifecycle pushes for deposit-confirmed,
+  fulfilled, declined, and expiry events are not wired yet — the in-app
+  notifications cover them.)
 - `lib/screens/seller/seller_dashboard_screen.dart` — "BULK RESERVATIONS"
   metric card (pending + proof-verification count via `fetchPendingCount`,
   non-fatal on error) + alert chip when > 0, both routing to the queue.

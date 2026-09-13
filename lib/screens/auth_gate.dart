@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -37,6 +38,12 @@ class _AuthGateState extends State<AuthGate> {
   /// screen shows exactly once per account (persisted in prefs).
   final Set<String> _celebratedUserIds = {};
 
+  /// Whether [_celebratedUserIds] has been restored from prefs. Routing
+  /// is blocked until this is true — otherwise a cold start whose profile
+  /// fetch wins the race against the async prefs read would re-show the
+  /// celebration on every login (the very bug this set exists to prevent).
+  bool _celebrationPrefsLoaded = false;
+
   /// Whether we've set up the auth hooks (login/logout) already.
   bool _hooksWired = false;
 
@@ -50,12 +57,22 @@ class _AuthGateState extends State<AuthGate> {
   }
 
   /// Loads the persisted set of user ids that already saw the approval
-  /// celebration (prefs key `seller_celebration_seen_v1`).
+  /// celebration (prefs key `seller_celebration_seen_v1`). Routing stays
+  /// gated on [_celebrationPrefsLoaded] until this completes.
   Future<void> _loadCelebratedUsers() async {
-    final prefs = await SharedPreferences.getInstance();
-    final ids = prefs.getStringList('seller_celebration_seen_v1') ?? [];
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final ids = prefs.getStringList('seller_celebration_seen_v1') ?? [];
+      if (!mounted) return;
+      _celebratedUserIds.addAll(ids);
+    } catch (e) {
+      // Prefs unreadable → fail OPEN (worst case: the one-time welcome
+      // re-shows) rather than deadlocking the gate below on a forever
+      // loading screen.
+      if (kDebugMode) debugPrint('[AuthGate] Celebration prefs load failed: $e');
+    }
     if (!mounted) return;
-    setState(() => _celebratedUserIds.addAll(ids));
+    setState(() => _celebrationPrefsLoaded = true);
   }
 
   /// Marks [userId] as having seen the celebration and persists it, so the
@@ -127,6 +144,16 @@ class _AuthGateState extends State<AuthGate> {
   Widget build(BuildContext context) {
     // Ensure hooks are wired once per widget lifecycle.
     _wireAuthHooks();
+
+    // Never make a routing decision before the celebration "seen" set is
+    // restored. The seller welcome screen must show exactly once per
+    // account; deciding with an empty set (prefs still loading) would
+    // re-show it every cold start that loses the race. The prefs read is
+    // a local millisecond-scale load while the profile fetch below is a
+    // network round-trip, so this gate never adds perceptible latency.
+    if (!_celebrationPrefsLoaded) {
+      return const _LoadingScreen();
+    }
 
     return StreamBuilder<AuthState>(
       stream: _authService.authStateChanges,

@@ -18,6 +18,7 @@ import 'manage_products_screen.dart';
 import 'manage_orders_screen.dart';
 import 'order_detail_screen.dart';
 import 'custom_orders_screen.dart';
+import 'reservation_requests_screen.dart';
 import 'seller_inbox_screen.dart';
 import 'seller_notification_center_screen.dart';
 import 'pos_history_screen.dart';
@@ -98,6 +99,15 @@ class _SellerShellState extends State<SellerShell> {
           Navigator.of(
             context,
           ).push(MaterialPageRoute(builder: (_) => const CustomOrdersScreen()));
+          break;
+        case 'seller_reservations':
+          // Bulk reservation request / deposit-verification pushes land
+          // on the seller's reservation queue.
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const ReservationRequestsScreen(),
+            ),
+          );
           break;
       }
     };
