@@ -736,6 +736,8 @@ class _NotificationCardContent extends StatelessWidget {
         return Icons.support_agent_outlined;
       case NotificationCategory.approval:
         return Icons.workspace_premium_outlined;
+      case NotificationCategory.reservations:
+        return Icons.inventory_2_outlined;
     }
   }
 
@@ -793,6 +795,8 @@ class _NotificationCardContent extends StatelessWidget {
         return const Color(0xFF2E7D32); // dark green for support
       case NotificationCategory.approval:
         return AppConstants.primary; // brand brown for the approval badge
+      case NotificationCategory.reservations:
+        return AppConstants.primary; // brand brown for reservation events
     }
   }
 }

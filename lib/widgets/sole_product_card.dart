@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../constants/app_constants.dart';
 import '../utils/sale_price.dart';
+import '../utils/compact_number.dart';
 import 'sole_star_rating.dart';
 import 'hanging_sale_tag.dart';
 import 'sale_price_tape.dart';
@@ -116,22 +117,39 @@ class SoleProductCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       // Star rating (hide if no reviews)
-                      if ((product['review_count'] as int? ?? 0) > 0) ...[
+                      // Rating + sold-count row. Stars plus the exact
+                      // average (e.g. 4.5) so customers see the precise
+                      // score; the compact sold count (1k, 2.5m) sits on
+                      // the right. Either can appear alone.
+                      if ((product['review_count'] as int? ?? 0) > 0 ||
+                          (product['units_sold'] as int? ?? 0) > 0) ...[
                         const SizedBox(height: 2),
                         Row(
                           children: [
-                            SoleStarRating(
-                              rating: ((product['avg_rating'] as num?)?.toDouble() ?? 0.0).round(),
-                              size: 13,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              '(${product['review_count']})',
-                              style: AppConstants.bodyStyle(
-                                fontSize: 10,
-                                color: AppConstants.secondary.withValues(alpha: 0.5),
+                            if ((product['review_count'] as int? ?? 0) > 0) ...[
+                              SoleStarRating(
+                                rating: ((product['avg_rating'] as num?)?.toDouble() ?? 0.0).round(),
+                                size: 13,
                               ),
-                            ),
+                              const SizedBox(width: 4),
+                              Text(
+                                ((product['avg_rating'] as num?)?.toDouble() ?? 0.0)
+                                    .toStringAsFixed(1),
+                                style: AppConstants.bodyStyle(
+                                  fontSize: 10,
+                                  color: AppConstants.secondary.withValues(alpha: 0.5),
+                                ),
+                              ),
+                            ],
+                            const Spacer(),
+                            if ((product['units_sold'] as int? ?? 0) > 0)
+                              Text(
+                                '${compactNumber(product['units_sold'] as int)} sold',
+                                style: AppConstants.bodyStyle(
+                                  fontSize: 10,
+                                  color: AppConstants.secondary.withValues(alpha: 0.5),
+                                ),
+                              ),
                           ],
                         ),
                       ],

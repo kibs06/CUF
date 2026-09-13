@@ -8,6 +8,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../constants/app_constants.dart';
 import '../../../providers/banner_provider.dart';
 import '../../../providers/product_provider.dart';
+import '../../../services/search_history_service.dart';
+import 'search_history_overlay.dart';
 
 /// Full-bleed hero at the top of [CustomerHomeScreen].
 ///
@@ -22,6 +24,7 @@ class HomeHero extends StatefulWidget {
     this.searchController,
     this.searchFocusNode,
     this.onSearchChanged,
+    this.onSearchTap,
   });
 
   /// Called when the cart icon is tapped.
@@ -38,6 +41,10 @@ class HomeHero extends StatefulWidget {
 
   /// Called when the search text changes.
   final ValueChanged<String>? onSearchChanged;
+
+  /// Called when the search field is tapped — opens the full-screen
+  /// search page. When null the field focuses inline as before.
+  final VoidCallback? onSearchTap;
 
   @override
   State<HomeHero> createState() => _HomeHeroState();
@@ -247,12 +254,17 @@ class _HomeHeroState extends State<HomeHero> {
             bottom: false,
             child: GestureDetector(
               behavior: HitTestBehavior.translucent,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              // Stack lets the history dropdown FLOAT over the hero (chips,
+              // banner text, everything) instead of squeezing the column —
+              // in-flow it overflowed the fixed hero height by ~10px.
+              child: Stack(
+                clipBehavior: Clip.none,
                 children: [
-                  // Icon row: search bar + cart
-                  _buildIconRow(),
-
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Icon row: search bar + cart
+                      _buildIconRow(),
                   // Frosted category chips
                   _buildChips(categories, selectedCategory, selectCategory),
 
@@ -261,6 +273,27 @@ class _HomeHeroState extends State<HomeHero> {
                   // Hero text block + CTA + dots
                   if (displayCount > 0)
                     _buildBottomContent(activeBanners),
+                ],
+                  ),
+
+                  // Recent-search history dropdown — floats over everything
+                  // below the search bar while it's focused and empty.
+                  if (_isSearchFocused &&
+                      (widget.searchController?.text.isEmpty ?? true))
+                    Positioned(
+                      top: 50, // search row (38px) + its 6px top padding + gap
+                      left: 16,
+                      right: 76, // aligns with the search pill (cart icon takes the rest)
+                      child: SearchHistoryOverlay(
+                        horizontalMargin: 0,
+                        onSelect: (term) {
+                          widget.searchController?.text = term;
+                          widget.onSearchChanged?.call(term);
+                          SearchHistoryService.instance.record(term);
+                          widget.searchFocusNode?.unfocus();
+                        },
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -442,7 +475,7 @@ class _HomeHeroState extends State<HomeHero> {
                 color: focused
                     ? Colors.white
                     : Colors.white.withValues(alpha: 0.85),
-                borderRadius: BorderRadius.circular(22),
+                borderRadius: BorderRadius.circular(4),
                 border: Border.all(
                   color: focused
                       ? AppConstants.primary
@@ -461,8 +494,16 @@ class _HomeHeroState extends State<HomeHero> {
               ),
               child: TextField(
                 controller: widget.searchController,
-                focusNode: widget.searchFocusNode,
+                focusNode: widget.onSearchTap != null ? null : widget.searchFocusNode,
+                onTap: widget.onSearchTap,
+                readOnly: widget.onSearchTap != null,
+                showCursor: widget.onSearchTap == null,
                 onChanged: widget.onSearchChanged,
+                textInputAction: TextInputAction.search,
+                onSubmitted: (term) {
+                  SearchHistoryService.instance.record(term);
+                  widget.searchFocusNode?.unfocus();
+                },
                 style: AppConstants.bodyStyle(
                   fontSize: 13,
                   color: AppConstants.secondary,

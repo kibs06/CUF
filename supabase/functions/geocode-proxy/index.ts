@@ -139,21 +139,30 @@ async function handleTile(
     return json({ error: "invalid tile coordinates" }, 400);
   }
 
+  // Raster tiles use the /256/ tile-size segment per MapTiler's current
+  // Maps API shape (…/maps/{mapId}/256/{z}/{x}/{y}.png). The older URL
+  // without the segment stopped resolving upstream.
   const url =
-    `https://api.maptiler.com/maps/streets-v2/${zoom}/${tileX}/${tileY}.png` +
+    `https://api.maptiler.com/maps/streets-v2/256/${zoom}/${tileX}/${tileY}.png` +
     `?key=${mapTilerKey()}`;
 
   try {
-    const upstream = await fetch(url);
+    const upstream = await fetch(url, {
+      headers: { "User-Agent": "com.solevision.app (geocode-proxy)" },
+    });
     if (!upstream.ok) {
       console.error(
         `[geocode-proxy] MapTiler tile ${upstream.status} for ${zoom}/${tileX}/${tileY}`,
       );
       // 404 = transparent/no-data tile — pass through so flutter_map
-      // doesn't retry forever; other errors surface as 502.
+      // doesn't retry forever; other errors surface as 502 with the
+      // upstream status so routing/key issues are diagnosable.
       return upstream.status === 404
         ? new Response(null, { status: 404, headers: corsHeaders })
-        : json({ error: "tile upstream error" }, 502);
+        : json(
+            { error: "tile upstream error", upstreamStatus: upstream.status },
+            502,
+          );
     }
     const bytes = await upstream.arrayBuffer();
     return new Response(bytes, {

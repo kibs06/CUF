@@ -228,6 +228,32 @@ class SupabaseService {
     return data == null ? null : _mapProduct(Map<String, dynamic>.from(data));
   }
 
+  /// Aggregate total units sold per product across completed purchases.
+  ///
+  /// Sums `order_items.quantity` for items belonging to orders that are
+  /// NOT cancelled AND paid — the same revenue-completion rule used by the
+  /// seller analytics (status != 'cancelled' AND payment_status = 'paid').
+  /// Returns a map of product_id → units sold; products with no sales are
+  /// simply absent (callers treat missing as 0).
+  Future<Map<String, int>> fetchUnitsSold() async {
+    final rows = await _client
+        .from('order_items')
+        .select('product_id, quantity, orders!inner(status, payment_status)')
+        .neq('orders.status', 'cancelled')
+        .eq('orders.payment_status', 'paid')
+        .timeout(_defaultTimeout);
+
+    final units = <String, int>{};
+    for (final row in (rows as List)) {
+      final map = Map<String, dynamic>.from(row as Map);
+      final pid = map['product_id']?.toString();
+      if (pid == null || pid.isEmpty) continue;
+      units[pid] =
+          (units[pid] ?? 0) + ((map['quantity'] as num?)?.toInt() ?? 0);
+    }
+    return units;
+  }
+
   Future<Map<String, dynamic>> addProduct(
     Map<String, dynamic> productData,
   ) async {

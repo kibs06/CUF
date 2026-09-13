@@ -144,6 +144,8 @@ class AppNotification {
         return NotificationCategory.support;
       case 'approval':
         return NotificationCategory.approval;
+      case 'reservations':
+        return NotificationCategory.reservations;
       default:
         return NotificationCategory.unpaid;
     }

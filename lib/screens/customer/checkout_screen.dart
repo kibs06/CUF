@@ -18,7 +18,14 @@ import 'gcash_payment_screen.dart';
 import 'tracking_screen.dart';
 
 class CheckoutScreen extends StatefulWidget {
-  const CheckoutScreen({super.key});
+  /// Direct-checkout items (Buy Now flow). When provided, checkout runs
+  /// entirely from this list — the cart is neither read for items nor
+  /// written to, so backing out returns to the product with the cart
+  /// untouched. When null, checkout operates on the cart's selected
+  /// items (normal Cart → Checkout flow).
+  final List<Map<String, dynamic>>? directItems;
+
+  const CheckoutScreen({super.key, this.directItems});
 
   @override
   State<CheckoutScreen> createState() => _CheckoutScreenState();
@@ -36,6 +43,22 @@ class _CheckoutScreenState extends State<CheckoutScreen>
   String? _placedOrderId;
   Map<String, dynamic>? _placedOrder;
   double _placedTotal = 0;
+
+  // Buy Now direct-checkout mode (widget.directItems != null): the
+  // ordered items come straight from the product screen and the cart
+  // is never touched — no reads for totals, no removals after purchase.
+  bool get _isDirectCheckout => widget.directItems != null;
+
+  /// The items this checkout will order: the passed-in direct list in
+  /// Buy Now mode, otherwise the cart's selected items.
+  List<Map<String, dynamic>> _checkoutItems(CartProvider cart) =>
+      _isDirectCheckout ? widget.directItems! : cart.selectedItems;
+
+  double _checkoutSubtotal(List<Map<String, dynamic>> items) => items.fold(
+        0.0,
+        (sum, item) =>
+            sum + ((item['price'] as double) * (item['quantity'] as int)),
+      );
 
   // Cart validation state
   bool _isValidatingCart = false;
@@ -136,6 +159,10 @@ class _CheckoutScreenState extends State<CheckoutScreen>
 
   Future<void> _validateCart() async {
     final cart = Provider.of<CartProvider>(context, listen: false);
+    // Buy Now direct checkout: items aren't in the cart, so the cart
+    // validation service (which validates server cart rows) doesn't
+    // apply. Order placement re-validates stock server-side anyway.
+    if (_isDirectCheckout) return;
     debugPrint('[CHECKOUT-SCREEN] _validateCart() called — items: ${cart.items.length}, selected: ${cart.selectedCount}');
     if (cart.items.isEmpty) {
       if (_itemValidations.isNotEmpty) {
@@ -182,7 +209,7 @@ class _CheckoutScreenState extends State<CheckoutScreen>
   // ═══════════════════════════════════════════════════════════════
 
   bool _canSubmitOrder(CartProvider cart) {
-    if (cart.selectedItems.isEmpty) return false;
+    if (_checkoutItems(cart).isEmpty) return false;
     if (_isValidatingCart) return false;
     if (_selectedAddress == null) return false; // Must have an address
     for (final v in _itemValidations) {
@@ -203,7 +230,7 @@ class _CheckoutScreenState extends State<CheckoutScreen>
   Future<void> _fetchGcashFee() async {
     if (_paymentMethod != 'GCash') return;
     final cart = context.read<CartProvider>();
-    final subtotal = cart.selectedTotal; // items + fixed ₱100 delivery
+    final subtotal = _checkoutSubtotal(_checkoutItems(cart)) + 100.0; // items + fixed ₱100 delivery
     if (subtotal <= 0) return;
     setState(() => _feeLoading = true);
     final fee = await GcashPaymentService().fetchFee(subtotal);
@@ -243,7 +270,7 @@ class _CheckoutScreenState extends State<CheckoutScreen>
     final auth = Provider.of<AuthProvider>(context, listen: false);
     final orderProvider = Provider.of<OrderProvider>(context, listen: false);
 
-    final items = cart.selectedItems;
+    final items = _checkoutItems(cart);
     if (items.isEmpty) return;
 
     // Calculate total from selected items
@@ -251,7 +278,7 @@ class _CheckoutScreenState extends State<CheckoutScreen>
     for (final item in items) {
       orderTotal += (item['price'] as double) * (item['quantity'] as int);
     }
-    orderTotal += cart.selectedDeliveryFee; // ₱100 delivery
+    orderTotal += orderTotal > 0 ? 100.0 : 0.0; // ₱100 delivery
 
     // GCash (PayMongo): the server creates the order in 'awaiting_payment'
     // (no stock held yet) and a hosted PayMongo checkout session. The
@@ -283,20 +310,24 @@ class _CheckoutScreenState extends State<CheckoutScreen>
     );
 
     if (order != null && mounted) {
-      // Clear ordered items from the server AND local state
-      final orderedServerIds = items
-          .map((item) => item['server_id'] as String?)
-          .where((id) => id != null)
-          .cast<String>()
-          .toList();
-      if (orderedServerIds.isNotEmpty) {
-        await cart.removeServerItems(orderedServerIds);
-      } else {
-        await cart.clearCartFromServer();
-      }
-      for (final item in items) {
-        final key = item['id'] as String;
-        cart.removeFromCart(key);
+      // Clear ordered items from the server AND local state. In Buy Now
+      // direct mode nothing was ever added to the cart, so there's
+      // nothing to remove.
+      if (!_isDirectCheckout) {
+        final orderedServerIds = items
+            .map((item) => item['server_id'] as String?)
+            .where((id) => id != null)
+            .cast<String>()
+            .toList();
+        if (orderedServerIds.isNotEmpty) {
+          await cart.removeServerItems(orderedServerIds);
+        } else {
+          await cart.clearCartFromServer();
+        }
+        for (final item in items) {
+          final key = item['id'] as String;
+          cart.removeFromCart(key);
+        }
       }
 
       setState(() {
@@ -333,8 +364,8 @@ class _CheckoutScreenState extends State<CheckoutScreen>
                     ScaffoldMessenger.of(context).hideCurrentSnackBar();
                     Navigator.of(context).pop();
                   },
-                  child: const Text(
-                    'Go to Cart',
+                  child: Text(
+                    _isDirectCheckout ? 'Go Back' : 'Go to Cart',
                     style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
@@ -651,8 +682,15 @@ class _CheckoutScreenState extends State<CheckoutScreen>
   // ═══════════════════════════════════════════════════════════════
 
   Widget _buildFormStep(CartProvider cart) {
-    final selectedItems = cart.selectedItems;
-    final selectedCount = cart.selectedCount;
+    // Buy Now passes its own item list; the cart's selection is ignored.
+    final selectedItems = _checkoutItems(cart);
+    final selectedCount = selectedItems.fold<int>(
+      0,
+      (sum, item) => sum + (item['quantity'] as int),
+    );
+    final selectedSubtotal = _checkoutSubtotal(selectedItems);
+    final selectedDeliveryFee = selectedSubtotal > 0 ? 100.0 : 0.0;
+    final selectedTotal = selectedSubtotal + selectedDeliveryFee;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20.0),
@@ -796,9 +834,9 @@ class _CheckoutScreenState extends State<CheckoutScreen>
               color: AppConstants.primary.withValues(alpha: 0.04),
               child: Column(
                 children: [
-                  _priceRow('Subtotal', '₱${cart.selectedSubtotal.toStringAsFixed(2)}'),
+                  _priceRow('Subtotal', '₱${selectedSubtotal.toStringAsFixed(2)}'),
                   const SizedBox(height: 6),
-                  _priceRow('Delivery Fee', '₱${cart.selectedDeliveryFee.toStringAsFixed(2)}'),
+                  _priceRow('Delivery Fee', '₱${selectedDeliveryFee.toStringAsFixed(2)}'),
                   // Model B: the GCash fee is its own disclosed line item.
                   if (_paymentMethod == 'GCash') ...[const SizedBox(height: 6), _priceRow(
                     _feeLoading
@@ -842,7 +880,7 @@ class _CheckoutScreenState extends State<CheckoutScreen>
                   const Divider(color: AppConstants.borderGray, height: 20),
                   _priceRow(
                     'Total Amount Due',
-                    '₱${(_paymentMethod == 'GCash' && _gcashFeeAmount != null ? cart.selectedTotal + _gcashFeeAmount! : cart.selectedTotal).toStringAsFixed(2)}',
+                    '₱${(_paymentMethod == 'GCash' && _gcashFeeAmount != null ? selectedTotal + _gcashFeeAmount! : selectedTotal).toStringAsFixed(2)}',
                     bold: true,
                   ),
                   const SizedBox(height: 16),

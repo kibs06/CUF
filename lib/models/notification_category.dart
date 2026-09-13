@@ -14,6 +14,7 @@ enum NotificationCategory {
   message,
   support,
   approval,
+  reservations,
 }
 
 /// Returns a display-friendly label for each category.
@@ -35,5 +36,7 @@ String notificationCategoryLabel(NotificationCategory cat) {
       return 'Support';
     case NotificationCategory.approval:
       return 'Approval';
+    case NotificationCategory.reservations:
+      return 'Reservation';
   }
 }

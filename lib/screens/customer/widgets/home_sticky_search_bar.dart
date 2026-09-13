@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../constants/app_constants.dart';
+import '../../../services/search_history_service.dart';
 import '../../../widgets/cart_icon_button.dart';
+import 'search_history_overlay.dart';
 
 /// A compact search bar + cart icon that pins to the top of the viewport
 /// once the hero has scrolled out of view.
@@ -16,11 +18,16 @@ class HomeStickySearchBar extends StatefulWidget {
     required this.searchController,
     required this.searchFocusNode,
     required this.onSearchChanged,
+    this.onTap,
   });
 
   final TextEditingController searchController;
   final FocusNode searchFocusNode;
   final ValueChanged<String>? onSearchChanged;
+
+  /// When provided, tapping the field opens the full-screen search page
+  /// instead of focusing inline (read-only tap-through field).
+  final VoidCallback? onTap;
 
   @override
   State<HomeStickySearchBar> createState() => _HomeStickySearchBarState();
@@ -81,8 +88,11 @@ class _HomeStickySearchBarState extends State<HomeStickySearchBar> {
           ),
         ],
       ),
-      child: Row(
+      child: Stack(
+        clipBehavior: Clip.none,
         children: [
+          Row(
+            children: [
           // Search pill — white background, subtle border
           Expanded(
             child: AnimatedContainer(
@@ -90,7 +100,7 @@ class _HomeStickySearchBarState extends State<HomeStickySearchBar> {
               height: 38,
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(22),
+                borderRadius: BorderRadius.circular(4),
                 border: Border.all(
                   color: focused
                       ? AppConstants.primary
@@ -109,8 +119,16 @@ class _HomeStickySearchBarState extends State<HomeStickySearchBar> {
               ),
               child: TextField(
                 controller: widget.searchController,
-                focusNode: widget.searchFocusNode,
+                focusNode: widget.onTap != null ? null : widget.searchFocusNode,
+                onTap: widget.onTap,
+                readOnly: widget.onTap != null,
+                showCursor: widget.onTap == null,
                 onChanged: widget.onSearchChanged,
+                textInputAction: TextInputAction.search,
+                onSubmitted: (term) {
+                  SearchHistoryService.instance.record(term);
+                  widget.searchFocusNode.unfocus();
+                },
                 style: AppConstants.bodyStyle(
                   fontSize: 13,
                   color: AppConstants.secondary,
@@ -152,6 +170,26 @@ class _HomeStickySearchBarState extends State<HomeStickySearchBar> {
 
           // Cart icon — no background circle, matches hero's style
           const CartIconButton(),
+          ],
+        ),
+
+          // Recent-search history dropdown — floats over the page content
+          // (takes no layout space, so the pinned bar never grows).
+          if (_isSearchFocused && widget.searchController.text.isEmpty)
+            Positioned(
+              top: 48, // search row (38px) + 6px top padding + small gap
+              left: 16,
+              right: 62, // aligns with the search pill (cart icon takes the rest)
+              child: SearchHistoryOverlay(
+                horizontalMargin: 0,
+                onSelect: (term) {
+                  widget.searchController.text = term;
+                  widget.onSearchChanged?.call(term);
+                  SearchHistoryService.instance.record(term);
+                  widget.searchFocusNode.unfocus();
+                },
+              ),
+            ),
         ],
       ),
     );

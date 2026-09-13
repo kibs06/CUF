@@ -13,6 +13,13 @@ enum SortMode {
   priceHighToLow,
   nameAZ,
   nameZA,
+
+  /// Highest average product rating first (trigger-maintained
+  /// `avg_rating` on products). Ties break toward more reviews.
+  topRated,
+
+  /// Most units sold first (aggregated from paid, non-cancelled orders).
+  bestSelling,
 }
 
 String sortModeLabel(SortMode mode) {
@@ -27,6 +34,10 @@ String sortModeLabel(SortMode mode) {
       return 'Name: A to Z';
     case SortMode.nameZA:
       return 'Name: Z to A';
+    case SortMode.topRated:
+      return 'Top Rated';
+    case SortMode.bestSelling:
+      return 'Best Selling';
   }
 }
 
@@ -37,6 +48,10 @@ class ProductProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _selectedCategory = 'All';
   SortMode _sortMode = SortMode.featured;
+
+  /// product_id → total units sold across paid, non-cancelled orders.
+  /// Loaded alongside the catalog; missing id = 0 units.
+  Map<String, int> _unitsSold = const {};
 
   List<Map<String, dynamic>> get products => _products;
   bool get isLoading => _isLoading;
@@ -89,7 +104,20 @@ class ProductProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _products = await _db.fetchProducts(hideOutOfStock: hideOutOfStock);
+      // Fetch the catalog and the units-sold aggregation in parallel —
+      // the sold counts power the Best Selling sort mode.
+      final results = await Future.wait([
+        _db.fetchProducts(hideOutOfStock: hideOutOfStock),
+        _db.fetchUnitsSold().catchError((_) => <String, int>{}),
+      ]);
+      _products = results[0] as List<Map<String, dynamic>>;
+      _unitsSold = results[1] as Map<String, int>;
+      // Stamp the sold count onto each product map so widgets that render
+      // products directly (product cards) can display it without reaching
+      // back into the provider.
+      for (final p in _products) {
+        p['units_sold'] = _unitsSold[p['id']?.toString()] ?? 0;
+      }
       if (reshuffle) {
         _products.shuffle();
       }
@@ -157,6 +185,10 @@ class ProductProvider extends ChangeNotifier {
     _sortMode = mode;
     notifyListeners();
   }
+
+  /// Total units sold for a product (paid, non-cancelled orders).
+  /// Returns 0 for products never sold or not in the last aggregation.
+  int unitsSoldFor(String productId) => _unitsSold[productId] ?? 0;
 
   /// Returns the EFFECTIVE price (sale-aware) from a product map.
   ///
@@ -232,6 +264,26 @@ class ProductProvider extends ChangeNotifier {
         sorted.sort((a, b) => (a['name'] ?? '').toString().compareTo((b['name'] ?? '').toString()));
       case SortMode.nameZA:
         sorted.sort((a, b) => (b['name'] ?? '').toString().compareTo((a['name'] ?? '').toString()));
+      case SortMode.topRated:
+        sorted.sort((a, b) {
+          final rA = (a['avg_rating'] as num?)?.toDouble() ?? 0;
+          final rB = (b['avg_rating'] as num?)?.toDouble() ?? 0;
+          // Higher rating first; ties break toward more reviews so a
+          // 5.0 from one review doesn't beat 4.8 from forty.
+          final c = rB.compareTo(rA);
+          if (c != 0) return c;
+          final nA = (a['review_count'] as num?)?.toInt() ?? 0;
+          final nB = (b['review_count'] as num?)?.toInt() ?? 0;
+          return nB.compareTo(nA);
+        });
+      case SortMode.bestSelling:
+        sorted.sort((a, b) {
+          final idA = a['id']?.toString() ?? '';
+          final idB = b['id']?.toString() ?? '';
+          final uA = _unitsSold[idA] ?? 0;
+          final uB = _unitsSold[idB] ?? 0;
+          return uB.compareTo(uA);
+        });
     }
 
     return sorted;

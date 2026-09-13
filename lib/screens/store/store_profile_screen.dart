@@ -16,6 +16,7 @@ import '../../services/message_service.dart';
 import '../../services/store_service.dart';
 import '../../widgets/chat/chat_view.dart';
 import '../../widgets/cart_icon_button.dart';
+import '../../widgets/sole_card.dart';
 import '../../widgets/sole_product_card.dart';
 import '../../widgets/sole_star_rating.dart';
 import '../../widgets/shimmer_group.dart';
@@ -238,7 +239,9 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                     // Stitch overlay
                     CustomPaint(painter: const StitchPainter()),
 
-                    // Content overlay
+                    // Content overlay — tagline only, single line. The
+                    // full description + tags live in the About card below
+                    // the hero (dark-on-light, actually readable).
                     Positioned(
                       bottom: 56,
                       left: 20,
@@ -246,60 +249,18 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          if (store.tagline != null)
+                          if (store.tagline != null &&
+                              store.tagline!.trim().isNotEmpty)
                             Text(
                               store.tagline!,
                               style: AppConstants.bodyStyle(
                                 fontSize: 13,
-                                color: Colors.white.withAlpha(190),
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white.withAlpha(220),
                               ),
-                            ),
-                          if (store.description != null &&
-                              store.description!.isNotEmpty) ...[
-                            const SizedBox(height: 8),
-                            Text(
-                              store.description!,
-                              style: AppConstants.bodyStyle(
-                                fontSize: 13,
-                                color: Colors.white.withAlpha(190),
-                                height: 1.4,
-                              ),
-                              maxLines: 3,
+                              maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
-                          ],
-                          if (store.tags.isNotEmpty) ...[
-                            const SizedBox(height: 10),
-                            // Store tags — same vocabulary as product tags
-                            Wrap(
-                              spacing: 6,
-                              runSpacing: 6,
-                              children: [
-                                for (final t in store.tags)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 10, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color:
-                                          Colors.white.withValues(alpha: 0.18),
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color: Colors.white
-                                            .withValues(alpha: 0.35),
-                                      ),
-                                    ),
-                                    child: Text(
-                                      tagDisplayLabel(t),
-                                      style: AppConstants.bodyStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ],
                           const SizedBox(height: 12),
                           // Stats row — horizontally scrollable, never overflows
                           _buildStatsRow(store),
@@ -313,6 +274,70 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                 ),
               ),
             ),
+
+            // ── Sliver 1.25: About card — description + tags, dark-on-light
+            // so they're readable (the hero keeps only the tagline).
+            if ((store.description != null &&
+                    store.description!.trim().isNotEmpty) ||
+                store.tags.isNotEmpty)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                  child: SoleCard(
+                    color: Colors.white,
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'About',
+                          style: AppConstants.headlineStyle(fontSize: 15),
+                        ),
+                        if (store.description != null &&
+                            store.description!.trim().isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            store.description!,
+                            style: AppConstants.bodyStyle(
+                              fontSize: 13,
+                              height: 1.5,
+                              color: AppConstants.secondary,
+                            ),
+                          ),
+                        ],
+                        if (store.tags.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          // Store tags — same vocabulary as product tags
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: [
+                              for (final t in store.tags)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: AppConstants.primary
+                                        .withValues(alpha: 0.08),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    tagDisplayLabel(t),
+                                    style: AppConstants.bodyStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppConstants.primary,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
 
             // ── Sliver 1.5: Store Reviews (direct "Rate this store") ──
             SliverToBoxAdapter(

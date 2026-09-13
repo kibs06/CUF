@@ -20,6 +20,7 @@ import '../../widgets/customer_foot_profile_banner.dart';
 import '../../widgets/chat/chat_view.dart';
 import 'cart_screen.dart';
 import 'product_detail_screen.dart';
+import 'product_search_screen.dart';
 import 'tracking_screen.dart';
 import 'my_reports_screen.dart';
 import 'widgets/home_hero.dart';
@@ -91,6 +92,23 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     if (show != _isHeroVisible) {
       setState(() => _isHeroVisible = show);
     }
+  }
+
+  /// Open the full-screen search page (recent + discovery chips).
+  /// A chosen term is applied as the home keyword and recorded in history.
+  Future<void> _openSearchScreen() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ProductSearchScreen(
+          initialQuery: _searchKeyword,
+          onSearchSelected: (term) {
+            _searchController.text = term;
+          },
+        ),
+      ),
+    );
+    if (!mounted) return;
+    setState(() => _searchKeyword = _searchController.text);
   }
 
   Future<void> _loadConversations() async {
@@ -171,28 +189,31 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           borderRadius: BorderRadius.circular(16),
         ),
         padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Drag handle
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppConstants.borderGray,
-                  borderRadius: BorderRadius.circular(2),
+        // SingleChildScrollView so the option list scrolls instead of
+        // overflowing on shorter screens (7 options now, maybe more later).
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Drag handle
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppConstants.borderGray,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Sort by',
-              style: AppConstants.headlineStyle(fontSize: 18),
-            ),
-            const SizedBox(height: 12),
-            ...SortMode.values.map((mode) {
+              const SizedBox(height: 16),
+              Text(
+                'Sort by',
+                style: AppConstants.headlineStyle(fontSize: 18),
+              ),
+              const SizedBox(height: 12),
+              ...SortMode.values.map((mode) {
               final isActive = productProvider.sortMode == mode;
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 2),
@@ -227,7 +248,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 ),
               );
             }),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -276,6 +298,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                     onSearchChanged: (val) {
                       setState(() => _searchKeyword = val);
                     },
+                    onSearchTap: _openSearchScreen,
                     onCartTap: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(
@@ -452,6 +475,18 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                                 ],
                               ),
                             )
+                          else if (filteredProducts.isEmpty)
+                            _EmptyCategoryView(
+                              keyword: _searchKeyword,
+                              onBrowseAll: () {
+                                context
+                                    .read<ProductProvider>()
+                                    .selectCategory('All');
+                                _searchController.clear();
+                                _searchFocusNode.unfocus();
+                                setState(() => _searchKeyword = '');
+                              },
+                            )
                           else
                             MasonryGridView.count(
                               key: _catalogKey,
@@ -504,6 +539,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 onSearchChanged: (val) {
                   setState(() => _searchKeyword = val);
                 },
+                onTap: _openSearchScreen,
               ),
             ),
 
@@ -632,6 +668,146 @@ class _CatalogSkeletonGrid extends StatelessWidget {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Empty state for a category (or search) with no matching products.
+///
+/// Shows a per-category outlined icon in a soft clay circle — modern,
+/// quiet, and on-brand with the app's warm leather palette — plus a
+/// one-line explanation and a "Browse All" reset chip.
+class _EmptyCategoryView extends StatelessWidget {
+  const _EmptyCategoryView({this.keyword = '', this.onBrowseAll});
+
+  final String keyword;
+  final VoidCallback? onBrowseAll;
+
+  /// A representative outlined icon per category; anything unknown falls
+  /// back to a generic shoe icon. Outlined style keeps it light and modern
+  /// against the soft circle.
+  static IconData _iconFor(String category) {
+    switch (category.toLowerCase()) {
+      case 'casual':
+        return Icons.directions_walk_outlined;
+      case 'formal':
+        return Icons.work_outline;
+      case 'sports':
+        return Icons.directions_run_outlined;
+      case 'sandals':
+        return Icons.beach_access_outlined;
+      case 'boots':
+        return Icons.hiking_outlined;
+      case 'sneakers':
+      case 'slip-ons':
+        return Icons.ice_skating_outlined;
+      case 'on sale':
+        return Icons.sell_outlined;
+      default:
+        return Icons.do_not_step_outlined;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasSearch = keyword.trim().isNotEmpty;
+    final category = context.read<ProductProvider>().selectedCategory ?? 'All';
+    final isCategoryScoped = category != 'All' && category != 'On Sale';
+
+    // Message adapts: search-within-category vs category vs search-only.
+    final String title;
+    final String subtitle;
+    if (hasSearch && isCategoryScoped) {
+      title = 'Nothing in $category for "${keyword.trim()}"';
+      subtitle = 'Try a different search or browse all $category styles';
+    } else if (isCategoryScoped) {
+      title = 'No $category yet';
+      subtitle = 'New styles land here soon — browse the rest meanwhile';
+    } else if (hasSearch) {
+      title = 'No matches for "${keyword.trim()}"';
+      subtitle = 'Check the spelling or try a shorter word';
+    } else {
+      title = 'Nothing here yet';
+      subtitle = 'Check back soon — new pairs are on the way';
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 32, 20, 48),
+      child: Column(
+        children: [
+          // Icon in a soft clay circle — layered primary tints echo the
+          // app's warm surface treatment without needing new colors.
+          Container(
+            width: 88,
+            height: 88,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppConstants.primary.withValues(alpha: 0.07),
+              border: Border.all(
+                color: AppConstants.primary.withValues(alpha: 0.18),
+                width: 1.5,
+              ),
+            ),
+            child: Icon(
+              isCategoryScoped ? _iconFor(category) : Icons.search_off,
+              size: 38,
+              color: AppConstants.primary.withValues(alpha: 0.75),
+            ),
+          ),
+          const SizedBox(height: 18),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: AppConstants.headlineStyle(fontSize: 16),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            subtitle,
+            textAlign: TextAlign.center,
+            style: AppConstants.bodyStyle(
+              fontSize: 13,
+              color: AppConstants.secondary.withValues(alpha: 0.55),
+            ),
+          ),
+          const SizedBox(height: 20),
+          // Reset action — always offered since this view only appears when
+          // a filter/search actually excluded everything.
+          GestureDetector(
+            onTap: onBrowseAll ?? () {
+              context.read<ProductProvider>().selectCategory('All');
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppConstants.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: AppConstants.primary.withValues(alpha: 0.2),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.category_outlined,
+                    size: 15,
+                    color: AppConstants.primary,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Browse All Styles',
+                    style: AppConstants.bodyStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: AppConstants.primary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

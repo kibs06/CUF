@@ -12,6 +12,7 @@ import '../../providers/product_provider.dart';
 import '../../providers/seller_notification_provider.dart';
 import '../../services/connectivity_service.dart';
 import '../../services/order_service.dart';
+import '../../services/reservation_service.dart';
 import '../../services/sales_service.dart';
 import '../../services/seller_notification_service.dart';
 import '../../services/store_service.dart';
@@ -21,6 +22,7 @@ import '../../widgets/shimmer_box.dart';
 import '../../widgets/seller/seller_metric_card.dart';
 import '../../widgets/seller/seller_alert_chip.dart';
 import '../../widgets/seller/seller_order_card.dart';
+import 'reservation_requests_screen.dart';
 import '../../models/sales_trend_data.dart';
 import '../../widgets/seller/seller_stacked_area_chart.dart';
 import '../../widgets/seller/seller_revenue_doughnut.dart';
@@ -53,6 +55,7 @@ class _DashboardData {
   final Map<String, dynamic>? store;
   final int lowStockCount;
   final int pendingCustoms;
+  final int pendingReservations;
   final List<Map<String, dynamic>> lowStockItems;
   final List<Map<String, dynamic>> staleOrders;
 
@@ -71,6 +74,7 @@ class _DashboardData {
     this.store,
     required this.lowStockCount,
     required this.pendingCustoms,
+    required this.pendingReservations,
     required this.lowStockItems,
     required this.staleOrders,
   });
@@ -211,6 +215,15 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
         .take(2)
         .toList();
 
+    // Actionable bulk reservations (reseller holds): pending requests +
+    // deposit proofs awaiting verification. Non-fatal: the metric just
+    // shows 0 when the query fails.
+    var pendingReservations = 0;
+    try {
+      pendingReservations =
+          await ReservationService.instance.fetchPendingCount(storeId);
+    } catch (_) {}
+
     // ── Notification: stale_order ─────────────────────────────────
     // Fire-and-forget: notify seller about stale pending orders.
     for (final order in staleOrders) {
@@ -252,6 +265,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
       monthlyTrend: results[9] as SalesTrendResult?,
       lowStockCount: lowStockCount,
       pendingCustoms: pendingCustoms,
+      pendingReservations: pendingReservations,
       lowStockItems: lowStockItems,
       staleOrders: staleOrders,
     );
@@ -271,6 +285,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     ordersByStatus: {},
     lowStockCount: 0,
     pendingCustoms: 0,
+    pendingReservations: 0,
     lowStockItems: [],
     staleOrders: [],
   );
@@ -802,10 +817,10 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        // Low Stock & Custom Orders — small boxes below
+        // Low Stock / Custom Orders / Bulk Reservations — small boxes below
         Row(
           children: [
-            // Low Stock (small, left)
+            // Low Stock
             Expanded(
               child: SellerMetricCard(
                 label: 'LOW STOCK',
@@ -827,7 +842,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
               ),
             ),
             const SizedBox(width: 10),
-            // Custom Orders (small, right)
+            // Custom Orders
             Expanded(
               child: SellerMetricCard(
                 label: 'CUSTOM ORDERS',
@@ -843,6 +858,25 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
               ),
             ),
           ],
+        ),
+        const SizedBox(height: 10),
+        // Bulk Reservations — reseller stock holds awaiting approval
+        SellerMetricCard(
+          label: 'BULK RESERVATIONS',
+          value: '${data.pendingReservations}',
+          valueColor: data.pendingReservations > 0
+              ? SellerTheme.amberDark
+              : SellerTheme.sage,
+          subtitle: data.pendingReservations > 0
+              ? 'reseller requests to review'
+              : 'no pending requests',
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const ReservationRequestsScreen(),
+              ),
+            );
+          },
         ),
       ],
     );
@@ -898,6 +932,20 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                   Navigator.of(context).push(
                     MaterialPageRoute(
                       builder: (_) => const CustomOrdersScreen(),
+                    ),
+                  );
+                },
+              ),
+            if (data.pendingReservations > 0)
+              SellerAlertChip(
+                icon: Icons.inventory_2_outlined,
+                // Requests to decide + deposit proofs to verify (see
+                // fetchPendingCount — the deposit gate added the second kind).
+                text: '${data.pendingReservations} bulk reservation item${data.pendingReservations > 1 ? 's' : ''} to review',
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const ReservationRequestsScreen(),
                     ),
                   );
                 },

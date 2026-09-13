@@ -6,6 +6,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/cart_provider.dart';
+import '../../providers/product_provider.dart';
 import '../../providers/review_provider.dart';
 import '../../utils/cart_helpers.dart';
 import '../../utils/recently_viewed.dart';
@@ -26,6 +27,7 @@ import '../../widgets/size_guide_modal.dart';
 import '../../widgets/hanging_sale_tag.dart';
 import '../../widgets/sale_price_tape.dart';
 import '../../widgets/sale_countdown_overlay.dart';
+import 'widgets/bulk_reservation_sheet.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   final Map<String, dynamic> product;
@@ -430,12 +432,15 @@ class _StoreProductCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 6),
-            // Name
-            Text(
-              product['name'] ?? '',
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: AppConstants.bodyStyle(fontSize: 12, fontWeight: FontWeight.bold),
+            // Name — flexes so 2-line names can never push the price past
+            // the card's fixed height (RenderFlex overflow guard).
+            Expanded(
+              child: Text(
+                product['name'] ?? '',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppConstants.bodyStyle(fontSize: 12, fontWeight: FontWeight.bold),
+              ),
             ),
             const SizedBox(height: 2),
             // Price
@@ -607,6 +612,20 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
       Color(0xFFB8860B),
     ];
     return palette[name.hashCode.abs() % palette.length];
+  }
+
+  /// Total stock across all sizes (inventory + variants).
+  int _totalStock() {
+    var total = 0;
+    final variants = widget.product['product_variants'] as List<dynamic>? ?? [];
+    for (final row in variants) {
+      total += row['stock'] as int? ?? 0;
+    }
+    final inventory = widget.product['inventory'] as List<dynamic>? ?? [];
+    for (final row in inventory) {
+      total += row['stock'] as int? ?? 0;
+    }
+    return total;
   }
 
   /// Build a map of {size: stock} from both inventory and product_variants.
@@ -824,16 +843,59 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
   }
 
   void _buyNow() {
-    _addToCart();
-    // Navigate to checkout after the box-pack animation completes
-    Future.delayed(const Duration(milliseconds: 2000), () {
-      if (!mounted) return;
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => const CheckoutScreen(),
+    if (_selectedSize == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _isLoadingSizes
+                ? 'Sizes are still loading. Please wait.'
+                : 'No sizes available. Please check back later.',
+          ),
+          backgroundColor: AppConstants.error,
         ),
       );
-    });
+      return;
+    }
+
+    // Get product image URL for the checkout summary row
+    final List<String> imageUrls = _sortedImageUrls;
+    final String? imageUrl = imageUrls.isNotEmpty ? imageUrls.first : null;
+
+    // Look up variant_id and additional_price for the selected size+color
+    final variants = widget.product['product_variants'] as List<dynamic>? ?? [];
+    final (:variantId, :additionalPrice) = resolveVariant(
+      variants: variants,
+      size: _selectedSize!,
+      color: _effectiveColor,
+    );
+
+    // Build the item directly — Buy Now NEVER touches the cart, so
+    // backing out of checkout leaves My Cart exactly as it was.
+    final double price = effectivePrice(widget.product);
+    final directItems = [
+      {
+        'id': 'buynow-${widget.product['id']}-${_selectedSize!}-${_effectiveColor ?? 'none'}',
+        'server_id': null,
+        'product_id': widget.product['id'].toString(),
+        'product_name': widget.product['name'],
+        'imageUrl': imageUrl ?? '',
+        'price': price + additionalPrice,
+        'additional_price': additionalPrice,
+        'size': _selectedSize!,
+        'color': _effectiveColor ?? 'none',
+        'quantity': _quantity,
+        'store_id': widget.product['store_id']?.toString() ?? 'unknown',
+        'store_name': widget.product['store_name']?.toString() ?? 'Unknown Store',
+        'variant_id': variantId,
+        'customizations': null,
+      },
+    ];
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => CheckoutScreen(directItems: directItems),
+      ),
+    );
   }
 
   /// Share this product via the native share sheet.
@@ -1267,7 +1329,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
               // Detail content
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 160), // High bottom padding for floating pill
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 160), // High bottom padding for floating pill
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -1290,7 +1352,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                           ),
                         ],
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 6),
 
                       // Price tag — sale-aware: strikethrough original +
                       // sale price + savings/end-date note. The sale price is
@@ -1349,7 +1411,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                             ),
                           ),
                         ),
-                      ] else
+                      ]                      else
                         Text(
                           '₱${price.toStringAsFixed(2)}',
                           style: AppConstants.monoStyle(
@@ -1358,6 +1420,67 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                             color: AppConstants.primary,
                           ),
                         ),
+                      // Social proof row — units sold (paid, non-cancelled
+                      // orders) + average rating when available. Hidden
+                      // entirely for products with no sales and no reviews
+                      // so new listings don't show empty counters.
+                      Selector<ProductProvider, (int, double, int)>(
+                        selector: (_, p) {
+                          final pid = widget.product['id']?.toString() ?? '';
+                          return (
+                            p.unitsSoldFor(pid),
+                            (widget.product['avg_rating'] as num?)?.toDouble() ?? 0,
+                            (widget.product['review_count'] as num?)?.toInt() ?? 0,
+                          );
+                        },
+                        builder: (context, data, _) {
+                          final (sold, avgRating, reviewCount) = data;
+                          if (sold <= 0 && reviewCount <= 0) return const SizedBox.shrink();
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Row(
+                              children: [
+                                if (sold > 0) ...[
+                                  Text(
+                                    '$sold sold',
+                                    style: AppConstants.bodyStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppConstants.secondary.withValues(alpha: 0.6),
+                                    ),
+                                  ),
+                                ],
+                                if (sold > 0 && reviewCount > 0)
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                                    child: Text(
+                                      '·',
+                                      style: AppConstants.bodyStyle(
+                                        fontSize: 12,
+                                        color: AppConstants.secondary.withValues(alpha: 0.3),
+                                      ),
+                                    ),
+                                  ),
+                                if (reviewCount > 0) ...[
+                                  Icon(
+                                    Icons.star_rounded,
+                                    size: 15,
+                                    color: AppConstants.primary,
+                                  ),
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    '${avgRating.toStringAsFixed(1)} ($reviewCount)',
+                                    style: AppConstants.bodyStyle(
+                                      fontSize: 12,
+                                      color: AppConstants.secondary.withValues(alpha: 0.6),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          );
+                        },
+                      ),
                       // Product tags — real data from products.tags.
                       // Tappable: navigates to a screen showing all products with that tag.
                       if (_productTags.isNotEmpty) ...[
@@ -1389,7 +1512,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                           ),
                         ),
                       ],
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 12),
 
                       // Size Selector Label + unit switcher, with the
                       // Size guide link aligned on the same row.
@@ -1578,9 +1701,53 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                         ),
                         const SizedBox(height: 8),
                         _buildQuantityStepper(),
+                        // Reseller entry point — request a bulk hold from
+                        // the seller (shown only when the product has stock).
+                        if (_totalStock() > 0)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(6),
+                                onTap: () => showBulkReservationSheet(
+                                  context,
+                                  product: widget.product,
+                                  sizesStock: _buildSizesMap(),
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 4, vertical: 4),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.inventory_2_outlined,
+                                        size: 15,
+                                        color: AppConstants.secondary
+                                            .withValues(alpha: 0.7),
+                                      ),
+                                      const SizedBox(width: 5),
+                                      Text(
+                                        'Buying to resell? Request a bulk hold',
+                                        style: AppConstants.bodyStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppConstants.secondary
+                                              .withValues(alpha: 0.7),
+                                        ).copyWith(
+                                            decoration:
+                                                TextDecoration.underline),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
                           ],
                         ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 12),
 
                       // Color variant swatches — real colors from the
                       // product's variants; hidden when none are set.
@@ -1613,7 +1780,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                           ),
                         ),
                       ],
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 12),
 
                       // Description section
                       Text(

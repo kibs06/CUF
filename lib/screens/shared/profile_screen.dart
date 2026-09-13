@@ -19,6 +19,7 @@ import '../../widgets/sole_card.dart';
 import '../../widgets/sole_status_chip.dart';
 import '../../widgets/sole_switch.dart';
 import '../customer/my_orders_screen.dart';
+import '../customer/my_reservations_screen.dart';
 import '../seller/create_store_screen.dart';
 import '../seller/store_profile_screen.dart';
 import '../seller/gcash_payment_settings_screen.dart';
@@ -1000,6 +1001,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
       padding: EdgeInsets.zero,
       child: Column(
         children: [
+          // Bulk (reseller) reservations — holds requested from product
+          // pages; visible to everyone since any customer can resell.
+          _settingsRow(
+            icon: Icons.inventory_2_outlined,
+            title: 'My Reservations',
+            subtitle: 'Bulk holds you requested from sellers',
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const MyReservationsScreen(),
+                ),
+              );
+            },
+          ),
+          const Divider(height: 1, color: Color(0xFFE5E7EB)),
           // Sellers set up their GCash static QR here (shown at POS checkout).
           if (auth.userRole == AppConstants.roleSeller) ...[
             _settingsRow(
