@@ -1,0 +1,39 @@
+<!--
+  Sign-in code email — ANQUI checklist item 16, Part B (new-device step-up).
+
+  Sent by `signInWithOtp(shouldCreateUser: false)` when a password login comes
+  from a device the account has never been seen on. Same reasoning as
+  confirmation.html: the stock "Magic Link" template renders only
+  `{{ .ConfirmationURL }}`, so the 6-digit `{{ .Token }}` must be added
+  explicitly or the challenge screen has nothing to accept.
+
+  ⚠️ Mirror this in the LIVE project (Dashboard → Authentication → Email
+  Templates → Magic Link). Keep the user-facing copy deliberately vague about
+  WHICH device, because anyone who can read this mailbox can read it — say
+  "a new device", never the model name.
+-->
+<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#F3E9D8;padding:32px 16px;">
+  <div style="max-width:480px;margin:0 auto;background:#FBF5E9;border-radius:16px;padding:32px;border:1px solid #E3D6BC;">
+    <h1 style="margin:0 0 8px;font-size:20px;color:#3A2E22;">Confirm it's you</h1>
+    <p style="margin:0 0 24px;font-size:14px;line-height:1.6;color:#6B5B47;">
+      Someone is signing in to your CUFMAI account from a device we have not
+      seen before. Enter this code in the app to continue:
+    </p>
+
+    <div style="text-align:center;margin:0 0 24px;">
+      <span style="display:inline-block;font-size:34px;font-weight:700;letter-spacing:10px;color:#3A2E22;background:#F0DFBB;padding:14px 20px 14px 30px;border-radius:12px;">
+        {{ .Token }}
+      </span>
+    </div>
+
+    <p style="margin:0 0 24px;font-size:13px;line-height:1.6;color:#6B5B47;">
+      The code expires in 1 hour. You can review and remove trusted devices
+      any time in Account &amp; Security → Manage Login Device.
+    </p>
+
+    <p style="margin:0;font-size:12px;line-height:1.6;color:#6B5B47;">
+      If this wasn't you, do not enter the code — instead change your password
+      and remove the device from your account settings.
+    </p>
+  </div>
+</div>

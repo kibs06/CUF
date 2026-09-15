@@ -492,7 +492,7 @@ class _TagSelectorState extends State<TagSelector> {
                   isDense: true,
                   hintText: 'Add your own ${group.label.toLowerCase()}…',
                   filled: true,
-                  fillColor: Colors.white,
+                  fillColor: AppConstants.surfaceLight,
                   contentPadding:
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   border: OutlineInputBorder(
@@ -595,9 +595,9 @@ class _TagChipState extends State<TagChip> with SingleTickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final selected = widget.selected;
-    // Unselected chips stay uniform (white fill, muted carob text, suede
-    // border); selection fills the chip with the group's accent color and
-    // swaps the content to the group's on-color.
+    // Unselected chips stay uniform (lighter-cream fill, muted carob text,
+    // suede border); selection fills the chip with the group's accent color
+    // and swaps the content to the group's on-color.
     final offColor = AppConstants.secondary.withValues(alpha: 0.65);
 
     return Semantics(
@@ -616,7 +616,7 @@ class _TagChipState extends State<TagChip> with SingleTickerProviderStateMixin {
             curve: Curves.easeInOut,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
-              color: selected ? widget.color : Colors.white,
+              color: selected ? widget.color : AppConstants.sellerCardBg,
               borderRadius: AppConstants.stadiumRadius,
               border: Border.all(
                 color: selected ? widget.color : AppConstants.borderGray,
@@ -776,7 +776,7 @@ class OtherTagChip extends StatelessWidget {
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeInOut,
           decoration: BoxDecoration(
-            color: open ? color.withValues(alpha: 0.08) : Colors.white,
+            color: open ? color.withValues(alpha: 0.08) : AppConstants.sellerCardBg,
             borderRadius: AppConstants.stadiumRadius,
           ),
           child: CustomPaint(

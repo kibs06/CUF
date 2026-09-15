@@ -172,7 +172,7 @@ class _AdminUserDocumentsScreenState extends State<AdminUserDocumentsScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppConstants.borderGray.withValues(alpha: 0.5)),
       ),
@@ -411,7 +411,7 @@ class _AdminUserDocumentsScreenState extends State<AdminUserDocumentsScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppConstants.borderGray.withValues(alpha: 0.5)),
       ),

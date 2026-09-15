@@ -22,6 +22,60 @@ enum SortMode {
   bestSelling,
 }
 
+/// Label of the 'Best Sellers' pseudo-category — a *filter* (like the
+/// 'On Sale' pseudo-category), not a [SortMode]. See
+/// [ProductProvider.categories] / [ProductProvider.getFilteredProducts].
+const String kBestSellersCategory = 'Best Sellers';
+
+/// How many products the 'Best Sellers' filter/rail keeps.
+///
+/// A best-seller set has to be curated: "has sold at least one unit" alone
+/// would return most of an established catalog and leave the chip pointless.
+/// Top-N of the live `units_sold` aggregation is the rule; catalogs smaller
+/// than [kBestSellerLimit] simply return every product that has sold.
+const int kBestSellerLimit = 20;
+
+/// Units sold for [product] per the [unitsSold] aggregation (absent = 0).
+int unitsSoldOf(Map<String, dynamic> product, Map<String, int> unitsSold) =>
+    unitsSold[product['id']?.toString() ?? ''] ?? 0;
+
+/// The 'Best Sellers' set, derived live from the loaded catalog and the
+/// `units_sold` aggregation. Single source of truth for BOTH the home rail and
+/// the 'Best Sellers' filter, so the rail can never show a product the chip
+/// excludes (or vice versa).
+///
+/// Rules:
+/// - only products that have actually sold (units_sold > 0) — a brand-new
+///   catalog yields an empty set, and the chip/rail hide themselves;
+/// - most-sold first, so the rail and the filtered catalog agree on order;
+/// - capped at [limit];
+/// - ties break on rating then name, because the catalog list itself is
+///   reshuffled per load and an unstable sort would reshuffle the rail too.
+List<Map<String, dynamic>> bestSellerProducts(
+  List<Map<String, dynamic>> products,
+  Map<String, int> unitsSold, {
+  int limit = kBestSellerLimit,
+}) {
+  final ranked = products
+      .where((p) => unitsSoldOf(p, unitsSold) > 0)
+      .toList()
+    ..sort((a, b) {
+      final byUnits =
+          unitsSoldOf(b, unitsSold).compareTo(unitsSoldOf(a, unitsSold));
+      if (byUnits != 0) return byUnits;
+      final rA = (a['avg_rating'] as num?)?.toDouble() ?? 0;
+      final rB = (b['avg_rating'] as num?)?.toDouble() ?? 0;
+      final byRating = rB.compareTo(rA);
+      if (byRating != 0) return byRating;
+      return (a['name'] ?? '')
+          .toString()
+          .compareTo((b['name'] ?? '').toString());
+    });
+  return limit > 0 && ranked.length > limit
+      ? ranked.sublist(0, limit)
+      : ranked;
+}
+
 String sortModeLabel(SortMode mode) {
   switch (mode) {
     case SortMode.featured:
@@ -42,7 +96,7 @@ String sortModeLabel(SortMode mode) {
 }
 
 class ProductProvider extends ChangeNotifier {
-  final SupabaseService _db = SupabaseService.instance;
+  final SupabaseService _db;
 
   List<Map<String, dynamic>> _products = [];
   bool _isLoading = false;
@@ -52,6 +106,30 @@ class ProductProvider extends ChangeNotifier {
   /// product_id → total units sold across paid, non-cancelled orders.
   /// Loaded alongside the catalog; missing id = 0 units.
   Map<String, int> _unitsSold = const {};
+
+  ProductProvider() : _db = SupabaseService.instance;
+
+  /// Test seam: a provider seeded with a catalog + sold-count aggregation and
+  /// no network access. Mirrors exactly what [loadProducts] leaves in memory
+  /// (see [_stampUnitsSold]) so filtering/sorting can be asserted directly.
+  @visibleForTesting
+  ProductProvider.seeded({
+    List<Map<String, dynamic>> products = const [],
+    Map<String, int> unitsSold = const {},
+  }) : _db = SupabaseService.instance {
+    _products = products.map(Map<String, dynamic>.from).toList();
+    _unitsSold = Map<String, int>.from(unitsSold);
+    _stampUnitsSold();
+  }
+
+  /// Copy [units_sold] onto each product map so widgets that render products
+  /// directly (product cards) can display it without reaching back into the
+  /// provider.
+  void _stampUnitsSold() {
+    for (final p in _products) {
+      p['units_sold'] = _unitsSold[p['id']?.toString()] ?? 0;
+    }
+  }
 
   List<Map<String, dynamic>> get products => _products;
   bool get isLoading => _isLoading;
@@ -64,8 +142,10 @@ class ProductProvider extends ChangeNotifier {
   // filterable even before any product uses them. Any category actually on a
   // product that isn't canonical (legacy values, custom entries) still shows
   // up, so nothing already filterable disappears. 'All' stays first and the
-  // 'On Sale' pseudo-category is appended last when at least one product is
-  // actively on sale — it acts like a filter chip, not a real category.
+  // pseudo-categories are appended last, each only when it can actually offer
+  // something: 'On Sale' when a product is actively on sale, 'Best Sellers'
+  // when a product has sold at least one unit. Both act like filter chips, not
+  // real categories — a dead-end chip is never rendered.
   List<String> get categories {
     final Set<String> uniqueCats = {'All'};
     uniqueCats.addAll(AppConstants.productCategories);
@@ -77,8 +157,23 @@ class ProductProvider extends ChangeNotifier {
     if (_products.any(isOnSale)) {
       uniqueCats.add('On Sale');
     }
+    if (hasBestSellers) {
+      uniqueCats.add(kBestSellersCategory);
+    }
     return uniqueCats.toList();
   }
+
+  /// The live best-seller set — most-sold first, never-sold excluded.
+  ///
+  /// Derived on every read from [_products] + [_unitsSold], so it always
+  /// reflects the current aggregation rather than a stale cached snapshot.
+  List<Map<String, dynamic>> get bestSellers =>
+      bestSellerProducts(_products, _unitsSold);
+
+  /// Whether the catalog holds any best seller at all — gates whether the
+  /// 'Best Sellers' chip and the home rail are rendered.
+  bool get hasBestSellers =>
+      _products.any((p) => unitsSoldOf(p, _unitsSold) > 0);
 
   /// Load ALL products (customer / admin screens).
   ///
@@ -112,12 +207,7 @@ class ProductProvider extends ChangeNotifier {
       ]);
       _products = results[0] as List<Map<String, dynamic>>;
       _unitsSold = results[1] as Map<String, int>;
-      // Stamp the sold count onto each product map so widgets that render
-      // products directly (product cards) can display it without reaching
-      // back into the provider.
-      for (final p in _products) {
-        p['units_sold'] = _unitsSold[p['id']?.toString()] ?? 0;
-      }
+      _stampUnitsSold();
       if (reshuffle) {
         _products.shuffle();
       }
@@ -208,14 +298,27 @@ class ProductProvider extends ChangeNotifier {
   List<Map<String, dynamic>> getFilteredProducts(String searchKeyword) {
     List<Map<String, dynamic>> filtered = _products;
 
-    // Category filter — 'On Sale' is a pseudo-category that filters by the
-    // active-sale rule instead of the product's category field. If the sale
-    // expired mid-session while 'On Sale' is selected, gracefully fall back
-    // to the full list instead of showing a confusing empty state.
+    // Category filter — 'On Sale' and 'Best Sellers' are pseudo-categories
+    // that filter by a derived rule (active sale / live units sold) instead of
+    // the product's category field, and they behave identically to one
+    // another. Each rule is only applied while it currently yields something:
+    // its chip is hidden the moment it doesn't, so the branch below is only
+    // reachable if the data changed under a selected chip (sale expired, a
+    // reload dropped the units-sold aggregation). That state degrades exactly
+    // like a category with no matching products — the empty state, whose
+    // "browse all" action clears the selection.
     final bool saleFilterActive =
         _selectedCategory == 'On Sale' && _products.any(isOnSale);
+    final bool bestSellerFilterActive =
+        _selectedCategory == kBestSellersCategory && hasBestSellers;
     if (saleFilterActive) {
       filtered = filtered.where((p) => isOnSale(p)).toList();
+    } else if (bestSellerFilterActive) {
+      final bestSellerIds =
+          bestSellers.map((p) => p['id']?.toString()).toSet();
+      filtered = filtered
+          .where((p) => bestSellerIds.contains(p['id']?.toString()))
+          .toList();
     } else if (_selectedCategory != 'All' && _selectedCategory != null) {
       filtered = filtered
           .where((p) => p['category'] == _selectedCategory)

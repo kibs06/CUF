@@ -451,6 +451,24 @@ class SupabaseService {
       if (gcashRef != null && gcashRef.isNotEmpty) {
         insertData['gcash_reference_number'] = gcashRef;
       }
+      // Voucher code redemption. The client sends ONLY the code: the
+      // items_snapshot below is what the server reprices from, and the
+      // orders_apply_voucher() trigger overwrites subtotal_amount /
+      // discount_amount / total_amount inside this very insert — a forged
+      // total_amount in orderData is therefore never what gets stored, and
+      // an invalid code fails the insert with a readable message.
+      final voucherCode = orderData['voucher_code']?.toString().trim();
+      if (voucherCode != null && voucherCode.isNotEmpty) {
+        insertData['voucher_code'] = voucherCode.toUpperCase();
+        insertData['items_snapshot'] = items
+            .map((item) => {
+                  'product_id': item['product_id'],
+                  'product_name': item['product_name'] ?? 'Product',
+                  'size': item['size'] ?? '',
+                  'quantity': item['quantity'] ?? 1,
+                })
+            .toList();
+      }
       if (shippingAddress != null) {
         insertData['shipping_address'] = shippingAddress;
       }

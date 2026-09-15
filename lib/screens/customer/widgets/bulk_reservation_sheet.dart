@@ -120,7 +120,7 @@ class _BulkReservationSheetState extends State<_BulkReservationSheet> {
           bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Container(
         decoration: const BoxDecoration(
-          color: Colors.white,
+          color: AppConstants.surfaceLight,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),

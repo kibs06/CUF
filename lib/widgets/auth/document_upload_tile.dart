@@ -31,7 +31,7 @@ enum DocumentUploadStatus {
 Future<ImageSource?> showVerificationImageSourceSheet(BuildContext context) {
   return showModalBottomSheet<ImageSource>(
     context: context,
-    backgroundColor: Colors.white,
+    backgroundColor: AppConstants.surfaceLight,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
@@ -118,7 +118,7 @@ class DocumentUploadTile extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(AuthSpacing.s12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: BorderRadius.circular(16),
         // Warm, subtle edge — softer alpha than the old hard border, with a
         // soft clay shadow carrying the card instead.

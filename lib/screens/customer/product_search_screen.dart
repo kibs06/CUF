@@ -98,7 +98,7 @@ class _ProductSearchScreenState extends State<ProductSearchScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppConstants.surfaceLight,
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -203,7 +203,7 @@ class _ProductSearchScreenState extends State<ProductSearchScreen> {
               height: 44,
               padding: const EdgeInsets.only(left: 4),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: AppConstants.surfaceLight,
                 borderRadius: BorderRadius.circular(6),
                 border: Border.all(
                   color: AppConstants.secondary,

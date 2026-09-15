@@ -5,6 +5,20 @@ import '../constants/app_constants.dart';
 import '../models/seller_application_data.dart';
 import '../utils/customer_profile_fields.dart' as customer_profile_fields;
 
+/// Result of [AuthService.ensureUser] — the authenticated user plus whether
+/// the e-mail still has to be confirmed before anything can be written for
+/// them. When [emailVerificationRequired] is true there is deliberately NO
+/// session yet (see `docs/AI/EMAIL_OTP_AND_DEVICE_TRUST_ARCHITECTURE.md`).
+class EnsureUserResult {
+  final User user;
+  final bool emailVerificationRequired;
+
+  const EnsureUserResult({
+    required this.user,
+    required this.emailVerificationRequired,
+  });
+}
+
 class AuthService {
   AuthService._();
 
@@ -96,6 +110,20 @@ class AuthService {
     };
   }
 
+  /// Creates the Supabase auth user for a CUSTOMER signup.
+  ///
+  /// ⚠️ Ordering contract: `public.profiles` has no `on auth.users` trigger —
+  /// its INSERT policy is `auth.uid() = id`, so a session must already exist
+  /// to write the row. With "Confirm email" ON, `signUp` returns **no
+  /// session**, so the profile write is DEFERRED to [writeProfileFromMetadata],
+  /// which the verify-email screen calls once `verifyOTP` has established one.
+  ///
+  /// The fields the profile needs are therefore also stashed in the user's
+  /// metadata (server-side, so closing the app mid-verification — or the same
+  /// code being typed on another device — does not lose them).
+  ///
+  /// Returns `{'user', 'profile', 'emailVerificationRequired'}`. `profile` is
+  /// null when verification is still pending.
   Future<Map<String, dynamic>> signUp({
     required String fullName,
     required String email,
@@ -105,43 +133,95 @@ class AuthService {
     DateTime? birthday,
     String? gender,
   }) async {
+    // Birthday/gender are collected at signup (see customer_register_screen).
+    // formatBirthdayForDb keeps the DATE column from shifting across
+    // midnight via UTC serialization.
+    final birthdayValue = customer_profile_fields.formatBirthdayForDb(birthday);
+
     final response = await _client.auth.signUp(
       email: email.trim(),
       password: password,
-      data: {'full_name': fullName.trim()},
+      data: {
+        'full_name': fullName.trim(),
+        // Mirrors the profiles columns so the row can be written later from
+        // metadata alone, after email confirmation.
+        'role': AppConstants.roleCustomer,
+        'seller_status': sellerStatus,
+        'phone': phone,
+        'birthday': birthdayValue,
+        'gender': gender,
+      },
     );
     final user = response.user;
     if (user == null) throw Exception('Sign up failed. Please try again.');
 
-    final profileData = {
-      'id': user.id,
-      'full_name': fullName.trim(),
-      'email': email.trim(),
-      'role': AppConstants.roleCustomer,
-      'seller_status': sellerStatus,
-      'avatar_url': null,
-      'phone': phone,
-      // Birthday/gender are collected at signup (see customer_register_screen).
-      // formatBirthdayForDb keeps the DATE column from shifting across
-      // midnight via UTC serialization.
-      'birthday': customer_profile_fields.formatBirthdayForDb(birthday),
-      'gender': gender,
-    };
+    if (response.session == null) {
+      // "Confirm email" is ON. No session ⇒ no profile write yet: RLS would
+      // reject it. The verify-email screen finishes the job.
+      return {
+        'user': {'id': user.id, 'email': user.email ?? email.trim()},
+        'profile': null,
+        'emailVerificationRequired': true,
+      };
+    }
 
-    await _client.from('profiles').upsert(profileData);
-    final profile = await getProfile(user.id);
+    final profile = await writeProfileFromMetadata(user);
 
     return {
       'user': {'id': user.id, 'email': user.email ?? email.trim()},
       'profile': profile,
+      'emailVerificationRequired': false,
     };
+  }
+
+  /// Upserts the `profiles` row for [user] from the metadata captured at
+  /// sign-up. Idempotent, so it is safe on both paths: immediately after
+  /// `signUp` when confirmation is OFF, or after `verifyOTP` when it is ON.
+  ///
+  /// ⚠️ It also runs for accounts that predate e-mail confirmation (a
+  /// never-confirmed legacy account that just verified, see
+  /// `AuthProvider.login`). For those the row ALREADY EXISTS, so the method
+  /// must not clobber it: `role` and `seller_status` are only ever written
+  /// when there is no row yet (otherwise a legacy approved SELLER, whose
+  /// metadata has no `role`, would be silently demoted to `customer`), and
+  /// only non-null metadata values overwrite existing columns.
+  Future<Map<String, dynamic>> writeProfileFromMetadata(User user) async {
+    final meta = user.userMetadata ?? const <String, dynamic>{};
+
+    final existing = await _client
+        .from('profiles')
+        .select('id')
+        .eq('id', user.id)
+        .maybeSingle();
+
+    final profileData = <String, dynamic>{
+      'id': user.id,
+      'full_name': (meta['full_name'] ?? '').toString(),
+      'email': user.email ?? (meta['email'] ?? '').toString(),
+    };
+
+    if (existing == null) {
+      // First write for this account — it also needs its role/status.
+      profileData['role'] =
+          (meta['role'] ?? AppConstants.roleCustomer).toString();
+      profileData['seller_status'] = (meta['seller_status'] ?? 'none').toString();
+    }
+
+    // Identity fields are only applied when the metadata actually carries
+    // them, so a legacy row's phone/birthday/gender survive too.
+    for (final key in const ['phone', 'birthday', 'gender']) {
+      if (meta[key] != null) profileData[key] = meta[key];
+    }
+
+    await _client.from('profiles').upsert(profileData);
+    return await getProfile(user.id) ?? profileData;
   }
 
   /// Ensures an authenticated Supabase user exists for [email].
   ///
   /// Used by the seller application flow, which deliberately creates the
   /// auth user only at the FINAL submit step (so abandoning the flow never
-  /// leaves an orphaned account). Handles three cases:
+  /// leaves an orphaned account). Handles four cases:
   ///
   /// 1. Already signed in with this email (re-apply) → returns the current
   ///    user, no network call.
@@ -151,7 +231,13 @@ class AuthService {
   ///    already exists but returns no session (e.g. an abandoned legacy
   ///    application), signs in with the supplied password instead so the
   ///    retryable submit can complete the profile.
-  Future<User> ensureUser({
+  /// 4. **"Confirm email" is ON** → `signUp` returns no session and the
+  ///    sign-in fallback above fails with `email_not_confirmed`. That is
+  ///    reported as [EnsureUserResult.emailVerificationRequired] rather than
+  ///    thrown, so the flow can verify FIRST and only then upload into the
+  ///    private bucket / write the profile — both of which need a session
+  ///    (`seller-verification-docs` RLS keys off `auth.uid()`).
+  Future<EnsureUserResult> ensureUser({
     required String email,
     String? password,
     String? fullName,
@@ -160,7 +246,10 @@ class AuthService {
     final current = _client.auth.currentUser;
     if (current != null) {
       if ((current.email ?? '').toLowerCase() == trimmedEmail.toLowerCase()) {
-        return current;
+        return EnsureUserResult(
+          user: current,
+          emailVerificationRequired: false,
+        );
       }
       await _client.auth.signOut();
     }
@@ -175,19 +264,33 @@ class AuthService {
       password: password,
       data: {'full_name': fullName.trim()},
     );
-    var user = response.user;
+    final user = response.user;
     if (user == null) throw Exception('Sign up failed. Please try again.');
 
-    if (response.session == null) {
-      // Account exists but no session — likely an abandoned legacy
-      // application. Complete it by signing in with the submitted password.
+    if (response.session != null) {
+      return EnsureUserResult(user: user, emailVerificationRequired: false);
+    }
+
+    // No session. Either the account already exists (an abandoned
+    // application) or email confirmation is required. Diffing on the
+    // server's own answer is more reliable than guessing from config.
+    try {
       final signIn = await _client.auth.signInWithPassword(
         email: trimmedEmail,
         password: password,
       );
-      user = signIn.user ?? user;
+      return EnsureUserResult(
+        user: signIn.user ?? user,
+        emailVerificationRequired: false,
+      );
+    } on AuthException catch (e) {
+      if (e.code == 'email_not_confirmed') {
+        return EnsureUserResult(user: user, emailVerificationRequired: true);
+      }
+      // Wrong password / anything else: surface it unchanged so the flow's
+      // existing error mapper keeps producing the right copy.
+      rethrow;
     }
-    return user;
   }
 
   /// Writes the full Tier 1 seller application onto the user's profile and

@@ -737,7 +737,7 @@ class _FootResultsScreenState extends State<FootResultsScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: AppConstants.borderGray.withValues(alpha: 0.3),
@@ -831,7 +831,7 @@ class _FootResultsScreenState extends State<FootResultsScreen> {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppConstants.surfaceLight,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: AppConstants.borderGray.withValues(alpha: 0.3),
@@ -879,7 +879,7 @@ class _FootResultsScreenState extends State<FootResultsScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: _hasAdjusted
@@ -918,7 +918,7 @@ class _FootResultsScreenState extends State<FootResultsScreen> {
                     width: 44,
                     margin: const EdgeInsets.only(right: 8),
                     decoration: BoxDecoration(
-                      color: isSelected ? AppConstants.primary : Colors.white,
+                      color: isSelected ? AppConstants.primary : AppConstants.sellerCardBg,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
                         color: isSelected
@@ -1016,7 +1016,7 @@ class _FootResultsScreenState extends State<FootResultsScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: AppConstants.borderGray.withValues(alpha: 0.3),

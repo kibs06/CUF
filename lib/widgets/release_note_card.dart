@@ -24,7 +24,7 @@ class ReleaseNoteCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: AppConstants.cardRadius,
         boxShadow: AppConstants.warmShadow,
         border: Border.all(

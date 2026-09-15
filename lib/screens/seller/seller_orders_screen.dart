@@ -111,7 +111,7 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                     return Container(
                       margin: const EdgeInsets.only(bottom: 12),
                       child: SoleCard(
-                        color: Colors.white,
+                        color: AppConstants.surfaceLight,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [

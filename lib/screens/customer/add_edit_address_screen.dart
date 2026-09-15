@@ -667,7 +667,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
               MediaQuery.of(context).padding.bottom + 16,
             ),
             decoration: const BoxDecoration(
-              color: Colors.white,
+              color: AppConstants.surfaceLight,
               borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
               boxShadow: [
                 BoxShadow(
@@ -733,7 +733,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
     return Container(
       height: 48,
       decoration: BoxDecoration(
-        color: const Color(0xFFF5F0EB),
+        color: AppConstants.surfaceLight,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -817,7 +817,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
       child: Container(
         constraints: const BoxConstraints(maxHeight: 280),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppConstants.surfaceLight,
           borderRadius: BorderRadius.circular(12),
         ),
         child: ListView.builder(
@@ -928,7 +928,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
         width: 44,
         height: 44,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppConstants.surfaceLight,
           shape: BoxShape.circle,
           boxShadow: [
             BoxShadow(
@@ -977,7 +977,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
               _sectionHeader('Recipient Details'),
               const SizedBox(height: 12),
               SoleCard(
-                color: Colors.white,
+                color: AppConstants.surfaceLight,
                 child: Column(
                   children: [
                     SoleTextField(
@@ -1015,7 +1015,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
               _sectionHeader('Address Details'),
               const SizedBox(height: 12),
               SoleCard(
-                color: Colors.white,
+                color: AppConstants.surfaceLight,
                 child: Column(
                   children: [
                     SoleTextField(
@@ -1074,7 +1074,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
               _sectionHeader('Address Label'),
               const SizedBox(height: 12),
               SoleCard(
-                color: Colors.white,
+                color: AppConstants.surfaceLight,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [

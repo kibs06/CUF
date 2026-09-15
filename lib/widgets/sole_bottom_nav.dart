@@ -22,7 +22,8 @@ class SoleBottomNav extends StatelessWidget {
   /// When 0, no badge is shown. Values > 99 display as "99+".
   final int notificationUnreadCount;
 
-  /// Bar background. Defaults to the app's warm cream.
+  /// Bar background. Defaults to [AppConstants.creamDeep] — a deeper cream
+  /// than the page so the bar reads as its own grounded band.
   final Color? backgroundColor;
 
   /// Accent color for the indicator pill tint and the selected icon/label.
@@ -73,7 +74,7 @@ class SoleBottomNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final destinations = _getDestinations();
-    final bg = backgroundColor ?? AppConstants.surfaceLight;
+    final bg = backgroundColor ?? AppConstants.creamDeep;
     final active = activeColor ?? AppConstants.primary;
     final inactive =
         inactiveColor ?? AppConstants.secondary.withValues(alpha: 0.5);
@@ -137,6 +138,7 @@ class SoleBottomNav extends StatelessWidget {
                               i,
                               active,
                               inactive,
+                              bg,
                             ),
                           ),
                       ],
@@ -157,6 +159,7 @@ class SoleBottomNav extends StatelessWidget {
     int index,
     Color active,
     Color inactive,
+    Color barBackground,
   ) {
     final isActive = index == currentIndex;
 
@@ -187,6 +190,9 @@ class SoleBottomNav extends StatelessWidget {
                           unreadCount: notificationUnreadCount,
                           selected: isActive,
                           activeColor: active,
+                          // The unread badge's ring must match the BAR, not the
+                          // page, or it shows a lighter halo on the nav band.
+                          barBackground: barBackground,
                         )
                       : Icon(
                           isActive ? dest.selectedIcon : dest.icon,
@@ -337,11 +343,16 @@ class _NotificationBadgeIcon extends StatelessWidget {
   final bool selected;
   final Color activeColor;
 
+  /// The bar's own background — used for the badge's cut-out ring so the
+  /// ring blends into the nav band instead of the page behind it.
+  final Color barBackground;
+
   const _NotificationBadgeIcon({
     required this.icon,
     required this.unreadCount,
     this.selected = false,
     this.activeColor = AppConstants.primary,
+    this.barBackground = AppConstants.creamDeep,
   });
 
   @override
@@ -367,7 +378,7 @@ class _NotificationBadgeIcon extends StatelessWidget {
                   color: AppConstants.error,
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: Theme.of(context).scaffoldBackgroundColor,
+                    color: barBackground,
                     width: 1.5,
                   ),
                 ),

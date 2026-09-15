@@ -366,7 +366,7 @@ class _SeeMorePill extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppConstants.surfaceLight,
             borderRadius: AppConstants.stadiumRadius,
             boxShadow: AppConstants.warmShadow,
             border: Border.all(

@@ -15,6 +15,17 @@
 > never touches stock. See `20260913130000_add_bulk_reservation_awaiting_deposit_status.sql`,
 > `20260913140000_add_bulk_reservation_deposits.sql`, and the pgTAP suite
 > `supabase/tests/bulk_reservation_deposits.test.sql`.
+>
+> 🔀 **NOT THE ONLY RESERVATION SYSTEM (Sep 15, 2026).** A separate, simpler
+> sibling exists for the walk-in customer: **pickup reservations**
+> (`pickup_reservations`, ANQUI item #14) — 1–2 units of ONE size, held for a
+> fixed 24 h, **no deposit and no approval**, which becomes a POS order when
+> collected. The two share only `inventory.stock` (the place a hold lives) and
+> the `reservations` notification category; that system never touches
+> `bulk_reservations` or `bulk_reservation_deposits`. The deposit and approval
+> steps below are what THIS flow is — do not port them over, and do not add a
+> quick customer path here. See `docs/AI/PICKUP_RESERVATION_ARCHITECTURE.md` §0
+> for the side-by-side comparison.
 
 ## 1. Concept
 

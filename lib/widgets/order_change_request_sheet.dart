@@ -289,7 +289,7 @@ class _ChangeRequestSheetState extends State<_ChangeRequestSheet> {
                             color: AppConstants.secondary.withValues(alpha: 0.4),
                           ),
                           filled: true,
-                          fillColor: Colors.white,
+                          fillColor: AppConstants.surfaceLight,
                           contentPadding: const EdgeInsets.all(12),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
@@ -331,7 +331,7 @@ class _ChangeRequestSheetState extends State<_ChangeRequestSheet> {
               12 + MediaQuery.of(context).padding.bottom,
             ),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppConstants.surfaceLight,
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.06),
@@ -372,7 +372,7 @@ class _TypeOption extends StatelessWidget {
         decoration: BoxDecoration(
           color: isSelected
               ? AppConstants.primary.withValues(alpha: 0.06)
-              : Colors.white,
+              : AppConstants.sellerCardBg,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isSelected

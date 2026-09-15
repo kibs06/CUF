@@ -217,7 +217,7 @@ class _FollowingListDialogState extends State<FollowingListDialog> {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade200,
+                    color: AppConstants.creamDeep,
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
@@ -226,9 +226,9 @@ class _FollowingListDialogState extends State<FollowingListDialog> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(width: 120, height: 14, color: Colors.grey.shade200),
+                      Container(width: 120, height: 14, color: AppConstants.creamDeep),
                       const SizedBox(height: 6),
-                      Container(width: 80, height: 12, color: Colors.grey.shade100),
+                      Container(width: 80, height: 12, color: AppConstants.sellerCardBg),
                     ],
                   ),
                 ),

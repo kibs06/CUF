@@ -63,6 +63,7 @@ Pages (src/pages/*) ──> Hooks (src/hooks/*) ──> lib/supabase.js ──> 
 | Admin Shell | `admin_shell.dart` | Tab host for all admin screens |
 | Dashboard | `admin_dashboard_screen.dart` | Overview stats, quick actions |
 | Manage Users | `manage_users_screen.dart` | User list with role filters, suspension |
+| Account Security | `admin_account_security_screen.dart` | Per-account trusted devices + credential state, code/sign-in timeline, lockouts, gate state (opened from the row menu: **⋮ → Account Security**). The screen a *"I got a new phone and I can't get in"* ticket is answered with — see [[docs/AI/EMAIL_OTP_AND_DEVICE_TRUST_ARCHITECTURE\|Email OTP & Device Trust]] Part D |
 | Monitor Products | `monitor_products_screen.dart` | Product catalog oversight |
 | Seller Approval | `seller_approval_screen.dart` | Tier 1 queue + Business Docs tab |
 | Business Docs Review | `seller_business_docs_review_screen.dart` | Tier 2 doc review (signed URLs) |
@@ -95,11 +96,14 @@ Read-only on `payment_intents` + `payment_webhook_events` (SELECT-only RLS in `2
 ### Products
 `useProducts` groups by store ("Unassigned" fallback), computes stock totals, thumbnails, category list client-side. **Delete is soft** — `is_published: false`.
 
+### Account security (Flutter only)
+`admin_account_security_overview(p_user_id)` — **admin-only** (`is_admin()`, else 42501; `anon` has no EXECUTE grant, so accounts cannot be enumerated without a session). Returns trusted devices with **whether each still holds the device-gate credential**, the account's confirmation/lockout facts, GoTrue's own event timeline (matched across all three identification shapes — `user_signedup` puts the SERVICE ROLE in `actor_id` and the user in `traits.user_id`), and the enforcement switch. Reads `device_secrets`, which has **no grants at all**, but selects only the mint time — never the hash. The payload also states what it **cannot** know: a wrong code leaves no trace server-side, and a refused device is never recorded, so an empty timeline is not "nobody tried". The Flutter screen derives the diagnosis in `lib/models/account_security_overview.dart` (`findingsAt`) and **suppresses the device findings while enforcement is off** — blaming a credential-less device when the gate is not enforcing is the wrong lead.
+
 ---
 
 ## 🗄️ Database entities used
 
-`profiles` (roles, seller_status, suspended + suspended_reason/suspended_at, rejection_reason) · `stores` · `products` + `product_images` + `inventory` · `orders` + `order_items` · `payment_intents` + `payment_webhook_events` · `reports` (priority/status).
+`profiles` (roles, seller_status, suspended + suspended_reason/suspended_at, rejection_reason) · `stores` · `products` + `product_images` + `inventory` · `orders` + `order_items` · `payment_intents` + `payment_webhook_events` · `reports` (priority/status) · `trusted_devices` + `device_secrets` + `auth.audit_log_entries` + `failed_logins` (account-security view only, read through the RPC — `device_secrets` is never readable by a client role).
 
 ## ⚠️ Gotchas
 

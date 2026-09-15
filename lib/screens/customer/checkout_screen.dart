@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -10,6 +12,7 @@ import '../../providers/cart_provider.dart';
 import '../../providers/order_provider.dart';
 import '../../utils/delivery_date.dart';
 import '../../services/gcash_payment_service.dart';
+import '../../services/voucher_service.dart';
 import '../../widgets/sole_card.dart';
 import '../../widgets/order_confirmation_view.dart';
 import '../../widgets/sole_primary_button.dart';
@@ -78,6 +81,32 @@ class _CheckoutScreenState extends State<CheckoutScreen>
   // idempotency gate instead of spawning duplicate orders/intents.
   String? _gcashIdempotencyKey;
 
+  // Voucher (ANQUI item #5). The client only ever sends the CODE — the
+  // discount shown here comes from the server-side quote, and the orders
+  // trigger re-evaluates it inside the order's own transaction, so a
+  // stale quote can never be charged.
+  final _voucherController = TextEditingController();
+  VoucherQuote? _voucherQuote;
+  String? _voucherError;
+  bool _voucherApplying = false;
+
+  /// The server quote only counts once it actually granted a discount.
+  VoucherQuote? get _appliedVoucher =>
+      (_voucherQuote?.hasDiscount ?? false) ? _voucherQuote : null;
+
+  double get _voucherDiscount => _appliedVoucher?.discountAmount ?? 0;
+
+  /// The checkout cart in the shape the server prices from — it looks unit
+  /// prices up itself, so only identity + quantity are sent.
+  List<Map<String, dynamic>> _voucherItems(List<Map<String, dynamic>> items) =>
+      items
+          .map((i) => {
+                'product_id': i['product_id'],
+                'size': i['size'] ?? '',
+                'quantity': i['quantity'],
+              })
+          .toList();
+
   // Animation controller for checkmark
   late AnimationController _checkController;
   late Animation<double> _checkScale;
@@ -104,7 +133,203 @@ class _CheckoutScreenState extends State<CheckoutScreen>
   @override
   void dispose() {
     _checkController.dispose();
+    _voucherController.dispose();
     super.dispose();
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // VOUCHER — quote a code server-side and show the real discount
+  // ═══════════════════════════════════════════════════════════════
+
+  /// Asks the server what this code is worth against the CURRENT cart and
+  /// stores the result. Returns the quote (null when there is nothing to
+  /// price). [silent] skips the inline error line — used by the pre-submit
+  /// re-check, where the caller decides what to tell the customer.
+  Future<VoucherQuote?> _applyVoucher(
+    String code, {
+    bool silent = false,
+  }) async {
+    final cart = context.read<CartProvider>();
+    final items = _voucherItems(_checkoutItems(cart));
+    if (items.isEmpty) return null;
+
+    setState(() {
+      _voucherApplying = true;
+      if (!silent) _voucherError = null;
+    });
+
+    final quote = await VoucherService().validate(code: code, items: items);
+    if (!mounted) return quote;
+
+    setState(() {
+      _voucherApplying = false;
+      if (quote.hasDiscount) {
+        _voucherQuote = quote;
+        _voucherController.text = quote.code;
+        _voucherError = null;
+      } else if (!silent) {
+        _voucherQuote = null;
+        _voucherError = quote.message.isNotEmpty
+            ? quote.message
+            : 'That code could not be applied.';
+      }
+    });
+
+    // The GCash fee is charged on what the customer actually owes, so the
+    // quote changes it.
+    if (quote.hasDiscount || silent) unawaited(_fetchGcashFee());
+    return quote;
+  }
+
+  /// The voucher stopped being valid between entry and submit. Never
+  /// proceed silently at the higher price — ask.
+  Future<bool> _confirmDropVoucher(String code, String reason) async {
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Voucher no longer valid'),
+        content: Text(
+          reason.isEmpty
+              ? 'The code "$code" can no longer be applied. Continue without it?'
+              : '$reason\n\nContinue without "$code"?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Review my cart'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Continue without it'),
+          ),
+        ],
+      ),
+    );
+    return proceed == true;
+  }
+
+  void _clearVoucher() {
+    setState(() {
+      _voucherQuote = null;
+      _voucherError = null;
+      _voucherController.clear();
+    });
+    unawaited(_fetchGcashFee());
+  }
+
+  Widget _buildVoucherBody() {
+    final applied = _appliedVoucher;
+
+    if (applied != null) {
+      return Row(
+        children: [
+          const Icon(Icons.local_offer_outlined,
+              size: 18, color: AppConstants.success),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  applied.code,
+                  style: AppConstants.bodyStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AppConstants.secondary,
+                  ),
+                ),
+                Text(
+                  'You save ₱${applied.discountAmount.toStringAsFixed(2)}',
+                  style: AppConstants.bodyStyle(
+                    fontSize: 12,
+                    color: AppConstants.success,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: _voucherApplying ? null : _clearVoucher,
+            child: const Text('Remove'),
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _voucherController,
+                textCapitalization: TextCapitalization.characters,
+                autocorrect: false,
+                enabled: !_voucherApplying,
+                decoration: InputDecoration(
+                  hintText: 'Voucher code',
+                  isDense: true,
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                  filled: true,
+                  fillColor: AppConstants.surfaceLight,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: AppConstants.borderGray.withValues(alpha: 0.6),
+                    ),
+                  ),
+                ),
+                onSubmitted: (value) => _applyVoucher(value),
+              ),
+            ),
+            const SizedBox(width: 10),
+            TextButton(
+              onPressed: _voucherApplying
+                  ? null
+                  : () => _applyVoucher(_voucherController.text),
+              child: _voucherApplying
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Apply'),
+            ),
+          ],
+        ),
+        if (_voucherError != null) ...[
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.error_outline,
+                  size: 15, color: AppConstants.error),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  _voucherError!,
+                  style: AppConstants.bodyStyle(
+                    fontSize: 12,
+                    color: AppConstants.error,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ] else ...[
+          const SizedBox(height: 6),
+          Text(
+            'Discount codes are verified on our server and applied to your order total.',
+            style: AppConstants.bodyStyle(
+              fontSize: 11,
+              color: AppConstants.secondary.withValues(alpha: 0.45),
+            ),
+          ),
+        ],
+      ],
+    );
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -230,10 +455,14 @@ class _CheckoutScreenState extends State<CheckoutScreen>
   Future<void> _fetchGcashFee() async {
     if (_paymentMethod != 'GCash') return;
     final cart = context.read<CartProvider>();
-    final subtotal = _checkoutSubtotal(_checkoutItems(cart)) + 100.0; // items + fixed ₱100 delivery
-    if (subtotal <= 0) return;
+    // items + fixed ₱100 delivery − any applied voucher: the Model B fee is
+    // charged on what the customer actually owes, and the server computes it
+    // from the same discounted total.
+    final orderTotal =
+        _checkoutSubtotal(_checkoutItems(cart)) + 100.0 - _voucherDiscount;
+    if (orderTotal <= 0) return;
     setState(() => _feeLoading = true);
-    final fee = await GcashPaymentService().fetchFee(subtotal);
+    final fee = await GcashPaymentService().fetchFee(orderTotal);
     if (!mounted) return;
     setState(() {
       _gcashFeeAmount = fee?.feeAmount;
@@ -267,6 +496,25 @@ class _CheckoutScreenState extends State<CheckoutScreen>
     final cart = Provider.of<CartProvider>(context, listen: false);
     if (!_canSubmitOrder(cart)) return;
 
+    // A voucher is only worth what the server says it is worth RIGHT NOW:
+    // the cart, the code's window, or its usage cap may have moved since it
+    // was applied. The order trigger checks again (that is the enforcement),
+    // so this is purely so the customer gets a clear message here instead of
+    // a failed payment.
+    final applied = _appliedVoucher;
+    if (applied != null) {
+      final quote = await _applyVoucher(applied.code, silent: true);
+      if (!mounted) return;
+      if (quote == null || !quote.hasDiscount) {
+        final proceed = await _confirmDropVoucher(
+          applied.code,
+          quote?.message ?? '',
+        );
+        if (!mounted || !proceed) return;
+        _clearVoucher();
+      }
+    }
+
     final auth = Provider.of<AuthProvider>(context, listen: false);
     final orderProvider = Provider.of<OrderProvider>(context, listen: false);
 
@@ -279,6 +527,7 @@ class _CheckoutScreenState extends State<CheckoutScreen>
       orderTotal += (item['price'] as double) * (item['quantity'] as int);
     }
     orderTotal += orderTotal > 0 ? 100.0 : 0.0; // ₱100 delivery
+    orderTotal -= _voucherDiscount; // server re-applies this on insert
 
     // GCash (PayMongo): the server creates the order in 'awaiting_payment'
     // (no stock held yet) and a hosted PayMongo checkout session. The
@@ -286,7 +535,10 @@ class _CheckoutScreenState extends State<CheckoutScreen>
     // the next screen, and the order is only marked paid by the verified
     // webhook — never by the client.
     if (_paymentMethod == 'GCash') {
-      await _startGcashCheckout(items: items);
+      await _startGcashCheckout(
+        items: items,
+        voucherCode: _appliedVoucher?.code,
+      );
       return;
     }
 
@@ -307,6 +559,7 @@ class _CheckoutScreenState extends State<CheckoutScreen>
       deliveryAddress: _selectedAddress!.formattedAddress,
       paymentMethod: _paymentMethod,
       shippingAddress: _selectedAddress!.toSnapshot(),
+      voucherCode: _appliedVoucher?.code,
     );
 
     if (order != null && mounted) {
@@ -335,7 +588,9 @@ class _CheckoutScreenState extends State<CheckoutScreen>
         _checkoutStep = 1;
         _placedOrderId = order['id']?.toString();
         _placedOrder = order;
-        _placedTotal = orderTotal;
+        // The server owns the money — with a voucher the trigger has
+        // already rewritten total_amount, so display what it returned.
+        _placedTotal = (order['total_amount'] as num?)?.toDouble() ?? orderTotal;
       });
 
       _checkController.forward();
@@ -390,6 +645,7 @@ class _CheckoutScreenState extends State<CheckoutScreen>
   // the customer into GCash and polls the server-verified status.
   Future<void> _startGcashCheckout({
     required List<Map<String, dynamic>> items,
+    String? voucherCode,
   }) async {
     setState(() => _isSubmitting = true);
 
@@ -405,6 +661,7 @@ class _CheckoutScreenState extends State<CheckoutScreen>
             .toList(),
         deliveryAddress: _selectedAddress?.formattedAddress,
         shippingAddress: _selectedAddress?.toSnapshot(),
+        voucherCode: voucherCode,
       );
 
       if (!mounted) return;
@@ -690,7 +947,9 @@ class _CheckoutScreenState extends State<CheckoutScreen>
     );
     final selectedSubtotal = _checkoutSubtotal(selectedItems);
     final selectedDeliveryFee = selectedSubtotal > 0 ? 100.0 : 0.0;
-    final selectedTotal = selectedSubtotal + selectedDeliveryFee;
+    final voucherDiscount = _voucherDiscount;
+    final selectedTotal =
+        selectedSubtotal + selectedDeliveryFee - voucherDiscount;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20.0),
@@ -748,7 +1007,7 @@ class _CheckoutScreenState extends State<CheckoutScreen>
                 style: AppConstants.headlineStyle(fontSize: 16)),
             const SizedBox(height: 12),
             SoleCard(
-              color: Colors.white,
+              color: AppConstants.surfaceLight,
               padding: EdgeInsets.zero,
               child: Column(
                 children: [
@@ -778,7 +1037,7 @@ class _CheckoutScreenState extends State<CheckoutScreen>
                 style: AppConstants.headlineStyle(fontSize: 16)),
             const SizedBox(height: 12),
             SoleCard(
-              color: Colors.white,
+              color: AppConstants.surfaceLight,
               child: Column(
                 children: [
                   RadioGroup<String>(
@@ -829,7 +1088,16 @@ class _CheckoutScreenState extends State<CheckoutScreen>
             ),
             const SizedBox(height: 24),
 
-            // ── Section 4: Price Breakdown & Submit ───────────
+            // ── Section 4: Voucher code ───────────────────────
+            Text('Voucher', style: AppConstants.headlineStyle(fontSize: 16)),
+            const SizedBox(height: 12),
+            SoleCard(
+              color: AppConstants.surfaceLight,
+              child: _buildVoucherBody(),
+            ),
+            const SizedBox(height: 24),
+
+            // ── Section 5: Price Breakdown & Submit ───────────
             SoleCard(
               color: AppConstants.primary.withValues(alpha: 0.04),
               child: Column(
@@ -837,6 +1105,14 @@ class _CheckoutScreenState extends State<CheckoutScreen>
                   _priceRow('Subtotal', '₱${selectedSubtotal.toStringAsFixed(2)}'),
                   const SizedBox(height: 6),
                   _priceRow('Delivery Fee', '₱${selectedDeliveryFee.toStringAsFixed(2)}'),
+                  if (voucherDiscount > 0) ...[
+                    const SizedBox(height: 6),
+                    _priceRow(
+                      'Voucher (${_appliedVoucher?.code ?? ''})',
+                      '−₱${voucherDiscount.toStringAsFixed(2)}',
+                      color: AppConstants.success,
+                    ),
+                  ],
                   // Model B: the GCash fee is its own disclosed line item.
                   if (_paymentMethod == 'GCash') ...[const SizedBox(height: 6), _priceRow(
                     _feeLoading
@@ -906,7 +1182,7 @@ class _CheckoutScreenState extends State<CheckoutScreen>
     // No addresses saved at all
     if (_selectedAddress == null) {
       return SoleCard(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         child: GestureDetector(
           onTap: _pickAddress,
           child: Container(
@@ -962,7 +1238,7 @@ class _CheckoutScreenState extends State<CheckoutScreen>
 
     // Has a selected address
     return SoleCard(
-      color: Colors.white,
+      color: AppConstants.surfaceLight,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1070,17 +1346,23 @@ class _CheckoutScreenState extends State<CheckoutScreen>
     );
   }
 
-  Widget _priceRow(String label, String value, {bool bold = false}) {
+  Widget _priceRow(
+    String label,
+    String value, {
+    bool bold = false,
+    Color? color,
+  }) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(label, style: AppConstants.bodyStyle(
           fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+          color: color ?? AppConstants.secondary,
         )),
         Text(value, style: AppConstants.monoStyle(
           fontSize: bold ? 16 : 13,
           fontWeight: bold ? FontWeight.bold : FontWeight.normal,
-          color: bold ? AppConstants.primary : AppConstants.secondary,
+          color: color ?? (bold ? AppConstants.primary : AppConstants.secondary),
         )),
       ],
     );

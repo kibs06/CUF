@@ -273,7 +273,7 @@ class _StoreScheduleScreenState extends State<StoreScheduleScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: AppConstants.cardRadius,
         boxShadow: AppConstants.warmShadow,
       ),
@@ -365,7 +365,7 @@ class _StoreScheduleScreenState extends State<StoreScheduleScreen> {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppConstants.surfaceLight,
           borderRadius: AppConstants.cardRadius,
           boxShadow: AppConstants.warmShadow,
           border: Border.all(
@@ -409,7 +409,7 @@ class _StoreScheduleScreenState extends State<StoreScheduleScreen> {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppConstants.surfaceLight,
           borderRadius: AppConstants.cardRadius,
           boxShadow: AppConstants.warmShadow,
         ),

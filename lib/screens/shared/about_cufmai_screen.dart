@@ -277,7 +277,7 @@ class AboutCufmaiScreen extends StatelessWidget {
     required List<String> paragraphs,
   }) {
     return SoleCard(
-      color: Colors.white,
+      color: AppConstants.surfaceLight,
       padding: const EdgeInsets.all(22),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

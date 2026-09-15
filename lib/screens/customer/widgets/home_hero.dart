@@ -601,7 +601,7 @@ class _HomeHeroState extends State<HomeHero> {
                     height: 2,
                     width: isSelected ? _measureTextWidth(cat) : 0,
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: AppConstants.surfaceLight,
                       borderRadius: BorderRadius.circular(1),
                     ),
                   ),

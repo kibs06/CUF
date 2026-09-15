@@ -521,7 +521,7 @@ class ProductCustomization {
 | `primary` | `#8B5A2B` | Burnished Clay — brand color, CTAs, active states |
 | `secondary` | `#3B2314` | Carob Dark — text, icons |
 | `accent` | `#4ECDC4` | Celadon Teal — AR mode, highlights, badges |
-| `surfaceLight` | `#F5F0EB` | Off-White Suede — backgrounds |
+| `surfaceLight` | `#F3E9D8` | Warm Cream — page / sheet / card backgrounds |
 | `surfaceDark` | `#1A1208` | Midnight Canvas — AR overlay, dark surfaces |
 | `success` | `#6B8F47` | Olive Stitch — success states |
 | `error` | `#D64545` | Crimson Welt — errors, delete actions |

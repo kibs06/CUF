@@ -516,7 +516,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: AppConstants.surfaceLight,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -936,7 +936,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: AppConstants.surfaceLight,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -955,7 +955,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
             child: Container(
               height: sheetHeight,
               decoration: const BoxDecoration(
-                color: Colors.white,
+                color: AppConstants.surfaceLight,
                 borderRadius: BorderRadius.vertical(
                   top: Radius.circular(20),
                 ),
@@ -1297,7 +1297,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
         children: [
           Container(
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppConstants.surfaceLight,
               borderRadius: AppConstants.cardRadius,
               boxShadow: AppConstants.warmShadow,
             ),
@@ -1480,7 +1480,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
             Positioned.fill(
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.7),
+                  color: AppConstants.surfaceLight.withValues(alpha: 0.75),
                   borderRadius: AppConstants.cardRadius,
                 ),
                 child: const Center(
@@ -1643,7 +1643,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
     ];
     return Container(
       height: 54,
-      color: Colors.white,
+      color: AppConstants.surfaceLight,
       child: ListView.separated(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
         scrollDirection: Axis.horizontal,
@@ -1704,7 +1704,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
         itemBuilder: (_, i) => Container(
           height: heights[i],
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppConstants.surfaceLight,
             borderRadius: AppConstants.cardRadius,
           ),
         ),

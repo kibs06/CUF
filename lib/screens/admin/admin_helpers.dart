@@ -152,7 +152,7 @@ class AdminCard extends StatelessWidget {
       margin: margin,
       padding: padding,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppConstants.borderGray.withValues(alpha: 0.6)),
         boxShadow: const [

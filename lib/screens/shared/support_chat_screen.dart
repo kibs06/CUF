@@ -205,7 +205,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
                 color: AppConstants.secondary.withValues(alpha: 0.4),
               ),
               filled: true,
-              fillColor: Colors.white,
+              fillColor: AppConstants.surfaceLight,
               contentPadding: const EdgeInsets.all(12),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
@@ -249,7 +249,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
                 color: AppConstants.secondary.withValues(alpha: 0.4),
               ),
               filled: true,
-              fillColor: Colors.white,
+              fillColor: AppConstants.surfaceLight,
               contentPadding: const EdgeInsets.all(12),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),

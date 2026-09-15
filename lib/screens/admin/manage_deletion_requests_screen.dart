@@ -412,7 +412,7 @@ class _ManageDeletionRequestsScreenState
     final reviewedAt = request['reviewed_at'] as String?;
 
     return Card(
-      color: Colors.white,
+      color: AppConstants.surfaceLight,
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
@@ -489,7 +489,7 @@ class _ManageDeletionRequestsScreenState
                 width: double.infinity,
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade50,
+                  color: AppConstants.surfaceLight,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/order_provider.dart';
 import '../../widgets/sole_card.dart';
+import 'admin_account_security_screen.dart';
 import 'admin_user_documents_screen.dart';
 
 class ManageUsersScreen extends StatefulWidget {
@@ -34,6 +35,20 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => AdminUserDocumentsScreen(
+          userId: userId,
+          userName: name,
+        ),
+      ),
+    );
+  }
+
+  /// Trusted devices + sign-in codes for one account. This is the screen a
+  /// "I got a new phone and I can't get in" ticket is answered with, so it
+  /// sits next to View Documents in the row menu.
+  void _viewAccountSecurity(String userId, String name) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => AdminAccountSecurityScreen(
           userId: userId,
           userName: name,
         ),
@@ -134,7 +149,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                   hintText: 'DELETE',
                   hintStyle: AppConstants.bodyStyle(fontSize: 13, color: Colors.black38),
                   filled: true,
-                  fillColor: Colors.white,
+                  fillColor: AppConstants.surfaceLight,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                 ),
                 onChanged: (val) {
@@ -274,7 +289,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                     hintStyle: AppConstants.bodyStyle(fontSize: 13, color: Colors.black38),
                     prefixIcon: const Icon(Icons.search, color: AppConstants.primary),
                     filled: true,
-                    fillColor: Colors.white,
+                    fillColor: AppConstants.surfaceLight,
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
                   ),
                 ),
@@ -328,7 +343,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                               return Container(
                                 margin: const EdgeInsets.only(bottom: 10),
                                 child: SoleCard(
-                                  color: Colors.white,
+                                  color: AppConstants.surfaceLight,
                                   padding: const EdgeInsets.all(12),
                                   child: Row(
                                     children: [
@@ -379,6 +394,8 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                                             _deactivateUser(userId, name);
                                           } else if (val == 'view_docs') {
                                             _viewDocuments(userId, name);
+                                          } else if (val == 'security') {
+                                            _viewAccountSecurity(userId, name);
                                           }
                                         },
                                         itemBuilder: (context) => [
@@ -389,6 +406,16 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                                                 const Icon(Icons.description_outlined, size: 16, color: AppConstants.primary),
                                                 const SizedBox(width: 8),
                                                 Text('View Documents', style: AppConstants.bodyStyle(fontSize: 13)),
+                                              ],
+                                            ),
+                                          ),
+                                          PopupMenuItem(
+                                            value: 'security',
+                                            child: Row(
+                                              children: [
+                                                const Icon(Icons.shield_outlined, size: 16, color: AppConstants.primary),
+                                                const SizedBox(width: 8),
+                                                Text('Account Security', style: AppConstants.bodyStyle(fontSize: 13)),
                                               ],
                                             ),
                                           ),

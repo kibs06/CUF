@@ -95,4 +95,73 @@ void main() {
       expect(notified, 1);
     });
   });
+
+  // ANQUI item 16, Part A. The seller flow creates its account at final
+  // submit, so with "Confirm email" ON the code has to be cleared BEFORE the
+  // private-bucket uploads (their RLS needs a session) and before the profile
+  // write. These assert the ordering rule; the end-to-end effects (a pending
+  // application, never an approved one) are covered by the flow that calls
+  // it plus the pgTAP suite.
+  group('email-verification pre-flight', () {
+    test('no verification step when the account already has a session', () {
+      expect(
+        SellerApplicationController.needsVerificationStep(
+          emailVerificationRequired: false,
+        ),
+        isFalse,
+      );
+    });
+
+    test('a verification step is required when signUp returned no session', () {
+      expect(
+        SellerApplicationController.needsVerificationStep(
+          emailVerificationRequired: true,
+        ),
+        isTrue,
+      );
+    });
+
+    test('a verified code + a live session lets the application continue', () {
+      expect(
+        SellerApplicationController.canProceedAfterVerification(
+          verified: true,
+          hasSession: true,
+        ),
+        isTrue,
+      );
+    });
+
+    test('backing out of verification does NOT half-complete the application',
+        () {
+      // The screen popped without a code, so there is nothing to upload as.
+      expect(
+        SellerApplicationController.canProceedAfterVerification(
+          verified: false,
+          hasSession: false,
+        ),
+        isFalse,
+      );
+      expect(
+        SellerApplicationController.canProceedAfterVerification(
+          verified: null,
+          hasSession: false,
+        ),
+        isFalse,
+      );
+    });
+
+    test('a claimed verification without a session still blocks', () {
+      // Defensive: if the caller reports success but no session materialised,
+      // the uploads that follow would be a permission error — and writing the
+      // profile from signup metadata would downgrade a seller application to
+      // a plain customer row.
+      expect(
+        SellerApplicationController.canProceedAfterVerification(
+          verified: true,
+          hasSession: false,
+        ),
+        isFalse,
+      );
+    });
+  });
 }

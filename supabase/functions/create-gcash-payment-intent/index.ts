@@ -4,11 +4,16 @@
 //
 // Auth:        required (JWT) — the logged-in customer
 // Input:       { idempotency_key, items:[{product_id,size,quantity}],
-//                delivery_address?, shipping_address? }
+//                delivery_address?, shipping_address?, voucher_code? }
 // Behavior:
 //   • NEVER trusts a client-supplied total. Stock is revalidated and the
 //     total is recomputed server-side from current product prices +
 //     the fixed ₱100 delivery fee.
+//   • NEVER trusts a client-supplied discount: voucher_code is handed to
+//     the orders_apply_voucher() BEFORE INSERT trigger, which validates
+//     the code and rewrites the order's totals in the same transaction.
+//     The fee and the PayMongo charge are then derived from the stored
+//     totals, so the amount charged always equals the order's total.
 //   • Model B fee (confirmed with the human): the customer is charged
 //     order_total + a GCash fee computed from payment_fee_config
 //     (rate = data, not code) so the seller nets the full order total.
@@ -138,6 +143,15 @@ serve(async (req: Request) => {
   const deliveryAddress: string = body?.delivery_address ?? "";
   const shippingAddress = body?.shipping_address ?? null;
 
+  // ── Voucher (optional) ──────────────────────────────────────────
+  // The client sends a CODE only. The discount is decided server-side by
+  // the orders_apply_voucher() trigger inside the order insert below, and
+  // the charged amount is derived from what the trigger stored — this
+  // function never computes or trusts a discount of its own.
+  const voucherCode: string = String(body?.voucher_code ?? "")
+    .trim()
+    .toUpperCase();
+
   const serviceClient = createClient(supabaseUrl, serviceKey);
 
   // ── Per-customer mini-sweep (runs BEFORE the pending-intent lookup) ─
@@ -200,7 +214,10 @@ serve(async (req: Request) => {
     console.error("[CREATE-PI] active intent lookup failed:", activeErr.message);
     return json(500, { error: "Could not check for an existing checkout" });
   }
-  const fingerprint = cartFingerprint(items);
+  // The voucher is part of the identity of a checkout: the same cart with a
+  // different code is a different charge, so it must not be returned as an
+  // idempotent hit for the old (undiscounted) intent.
+  const fingerprint = cartFingerprint(items) + (voucherCode ? `#${voucherCode}` : "");
   if (activeIntents && activeIntents.length > 0) {
     const pi = activeIntents[0];
     // Don't resurrect an intent whose payment window has already lapsed —
@@ -219,7 +236,8 @@ serve(async (req: Request) => {
           already_exists: true,
         });
       }
-      // Different cart → don't silently pay for the wrong items.
+      // Different cart (or a different voucher code) → don't silently pay
+      // for the wrong items or the wrong amount.
       console.log("[CREATE-PI] Active pending intent is for a different cart — refusing", pi.id);
       return json(409, {
         error: "You have an unfinished checkout for a different cart. Complete or cancel it before starting a new one.",
@@ -292,6 +310,42 @@ serve(async (req: Request) => {
   }
   const orderTotalCents = subtotalCents > 0 ? subtotalCents + DELIVERY_FEE * 100 : 0;
 
+  /// Spreads a voucher discount across the PayMongo line items so the
+  /// session total equals the discounted order total EXACTLY.
+  /// PayMongo derives the charge from line_items and rejects negative
+  /// amounts, so the discount cannot be a line of its own: each line gets
+  /// its floor share of the discounted total and the leftover centavos go
+  /// to the largest fractional parts (largest-remainder rounding). Lines
+  /// are flattened to quantity 1 when a discount applies, because the
+  /// adjusted per-unit amount is not guaranteed to divide evenly.
+  function applyDiscountToLineItems(
+    lines: { name: string; amount: number; quantity: number }[],
+    discountCents: number,
+  ): { name: string; amount: number; quantity: number }[] {
+    const lineTotals = lines.map((l) => l.amount * l.quantity);
+    const gross = lineTotals.reduce((a, b) => a + b, 0);
+    if (discountCents <= 0 || gross <= 0) return lines;
+    const target = Math.max(0, gross - discountCents);
+
+    const exact = lineTotals.map((t) => (t / gross) * target);
+    const floors = exact.map(Math.floor);
+    let remainder = target - floors.reduce((a, b) => a + b, 0);
+    const byFraction = exact
+      .map((e, i) => ({ i, frac: e - Math.floor(e) }))
+      .sort((a, b) => b.frac - a.frac);
+    for (const { i } of byFraction) {
+      if (remainder <= 0) break;
+      floors[i] += 1;
+      remainder -= 1;
+    }
+
+    return lines.map((l, i) => ({
+      name: l.quantity > 1 ? `${l.name} ×${l.quantity}` : l.name,
+      amount: Math.max(0, floors[i]),
+      quantity: 1,
+    }));
+  }
+
   // ── Model B fee — read the config (rate = data, never hardcoded) ─
   const { data: feeConfig, error: feeErr } = await serviceClient
     .from("payment_fee_config")
@@ -306,18 +360,13 @@ serve(async (req: Request) => {
   const rateBps = Number(feeConfig.rate_bps);
   const vatBps = Number(feeConfig.vat_bps);
 
-  let chargedCents: number;
-  let feeCents: number;
-  try {
-    ({ chargedCents, feeCents } = computeFeeCents(orderTotalCents, rateBps, vatBps));
-  } catch (e: any) {
-    console.error("[CREATE-PI] fee config invalid:", e?.message ?? e);
-    return json(503, { error: "GCash fee is not configured. Please contact support." });
-  }
-  const chargedPesos = chargedCents / 100;
-  const feePesos = feeCents / 100;
-
   // ── Create the order (awaiting_payment — no stock touched) ──────
+  // A voucher code is redeemed HERE. orders_apply_voucher() is a BEFORE
+  // INSERT trigger: it re-evaluates the code inside this statement's
+  // transaction (holding a FOR UPDATE lock on the voucher row so a use cap
+  // cannot be raced), reprices the cart from items_snapshot, and OVERWRITES
+  // subtotal_amount / discount_amount / total_amount. Whatever comes back is
+  // the authoritative money — nothing below re-derives it from the request.
   const firstProduct: any = productById.get(productIds[0]);
   const { data: orderRow, error: orderErr } = await serviceClient
     .from("orders")
@@ -333,17 +382,63 @@ serve(async (req: Request) => {
       shipping_address: shippingAddress,
       source: "online",
       items_snapshot: snapshot,
+      voucher_code: voucherCode || null,
+    })
+    .select("id, total_amount, subtotal_amount, discount_amount")
+    .single();
+  if (orderErr) {
+    console.error("[CREATE-PI] order insert failed:", orderErr.message);
+    // A rejected voucher raises P0001 with a customer-readable reason
+    // (expired / fully claimed / already used / below minimum / wrong
+    // store). Surface it so the app can show it instead of a dead end.
+    if (orderErr.code === "P0001") {
+      return json(409, { error: orderErr.message });
+    }
+    return json(500, { error: "Could not create the order" });
+  }
+  const orderId: string = orderRow.id; // UUID (live DB orders.id)
+  const discountPesos = Number(orderRow.discount_amount ?? 0);
+  const discountCents = Math.round(discountPesos * 100);
+  // The voucher (if any) has already been taken off this total by the
+  // trigger — the fee and the charge both follow the order, never the cart.
+  const finalOrderTotalCents = Math.round(Number(orderRow.total_amount) * 100);
+
+  let chargedCents: number;
+  let feeCents: number;
+  try {
+    ({ chargedCents, feeCents } = computeFeeCents(finalOrderTotalCents, rateBps, vatBps));
+  } catch (e: any) {
+    console.error("[CREATE-PI] fee config invalid:", e?.message ?? e);
+    // Nothing was charged and no stock is held — close the order for audit.
+    await serviceClient
+      .from("orders")
+      .update({
+        status: "cancelled",
+        payment_status: "failed",
+        cancellation_reason: "GCash fee not configured",
+        cancelled_at: new Date().toISOString(),
+      })
+      .eq("id", orderId);
+    return json(503, { error: "GCash fee is not configured. Please contact support." });
+  }
+  const chargedPesos = chargedCents / 100;
+  const feePesos = feeCents / 100;
+
+  // Fee snapshot is written after the insert because it depends on the
+  // post-voucher total. Display/audit only: the authoritative charge is
+  // the PayMongo session below, and the webhook compares its amount against
+  // payment_intents.amount (set further down), not against these columns.
+  const { error: feeSnapshotErr } = await serviceClient
+    .from("orders")
+    .update({
       gcash_fee_amount: feePesos,
       gcash_fee_rate_bps: rateBps,
       gcash_fee_vat_bps: vatBps,
     })
-    .select("id")
-    .single();
-  if (orderErr) {
-    console.error("[CREATE-PI] order insert failed:", orderErr.message);
-    return json(500, { error: "Could not create the order" });
+    .eq("id", orderId);
+  if (feeSnapshotErr) {
+    console.error("[CREATE-PI] fee snapshot write failed:", feeSnapshotErr.message);
   }
-  const orderId: string = orderRow.id; // UUID (live DB orders.id)
 
   // ── Create the PayMongo Checkout Session ────────────────────────
   const successUrl =
@@ -353,12 +448,18 @@ serve(async (req: Request) => {
     Deno.env.get("PAYMONGO_CANCEL_URL") ??
     "solvision://checkout/gcash/cancel";
 
+  // The discount is spread across the ITEM lines (never the delivery fee or
+  // the GCash service fee) so the session total stays exactly
+  // chargedCents. Without a voucher the lines keep their unit × qty shape.
+  const itemLines = snapshot.map((s: any) => ({
+    name: `${s.product_name}${s.size ? ` (EU ${s.size})` : ""}`,
+    amount: Math.round(Number(s.unit_price) * 100), // per unit, centavos
+    quantity: Number(s.quantity),
+  }));
   const lineItems = [
-    ...snapshot.map((s: any) => ({
-      name: `${s.product_name}${s.size ? ` (EU ${s.size})` : ""}`,
-      amount: Math.round(Number(s.unit_price) * 100), // per unit, centavos
-      quantity: Number(s.quantity),
-    })),
+    ...(discountCents > 0
+      ? applyDiscountToLineItems(itemLines, discountCents)
+      : itemLines),
     { name: "Delivery Fee", amount: DELIVERY_FEE * 100, quantity: 1 },
     { name: "GCash Service Fee", amount: feeCents, quantity: 1 },
   ];

@@ -109,6 +109,7 @@ class OrderProvider extends ChangeNotifier {
     String source = 'online',
     double? amountTendered,
     String? gcashReference,
+    String? voucherCode,
   }) async {
     _isLoading = true;
     notifyListeners();
@@ -126,6 +127,9 @@ class OrderProvider extends ChangeNotifier {
         'source': source,
         'amount_tendered': ?amountTendered,
         'gcash_reference_number': ?gcashReference,
+        // Voucher CODE only — the server looks it up, validates it and
+        // recomputes total_amount inside the insert (orders_apply_voucher).
+        'voucher_code': ?voucherCode,
       });
       await loadOrders();
       _isLoading = false;

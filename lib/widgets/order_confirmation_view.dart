@@ -89,7 +89,7 @@ class OrderConfirmationView extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             SoleCard(
-              color: Colors.white,
+              color: AppConstants.surfaceLight,
               padding: const EdgeInsets.all(20),
               child: Column(
                 children: [

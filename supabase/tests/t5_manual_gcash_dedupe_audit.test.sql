@@ -42,7 +42,7 @@ values ('00000000-0000-0000-0000-0000000000ee', 'T5 Store', 'Manila', '00000000-
 
 -- ── structural checks ─────────────────────────────────────────────
 select is(
-  to_regindex('public.uq_orders_gcash_reference_number_paid') IS NOT NULL,
+  to_regclass('public.uq_orders_gcash_reference_number_paid') IS NOT NULL,
   true,
   '1: dedupe partial unique index exists on orders'
 );
@@ -162,7 +162,7 @@ update public.orders
  where id = '11111111-1111-1111-1111-111111111105';
 
 select is(
-  (select count(*) from public.gcash_payment_decision_audit
+  (select count(*)::int from public.gcash_payment_decision_audit
     where order_id = '11111111-1111-1111-1111-111111111105'),
   1,
   '12: POS confirm writes exactly one audit row'
@@ -200,7 +200,7 @@ select is(
 update public.orders set payment_status = 'paid' where id = '11111111-1111-1111-1111-111111111105';
 
 select is(
-  (select count(*) from public.gcash_payment_decision_audit
+  (select count(*)::int from public.gcash_payment_decision_audit
     where order_id = '11111111-1111-1111-1111-111111111105'),
   1,
   '17: no-op re-confirmation does not duplicate the audit row'
@@ -258,7 +258,7 @@ select lives_ok(
 reset role;
 
 select is(
-  (select count(*) from public.gcash_payment_decision_audit
+  (select count(*)::int from public.gcash_payment_decision_audit
     where order_id = '11111111-1111-1111-1111-111111111106'),
   1,
   '20: queue confirm writes exactly one audit row'
@@ -326,7 +326,7 @@ select set_config(
 set role authenticated;
 
 select is(
-  (select count(*) from public.gcash_payment_decision_audit),
+  (select count(*)::int from public.gcash_payment_decision_audit),
   0,
   '28: non-admin reads zero audit rows'
 );
@@ -340,7 +340,10 @@ select throws_ok(
        '9999999999999', 1.00, 'confirmed', 'pos')
   $sql$,
   null,
-  'permission denied',
+  -- pgTAP matches the error message EXACTLY (not as a prefix), so this has
+  -- to be the full message. The denial is the table-level grant: only
+  -- SELECT is granted to authenticated, so the insert never reaches RLS.
+  'permission denied for table gcash_payment_decision_audit',
   '29: non-admin direct insert into the audit table is denied'
 );
 
@@ -355,7 +358,7 @@ select set_config(
 set role authenticated;
 
 select ok(
-  (select count(*) from public.gcash_payment_decision_audit) > 0,
+  (select count(*)::int from public.gcash_payment_decision_audit) > 0,
   '30: admin reads audit rows'
 );
 

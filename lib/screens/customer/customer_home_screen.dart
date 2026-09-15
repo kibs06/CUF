@@ -17,6 +17,7 @@ import '../../widgets/no_internet_view.dart';
 import '../../widgets/sole_product_card.dart';
 import '../../widgets/shimmer_group.dart';
 import '../../widgets/customer_foot_profile_banner.dart';
+import '../../widgets/best_sellers_section.dart';
 import '../../widgets/chat/chat_view.dart';
 import 'cart_screen.dart';
 import 'product_detail_screen.dart';
@@ -195,7 +196,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       builder: (ctx) => Container(
         margin: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppConstants.surfaceLight,
           borderRadius: BorderRadius.circular(16),
         ),
         padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
@@ -275,6 +276,15 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     // Products currently on sale — powers the dedicated "On Sale" sliver.
     final saleProducts =
         allProducts.where(isOnSale).toList();
+    // Best sellers — the same live `units_sold` set the 'Best Sellers' chip
+    // filters by (one rule, see bestSellerProducts). The rail is suppressed
+    // while a category or search is narrowing the catalog, exactly like the
+    // "On Sale" section below.
+    final bestSellers = productProvider.bestSellers;
+    final showBestSellers = _searchKeyword.isEmpty &&
+        bestSellers.isNotEmpty &&
+        (productProvider.selectedCategory == null ||
+            productProvider.selectedCategory == 'All');
 
     return Scaffold(
       backgroundColor: AppConstants.surfaceLight,
@@ -395,6 +405,21 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                                   );
                                 },
                               ),
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+
+                          // ── Best Sellers rail ──
+                          if (showBestSellers) ...[
+                            BestSellersSection(
+                              onSeeAll: () {
+                                context
+                                    .read<ProductProvider>()
+                                    .selectCategory(kBestSellersCategory);
+                                _searchController.clear();
+                                _searchFocusNode.unfocus();
+                                setState(() => _searchKeyword = '');
+                              },
                             ),
                             const SizedBox(height: 16),
                           ],
@@ -636,7 +661,7 @@ class _ProductCardSkeleton extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: BorderRadius.circular(12),
       ),
       child: const Column(
@@ -714,6 +739,8 @@ class _EmptyCategoryView extends StatelessWidget {
         return Icons.ice_skating_outlined;
       case 'on sale':
         return Icons.sell_outlined;
+      case 'best sellers':
+        return Icons.local_fire_department_outlined;
       default:
         return Icons.do_not_step_outlined;
     }
@@ -723,7 +750,11 @@ class _EmptyCategoryView extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasSearch = keyword.trim().isNotEmpty;
     final category = context.read<ProductProvider>().selectedCategory ?? 'All';
-    final isCategoryScoped = category != 'All' && category != 'On Sale';
+    // Pseudo-categories (derived rules, not real category values) get the
+    // generic copy instead of "No Best Sellers yet".
+    final isCategoryScoped = category != 'All' &&
+        category != 'On Sale' &&
+        category != kBestSellersCategory;
 
     // Message adapts: search-within-category vs category vs search-only.
     final String title;

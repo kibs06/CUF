@@ -67,7 +67,7 @@ class SoleTextField extends StatelessWidget {
             hintText: hintText,
             hintStyle: AppConstants.bodyStyle(fontSize: 14, color: AppConstants.secondary.withValues(alpha: 0.5)),
             filled: true,
-            fillColor: Colors.white,
+            fillColor: AppConstants.surfaceLight,
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             prefixIcon: prefixIcon != null ? Icon(prefixIcon, color: AppConstants.primary, size: 20) : null,
             suffixIcon: suffixIcon,

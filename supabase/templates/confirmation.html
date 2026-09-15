@@ -1,0 +1,45 @@
+<!--
+  Sign-up confirmation email — ANQUI checklist item 16 (email OTP).
+
+  WHY THIS FILE EXISTS: the stock Supabase "Confirm signup" template renders
+  ONLY `{{ .ConfirmationURL }}` (a link). The app verifies with
+  `verifyOtp(type: OtpType.signup)`, which needs the 6-digit `{{ .Token }}` —
+  so without a template like this the verify-email screen has no code to
+  accept. `supabase/config.toml` points `[auth.email.template.confirmation]`
+  here — note that key is `confirmation` (GoTrue's mail-type name), NOT
+  `signup`, which the CLI would map to an env var GoTrue ignores.
+
+  ⚠️ The LIVE project's template must match (Dashboard → Authentication →
+  Email Templates → Confirm signup); a local template does not ship anywhere.
+  See docs/AI/EMAIL_OTP_AND_DEVICE_TRUST_ARCHITECTURE.md.
+-->
+<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#F3E9D8;padding:32px 16px;">
+  <div style="max-width:480px;margin:0 auto;background:#FBF5E9;border-radius:16px;padding:32px;border:1px solid #E3D6BC;">
+    <h1 style="margin:0 0 8px;font-size:20px;color:#3A2E22;">Confirm your email</h1>
+    <p style="margin:0 0 24px;font-size:14px;line-height:1.6;color:#6B5B47;">
+      Welcome to CUFMAI. Enter this code in the app to activate your account:
+    </p>
+
+    <div style="text-align:center;margin:0 0 24px;">
+      <span style="display:inline-block;font-size:34px;font-weight:700;letter-spacing:10px;color:#3A2E22;background:#F0DFBB;padding:14px 20px 14px 30px;border-radius:12px;">
+        {{ .Token }}
+      </span>
+    </div>
+
+    <p style="margin:0 0 24px;font-size:13px;line-height:1.6;color:#6B5B47;">
+      The code expires in 1 hour. If you would rather confirm on this device,
+      tap the button below.
+    </p>
+
+    <p style="margin:0 0 24px;">
+      <a href="{{ .ConfirmationURL }}"
+         style="display:inline-block;background:#8C6B4F;color:#FBF5E9;text-decoration:none;font-size:14px;font-weight:600;padding:12px 22px;border-radius:12px;">
+        Confirm email address
+      </a>
+    </p>
+
+    <p style="margin:0;font-size:12px;line-height:1.6;color:#6B5B47;">
+      If you did not create a CUFMAI account, you can safely ignore this email.
+    </p>
+  </div>
+</div>

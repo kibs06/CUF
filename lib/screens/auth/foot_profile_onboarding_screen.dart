@@ -265,7 +265,7 @@ class _FootProfileOnboardingScreenState
     return Container(
       padding: const EdgeInsets.all(AuthSpacing.s20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: AppConstants.cardRadius,
         border: Border.all(
           color: AppConstants.borderGray.withValues(alpha: 0.6),
@@ -330,7 +330,7 @@ class _FootProfileOnboardingScreenState
                     padding: const EdgeInsets.symmetric(horizontal: 14),
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: isSelected ? AppConstants.primary : Colors.white,
+                      color: isSelected ? AppConstants.primary : AppConstants.sellerCardBg,
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
                         color: isSelected
@@ -380,7 +380,7 @@ class _FootProfileOnboardingScreenState
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         color:
-                            isSelected ? AppConstants.primary : Colors.white,
+                            isSelected ? AppConstants.primary : AppConstants.sellerCardBg,
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
                           color: isSelected

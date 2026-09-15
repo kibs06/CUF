@@ -83,7 +83,7 @@ class PosReceiptDetailScreen extends StatelessWidget {
             child: Container(
               width: double.infinity,
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: AppConstants.surfaceLight,
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(

@@ -10,7 +10,9 @@ import '../../providers/auth_provider.dart';
 import '../../providers/seller_application_controller.dart';
 import '../../screens/shared/terms_privacy_screen.dart';
 import '../../services/auth_service.dart';
+import '../../services/email_otp_service.dart';
 import '../../services/seller_application_draft_store.dart';
+import '../shared/email_otp_screen.dart';
 import '../../utils/customer_profile_fields.dart';
 import '../../utils/dev_mode.dart';
 import '../../screens/seller/store_location_picker_screen.dart';
@@ -297,6 +299,31 @@ class _SellerApplicationFlowState extends State<SellerApplicationFlow> {
       final fullName = _nameController.text.trim().isNotEmpty
           ? _nameController.text.trim()
           : 'Dev Seller';
+
+      // A brand-new dev account still has to clear email confirmation when
+      // "Confirm email" is on, otherwise the profile write below would be
+      // rejected by RLS. Reusing the production helper keeps the dev path on
+      // the same rails instead of quietly diverging (the code shows up in
+      // Mailpit at :54324 locally).
+      final ensured = await AuthService.instance.ensureUser(
+        email: email,
+        password: password,
+        fullName: fullName,
+      );
+      if (!mounted) return;
+      if (ensured.emailVerificationRequired) {
+        final verified = await _requestEmailVerification(context, email, auth);
+        if (!verified) {
+          if (!mounted) return;
+          setState(
+            () => _controller.submitError =
+                'Dev seller application needs a confirmed email address.',
+          );
+          return;
+        }
+      }
+      if (!mounted) return;
+
       final ok = await auth.signUpSeller(
         data: SellerApplicationData(
           fullName: fullName,
@@ -386,10 +413,7 @@ class _SellerApplicationFlowState extends State<SellerApplicationFlow> {
       );
       return;
     }
-    final auth = context.read<AuthProvider>();
-    final ok = await _controller.submit(
-      signUpSeller: (data) => auth.signUpSeller(data: data),
-    );
+    final ok = await _runSubmit(context, _controller);
     if (!mounted) return;
     if (ok) {
       // The application is in — drop the persisted draft so reopening the
@@ -734,7 +758,7 @@ class _AccountStep extends StatelessWidget {
                 showCheckmark: false,
                 onSelected: (sel) => onGenderChanged(sel ? option : null),
                 selectedColor: AppConstants.primary,
-                backgroundColor: Colors.white,
+                backgroundColor: AppConstants.surfaceLight,
                 side: BorderSide(
                   color: selected
                       ? Colors.transparent
@@ -951,7 +975,7 @@ class _IdentityStepState extends State<_IdentityStep> {
       width: double.infinity,
       padding: const EdgeInsets.all(AuthSpacing.s12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: (selected == null
@@ -1033,7 +1057,7 @@ class _IdentityStepState extends State<_IdentityStep> {
   ) async {
     final selected = await showModalBottomSheet<String>(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: AppConstants.surfaceLight,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -1629,7 +1653,7 @@ class _ProductPhotoSlot extends StatelessWidget {
       borderRadius: BorderRadius.circular(14),
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppConstants.surfaceLight,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: AppConstants.borderGray.withValues(alpha: 0.6),
@@ -1739,7 +1763,7 @@ class _SubmissionView extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(AuthSpacing.s20),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppConstants.surfaceLight,
             borderRadius: AppConstants.premiumCardRadius,
             boxShadow: AppConstants.premiumCardShadow,
           ),
@@ -1857,13 +1881,7 @@ class _SubmissionView extends StatelessWidget {
                   width: double.infinity,
                   height: 48,
                   child: FilledButton.icon(
-                    onPressed: () {
-                      final auth = context.read<AuthProvider>();
-                      ctrl.submit(
-                        signUpSeller: (data) =>
-                            auth.signUpSeller(data: data),
-                      );
-                    },
+                    onPressed: () => _runSubmit(context, ctrl),
                     icon: const Icon(Icons.refresh_rounded, size: 18),
                     label: const Text('Try again'),
                     style: FilledButton.styleFrom(
@@ -1904,8 +1922,55 @@ class _SubmissionView extends StatelessWidget {
 /// The submit sequence is idempotent — already-uploaded documents are
 /// skipped and only the failed one is re-attempted.
 void _retrySubmit(BuildContext context, SellerApplicationController ctrl) {
+  _runSubmit(context, ctrl);
+}
+
+/// The seller application's single submission entry point — the final
+/// Submit, the submission view's "Try again", and the per-document retry all
+/// funnel through here so they can never drift apart.
+///
+/// It wires in the e-mail verification step that "Confirm email" (ANQUI item
+/// 16, Part A) requires: the application's account is created at final
+/// submit, so the confirmation code has to be cleared BEFORE the private
+/// document uploads, which need a session.
+Future<bool> _runSubmit(
+  BuildContext context,
+  SellerApplicationController ctrl,
+) {
   final auth = context.read<AuthProvider>();
-  ctrl.submit(signUpSeller: (data) => auth.signUpSeller(data: data));
+  return ctrl.submit(
+    signUpSeller: (data) => auth.signUpSeller(data: data),
+    requestEmailVerification: () =>
+        _requestEmailVerification(context, ctrl.email, auth),
+  );
+}
+
+/// Pushes the shared email-OTP screen above the flow and resolves to true
+/// once the address is confirmed (a real session now exists). Closing it
+/// without verifying resolves to false and just parks the submission view
+/// with an explanatory error — the submission sequence is idempotent, so
+/// "Try again" resumes cleanly.
+Future<bool> _requestEmailVerification(
+  BuildContext context,
+  String email,
+  AuthProvider auth,
+) async {
+  final verified = await Navigator.of(context).push<bool>(
+    MaterialPageRoute(
+      builder: (routeContext) => EmailOtpScreen(
+        purpose: EmailOtpPurpose.signupVerification,
+        email: email,
+        // ensureUser's signUp already mailed the first code.
+        codeAlreadySent: true,
+        cancelLabel: 'Back to my application',
+        onVerify: (code) async {
+          await auth.verifySignupCodeForSeller(email: email, code: code);
+          if (routeContext.mounted) Navigator.of(routeContext).pop(true);
+        },
+      ),
+    ),
+  );
+  return verified == true;
 }
 
 // ══════════════════════════════════════════════════════════════════

@@ -722,7 +722,7 @@ class _ManageOrdersScreenState extends State<ManageOrdersScreen>
         children: [
           // Tab bar
           Container(
-            color: Colors.white,
+            color: AppConstants.surfaceLight,
             child: TabBar(
               controller: _tabController,
               isScrollable: true,

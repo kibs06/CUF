@@ -64,7 +64,7 @@ class _MonitorProductsScreenState extends State<MonitorProductsScreen> {
                         return Container(
                           margin: const EdgeInsets.only(bottom: 12),
                           child: SoleCard(
-                            color: Colors.white,
+                            color: AppConstants.surfaceLight,
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [

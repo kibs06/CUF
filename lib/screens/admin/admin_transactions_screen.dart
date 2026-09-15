@@ -405,7 +405,7 @@ class _AdminTransactionsScreenState extends State<AdminTransactionsScreen> {
                                 decoration: BoxDecoration(
                                   color: _statusFilter == value
                                       ? AppConstants.primary
-                                      : Colors.white,
+                                      : AppConstants.sellerCardBg,
                                   borderRadius: BorderRadius.circular(20),
                                   border: Border.all(
                                     color: _statusFilter == value
@@ -453,7 +453,7 @@ class _AdminTransactionsScreenState extends State<AdminTransactionsScreen> {
                               )
                             : null,
                         filled: true,
-                        fillColor: Colors.white,
+                        fillColor: AppConstants.surfaceLight,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
                           borderSide: BorderSide.none,
@@ -473,7 +473,7 @@ class _AdminTransactionsScreenState extends State<AdminTransactionsScreen> {
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                               decoration: BoxDecoration(
-                                color: Colors.white,
+                                color: AppConstants.surfaceLight,
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(color: AppConstants.borderGray),
                               ),
@@ -491,7 +491,7 @@ class _AdminTransactionsScreenState extends State<AdminTransactionsScreen> {
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                               decoration: BoxDecoration(
-                                color: Colors.white,
+                                color: AppConstants.surfaceLight,
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(color: AppConstants.borderGray),
                               ),
@@ -689,7 +689,7 @@ class _AdminTransactionsScreenState extends State<AdminTransactionsScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppConstants.borderGray),
       ),
@@ -697,7 +697,7 @@ class _AdminTransactionsScreenState extends State<AdminTransactionsScreen> {
         child: DropdownButton<String>(
           value: _storeFilter,
           isExpanded: true,
-          dropdownColor: Colors.white,
+          dropdownColor: AppConstants.sellerCardBg,
           style: AppConstants.bodyStyle(fontSize: 12),
           items: [
             const DropdownMenuItem(value: 'all', child: Text('All stores')),

@@ -153,7 +153,7 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
                     color: AppConstants.secondary.withValues(alpha: 0.5),
                   ),
                   filled: true,
-                  fillColor: const Color(0xFFF5F5F5),
+                  fillColor: AppConstants.surfaceLight,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide(
@@ -244,7 +244,7 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
     final auth = context.watch<AuthProvider>();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
+      backgroundColor: AppConstants.surfaceLight,
       appBar: AppBar(
         title: Text(
           'Account & Security',
@@ -411,7 +411,7 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
-      color: const Color(0xFFF0F0F0),
+      color: AppConstants.sellerCardBg,
       child: Text(
         title,
         style: AppConstants.bodyStyle(
@@ -425,7 +425,7 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
   // ── Section card ───────────────────────────────────────────────
   Widget _buildSection(List<Widget> children) {
     return Container(
-      color: Colors.white,
+      color: AppConstants.surfaceLight,
       child: Column(children: children),
     );
   }

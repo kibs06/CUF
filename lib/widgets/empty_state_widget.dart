@@ -19,7 +19,7 @@ class EmptyStateWidget extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: BorderRadius.circular(14),
         boxShadow: AppConstants.warmShadow,
       ),

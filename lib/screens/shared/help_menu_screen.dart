@@ -41,7 +41,7 @@ class HelpMenuScreen extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppConstants.surfaceLight,
               borderRadius: BorderRadius.circular(16),
             ),
             child: Column(
@@ -146,7 +146,7 @@ class _HelpOption extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.white,
+      color: AppConstants.surfaceLight,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: onTap,

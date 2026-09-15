@@ -12,6 +12,7 @@ import '../../providers/product_provider.dart';
 import '../../providers/seller_notification_provider.dart';
 import '../../services/connectivity_service.dart';
 import '../../services/order_service.dart';
+import '../../services/pickup_reservation_service.dart';
 import '../../services/reservation_service.dart';
 import '../../services/sales_service.dart';
 import '../../services/seller_notification_service.dart';
@@ -35,6 +36,7 @@ import 'seller_inbox_screen.dart';
 import 'reports_screen.dart';
 import 'gcash_payment_queue_screen.dart';
 import 'create_store_screen.dart';
+import 'pickup_reservations_screen.dart';
 
 /// Dashboard data model — holds all real data fetched from Supabase.
 class _DashboardData {
@@ -56,6 +58,15 @@ class _DashboardData {
   final int lowStockCount;
   final int pendingCustoms;
   final int pendingReservations;
+  /// Live FREE pickup holds (ANQUI item 14) — stock already off the shelf,
+  /// waiting for the customer to walk in. A different queue from the
+  /// deposit-gated `pendingReservations` above.
+  final int activePickups;
+  /// How many of [activePickups] hand their stock back within 2 hours (or
+  /// already have, pending the sweep) and how many units that is — the part a
+  /// store has to act on before the shelf refills itself.
+  final int pickupLapsing;
+  final int pickupReturningUnits;
   final List<Map<String, dynamic>> lowStockItems;
   final List<Map<String, dynamic>> staleOrders;
 
@@ -75,6 +86,9 @@ class _DashboardData {
     required this.lowStockCount,
     required this.pendingCustoms,
     required this.pendingReservations,
+    required this.activePickups,
+    this.pickupLapsing = 0,
+    this.pickupReturningUnits = 0,
     required this.lowStockItems,
     required this.staleOrders,
   });
@@ -224,6 +238,18 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
           await ReservationService.instance.fetchPendingCount(storeId);
     } catch (_) {}
 
+    // Live pickup holds (free, no deposit, already holding stock). Also
+    // non-fatal. Opportunistic sweeps ride along so a stale hold is released
+    // whenever the dashboard is opened.
+    var pickupStats = const PickupStoreStats();
+    try {
+      await PickupReservationService.instance.expireStale();
+      pickupStats = await PickupReservationService.instance.fetchStoreStats(storeId);
+    } catch (_) {}
+    final activePickups = pickupStats.active;
+    final pickupLapsing = pickupStats.lapsing;
+    final pickupReturningUnits = pickupStats.returningUnits;
+
     // ── Notification: stale_order ─────────────────────────────────
     // Fire-and-forget: notify seller about stale pending orders.
     for (final order in staleOrders) {
@@ -266,6 +292,9 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
       lowStockCount: lowStockCount,
       pendingCustoms: pendingCustoms,
       pendingReservations: pendingReservations,
+      activePickups: activePickups,
+      pickupLapsing: pickupLapsing,
+      pickupReturningUnits: pickupReturningUnits,
       lowStockItems: lowStockItems,
       staleOrders: staleOrders,
     );
@@ -286,6 +315,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     lowStockCount: 0,
     pendingCustoms: 0,
     pendingReservations: 0,
+    activePickups: 0,
     lowStockItems: [],
     staleOrders: [],
   );
@@ -771,66 +801,73 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        // Low Stock / Custom Orders / Bulk Reservations — small boxes below
-        Row(
-          children: [
-            // Low Stock
-            Expanded(
-              child: SellerMetricCard(
-                label: 'LOW STOCK',
-                value: '${data.lowStockCount}',
-                valueColor: data.lowStockCount > 0
-                    ? SellerTheme.rust
-                    : SellerTheme.sage,
-                subtitle: data.lowStockCount > 0
-                    ? 'items need restocking'
-                    : 'stock levels OK',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          const ManageProductsScreen(initialFilter: 'Low Stock'),
-                    ),
-                  );
-                },
+        // Low Stock / Custom Orders / Bulk Reservations — three equal cards
+        // across. IntrinsicHeight + stretch keeps all three the same height
+        // even when a label or subtitle wraps to two lines at this width.
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Low Stock
+              Expanded(
+                child: SellerMetricCard(
+                  label: 'LOW STOCK',
+                  value: '${data.lowStockCount}',
+                  valueColor: data.lowStockCount > 0
+                      ? SellerTheme.rust
+                      : SellerTheme.sage,
+                  subtitle: data.lowStockCount > 0
+                      ? 'items need restocking'
+                      : 'stock levels OK',
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const ManageProductsScreen(
+                            initialFilter: 'Low Stock'),
+                      ),
+                    );
+                  },
+                ),
               ),
-            ),
-            const SizedBox(width: 10),
-            // Custom Orders
-            Expanded(
-              child: SellerMetricCard(
-                label: 'CUSTOM ORDERS',
-                value: '${data.pendingCustoms}',
-                subtitle: 'unreviewed requests',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const CustomOrdersScreen(),
-                    ),
-                  );
-                },
+              const SizedBox(width: 10),
+              // Custom Orders
+              Expanded(
+                child: SellerMetricCard(
+                  label: 'CUSTOM ORDERS',
+                  value: '${data.pendingCustoms}',
+                  subtitle: 'unreviewed requests',
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const CustomOrdersScreen(),
+                      ),
+                    );
+                  },
+                ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        // Bulk Reservations — reseller stock holds awaiting approval
-        SellerMetricCard(
-          label: 'BULK RESERVATIONS',
-          value: '${data.pendingReservations}',
-          valueColor: data.pendingReservations > 0
-              ? SellerTheme.amberDark
-              : SellerTheme.sage,
-          subtitle: data.pendingReservations > 0
-              ? 'reseller requests to review'
-              : 'no pending requests',
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const ReservationRequestsScreen(),
+              const SizedBox(width: 10),
+              // Bulk Reservations — reseller stock holds awaiting approval
+              Expanded(
+                child: SellerMetricCard(
+                  label: 'BULK RESERVATIONS',
+                  value: '${data.pendingReservations}',
+                  valueColor: data.pendingReservations > 0
+                      ? SellerTheme.amberDark
+                      : SellerTheme.sage,
+                  subtitle: data.pendingReservations > 0
+                      ? 'reseller requests to review'
+                      : 'no pending requests',
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const ReservationRequestsScreen(),
+                      ),
+                    );
+                  },
+                ),
               ),
-            );
-          },
+            ],
+          ),
         ),
       ],
     );
@@ -889,6 +926,29 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                     ),
                   );
                 },
+              ),
+            // FREE pickup holds (ANQUI item 14). Their stock is already off
+            // the shelf, so they are a queue of their own rather than part of
+            // the bulk count below — and they never need a deposit decision.
+            if (data.activePickups > 0)
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: SellerAlertChip(
+                  icon: Icons.storefront_outlined,
+                  // The lapsing half matters more than the total: a hold that
+                  // just lapsed is stock that walks back on the shelf unnoticed.
+                  text: data.pickupLapsing > 0
+                      ? '${data.activePickups} pickup hold${data.activePickups > 1 ? 's' : ''} · '
+                          '${data.pickupReturningUnits} pair${data.pickupReturningUnits > 1 ? 's' : ''} back soon'
+                      : '${data.activePickups} pickup hold${data.activePickups > 1 ? 's' : ''} waiting',
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const PickupReservationsScreen(),
+                      ),
+                    );
+                  },
+                ),
               ),
             if (data.pendingReservations > 0)
               SellerAlertChip(

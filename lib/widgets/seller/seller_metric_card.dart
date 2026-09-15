@@ -44,30 +44,43 @@ class SellerMetricCard extends StatelessWidget {
           border: Border.all(color: SellerTheme.cardBorder),
           boxShadow: SellerTheme.cardShadow,
         ),
-        padding: const EdgeInsets.all(14),
+        // Slightly tighter than the original 14 so a one-third-width card
+        // (three across on the dashboard) still fits its eyebrow label.
+        padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Eyebrow label: rust dot + uppercase, tracked-out caption.
+            // The label is Flexible so a long one (e.g. "BULK RESERVATIONS"
+            // in a one-third-width card) wraps to a second line instead of
+            // overflowing the row.
             Row(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 5,
-                  height: 5,
-                  decoration: const BoxDecoration(
-                    color: SellerTheme.rust,
-                    shape: BoxShape.circle,
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Container(
+                    width: 5,
+                    height: 5,
+                    decoration: const BoxDecoration(
+                      color: SellerTheme.rust,
+                      shape: BoxShape.circle,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 6),
-                Text(
-                  label,
-                  style: AppConstants.bodyStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: SellerTheme.textMuted,
-                  ).copyWith(letterSpacing: 1.2),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppConstants.bodyStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: SellerTheme.textMuted,
+                    ),
+                  ),
                 ),
               ],
             ),

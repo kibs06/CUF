@@ -17,7 +17,7 @@ class ErrorRetryWidget extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: BorderRadius.circular(14),
         boxShadow: AppConstants.warmShadow,
       ),

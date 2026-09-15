@@ -279,7 +279,7 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                 height: 64,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Colors.white,
+                  color: AppConstants.surfaceLight,
                   border: Border.all(
                       color: AppConstants.surfaceLight, width: 2.5),
                   boxShadow: AppConstants.warmShadow,
@@ -355,7 +355,7 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: AppConstants.cardRadius,
         boxShadow: AppConstants.warmShadow,
       ),
@@ -582,7 +582,7 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
         child: Container(
           height: 80,
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppConstants.surfaceLight,
             borderRadius: AppConstants.cardRadius,
           ),
         ),
@@ -592,7 +592,7 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: AppConstants.cardRadius,
         boxShadow: AppConstants.warmShadow,
       ),

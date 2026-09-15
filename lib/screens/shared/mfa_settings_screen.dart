@@ -144,7 +144,7 @@ class _MfaSettingsScreenState extends State<MfaSettingsScreen> {
     final enabled = verifiedFactors.isNotEmpty;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
+      backgroundColor: AppConstants.surfaceLight,
       appBar: AppBar(
         title: Text(
           'Two-Factor Authentication',
@@ -175,7 +175,7 @@ class _MfaSettingsScreenState extends State<MfaSettingsScreen> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: AppConstants.surfaceLight,
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
                       color: AppConstants.borderGray.withValues(alpha: 0.5),
@@ -246,7 +246,7 @@ class _MfaSettingsScreenState extends State<MfaSettingsScreen> {
                       margin: const EdgeInsets.only(bottom: 10),
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: AppConstants.surfaceLight,
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
                           color: AppConstants.borderGray.withValues(alpha: 0.5),
@@ -382,7 +382,7 @@ class _EnrollSheetState extends State<_EnrollSheet> {
                   height: 200,
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: AppConstants.surfaceLight,
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
                       color: AppConstants.borderGray.withValues(alpha: 0.5),
@@ -397,7 +397,7 @@ class _EnrollSheetState extends State<_EnrollSheet> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF5F5F5),
+                  color: AppConstants.surfaceLight,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Column(
@@ -436,7 +436,7 @@ class _EnrollSheetState extends State<_EnrollSheet> {
                 decoration: InputDecoration(
                   counterText: '',
                   filled: true,
-                  fillColor: Colors.white,
+                  fillColor: AppConstants.surfaceLight,
                   hintText: '123456',
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),

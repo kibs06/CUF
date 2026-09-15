@@ -209,7 +209,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                           margin: const EdgeInsets.only(right: 8),
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                           decoration: BoxDecoration(
-                            color: _days == d ? AppConstants.primary : Colors.white,
+                            color: _days == d ? AppConstants.primary : AppConstants.sellerCardBg,
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(
                               color: _days == d ? AppConstants.primary : AppConstants.borderGray,

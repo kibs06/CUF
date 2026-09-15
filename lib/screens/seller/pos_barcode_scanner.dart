@@ -163,7 +163,7 @@ class _PosBarcodeScannerState extends State<PosBarcodeScanner> {
                       width: scanAreaSize,
                       height: scanAreaSize,
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: AppConstants.surfaceLight,
                         borderRadius: BorderRadius.circular(16),
                       ),
                     ),

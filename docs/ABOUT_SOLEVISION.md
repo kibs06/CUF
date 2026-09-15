@@ -129,3 +129,4 @@ SoleVision is a capstone project that digitizes an entire local industry. Instea
 | `docs/CUSTOMER_ARCHITECTURE.md` | Customer module deep-dive |
 | `docs/SELLER_MODULE_GUIDE.md` | Seller module deep-dive |
 | `docs/AI/SIGNUP_ARCHITECTURE.md` | Condensed sign-up reference for AI agents |
+| `docs/AI/EMAIL_OTP_AND_DEVICE_TRUST_ARCHITECTURE.md` | Email OTP: sign-up verification + new-device step-up, the `trusted_devices` model, and the server-side device gate (`device_secrets` + restrictive RLS) that enforces it |

@@ -152,7 +152,7 @@ class _CancellationSheetState extends State<_CancellationSheet> {
                                 color: AppConstants.secondary.withValues(alpha: 0.4),
                               ),
                               filled: true,
-                              fillColor: Colors.white,
+                              fillColor: AppConstants.surfaceLight,
                               contentPadding: const EdgeInsets.all(12),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(10),
@@ -205,7 +205,7 @@ class _CancellationSheetState extends State<_CancellationSheet> {
                   12 + MediaQuery.of(context).padding.bottom,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: AppConstants.surfaceLight,
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withValues(alpha: 0.06),

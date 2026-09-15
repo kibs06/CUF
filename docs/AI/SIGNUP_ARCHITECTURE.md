@@ -40,8 +40,15 @@
   store basics) is REQUIRED to apply. Tier 2 (DTI/BIR/permit via
   `seller_business_docs`) is OPTIONAL, post-approval, and never gates
   selling.
-- **Auto-login after sign up** — customers land in `CustomerShell`;
-  pending sellers land in `PendingApprovalScreen`.
+- **Auto-login after sign up only happens when email confirmation is OFF.**
+  Since ANQUI item 16 confirmation is **ON**: `auth.signUp` returns **no
+  session**, the user enters a 6-digit e-mailed code on
+  `EmailOtpScreen`, and the `profiles` row is written only after that code
+  clears (the table has no `on auth.users` trigger — its INSERT policy needs
+  `auth.uid() = id`, so a session must exist first). Customers then land in
+  `CustomerShell`; pending sellers land in `PendingApprovalScreen`. Full
+  mechanism, templates and the trusted-device challenge:
+  `docs/AI/EMAIL_OTP_AND_DEVICE_TRUST_ARCHITECTURE.md`.
 - ⛔ **Temporary dev mode exists** (swipe ↑↑↓↓→→←← on the entry screen) —
   a signup skip that shows a "DEV MODE" chip. Mostly UI-only (no backend
   writes), with ONE exception: the seller flow's final Submit creates a
@@ -95,6 +102,13 @@ PendingApprovalScreen ──admin reject──▶ CustomerShell + rejection bann
                                         (rejection_reason + "Re-apply" → flow)
 ```
 
+> **Email-confirmation gate (ANQUI item 16, shipped):** every arrow above that
+> produces a session now passes through `EmailOtpScreen` first while
+> "Confirm email" is ON — after `signUpCustomer()`, and inside the seller
+> flow between `ensureUser` and the document uploads. It is rendered by
+> `AuthGate`, not pushed by the screens, so it cannot be skipped by
+> navigation.
+
 **On approve/reject the applicant is emailed too** (not just the in-app
 `approval` notification from the DB trigger `trg_notify_on_seller_approved`):
 both admin surfaces (Flutter `OrderProvider.approveSeller/rejectSeller` and
@@ -129,15 +143,29 @@ twice; every later launch goes straight to `SellerShell`), admin →
    terms checkbox.
 3. Duplicate-email check (`AuthService.emailExists`) runs BEFORE creating
    the account and surfaces inline on the email field.
-4. `AuthProvider.signUpCustomer(...)` → `AuthService.signUp(...)` creates
-   the Supabase user and upserts `profiles` (role `customer`,
-   `seller_status: 'none'`, `birthday`, `gender`) → auto-login.
-5. The register screen then `pushReplacement`s to
+4. `AuthProvider.signUpCustomer(...)` → `AuthService.signUp(...)` creates the
+   Supabase user, stashing the profile fields in the user's **metadata**.
+   Then it branches on what GoTrue returned:
+   - **session present** (confirmation OFF): `writeProfileFromMetadata(...)`
+     upserts `profiles` (role `customer`, `seller_status: 'none'`,
+     `birthday`, `gender`) immediately → auto-login.
+   - **session null** (confirmation ON, the shipped default): NO profile
+     write is attempted (RLS would reject it). `AuthGate` swaps to
+     `EmailOtpScreen`; `AuthProvider.verifySignupEmail(code)` runs
+     `verifyOTP(type: signup)`, then writes the profile from that metadata.
+     The register screen deliberately does **not** navigate in this case.
+5. The register screen `pushReplacement`s to
    **`FootProfileOnboardingScreen`** (customer flow ONLY — sellers never see
-   it). **Account creation already succeeded at this point**; onboarding is
-   a separate, always-skippable step and never blocks access.
+   it) — on the session-present path from the register screen, and on the
+   confirmation path from the verify gate once the code clears. Onboarding
+   is a separate, always-skippable step and never blocks access.
 6. Onboarding completion pops to the first route, where AuthGate has
    already swapped the root to **CustomerShell**.
+
+> `writeProfileFromMetadata` is row-safe: `role`/`seller_status` are written
+> only when no row exists, and `phone`/`birthday`/`gender` only when the
+> metadata carries them — so it can also finish verification for an account
+> that predates email confirmation without demoting a legacy seller.
 
 ---
 
@@ -205,6 +233,16 @@ is:
 1. `AuthService.ensureUser(...)` — creates the account (or reuses the
    existing session when re-applying; a `signUp` that returns no session
    because the account already exists falls back to `signInWithPassword`).
+   It returns an `EnsureUserResult` carrying
+   `emailVerificationRequired`: with confirmation ON, a brand-new account
+   gets no session, and the server's own `email_not_confirmed` answer is
+   what decides it.
+1b. **Email verification** — when required, the flow pushes
+   `EmailOtpScreen` and only continues once a session exists. This is
+   ordered BEFORE the uploads on purpose: the private bucket's RLS keys off
+   `auth.uid()`, so uploading first would be a permission error. Verifying
+   here does NOT grant seller access — step 3 still writes
+   `seller_status = 'pending'` with `role = 'customer'`.
 2. Upload pending documents to the PRIVATE bucket via
    `VerificationDocumentService.uploadDocument` (deterministic paths
    `{userId}/{docKey}.jpg`, upsert). Per-doc status drives the animated
@@ -307,7 +345,13 @@ manually upserts a minimal profile as a safety net.
 | UI | `lib/screens/auth/pending_approval_screen.dart` | Post-apply locked screen (Tier 1 summary + Tier 2 explainer) |
 | UI | `lib/screens/seller/seller_business_verification_screen.dart` | Tier 2 upload/submit (seller, post-approval) |
 | State | `lib/providers/auth_provider.dart` | `signUpCustomer()` / `signUpSeller()` |
-| Service | `lib/services/auth_service.dart` | signUp, ensureUser, completeSellerApplication, Tier 2 methods, admin verdict RPC |
+| Service | `lib/services/auth_service.dart` | signUp, ensureUser, writeProfileFromMetadata, completeSellerApplication, Tier 2 methods, admin verdict RPC |
+| Service | `lib/services/email_otp_service.dart` | Email OTP send/verify (both purposes) + pure `EmailOtpPolicy` rules |
+| Service | `lib/services/login_challenge_service.dart` | New-device decision + step-up round trip |
+| Service | `lib/services/device_trust_service.dart` | Per-install device id (secure storage) + `trusted_devices` CRUD |
+| UI | `lib/screens/shared/email_otp_screen.dart` | The single 6-digit code screen (signup + new-device), resend cooldown, expiry countdown |
+| UI | `lib/screens/shared/manage_login_device_screen.dart` | Account & Security → trusted device list + revoke |
+| Schema | `supabase/migrations/20260915140000_add_trusted_devices.sql` | `trusted_devices` + `trust_device` RPC + RLS |
 | Service | `lib/services/verification_document_service.dart` | Private-bucket uploads + signed URLs |
 | Routing | `lib/screens/auth_gate.dart` | Role-based routing (unchanged) |
 | Admin UI | `lib/screens/admin/seller_approval_screen.dart` | Tier 1 queue + Business Docs tab |
@@ -341,8 +385,19 @@ manually upserts a minimal profile as a safety net.
    message (`ensureUser` requires password/fullName when no session).
 9. **Customer onboarding is NOT a hard gate**: account creation completes
    BEFORE `FootProfileOnboardingScreen` exists; all three paths (and even
-   the Android back button) land in `CustomerShell`. `pushReplacement` (not
-   push) swaps the register screen for onboarding so the stack stays clean.
+   the Android back button) land in `CustomerShell`. `push`/`pushReplacement`
+   swaps the register screen (or the verify gate) for onboarding so the
+   stack stays clean.
+9b. **Email confirmation is a hard gate** (the one deliberate exception to
+   "nothing blocks access"): while confirmation is ON, no `profiles` row and
+   no session exist until the code clears, so the user either verifies or
+   signs up again. A never-confirmed legacy account is not dead-ended —
+   `AuthProvider.login` catches `email_not_confirmed`, mails a fresh code and
+   routes to the same verify screen.
+9c. **Seller applications must verify before uploading.** See the submit
+   sequence above: the code is cleared before any document is uploaded, and
+   documents remain local file paths until then, so nothing is lost if the
+   user abandons verification.
 10. **`foot_profile_source` semantics**: `'ar_scan'` (live AR tap-to-
     measure) > `'manual'` (manual size picker OR paper camera scan) >
     `'skipped'`/NULL (reminder banner shows). Full scan fidelity always

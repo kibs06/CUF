@@ -11,6 +11,17 @@ final Finder _pillFinder = find.descendant(
   matching: find.byType(Container),
 );
 
+/// The bar's own background Container: the only descendant Container using a
+/// plain `color` (the pill and the unread badge both use a `decoration`).
+Container _barContainer(WidgetTester tester) => tester
+    .widgetList<Container>(
+      find.descendant(
+        of: find.byType(SoleBottomNav),
+        matching: find.byType(Container),
+      ),
+    )
+    .firstWhere((c) => c.color != null && c.decoration == null);
+
 Widget _wrap(SoleBottomNav nav) => MaterialApp(
   home: Scaffold(body: const SizedBox(), bottomNavigationBar: nav),
 );
@@ -199,5 +210,81 @@ void main() {
       ),
     );
     expect(find.text('99+'), findsOneWidget);
+  });
+
+  testWidgets('bar paints the deeper nav cream, distinct from the page', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _wrap(
+        SoleBottomNav(
+          role: AppConstants.roleCustomer,
+          currentIndex: 0,
+          onTap: (_) {},
+        ),
+      ),
+    );
+
+    final bar = _barContainer(tester);
+    expect(bar.color, AppConstants.creamDeep);
+    expect(
+      bar.color,
+      isNot(AppConstants.surfaceLight),
+      reason: 'the nav band must be a deeper cream than the page background',
+    );
+  });
+
+  testWidgets('an explicit backgroundColor still overrides the default', (
+    tester,
+  ) async {
+    // The seller shell passes its own card cream — the deeper default must
+    // not clobber it.
+    await tester.pumpWidget(
+      _wrap(
+        SoleBottomNav(
+          role: AppConstants.roleSeller,
+          currentIndex: 0,
+          onTap: (_) {},
+          backgroundColor: AppConstants.sellerCardBg,
+        ),
+      ),
+    );
+
+    expect(_barContainer(tester).color, AppConstants.sellerCardBg);
+  });
+
+  testWidgets('the unread badge ring matches the bar, not the page', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _wrap(
+        SoleBottomNav(
+          role: AppConstants.roleCustomer,
+          currentIndex: 0,
+          onTap: (_) {},
+          notificationUnreadCount: 5,
+        ),
+      ),
+    );
+
+    final badge = tester
+        .widgetList<Container>(
+          find.descendant(
+            of: find.byType(SoleBottomNav),
+            matching: find.byType(Container),
+          ),
+        )
+        .firstWhere(
+          (c) =>
+              c.decoration is BoxDecoration &&
+              (c.decoration! as BoxDecoration).color == AppConstants.error,
+        );
+
+    final border = (badge.decoration! as BoxDecoration).border! as Border;
+    expect(
+      border.top.color,
+      AppConstants.creamDeep,
+      reason: 'a page-colored ring would halo against the deeper nav band',
+    );
   });
 }

@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../constants/app_constants.dart';
 import '../../models/update_info.dart';
 import '../../providers/update_provider.dart';
+import '../../services/apk_installer_service.dart';
 import '../../services/update_checker.dart';
 import '../../widgets/empty_state_widget.dart';
 import '../../widgets/error_retry_widget.dart';
@@ -17,6 +18,10 @@ import '../../widgets/sole_primary_button.dart';
 
 /// "What's New" — shows the current installed version, a prominent update
 /// banner if a newer release exists, and a reverse-chronological changelog.
+///
+/// The primary Download action streams the APK inside the app (progress +
+/// resume) and hands it to Android's system installer; the original browser
+/// download remains available as a secondary link.
 ///
 /// Pushed from the Profile → Settings card via `MaterialPageRoute`, matching
 /// the app's other settings sub-screens (FAQ, Help & Support, etc.).
@@ -29,6 +34,7 @@ class WhatsNewScreen extends StatefulWidget {
 
 class _WhatsNewScreenState extends State<WhatsNewScreen> {
   final UpdateCheckerService _service = UpdateCheckerService.instance;
+  final ApkInstallerService _installer = ApkInstallerService.instance;
 
   late Future<List<UpdateInfo>> _changelogFuture;
   bool _hasChecked = false;
@@ -54,9 +60,11 @@ class _WhatsNewScreenState extends State<WhatsNewScreen> {
     });
   }
 
-  /// Opens the APK URL in an external browser/app so Android's download and
-  /// install flow takes over. On iOS this isn't possible — see the banner.
-  Future<void> _downloadApk(String url) async {
+  /// Fallback path: opens the APK URL in an external browser/app so Android's
+  /// download-and-install flow takes over. Kept alongside the in-app updater
+  /// for users whose device/CDN combination misbehaves with the streaming
+  /// download. On iOS this isn't possible — see the banner.
+  Future<void> _downloadApkViaBrowser(String url) async {
     final uri = Uri.parse(url);
     final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!mounted) return;
@@ -71,6 +79,26 @@ class _WhatsNewScreenState extends State<WhatsNewScreen> {
         backgroundColor: launched ? AppConstants.success : AppConstants.error,
       ),
     );
+  }
+
+  /// In-app path: stream the APK (progress in the banner) then trigger the
+  /// system installer. When the APK is already fully downloaded (Install tap
+  /// after completion, or a previous session), the download is skipped.
+  /// Failures fall back to the browser flow with a toast.
+  Future<void> _downloadInApp(UpdateInfo update) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      // Download is skipped by the service when this version's APK exists.
+      await _installer.downloadAndInstall(update.apkUrl, update.version);
+    } catch (e) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('In-app download failed — opening the browser instead.'),
+          backgroundColor: AppConstants.error,
+        ),
+      );
+      await _downloadApkViaBrowser(update.apkUrl);
+    }
   }
 
   @override
@@ -132,8 +160,12 @@ class _WhatsNewScreenState extends State<WhatsNewScreen> {
                 // Emulators: show the release info but never push the APK
                 // download — dev builds are updated via `flutter run`.
                 showDownload: !updateProvider.isEmulator,
-                onDownload: () =>
-                    _downloadApk(updateProvider.latestUpdate!.apkUrl),
+                installer: _installer,
+                onDownloadInApp: () =>
+                    _downloadInApp(updateProvider.latestUpdate!),
+                onDownloadViaBrowser: () => _downloadApkViaBrowser(
+                    updateProvider.latestUpdate!.apkUrl),
+                onCancelDownload: () => _installer.cancelDownload(),
               )
             else
               const _UpToDateCard(),
@@ -219,7 +251,7 @@ class _InstalledVersionHeader extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: AppConstants.cardRadius,
         boxShadow: AppConstants.warmShadow,
       ),
@@ -259,16 +291,24 @@ class _InstalledVersionHeader extends StatelessWidget {
   }
 }
 
-/// Prominent card shown when a newer version is available.
+/// Prominent card shown when a newer version is available. The primary
+/// button drives the in-app download (with live progress); a secondary
+/// link keeps the classic browser download available.
 class _UpdateBanner extends StatelessWidget {
   const _UpdateBanner({
     required this.update,
-    required this.onDownload,
+    required this.onDownloadInApp,
+    required this.onDownloadViaBrowser,
+    required this.onCancelDownload,
+    required this.installer,
     this.showDownload = true,
   });
 
   final UpdateInfo update;
-  final VoidCallback onDownload;
+  final VoidCallback onDownloadInApp;
+  final VoidCallback onDownloadViaBrowser;
+  final VoidCallback onCancelDownload;
+  final ApkInstallerService installer;
 
   /// False on emulators: the release info stays visible, but the download
   /// CTA is replaced by a passive note (dev builds update via `flutter run`).
@@ -368,12 +408,54 @@ class _UpdateBanner extends StatelessWidget {
               ),
             )
           else
-            SolePrimaryButton(
-              label: 'Download v${update.version}',
-              backgroundColor: AppConstants.accent,
-              textColor: AppConstants.secondary,
-              icon: const Icon(Icons.download_rounded, size: 18, color: AppConstants.secondary),
-              onPressed: onDownload,
+            AnimatedBuilder(
+              animation: installer,
+              builder: (context, _) {
+                final state = installer.state;
+                final downloading =
+                    state?.phase == ApkDownloadPhase.downloading;
+                final done = state?.phase == ApkDownloadPhase.done;
+
+                if (downloading) {
+                  return _ProgressSection(
+                    state: state!,
+                    onCancel: onCancelDownload,
+                  );
+                }
+                if (done && state?.filePath != null) {
+                  return _InstallReadySection(
+                    onInstall: onDownloadInApp,
+                  );
+                }
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SolePrimaryButton(
+                      label: 'Download v${update.version}',
+                      backgroundColor: AppConstants.accent,
+                      textColor: AppConstants.secondary,
+                      icon: const Icon(Icons.download_rounded,
+                          size: 18, color: AppConstants.secondary),
+                      onPressed: onDownloadInApp,
+                    ),
+                    const SizedBox(height: 10),
+                    // Fallback kept from the original flow: browser download.
+                    Center(
+                      child: TextButton(
+                        onPressed: onDownloadViaBrowser,
+                        child: Text(
+                          'Download via browser instead',
+                          style: AppConstants.bodyStyle(
+                            fontSize: 12,
+                            color:
+                                const Color(0xFFF5EDE4).withValues(alpha: 0.8),
+                          ).copyWith(decoration: TextDecoration.underline),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
         ],
       ),
@@ -386,6 +468,79 @@ class _UpdateBanner extends StatelessWidget {
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
     ];
     return '${months[date.month - 1]} ${date.day}, ${date.year}';
+  }
+}
+
+/// Live progress (percent + MB) with a Cancel action while the APK streams.
+class _ProgressSection extends StatelessWidget {
+  const _ProgressSection({required this.state, required this.onCancel});
+
+  final ApkDownloadState state;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final pct = (state.progress * 100).round();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: LinearProgressIndicator(
+            value: state.progress,
+            minHeight: 10,
+            backgroundColor: Colors.white.withValues(alpha: 0.2),
+            valueColor:
+                const AlwaysStoppedAnimation<Color>(AppConstants.accent),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                state.totalMb > 0
+                    ? 'Downloading — $pct% (${state.receivedMb}/${state.totalMb} MB)'
+                    : 'Downloading…',
+                style: AppConstants.bodyStyle(
+                  fontSize: 12,
+                  color: const Color(0xFFF5EDE4),
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: onCancel,
+              child: Text(
+                'Cancel',
+                style: AppConstants.bodyStyle(
+                  fontSize: 12,
+                  color: const Color(0xFFF5EDE4).withValues(alpha: 0.8),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// Shown once the APK is fully downloaded — one tap to install.
+class _InstallReadySection extends StatelessWidget {
+  const _InstallReadySection({required this.onInstall});
+
+  final VoidCallback onInstall;
+
+  @override
+  Widget build(BuildContext context) {
+    return SolePrimaryButton(
+      label: 'Install update',
+      backgroundColor: AppConstants.success,
+      textColor: Colors.white,
+      icon: const Icon(Icons.install_mobile_rounded,
+          size: 18, color: Colors.white),
+      onPressed: onInstall,
+    );
   }
 }
 

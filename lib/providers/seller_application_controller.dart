@@ -397,6 +397,12 @@ class SellerApplicationController extends ChangeNotifier {
   /// never duplicates work or files.
   Future<bool> submit({
     required Future<bool> Function(SellerApplicationData data) signUpSeller,
+    /// Called when the account needs its e-mail confirmed before anything
+    /// can be written for it ("Confirm email" is ON). Must return true once
+    /// a session exists. When null and verification is required, submit
+    /// fails with an explanatory [submitError] instead of silently
+    /// attempting uploads that the storage RLS would reject.
+    Future<bool> Function()? requestEmailVerification,
   }) async {
     if (isSubmitting) return false;
 
@@ -410,11 +416,40 @@ class SellerApplicationController extends ChangeNotifier {
     try {
       // 1. Account (create only at the end — no orphaned accounts).
       final auth = AuthService.instance;
-      final user = await auth.ensureUser(
+      final ensured = await auth.ensureUser(
         email: email,
         password: isReapply ? null : password,
         fullName: fullName,
       );
+      var user = ensured.user;
+
+      // 1b. E-mail verification (ANQUI item 16, Part A). With "Confirm
+      // email" ON, ensureUser comes back with NO session — and both the
+      // private-bucket uploads (step 2) and the profile write (step 3) need
+      // one, because `seller-verification-docs` RLS keys off auth.uid().
+      // So the code is verified FIRST rather than uploading into a
+      // permission error. Verifying e-mail does NOT grant seller access:
+      // step 3 still writes seller_status = 'pending' with role customer,
+      // and only an admin approval flips the role.
+      if (needsVerificationStep(
+        emailVerificationRequired: ensured.emailVerificationRequired,
+      )) {
+        final verified = await requestEmailVerification?.call();
+        final signedIn = auth.currentUser;
+        if (!canProceedAfterVerification(
+          verified: verified,
+          hasSession: signedIn != null,
+        )) {
+          submitError =
+              'Please confirm your email address to finish your application.';
+          notifyListeners();
+          return false;
+        }
+        // The verified call establishes the session; use that user for the
+        // uploads that follow.
+        user = signedIn!;
+      }
+
       accountCreated = true;
       notifyListeners();
 
@@ -504,6 +539,35 @@ class SellerApplicationController extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  // ── Email-verification pre-flight (ANQUI item 16, Part A) ──────────
+  //
+  // WHY THESE ARE PURE AND TESTED: the ordering here is what breaks loudly.
+  // The private `seller-verification-docs` bucket keys its RLS off
+  // `auth.uid()`, so uploading (or writing the profile) BEFORE a session
+  // exists is a permission error, and completing the application from signup
+  // metadata instead would create a plain CUSTOMER row rather than a pending
+  // seller application. `submit` is hard to unit-test (it talks to Supabase),
+  // so the rule itself is a function — same convention as `EmailOtpPolicy`
+  // and `DeviceTrustPolicy`.
+
+  /// Does submit have to interrupt for e-mail verification before it can
+  /// write anything for this account?
+  @visibleForTesting
+  static bool needsVerificationStep({
+    required bool emailVerificationRequired,
+  }) => emailVerificationRequired;
+
+  /// May the application continue after the verification attempt?
+  ///
+  /// Both halves matter: [verified] false/null means the user backed out or
+  /// the code was refused, and a missing session means there is still nothing
+  /// to upload as — either way the application must NOT half-complete.
+  @visibleForTesting
+  static bool canProceedAfterVerification({
+    required bool? verified,
+    required bool hasSession,
+  }) => verified == true && hasSession;
 
   /// Coerces a PostgREST TEXT[] cell (or a plain list) into a list of
   /// strings — used when pre-filling a re-apply from the profile row.

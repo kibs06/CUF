@@ -353,7 +353,7 @@ class _POSScreenState extends State<POSScreen>
               ),
 
               decoration: const BoxDecoration(
-                color: Colors.white,
+                color: AppConstants.surfaceLight,
                 borderRadius: BorderRadius.vertical(
                   top: Radius.circular(20),
                 ),
@@ -882,7 +882,7 @@ class _POSScreenState extends State<POSScreen>
                         ),
                       ),
                 filled: true,
-                fillColor: Colors.white,
+                fillColor: AppConstants.surfaceLight,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
@@ -904,7 +904,7 @@ class _POSScreenState extends State<POSScreen>
                 selected: selected,
                 showCheckmark: false,
                 selectedColor: AppConstants.primary,
-                backgroundColor: Colors.white,
+                backgroundColor: AppConstants.surfaceLight,
                 labelStyle: AppConstants.bodyStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
@@ -995,7 +995,7 @@ class _POSScreenState extends State<POSScreen>
                   aspectRatio: 1.0,
                   child: Container(
                     width: double.infinity,
-                    color: Colors.grey.shade100,
+                    color: AppConstants.borderGray.withValues(alpha: 0.25),
                     child: imageUrl.isEmpty
                         ? Icon(
                             Icons.inventory_2_outlined,
@@ -1116,7 +1116,7 @@ class _POSScreenState extends State<POSScreen>
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: AppConstants.surfaceLight,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
                   color: hasStock
@@ -1216,7 +1216,7 @@ class _POSScreenState extends State<POSScreen>
           Container(
             padding: const EdgeInsets.symmetric(vertical: 48),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppConstants.surfaceLight,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: SellerTheme.cardBorder),
               boxShadow: AppConstants.sellerShadow,
@@ -1469,7 +1469,7 @@ class _POSScreenState extends State<POSScreen>
         MediaQuery.of(context).padding.bottom + 12,
       ),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.12),
@@ -1982,7 +1982,7 @@ class _CheckoutSheetState extends State<_CheckoutSheet> {
         builder: (context, scrollController) {
           return Container(
             decoration: const BoxDecoration(
-              color: Colors.white,
+              color: AppConstants.surfaceLight,
               borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
             ),
             child: Column(
@@ -2320,7 +2320,7 @@ class _CheckoutSheetState extends State<_CheckoutSheet> {
                               height: 280,
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: Colors.white,
+                                color: AppConstants.surfaceLight,
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(
                                   color: AppConstants.borderGray

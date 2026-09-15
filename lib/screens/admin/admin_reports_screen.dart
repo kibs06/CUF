@@ -319,7 +319,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
                     hintStyle: AppConstants.bodyStyle(fontSize: 13, color: Colors.black38),
                     prefixIcon: const Icon(Icons.search, color: AppConstants.primary),
                     filled: true,
-                    fillColor: Colors.white,
+                    fillColor: AppConstants.surfaceLight,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(14),
                       borderSide: BorderSide.none,
@@ -520,7 +520,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
         child: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppConstants.surfaceLight,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: active ? AppConstants.primary : AppConstants.borderGray.withValues(alpha: 0.6),
@@ -573,14 +573,14 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppConstants.borderGray),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: value,
-          dropdownColor: Colors.white,
+          dropdownColor: AppConstants.sellerCardBg,
           style: AppConstants.bodyStyle(fontSize: 12),
           items: [
             for (final entry in options.entries)
@@ -834,7 +834,7 @@ class _ReportDetailSheetState extends State<_ReportDetailSheet> {
                   hintText: 'Internal notes (not visible to reporter)',
                   hintStyle: AppConstants.bodyStyle(fontSize: 12, color: Colors.black38),
                   filled: true,
-                  fillColor: Colors.white,
+                  fillColor: AppConstants.surfaceLight,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: const BorderSide(color: AppConstants.borderGray),
@@ -890,7 +890,7 @@ class _ReportDetailSheetState extends State<_ReportDetailSheet> {
                             decoration: BoxDecoration(
                               color: _selectedTemplate == entry.key
                                   ? AppConstants.surfaceLight
-                                  : Colors.white,
+                                  : AppConstants.sellerCardBg,
                               borderRadius: BorderRadius.circular(10),
                               border: Border.all(
                                 color: _selectedTemplate == entry.key
@@ -936,7 +936,7 @@ class _ReportDetailSheetState extends State<_ReportDetailSheet> {
                           decoration: InputDecoration(
                             hintText: 'Type a custom message…',
                             filled: true,
-                            fillColor: Colors.white,
+                            fillColor: AppConstants.surfaceLight,
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                               borderSide: const BorderSide(color: AppConstants.borderGray),
@@ -1006,7 +1006,7 @@ class _ReportDetailSheetState extends State<_ReportDetailSheet> {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppConstants.borderGray),
       ),
@@ -1014,7 +1014,7 @@ class _ReportDetailSheetState extends State<_ReportDetailSheet> {
         child: DropdownButton<String>(
           value: value,
           isExpanded: true,
-          dropdownColor: Colors.white,
+          dropdownColor: AppConstants.sellerCardBg,
           style: AppConstants.bodyStyle(fontSize: 13),
           items: [
             for (final s in options)

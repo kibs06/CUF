@@ -142,7 +142,7 @@ class _GcashPaymentSettingsScreenState extends State<GcashPaymentSettingsScreen>
                 isCropped ? AppConstants.success : AppConstants.statusPendingColor;
             return Container(
               decoration: const BoxDecoration(
-                color: Colors.white,
+                color: AppConstants.surfaceLight,
                 borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
               ),
               padding: EdgeInsets.fromLTRB(
@@ -552,7 +552,7 @@ class _GcashPaymentSettingsScreenState extends State<GcashPaymentSettingsScreen>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: AppConstants.cardRadius,
         boxShadow: AppConstants.warmShadow,
       ),
@@ -590,7 +590,7 @@ class _GcashPaymentSettingsScreenState extends State<GcashPaymentSettingsScreen>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: AppConstants.cardRadius,
         boxShadow: AppConstants.warmShadow,
       ),
@@ -737,7 +737,7 @@ class _GcashPaymentSettingsScreenState extends State<GcashPaymentSettingsScreen>
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: AppConstants.cardRadius,
         boxShadow: AppConstants.warmShadow,
       ),
@@ -787,7 +787,7 @@ class _GcashPaymentSettingsScreenState extends State<GcashPaymentSettingsScreen>
         color: AppConstants.secondary.withValues(alpha: 0.4),
       ),
       filled: true,
-      fillColor: Colors.white,
+      fillColor: AppConstants.surfaceLight,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       border: OutlineInputBorder(
         borderRadius: AppConstants.buttonRadius,

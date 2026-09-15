@@ -156,7 +156,7 @@ class _DepositProofReviewSheetState extends State<DepositProofReviewSheet> {
     final reasonCtrl = TextEditingController();
     final reason = await showModalBottomSheet<String>(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: AppConstants.surfaceLight,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -244,7 +244,7 @@ class _DepositProofReviewSheetState extends State<DepositProofReviewSheet> {
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Container(
         decoration: const BoxDecoration(
-          color: Colors.white,
+          color: AppConstants.surfaceLight,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),

@@ -27,7 +27,9 @@ import '../../widgets/size_guide_modal.dart';
 import '../../widgets/hanging_sale_tag.dart';
 import '../../widgets/sale_price_tape.dart';
 import '../../widgets/sale_countdown_overlay.dart';
+import '../../widgets/color_thumbnail_swatch.dart';
 import 'widgets/bulk_reservation_sheet.dart';
+import 'widgets/pickup_reservation_sheet.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   final Map<String, dynamic> product;
@@ -166,7 +168,7 @@ class _ReviewsSectionState extends State<_ReviewsSection> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
@@ -1161,7 +1163,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
         ),
         Container(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppConstants.surfaceLight,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
               color: AppConstants.borderGray.withValues(alpha: 0.5),
@@ -1224,7 +1226,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
               height: 48,
               margin: const EdgeInsets.only(right: 8),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: AppConstants.surfaceLight,
                 borderRadius: BorderRadius.circular(8),
               ),
             ),
@@ -1627,7 +1629,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                                       color: isSelected
                                           ? AppConstants.primary
                                           : (isAvailable
-                                              ? const Color(0xFFF7F5F2)
+                                              ? AppConstants.sellerCardBg
                                               : AppConstants.borderGray.withValues(alpha: 0.2)),
                                       borderRadius: BorderRadius.circular(8),
                                       border: Border.all(
@@ -1701,6 +1703,61 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                         ),
                         const SizedBox(height: 8),
                         _buildQuantityStepper(),
+                        // Pickup hold — FREE, 1-2 pairs of one size, held 24h.
+                        // A different flow from the bulk (reseller) hold
+                        // below: this one holds stock immediately and takes
+                        // no deposit.
+                        if (_totalStock() > 0)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(6),
+                                onTap: () async {
+                                  final reserved =
+                                      await showPickupReservationSheet(
+                                    context,
+                                    product: widget.product,
+                                    sizesStock: _buildSizesMap(),
+                                    initialSize: _selectedSize,
+                                  );
+                                  // Stock moved out of inventory — refresh the
+                                  // size map so the page stops offering it.
+                                  if (reserved == true && mounted) {
+                                    setState(() {});
+                                  }
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 4, vertical: 4),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.storefront_outlined,
+                                        size: 15,
+                                        color: AppConstants.secondary
+                                            .withValues(alpha: 0.7),
+                                      ),
+                                      const SizedBox(width: 5),
+                                      Text(
+                                        'Reserve for pickup — free, held 24 hours',
+                                        style: AppConstants.bodyStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppConstants.secondary
+                                              .withValues(alpha: 0.7),
+                                        ).copyWith(
+                                            decoration:
+                                                TextDecoration.underline),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
                         // Reseller entry point — request a bulk hold from
                         // the seller (shown only when the product has stock).
                         if (_totalStock() > 0)
@@ -1764,7 +1821,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                           child: Row(
                             children: [
                               for (final colorName in _variantColorNames)
-                                _ColorThumbnailSwatch(
+                                ColorThumbnailSwatch(
                                   name: colorName,
                                   fallbackColor: _swatchColorFor(colorName),
                                   selected: _effectiveColor == colorName,
@@ -1867,7 +1924,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
             right: 0,
             bottom: 0,
             child: Container(
-              color: Colors.white,
+              color: AppConstants.surfaceLight,
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
               child: Row(
                 children: [
@@ -1981,83 +2038,6 @@ class _SizeHelperLink extends StatelessWidget {
   }
 }
 
-/// Circular color swatch for a variant color name.
-/// Thumbnail-based color swatch — shows the color's first image as a
-/// small square thumbnail. Falls back to a colored dot when no images exist.
-class _ColorThumbnailSwatch extends StatelessWidget {
-  final String name;
-  final Color fallbackColor;
-  final bool selected;
-  final String? imageUrl;
-  final VoidCallback onTap;
-
-  const _ColorThumbnailSwatch({
-    required this.name,
-    required this.fallbackColor,
-    required this.selected,
-    this.imageUrl,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(right: 10),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Thumbnail with selection ring
-            Container(
-              width: 48,
-              height: 48,
-              padding: const EdgeInsets.all(2),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: selected ? AppConstants.primary : Colors.transparent,
-                  width: 2,
-                ),
-              ),
-              child: ClipOval(
-                child: imageUrl != null
-                    ? CachedNetworkImage(
-                        imageUrl: imageUrl!,
-                        fit: BoxFit.cover,
-                        placeholder: (_, _) => Container(
-                          color: fallbackColor,
-                        ),
-                        errorWidget: (_, _, _) => Container(
-                          color: fallbackColor,
-                          child: const Icon(Icons.image, size: 16, color: Colors.white),
-                        ),
-                      )
-                    : Container(
-                        color: fallbackColor,
-                        child: selected
-                            ? const Icon(Icons.check, size: 16, color: Colors.white)
-                            : null,
-                      ),
-              ),
-            ),
-            const SizedBox(height: 4),
-            // Color name label
-            Text(
-              name,
-              style: AppConstants.bodyStyle(
-                fontSize: 10,
-                fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-                color: selected ? AppConstants.primary : AppConstants.secondary,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 /// Tappable unit switcher chip (US / EU / UK) next to the size label.
 /// Opens a small menu — the reference's chevron affordance.
 class _UnitSwitcher extends StatelessWidget {
@@ -2104,7 +2084,7 @@ class _UnitSwitcher extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppConstants.surfaceLight,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: AppConstants.borderGray.withValues(alpha: 0.5),

@@ -135,7 +135,7 @@ class _MyReservationsScreenState extends State<MyReservationsScreen> {
       appBar: AppBar(
         title: Text('My Reservations',
             style: AppConstants.headlineStyle(fontSize: 17)),
-        backgroundColor: Colors.white,
+        backgroundColor: AppConstants.surfaceLight,
         surfaceTintColor: Colors.white,
         elevation: 0,
       ),
@@ -247,7 +247,7 @@ class _ReservationTile extends StatelessWidget {
     final r = reservation;
     final statusColor = _statusColor(r.status);
     return SoleCard(
-      color: Colors.white,
+      color: AppConstants.surfaceLight,
       padding: const EdgeInsets.all(12),
       margin: EdgeInsets.zero,
       child: Row(

@@ -1001,7 +1001,7 @@ class _ChatViewState extends State<ChatView> with SingleTickerProviderStateMixin
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppConstants.surfaceLight,
               borderRadius: BorderRadius.circular(16),
             ),
             child: Row(
@@ -1676,10 +1676,12 @@ class _ChatViewState extends State<ChatView> with SingleTickerProviderStateMixin
           ),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
-            // Kept on explicit white/shadow (NOT the cream seller theme) —
-            // ChatView is shared with customers, so its bubbles must stay
-            // unchanged while the seller module rethemes.
-            color: isOwnMessage ? AppConstants.primary : Colors.white,
+            // Incoming bubbles use the shared lighter-cream card tone (never
+            // pure white, which read as a cold patch once every screen moved
+            // to cream); the shadow keeps them lifted off the message list.
+            color: isOwnMessage
+                ? AppConstants.primary
+                : AppConstants.sellerCardBg,
             borderRadius: BorderRadius.only(
               topLeft: const Radius.circular(16),
               topRight: const Radius.circular(16),
@@ -2288,7 +2290,7 @@ class _ChatViewState extends State<ChatView> with SingleTickerProviderStateMixin
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
@@ -2543,7 +2545,7 @@ class _AttachmentPreviewSheetState extends State<_AttachmentPreviewSheet> {
       builder: (context, scrollController) {
         return Container(
           decoration: const BoxDecoration(
-            color: Colors.white,
+            color: AppConstants.surfaceLight,
             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
           child: Column(

@@ -391,7 +391,7 @@ class _BulkDepositPayScreenState extends State<BulkDepositPayScreen> {
 
           // QR + account details
           SoleCard(
-            color: Colors.white,
+            color: AppConstants.surfaceLight,
             child: _storeError != null
                 ? Text(
                     _storeError!,
@@ -497,7 +497,7 @@ class _BulkDepositPayScreenState extends State<BulkDepositPayScreen> {
 
           // How to pay
           SoleCard(
-            color: Colors.white,
+            color: AppConstants.surfaceLight,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -524,7 +524,7 @@ class _BulkDepositPayScreenState extends State<BulkDepositPayScreen> {
 
           // Proof form
           SoleCard(
-            color: Colors.white,
+            color: AppConstants.surfaceLight,
             child: Form(
               key: _formKey,
               child: Column(

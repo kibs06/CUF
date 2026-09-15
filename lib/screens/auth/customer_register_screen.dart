@@ -156,6 +156,12 @@ class _CustomerRegisterScreenState extends State<CustomerRegisterScreen> {
             builder: (_) => const FootProfileOnboardingScreen(),
           ),
         );
+      } else if (auth.pendingSignupVerification != null) {
+        // "Confirm email" is ON: signUp returned no session, so there is
+        // nothing to log in with yet. AuthGate has already swapped to the
+        // verify-code screen — just stop the spinner and leave navigation
+        // alone (the verify screen owns the hand-off from here).
+        setState(() => _isSubmitting = false);
       } else {
         setState(() => _isSubmitting = false);
         _showMessage(auth.errorMessage ?? 'Registration failed.');
@@ -260,7 +266,7 @@ class _CustomerRegisterScreenState extends State<CustomerRegisterScreen> {
               showCheckmark: false,
               onSelected: (sel) => setState(() => _gender = sel ? option : null),
               selectedColor: AppConstants.primary,
-              backgroundColor: Colors.white,
+              backgroundColor: AppConstants.surfaceLight,
               side: BorderSide(
                 color: selected
                     ? Colors.transparent

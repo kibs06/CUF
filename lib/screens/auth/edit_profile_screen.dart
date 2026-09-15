@@ -80,7 +80,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         color: AppConstants.secondary.withValues(alpha: 0.5),
       ),
       filled: true,
-      fillColor: const Color(0xFFF5F5F5),
+      fillColor: AppConstants.surfaceLight,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide(color: AppConstants.borderGray.withValues(alpha: 0.5)),
@@ -306,7 +306,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 color: AppConstants.secondary.withValues(alpha: 0.5),
               ),
               filled: true,
-              fillColor: const Color(0xFFF5F5F5),
+              fillColor: AppConstants.surfaceLight,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide(color: AppConstants.borderGray.withValues(alpha: 0.5)),
@@ -470,7 +470,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     color: AppConstants.secondary.withValues(alpha: 0.5),
                   ),
                   filled: true,
-                  fillColor: const Color(0xFFF5F5F5),
+                  fillColor: AppConstants.surfaceLight,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide(color: AppConstants.borderGray.withValues(alpha: 0.5)),
@@ -530,7 +530,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final auth = context.watch<AuthProvider>();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
+      backgroundColor: AppConstants.surfaceLight,
       appBar: AppBar(
         title: Text(
           'Edit Profile',
@@ -631,7 +631,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.symmetric(vertical: 24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: AppConstants.borderGray.withValues(alpha: 0.3),
@@ -720,7 +720,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: AppConstants.borderGray.withValues(alpha: 0.3),

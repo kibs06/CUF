@@ -333,7 +333,7 @@ class _PendingGcashCheckoutSheetState extends State<_PendingGcashCheckoutSheet> 
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
         child: SoleCard(
-          color: Colors.white,
+          color: AppConstants.surfaceLight,
           child: Row(
             children: [
               Icon(
@@ -369,7 +369,7 @@ class _PendingGcashCheckoutSheetState extends State<_PendingGcashCheckoutSheet> 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: SoleCard(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         padding: EdgeInsets.zero,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

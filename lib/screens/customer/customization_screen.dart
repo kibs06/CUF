@@ -190,7 +190,7 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                   state: _currentStep > 0 ? StepState.complete : StepState.editing,
                   title: Text('Base Shoe Design', style: AppConstants.headlineStyle(fontSize: 16)),
                   content: SoleCard(
-                    color: Colors.white,
+                    color: AppConstants.surfaceLight,
                     child: RadioGroup<int>(
                       groupValue: _selectedBaseIndex,
                       onChanged: (val) {
@@ -233,7 +233,7 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                   state: _currentStep > 1 ? StepState.complete : (_currentStep == 1 ? StepState.editing : StepState.indexed),
                   title: Text('Color & Dye Scheme', style: AppConstants.headlineStyle(fontSize: 16)),
                   content: SoleCard(
-                    color: Colors.white,
+                    color: AppConstants.surfaceLight,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -299,7 +299,7 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                   state: _currentStep > 2 ? StepState.complete : (_currentStep == 2 ? StepState.editing : StepState.indexed),
                   title: Text('Upper Material', style: AppConstants.headlineStyle(fontSize: 16)),
                   content: SoleCard(
-                    color: Colors.white,
+                    color: AppConstants.surfaceLight,
                     child: Column(
                       children: List.generate(_materials.length, (index) {
                         final item = _materials[index];
@@ -315,7 +315,7 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                             margin: const EdgeInsets.only(bottom: 12),
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              color: isSelected ? AppConstants.primary.withValues(alpha: 0.04) : Colors.white,
+                              color: isSelected ? AppConstants.primary.withValues(alpha: 0.04) : AppConstants.sellerCardBg,
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
                                 color: isSelected ? AppConstants.primary : AppConstants.borderGray.withValues(alpha: 0.4),
@@ -367,7 +367,7 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                   state: _currentStep > 3 ? StepState.complete : (_currentStep == 3 ? StepState.editing : StepState.indexed),
                   title: Text('Artisan Engraving & Sizing Notes', style: AppConstants.headlineStyle(fontSize: 16)),
                   content: SoleCard(
-                    color: Colors.white,
+                    color: AppConstants.surfaceLight,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -400,7 +400,7 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                   state: _currentStep == 4 ? StepState.editing : StepState.indexed,
                   title: Text('Review Selection', style: AppConstants.headlineStyle(fontSize: 16)),
                   content: SoleCard(
-                    color: Colors.white,
+                    color: AppConstants.surfaceLight,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [

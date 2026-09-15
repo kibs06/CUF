@@ -38,7 +38,16 @@ String friendlyAuthError(AuthException e) {
     case 'email_address_invalid':
       return "That doesn't look like a valid email address.";
     case 'over_email_send_rate_limit':
+      // Reached by the email-OTP resend button too — Supabase rate-limits
+      // per address AND per IP, so this must never fail silently.
       return 'Too many attempts. Try again in about a minute.';
+    case 'otp_expired':
+    case 'otp_invalid':
+    case 'invalid_token':
+      // GoTrue reports a wrong OR expired email OTP as one of these.
+      return "That code didn't match or has expired. Request a new one.";
+    case 'otp_disabled':
+      return 'Email codes are not available right now. Please contact support.';
     case 'over_request_rate_limit':
       return 'Too many attempts. Wait a moment and try again.';
     case 'signup_disabled':

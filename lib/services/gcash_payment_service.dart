@@ -157,6 +157,7 @@ class GcashPaymentService {
     required List<Map<String, dynamic>> items,
     String? deliveryAddress,
     Map<String, dynamic>? shippingAddress,
+    String? voucherCode,
   }) async {
     try {
       final res = await _client.functions.invoke(
@@ -166,6 +167,10 @@ class GcashPaymentService {
           'items': items,
           'delivery_address': deliveryAddress,
           'shipping_address': shippingAddress,
+          // Voucher CODE only — the edge function passes it to the order
+          // insert, where the DB trigger validates it and rewrites the
+          // totals. The returned `amount` is therefore already discounted.
+          'voucher_code': ?voucherCode,
         },
       );
       final data = _asMap(res.data);

@@ -122,7 +122,7 @@ class _ReservationRequestsScreenState extends State<ReservationRequestsScreen> {
     int selected = 7;
     return showModalBottomSheet<int>(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: AppConstants.surfaceLight,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -207,7 +207,7 @@ class _ReservationRequestsScreenState extends State<ReservationRequestsScreen> {
     final ctrl = TextEditingController();
     return showModalBottomSheet<String>(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: AppConstants.surfaceLight,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -319,11 +319,11 @@ class _ReservationRequestsScreenState extends State<ReservationRequestsScreen> {
   Widget build(BuildContext context) {
     final filtered = _filtered;
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppConstants.surfaceLight,
       appBar: AppBar(
         title: Text('Bulk Reservations',
             style: AppConstants.headlineStyle(fontSize: 17)),
-        backgroundColor: Colors.white,
+        backgroundColor: AppConstants.surfaceLight,
         surfaceTintColor: Colors.white,
         elevation: 0,
       ),
@@ -519,7 +519,7 @@ class _SellerReservationTile extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: AppConstants.borderGray.withValues(alpha: 0.5),

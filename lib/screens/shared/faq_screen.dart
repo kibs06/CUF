@@ -98,7 +98,7 @@ class _FAQItemState extends State<_FAQItem> {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Theme(

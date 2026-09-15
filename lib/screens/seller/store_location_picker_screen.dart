@@ -476,7 +476,7 @@ class _StoreLocationPickerScreenState extends State<StoreLocationPickerScreen> {
                 MediaQuery.of(context).padding.bottom + 16,
               ),
               decoration: const BoxDecoration(
-                color: Colors.white,
+                color: AppConstants.surfaceLight,
                 borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
                 boxShadow: [
                   BoxShadow(
@@ -563,7 +563,7 @@ class _StoreLocationPickerScreenState extends State<StoreLocationPickerScreen> {
     return Container(
       height: 48,
       decoration: BoxDecoration(
-        color: const Color(0xFFF5F0EB),
+        color: AppConstants.surfaceLight,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -652,7 +652,7 @@ class _StoreLocationPickerScreenState extends State<StoreLocationPickerScreen> {
 
   Widget _circleButton({required IconData icon, required VoidCallback onTap}) {
     return Material(
-      color: Colors.white,
+      color: AppConstants.surfaceLight,
       shape: const CircleBorder(),
       elevation: 4,
       child: InkWell(

@@ -99,7 +99,7 @@ class _HomeStickySearchBarState extends State<HomeStickySearchBar> {
               duration: const Duration(milliseconds: 200),
               height: 38,
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: AppConstants.surfaceLight,
                 borderRadius: BorderRadius.circular(4),
                 border: Border.all(
                   color: focused

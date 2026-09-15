@@ -395,7 +395,7 @@ class _GcashPayScreenState extends State<GcashPayScreen> {
 
           // QR + account details
           SoleCard(
-            color: Colors.white,
+            color: AppConstants.surfaceLight,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -499,7 +499,7 @@ class _GcashPayScreenState extends State<GcashPayScreen> {
 
           // How to pay
           SoleCard(
-            color: Colors.white,
+            color: AppConstants.surfaceLight,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -523,7 +523,7 @@ class _GcashPayScreenState extends State<GcashPayScreen> {
 
           // Proof form
           SoleCard(
-            color: Colors.white,
+            color: AppConstants.surfaceLight,
             child: Form(
               key: _formKey,
               child: Column(

@@ -26,7 +26,7 @@ class SettingsScreen extends StatelessWidget {
     final installedVersion = updateProvider.installedVersion;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
+      backgroundColor: AppConstants.surfaceLight,
       appBar: AppBar(
         title: Text(
           'Settings',
@@ -224,7 +224,7 @@ class SettingsScreen extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
-      color: const Color(0xFFF0F0F0),
+      color: AppConstants.sellerCardBg,
       child: Text(
         title,
         style: AppConstants.bodyStyle(
@@ -238,7 +238,7 @@ class SettingsScreen extends StatelessWidget {
   // ── Section card (flat, no rounded corners) ──────────────────
   Widget _buildSection(List<Widget> children) {
     return Container(
-      color: Colors.white,
+      color: AppConstants.surfaceLight,
       child: Column(children: children),
     );
   }

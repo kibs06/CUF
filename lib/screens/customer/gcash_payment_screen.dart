@@ -455,7 +455,7 @@ class _GcashPaymentScreenState extends State<GcashPaymentScreen>
   Widget _buildAmountCard() {
     final orderTotal = widget.intent.orderTotal;
     return SoleCard(
-      color: Colors.white,
+      color: AppConstants.surfaceLight,
       child: Column(
         children: [
           Text(

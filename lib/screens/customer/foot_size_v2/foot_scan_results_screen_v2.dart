@@ -474,7 +474,7 @@ class _FootScanResultsScreenV2State extends State<FootScanResultsScreenV2>
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: AppConstants.cardRadius,
         border:
             Border.all(color: AppConstants.borderGray.withValues(alpha: 0.4)),
@@ -618,7 +618,7 @@ class _FootScanResultsScreenV2State extends State<FootScanResultsScreenV2>
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: AppConstants.cardRadius,
         border:
             Border.all(color: AppConstants.borderGray.withValues(alpha: 0.4)),
@@ -756,7 +756,7 @@ class _FootScanResultsScreenV2State extends State<FootScanResultsScreenV2>
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: AppConstants.cardRadius,
         border:
             Border.all(color: AppConstants.borderGray.withValues(alpha: 0.4)),
@@ -816,7 +816,7 @@ class _FootScanResultsScreenV2State extends State<FootScanResultsScreenV2>
                     height: 18,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: Colors.white,
+                      color: AppConstants.surfaceLight,
                       border:
                           Border.all(color: AppConstants.accent, width: 3),
                       boxShadow: AppConstants.darkShadow,
@@ -968,7 +968,7 @@ class _FootCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: AppConstants.cardRadius,
         border: Border.all(
           color: isSizingFoot ? AppConstants.accent : AppConstants.borderGray,

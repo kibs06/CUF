@@ -223,7 +223,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 Text('Workshop Health', style: AppConstants.headlineStyle(fontSize: 18)),
                 const SizedBox(height: 12),
                 SoleCard(
-                  color: Colors.white,
+                  color: AppConstants.surfaceLight,
                   child: Column(
                     children: [
                       _buildHealthIndicator('AR Foundation Pipeline', 'Healthy (Unity Ready)', AppConstants.success),
@@ -252,7 +252,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     return GestureDetector(
       onTap: onTap,
       child: SoleCard(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         child: Row(
           children: [
             Container(

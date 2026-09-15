@@ -159,7 +159,7 @@ class _SellerApprovalScreenState extends State<SellerApprovalScreen> {
                   color: Colors.black38,
                 ),
                 filled: true,
-                fillColor: Colors.white,
+                fillColor: AppConstants.surfaceLight,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
@@ -310,7 +310,7 @@ class _SellerApprovalScreenState extends State<SellerApprovalScreen> {
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
           child: SoleCard(
-            color: Colors.white,
+            color: AppConstants.surfaceLight,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

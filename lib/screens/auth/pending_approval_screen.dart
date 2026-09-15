@@ -357,7 +357,7 @@ class _SubmissionHeader extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: AuthSpacing.s24, vertical: AuthSpacing.s24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: AppConstants.premiumCardRadius,
         border: Border.all(
           color: AppConstants.borderGray.withValues(alpha: 0.5),
@@ -489,7 +489,7 @@ class _TimelineCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AuthSpacing.s16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: AppConstants.premiumCardRadius,
         boxShadow: AppConstants.premiumCardShadow,
       ),
@@ -689,7 +689,7 @@ class _EmailNoticeCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AuthSpacing.s16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: AppConstants.borderGray.withValues(alpha: 0.4),
@@ -761,7 +761,7 @@ class _ReceivedList extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: AuthSpacing.s12),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppConstants.surfaceLight,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: AppConstants.borderGray.withValues(alpha: 0.4),

@@ -213,7 +213,7 @@ class _ReportModalSheetState extends State<_ReportModalSheet> {
     return Container(
       height: MediaQuery.of(context).size.height * 0.85,
       decoration: const BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Column(
@@ -337,7 +337,7 @@ class _ReportModalSheetState extends State<_ReportModalSheet> {
                             decoration: BoxDecoration(
                               color: isSelected
                                   ? AppConstants.primary.withValues(alpha: 0.08)
-                                  : Colors.white,
+                                  : AppConstants.sellerCardBg,
                               borderRadius: BorderRadius.circular(10),
                               border: Border.all(
                                 color: isSelected
@@ -473,7 +473,7 @@ class _ReportModalSheetState extends State<_ReportModalSheet> {
           Container(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppConstants.surfaceLight,
               border: Border(
                 top: BorderSide(
                   color: AppConstants.secondary.withValues(alpha: 0.1),

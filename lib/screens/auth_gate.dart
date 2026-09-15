@@ -12,10 +12,13 @@ import '../providers/auth_provider.dart';
 import '../providers/follow_provider.dart';
 import '../services/auth_service.dart';
 import '../services/mfa_service.dart';
+import '../services/email_otp_service.dart';
 import '../widgets/error_retry_widget.dart';
+import 'shared/email_otp_screen.dart';
 import 'shared/mfa_verify_screen.dart';
 import 'admin/admin_shell.dart';
 import 'auth/account_entry_screen.dart';
+import 'auth/foot_profile_onboarding_screen.dart';
 import 'auth/onboarding_screen.dart';
 import 'auth/pending_approval_screen.dart';
 import 'auth/seller_approved_celebration_screen.dart';
@@ -145,6 +148,21 @@ class _AuthGateState extends State<AuthGate> {
     // Ensure hooks are wired once per widget lifecycle.
     _wireAuthHooks();
 
+    // ── Email-OTP gates (ANQUI item 16) ──────────────────────────
+    // Both are "no session yet" states that own the entire screen, so they
+    // are resolved BEFORE any stream/session logic — otherwise the gate
+    // would flash the login screen (or a shell) while a code is outstanding.
+    // `select` limits the extra rebuilds to actual state transitions.
+    final pendingSignup = context.select<AuthProvider, Map<String, dynamic>?>(
+      (a) => a.pendingSignupVerification,
+    );
+    if (pendingSignup != null) return _signupVerificationGate(pendingSignup);
+
+    final pendingDevice = context.select<AuthProvider, Map<String, dynamic>?>(
+      (a) => a.pendingDeviceChallenge,
+    );
+    if (pendingDevice != null) return _deviceChallengeGate(pendingDevice);
+
     // Never make a routing decision before the celebration "seen" set is
     // restored. The seller welcome screen must show exactly once per
     // account; deciding with an empty set (prefs still loading) would
@@ -231,6 +249,53 @@ class _AuthGateState extends State<AuthGate> {
           },
         );
       },
+    );
+  }
+
+  /// Part A — the 6-digit code screen that stands between sign-up and the
+  /// first session. Also the ONLY place the `profiles` row is written when
+  /// email confirmation is on, because that write needs the session the
+  /// verification establishes.
+  Widget _signupVerificationGate(Map<String, dynamic> pending) {
+    final auth = context.read<AuthProvider>();
+    return EmailOtpScreen(
+      purpose: EmailOtpPurpose.signupVerification,
+      email: (pending['email'] as String?) ?? '',
+      // signUp already mailed the first code.
+      codeAlreadySent: true,
+      onSend: auth.resendSignupEmail,
+      onCancel: auth.cancelSignupVerification,
+      cancelLabel: 'Back to sign in',
+      onVerify: (code) async {
+        await auth.verifySignupEmail(code);
+        if (!mounted) return;
+        // The same hand-off the register screen used to do: the optional,
+        // always-skippable foot-profile step, pushed ABOVE the gate so the
+        // session-driven routing below still lands on CustomerShell when
+        // the user backs out of it.
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => const FootProfileOnboardingScreen(),
+          ),
+        );
+      },
+    );
+  }
+
+  /// Part B — the new-device step-up. The AAL1 session was already withdrawn
+  /// by `AuthProvider.login`, so completing this code is what signs the user
+  /// in at all; the device is recorded as trusted at the same time.
+  Widget _deviceChallengeGate(Map<String, dynamic> pending) {
+    final auth = context.read<AuthProvider>();
+    return EmailOtpScreen(
+      purpose: EmailOtpPurpose.newDeviceChallenge,
+      email: (pending['email'] as String?) ?? '',
+      deviceLabel: pending['deviceLabel'] as String?,
+      // login() sent it; this screen only resends on demand.
+      codeAlreadySent: true,
+      onSend: auth.resendDeviceChallenge,
+      onCancel: auth.cancelDeviceChallenge,
+      onVerify: (code) => auth.verifyDeviceChallenge(code),
     );
   }
 
@@ -342,6 +407,15 @@ class _MfaGateState extends State<_MfaGate> {
     _lastAal = _currentAal();
     final aal = _lastAal!;
     if (!MfaService.mfaRequiredForAal(aal)) {
+      if (aal == 'aal2') {
+        // The TOTP factor just satisfied the step-up. The SERVER's device
+        // gate checks a minted device secret rather than the AAL, and the
+        // login flow deliberately skips the email challenge for MFA users —
+        // so this is where an MFA login on a new device is granted its
+        // credential. Without it the user would get in and then find every
+        // gated table (orders, cart, messages) silently empty.
+        unawaited(context.read<AuthProvider>().ensureDeviceTrusted());
+      }
       setState(() {
         _open = true;
         _factorId = null;
@@ -478,7 +552,7 @@ class _SuspendedAccountScreen extends StatelessWidget {
                         width: double.infinity,
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: AppConstants.surfaceLight,
                           borderRadius: AppConstants.cardRadius,
                           border: Border.all(
                             color: AppConstants.borderGray.withValues(alpha: 0.5),

@@ -45,6 +45,7 @@ A `CustomScrollView` with slivers, wrapped in `RefreshIndicator`. No AppBar — 
 2. **Sheet** — `SliverToBoxAdapter` with rounded top corners (`ClipRRect` `borderRadius: 22`), containing:
    - Foot profile banner (conditional — only for incomplete profiles)
    - On Sale section (conditional — only when no search + no category filter + sale items exist)
+   - Best Sellers rail (conditional — same gate as On Sale; hidden when nothing has sold). See `docs/AI/HOME_ON_SALE_ARCHITECTURE.md` §4.4
    - Catalog header + sort button
    - Product grid (`MasonryGridView.count`, 2-col)
    - Bottom spacing for nav bar
@@ -56,11 +57,12 @@ A `CustomScrollView` with slivers, wrapped in `RefreshIndicator`. No AppBar — 
 - On connectivity restore (was offline → now online): auto-refreshes products.
 - On `_loadConversations()`: loads chat conversations for the floating message badge + subscribes to realtime inbox.
 - Push notification deep-link handlers: navigates to `ChatView`, `OrderTrackingScreen`, or `MyReportsScreen`.
+- `loadProducts()` also fetches the `units_sold` aggregation in parallel (`SupabaseService.fetchUnitsSold()`) and stamps `units_sold` onto each product — that single value powers the **Best Selling** sort, the **Best Sellers** filter chip and the Best Sellers rail. No second query exists for any of them.
 - Search: hero search bar drives inline filtering via `ProductProvider.getFilteredProducts(_searchKeyword)`.
 
 ### Key providers consumed
 
-- `ProductProvider` — `context.watch` for: `products`, `categories`, `selectedCategory`, `sortMode`, `isLoading`, `getFilteredProducts()`, `selectCategory()`, `setSortMode()`.
+- `ProductProvider` — `context.watch` for: `products`, `categories`, `selectedCategory`, `sortMode`, `isLoading`, `bestSellers`, `getFilteredProducts()`, `selectCategory()`, `setSortMode()`.
 - `CartProvider` — `context.select` for `itemCount` (cart badge on hero icon).
 - `MessageProvider` — `context.read` for conversation loading (no watch).
 
@@ -172,6 +174,8 @@ All providers are app-root singletons, created in `main.dart` and consumed via `
 | Widget | File | Used by |
 |--------|------|---------|
 | `SoleProductCard` | `widgets/sole_product_card.dart` | Home grid, sale section, cross-store row |
+| `BestSellersSection` | `widgets/best_sellers_section.dart` | Home — horizontally-scrolling Best Sellers rail (live `units_sold` order) |
+| `HorizontalProductCard` | `widgets/horizontal_product_card.dart` | Home Best Sellers rail, profile Buy Again / Recently Viewed rails |
 | `SoleBottomNav` | `widgets/sole_bottom_nav.dart` | All shells (customer, seller, admin) |
 | `CartIconButton` | `widgets/cart_icon_button.dart` | Home, Store app bars |
 | `FloatingMessageButton` | `widgets/floating_message_button.dart` | Home tab overlay |

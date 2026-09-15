@@ -182,7 +182,7 @@ class _AuthTextFieldState extends State<AuthTextField> {
               color: AppConstants.secondary.withValues(alpha: 0.45),
             ),
             filled: true,
-            fillColor: Colors.white,
+            fillColor: AppConstants.surfaceLight,
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
               vertical: 14,

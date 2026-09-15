@@ -70,7 +70,7 @@ class _SearchHistoryOverlayState extends State<SearchHistoryOverlay> {
         margin: EdgeInsets.symmetric(horizontal: widget.horizontalMargin),
         padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppConstants.surfaceLight,
           // Sharp corners to match the squared search bar.
           borderRadius: BorderRadius.circular(4),
           boxShadow: [

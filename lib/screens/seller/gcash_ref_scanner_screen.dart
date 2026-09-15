@@ -296,7 +296,7 @@ class _GcashRefScannerScreenState extends State<GcashRefScannerScreen> {
                   width: 72,
                   height: 72,
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: AppConstants.surfaceLight,
                     shape: BoxShape.circle,
                     border: Border.all(color: AppConstants.accent, width: 4),
                   ),

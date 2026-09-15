@@ -144,7 +144,7 @@ class _MfaVerifyScreenState extends State<MfaVerifyScreen> {
                   decoration: InputDecoration(
                     counterText: '',
                     filled: true,
-                    fillColor: Colors.white,
+                    fillColor: AppConstants.surfaceLight,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),

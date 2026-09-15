@@ -842,7 +842,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
+                      color: AppConstants.borderGray.withValues(alpha: 0.25),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Column(
@@ -906,7 +906,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             height: 24,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: isComplete ? AppConstants.okStockColor : Colors.grey.shade200,
+              color: isComplete ? AppConstants.okStockColor : AppConstants.borderGray.withValues(alpha: 0.6),
             ),
             child: Icon(
               isComplete ? Icons.check : Icons.circle_outlined,

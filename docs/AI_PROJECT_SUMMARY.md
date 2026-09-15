@@ -394,7 +394,7 @@ npm run dev
 | Primary (Burnished Clay) | `#8B5A2B` | Buttons, active states |
 | Secondary (Carob Dark) | `#3B2314` | Text, icons |
 | Accent (Celadon Teal) | `#4ECDC4` | AR mode, CTAs |
-| Surface (Off-White Suede) | `#F5F0EB` | Backgrounds |
+| Surface (Warm Cream) | `#F3E9D8` | Page / sheet / card backgrounds |
 | Success (Olive Stitch) | `#6B8F47` | Success states |
 | Error (Crimson Welt) | `#D64545` | Error states |
 

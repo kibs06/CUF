@@ -91,7 +91,7 @@ class _AddressBookScreenState extends State<AddressBookScreen> {
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
           child: SoleCard(
-            color: Colors.white,
+            color: AppConstants.surfaceLight,
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

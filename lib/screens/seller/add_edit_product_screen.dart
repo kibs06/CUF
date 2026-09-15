@@ -363,7 +363,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
           height: 34,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: Colors.white,
+            color: AppConstants.surfaceLight,
             border: Border.all(color: AppConstants.borderGray),
           ),
           child: Icon(icon, size: 18, color: AppConstants.primary),
@@ -1639,7 +1639,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                 fontSize: 15, fontWeight: FontWeight.bold),
             hintText: 'Leave empty for no sale',
             filled: true,
-            fillColor: Colors.white,
+            fillColor: AppConstants.surfaceLight,
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             border: OutlineInputBorder(
@@ -1874,7 +1874,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
         width: 90,
         height: 90,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppConstants.surfaceLight,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: AppConstants.borderGray,
@@ -1984,7 +1984,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
               prefixStyle: AppConstants.monoStyle(
                   fontSize: 15, fontWeight: FontWeight.bold),
               filled: true,
-              fillColor: Colors.white,
+              fillColor: AppConstants.surfaceLight,
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               border: OutlineInputBorder(
@@ -2566,7 +2566,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                               width: 80,
                               height: 80,
                               decoration: BoxDecoration(
-                                color: Colors.white,
+                                color: AppConstants.surfaceLight,
                                 borderRadius: BorderRadius.circular(8),
                                 border: Border.all(
                                     color: AppConstants.borderGray),
@@ -3270,7 +3270,7 @@ class _ProductTagSelectorState extends State<_ProductTagSelector> {
                   isDense: true,
                   hintText: 'Add your own ${group.label.toLowerCase()}…',
                   filled: true,
-                  fillColor: Colors.white,
+                  fillColor: AppConstants.surfaceLight,
                   contentPadding:
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   border: OutlineInputBorder(
@@ -3372,9 +3372,9 @@ class _TagChipState extends State<_TagChip> with SingleTickerProviderStateMixin 
   @override
   Widget build(BuildContext context) {
     final selected = widget.selected;
-    // Unselected chips stay uniform (white fill, muted carob text, suede
-    // border); selection fills the chip with the group's accent color and
-    // swaps the content to the group's on-color.
+    // Unselected chips stay uniform (lighter-cream fill, muted carob text,
+    // suede border); selection fills the chip with the group's accent color
+    // and swaps the content to the group's on-color.
     final offColor = AppConstants.secondary.withValues(alpha: 0.65);
 
     return Semantics(
@@ -3393,7 +3393,7 @@ class _TagChipState extends State<_TagChip> with SingleTickerProviderStateMixin 
             curve: Curves.easeInOut,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
-              color: selected ? widget.color : Colors.white,
+              color: selected ? widget.color : AppConstants.sellerCardBg,
               borderRadius: AppConstants.stadiumRadius,
               border: Border.all(
                 color: selected ? widget.color : AppConstants.borderGray,
@@ -3551,7 +3551,7 @@ class _OtherTagChip extends StatelessWidget {
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeInOut,
           decoration: BoxDecoration(
-            color: open ? color.withValues(alpha: 0.08) : Colors.white,
+            color: open ? color.withValues(alpha: 0.08) : AppConstants.sellerCardBg,
             borderRadius: AppConstants.stadiumRadius,
           ),
           child: CustomPaint(
@@ -3923,7 +3923,7 @@ class _PresetChipSelectorState extends State<_PresetChipSelector> {
                   isDense: true,
                   hintText: 'Add your own…',
                   filled: true,
-                  fillColor: Colors.white,
+                  fillColor: AppConstants.surfaceLight,
                   contentPadding:
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   border: OutlineInputBorder(
@@ -4122,7 +4122,7 @@ class _SizeColorSelectorState extends State<_SizeColorSelector> {
                   isDense: true,
                   hintText: 'e.g. Burnished Clay',
                   filled: true,
-                  fillColor: Colors.white,
+                  fillColor: AppConstants.surfaceLight,
                   contentPadding:
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   border: OutlineInputBorder(
@@ -4192,7 +4192,7 @@ class _CompactSheetField extends StatelessWidget {
           color: AppConstants.secondary.withValues(alpha: 0.5),
         ),
         filled: true,
-        fillColor: Colors.white,
+        fillColor: AppConstants.surfaceLight,
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
         border: OutlineInputBorder(
@@ -4422,7 +4422,7 @@ class _ColorSwatchPickerState extends State<_ColorSwatchPicker> {
                   isDense: true,
                   hintText: 'Add your own…',
                   filled: true,
-                  fillColor: Colors.white,
+                  fillColor: AppConstants.surfaceLight,
                   contentPadding:
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   border: OutlineInputBorder(
@@ -4707,7 +4707,7 @@ class _SizeMultiSelectorState extends State<_SizeMultiSelector> {
                   isDense: true,
                   hintText: 'Add your own…',
                   filled: true,
-                  fillColor: Colors.white,
+                  fillColor: AppConstants.surfaceLight,
                   contentPadding:
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   border: OutlineInputBorder(
@@ -4899,7 +4899,7 @@ class _VariantGuideOverlayState extends State<_VariantGuideOverlay>
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(

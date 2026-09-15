@@ -267,7 +267,7 @@ class _TermsPrivacyScreenState extends State<TermsPrivacyScreen> {
     }
 
     return SoleCard(
-      color: Colors.white,
+      color: AppConstants.surfaceLight,
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -859,7 +859,7 @@ class _TermsPrivacyScreenState extends State<TermsPrivacyScreen> {
     required List<_PolicyItem> items,
   }) {
     return SoleCard(
-      color: Colors.white,
+      color: AppConstants.surfaceLight,
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

@@ -160,7 +160,7 @@ class _SellerApprovedCelebrationScreenState
                   Container(
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: AppConstants.surfaceLight,
                       borderRadius: AppConstants.premiumCardRadius,
                       border: Border.all(
                         color: AppConstants.borderGray.withValues(alpha: 0.5),

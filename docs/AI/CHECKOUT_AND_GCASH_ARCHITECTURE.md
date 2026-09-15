@@ -1,6 +1,9 @@
 # Checkout & GCash Payment — Architecture
 
-> **Last updated:** Aug 9, 2026 — **attempt #6 (PayMongo Checkout Sessions online GCash)
+> **Last updated:** Sep 15, 2026 — added **§12 Vouchers / discount codes** (ANQUI
+> checklist item #5). Everything below about attempts #5/#6 still stands.
+>
+> **Last updated (attempt #6):** Aug 9, 2026 — **attempt #6 (PayMongo Checkout Sessions online GCash)
 > is implemented and wired** (approved migration + 3 Edge Functions + Flutter checkout
 > → hosted checkout → poll flow). The gateway-free direct flow (attempt #5) is now
 > **dormant/deprecated for the online path** (kept for POS-style reference; POS itself
@@ -824,3 +827,120 @@ cancel → manual review) rather than a silent loss.
 client mocks for edge functions, so the mini-sweep is verified by code review
 and the live SQL diagnostics, not by an automated test. The Dart change passes
 `flutter analyze`.
+
+---
+
+## 12. NEW — Vouchers / discount codes (ANQUI item #5, Sep 15 2026)
+
+**What it is.** Store owners (and admins) issue discount CODES — `ANQUI10`. A
+customer types one at checkout; the discount is computed and applied by the
+server, and recorded against the order.
+
+**Files.**
+
+| Piece | Where |
+|---|---|
+| Schema (tables, RLS, orders money columns, pricing helpers) | `supabase/migrations/20260915120000_add_vouchers.sql` |
+| Evaluation + preview RPC + orders triggers + deactivate RPC | `supabase/migrations/20260915130000_add_voucher_enforcement.sql` |
+| DB tests (pgTAP, run by CI) | `supabase/tests/vouchers.test.sql` |
+| Dart client | `lib/services/voucher_service.dart` |
+| Customer UI | `lib/screens/customer/checkout_screen.dart` (Voucher section) |
+| Seller UI | `lib/screens/seller/vouchers_screen.dart` (Profile → Vouchers, seller only) |
+| Model tests | `test/services/voucher_service_test.dart` |
+
+### 12.1 The rule: only the CODE crosses the wire
+
+The client sends a code. It never sends a discount amount, and the server never
+reads one:
+
+1. **Preview (advisory).** `public.validate_voucher(code, items)` reprices the
+   cart server-side (prices come from `public.products`, never from the client)
+   and returns `{ok, reason, message, subtotal, delivery_fee, discount_amount,
+   total}`. The checkout screen renders exactly these numbers.
+2. **Enforcement (authoritative).** The code is written onto the order row as
+   `orders.voucher_code`. A **BEFORE INSERT trigger** on `orders`
+   (`orders_apply_voucher()`) re-evaluates it inside the order's own
+   transaction and **overwrites** `subtotal_amount`, `discount_amount` and
+   `total_amount`. An **AFTER INSERT trigger** records the redemption and
+   increments `uses_count`.
+
+Because the numbers are rewritten during the insert, a hand-rolled client that
+posts a fabricated `total_amount` (or a stale preview from ten minutes ago)
+simply gets the server's total. A rejected code fails the insert with a
+customer-readable `P0001` message instead of silently charging full price.
+
+### 12.2 Why a trigger (and not "validate then create")
+
+A separate validate call followed by an insert is a TOCTOU hole: the cart can
+change, the code can expire, or the last use can be claimed in between, and the
+customer would be charged a total nobody re-checked. The trigger removes that
+window — and there is no path around it: the PayMongo edge function inserts with
+the **service role** (RLS bypassed), so the trigger is the only thing standing
+between a forged request and the money.
+
+`SELECT ... FOR UPDATE` on the voucher row, taken inside the insert, is what
+makes the caps race-safe: a second concurrent checkout blocks, then re-reads the
+row with the winner's incremented `uses_count` and is refused.
+
+### 12.3 Decisions taken without explicit client sign-off (review these)
+
+- **Stacking.** A voucher **stacks on top of an active product sale**. The
+discount base is the *sale-aware* goods subtotal (`product_effective_price`
+mirrors `lib/utils/sale_price.dart`), and the fixed **₱100 delivery fee is added
+after the discount** — so a voucher never pays for delivery and the payable
+total can never go negative.
+- **Scope.** Vouchers are an **online-order** feature. A POS insert carrying a
+code is rejected outright rather than silently charged — POS discounts stay a
+seller-side activity.
+- **Funding.** `funded_by` (`store` | `platform`) records who absorbs the
+discount, and the seller's redemption view splits the two. Sellers can only
+create store-funded, store-scoped codes; platform-wide codes are admin-only.
+- **Lifecycle.** Codes are **deactivated, never deleted** (no DELETE policy —
+redemptions reference them). Money terms (`code`, discount type/value, scope,
+funding) are **frozen once a code has been redeemed** so historical orders stay
+explainable; the window, caps, minimum and active flag stay editable.
+- **Customer visibility.** Customers have **no SELECT policy on `vouchers`** at
+all: the only way to learn about a code is to present it to
+`validate_voucher`. Codes cannot be enumerated from the app.
+
+### 12.4 Where it plugs into each path
+
+- **GCash (PayMongo, live):** `create-gcash-payment-intent` takes an optional
+`voucher_code`, writes it on the order insert, then derives the Model B fee and
+the hosted-session amount from the **stored, post-voucher** `total_amount`.
+Because PayMongo computes the charge from `line_items` (and rejects negative
+amounts), the discount is spread across the item lines with largest-remainder
+rounding so the session total matches the order exactly. The voucher is also
+part of the cart fingerprint, so an existing pending intent for the same cart
+cannot be returned as an idempotent hit for a *different* code.
+- **Cash on pickup:** `OrderProvider.placeOrder(voucherCode:)` →
+`SupabaseService.createOrder` adds `voucher_code` + `items_snapshot` (the trigger
+needs the lines to reprice from). The returned row's `total_amount` is what the
+confirmation screen displays.
+- **Deprecated attempt-#5 RPC:** untouched. Its `create_gcash_checkout` has no
+voucher support and its EXECUTE grant is revoked by 20260905000000.
+
+### 12.5 Failure reasons (shown verbatim in the UI)
+
+`invalid_code`, `inactive`, `not_started`, `expired`, `max_uses_reached`,
+`per_user_limit_reached`, `below_minimum`, `wrong_store`, `empty_cart`.
+
+If a code becomes invalid between entry and submit, the checkout re-checks it
+then and asks the customer to continue without it — it never silently charges
+the higher total.
+
+### 12.6 Test coverage
+
+`supabase/tests/vouchers.test.sql` (pgTAP, runs in the `supabase-migrations` CI
+job) covers: schema/triggers, every failure reason, percent caps and clamping,
+the preview/sale-price agreement, **a forged `total_amount` being overwritten**,
+**max_uses=1 refusing the second order and double-counting nothing**,
+per-user limits (same customer refused, different customer allowed), POS and
+missing-snapshot rejection, and RLS (a customer cannot list codes).
+
+`test/services/voucher_service_test.dart` covers the client model and keeps the
+reason strings mirrored with the server.
+
+**Honest gap:** the edge-function change (voucher pass-through + line-item
+discount distribution) has no automated test — this repo has no Deno harness
+(see §11), so it is verified by review plus the DB-level tests above.

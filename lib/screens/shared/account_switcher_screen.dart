@@ -305,7 +305,7 @@ class _AccountSwitcherScreenState extends State<AccountSwitcherScreen> {
           child: Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppConstants.surfaceLight,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: isActive

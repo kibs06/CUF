@@ -148,7 +148,7 @@ class _TagProductsScreenState extends State<TagProductsScreen> {
       },
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppConstants.surfaceLight,
           borderRadius: AppConstants.cardRadius,
           boxShadow: AppConstants.warmShadow,
         ),
@@ -251,7 +251,7 @@ class _TagProductsScreenState extends State<TagProductsScreen> {
         itemBuilder: (_, i) => Container(
           height: i.isEven ? 220 : 260,
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppConstants.surfaceLight,
             borderRadius: AppConstants.cardRadius,
           ),
         ),

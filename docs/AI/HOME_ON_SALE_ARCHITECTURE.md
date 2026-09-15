@@ -89,7 +89,9 @@ if (saleFilterActive) {
 ```
 
 - Selecting the chip filters the **main catalog grid** to active-sale items only.
-- **Graceful fallback:** if the sale expires mid-session while `'On Sale'` is selected, `saleFilterActive` flips false and the grid falls back to the full list — never a confusing empty state. (Note: the chip itself stays in the row until the next reload, since `categories` is recomputed from `_products`.)
+- **Degradation when the data empties:** if the sale expires mid-session while `'On Sale'` is selected, `saleFilterActive` flips false and the `'On Sale'` branch stops applying — the selection then falls through to the generic category branch below it, matches no product's `category` (nothing has `category == 'On Sale'`), and the grid shows its empty state with its "browse all" action. It does **not** fall back to the full list. The chip itself also disappears on the next rebuild, since `categories` is recomputed from `_products`.
+  - *(Corrected Sep 15, 2026 — this previously read "falls back to the full list — never a confusing empty state", which the branch structure does not do; verified while building the `'Best Sellers'` pseudo-category below, which is tested against exactly this case.)*
+- **`'Best Sellers'` is the second pseudo-category** and behaves identically — see §4.4.
 
 ### 4.2 Dedicated "On Sale / HOT DEALS" section (home screen sliver)
 
@@ -153,6 +155,15 @@ A countdown readout overlaid on the **bottom edge of the product image** telling
 - **Placement & look:** cards, the product detail hero and the Recently Viewed strip all get the **same full-width yellow (amber) band** across the image's bottom — pinned `left: 0, right: 0` so it always reaches both edges (no side gaps). Dark brown text (`AppConstants.secondary`) on amber (`0xFFFFC107` — the HOT DEALS accent) keeps contrast; under 1h the band deepens to golden yellow (`0xFFF0A500`) and pulses. On the detail hero the dot indicators sit raised above the band. Pure `Positioned` overlay everywhere — no layout/masonry impact, same contract as the tag/tape.
 - `Semantics` is human-readable ("Sale ends in 2 days", "Sale ends in 1 hour and 30 minutes") at minute resolution — no per-second screen-reader spam.
 
+### 4.4 `'Best Sellers'` — the second pseudo-category (added Sep 15, 2026)
+
+The home screen now carries a **Best Sellers** rail beside the On Sale section, fed by the `units_sold` aggregation (§4.1's pattern reused, not a parallel mechanism):
+
+- **One rule, one place:** `bestSellerProducts(products, unitsSold)` in `lib/providers/product_provider.dart` returns the top `kBestSellerLimit` (= 20) products by `units_sold`, **excluding anything that has never sold**, most-sold first, ties broken on rating then name. Both the chip and the rail call it, so they cannot disagree. `hasBestSellers` gates whether either is offered at all.
+- **Chip:** `categories` appends `kBestSellersCategory` (`'Best Sellers'`) when `hasBestSellers`, and `getFilteredProducts()` applies it through a sibling branch to the `'On Sale'` one (`bestSellerFilterActive`), with the same degradation described in §4.1.
+- **Rail:** `lib/widgets/best_sellers_section.dart` renders a header (`Best Sellers` + a `SoleBadge('MOST SOLD')` + "See all") over a horizontal `ListView` of the shared `HorizontalProductCard` — the same 130×180 strip card as the profile's "Buy Again"/"Recently Viewed" rails. It reads `ProductProvider.bestSellers` (live), so **no extra query**. The home screen renders it only in the default browse state (`_searchKeyword.isEmpty` + no category filter), exactly like the On Sale section in §4.2.
+- **No masonry concern:** it is a horizontal list inside a fixed-height `SizedBox`, not a second grid — §4.2's `flutter_staggered_grid_view` gotcha does not apply.
+
 ---
 
 ## 5. Sorting under active sales
@@ -173,8 +184,9 @@ So "Price: Low to High" lists discounted items at their *actual* price. `SortMod
 | File | Role in the sale feature |
 |------|--------------------------|
 | `lib/utils/sale_price.dart` | **Single source of truth** — `isOnSale`, `effectivePrice`, `salePercent` |
-| `lib/screens/customer/customer_home_screen.dart` | "On Sale" section sliver + chip wiring + recently-viewed sale prices |
-| `lib/providers/product_provider.dart` | `categories` (`'On Sale'` pseudo-category), `getFilteredProducts` (sale filter + effective-price sort) |
+| `lib/screens/customer/customer_home_screen.dart` | "On Sale" section sliver + Best Sellers rail + chip wiring + recently-viewed sale prices |
+| `lib/providers/product_provider.dart` | `categories` (the `'On Sale'` and `'Best Sellers'` pseudo-categories), `getFilteredProducts` (sale filter, best-seller filter, effective-price sort), `bestSellerProducts()` / `bestSellers` / `hasBestSellers` |
+| `lib/widgets/best_sellers_section.dart` | The Best Sellers home rail (live `units_sold` ranking, shared `HorizontalProductCard`) |
 | `lib/widgets/sole_product_card.dart` | Hanging tag + price-tape overlays, strikethrough/effective price display |
 | `lib/widgets/hanging_sale_tag.dart` | The interactive hang tag (swing, flip reveal, semantics, reduced motion) |
 | `lib/widgets/sale_price_tape.dart` | Peel-away tape over the sale price (corner-lift peel, blur, shimmer, shared reveal state) |
@@ -194,7 +206,7 @@ So "Price: Low to High" lists discounted items at their *actual* price. `SortMod
 1. **Never duplicate the sale rule** — any new price display must call `isOnSale`/`effectivePrice`/`salePercent` from `sale_price.dart`.
 2. **Don't switch the HOT DEALS section to masonry** and don't give those cards `imageAspectRatio` (see §4.2 gotcha). The hanging tag is an overlay (`clipBehavior: Clip.none` outer `Stack` in `SoleProductCard`) and must never change that.
 3. Keep the section's visibility guard tied to `_searchKeyword.isEmpty` + `selectedCategory` — search/category states must not double-render sale items.
-4. The `'On Sale'` chip is computed from `_products.any(isOnSale)` — if you add new sale criteria, update `sale_price.dart` only.
+4. The `'On Sale'` chip is computed from `_products.any(isOnSale)` — if you add new sale criteria, update `sale_price.dart` only. The same applies to `'Best Sellers'` (§4.4): its rule lives in `bestSellerProducts()` and the chip/rail both read it — never re-derive "is this a best seller" in a widget.
 5. Sorting by price must use `effectivePrice`, or discounted items will sort by their inflated original price.
 6. **Reveal state is per user+product, not per widget, and is SPLIT in two (Option B).** Always read it through `SaleTagProvider` — the tag uses `isTagRevealed`/`revealTag`, the tape uses `isTapeRevealed`/`revealTape`. Never merge the sets and never make one interaction reveal the other (that was the old shared Option A — it has been deliberately reverted). Each product shows the same face on every screen. To make reveals sync across devices later, swap `SaleTagService` for a Supabase table with a `reveal_type` discriminator (`'tag'` vs `'price'`, PK `(user_id, product_id, reveal_type)`) — the provider API stays the same.
 7. **Never change the price block's footprint between states.** The sale-price `Text` sits in a padded box (`hitPadding` — the ≥40px tap target) and the SAME box is returned in the covered and revealed states; the tape visual is a `Positioned`/`IgnorePointer` overlay (`clipBehavior: Clip.none`) hugging the text. Covered and revealed must be pixel-identical in size, and the original/strikethrough line is never covered. Don't shrink `hitPadding` below ~40px total height — the detail screen puts the slack above (`fromLTRB(10, 22, 10, 0)`) to preserve its bottom-aligned price row; the strip uses `fromLTRB(10, 20, 10, 9)` for its 11px price.
@@ -203,3 +215,4 @@ So "Price: Low to High" lists discounted items at their *actual* price. `SortMod
 10. **Never build a second "is this sale active" check.** The countdown only renders where `isOnSale(product)` is true; the timer's target is `sale_ends_at` (NULL → no timer). All sale logic still lives in `sale_price.dart`.
 11. **Expiry fallback is centralized in `SaleEndWatcher`.** When the countdown hits zero it rebuilds with `now = sale_ends_at + 1s` so the whole card/screen falls back together. Any new surface showing a countdown (or sale prices) must be wrapped in `SaleEndWatcher` with the `now` it provides threaded into `isOnSale`/`effectivePrice`/`salePercent`.
 12. **One shared ticker, no per-card timers.** Countdown displays subscribe to `SaleCountdownTicker.instance` (remove in `dispose`) — never spin up their own `Timer.periodic` per card. `SaleEndWatcher`'s one-shot expiry timer is fine (idle between schedule and fire).
+13. **Pseudo-categories are a pattern — follow it, don't fork it.** `'On Sale'` and `'Best Sellers'` are derived rules dressed as chips: appended in `categories` only while they can yield something, branched in `getFilteredProducts()`, never a real `category` value in the DB, and backed by exactly one rule function. A future "filter the catalog by rule X" belongs in the same two places (plus a rail if it deserves one), not in a new filtering mechanism.

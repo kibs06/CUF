@@ -86,8 +86,21 @@ class BiometricService {
     // Keep _keyDeclined so we don't re-ask after logout
   }
 
-  /// Full wipe — clears everything including declined flag.
+  /// Full wipe of BIOMETRIC state — everything this service owns, including
+  /// the declined flag.
+  ///
+  /// Deliberately NOT `deleteAll()`. The secure store is shared with
+  /// [DeviceTrustService] (the per-install device id and the per-account
+  /// step-up secrets) and [AccountManager], so a blanket wipe would destroy
+  /// this device's identity: the phone would look brand new on the next login
+  /// — re-triggering the OTP step-up — and, with server-side device
+  /// enforcement on, its credential would be gone. Only this service's own
+  /// keys are cleared. Guarded by
+  /// test/services/device_trust_persistence_test.dart.
   Future<void> clearAll() async {
-    await _storage.deleteAll();
+    await _storage.delete(key: _keyEmail);
+    await _storage.delete(key: _keyPassword);
+    await _storage.delete(key: _keyEnabled);
+    await _storage.delete(key: _keyDeclined);
   }
 }

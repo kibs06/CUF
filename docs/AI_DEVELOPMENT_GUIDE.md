@@ -180,7 +180,9 @@ class OrderProvider extends ChangeNotifier {
 | Primary (Burnished Clay) | `#8B5A2B` | Buttons, active states, brand accent |
 | Secondary (Carob Dark) | `#3B2314` | Text, icons, sidebar background |
 | Accent (Celadon Teal) | `#4ECDC4` | AR mode, CTAs, highlights |
-| Surface Light (Off-White Suede) | `#F5F0EB` | Backgrounds |
+| Surface Light (Warm Cream) | `#F3E9D8` | Page / sheet / card backgrounds (`= SellerTheme.creamBg`) |
+| Card / raised cream (`sellerCardBg`) | `#FBF5E9` | Raised chips, unselected option cards, popup menus (`= SellerTheme.card`) |
+| Nav band (`creamDeep`) | `#F0DFBB` | The bottom navigation band |
 | Success (Olive Stitch) | `#6B8F47` | Success states |
 | Error (Crimson Welt) | `#D64545` | Error states |
 
@@ -188,6 +190,12 @@ class OrderProvider extends ChangeNotifier {
 - Headlines: Playfair Display
 - Body: DM Sans
 - Monospace: JetBrains Mono
+
+> **Surfaces:** which token paints which surface, the two non-obvious rules (nav
+> badge ring, `SoleCard` default) and the guard test that enforces it are all in
+> **`docs/AI/CREAM_THEME_SYSTEM.md`**. `surfaceLight` is aliased to
+> `SellerTheme.creamBg`, so the customer, seller and admin sides share one cream
+> palette — never hardcode a white, grey or cream hex in a widget.
 
 ---
 

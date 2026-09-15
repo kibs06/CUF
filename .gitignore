@@ -56,3 +56,6 @@ android/build/
 
 # Obsidian local settings (vault notes themselves are committed)
 .obsidian/
+
+# Codebuff/Freebuff agent workspace (APK builds, screenshots, logs) — tooling, not source
+.freebuff/

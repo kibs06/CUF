@@ -213,6 +213,9 @@ class _AccountEntryScreenState extends State<AccountEntryScreen>
         // here — AuthGate reacts to the auth state change and swaps the root.
         _offerBiometricEnrollment(email, password);
       } else if (!success && mounted) {
+        // A new-device step-up now owns the screen (AuthGate swaps to the
+        // OTP gate) — "Authentication failed." over it would be a lie.
+        if (auth.pendingDeviceChallenge != null) return;
         // Check if a lockout overlay should be shown
         final lockout = auth.pendingLockout;
         if (lockout != null && mounted) {
@@ -291,7 +294,7 @@ class _AccountEntryScreenState extends State<AccountEntryScreen>
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: AppConstants.surfaceLight,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -398,7 +401,9 @@ class _AccountEntryScreenState extends State<AccountEntryScreen>
       if (!mounted) return;
       final auth = Provider.of<AuthProvider>(context, listen: false);
       final success = await auth.login(creds['email']!, creds['password']!);
-      if (!success && mounted) {
+      // Biometric sign-in lands on the same new-device step-up as a typed
+      // password, so it needs the same "don't shout an error" guard.
+      if (!success && mounted && auth.pendingDeviceChallenge == null) {
         _showError(auth.errorMessage ?? 'Authentication failed.');
       }
     } catch (e) {
@@ -756,7 +761,7 @@ class _AccountEntryScreenState extends State<AccountEntryScreen>
                 vertical: 14,
               ),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: AppConstants.surfaceLight,
                 borderRadius: AppConstants.buttonRadius,
                 border: Border.all(
                   color: AppConstants.primary.withValues(alpha: 0.3),

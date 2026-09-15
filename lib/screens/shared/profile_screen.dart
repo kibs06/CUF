@@ -19,10 +19,12 @@ import '../../widgets/sole_card.dart';
 import '../../widgets/sole_status_chip.dart';
 import '../../widgets/sole_switch.dart';
 import '../customer/my_orders_screen.dart';
+import '../customer/my_pickup_reservations_screen.dart';
 import '../customer/my_reservations_screen.dart';
 import '../seller/create_store_screen.dart';
 import '../seller/store_profile_screen.dart';
 import '../seller/gcash_payment_settings_screen.dart';
+import '../seller/vouchers_screen.dart';
 import 'help_menu_screen.dart';
 import 'whats_new_screen.dart';
 import 'settings_screen.dart';
@@ -406,7 +408,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(height: 8),
                 SoleCard(
-                  color: Colors.white,
+                  color: AppConstants.surfaceLight,
                   padding: EdgeInsets.zero,
                   child: Column(
                     children: [
@@ -628,7 +630,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               margin: const EdgeInsets.only(top: 12),
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: AppConstants.surfaceLight,
                 borderRadius: BorderRadius.circular(16),                  border: Border.all(color: AppConstants.borderGray.withValues(alpha: 0.4)),
               ),
               child: Column(
@@ -651,7 +653,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
+                      color: AppConstants.borderGray.withValues(alpha: 0.25),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(
@@ -915,7 +917,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ],
         ),
         SoleCard(
-          color: Colors.white,
+          color: AppConstants.surfaceLight,
           padding: EdgeInsets.zero,
           margin: EdgeInsets.zero,
           child: Row(
@@ -997,10 +999,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // ════════════════════════════════════════════════════════════════
   Widget _buildSettingsCard(AuthProvider auth) {
     return SoleCard(
-      color: Colors.white,
+      color: AppConstants.surfaceLight,
       padding: EdgeInsets.zero,
       child: Column(
         children: [
+          // Pickup holds — the free 24-hour hold a customer makes on a
+          // product page. Separate row from the bulk (reseller) holds below,
+          // because the two are different flows (no deposit, no approval).
+          _settingsRow(
+            icon: Icons.storefront_outlined,
+            title: 'My Pickup Reservations',
+            subtitle: 'Free 24-hour holds waiting for you',
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const MyPickupReservationsScreen(),
+                ),
+              );
+            },
+          ),
+          const Divider(height: 1, color: Color(0xFFE5E7EB)),
           // Bulk (reseller) reservations — holds requested from product
           // pages; visible to everyone since any customer can resell.
           _settingsRow(
@@ -1026,6 +1044,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => const GcashPaymentSettingsScreen(),
+                  ),
+                );
+              },
+            ),
+            const Divider(height: 1, color: Color(0xFFE5E7EB)),
+            // Discount codes customers can enter at checkout.
+            _settingsRow(
+              icon: Icons.local_offer_outlined,
+              title: 'Vouchers',
+              subtitle: 'Create discount codes and see who used them',
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const VouchersScreen(),
                   ),
                 );
               },
@@ -1062,7 +1094,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _fieldLabel('Seller Info'),
         const SizedBox(height: 8),
         SoleCard(
-          color: Colors.white,
+          color: AppConstants.surfaceLight,
           padding: EdgeInsets.zero,
           child: FutureBuilder<Map<String, dynamic>?>(
             future: _sellerStoreFuture,
@@ -1385,7 +1417,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         color: Colors.grey.shade400,
       ),
       filled: true,
-      fillColor: Colors.white,
+      fillColor: AppConstants.surfaceLight,
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),

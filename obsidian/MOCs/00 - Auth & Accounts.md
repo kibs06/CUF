@@ -119,10 +119,14 @@ AccountEntryScreen (create mode) ──"Shop as customer?"──▶ CustomerRegi
 5. `foot_profile_source` semantics: `ar_scan` > `manual` > `skipped`/NULL (banner shows).
 6. Birthday sent as local `YYYY-MM-DD` (`formatBirthdayForDb`) to avoid midnight UTC shifts.
 7. Auth policies in `admin-portal/supabase/admin_policies.sql` must stay in sync with the redefined `is_admin()` or they silently downgrade the ban.
+8. **Email confirmation is ON** (ANQUI item 16): `auth.signUp` returns **no session**, and there is no `on auth.users` trigger, so the `profiles` row can only be written AFTER `verifyOTP` establishes one. The seller flow therefore verifies **before** its private-bucket uploads. The 6-digit code only arrives if the Supabase e-mail templates render `{{ .Token }}` (stock templates send a link only), and the `config.toml` template key must be `confirmation`, not `signup`. A never-confirmed legacy account is not dead-ended — a fresh code is mailed on its next sign-in attempt.
+9. **New-device step-up**: a password login from a device absent from `trusted_devices` withdraws the AAL1 session and requires an emailed code; TOTP MFA accounts skip it (MFA satisfies the step-up). Devices are reviewable/revocable in Account & Security → Manage Login Device.
+9b. **The step-up is enforced by the DATABASE, not by the screen** (`20260915150000_enforce_trusted_devices.sql`). `trust_device()` mints a 32-byte **device secret** (stored only as a SHA-256 in `device_secrets`, which has no policies and no grants) and the client sends it as `x-cufmai-device: <device_id>:<secret>`; a RESTRICTIVE `Require a trusted device` policy on the 26 private tables checks it via `device_is_trusted()`. A hand-crafted client with a stolen password gets empty results — and cannot mint a secret, because `trust_device()` refuses a password-only session (`amr` must contain otp/magiclink, or be `aal2`). **Enforcement ships OFF** (`set_device_enforcement(true)` flips it) so applying the migration cannot break clients that predate the header. `profiles`, `trusted_devices` and `failed_logins` are deliberately exempt — the step-up needs them before it can run.
 
 ## 📚 Deep-dive docs
 
 - [[docs/AI/SIGNUP_ARCHITECTURE|Signup architecture]] — full signup/seller/tiered-verification reference
+- [[docs/AI/EMAIL_OTP_AND_DEVICE_TRUST_ARCHITECTURE|Email OTP & device trust]] — signup verification, the new-device step-up, `trusted_devices`, the e-mail templates it depends on, and Part C: the server-side gate (`device_secrets`, the RESTRICTIVE policies, the ship-off switch)
 - [[docs/SIGNUP_ARCHITECTURE|Signup architecture (top-level copy)]]
 - [[docs/AI/ADMIN_SUSPENSION_ARCHITECTURE|Admin suspension & enforcement]] — full three-layer reference
 - [[docs/AI/PROFILE_ARCHITECTURE|Profile architecture]]

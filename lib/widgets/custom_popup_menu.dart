@@ -150,7 +150,7 @@ class _PopupMenuOverlayState extends State<_PopupMenuOverlay>
                     child: Container(
                       width: widget.menuWidth,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFAF6F1), // Warm cream background
+                        color: AppConstants.sellerCardBg, // Warm cream background
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
                           color: AppConstants.borderGray.withValues(alpha: 0.3),

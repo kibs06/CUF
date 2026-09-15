@@ -176,7 +176,7 @@ class _RateStoreScreenState extends State<RateStoreScreen> {
                   fontSize: 14,
                 ),
                 filled: true,
-                fillColor: Colors.white,
+                fillColor: AppConstants.surfaceLight,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide(
@@ -250,7 +250,7 @@ class _RateStoreScreenState extends State<RateStoreScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: BorderRadius.circular(16),
         boxShadow: AppConstants.warmShadow,
       ),

@@ -227,7 +227,14 @@ enable_signup = true
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true
 # If enabled, users need to confirm their email address before signing in.
-enable_confirmations = false
+#
+# ON since ANQUI item 16 (email OTP): the app now has a verify-email screen
+# and defers the `profiles` insert until verifyOTP establishes a session.
+# The LIVE project must be switched on in the dashboard too
+# (Authentication → Sign In / Providers → Email → "Confirm email") — a local
+# default here does not change the hosted project.
+# See docs/AI/EMAIL_OTP_AND_DEVICE_TRUST_ARCHITECTURE.md.
+enable_confirmations = true
 # If enabled, users will need to reauthenticate or have logged in recently to change their password.
 secure_password_change = false
 # Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.
@@ -236,6 +243,31 @@ max_frequency = "1s"
 otp_length = 6
 # Number of seconds before the email OTP expires (defaults to 1 hour).
 otp_expiry = 3600
+
+# ── Custom email templates (ANQUI item 16) ────────────────────────
+# The app verifies BOTH flows with `verifyOtp`, which needs a 6-digit
+# `{{ .Token }}` in the email. The stock Supabase templates render only a
+# `{{ .ConfirmationURL }}` LINK — verified against a real local stack — so
+# without these overrides the code-entry screen has nothing to accept.
+#
+# ⚠️ The key MUST be `confirmation`, not `signup`.
+# GoTrue names this mail type "confirmation"; the CLI maps the section name
+# straight onto GOTRUE_MAILER_TEMPLATES_<NAME>. With `signup` the CLI emits
+# GOTRUE_MAILER_TEMPLATES_SIGNUP, which GoTrue ignores, and the mailer
+# silently falls back to its built-in link-only template — verified by
+# observing the env vars and the delivered message on a real stack.
+# The LIVE project is unaffected by this (its templates live in the
+# dashboard), but it MUST have the code added to Confirm-signup + Magic-link.
+[auth.email.template.confirmation]
+subject = "Confirm your CUFMAI email"
+content_path = "./supabase/templates/confirmation.html"
+
+# Sent by signInWithOtp for the new-device step-up challenge.
+# New-device step-up. `magic_link` IS GoTrue's own mail-type name, so no
+# rename is needed here (unlike `confirmation` above).
+[auth.email.template.magic_link]
+subject = "Your CUFMAI sign-in code"
+content_path = "./supabase/templates/magic_link.html"
 
 # Use a production-ready SMTP server
 # [auth.email.smtp]

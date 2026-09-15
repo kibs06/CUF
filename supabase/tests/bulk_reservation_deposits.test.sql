@@ -79,14 +79,22 @@ select is(
   0::bigint, '6: still NO UPDATE policy on bulk_reservations (RPC-only writes)');
 
 -- ══ 1. HAPPY PATH ═════════════════════════════════════════════════
--- Seller approves a 10-unit, 7-day hold.
+-- Seller approves a 10-unit, 7-day hold.-- request_bulk_reservation takes the customer from auth.uid(), so the
+-- request MUST be made under the customer's JWT. Creating it under the
+-- seller's JWT (as this file used to) owns the hold to the seller and
+-- makes every customer-side step below fail with FORBIDDEN.
+select set_config('request.jwt.claims',
+  '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated"}', true);
+select public.request_bulk_reservation(
+  'a0000000-0000-0000-0000-00000000aaa1', 'a0000000-0000-0000-0000-00000000000e', 10,
+  '[{"size":"42","quantity":10}]'::jsonb, null);
+
 select set_config('request.jwt.claims',
   '{"sub":"a0000000-0000-0000-0000-00000000000c","role":"authenticated"}', true);
 select lives_ok(
   $sql$ select public.decide_bulk_reservation(
-    public.request_bulk_reservation(
-      'a0000000-0000-0000-0000-00000000aaa1', 'a0000000-0000-0000-0000-00000000000e', 10,
-      '[{"size":"42","quantity":10}]'::jsonb, null),
+    (select id from public.bulk_reservations
+      where product_id = 'a0000000-0000-0000-0000-00000000aaa1'),
     true, 7, null) $sql$,
   '7: seller approves the request');
 
@@ -150,8 +158,8 @@ select is(
   10, '18: reserved_stock = 10');
 -- Largest-first: 42: 20-10=10, 41: 10, 40: 5.
 select is(
-  (select (array_agg(stock order by size) from public.inventory
-    where product_id = 'a0000000-0000-0000-0000-00000000aaa1')),
+  (select array_agg(stock order by size) from public.inventory
+    where product_id = 'a0000000-0000-0000-0000-00000000aaa1'),
   ARRAY[5,10,10], '19: stock drawn largest-size-first (40,41,42 → 5,10,10)');
 select ok(
   (select deposit_paid_at is not null and reserved_at is not null
@@ -187,14 +195,20 @@ select throws_ok(
       where customer_id = 'a0000000-0000-0000-0000-00000000000b'),
     '1234567890123', (select id::text from public.bulk_reservations
       where customer_id = 'a0000000-0000-0000-0000-00000000000b') || '/shot.jpg') $sql$,
-  'REFERENCE_ALREADY_USED', null,
+  'REFERENCE_ALREADY_USED',
   '24: an order- or deposit-used reference cannot confirm a second deposit');
 
 -- ══ 5. CANCEL POST-PAYMENT → FORFEIT ══════════════════════════════
+-- Cancel is customer-only, so run as customer A and scope the subquery to
+-- A's own row: by now a second customer also holds a reservation for this
+-- product, and an unscoped subquery returns more than one row (21000).
+select set_config('request.jwt.claims',
+  '{"sub":"a0000000-0000-0000-0000-00000000000a","role":"authenticated"}', true);
 select lives_ok(
   $sql$ select public.cancel_bulk_reservation(
     (select id from public.bulk_reservations
-      where product_id = 'a0000000-0000-0000-0000-00000000aaa1')) $sql$,
+      where customer_id = 'a0000000-0000-0000-0000-00000000000a'
+        and status = 'approved')) $sql$,
   '25: customer cancels the paid (reserved) hold');
 select is(
   (select status from public.bulk_reservations
@@ -214,6 +228,9 @@ select is(
   35::bigint, '28: stock restored exactly (5,10,10 → sum 35)');
 
 -- ══ 4. CANCEL WHILE AWAITING_DEPOSIT → no forfeiture ══════════════
+-- This hold belongs to customer B, and cancel is customer-only.
+select set_config('request.jwt.claims',
+  '{"sub":"a0000000-0000-0000-0000-00000000000b","role":"authenticated"}', true);
 select lives_ok(
   $sql$ select public.cancel_bulk_reservation(
     (select id from public.bulk_reservations
@@ -257,7 +274,7 @@ select throws_ok(
     '9999999999999', (select id::text from public.bulk_reservations
       where customer_id = 'a0000000-0000-0000-0000-00000000000a'
         and status = 'awaiting_deposit') || '/late.jpg') $sql$,
-  'DEPOSIT_DEADLINE_PASSED', null,
+  'DEPOSIT_DEADLINE_PASSED',
   '33: proof submission after the deadline → DEPOSIT_DEADLINE_PASSED');
 select set_config('request.jwt.claims',
   '{"sub":"a0000000-0000-0000-0000-00000000000c","role":"authenticated"}', true);
@@ -266,24 +283,28 @@ select throws_ok(
     (select id from public.bulk_reservations
       where customer_id = 'a0000000-0000-0000-0000-00000000000a'
         and status = 'awaiting_deposit')) $sql$,
-  'DEPOSIT_DEADLINE_PASSED', null,
+  'DEPOSIT_DEADLINE_PASSED',
   '34: confirm after the deadline → DEPOSIT_DEADLINE_PASSED');
 
 -- Sweep expires it; NO stock was ever drawn for it.
 select is(
   (select public.expire_bulk_reservations()),
   1, '35: sweep expires the lapsed deposit window');
+-- Select the lapsed hold by property, not by created_at: this whole file
+-- runs in ONE transaction, so every row shares the same now() and
+-- `order by created_at desc` is an arbitrary tie-break. Only the row whose
+-- deadline was forced into the past is the one the sweep should expire.
 select is(
   (select status from public.bulk_reservations
-    where id = (select id from public.bulk_reservations
-                where customer_id = 'a0000000-0000-0000-0000-00000000000a'
-                order by created_at desc limit 1)),
+    where customer_id = 'a0000000-0000-0000-0000-00000000000a'
+      and deposit_deadline < now()
+    order by deposit_deadline limit 1),
   'expired', '36: status expired after sweep');
 select is(
   (select deposit_status from public.bulk_reservations
-    where id = (select id from public.bulk_reservations
-                where customer_id = 'a0000000-0000-0000-0000-00000000000a'
-                order by created_at desc limit 1)),
+    where customer_id = 'a0000000-0000-0000-0000-00000000000a'
+      and deposit_deadline < now()
+    order by deposit_deadline limit 1),
   'unpaid', '37: unpaid deposit stays unpaid (nothing to forfeit)');
 select is(
   (select sum(stock) from public.inventory
@@ -338,7 +359,7 @@ select throws_ok(
     (select id from public.bulk_reservations
       where customer_id = 'a0000000-0000-0000-0000-00000000000a'
         and status = 'approved')) $sql$,
-  'ALREADY_RESOLVED', null,
+  'ALREADY_RESOLVED',
   '43: second confirm → ALREADY_RESOLVED (exactly-once holds)');
 select is(
   (select reserved_stock from public.bulk_reservations
@@ -387,7 +408,7 @@ select throws_ok(
     (select id from public.bulk_reservations
       where customer_id = 'a0000000-0000-0000-0000-00000000000b'
         and status = 'awaiting_deposit')) $sql$,
-  'INSUFFICIENT_STOCK_MISSING_2', null,
+  'INSUFFICIENT_STOCK_MISSING_2',
   '48: confirm aborts loudly (INSUFFICIENT_STOCK_MISSING_2 — 30 requested, 28 left)');
 select is(
   (select status from public.bulk_reservations

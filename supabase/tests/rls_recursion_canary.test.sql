@@ -21,13 +21,21 @@
 --     is exactly what caught that.
 --   • stale policies that error for the anon/authenticated roles.
 --
+-- Tables the role cannot SELECT at all are SKIPPED with a NOTICE (see
+-- the privilege check in tmp_rls_canary_sweep): Postgres rejects the
+-- statement on the table grant before RLS is ever evaluated, so there
+-- is no policy to exercise. That is a deliberate grant decision (e.g.
+-- gcash_payment_decision_audit is granted to authenticated only), not
+-- a policy bug. The "at least one table swept" assertion below keeps
+-- that skip from silently turning the anon sweep into a no-op.
+--
 -- Run locally:
 --   supabase start
 --   supabase test db
 -- ══════════════════════════════════════════════════════════════════
 
 begin;
-select plan(6);
+select plan(7);
 
 -- ── helper: sweep every RLS-enabled public table ───────────────────
 -- Runs as the CURRENT role (no SECURITY DEFINER!) so RLS applies and
@@ -35,12 +43,13 @@ select plan(6);
 -- `cnt` on purpose — PL/pgSQL variables shadow SQL identifiers, so a
 -- variable named `n` would clash with a pg_namespace alias named `n`.
 create or replace function public.tmp_rls_canary_sweep()
-returns void
+returns integer
 language plpgsql
 as $$
 declare
   r record;
   cnt bigint;
+  swept integer := 0;
 begin
   for r in
     select c.relname
@@ -51,12 +60,26 @@ begin
       and ns.nspname = 'public'
     order by c.relname
   loop
+    -- No table-level SELECT for this role ⇒ the statement is rejected
+    -- before RLS runs, so there is nothing to exercise. Skip it (and
+    -- say so) rather than reporting a policy failure that isn't one.
+    -- A missing grant on a table a role CAN reach still raises below,
+    -- because then the denial comes from inside the policy chain.
+    if not has_table_privilege(
+      current_user, format('public.%I', r.relname), 'select'
+    ) then
+      raise notice 'canary: skipping public.% — % has no SELECT privilege',
+        r.relname, current_user;
+      continue;
+    end if;
     begin
       execute format('select count(*) from public.%I', r.relname) into cnt;
+      swept := swept + 1;
     exception when others then
       raise exception 'RLS error on table "%": %', r.relname, sqlerrm;
     end;
   end loop;
+  return swept;
 end
 $$;
 
@@ -95,6 +118,14 @@ set role anon;
 select lives_ok(
   'select public.tmp_rls_canary_sweep()',
   'anon: no RLS recursion (42P17) on any RLS-enabled table'
+);
+
+-- Guard: the anon sweep must still be doing real work. Without this,
+-- revoking anon SELECT across the schema would make the sweep above
+-- pass vacuously (every table skipped) instead of failing loudly.
+select cmp_ok(
+  public.tmp_rls_canary_sweep(), '>', 0,
+  'anon: the sweep exercised at least one RLS-enabled table'
 );
 
 reset role;

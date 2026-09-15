@@ -114,21 +114,42 @@ AuthGate listens to authStateChanges → routes by role (Section 7)
    `AuthProvider.signUp(..., applyAsSeller: false)`.
 2. **Provider** — `AuthProvider.signUp` (`lib/providers/auth_provider.dart:89`) sets
    `sellerStatus = 'none'` and calls `AuthService.signUp`.
-3. **Service** — `AuthService.signUp` (`lib/services/auth_service.dart:79`):
-   - Creates the Supabase Auth user with user metadata `{full_name}`.
-   - Upserts a `profiles` row:
-     ```
-     id = user.id, full_name, email, role = 'customer',
-     seller_status = 'none', avatar_url = null, phone = null
-     ```
-   - Fetches the profile back (with retry/fallback).
-4. **Auto-login** — the provider stores `_currentUser` and `_profile`, fires the
+3. **Service** — `AuthService.signUp` (`lib/services/auth_service.dart`):
+   - Creates the Supabase Auth user, stashing everything the profile row needs
+     in user metadata (`full_name`, `role`, `seller_status`, `phone`,
+     `birthday`, `gender`) so it survives an interrupted verification.
+   - Writes the `profiles` row **only if a session came back** (see step 3b).
+4. **Email confirmation (ANQUI item 16) — ON by default.** `auth.signUp` now
+   returns **no session**, so there is nothing to log in with yet:
+   - No `profiles` row can be written (the table has no `on auth.users`
+     trigger; its INSERT policy is `auth.uid() = id`).
+   - `AuthGate` swaps to the 6-digit **verify-email screen**
+     (`lib/screens/shared/email_otp_screen.dart`) and the register screen
+     deliberately does **not** navigate.
+   - On a correct code, `AuthProvider.verifySignupEmail` runs
+     `verifyOTP(type: signup)`, writes the profile from that metadata and
+     adopts the session. Wrong/expired codes surface `otp_expired` copy; the
+     resend button has a 60 s cooldown and rate limits are shown, not
+     swallowed.
+   - With confirmation **OFF** the old path still applies (session present →
+     profile written immediately → auto-login), so the app supports both.
+5. **Auto-login** — the provider stores `_currentUser` and `_profile`, fires the
    login hook, and returns `true`.
-5. **UI feedback** — SnackBar *"Welcome to CUFMAI!"* (green), then `Navigator.pop()`.
-6. **Routing** — `AuthGate` detects the signed-in session, loads the profile, and
+6. **UI feedback** — SnackBar *"Welcome to CUFMAI!"* (green), then
+   `Navigator.pop()` — or, on the confirmation path, the optional foot-profile
+   onboarding step once the code clears.
+7. **Routing** — `AuthGate` detects the signed-in session, loads the profile, and
    routes the user into the **CustomerShell** (4-tab customer experience).
 
-**Result:** The customer can immediately browse, cart, and order — no activation step.
+**Result:** Once the emailed code is entered, the customer can browse, cart and
+order — **there is no activation step after that**, but the address is no longer
+unverified.
+
+> The seller flow verifies the address too, **before** its document uploads
+> (the private bucket's RLS needs a session), and verification never grants
+> seller access. New-device sign-ins are also challenged with a code — the
+> full mechanism, the templates it depends on, and the decisions behind it are
+> in `docs/AI/EMAIL_OTP_AND_DEVICE_TRUST_ARCHITECTURE.md`.
 
 ---
 
@@ -266,7 +287,7 @@ client compensates with a retry loop and manual upsert fallback
 |-------|------|----------------|
 | UI | `lib/screens/auth/register_screen.dart` | Registration form, validation, seller toggle |
 | UI | `lib/screens/auth/login_screen.dart` | Login screen; links to Register |
-| State | `lib/providers/auth_provider.dart` | `signUp()`, `login()`, auto-login, hooks, error state |
+| State | `lib/providers/auth_provider.dart` | `signUp()`, `login()`, auto-login, email-OTP verify/resend state, hooks, error state |
 | Service | `lib/services/auth_service.dart` | Supabase auth calls, profile upsert/get, seller approve/reject |
 | Service | `lib/services/supabase_service.dart` | Profile CRUD used by provider |
 | Routing | `lib/screens/auth_gate.dart` | Session stream, role router, `PendingApprovalScreen` |
@@ -299,6 +320,10 @@ client compensates with a retry loop and manual upsert fallback
 ## Related Documentation
 
 - `docs/AI/SIGNUP_ARCHITECTURE.md` — condensed AI-agent context version of this document.
+- `docs/AI/EMAIL_OTP_AND_DEVICE_TRUST_ARCHITECTURE.md` — email OTP (signup
+  verification + new-device step-up), the server-side device gate that enforces
+  it, `trusted_devices`, the email templates it
+  depends on, and the decisions behind it.
 - `docs/CUSTOMER_ARCHITECTURE.md` — customer module deep-dive.
 - `docs/SELLER_MODULE_GUIDE.md` — seller module deep-dive.
 - `docs/PROJECT_HANDOFF.md` — overall project orientation.

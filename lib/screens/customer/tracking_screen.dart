@@ -819,7 +819,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
 
                 // ── Order header details card ───────────────────
                 SoleCard(
-                  color: Colors.white,
+                  color: AppConstants.surfaceLight,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -972,7 +972,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                 const SizedBox(height: 16),
 
                 SoleCard(
-                  color: Colors.white,
+                  color: AppConstants.surfaceLight,
                   padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
                   child: SoleTimeline(
                     items: _buildTimelineItems(),
@@ -1319,7 +1319,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     Widget? child,
   }) {
     return SoleCard(
-      color: Colors.white,
+      color: AppConstants.surfaceLight,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

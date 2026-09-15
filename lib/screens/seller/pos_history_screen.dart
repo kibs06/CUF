@@ -223,7 +223,7 @@ class _PosHistoryScreenState extends State<PosHistoryScreen> {
   Widget _buildFilterBar() {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
-      color: Colors.white,
+      color: AppConstants.surfaceLight,
       child: Column(
         children: [
           // Filter chips row
@@ -303,7 +303,7 @@ class _PosHistoryScreenState extends State<PosHistoryScreen> {
             margin: const EdgeInsets.only(bottom: 14),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppConstants.surfaceLight,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: SellerTheme.cardBorder),
               boxShadow: AppConstants.sellerShadow,
@@ -435,7 +435,7 @@ class _PosHistoryScreenState extends State<PosHistoryScreen> {
       child: Container(
       margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(

@@ -106,7 +106,7 @@ class _OrderReviewScreenState extends State<OrderReviewScreen> {
                 margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: AppConstants.surfaceLight,
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: AppConstants.warmShadow,
                 ),
@@ -253,7 +253,7 @@ class _OrderItemCard extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppConstants.surfaceLight,
             borderRadius: BorderRadius.circular(16),
             boxShadow: AppConstants.warmShadow,
           ),
@@ -434,7 +434,7 @@ class _OrderReviewSkeleton extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppConstants.surfaceLight,
               borderRadius: BorderRadius.circular(16),
             ),
             child: const Row(
@@ -461,7 +461,7 @@ class _OrderReviewSkeleton extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: AppConstants.surfaceLight,
                 borderRadius: BorderRadius.circular(16),
               ),
               child: const Column(

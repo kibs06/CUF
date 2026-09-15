@@ -158,7 +158,7 @@ class _StoreGroupCard extends StatelessWidget {
     final isPartiallySelected = cart.isStorePartiallySelected(storeId);
 
     return SoleCard(
-      color: Colors.white,
+      color: AppConstants.surfaceLight,
       padding: EdgeInsets.zero,
       margin: const EdgeInsets.only(bottom: 12),
       child: Column(
@@ -458,7 +458,7 @@ class _CartItemRow extends StatelessWidget {
       builder: (ctx) => Container(
         margin: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppConstants.surfaceLight,
           borderRadius: BorderRadius.circular(16),
         ),
         padding: const EdgeInsets.all(24),
@@ -617,7 +617,7 @@ class _SoleCheckbox extends StatelessWidget {
                 ? Container(
                     margin: const EdgeInsets.symmetric(horizontal: 5),
                     decoration: const BoxDecoration(
-                      color: Colors.white,
+                      color: AppConstants.surfaceLight,
                       borderRadius: BorderRadius.all(Radius.circular(1)),
                     ),
                   )
@@ -643,7 +643,7 @@ class _CartCheckoutBar extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.06),

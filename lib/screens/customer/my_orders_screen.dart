@@ -145,7 +145,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
 
   Widget _buildTabBar() {
     return Container(
-      color: Colors.white,
+      color: AppConstants.surfaceLight,
       child: TabBar(
         controller: _tabController,
         isScrollable: true,
@@ -267,7 +267,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: AppConstants.primary.withValues(alpha: 0.12),
@@ -364,7 +364,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen>
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
           child: SoleCard(
-            color: Colors.white,
+            color: AppConstants.surfaceLight,
             padding: const EdgeInsets.all(16),
             shadow: [
               BoxShadow(
@@ -630,7 +630,7 @@ class _OrderCard extends StatelessWidget {
       child: GestureDetector(
         onTap: onTap,
         child: SoleCard(
-          color: Colors.white,
+          color: AppConstants.surfaceLight,
           padding: const EdgeInsets.all(14),
           shadow: [
             BoxShadow(

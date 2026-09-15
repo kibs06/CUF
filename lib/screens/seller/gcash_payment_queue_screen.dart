@@ -405,7 +405,7 @@ class _OrderCard extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: SoleCard(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

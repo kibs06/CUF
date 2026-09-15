@@ -284,7 +284,7 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
                   child: SoleCard(
-                    color: Colors.white,
+                    color: AppConstants.surfaceLight,
                     padding: const EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -576,7 +576,7 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                     ),
                     child: Container(
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: AppConstants.surfaceLight,
                         borderRadius: AppConstants.cardRadius,
                         boxShadow: AppConstants.warmShadow,
                       ),
@@ -647,7 +647,7 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                               setState(() => _sortMode = mode);
                             },
                             selectedColor: AppConstants.primary,
-                            backgroundColor: Colors.white,
+                            backgroundColor: AppConstants.surfaceLight,
                             side: BorderSide(
                               color: isSelected
                                   ? Colors.transparent
@@ -1111,7 +1111,7 @@ class _StoreReviewsSection extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: BorderRadius.circular(14),
         boxShadow: AppConstants.warmShadow,
       ),
@@ -1261,7 +1261,7 @@ class _StoreProductCardSkeleton extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: BorderRadius.circular(12),
       ),
       child: const Column(

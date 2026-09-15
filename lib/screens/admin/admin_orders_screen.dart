@@ -162,7 +162,7 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
                         hintStyle: AppConstants.bodyStyle(fontSize: 13, color: Colors.black38),
                         prefixIcon: const Icon(Icons.search, color: AppConstants.primary),
                         filled: true,
-                        fillColor: Colors.white,
+                        fillColor: AppConstants.surfaceLight,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
                           borderSide: BorderSide.none,
@@ -283,7 +283,7 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
                                     child: Container(
                                       margin: const EdgeInsets.only(bottom: 10),
                                       child: SoleCard(
-                                        color: Colors.white,
+                                        color: AppConstants.surfaceLight,
                                         padding: const EdgeInsets.all(14),
                                         child: Column(
                                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -349,7 +349,7 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
         margin: const EdgeInsets.only(right: 6),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: active ? AppConstants.primary : Colors.white,
+          color: active ? AppConstants.primary : AppConstants.sellerCardBg,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: active ? AppConstants.primary : AppConstants.borderGray,
@@ -373,7 +373,7 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppConstants.surfaceLight,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: AppConstants.borderGray),
         ),
@@ -563,7 +563,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                 isExpanded: true,
                 decoration: InputDecoration(
                   filled: true,
-                  fillColor: Colors.white,
+                  fillColor: AppConstants.surfaceLight,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                 ),
                 items: [

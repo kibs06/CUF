@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 
+import '../constants/app_constants.dart';
+
 /// Wraps an entire skeleton layout in a SINGLE shimmer animation, so one
 /// wave sweeps across every placeholder at once instead of each box
 /// pulsing independently.
@@ -14,8 +16,12 @@ class ShimmerGroup extends StatelessWidget {
   const ShimmerGroup({
     super.key,
     required this.child,
-    this.baseColor = const Color(0xFFEEEEEE), // Colors.grey.shade200
-    this.highlightColor = const Color(0xFFF5F5F5), // Colors.grey.shade100
+    // Warm cream skeleton tones (they used to be neutral greys, which read as
+    // cold grey slabs against the cream page). Base is the deeper band cream
+    // and the sweep brightens to the card cream, so placeholders stay in the
+    // same warm family as the surfaces they stand in for.
+    this.baseColor = AppConstants.creamDeep,
+    this.highlightColor = AppConstants.sellerCardBg,
   });
 
   @override
@@ -49,7 +55,7 @@ class SkeletonBox extends StatelessWidget {
       width: width,
       height: height,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: BorderRadius.circular(borderRadius),
       ),
     );

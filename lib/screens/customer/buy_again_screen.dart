@@ -133,7 +133,7 @@ class _BuyAgainScreenState extends State<BuyAgainScreen>
 
   Widget _buildTabBar() {
     return Container(
-      color: Colors.white,
+      color: AppConstants.surfaceLight,
       child: TabBar(
         controller: _tabController,
         isScrollable: true,
@@ -545,7 +545,7 @@ class _PurchaseOrderCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       child: SoleCard(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         padding: EdgeInsets.zero,
         shadow: [
           BoxShadow(
@@ -559,9 +559,12 @@ class _PurchaseOrderCard extends StatelessWidget {
             // ── Store header: store name + status ─
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 border: Border(
-                  bottom: BorderSide(color: Color(0xFFF0F0F0), width: 1),
+                  bottom: BorderSide(
+                    color: AppConstants.borderGray.withValues(alpha: 0.4),
+                    width: 1,
+                  ),
                 ),
               ),
               child: Row(
@@ -711,7 +714,7 @@ class _PurchaseOrderCard extends StatelessWidget {
             ),
 
             // ── Divider ─
-            const Divider(height: 1, color: Color(0xFFF0F0F0)),
+            Divider(height: 1, color: AppConstants.borderGray.withValues(alpha: 0.4)),
 
             // ── Buy Again button ─
             Padding(

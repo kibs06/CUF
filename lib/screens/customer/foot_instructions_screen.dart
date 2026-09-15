@@ -549,7 +549,7 @@ class _FootInstructionsScreenState extends State<FootInstructionsScreen> {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isSelected ? AppConstants.accent.withValues(alpha: 0.08) : Colors.white,
+          color: isSelected ? AppConstants.accent.withValues(alpha: 0.08) : AppConstants.sellerCardBg,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isSelected ? AppConstants.accent : AppConstants.borderGray.withValues(alpha: 0.5),
@@ -598,7 +598,7 @@ class _FootInstructionsScreenState extends State<FootInstructionsScreen> {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isSelected ? AppConstants.accent.withValues(alpha: 0.08) : Colors.white,
+          color: isSelected ? AppConstants.accent.withValues(alpha: 0.08) : AppConstants.sellerCardBg,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isSelected ? AppConstants.accent : AppConstants.borderGray.withValues(alpha: 0.5),
@@ -640,7 +640,7 @@ class _FootInstructionsScreenState extends State<FootInstructionsScreen> {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isSelected ? AppConstants.accent.withValues(alpha: 0.08) : Colors.white,
+          color: isSelected ? AppConstants.accent.withValues(alpha: 0.08) : AppConstants.sellerCardBg,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isSelected ? AppConstants.accent : AppConstants.borderGray.withValues(alpha: 0.5),
@@ -692,7 +692,7 @@ class _FootInstructionsScreenState extends State<FootInstructionsScreen> {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isSelected ? AppConstants.accent.withValues(alpha: 0.08) : Colors.white,
+          color: isSelected ? AppConstants.accent.withValues(alpha: 0.08) : AppConstants.sellerCardBg,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isSelected ? AppConstants.accent : AppConstants.borderGray.withValues(alpha: 0.5),
@@ -760,7 +760,7 @@ class _FootInstructionsScreenState extends State<FootInstructionsScreen> {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
-          color: isSelected ? AppConstants.accent.withValues(alpha: 0.08) : Colors.white,
+          color: isSelected ? AppConstants.accent.withValues(alpha: 0.08) : AppConstants.sellerCardBg,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isSelected ? AppConstants.accent : AppConstants.borderGray.withValues(alpha: 0.5),
@@ -789,7 +789,7 @@ class _FootInstructionsScreenState extends State<FootInstructionsScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: AppConstants.borderGray.withValues(alpha: 0.5),
@@ -849,7 +849,7 @@ class _FootInstructionsScreenState extends State<FootInstructionsScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: AppConstants.borderGray.withValues(alpha: 0.3),

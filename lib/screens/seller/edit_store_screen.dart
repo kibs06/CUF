@@ -313,7 +313,7 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
                     height: 80,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: Colors.white,
+                      color: AppConstants.surfaceLight,
                       border: Border.all(
                           color: AppConstants.surfaceLight, width: 3),
                       boxShadow: AppConstants.warmShadow,
@@ -451,7 +451,7 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: AppConstants.cardRadius,
         boxShadow: AppConstants.warmShadow,
       ),
@@ -559,7 +559,7 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: AppConstants.cardRadius,
         boxShadow: AppConstants.warmShadow,
       ),
@@ -630,7 +630,7 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: AppConstants.cardRadius,
         boxShadow: AppConstants.warmShadow,
       ),
@@ -669,7 +669,7 @@ class _EditStoreScreenState extends State<EditStoreScreen> {
         color: AppConstants.secondary.withValues(alpha: 0.4),
       ),
       filled: true,
-      fillColor: Colors.white,
+      fillColor: AppConstants.surfaceLight,
       contentPadding:
           const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       border: OutlineInputBorder(

@@ -30,6 +30,7 @@ import 'screens/auth/splash_screen.dart';
 import 'screens/customer/gcash_payment_screen.dart';
 import 'screens/customer/product_detail_screen.dart';
 import 'services/connectivity_service.dart';
+import 'services/device_trust_service.dart';
 // TEMPORARY (Phase 1b diagnostics) — remove with diag_logger.dart.
 import 'services/diag_logger.dart';
 import 'services/deep_link_service.dart';
@@ -93,6 +94,18 @@ Future<void> main() async {
   if (supabaseReady) {
     // Start the connectivity service after Supabase is ready
     ConnectivityService.instance.start();
+
+    // Attach this install's step-up credential to outgoing requests before
+    // anything reads a device-gated table, and keep it pointed at whichever
+    // account is signed in (the secret is per (user, device), so an account
+    // switch must swap it). Both are best-effort: with the server gate
+    // switched off — the shipped default — nothing depends on this.
+    try {
+      await DeviceTrustService.instance.refreshRequestHeader();
+      DeviceTrustService.instance.startSyncWithAuthState();
+    } catch (e) {
+      if (kDebugMode) debugPrint('Device header setup failed: $e');
+    }
 
     // Initialize Firebase for push notifications
     try {

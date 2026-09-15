@@ -54,8 +54,21 @@ class AppConstants {
   // Accent – Celadon Teal (AR mode, CTAs, highlights)
   static const Color accent = Color(0xFF4ECDC4);
 
-  // Surface Light – Off-White Suede
-  static const Color surfaceLight = Color(0xFFF5F0EB);
+  // Surface Light – Warm Cream
+  //
+  // The app-wide light surface (page backgrounds, sheets, cards, nav bar).
+  // Repointed at the seller-side cream so the ENTIRE app shares the one warm
+  // cream aesthetic the seller dashboard already uses — the previous value
+  // (#F5F0EB, "off-white suede") read as plain white on the customer home.
+  // Referenced from [SellerTheme.creamBg] so the two can never drift, and so
+  // this also warms every place that uses it as light-on-dark text.
+  static const Color surfaceLight = SellerTheme.creamBg;
+
+  // Surface Light – Deep Cream
+  // A half-step deeper and warmer than [surfaceLight], used for the bottom
+  // navigation band so the bar reads as its own grounded surface instead of
+  // blending into the page behind it.
+  static const Color creamDeep = Color(0xFFF0DFBB);
 
   // Surface Dark – Midnight Canvas (dark mode / AR overlay)
   static const Color surfaceDark = Color(0xFF1A1208);

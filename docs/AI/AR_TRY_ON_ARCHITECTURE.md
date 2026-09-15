@@ -347,7 +347,7 @@ From `lib/constants/app_constants.dart`:
 | `AppConstants.success` | `#6B8F47` (Olive Stitch) | Tracking locked indicator |
 | `AppConstants.error` | `#D64545` (Crimson Welt) | Out-of-stock indicators |
 | `AppConstants.secondary` | `#3B2314` (Carob Dark) | Text on accent backgrounds |
-| `AppConstants.surfaceLight` | `#F5F0EB` (Off-White Suede) | Text on dark backgrounds |
+| `AppConstants.surfaceLight` | `#F3E9D8` (Warm Cream) | Text on dark backgrounds |
 | `AppConstants.cardRadius` | `BorderRadius.circular(16)` | Glassmorphism panels |
 | `AppConstants.buttonRadius` | `BorderRadius.circular(12)` | Add to Cart button |
 

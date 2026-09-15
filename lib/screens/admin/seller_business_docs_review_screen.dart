@@ -197,7 +197,7 @@ class _DocCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppConstants.borderGray.withValues(alpha: 0.5)),
       ),

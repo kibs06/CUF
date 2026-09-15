@@ -82,7 +82,7 @@ routes — one route whose body swaps between steps with an
 ## Screen anatomy (top → bottom)
 
 ```
-Scaffold (surfaceLight #F5F0EB)
+Scaffold (surfaceLight #F3E9D8)
 └── Stack
     ├── noiseOverlay(opacity: 0.04)      ← fine organic texture, CustomPainter
     └── SafeArea
@@ -406,7 +406,7 @@ radius, 1px border):
 
 All from `AppConstants` (`lib/constants/app_constants.dart`):
 
-- **Colors:** `surfaceLight` #F5F0EB (warm cream page bg) · `primary`
+- **Colors:** `surfaceLight` #F3E9D8 (warm cream page bg) · `primary`
   #8B5A2B (burnished clay — buttons, accents, icons) · `secondary`
   #3B2314 (carob dark — text/icons) · `success` #6B8F47 · `error` #D64545 ·
   `borderGray` #D2C7BC.

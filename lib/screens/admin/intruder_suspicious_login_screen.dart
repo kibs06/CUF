@@ -174,7 +174,7 @@ class _AdminIntruderSuspiciousLoginScreenState
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: AppConstants.cardRadius,
         border: Border.all(
           color: AppConstants.borderGray.withValues(alpha: 0.3),
@@ -232,7 +232,7 @@ class _AdminIntruderSuspiciousLoginScreenState
         width: double.infinity,
         padding: const EdgeInsets.all(32),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppConstants.surfaceLight,
           borderRadius: AppConstants.cardRadius,
           border: Border.all(
             color: AppConstants.borderGray.withValues(alpha: 0.3),
@@ -292,7 +292,7 @@ class _AdminIntruderSuspiciousLoginScreenState
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppConstants.surfaceLight,
         borderRadius: AppConstants.cardRadius,
         border: Border.all(
           color: isLocked
