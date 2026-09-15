@@ -1,5 +1,23 @@
 [
   {
+    "latest_version": "1.0.26",
+    "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.26/app-release-1.0.26.apk",
+    "released_at": "2026-09-15",
+    "notes": [
+      "Vouchers are here: enter a coupon code at checkout and the discount is applied to your order",
+      "Reserve for Pickup: hold 1–2 pairs for 24 hours, free — no deposit",
+      "New-device verification: signing in on a phone we have not seen before asks for a 6-digit code emailed to you, and new sign-ups verify their email address",
+      "Store owners: create codes in the new Vouchers screen — percent or fixed amount, minimum order, use limits, end date",
+      "Sellers: the Pickup Reservations screen lists incoming holds and records a collected one as a sale in one tap",
+      "Track your holds with a countdown in Profile → My Pickup Reservations — cancel any time, or extend once (+24 hours) if you are running late",
+      "Best Sellers: a new Best Sellers filter and a home-screen rail show what is selling most, ranked by units sold",
+      "Admins: Manage Users → Account Security shows trusted devices, code history and lockouts for any account",
+      "White and cream colour swatches now have a visible outline, so they no longer disappear on light cards",
+      "The whole app now wears the warm cream look of the seller dashboard",
+      "Updates install from inside the app — no more hunting for the APK file yourself"
+    ]
+  },
+  {
     "latest_version": "1.0.25",
     "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.25/app-release-1.0.25.apk",
     "released_at": "2026-09-13",
