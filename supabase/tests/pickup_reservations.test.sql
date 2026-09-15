@@ -22,7 +22,7 @@
 -- ══════════════════════════════════════════════════════════════════
 
 begin;
-select plan(128);
+select plan(129);
 
 -- ── helpers ────────────────────────────────────────────────────────
 create or replace function public.tmp_pickup_claims(p_user uuid)
@@ -927,6 +927,36 @@ select ok(
 select is(public.tmp_pickup_notices(
             'e0000000-0000-0000-0000-000000000011','Your pickup hold expires soon'), 1,
           '125: exactly one warning reaches the customer — the one for the new deadline'
+);
+
+-- ══ 9. THE SHAPE A REPAIR MUST RESTORE ═════════════════════════════
+-- The migration's §3b (`ALTER TABLE … ADD COLUMN IF NOT EXISTS`) exists because
+-- `CREATE TABLE IF NOT EXISTS` is a NO-OP when the table already exists: a
+-- re-apply over a `pickup_reservations` created by an EARLIER revision of the
+-- same file silently kept the old shape and died on
+-- `42703: column "extension_count" does not exist` (live, 2026-09-16).
+--
+-- The two ways that can regress are guarded from both ends, deliberately:
+--   file text — the Dart contract test asserts §3 and §3b declare the SAME
+--               columns, which is the only place the CREATE TABLE branch is
+--               observable (test/services/pickup_reservation_contract_test.dart)
+--   database  — this, the live table's column set exactly, both directions,
+--               so a repair can be checked against a statement of intent rather
+--               than against the error message it produced
+-- A clean `db reset` builds the table through §3, so it cannot fail on a stale
+-- table; what it CAN do is refuse to let the declared shape drift silently.
+select is(
+  (select array_agg(column_name order by column_name)::text
+     from information_schema.columns
+    where table_schema = 'public' and table_name = 'pickup_reservations'),
+  (select array_agg(c order by c)::text
+     from unnest(array[
+            'id','customer_id','store_id','product_id','size','quantity',
+            'reserved_stock','status','pickup_deadline','reserved_at',
+            'released_at','fulfilled_at','fulfilled_order_id',
+            'reminder_sent_at','extension_count','created_at'
+          ]) as c),
+  '129: pickup_reservations has exactly the columns §3/§3b declare'
 );
 
 select * from finish();

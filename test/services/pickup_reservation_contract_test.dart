@@ -295,4 +295,83 @@ void main() {
       expect(sqlCode.contains('sales_transactions'), isFalse);
     });
   });
+
+  // ── the re-apply hazard ──────────────────────────────────────────────
+  // This file is applied BY HAND through the SQL Editor, so "idempotent" has
+  // to mean more than "does not error where it already ran at this revision".
+  // `CREATE TABLE IF NOT EXISTS` is a NO-OP on an existing table, so a column
+  // that exists in §3 but not in §3b is INVISIBLE on any database that already
+  // holds the table — which is not hypothetical: a live re-apply died with
+  // `42703: column "extension_count" does not exist`, naming the constraint
+  // rather than the CREATE TABLE that quietly did nothing.
+  group('the schema converges when the file is re-applied', () {
+    /// Columns §3 (`CREATE TABLE IF NOT EXISTS`) declares: a line that STARTS
+    /// with `name <TYPE>`, so continuation clauses (`ON DELETE SET NULL,`) and
+    /// the `--` prose between columns are both ignored.
+    List<String> declaredColumns() {
+      final start =
+          sqlCode.indexOf('CREATE TABLE IF NOT EXISTS public.pickup_reservations');
+      expect(start, isNot(-1),
+          reason: '§3 moved or was renamed — update this guard, do not delete it');
+      final end = sqlCode.indexOf('\n);', start);
+      expect(end, isNot(-1), reason: '§3 has no terminating `);`');
+      // The TYPE is matched loosely on purpose: a fixed list of built-in types
+      // silently skipped `status pickup_reservation_status` (the enum) when this
+      // guard was first written, and a guard that quietly under-reads its own
+      // input is worse than no guard. Uppercase simple/parameterized types
+      // (`UUID`, `NUMERIC(2,1)`) or a lowercase named type (the enum) both match;
+      // a continuation clause starting with a keyword (`ON DELETE …`) does not,
+      // because it would have to begin the line with a lowercase identifier.
+      return RegExp(
+        r'^\s*([a-z_][a-z0-9_]*)\s+(?:[A-Z][A-Z0-9_]*(?:\s*\([^)]*\))?|[a-z_][a-z0-9_]*)',
+        multiLine: true,
+      )
+          .allMatches(sqlCode.substring(start, end))
+          .map((m) => m.group(1)!)
+          .toList();
+    }
+
+    /// Columns §3b (`ALTER TABLE … ADD COLUMN IF NOT EXISTS`) converges.
+    List<String> convergedColumns() =>
+        RegExp(r'ADD COLUMN IF NOT EXISTS ([a-z_][a-z0-9_]*)')
+            .allMatches(sqlCode)
+            .map((m) => m.group(1)!)
+            .toList();
+
+    test('§3b converges exactly the columns §3 declares', () {
+      final declared = declaredColumns();
+      expect(declared, isNotEmpty,
+          reason: 'this guard stopped parsing §3 — fix the pattern rather '
+              'than deleting the guard');
+      final converged = convergedColumns();
+
+      expect(
+        converged.toSet(),
+        declared.toSet(),
+        reason: 'every column §3 declares must also be converged by §3b, or a '
+            're-apply over a table that predates it fails with 42703 — and '
+            'nothing in §3b that §3 does not declare either, or it is '
+            'converging a column nothing creates',
+      );
+      expect(converged.length, declared.length,
+          reason: 'a column is converged twice — one line is dead');
+    });
+
+    test('§3b runs before the constraints that read its columns', () {
+      final convergence = sqlCode.indexOf('ADD COLUMN IF NOT EXISTS');
+      final window =
+          sqlCode.indexOf('ADD CONSTRAINT pickup_reservations_within_max_window');
+      final cap =
+          sqlCode.indexOf('ADD CONSTRAINT pickup_reservations_within_extension_cap');
+      expect([convergence, window, cap], everyElement(isNot(-1)));
+
+      expect(convergence, lessThan(cap),
+          reason: 'the extension-count CHECK reads `extension_count`, so it '
+              'must run AFTER §3b or the file cannot be re-applied over a '
+              'table that predates that column (the 42703 above)');
+      expect(convergence, lessThan(window),
+          reason: 'the window CHECK reads `created_at`/`pickup_deadline` — '
+              'same ordering requirement');
+    });
+  });
 }

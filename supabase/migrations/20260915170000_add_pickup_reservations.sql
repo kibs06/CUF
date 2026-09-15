@@ -154,6 +154,47 @@ CREATE TABLE IF NOT EXISTS public.pickup_reservations (
     created_at        TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
+-- 3b. CONVERGE THE TABLE (do not merely create it) ───────────────────
+-- `CREATE TABLE IF NOT EXISTS` above is a NO-OP when the table already exists —
+-- it does not reconcile an existing table with the definition above. That makes
+-- "idempotent, safe to re-run" weaker than it sounds for a file that is applied
+-- BY HAND through the SQL Editor (see supabase/MIGRATIONS_LIVE_STATUS.md): it is
+-- safe on a database where THIS revision already ran, but NOT on one holding a
+-- table created by an EARLIER REVISION OF THIS SAME FILE.
+--
+-- That is not hypothetical. An earlier hand-apply of the pre-extension version of
+-- this migration left a `pickup_reservations` with no `extension_count`; the
+-- CREATE TABLE above silently kept the old shape and the
+-- `pickup_reservations_within_extension_cap` constraint below then failed with:
+--
+--     ERROR: 42703: column "extension_count" does not exist
+--
+-- — an error naming a statement whose own text looks correct, which is exactly
+-- why it is worth this block. Every column is listed (not only the ones added
+-- after the first release) so the table converges from ANY earlier shape, and so
+-- this block doubles as the one place to read what a hold actually stores.
+--
+-- IF NOT EXISTS matches on NAME only: this reconciles MISSING columns, not
+-- CHANGED ones. A column that already exists with a different type or default is
+-- left alone, and (as with the CHECKs below) existing rows are not re-validated.
+ALTER TABLE public.pickup_reservations
+    ADD COLUMN IF NOT EXISTS id                 UUID DEFAULT gen_random_uuid(),
+    ADD COLUMN IF NOT EXISTS customer_id        UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    ADD COLUMN IF NOT EXISTS store_id           UUID NOT NULL REFERENCES public.stores(id) ON DELETE CASCADE,
+    ADD COLUMN IF NOT EXISTS product_id         UUID NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
+    ADD COLUMN IF NOT EXISTS size               TEXT NOT NULL,
+    ADD COLUMN IF NOT EXISTS quantity           INTEGER NOT NULL CHECK (quantity > 0),
+    ADD COLUMN IF NOT EXISTS reserved_stock     INTEGER NOT NULL DEFAULT 0 CHECK (reserved_stock >= 0),
+    ADD COLUMN IF NOT EXISTS status             pickup_reservation_status NOT NULL DEFAULT 'active',
+    ADD COLUMN IF NOT EXISTS pickup_deadline    TIMESTAMPTZ NOT NULL,
+    ADD COLUMN IF NOT EXISTS reserved_at        TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS released_at        TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS fulfilled_at       TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS fulfilled_order_id UUID REFERENCES public.orders(id) ON DELETE SET NULL,
+    ADD COLUMN IF NOT EXISTS reminder_sent_at   TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS extension_count    INTEGER NOT NULL DEFAULT 0 CHECK (extension_count >= 0),
+    ADD COLUMN IF NOT EXISTS created_at         TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now());
+
 -- ⚠️ THE HONESTY BOUND, AS A CONSTRAINT.
 -- A hold can never keep stock longer than the base window plus every allowed
 -- extension. Enforced here rather than only in the RPC (and not only in the
@@ -973,6 +1014,27 @@ SELECT public.install_device_gate_policies();
 -- ══════════════════════════════════════════════════════════════════════
 -- VERIFICATION (run after applying)
 -- ══════════════════════════════════════════════════════════════════════
+-- PREFLIGHT — ONLY IF `pickup_reservations` ALREADY EXISTS, because an earlier
+-- revision of this file was applied here first. `CREATE TABLE IF NOT EXISTS`
+-- adds nothing to an existing table, so check the two ways a re-apply can still
+-- fail: §3b repairs a missing COLUMN, but the unique index below cannot repair
+-- DATA.
+--
+--   1. Columns — all 16 of §3/§3b must be present. Anything missing is exactly
+--      what §3b adds, so re-running the file repairs it (this is the shape that
+--      produced `42703: column "extension_count" does not exist`):
+--        select column_name from information_schema.columns
+--         where table_schema = 'public' and table_name = 'pickup_reservations'
+--         order by ordinal_position;                       -- expect 16 rows
+--
+--   2. Duplicate LIVE holds — the partial unique index is created with
+--      IF NOT EXISTS, but its data requirement is absolute: two `active` rows
+--      for one (customer, product, size) make CREATE UNIQUE INDEX fail. Resolve
+--      them first (cancel or expire the newer one) if this returns any row:
+--        select customer_id, product_id, size, count(*)
+--          from public.pickup_reservations where status = 'active'
+--         group by 1, 2, 3 having count(*) > 1;
+--
 -- The cap is one number everywhere:
 --   select public.pickup_reservation_max_quantity();          -- 2
 --

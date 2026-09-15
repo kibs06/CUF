@@ -123,6 +123,29 @@ either number is ever changed, existing rows are *not* re-validated, so it is a
   data-affecting change rather than a config tweak.
 - `pickup_reservations_within_extension_cap` — `extension_count <= max_extensions`.
 
+**The migration CONVERGES this table; it does not merely create it (§3b).**
+`CREATE TABLE IF NOT EXISTS` is a **no-op** on an existing table, so a column
+that lives only inside it is invisible on any database that already holds the
+table. This file is applied by hand through the SQL Editor (see
+`supabase/MIGRATIONS_LIVE_STATUS.md`), which makes that a live hazard rather
+than a theoretical one: re-applying it over a `pickup_reservations` created by
+the **pre-extension revision of this same file** died on
+
+```
+ERROR: 42703: column "extension_count" does not exist
+```
+
+…raised by the `pickup_reservations_within_extension_cap` constraint below —
+i.e. naming a statement whose own text is correct. §3b therefore lists all 16
+columns again as `ALTER TABLE … ADD COLUMN IF NOT EXISTS`, so re-applying the
+file converges a table created by ANY earlier revision of itself. Two guards
+keep the two lists from drifting: `test/services/pickup_reservation_contract_test.dart`
+asserts §3 and §3b declare the same columns *and* that §3b still runs before
+the constraints that read it, and the pgTAP suite pins the live table's column
+set. (`ADD COLUMN IF NOT EXISTS` matches on NAME only, so this reconciles
+missing columns — not changed ones — and, like the CHECKs, existing rows are
+not re-validated.)
+
 **One live hold per customer per product+size — enforced by the database, not
 just by the RPC.** A partial unique index on
 `(customer_id, product_id, size) WHERE status = 'active'` backstops the RPC's
