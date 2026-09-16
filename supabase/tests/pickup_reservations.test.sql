@@ -740,7 +740,7 @@ select ok(
   exists (select 1 from pg_constraint
            where conname = 'pickup_reservations_within_max_window'
              and conrelid = 'public.pickup_reservations'::regclass),
-  '97: the 48h ceiling is a table CHECK (a new RPC cannot quietly exceed it)'
+  '97: the total-window ceiling is a table CHECK (no RPC can quietly exceed it)'
 );
 select ok(
   exists (select 1 from pg_constraint
@@ -811,12 +811,15 @@ select throws_ok(
 );
 
 -- ⚠️ …and the cap holds even for code that bypasses the RPC entirely.
+-- 96 h is past the ABSOLUTE ceiling (72 h = hold + every budget; see §2b and
+-- store_pickup_extensions.test.sql, which proves the store's budget is part of
+-- that sum and that exactly 72 h is still accepted).
 select throws_ok(
   $$update public.pickup_reservations
-       set pickup_deadline = created_at + interval '72 hours'
+       set pickup_deadline = created_at + interval '96 hours'
      where customer_id='e0000000-0000-0000-0000-000000000011'$$,
   '23514', null,
-  '109: a direct UPDATE past 48 hours is refused by the CHECK, not just by the RPC'
+  '109: a direct UPDATE past the absolute ceiling is refused by the CHECK, not just by the RPC'
 );
 
 -- Notifications: both sides are told, because the store''s commitment grew.
@@ -954,7 +957,8 @@ select is(
             'id','customer_id','store_id','product_id','size','quantity',
             'reserved_stock','status','pickup_deadline','reserved_at',
             'released_at','fulfilled_at','fulfilled_order_id',
-            'reminder_sent_at','extension_count','created_at'
+            'reminder_sent_at','extension_count','store_extension_count',
+            'pickup_code','created_at'
           ]) as c),
   '129: pickup_reservations has exactly the columns §3/§3b declare'
 );

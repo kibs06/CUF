@@ -269,15 +269,53 @@ content_path = "./supabase/templates/confirmation.html"
 subject = "Your CUFMAI sign-in code"
 content_path = "./supabase/templates/magic_link.html"
 
-# Use a production-ready SMTP server
+# ── Custom SMTP — the app's own Gmail (ANQUI item 16) ───────────────
+# GoTrue sends every AUTH e-mail from here: the sign-up confirmation, the
+# new-device sign-in code (magic_link), password reset and e-mail change.
+# The app's own Edge Functions (send-approval-email / send-lockout-email)
+# already send through this SAME Gmail account + App Password, so one
+# mailbox owns all outbound mail — no third-party provider, no domain, no
+# DNS records.
+#
+# ⚠️ GoTrue MUST stay the sender for the verification code. The 6-digit code
+# is minted by GoTrue and stamped into the session as `amr: ["otp"]`, which
+# public.session_proves_possession() requires before trust_device() will mint
+# a device secret. E-mailing the code from our own function instead would
+# leave the session at `amr: ["password"]`, the mint would be refused
+# (42501), and every device would then be denied the gated private tables
+# once enforcement is switched on. See
+# docs/AI/EMAIL_OTP_AND_DEVICE_TRUST_ARCHITECTURE.md §3.7 and §5.1.
+#
+# ⚠️ LEFT OFF LOCALLY ON PURPOSE. `[local_smtp]` above captures dev e-mail in
+# Mailpit (http://127.0.0.1:54324) and dev mode reads the code from there;
+# enabling this locally would send real mail and leave Mailpit empty.
+#
+# The HOSTED project does not read this file's value — set it in the
+# dashboard (Authentication → SMTP Settings):
+#   host smtp.gmail.com · port 465 (implicit TLS, what the Edge Functions
+#   already use) · user + sender = GMAIL_SENDER · sender name CUFMAI ·
+#   password = GMAIL_APP_PASSWORD
+#   Then raise Authentication → Rate Limits (`rate_limit_email_sent` defaults
+#   to 30/h once custom SMTP is saved). The sender address must be the Gmail
+#   account itself, because Gmail rewrites a `From` it does not own.
+#
+# The built-in mailer this replaces is not merely slow: it only delivers to
+# addresses belonging to the Supabase organization, so a real customer's code
+# is refused outright (see the architecture doc §5.1).
+#
+# The same values can be applied as code — PATCH /v1/projects/<ref>/config/auth
+# with a personal access token, which `dart run tool/apply_live_auth_mail.dart`
+# does for you (SMTP + both templates + the redirect allow list, then a
+# read-back of every field). Full steps, values and the verification checks:
+# docs/fixes/GO_LIVE_PRELAUNCH_CHECKLIST.md §R8.
 # [auth.email.smtp]
 # enabled = true
-# host = "smtp.sendgrid.net"
-# port = 587
-# user = "apikey"
-# pass = "env(SENDGRID_API_KEY)"
-# admin_email = "admin@email.com"
-# sender_name = "Admin"
+# host = "smtp.gmail.com"
+# port = 465
+# user = "env(GMAIL_SENDER)"
+# pass = "env(GMAIL_APP_PASSWORD)"
+# admin_email = "env(GMAIL_SENDER)"
+# sender_name = "CUFMAI"
 
 # Uncomment to customize email template
 # [auth.email.template.invite]

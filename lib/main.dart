@@ -292,6 +292,18 @@ class _DeepLinkHostState extends State<DeepLinkHost> {
       return;
     }
 
+    // Return from the sign-up confirmation e-mail. supabase_flutter's own
+    // observer already turns the `#access_token=…` fragment into a session;
+    // this finishes the part it cannot know about (the `profiles` row the
+    // verify-code screen would otherwise have written). Never fatal: a link
+    // that does not complete still leaves the user signed in, with the
+    // gate's own Retry as the backstop.
+    if (DeepLinkService.isAuthConfirmLink(uri)) {
+      if (!mounted) return;
+      await context.read<AuthProvider>().completeSignupFromEmailLink();
+      return;
+    }
+
     if (!DeepLinkService.isGcashReturn(uri)) return;
     // Warm return: the payment screen is open and polling — skip.
     if (GcashPaymentScreen.isOpen) return;

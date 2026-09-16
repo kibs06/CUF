@@ -18,11 +18,41 @@ class DeepLinkService {
   final AppLinks _appLinks = AppLinks();
   StreamSubscription<Uri>? _sub;
 
+  /// Where the sign-up confirmation e-mail sends the user back to.
+  ///
+  /// Passed as `emailRedirectTo` on sign-up (and on a resend), which is what
+  /// GoTrue embeds as `redirect_to` in `{{ .ConfirmationURL }}`. Tapping that
+  /// button then lands HERE with the session in the URI instead of on a web
+  /// page the app cannot use.
+  ///
+  /// ⚠️ Three places must agree or the button silently falls back to the web
+  /// redirect (GoTrue refuses a redirect it has not been told about):
+  ///  1. this constant,
+  ///  2. the `solvision`/`auth` intent-filter in `AndroidManifest.xml`
+  ///     (iOS only matches the `solvision` scheme, already registered in
+  ///     `Info.plist`),
+  ///  3. the LIVE project's Authentication → URL Configuration → **Redirect
+  ///     URLs** allow-list.
+  /// `test/services/deep_link_service_test.dart` pins 1 against 2.
+  static const String authConfirmRedirect = 'solvision://auth/confirm';
+
   /// Whether a link is one of our GCash return links.
   static bool isGcashReturn(Uri uri) =>
       uri.scheme == 'solvision' &&
       uri.host == 'checkout' &&
       uri.path.startsWith('/gcash');
+
+  /// Whether [uri] is the return from the sign-up confirmation e-mail
+  /// (see [authConfirmRedirect]).
+  ///
+  /// Matched on scheme + host + path, not merely the scheme: the app owns
+  /// other `solvision://` links, and each one has a different handler.
+  static bool isAuthConfirmLink(Uri uri) {
+    final expected = Uri.parse(authConfirmRedirect);
+    return uri.scheme == expected.scheme &&
+        uri.host == expected.host &&
+        uri.path.startsWith(expected.path);
+  }
 
   /// The product ID when [uri] is a product share link, else null.
   ///

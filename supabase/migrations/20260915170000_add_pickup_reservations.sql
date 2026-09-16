@@ -15,7 +15,9 @@
 --   status machine w/ pending,    one state: `active` until it resolves
 --     awaiting_deposit, approved
 --   20% non-refundable deposit    FREE — no money, no deposit table
---   deadline chosen by seller     24 h, extendable once (≤ 48 h total)
+--   deadline chosen by seller     24 h; +24 h once by the customer, and +24 h
+--                                 more by the store as an audited goodwill
+--                                 grant (≤ 72 h — see §2b)
 --   hold against TOTAL stock      hold against ONE size
 --
 -- They share exactly TWO things and nothing else: `inventory.stock` as the
@@ -76,18 +78,28 @@ COMMENT ON FUNCTION public.pickup_reservation_max_quantity() IS
   'Maximum units a single free pickup hold may take. Above this, the customer is pointed at the deposit-gated bulk reservation flow.';
 
 -- 2b. THE HOLD WINDOW AND THE EXTENSION CAP ───────────────────────────
--- The customer may ask for MORE time before a hold lapses (see
+-- MORE time can be granted before a hold lapses (see
 -- `extend_pickup_reservation`), because "I am on my way but I will not make 6pm"
--- is a real thing a free hold should survive. What a customer may NOT do is
--- keep a store's stock parked indefinitely, so the patience is bounded on both
--- axes and the bound is a single number each:
+-- is a real thing a free hold should survive. What nobody may do is keep a
+-- store's stock parked indefinitely, so every way the deadline can move is an
+-- explicit, separately-counted budget:
 --
---   hold hours        one base window (24h)
---   max extensions    how many times it may be pushed (1)
+--   hold hours          one base window (24h)
+--   customer budget     how many times the CUSTOMER may push it (1 × 24h)
+--   store budget        how many times the STORE may push it as a goodwill
+--                       grant (1 × 24h) — the RPC ships in
+--                       20260916120000_add_store_pickup_extensions.sql, which
+--                       also records each grant and its reason
 --
--- ⇒ a hold can never keep stock for longer than 48 hours from reservation, and
--- that ceiling is not merely a rule in the RPC: it is a table CHECK (see §3), so
--- even a hand-written INSERT/UPDATE cannot exceed it.
+-- ⇒ three budgets, three numbers, and ONE ceiling that is their sum: 72 hours.
+-- It is not merely a rule inside an RPC — it is a table CHECK (see §3) built
+-- from `pickup_reservation_max_window_hours()`, so even a hand-written
+-- INSERT/UPDATE cannot exceed it, and widening one budget cannot forget the
+-- bound.
+--
+-- The two sides are deliberately NOT the same act. The customer's extension is
+-- self-service; the store's is a recorded favour with a reason attached. See the
+-- header of the store-grant migration for why that distinction is kept.
 CREATE OR REPLACE FUNCTION public.pickup_reservation_hold_hours()
 RETURNS integer
 LANGUAGE sql
@@ -114,6 +126,45 @@ AS $$ SELECT public.pickup_reservation_hold_hours(); $$;
 
 COMMENT ON FUNCTION public.pickup_reservation_extension_hours() IS
   'Hours added by one extension. Same length as the base hold: an extension buys a customer one more ordinary window rather than an arbitrary amount of time.';
+
+-- The STORE's budget. Defined here, beside the other two, because it is part of
+-- what a hold IS — the row's own CHECK bounds itself with it (§3). The RPC that
+-- spends it lives in 20260916120000: a store granting time is an explicit,
+-- audited favour rather than self-service, so it gets its own file and its own
+-- trail instead of being folded into `extend_pickup_reservation`.
+CREATE OR REPLACE FUNCTION public.pickup_reservation_max_store_extensions()
+RETURNS integer
+LANGUAGE sql
+IMMUTABLE
+AS $$ SELECT 1; $$;
+
+COMMENT ON FUNCTION public.pickup_reservation_max_store_extensions() IS
+  'How many goodwill extensions the STORE may grant on one hold (mirrored by PickupReservation.maxStoreExtensions in Dart). Separate from the customer''s own budget so a lenient store is not blocked once the customer has used theirs.';
+
+CREATE OR REPLACE FUNCTION public.pickup_reservation_store_extension_hours()
+RETURNS integer
+LANGUAGE sql
+IMMUTABLE
+AS $$ SELECT public.pickup_reservation_hold_hours(); $$;
+
+COMMENT ON FUNCTION public.pickup_reservation_store_extension_hours() IS
+  'Hours added by one store goodwill grant. One ordinary window, exactly like the customer''s extension — a grant is patience, not an arbitrary new deadline.';
+
+-- THE CEILING, as one expression. Every budget above is summed here so the
+-- table CHECK cannot be widened for one side and forgotten for the other, and so
+-- the answer to "how long can this store''s stock be held?" is a single call.
+CREATE OR REPLACE FUNCTION public.pickup_reservation_max_window_hours()
+RETURNS integer
+LANGUAGE sql
+IMMUTABLE
+AS $$
+    SELECT public.pickup_reservation_hold_hours()
+           * (1 + public.pickup_reservation_max_extensions()
+                + public.pickup_reservation_max_store_extensions());
+$$;
+
+COMMENT ON FUNCTION public.pickup_reservation_max_window_hours() IS
+  'Absolute ceiling on a hold: the base window plus EVERY extension budget (24 × 3 = 72 h). Used by the pickup_reservations_within_max_window CHECK, so no code path — present or future — can exceed it.';
 
 -- 3. TABLE ────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.pickup_reservations (
@@ -151,6 +202,23 @@ CREATE TABLE IF NOT EXISTS public.pickup_reservations (
     -- How many times this hold has been extended (0..max_extensions). Stored
     -- rather than derived so the cap is auditable on the row itself.
     extension_count   INTEGER NOT NULL DEFAULT 0 CHECK (extension_count >= 0),
+    -- Goodwill extensions the STORE has granted (0..max_store_extensions),
+    -- counted separately from the customer's own budget on purpose: a store
+    -- being generous must not consume the customer's allowance, and vice versa.
+    -- The reason for each one lives in pickup_reservation_extension_grants.
+    store_extension_count INTEGER NOT NULL DEFAULT 0 CHECK (store_extension_count >= 0),
+    -- The code the customer reads out at the counter and the seller types in to
+    -- find this exact hold (20260916140000 owns the generator, the lookup and
+    -- the one-action fulfil). Six characters from
+    -- `pickup_code_alphabet()` — no I, L, O, U, 0 or 1, because a code is spoken
+    -- aloud and copied off a phone screen, and those six are exactly the ones
+    -- that get misread as 1 I, 0 O, VV, etc.
+    --
+    -- NULLABLE, and not merely for legacy rows: the alphabet and the length are
+    -- asserted to match this regex by the contract test, so the CHECK *is* the
+    -- shape rule and a hand-written code cannot be a short one. A code is
+    -- assigned by a BEFORE INSERT trigger, so every insert path gets one.
+    pickup_code       TEXT CHECK (pickup_code ~ '^[23456789ABCDEFGHJKMNPQRSTVWXYZ]{6}$'),
     created_at        TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
@@ -193,7 +261,39 @@ ALTER TABLE public.pickup_reservations
     ADD COLUMN IF NOT EXISTS fulfilled_order_id UUID REFERENCES public.orders(id) ON DELETE SET NULL,
     ADD COLUMN IF NOT EXISTS reminder_sent_at   TIMESTAMPTZ,
     ADD COLUMN IF NOT EXISTS extension_count    INTEGER NOT NULL DEFAULT 0 CHECK (extension_count >= 0),
+    ADD COLUMN IF NOT EXISTS store_extension_count INTEGER NOT NULL DEFAULT 0 CHECK (store_extension_count >= 0),
+    ADD COLUMN IF NOT EXISTS pickup_code        TEXT CHECK (pickup_code ~ '^[23456789ABCDEFGHJKMNPQRSTVWXYZ]{6}$'),
     ADD COLUMN IF NOT EXISTS created_at         TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now());
+
+-- …and the column CHECKs that arrived with those columns. An inline CHECK is
+-- created only WITH its column, so `ADD COLUMN IF NOT EXISTS` above is a NO-OP
+-- on a table that already has the column — a missing CHECK would stay missing,
+-- the same gap the header of this block is about. Listed explicitly (DROP + ADD,
+-- addressed by the name Postgres gave them) so re-running this file converges the
+-- CONSTRAINTS as well as the columns. These four are the ones the hold logic
+-- reads: a negative counter would silently corrupt the caps below, and a
+-- negative `reserved_stock` would make a release INCREASE stock it never held.
+ALTER TABLE public.pickup_reservations
+    DROP CONSTRAINT IF EXISTS pickup_reservations_quantity_check;
+ALTER TABLE public.pickup_reservations
+    ADD CONSTRAINT pickup_reservations_quantity_check CHECK (quantity > 0);
+ALTER TABLE public.pickup_reservations
+    DROP CONSTRAINT IF EXISTS pickup_reservations_reserved_stock_check;
+ALTER TABLE public.pickup_reservations
+    ADD CONSTRAINT pickup_reservations_reserved_stock_check CHECK (reserved_stock >= 0);
+ALTER TABLE public.pickup_reservations
+    DROP CONSTRAINT IF EXISTS pickup_reservations_extension_count_check;
+ALTER TABLE public.pickup_reservations
+    ADD CONSTRAINT pickup_reservations_extension_count_check CHECK (extension_count >= 0);
+ALTER TABLE public.pickup_reservations
+    DROP CONSTRAINT IF EXISTS pickup_reservations_store_extension_count_check;
+ALTER TABLE public.pickup_reservations
+    ADD CONSTRAINT pickup_reservations_store_extension_count_check CHECK (store_extension_count >= 0);
+ALTER TABLE public.pickup_reservations
+    DROP CONSTRAINT IF EXISTS pickup_reservations_pickup_code_check;
+ALTER TABLE public.pickup_reservations
+    ADD CONSTRAINT pickup_reservations_pickup_code_check
+    CHECK (pickup_code ~ '^[23456789ABCDEFGHJKMNPQRSTVWXYZ]{6}$');
 
 -- ⚠️ THE HONESTY BOUND, AS A CONSTRAINT.
 -- A hold can never keep stock longer than the base window plus every allowed
@@ -210,15 +310,21 @@ ALTER TABLE public.pickup_reservations
 ALTER TABLE public.pickup_reservations
     ADD CONSTRAINT pickup_reservations_within_max_window CHECK (
         pickup_deadline <= created_at
-            + (public.pickup_reservation_hold_hours()
-               * (1 + public.pickup_reservation_max_extensions())
-              ) * interval '1 hour'
+            + public.pickup_reservation_max_window_hours() * interval '1 hour'
     );
 ALTER TABLE public.pickup_reservations
     DROP CONSTRAINT IF EXISTS pickup_reservations_within_extension_cap;
 ALTER TABLE public.pickup_reservations
     ADD CONSTRAINT pickup_reservations_within_extension_cap CHECK (
         extension_count <= public.pickup_reservation_max_extensions()
+    );
+-- …and the store's budget is bound the same way, so a hand-written UPDATE
+-- cannot hand out unlimited goodwill either.
+ALTER TABLE public.pickup_reservations
+    DROP CONSTRAINT IF EXISTS pickup_reservations_within_store_extension_cap;
+ALTER TABLE public.pickup_reservations
+    ADD CONSTRAINT pickup_reservations_within_store_extension_cap CHECK (
+        store_extension_count <= public.pickup_reservation_max_store_extensions()
     );
 
 CREATE INDEX IF NOT EXISTS idx_pickup_reservations_store_status
@@ -253,6 +359,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS
     idx_pickup_reservations_one_active_per_customer_product_size
     ON public.pickup_reservations (customer_id, product_id, size)
     WHERE status = 'active';
+
+-- The code the counter looks a hold up by (20260916140000 owns the generator,
+-- the lookup and the one-action fulfil). UNIQUE over the WHOLE table rather than
+-- only the live holds: a resolved hold's code must still resolve for the seller
+-- in a dispute ("this is the pair the customer showed me"). Postgres treats
+-- NULLs as distinct, so every code-less legacy row coexists happily.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_pickup_reservations_pickup_code
+    ON public.pickup_reservations (pickup_code);
 
 COMMENT ON TABLE public.pickup_reservations IS
   'Small FREE pickup holds (ANQUI item 14): 1-2 units of ONE size of ONE product, held out of inventory.stock for 24 hours, no deposit and no approval. A separate system from bulk_reservations (deposit-gated reseller holds) — see the header of 20260915170000_add_pickup_reservations.sql.';
@@ -525,9 +639,11 @@ GRANT EXECUTE ON FUNCTION public.request_pickup_reservation TO authenticated;
 -- must NOT become is a way to park a store's stock indefinitely, so three rules
 -- bound it:
 --
---   1. ONLY THE CUSTOMER. A store cannot extend on the customer's behalf —
---      that is the store choosing to keep its own stock off the shelf, which is
---      what a bulk reservation is for.
+--   1. ONLY THE CUSTOMER — here. A store CAN add time, but not through this
+--      RPC: it has its own explicit, reason-carrying, audited path
+--      (`grant_pickup_extension`, 20260916120000_add_store_pickup_extensions.sql)
+--      with its own budget, so a favour is recorded rather than silent. This
+--      function stays customer-only — it is the self-service door.
 --   2. ONLY BEFORE IT EXPIRES. Once `pickup_deadline` has passed the hold may
 --      lapse at any moment (the opportunistic sweep just has not run yet), so
 --      promising more time would be promising stock nobody can guarantee.
@@ -642,6 +758,7 @@ DECLARE
     v_reservation public.pickup_reservations%ROWTYPE;
     v_is_seller   BOOLEAN;
     v_owner_id    UUID;
+    v_recipient   UUID;
 BEGIN
     IF v_actor IS NULL THEN
         RAISE EXCEPTION 'NOT_AUTHENTICATED';
@@ -672,18 +789,32 @@ BEGIN
         p_reservation_id, 'active', 'cancelled');
 
     -- Notify the OTHER party.
-    INSERT INTO public.notifications (user_id, category, title, message)
-    VALUES (
-        CASE WHEN v_is_seller THEN v_reservation.customer_id ELSE v_owner_id END,
-        'reservations',
-        'Pickup reservation cancelled',
-        CASE WHEN v_is_seller
-             THEN 'The store released your pickup hold of ' || v_reservation.quantity ||
-                  ' × ' || v_reservation.size || ' (' || v_reservation.product_id || ').'
-             ELSE 'The customer cancelled their pickup hold of ' ||
-                  v_reservation.quantity || ' unit(s) — the stock is back on the shelf.'
-        END
-    );
+    --
+    -- ⚠️ THE RECIPIENT CAN BE NULL HERE, and resolving it first is the point.
+    -- `is_seller` is only ever true for a store that HAS an owner, so the
+    -- customer branch always has somebody to tell — but when the CUSTOMER
+    -- cancels a hold at a store whose `owner_id` is NULL (`stores.owner_id` is
+    -- NULLABLE), the ELSE branch evaluates to NULL against a NOT NULL column.
+    -- Unguarded, that would raise 23502 and stop a customer from cancelling
+    -- their own hold. Nobody to notify is not an error: the stock is released
+    -- either way. See docs/AI/NOTIFICATION_RECIPIENT_AUDIT.md.
+    v_recipient := CASE WHEN v_is_seller THEN v_reservation.customer_id
+                        ELSE v_owner_id END;
+
+    IF v_recipient IS NOT NULL THEN
+        INSERT INTO public.notifications (user_id, category, title, message)
+        VALUES (
+            v_recipient,
+            'reservations',
+            'Pickup reservation cancelled',
+            CASE WHEN v_is_seller
+                 THEN 'The store released your pickup hold of ' || v_reservation.quantity ||
+                      ' × ' || v_reservation.size || ' (' || v_reservation.product_id || ').'
+                 ELSE 'The customer cancelled their pickup hold of ' ||
+                      v_reservation.quantity || ' unit(s) — the stock is back on the shelf.'
+            END
+        );
+    END IF;
 END;
 $$;
 
@@ -1041,11 +1172,14 @@ SELECT public.install_device_gate_policies();
 -- The hold is real (stock drops by exactly the quantity):
 --   select stock from public.inventory where product_id = '<p>' and size = '<s>';
 --
--- The hold window and the extension cap are one number each:
---   select public.pickup_reservation_hold_hours();        -- 24
---   select public.pickup_reservation_max_extensions();    -- 1
--- so a hold can never keep stock for more than 48 hours — enforced by the
--- `pickup_reservations_within_max_window` CHECK, not only by the RPC:
+-- The window and every budget are one number each:
+--   select public.pickup_reservation_hold_hours();             -- 24
+--   select public.pickup_reservation_max_extensions();         -- 1
+--   select public.pickup_reservation_max_store_extensions();   -- 1
+--   select public.pickup_reservation_max_window_hours();       -- 72
+-- so a hold can never keep stock for more than 72 hours — the SUM of every
+-- budget, enforced by the `pickup_reservations_within_max_window` CHECK (which
+-- is built from that function), not only by the RPCs:
 --   select public.extend_pickup_reservation('<id>');      -- returns the new deadline
 --
 -- The T-2h sweep reminds the customer per hold and the store once per batch

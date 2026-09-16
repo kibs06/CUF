@@ -80,6 +80,17 @@ DECLARE
   v_message text;
   v_order_short text;
 BEGIN
+  -- ⚠️ THE RECIPIENT IS CHECKED BEFORE ANYTHING ELSE.
+  -- `orders.customer_id` is NULLABLE while `notifications.user_id` is NOT NULL,
+  -- so an order without a customer would raise 23502 — and because this trigger
+  -- is AFTER UPDATE, that exception aborts the status change itself: a seller
+  -- could not mark such an order shipped. `RETURN new` is the right answer: the
+  -- order is real, there is simply nobody to tell.
+  -- See docs/AI/NOTIFICATION_RECIPIENT_AUDIT.md.
+  IF new.customer_id IS NULL THEN
+    RETURN new;
+  END IF;
+
   -- Short ID for display (last 8 chars)
   v_order_short := '#' || substring(new.id::text, length(new.id::text) - 7);
 
@@ -135,8 +146,12 @@ DECLARE
 BEGIN
   v_order_short := '#' || substring(new.id::text, length(new.id::text) - 7);
 
-  -- Only notify for pending/new orders
-  IF new.status = 'pending' THEN
+  -- Only notify for pending/new orders — and only when there is a customer to
+  -- notify. Same reason as `notify_on_order_status_change`: this fires AFTER
+  -- INSERT, so an unguarded NULL recipient would reject the order itself with
+  -- 23502 rather than simply not notifying.
+  -- See docs/AI/NOTIFICATION_RECIPIENT_AUDIT.md.
+  IF new.status = 'pending' AND new.customer_id IS NOT NULL THEN
     INSERT INTO public.notifications (user_id, order_id, category, title, message)
     VALUES (
       new.customer_id,

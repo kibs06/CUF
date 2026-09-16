@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 
-/// Espresso/cream palette for the seller dashboard — carries the brand
-/// browns from the AppBar down through the whole screen so it reads as one
-/// designed surface. Mirrors `cufmai_dashboard_redesign.html` (the visual
-/// reference mockup). Styling only — no logic lives here.
+/// Neutral white/gray palette for the seller dashboard — the same surface
+/// language the customer, admin and auth sides now share, so the whole app
+/// reads as one designed surface. The brand browns below are kept for
+/// accents and data only, never as page or card fills. Styling only — no
+/// logic lives here.
 ///
 /// Usage: reference `SellerTheme.*` from dashboard widgets; never hardcode
 /// these hex values inline in widget files.
@@ -43,18 +44,24 @@ class SellerTheme {
   static const Color blue = Color(0xFF5C7A9E);
   static const Color blueBg = Color(0xFFE1E9F0);
 
-  // ── Cream surfaces ──────────────────────────────────────────────
-  /// Screen background, replacing the light-gray scaffold background.
-  static const Color creamBg = Color(0xFFF3E9D8);
+  // ── Neutral surfaces ────────────────────────────────────────────
+  /// Screen background — pure white (was the warm cream `#F3E9D8`).
+  static const Color creamBg = Color(0xFFFFFFFF);
 
-  /// Card surface, replacing pure white.
-  static const Color card = Color(0xFFFBF5E9);
+  /// Card surface. The same white as the page on purpose: cards are
+  /// separated by their [cardBorder] hairline rather than by a fill, so a
+  /// card can never look dirty or dingy against the page it sits on.
+  static const Color card = Color(0xFFFFFFFF);
 
-  /// Deeper cream — hero card gradient end (`.card.hero` in the mockup).
-  static const Color cardHeroEnd = Color(0xFFF6E9D2);
+  /// Hero card gradient end — a subtle neutral wash off the card white.
+  static const Color cardHeroEnd = Color(0xFFF5F5F5);
 
   /// Hairline card border — cards use a border instead of elevation.
-  static const Color cardBorder = Color(0xFFE7D8BC);
+  ///
+  /// This is now load-bearing: with a white card on a white page it is the
+  /// only thing separating the two, so do not lighten it without re-checking
+  /// card legibility on a real device.
+  static const Color cardBorder = Color(0xFFE8E8E8);
 
   // ── GCash card ──────────────────────────────────────────────────
   static const Color gcashBgStart = Color(0xFFF6E9D2);
@@ -63,13 +70,14 @@ class SellerTheme {
 
   // ── Text ────────────────────────────────────────────────────────
   /// Eyebrow labels, captions, subtitles.
-  static const Color textMuted = Color(0xFF8B7355);
+  static const Color textMuted = Color(0xFF6B6B6B);
 
   /// Secondary body text.
-  static const Color textSecondary = Color(0xFF6B5645);
+  static const Color textSecondary = Color(0xFF4A4A4A);
 
-  /// Ink text on espresso fills (buttons, icon tiles).
-  static const Color creamText = Color(0xFFF3E9D8);
+  /// Ink text on espresso fills (buttons, icon tiles). Pure white now — the
+  /// same role as [AppConstants.inkInverse], which aliases this token.
+  static const Color creamText = Color(0xFFFFFFFF);
 
   /// Soft card shadow (10px blur, 2px y, low opacity) — the mockup's
   /// treatment, replacing standard Material elevation on dashboard cards.

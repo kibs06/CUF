@@ -140,6 +140,12 @@ ALTER TABLE public.bulk_reservations ENABLE ROW LEVEL SECURITY;
 
 ALTER TABLE public.bulk_reservation_deposits ENABLE ROW LEVEL SECURITY;
 
+-- Each policy is dropped first so this file is RE-RUNNABLE — the storage
+-- policies below already do this; without it a second apply died on these lines
+-- and the functions further down were never reached. See
+-- supabase/MIGRATIONS_LIVE_STATUS.md, "safe to re-run".
+DROP POLICY IF EXISTS "Customers can view their own deposit proofs"
+    ON public.bulk_reservation_deposits;
 CREATE POLICY "Customers can view their own deposit proofs"
     ON public.bulk_reservation_deposits FOR SELECT
     USING (
@@ -149,6 +155,8 @@ CREATE POLICY "Customers can view their own deposit proofs"
         )
     );
 
+DROP POLICY IF EXISTS "Sellers can view deposit proofs for their store"
+    ON public.bulk_reservation_deposits;
 CREATE POLICY "Sellers can view deposit proofs for their store"
     ON public.bulk_reservation_deposits FOR SELECT
     USING (
@@ -159,6 +167,8 @@ CREATE POLICY "Sellers can view deposit proofs for their store"
         )
     );
 
+DROP POLICY IF EXISTS "Admins can view all deposit proofs"
+    ON public.bulk_reservation_deposits;
 CREATE POLICY "Admins can view all deposit proofs"
     ON public.bulk_reservation_deposits FOR SELECT
     USING (
@@ -308,6 +318,12 @@ BEGIN
         p_requested_sizes, p_note, 'pending'
     ) RETURNING id INTO v_id;
 
+    -- ⚠️ `AND s.owner_id IS NOT NULL` is a RECIPIENT guard: `stores.owner_id` is
+    -- NULLABLE and `notifications.user_id` is NOT NULL, so a store with no owner
+    -- would fail the CUSTOMER's request outright — the reservation insert above
+    -- and this statement are one transaction, so nothing would be requested at
+    -- all. An ownerless store simply has nobody to tell.
+    -- See docs/AI/NOTIFICATION_RECIPIENT_AUDIT.md.
     INSERT INTO public.notifications (user_id, category, title, message)
     SELECT s.owner_id, 'reservations',
            'New bulk reservation request',
@@ -315,7 +331,8 @@ BEGIN
            COALESCE(p.name, 'a product') || ' for resale.'
     FROM public.stores s
     JOIN public.products p ON p.id = p_product_id
-    WHERE s.id = p_store_id;
+    WHERE s.id = p_store_id
+      AND s.owner_id IS NOT NULL;
 
     RETURN v_id;
 END;

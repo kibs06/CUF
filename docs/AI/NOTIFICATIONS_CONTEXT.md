@@ -11,6 +11,14 @@
 
 ## Quick Facts
 
+- **⚠️ Recipients must be checked before use.** `notifications.user_id` and
+  `seller_notifications.store_id` are both `NOT NULL`, so a recipient that resolves
+  to NULL is a **failed statement**, not a skipped notification — and inside a loop
+  it rolls back the whole batch. The three nullable columns that ever hold a
+  recipient are `orders.customer_id`, `orders.store_id` and `stores.owner_id`.
+  Full inventory and the guards: **`docs/AI/NOTIFICATION_RECIPIENT_AUDIT.md`**
+  (enforced by `supabase/tests/notification_recipients.test.sql` and
+  `test/services/notification_recipient_contract_test.dart`).
 - **Stack:** Flutter + Supabase + Firebase Cloud Messaging (FCM) + Gmail SMTP (email)
 - **Four notification systems:** Customer in-app, Seller in-app, Push (FCM), Email (Gmail SMTP)
 - **Notification types:** 6 customer categories + 5 seller types (11 total)

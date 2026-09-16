@@ -69,6 +69,10 @@ copies of "2" is how the cap silently drifts.
                       extend_pickup_reservation()  ────────┤   +24h, ONCE, only while live
                       (customer, before it lapses)         │   stock untouched, reminder re-armed
                                                            │
+                      grant_pickup_extension()     ────────┤   +24h, ONCE, only while live,
+                      (store owner, with a REASON)         │   stock untouched, reminder re-armed,
+                                                           │   written to the audit trail
+                                                           │
                                                            ├── cancel_pickup_reservation()   [customer
                                                            │   or seller] → cancelled  ✔ stock released
                                                            └── expire_pickup_reservations()  [sweep]
@@ -77,11 +81,21 @@ copies of "2" is how the cap silently drifts.
 
 **The hold window is bounded on purpose.** A free hold should survive "I am on
 my way but I will not make 6pm" — and it must never become a way to park a
-store's stock indefinitely. So a hold runs `pickup_reservation_hold_hours()`
-(24 h) and may be extended `pickup_reservation_max_extensions()` times (once),
-by `pickup_reservation_extension_hours()` (24 h) each: **at most 48 hours from
-reservation, ever**. See §5 for the three rules and the CHECK that enforces the
-ceiling.
+store's stock indefinitely. There are **two independent budgets**, and the
+ceiling is their sum:
+
+| Budget | Constant | Who may spend it | What it needs |
+|---|---|---|---|
+| base window | `pickup_reservation_hold_hours()` = 24 h | — | — |
+| the customer's own extension | `pickup_reservation_max_extensions()` = 1 × `pickup_reservation_extension_hours()` = 24 h | the customer | nothing (self-service) |
+| the store's goodwill grant | `pickup_reservation_max_store_extensions()` = 1 × `pickup_reservation_store_extension_hours()` = 24 h | the store owner only | a **recorded reason** |
+
+So the customer can reach **48 h on their own**, and a generous store can reach
+**72 h total** — `pickup_reservation_max_window_hours()`. Spending one budget
+does not touch the other: a customer who has used their extension does not stop
+a store from being kind, and a store that has been kind does not consume the
+customer's allowance. See §5 for the rules on both paths and the CHECK that
+enforces the ceiling.
 
 - **active** — units are out of `inventory.stock`. There is no `pending`: a row
   exists only *because* stock was held.
@@ -106,8 +120,9 @@ ceiling.
 | `pickup_deadline` | `reserved_at + 24 h` |
 | `reserved_at` / `released_at` / `fulfilled_at` | exactly-once audit stamps |
 | `fulfilled_order_id` | the POS order this became. `ON DELETE SET NULL`, not cascade: deleting the order must not delete the reservation's history |
-| `reminder_sent_at` | makes the T-2h reminder exactly-once. **Cleared by an extension**, because the new deadline is owed its own warning |
-| `extension_count` | `0..max_extensions`. Stored rather than derived so the cap is auditable on the row itself |
+| `reminder_sent_at` | makes the T-2h reminder exactly-once. **Cleared by either extension path**, because the new deadline is owed its own warning |
+| `extension_count` | `0..max_extensions` — the customer's own asks. Stored rather than derived so the cap is auditable on the row itself |
+| `store_extension_count` | `0..max_store_extensions` — goodwill grants. Separate from `extension_count` by design (see §5), so "the customer asked" and "we chose to give them more time" can never be read as the same thing |
 
 Indexes: `(store_id, status)`, `(customer_id, created_at DESC)`, plus two
 partial indexes on `pickup_deadline` scoped to `status = 'active'` —
@@ -117,11 +132,15 @@ only `active` rows can ever be picked up by either sweep.
 — present or future — can exceed it:
 
 - `pickup_reservations_within_max_window` — `pickup_deadline <= created_at +
-  hold_hours × (1 + max_extensions)`, i.e. the **48 h ceiling**. Both functions
-  are `IMMUTABLE` constants, which is what makes them usable in a CHECK; if
-either number is ever changed, existing rows are *not* re-validated, so it is a
-  data-affecting change rather than a config tweak.
-- `pickup_reservations_within_extension_cap` — `extension_count <= max_extensions`.
+  pickup_reservation_max_window_hours()`, i.e. the **72 h ceiling**, and that
+  function is the *sum of every budget* so a new one cannot be added and
+  forgotten (`24 × (1 + 1 + 1)`). The functions it calls are `IMMUTABLE`
+  constants, which is what makes them usable in a CHECK; if any number is ever
+  changed, existing rows are *not* re-validated, so it is a data-affecting change
+  rather than a config tweak.
+- `pickup_reservations_within_extension_cap` — `extension_count <= max_extensions`
+  **and** `store_extension_count <= max_store_extensions`, each against its own
+  budget, so neither counter can be pushed past its own ceiling by any path.
 
 **The migration CONVERGES this table; it does not merely create it (§3b).**
 `CREATE TABLE IF NOT EXISTS` is a **no-op** on an existing table, so a column
@@ -207,6 +226,7 @@ only (`anon` has no `EXECUTE`).
 |---|---|---|
 | `request_pickup_reservation(p_product_id, p_size, p_quantity = 1) → uuid` | customer | validates the cap (`ABOVE_PICKUP_CAP`) and live stock, decrements it, inserts `active` with `pickup_deadline = now() + 24 h`, notifies the customer **and the store owner**. One active hold per (customer, product, size): the serial attempt raises `RESERVATION_ALREADY_EXISTS`, and a *concurrent* one is stopped by the partial unique index (`23505`), stock and all |
 | `extend_pickup_reservation(p_reservation_id) → timestamptz` | customer **only** | asks for more time; returns the new deadline. See the rules below |
+| `grant_pickup_extension(p_reservation_id, p_reason) → timestamptz` | store owner **only** | gives more time as an explicit goodwill gesture; **requires a reason**, records it in the trail, returns the new deadline. See §5's goodwill rules |
 | `cancel_pickup_reservation(p_reservation_id) → uuid` | customer **or** store owner | releases the stock immediately, `status = 'cancelled'`, notifies the counterparty |
 | `fulfill_pickup_reservation(p_reservation_id, p_payment_method = 'cash') → uuid` | store owner | "customer arrived" — writes the POS order and marks `fulfilled` |
 | `expire_pickup_reservations() → integer` | anyone signed in (opportunistic) | the sweep; returns how many it expired |
@@ -222,20 +242,26 @@ seller-chosen method (cash by default, GCash allowed). This deliberately does
 **not** route through the online checkout/GCash-proof flow — there is no
 customer-side payment to verify.
 
-### The three extension rules
+### The three extension rules (the customer's own ask)
 
 A hold may be extended only when **all three** hold, and each is enforced in the
 RPC (and, for the cap, twice over):
 
-1. **Only the customer.** The store cannot extend on the customer's behalf —
-   that is the store choosing to keep its own stock off the shelf, which is
-   what the bulk reservation flow is for. A seller calling this gets `FORBIDDEN`.
+1. **Only the customer — on this RPC.** The store has no way to spend the
+   customer's budget on the customer's behalf through this call; a seller
+   invoking it gets `FORBIDDEN`. A lenient store uses
+   `grant_pickup_extension` below, which is a *different* call with its own
+   budget and a mandatory reason. The split is the point: "the customer asked"
+   and "we chose to give them more time" must never look alike in the data.
 2. **Only before it expires.** Once `pickup_deadline` has passed, the hold may
    lapse at any moment (the sweep has not necessarily run yet), so promising
    more time would promise stock nobody can guarantee. `HOLD_LAPSED`.
 3. **Only `max_extensions` times**, each buying one ordinary window,
-   `EXTENSION_LIMIT_REACHED` beyond that — and the 48 h ceiling is a table CHECK,
-   not just this branch.
+   `EXTENSION_LIMIT_REACHED` beyond that — and the ceiling is a table CHECK, not
+   just this branch. Note that the *customer's* ceiling is what the copy quotes
+   (48 h): the store's budget is a favour, and the customer is never told to
+   count on it. The refusal says so, and points at the store rather than
+   dead-ending.
 
 The `UPDATE` is `FOR UPDATE`, which is what makes the cap concurrency-safe: two
 simultaneous taps serialize, and the second sees `extension_count` already
@@ -243,6 +269,141 @@ incremented and is refused — the same class of race as the duplicate-hold inde
 **Stock is not touched**: the units left `inventory.stock` when the hold was
 created, and more time does not change that. Nothing is charged, because a hold
 is free and so there is nothing to re-authorize.
+
+### The store's goodwill grant (a second, separate budget)
+
+`grant_pickup_extension(p_reservation_id, p_reason)` lets a store owner be
+lenient without touching the customer's allowance, and four rules bound it —
+all checked under `FOR UPDATE`, so two simultaneous taps cannot double a grant:
+
+1. **Only the store that owns the hold.** Not another seller, not the customer
+   (a customer approving their own favour is not a favour), not an admin acting
+   silently. `FORBIDDEN`.
+2. **Only while the hold is live.** Past the deadline the units may be released
+   at any moment, so adding time would promise stock the sweep is about to take
+   back. `HOLD_LAPSED`.
+3. **Only `store_extension_hours` (24 h) and only `max_store_extensions` (once)
+   per hold.** More than that is not goodwill, it is a bulk reservation with
+   extra steps. `STORE_EXTENSION_LIMIT_REACHED`.
+4. **Never without a reason**, 3–280 characters after trimming, enforced by the
+   RPC *and* by a CHECK on the trail table, so an unexplained grant is
+   impossible to insert by any path. `INVALID_REASON`.
+
+The move is recorded in `public.pickup_reservation_extension_grants` **in the
+same transaction as the deadline change**, so a grant can never exist without
+its record (or the reverse):
+
+| Column | Notes |
+|---|---|
+| `reservation_id` | → `pickup_reservations`, **cascade** — the trail exists to explain *a hold's* deadline, so it travels with the hold. It is not a compliance archive |
+| `customer_id` / `store_id` | denormalised, so "everything this store gave away" and "everything this customer was given" are each a single-table read |
+| `granted_by` | → `profiles`, **`ON DELETE SET NULL`** (the convention `gcash_payment_decision_audit.seller_id` already uses): deleting the seller must not delete the record that a favour happened |
+| `previous_deadline` / `new_deadline` | the move as a before/after pair, so one row explains a deadline without replaying the sequence |
+| `hours_granted` | what the deadline moved by |
+| `reason` | **required**, `CHECK (length(btrim(reason)) BETWEEN 3 AND 280)` |
+
+Like the hold table it is **`SELECT`-only** in RLS (customer, store owner,
+admin), so the RPC is the only write path and a hand-crafted `INSERT` cannot
+fabricate a trail; and it is folded into the **device gate**. The customer's
+notification carries the reason verbatim, because an unexplained later deadline
+reads like a glitch — and the store's own tile prints it back
+(`You gave 24h: "…"`), which is what makes a later deadline on the board
+explainable without asking.
+
+**Stock is untouched here too** (the units left `inventory.stock` at creation)
+and nothing is charged. The new deadline **re-arms** `reminder_sent_at`, exactly
+as the customer path does — a granted deadline is owed the same T-2h warning as
+any other.
+
+#### The customer's side of the ledger: the goodwill history
+
+The reason a grant exists is that a *person* was generous, so the record has to
+outlive the hold it was granted on. It does: the customer has a **history screen**
+(`PickupGoodwillScreen`, reached from *My Pickup Reservations*) listing **every**
+grant on their holds, newest first, each row carrying the store, the pair, the
+hours, the reason **as the store wrote it**, the deadline move (`from … to …`) and
+when it was given. Nothing about that list depends on the holds list: a hold that
+was collected, released, or pushed past the holds query's `LIMIT` still has its
+grant here, which is the entire point — the per-hold note only exists while its
+hold is on screen.
+
+**No migration was needed.** The trail is already readable to the customer
+through RLS (one of its three `SELECT` audiences), and the *names* arrive by
+embedding the hold: `pickup_reservations(size, products(name, stores(name)))`,
+which resolves only because `reservation_id` is a foreign key to
+`pickup_reservations`. That embed is therefore load-bearing — a renamed column
+renders an empty history rather than failing, and a renamed relation is a `400` on
+the whole query — so it is pinned from both ends: a pgTAP assertion that the trail
+FKs the hold (assertion 60 of `store_pickup_extensions.test.sql`), and a contract
+test reading the embed path out of the service. The seller's trail stays a
+**single-table** read: it renders beside holds it already has, and the contract
+test pins that exactly one query asks for the embed.
+
+Ten guards around the history were **mutation-tested** (dropping the embed,
+naming the wrong relation, reading `size` off the flat row instead of the embedded
+hold, counting grants where the header should count stores, sharing one select
+between the two audiences, filtering the history down to holds still in the list,
+and the link being always-on or never-on). One came back green on the first pass,
+and for a reason worth recording: the two halves of the link assertion lived in
+**different tests**, so an always-false condition satisfied the negative half on
+its own. They are now a matched pair inside one test — the only thing the
+mutation pass was able to prove by failing to fail.
+
+Two smaller decisions worth keeping: the action to open the history appears
+**only when there is something to read** (same rule as the seller screen's
+`Lapsing soon` chip — an action that opens an empty screen is noise), and the
+screen says in one line that the customer's **own** extension is *not* listed
+there, because the trail is the store's side of the ledger and mixing the two would
+make a favour indistinguishable from an entitlement.
+
+### The counter code — how a seller finds the hold in front of them
+
+The customer's card carries a **six-character code** (`4F7-K2Q`) and the seller
+has a **Collect by code** action in the app bar. That is the whole reason it
+exists: at a counter, neither party wants to scroll a list together to work out
+which of the store's holds is the pair being handed over.
+
+| Piece | Where | Why it lives there |
+|---|---|---|
+| `pickup_code` column + its CHECK | `20260915170000` §3/§3b | nullable, unique across the whole table, shaped by a regex that is a *literal copy* of the alphabet — a CHECK cannot call a function defined in a later migration |
+| `pickup_code_alphabet()` / `pickup_code_length()` | `20260916140000` | one definition each, read by the generator, the pgTAP suite and the Dart constants (3 copies, pinned to each other by the contract test) |
+| `generate_pickup_code()` | `20260916140000` | loops until free rather than "generate and hope": a collision at INSERT would fail the *customer's* request with a `23505` that has nothing to do with anything they did. Randomness is `gen_random_uuid()` hashed, not `random()` — `random()` is session-seeded, so a burst of inserts in one transaction could draw the same stream |
+| `assign_pickup_code()` (BEFORE INSERT trigger) | `20260916140000` | every insert path gets one, including a hand-written repair, and there is exactly one place that decides the format |
+| `normalize_pickup_code()` | `20260916140000` | upper-cases and strips separators — and deliberately does **no look-alike substitution** |
+| `find_pickup_reservation_by_code(p_code)` | `20260916140000` | the only resolver, scoped by joining `stores.owner_id = auth.uid()` |
+| `fulfill_pickup_reservation_by_code(p_code, p_payment_method)` | `20260916140000` | resolve + collect in ONE call, delegating to `fulfill_pickup_reservation` |
+
+**Why the alphabet omits I, L, O, U, 0 and 1.** A code is read off a phone screen
+across a counter and often spoken aloud, and those six are the ones that turn into
+each other. 30 symbols × 6 characters is ~729M combinations against a table that
+holds a few thousand rows, so the exclusions cost nothing.
+
+**The code is not a secret; the store scoping is the security boundary.** Knowing
+a code reveals nothing and permits nothing — but *without* the join through
+`stores.owner_id`, any seller could enumerate codes and pull up another store's
+holds, which is somebody else's business (who is holding what, and when they are
+coming to collect it). So another store's code is reported **exactly like a code
+that does not exist**, same `NOT_FOUND` text, because a distinguishable error
+would let the lookup be used to probe for real codes. A RESOLVED hold still
+resolves — a dispute ("this is the pair the customer showed me") is precisely when
+a seller needs the trail — and the app then says "already collected" instead of
+pretending the code was wrong.
+
+**Delegation, not a second implementation.** `fulfill_pickup_reservation_by_code`
+does one lookup and calls `fulfill_pickup_reservation`; the ownership check, the
+`ALREADY_RESOLVED` guard, the POS order and the single stock draw all stay in one
+place, so a rule added there cannot be forgotten here.
+
+**⚠️ Two assertions here were too weak until they were mutation-tested.** Removing
+the store join, the length pre-check, the trigger's assignment, the alphabet's
+exclusions, the index's uniqueness and the CHECK's character class each failed a
+named assertion — but replacing the delegation with a bare `RETURN v_id` (resolve
+the code, collect nothing) **passed** the original `lives_ok`. That is exactly the
+shape of a green test proving nothing: the description said "one call with the
+code collects the hold" while the assertion only proved the call did not raise.
+It now captures the returned id, checks it against `orders`, and checks it is *not*
+the hold's own id. The general lesson: `lives_ok` around an RPC is not a test that
+the RPC did anything.
 
 ## 6. Expiry sweep and reminders
 
@@ -326,7 +487,10 @@ sale at all.
 |---|---|
 | **Reserve for Pickup** action on the product detail screen (quantity stepper, capped at 2 *and* at the size's live stock — the stock wins when it is lower) | `lib/screens/customer/widgets/pickup_reservation_sheet.dart` |
 | "My Pickup Reservations" (countdown to the deadline, cancel, and **Extend 24h** while a hold is live and the cap is unused, with a dialog that states the store's side of the bargain) | `lib/screens/customer/my_pickup_reservations_screen.dart` |
-| Seller's incoming holds ("customer arrived — fulfill", manual release, per-tile countdown, and an `extended ×N` marker so a later deadline always has an explanation) | `lib/screens/seller/pickup_reservations_screen.dart` |
+| The **counter code** on a live hold — `Show this code at the counter`, grouped as `4F7-K2Q`, selectable so it can be copied or texted to whoever is collecting on the customer's behalf. Placed with the countdown because those are the two facts that matter while standing at the till, and neither should need a tap. A hold with no code renders **nothing** rather than a placeholder: a made-up code is worse than no code, because the seller would type it | `lib/screens/customer/my_pickup_reservations_screen.dart` |
+| Seller's incoming holds ("customer arrived — fulfill", manual release, per-tile countdown, and an `extended ×N` marker so a later deadline always has an explanation), with the counter code printed on each tile so a seller can eyeball that it matches what the customer says | `lib/screens/seller/pickup_reservations_screen.dart` |
+| **Goodwill history** (app-bar action, shown only when a grant exists): every time a store gave one of your holds more time — store, pair, hours, the reason, the deadline move, and when — including grants on holds the list no longer contains | `lib/screens/customer/pickup_goodwill_screen.dart` |
+| **Collect by code** (app bar): type the `6`-character code (spaces and dashes are fine, it is normalised) → the hold it resolved is shown with the customer's name and the code → confirm → "how was it paid?" → recorded as a sale. It resolves **before** asking for payment, so a seller is never asked "cash or GCash?" about a hold they have not seen | `lib/screens/seller/pickup_reservations_screen.dart` |
 | Service / models (`PickupReservation`, `PickupHoldSummary`, `PickupStoreStats`) | `lib/services/pickup_reservation_service.dart` |
 
 ### The store's early warning: `PickupHoldSummary`
@@ -371,7 +535,12 @@ chip + tile.
 any migration that adds an RLS table, because the sweep only covers tables that
 existed when it ran. Forgetting it makes the table silently open, and the pgTAP
 invariant in `admin_account_security.test.sql` ("every RLS table is either
-device-gated or explicitly exempt") fails the build. 27 tables are gated today.
+device-gated or explicitly exempt") fails the build. 28 tables are gated in a
+clean local database — including `pickup_reservation_extension_grants`, which
+the store-grant migration folds in for the same reason: it names a customer and
+a store. (The sweep is re-runnable, so the *live* count drifts and is
+occasionally higher; the pgTAP invariant therefore asserts named tables plus a
+floor rather than an exact number — do not "fix" a higher live count.)
 
 **Measured limit, not a guess:** the gate is an **RLS** control, so it applies
 to direct PostgREST table access. These RPCs are `SECURITY DEFINER` and owned by
@@ -388,9 +557,32 @@ touch gated tables.
 
 ## 10. Deployment status
 
-`20260915170000_add_pickup_reservations.sql` is **not yet applied live** — see
-`supabase/MIGRATIONS_LIVE_STATUS.md`. Apply via SQL Editor; it is idempotent
-and safe to re-run.
+The base file is **applied live** as of 2026-09-16, but a **revision behind**
+(no `store_extension_count`, no summed 72 h ceiling, no `pickup_code`); the
+store-grant and counter-code migrations are **not yet applied**. See
+`supabase/MIGRATIONS_LIVE_STATUS.md` for the rows and the ordering.
+
+**The deploy order matters, and it is: base file AGAIN → store grant → counter
+code.** All three are re-runnable. The base file must go first because both later
+files depend on columns/functions it declares, and applying either alone against
+the live revision would succeed and then have its first call refused by the
+stale CHECK or fail on a missing column. Applied through the SQL Editor:
+`CREATE TABLE IF NOT EXISTS` is a no-op on an existing table, so files here must
+**converge** their tables (§3b, and the same block in the store-grant file)
+rather than merely create them — an inline `CHECK` is created only alongside its
+column, so a missing constraint has to be named and re-added explicitly, which
+both files now do.
+
+The customer's **goodwill history** needs no migration at all: the trail is
+already readable to the customer through its own `SELECT` policy, and the store
+and product names come from embedding the hold. It is an app-only change, which is
+also why it can ship in any release window.
+
+Both later migrations are **additive**: nothing calls `grant_pickup_extension` or
+the by-code RPCs until a build ships the seller action / the customer's band, so
+they can be applied without a release in the same window. Apply them *before*
+that build, or those actions fail (`NOT_FOUND`). The counter-code migration adds
+**no new table**, so it changes nothing about the device-gate count.
 
 The device gate ships with **enforcement OFF**, so gating
 `pickup_reservations` changes nothing until that switch is thrown (apply → ship
@@ -400,15 +592,24 @@ the build → `select public.set_device_enforcement(true);`).
 
 | File | Assertions | Covers |
 |---|---|---|
-| `supabase/tests/pickup_reservations.test.sql` | 128 | happy path; **over-cap rejected**; **insufficient stock rejected**; the compare-and-set under a concurrent second request; the partial unique index (a second `active` row is `23505`, a cancelled one does not block); stock held on request and released on cancel **and** on expire **with no double-release when the sweep races a manual cancel**; a past-deadline `active` hold is expired while a live one is untouched; the sweep is idempotent when run twice; fulfil writes the order with `source='pos'` / `paid` / `received`, sets `fulfilled`, **does not double-draw inventory**, and feeds `units_sold`; the T-2h window fires once and never twice; the **store summary** (one per owner per batch, correct counts, singular wording, per-store isolation, silent on a second run, and never addressed to the customer); and the ownerless-store guard, which must not abort the sweep; and the **extension rules**: the window constants, both CHECK constraints, extend moves no stock, a second extension refused, a `created_at + 72 h` UPDATE refused by the constraint itself, only the customer may extend (not another customer, not the store, not anonymous), a lapsed hold refused, and the reminder **re-armed** so the new deadline gets its own T-2h warning |
-| `test/services/pickup_reservation_contract_test.dart` | 14 | the Dart↔SQL contract: the cap constant matches `pickup_reservation_max_quantity()`, **the three window constants match their SQL functions** (following `extension_hours → hold_hours` indirection instead of trusting a literal), the 48 h ceiling is still a table CHECK, the RPC names and argument names match the migration, the service never touches the bulk tables/RPCs, and the migration stays separate from `bulk_reservations` |
-| `test/services/pickup_reservation_service_test.dart` | 57 | error mapping (`ABOVE_PICKUP_CAP`, `RESERVATION_ALREADY_EXISTS`, the concurrent `23505` loser, `EXTENSION_LIMIT_REACHED`, `HOLD_LAPSED`, `INSUFFICIENT_STOCK`, `FORBIDDEN`, …), countdown formatting, the edge case that a row with no deadline must not read as "Expired", `fetchStoreStats`'s single-query shape, the whole `PickupHoldSummary` matrix (the 2-hour boundary inclusive, lapsed ≠ lapsing, resolved holds ignored, a missing quantity read as one pair, pluralisation, and the two entry points agreeing), and **the extension rules** (cap spent, lapsed refused even with the cap unused, resolved and deadline-less holds refused, an unknown `extension_count` read as none used, and `extend()`'s call shape plus a reply with no parseable deadline) |
+| `supabase/tests/store_pickup_extensions.test.sql` | 60 | the store's goodwill grant: the happy path (deadline moves by exactly 24 h, `store_extension_count` 1, the customer's `extension_count` **untouched**, stock untouched, `reminder_sent_at` re-armed); a missing/short/whitespace-only **reason refused** and no row written; a **wrong store**, the customer, and anonymous all `FORBIDDEN`; the **WHEN rules in their own right**, on a third hold so a spent budget cannot be what the failure is about — a hold with a **backdated deadline** is refused `HOLD_LAPSED` and a **cancelled** one `ALREADY_RESOLVED`, neither leaving a trail row; the **second grant** refused by the cap and the counter not double-incremented; a hand-written `UPDATE` past the 72 h ceiling refused by the CHECK (72 h itself accepted); the trail row's contents (who, from which deadline to which, how many hours, why) and its `granted_by` surviving the seller's deletion; both sides notified, the customer's notification carrying the reason; the table being device-gated; and **the FK the customer's history embeds through** (`reservation_id → pickup_reservations(id)`), which is what makes the history query resolvable rather than a `400` |
+| `supabase/tests/pickup_reservations.test.sql` | 129 | happy path; **over-cap rejected**; **insufficient stock rejected**; the compare-and-set under a concurrent second request; the partial unique index (a second `active` row is `23505`, a cancelled one does not block); stock held on request and released on cancel **and** on expire **with no double-release when the sweep races a manual cancel**; a past-deadline `active` hold is expired while a live one is untouched; the sweep is idempotent when run twice; fulfil writes the order with `source='pos'` / `paid` / `received`, sets `fulfilled`, **does not double-draw inventory**, and feeds `units_sold`; the T-2h window fires once and never twice; the **store summary** (one per owner per batch, correct counts, singular wording, per-store isolation, silent on a second run, and never addressed to the customer); and the ownerless-store guard, which must not abort the sweep; and the **extension rules**: the window constants, both CHECK constraints, extend moves no stock, a second extension refused, a `created_at + 72 h` UPDATE refused by the constraint itself, only the customer may extend (not another customer, not the store, not anonymous), a lapsed hold refused, and the reminder **re-armed** so the new deadline gets its own T-2h warning |
+| `supabase/tests/pickup_codes.test.sql` | 45 | the counter code: the column, its **UNIQUE** index (whole table, so a resolved hold still resolves) and the BEFORE INSERT trigger; the alphabet (30 symbols, none of I/L/O/U/0/1) and the length, **read from the SQL functions and compared to the column CHECK's literal regex**; normalisation — case and separators stripped, **and no look-alike substitution** (`O0I1` stays `O0I1`); 200 generated codes all match the CHECK and none collide; a hand-written code outside the alphabet or of the wrong length is refused, a well-formed one (including `4f7-k2q`, normalised on the way in) is accepted; the owning store resolves its code — as typed, lowercase, or with separators — while **another store, and the customer, get the same `NOT_FOUND`**, and a part-typed code says how long a code is; one call collects the hold **and returns the ORDER's id, not the hold's**; a second collection is refused `ALREADY_RESOLVED` while the code still resolves (the dispute case); the collection is a real POS sale (`pos/paid/received`) with one line item and **no second stock draw**; and another store cannot collect from a code |
+| `test/services/pickup_reservation_contract_test.dart` | 38 | the Dart↔SQL contract: the cap constant matches `pickup_reservation_max_quantity()`, **the window constants match their SQL functions** (following `extension_hours → hold_hours` indirection instead of trusting a literal), the ceiling is still a table CHECK **and is the sum of every budget**, both budgets have their own counter CHECK, the RPC names and argument names match the migration, **each extension path is defined in exactly one file** (re-applying one cannot shadow the other), a grant spends the store's counter and never the customer's, every code the grant RPC raises has friendly copy, the reason bound is the same 3–280 on both sides, the columns the model selects are the columns the table declares, the trail is `SELECT`-only + device-gated, and the migration stays separate from `bulk_reservations`. Plus **the counter code**: the Dart alphabet, the SQL function and the column CHECK's literal regex are the same 30 symbols (a drift makes every generated code un-insertable), the code length is read from the SQL function rather than a second literal, the app normalises exactly the way the server does and folds no look-alikes, the seller UI reaches a hold **through the scoped RPC** (the join to `stores.owner_id = auth.uid()` is pinned, so the app is not filtering store scope itself), fulfilment from a code **delegates rather than re-implements**, and the app never generates or stores a code itself |
+| `test/services/pickup_reservation_service_test.dart` | 94 | **the goodwill history's query** (the customer's trail asks for its own columns *plus* the embedded hold and its product and store; the embedded names land on the model; a flat row from the seller's select parses with no names instead of throwing; a `null` to-one embed is read as absent; and the summary's counts, distinct stores and empty case); **the counter code** (normalised before the RPC is asked, `resolveCode`'s call shape, the defensive no-id branch raising copy the mapper already explains, `fulfillByCode`'s one-call shape + default method, `normalizeCode` stripping case and separators **but inventing nothing**, the alphabet excluding the ambiguous six, and `pickupCodeLabel` grouping a real code while passing anything else through); error mapping (`ABOVE_PICKUP_CAP`, `RESERVATION_ALREADY_EXISTS`, the concurrent `23505` loser, `EXTENSION_LIMIT_REACHED` — **and that the store's cap is matched before it, since `STORE_EXTENSION_LIMIT_REACHED` contains it** — `INVALID_REASON`, `HOLD_LAPSED`, `INSUFFICIENT_STOCK`, `FORBIDDEN`, …), countdown formatting, the edge case that a row with no deadline must not read as "Expired", `fetchStoreStats`'s single-query shape, the whole `PickupHoldSummary` matrix (the 2-hour boundary inclusive, lapsed ≠ lapsing, resolved holds ignored, a missing quantity read as one pair, pluralisation, and the two entry points agreeing), **the extension rules** (cap spent, lapsed refused even with the cap unused, resolved and deadline-less holds refused, an unknown `extension_count` read as none used, and `extend()`'s call shape plus a reply with no parseable deadline), and **the store's goodwill grant** (its own constants and the summed ceiling, the two budgets being independent in both directions, a lapsed/resolved/deadline-less hold never offered, the note distinguishing a grant from the customer's own ask, `grantExtension()`'s call shape, that it is a *different RPC* from `extend()`, the trail queries scoped to the right audience and ordered newest-first, and the deadline formatter) |
+| `test/widgets/pickup_goodwill_test.dart` | 7 | the history screen: a gift reads as a store, the pair, the time `+24h` **and the reason quoted**; the header counts exactly what the list below shows (and one gift is not written in the plural); a grant whose embed brought back no names still shows its reason, with no dangling `· size` row; a grant with no timestamps skips the move line rather than rendering `null`; the screen states that the customer's own extensions are not in this list; and an empty history explains itself |
 | `test/widgets/pickup_reservation_sheet_test.dart` | 10 | the sheet: free/no-deposit copy, the size pre-selected on the detail screen, a single in-stock size needing no tap, the stepper never exceeding the cap or the live stock, larger orders pointed at bulk, and **submit inert until a size is chosen** |
-| `test/widgets/seller_pickup_reservations_test.dart` | 6 | the store's band and filter: the counts, nothing rendered when nothing is lapsing, a lapsed hold counted as coming back, the chip and the band's *Show* both narrowing to the urgent holds, and resolved holds neither counted nor offered |
-| `test/widgets/my_pickup_reservations_test.dart` | 7 | the customer's extension action: offered on a live hold with the amount of time named, withdrawn once extended and once lapsed, the dialog naming the store's side, confirming calls the RPC and reports the new deadline, backing out asks for nothing, a refusal reads as copy, and a resolved hold offers neither action. (A lapsed hold still carries the `Extend 24h` *label*, which is what gives this file teeth against the screen dropping its own gate.) |
+| `test/widgets/seller_pickup_reservations_test.dart` | 20 | **the counter flow** (the code printed on the tile, the action taking a typed lower-case dashed code and normalising it before the lookup, confirming against the pair in hand before payment, backing out recording nothing, the sale going through the **by-code RPC alone** — never the id path as well, which would be two sales for one pair — a code matching nothing reading as *no match* rather than a deleted hold, and an already-collected hold saying so instead of reading as a bad code); the store's band and filter: the counts, nothing rendered when nothing is lapsing, a lapsed hold counted as coming back, the chip and the band's *Show* both narrowing to the urgent holds, and resolved holds neither counted nor offered. Plus **the goodwill grant**: the labelled action on a live hold, the dialog naming the hold it is about, an empty reason refused *in the dialog* (so the server is never asked), a preset chip filling an editable field and being sent verbatim, a server refusal shown as copy, the action **withdrawn** once the store's budget is spent and on a lapsed hold, and the recorded reason printed back on the tile (never a grant belonging to another hold) |
+| `test/widgets/my_pickup_reservations_test.dart` | 14 | **the goodwill history link** (offered only when a grant exists — both halves asserted in one test, since an always-false condition would satisfy the negative on its own — and a grant on a hold the list **no longer contains** still reaches the screen with its reason, which is the feature's whole justification); **the counter code** on the card (visible without a tap, grouped as `4F7-K2Q`, and nothing rendered for a hold with no code — a placeholder would be typed by the seller); the customer's extension action: offered on a live hold with the amount of time named, withdrawn once extended and once lapsed, the dialog naming the store's side, confirming calls the RPC and reports the new deadline, backing out asks for nothing, a refusal reads as copy, and a resolved hold offers neither action. (A lapsed hold still carries the `Extend 24h` *label*, which is what gives this file teeth against the screen dropping its own gate.) Plus **the store's grant**: shown with its reason and in step with the hold's own note, never a grant belonging to another hold, and a **failed trail fetch costing the explanation but not the holds** (the graceful-degradation promise the release notes make) |
 
-Verified: **844** Flutter tests pass, `flutter analyze` clean, and **8 files /
-358 DB assertions PASS from a clean `supabase db reset`**.
+Verified: **940** Flutter tests pass, `flutter analyze` clean, and **11 files /
+491 DB assertions PASS from a clean `supabase db reset`** (129 + 60 + 45 for
+these three pickup files). Every rule in the counter-code migration was
+**mutation-tested** (eight SQL mutations + eight Dart ones, each expected to fail
+a named assertion). One mutation stayed green on the first pass — a by-code
+fulfil that resolved the code and collected nothing, which the original
+`lives_ok` could not tell apart from the real thing. That is why assertion 37 now
+checks the *returned* id against `orders`; see the counter-code section in §5.
 
 ## 12. Known limitations
 
@@ -419,9 +620,14 @@ Verified: **844** Flutter tests pass, `flutter analyze` clean, and **8 files /
 - **Raising the two window constants later does not retro-validate rows.** The
   CHECKs are evaluated on write, so changing `pickup_reservation_hold_hours()`
   or `pickup_reservation_max_extensions()` is a data-affecting change.
-- **The extension is customer-only by design.** A store that wants to be lenient
-  beyond 48 h has no tool for it; the answer to that, if it is ever asked for, is
-  a store-side "hold longer" policy field, not a looser cap here.
+- **A store's grant is once per hold, and cannot be undone.** The store's budget
+  (`pickup_reservation_max_store_extensions()`) is per *hold*, not per customer
+  or per day, so a lenient store that re-holds the same pair for the same
+  customer can grant again on the new hold. There is no way to revoke a grant —
+  shortening a deadline is not something a customer could be expected to
+  discover — and no way to grant after the deadline has passed (`HOLD_LAPSED`),
+  because the units may already be back on the shelf. Raising either budget is a
+  data-affecting change (§3).
 
 - **The store summary is per run, not per window.** Two concurrent sweep runs
   each summarise the rows they claimed, so a seller could get two summaries for

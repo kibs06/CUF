@@ -23,6 +23,10 @@ class FakeDeviceTrust implements DeviceTrustGateway {
   /// Answer to the "would the gate let this session through?" probe.
   bool gateOpen = true;
 
+  /// How many times the gate was probed — the probe costs a round trip, so
+  /// the paths that must not pay for it are pinned.
+  int gateProbes = 0;
+
   /// The secret the server hands back from trust().
   final String mintedSecret = List.filled(64, 'a').join();
 
@@ -62,6 +66,7 @@ class FakeDeviceTrust implements DeviceTrustGateway {
 
   @override
   Future<bool> isGateOpen() async {
+    gateProbes++;
     if (gateError != null) throw gateError!;
     return gateOpen;
   }
@@ -200,6 +205,7 @@ void main() {
     test('an unknown device without MFA raises the challenge', () async {
       trust.known = false;
       mfa.enabled = false;
+      trust.gateOpen = false; // enforcement is ON for this case
 
       final decision = await service.evaluate(userId: 'user-1');
 
@@ -208,6 +214,58 @@ void main() {
       expect(decision.deviceLabel, trust.label);
       // Nothing is trusted until the code clears.
       expect(trust.trustCalls, isEmpty);
+    });
+
+    // ── the gate probe (enforcement OFF) ──────────────────────────
+    test('no code while the server gate is OPEN (enforcement off)', () async {
+      trust.known = false;
+      trust.secret = false; // nothing on this device backs the session
+      mfa.enabled = false;
+      trust.gateOpen = true; // …but nothing is denied without a secret either
+
+      final decision = await service.evaluate(userId: 'user-1');
+
+      // The step-up would buy nothing here, so it must not cost the user
+      // their account when the code cannot be mailed.
+      expect(decision.requiresChallenge, isFalse);
+      expect(decision.skipReason, 'enforcement_off');
+      // `trust_device()` refuses a password-only session, so no write is
+      // attempted — the challenge mints the credential once the gate is on.
+      expect(trust.trustCalls, isEmpty);
+      expect(trust.gateProbes, 1);
+    });
+
+    test('an unreadable gate probe fails OPEN (never mails on a guess)',
+        () async {
+      trust.known = false;
+      trust.secret = false;
+      mfa.enabled = false;
+      trust.gateError = Exception('offline');
+
+      final decision = await service.evaluate(userId: 'user-1');
+
+      expect(decision.requiresChallenge, isFalse);
+      expect(decision.skipReason, 'enforcement_off');
+    });
+
+    test('the gate is never probed when the device is already known',
+        () async {
+      trust.known = true;
+      trust.secret = true;
+
+      await service.evaluate(userId: 'user-1');
+
+      expect(trust.gateProbes, 0);
+    });
+
+    test('the gate is never probed for an MFA account either', () async {
+      trust.known = false;
+      trust.secret = false;
+      mfa.enabled = true;
+
+      await service.evaluate(userId: 'user-1');
+
+      expect(trust.gateProbes, 0);
     });
 
     test('an unknown device on an MFA account skips the email challenge',
@@ -238,6 +296,7 @@ void main() {
         () async {
       trust.known = true; // the server still lists this device…
       trust.secret = false; // …but this install holds no credential
+      trust.gateOpen = false; // enforcement is ON
 
       final decision = await service.evaluate(userId: 'user-1');
 
@@ -250,6 +309,7 @@ void main() {
     test('holding a secret for a revoked device still challenges', () async {
       trust.known = false; // removed from the security screen
       trust.secret = true; // stale credential still in secure storage
+      trust.gateOpen = false; // enforcement is ON
 
       final decision = await service.evaluate(userId: 'user-1');
 
@@ -292,6 +352,12 @@ void main() {
         isFalse,
       );
     });
+
+    test('the probe is skipped entirely when a secret is held', () async {
+      trust.secret = true;
+      await service.needsStepUpOnRestoredSession(userId: 'user-1');
+      expect(trust.gateProbes, 0);
+    });
   });
 
   group('evaluate — failure handling', () {
@@ -317,9 +383,11 @@ void main() {
       expect(decision.skipReason, 'known_device');
     });
 
-    test('a failed roster read WITH no local secret challenges', () async {
+    test('a failed roster read WITH no local secret challenges — when the gate '
+        'is shut', () async {
       trust.secret = false;
       trust.lookupError = Exception('network down');
+      trust.gateOpen = false;
 
       final decision = await service.evaluate(userId: 'user-1');
 
@@ -328,11 +396,14 @@ void main() {
       expect(decision.requiresChallenge, isTrue);
     });
 
-    test('an unreadable MFA state fails TOWARD the challenge', () async {
+    test('an unreadable MFA state fails TOWARD the challenge once the gate is '
+        'actually shut', () async {
       // Unknown factor state is not evidence of a second factor, so the
       // extra challenge is applied (friction the user can clear) rather
-      // than silently skipped (a hole that cannot be seen).
+      // than silently skipped (a hole that cannot be seen). The gate probe
+      // still gets the final say: enforcement OFF means no code either way.
       trust.known = false;
+      trust.gateOpen = false;
       mfa.statusError = Exception('factors unavailable');
 
       final decision = await service.evaluate(userId: 'user-1');

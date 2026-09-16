@@ -22,18 +22,59 @@ class PickupReservation {
   /// `public.pickup_reservation_hold_hours()`. Pinned by the contract test.
   static const int holdHours = 24;
 
-  /// How many times a live hold may be extended — mirrors
+  /// How many times a live hold may be extended by the CUSTOMER — mirrors
   /// `public.pickup_reservation_max_extensions()`.
   static const int maxExtensions = 1;
+
+  /// How many GOODWILL extensions the STORE may grant — mirrors
+  /// `public.pickup_reservation_max_store_extensions()`.
+  ///
+  /// A separate budget from [maxExtensions] on purpose: a store being generous
+  /// must not consume the customer's allowance, and a customer using theirs must
+  /// not stop a store from being generous.
+  static const int maxStoreExtensions = 1;
 
   /// Hours one extension buys — mirrors
   /// `public.pickup_reservation_extension_hours()`.
   static const int extensionHours = 24;
 
-  /// The longest any hold can run: the base window plus every allowed
-  /// extension. The server enforces this as a table CHECK, so the app must not
-  /// promise more than it does.
+  /// Hours one STORE goodwill grant buys — mirrors
+  /// `public.pickup_reservation_store_extension_hours()`.
+  static const int storeExtensionHours = 24;
+
+  /// The longest a hold can run because of the CUSTOMER alone: the base window
+  /// plus their own extension. This is what customer-facing copy quotes, since
+  /// a store's goodwill is a favour rather than something to count on.
   static const int maxHoldHours = holdHours * (1 + maxExtensions);
+
+  /// The ABSOLUTE ceiling on a hold: the base window plus EVERY budget, which is
+  /// what the server's table CHECK enforces
+  /// (`pickup_reservation_max_window_hours`). Nothing — not a customer, not a
+  /// store, not a hand-written UPDATE — can push a hold past this.
+  static const int maxWindowHours =
+      holdHours * (1 + maxExtensions + maxStoreExtensions);
+
+  /// The symbols a pickup code is drawn from — mirrors
+  /// `public.pickup_code_alphabet()`.
+  ///
+  /// I, L, O, U, 0 and 1 are absent on purpose: a code is read off a phone
+  /// across a counter and frequently spoken aloud, and those are the six that
+  /// turn into each other. The set is also the column CHECK's character class,
+  /// and the contract test pins all three copies (this constant, the SQL
+  /// function, the CHECK) against each other.
+  static const String codeAlphabet = '23456789ABCDEFGHJKMNPQRSTVWXYZ';
+
+  /// Characters in a pickup code — mirrors `public.pickup_code_length()`.
+  static const int codeLength = 6;
+
+  /// What the counter should accept, reduced to the stored form: upper case,
+  /// separators gone. Mirrors `public.normalize_pickup_code()` — and copies its
+  /// deliberate refusal to substitute look-alikes, so what the app sends the
+  /// server is exactly what the seller typed.
+  static String normalizeCode(String code) => code
+      .trim()
+      .toUpperCase()
+      .replaceAll(RegExp(r'[^A-Z0-9]'), '');
 
   final String id;
   final String customerId;
@@ -51,8 +92,19 @@ class PickupReservation {
   final String? fulfilledOrderId;
   final DateTime? reminderSentAt;
 
+  /// The code the customer reads out at the counter and the seller types in
+  /// (`public.pickup_code_*`). Null only for a row that predates the column and
+  /// has not been backfilled — the app renders nothing rather than a placeholder
+  /// in that case, since a made-up code is worse than no code.
+  final String? pickupCode;
+
   /// How many times this hold has already been extended (`0..maxExtensions`).
   final int extensionCount;
+
+  /// Goodwill extensions the STORE has granted (`0..maxStoreExtensions`),
+  /// counted separately from [extensionCount] — the trail for each one (who,
+  /// when, and why) lives in `pickup_reservation_extension_grants`.
+  final int storeExtensionCount;
 
   // Joined display fields.
   final String productName;
@@ -74,7 +126,9 @@ class PickupReservation {
     this.fulfilledAt,
     this.fulfilledOrderId,
     this.reminderSentAt,
+    this.pickupCode,
     this.extensionCount = 0,
+    this.storeExtensionCount = 0,
     this.productName = '',
     this.productImage,
     this.storeName = '',
@@ -83,6 +137,15 @@ class PickupReservation {
 
   bool get isActive => status == 'active';
   bool get isFulfilled => status == 'fulfilled';
+
+  /// The code, grouped for reading aloud and for typing: `4F7K2Q` becomes
+  /// `4F7-K2Q`. Presentation only — the server stores and accepts the ungrouped
+  /// form, and [normalizeCode] strips the dash straight back out.
+  String? get pickupCodeLabel {
+    final code = pickupCode;
+    if (code == null || code.length != codeLength) return code;
+    return '${code.substring(0, 3)}-${code.substring(3)}';
+  }
   bool get isTerminal =>
       status == 'fulfilled' || status == 'cancelled' || status == 'expired';
 
@@ -145,10 +208,44 @@ class PickupReservation {
   String? get extendActionLabel =>
       extensionsLeft > 0 ? 'Extend ${extensionHours}h' : null;
 
+  /// Goodwill extensions the store still has available on this hold.
+  int get storeExtensionsLeft =>
+      (maxStoreExtensions - storeExtensionCount).clamp(0, maxStoreExtensions);
+
+  /// True when the store has already been generous on this hold.
+  bool get storeExtended => storeExtensionCount > 0;
+
+  /// May the STORE still give this hold more time?
+  ///
+  /// The same gates `grant_pickup_extension` enforces, so the seller UI hides
+  /// the action rather than offering one the server will refuse: the hold has to
+  /// be live (not lapsed — after the deadline the units may be released at any
+  /// moment) and the store's own budget has to be unspent.
+  bool canBeGrantedAt(DateTime now) =>
+      isActive &&
+      pickupDeadline != null &&
+      !hasLapsedAt(now) &&
+      storeExtensionsLeft > 0;
+
+  /// 'Give 24h', or null when the store's budget for this hold is spent.
+  String? get grantActionLabel =>
+      storeExtensionsLeft > 0 ? 'Give ${storeExtensionHours}h' : null;
+
   /// The line under the countdown: what extending means for this store, and
   /// whether it has already been used.
   String? get extensionNote {
     if (!isActive) return null;
+    // The store's goodwill is stated in its own words, and never as a limit the
+    // customer could rely on — which is why the customer-only copy below still
+    // quotes [maxHoldHours] rather than the absolute [maxWindowHours].
+    if (storeExtended && extensionCount > 0) {
+      return 'Extended by you and by the store — the longest a hold can run is '
+          '${maxWindowHours}h.';
+    }
+    if (storeExtended) {
+      return 'The store added ${storeExtensionHours}h for you as a goodwill '
+          'extension.';
+    }
     if (extensionCount > 0) {
       return 'Extended — a hold cannot be extended twice '
           '(max ${maxHoldHours}h).';
@@ -170,9 +267,6 @@ class PickupReservation {
     if (left.inHours < 1) return '${left.inMinutes}m left';
     return '${left.inHours}h ${left.inMinutes % 60}m left';
   }
-
-  static DateTime? _parseDate(dynamic v) =>
-      v == null ? null : DateTime.tryParse(v.toString())?.toLocal();
 
   factory PickupReservation.fromJson(Map<String, dynamic> json) {
     // Joined product fields — the customer-side query nests
@@ -213,13 +307,174 @@ class PickupReservation {
       fulfilledAt: _parseDate(json['fulfilled_at']),
       fulfilledOrderId: json['fulfilled_order_id']?.toString(),
       reminderSentAt: _parseDate(json['reminder_sent_at']),
+      pickupCode: json['pickup_code']?.toString(),
       extensionCount: (json['extension_count'] as num?)?.toInt() ?? 0,
+      storeExtensionCount:
+          (json['store_extension_count'] as num?)?.toInt() ?? 0,
       productName: productName,
       productImage: image,
       storeName: storeName,
       customerName: customerName,
     );
   }
+}
+
+/// Postgres timestamps arrive as UTC strings with an offset; the app works in
+/// local time everywhere it shows one. Top-level (rather than private to
+/// `PickupReservation`) because the goodwill trail parses dates too, and two
+/// parsers is how one of them ends up wrong.
+DateTime? _parseDate(dynamic v) =>
+    v == null ? null : DateTime.tryParse(v.toString())?.toLocal();
+
+/// One row of the goodwill trail (`pickup_reservation_extension_grants`): the
+/// store gave a hold more time, and here is exactly what was given and why.
+///
+/// The customer sees these on their own holds, the store sees them for its own
+/// store — both through RLS, not through a filter the app applies.
+class PickupExtensionGrant {
+  final String id;
+  final String reservationId;
+  final String customerId;
+  final String storeId;
+
+  /// The seller who granted it. Null once that account is deleted — the record
+  /// of the favour is kept, without the name.
+  final String? grantedBy;
+  final DateTime? previousDeadline;
+  final DateTime? newDeadline;
+  final int hoursGranted;
+  final String reason;
+  final DateTime? createdAt;
+
+  /// Display names, carried only by the customer's trail query (which embeds the
+  /// hold and, through it, the product and its store).
+  ///
+  /// They are here rather than looked up from the loaded holds because the
+  /// HISTORY exists precisely for grants the hold list may no longer show: a
+  /// hold that was collected, cancelled or pushed past the `LIMIT` of the
+  /// customer's fetch is still a favour that happened and still has a reason.
+  /// Empty strings on the flat selects, where the row is rendered beside a hold
+  /// that already knows its own names.
+  final String storeName;
+  final String productName;
+  final String size;
+
+  const PickupExtensionGrant({
+    required this.id,
+    required this.reservationId,
+    required this.customerId,
+    required this.storeId,
+    this.grantedBy,
+    this.previousDeadline,
+    this.newDeadline,
+    this.hoursGranted = 0,
+    this.reason = '',
+    this.createdAt,
+    this.storeName = '',
+    this.productName = '',
+    this.size = '',
+  });
+
+  factory PickupExtensionGrant.fromJson(Map<String, dynamic> json) {
+    // The embedded hold, when the caller asked for it. Every level is probed
+    // rather than assumed: the same model is built from the FLAT seller-side
+    // select, which has no `pickup_reservations` key at all, and a nested cast
+    // there would throw inside a list mapping and take the whole trail down.
+    final hold = _nest(json['pickup_reservations']);
+    final product = _nest(hold['products']);
+    final store = _nest(product['stores']);
+
+    return PickupExtensionGrant(
+      id: json['id']?.toString() ?? '',
+      reservationId: json['reservation_id']?.toString() ?? '',
+      customerId: json['customer_id']?.toString() ?? '',
+      storeId: json['store_id']?.toString() ?? '',
+      grantedBy: json['granted_by']?.toString(),
+      previousDeadline: _parseDate(json['previous_deadline']),
+      newDeadline: _parseDate(json['new_deadline']),
+      hoursGranted: (json['hours_granted'] as num?)?.toInt() ?? 0,
+      reason: json['reason']?.toString() ?? '',
+      createdAt: _parseDate(json['created_at']),
+      storeName: store['name']?.toString() ?? '',
+      productName: product['name']?.toString() ?? '',
+      size: hold['size']?.toString() ?? '',
+    );
+  }
+}
+
+/// One level of a PostgREST embed as a map, or an empty map when the level is
+/// absent (flat select) or not an object (a `null` to-one join). One helper
+/// instead of four nested ternaries, so the defensive shape is uniform.
+Map<String, dynamic> _nest(dynamic value) =>
+    value is Map ? Map<String, dynamic>.from(value) : const <String, dynamic>{};
+
+/// 'Mon 16, 17:30' in LOCAL time — deliberately the same shape the server
+/// writes into its pickup notifications (`Mon DD, HH24:MI`), so the seller's
+/// confirmation and the customer's notification about the same deadline read
+/// alike. Written by hand rather than pulled from `intl` because this is the
+/// only format the pickup flow needs.
+String formatPickupDeadline(DateTime deadline) {
+  const months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+  final d = deadline.toLocal();
+  final hh = d.hour.toString().padLeft(2, '0');
+  final mm = d.minute.toString().padLeft(2, '0');
+  return '${months[d.month - 1]} ${d.day.toString().padLeft(2, '0')}, $hh:$mm';
+}
+
+/// What the customer's goodwill history says in one line: how many times a store
+/// chose to give them more time, how much time that amounts to, and how many
+/// stores did it.
+///
+/// Pure arithmetic over rows already in hand (the same shape as
+/// `PickupHoldSummary`), so it is unit-testable and the header cannot disagree
+/// with the list it sits above — both are built from the same list.
+class PickupGoodwillSummary {
+  final int grants;
+  final int hours;
+
+  /// Distinct stores, counted by id: two grants from the same store is one store
+  /// being generous twice, not two stores.
+  final int stores;
+
+  const PickupGoodwillSummary({
+    this.grants = 0,
+    this.hours = 0,
+    this.stores = 0,
+  });
+
+  factory PickupGoodwillSummary.of(List<PickupExtensionGrant> grants) {
+    final storeIds = <String>{};
+    var hours = 0;
+    for (final grant in grants) {
+      hours += grant.hoursGranted;
+      if (grant.storeId.isNotEmpty) storeIds.add(grant.storeId);
+    }
+    return PickupGoodwillSummary(
+      grants: grants.length,
+      hours: hours,
+      stores: storeIds.length,
+    );
+  }
+
+  bool get isEmpty => grants == 0;
+}
+
+/// The most recent grant per reservation, from a trail fetched newest-first.
+///
+/// Pure and separate from the fetch so the "which one explains this deadline?"
+/// rule is testable without a database: the FIRST row seen for a reservation
+/// wins, which is only correct because the query orders by `created_at DESC`.
+/// (A trail that arrives oldest-first would silently surface the wrong reason.)
+Map<String, PickupExtensionGrant> latestGrantByReservation(
+    List<PickupExtensionGrant> grants) {
+  final latest = <String, PickupExtensionGrant>{};
+  for (final grant in grants) {
+    latest.putIfAbsent(grant.reservationId, () => grant);
+  }
+  return latest;
 }
 
 /// The dashboard's pickup numbers, derived from a single light query so the
@@ -405,6 +660,49 @@ class PickupReservationService {
     return orderId?.toString();
   }
 
+  /// Seller: the id of the hold a counter code belongs to, or a thrown error if
+  /// nothing for THIS store matches it.
+  ///
+  /// The scoping is the server's (`find_pickup_reservation_by_code` joins through
+  /// `stores.owner_id = auth.uid()`), deliberately — a code is not a secret, so
+  /// whoever may look one up is the security boundary, and it does not belong in
+  /// client code. Another store's code comes back as the same `NOT_FOUND` as a
+  /// code that does not exist, so the app cannot tell them apart either.
+  Future<String> resolveCode(String code) async {
+    final id = await _client.rpc('find_pickup_reservation_by_code', params: {
+      'p_code': PickupReservation.normalizeCode(code),
+    });
+    final resolved = id?.toString();
+    if (resolved == null || resolved.isEmpty) {
+      throw Exception('NOT_FOUND — no pickup hold for your store matches that code');
+    }
+    return resolved;
+  }
+
+  /// One hold by id — used after a code resolves, rather than hunting the loaded
+  /// list, because the store's list is windowed and the hold a customer is
+  /// standing in front of must never be "not in view".
+  Future<PickupReservation?> fetchById(String reservationId) async {
+    final row = await _client
+        .from('pickup_reservations')
+        .select('*, products(name), profiles(name)')
+        .eq('id', reservationId)
+        .maybeSingle();
+    if (row == null) return null;
+    return PickupReservation.fromJson(Map<String, dynamic>.from(row));
+  }
+
+  /// Seller: collect a hold from its code in ONE call — the server resolves the
+  /// code for this store and then runs the ordinary fulfilment, so this cannot
+  /// drift from [fulfill]. Returns the POS order id.
+  Future<String?> fulfillByCode(String code, {String paymentMethod = 'cash'}) async {
+    final orderId = await _client.rpc('fulfill_pickup_reservation_by_code', params: {
+      'p_code': PickupReservation.normalizeCode(code),
+      'p_payment_method': paymentMethod,
+    });
+    return orderId?.toString();
+  }
+
   /// Customer: my holds, newest first. The seller's side of each row comes
   /// along for display (store name for "pick up at").
   Future<List<PickupReservation>> fetchMine() async {
@@ -458,11 +756,14 @@ class PickupReservationService {
 
   /// Customer: ask for more time on a live hold.
   ///
-  /// Only the customer may extend (a store extending its own hold is a bulk
-  /// reservation), only before the deadline passes, and only up to
-  /// [PickupReservation.maxExtensions] times — the server enforces all three,
-  /// and the CHECK constraint on `pickup_deadline` caps the total window at
-  /// [PickupReservation.maxHoldHours] hours no matter what.
+  /// This is the SELF-SERVICE path: only the customer may call it, only before
+  /// the deadline passes, and only up to [PickupReservation.maxExtensions]
+  /// times. A store that wants to be lenient uses [grantExtension] instead — a
+  /// separate RPC with its own budget and a recorded reason — so "the customer
+  /// asked" and "we chose to give them more time" never look alike in the data.
+  /// The server enforces every rule, and the CHECK constraint on
+  /// `pickup_deadline` caps the total window at
+  /// [PickupReservation.maxWindowHours] hours no matter what.
   ///
   /// Returns the NEW deadline (local) when the server reports one, so the caller
   /// can confirm the new time without assuming the extension length.
@@ -473,6 +774,81 @@ class PickupReservationService {
     );
     final raw = result?.toString();
     return raw == null ? null : DateTime.tryParse(raw)?.toLocal();
+  }
+
+  /// Store owner: give a live hold more time as an explicit GOODWILL action.
+  ///
+  /// Deliberately not a convenience wrapper around [extend]: the server requires
+  /// [reason] (3–280 characters, also enforced by a CHECK on the trail), and it
+  /// records who granted it, for whom, from which deadline to which, how many
+  /// hours and why. The store's budget is its own
+  /// ([PickupReservation.maxStoreExtensions]), so this does not spend the
+  /// customer's, and the new deadline gets its own T-2h warning.
+  ///
+  /// Returns the NEW deadline (local), or null when the server sent none.
+  Future<DateTime?> grantExtension({
+    required String reservationId,
+    required String reason,
+  }) async {
+    final result = await _client.rpc(
+      'grant_pickup_extension',
+      params: {'p_reservation_id': reservationId, 'p_reason': reason},
+    );
+    final raw = result?.toString();
+    return raw == null ? null : DateTime.tryParse(raw)?.toLocal();
+  }
+
+  /// Columns the turn's own model reads — spelled out so a schema change cannot
+  /// silently start feeding the UI nulls.
+  static const String _grantColumns = 'id, reservation_id, customer_id, '
+      'store_id, granted_by, previous_deadline, new_deadline, hours_granted, '
+      'reason, created_at';
+
+  /// The trail's own columns PLUS the hold it explains, for the customer's
+  /// history. A SEPARATE constant on purpose: [_grantColumns] is pinned to the
+  /// trail's declared columns by the contract test (an embed is not one of
+  /// them), and `fetchStoreGrants` must stay a single-table read.
+  static const String _grantTrailColumns = '$_grantColumns, '
+      'pickup_reservations(size, products(name, stores(name)))';
+
+  /// The goodwill trail for a store, newest first (RLS scopes it to the owner).
+  Future<List<PickupExtensionGrant>> fetchStoreGrants(
+    String storeId, {
+    int limit = 100,
+  }) async {
+    final rows = await _client
+        .from('pickup_reservation_extension_grants')
+        .select(_grantColumns)
+        .eq('store_id', storeId)
+        .order('created_at', ascending: false)
+        .limit(limit);
+    return rows
+        .map<PickupExtensionGrant>(
+            (r) => PickupExtensionGrant.fromJson(Map<String, dynamic>.from(r)))
+        .toList();
+  }
+
+  /// The same trail as it concerns the signed-in customer, WITH the names.
+  ///
+  /// This one feeds the history screen as well as the per-hold note, so the rows
+  /// have to be readable on their own: `reservation_id` is the trail's FK, so the
+  /// hold is embedded (and through it the product and the store it is held at).
+  /// The embed is why a grant stays visible after its hold has been collected or
+  /// cancelled — and why a granted hold outside the holds list's own `LIMIT`
+  /// still shows up here.
+  Future<List<PickupExtensionGrant>> fetchMyGrants({int limit = 100}) async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null || uid.isEmpty) return const [];
+    final rows = await _client
+        .from('pickup_reservation_extension_grants')
+        .select(_grantTrailColumns)
+        .eq('customer_id', uid)
+        .order('created_at', ascending: false)
+        .limit(limit);
+    return rows
+        .map<PickupExtensionGrant>(
+            (r) => PickupExtensionGrant.fromJson(Map<String, dynamic>.from(r)))
+        .toList();
   }
 
   /// Opportunistic expiry sweep (there is no pg_cron in this database, so
@@ -535,10 +911,27 @@ String friendlyPickupReservationError(Object error) {
   if (raw.contains('RESERVATION_ALREADY_EXISTS')) {
     return kPickupAlreadyHoldingCopy;
   }
+  // NOTE the order: `STORE_EXTENSION_LIMIT_REACHED` CONTAINS
+  // `EXTENSION_LIMIT_REACHED`, so the store's cap must be matched first or the
+  // seller would be told about the customer's. (Pinned by a unit test.)
+  if (raw.contains('STORE_EXTENSION_LIMIT_REACHED')) {
+    return 'This hold has already had a goodwill extension from the store. If '
+        'the customer needs longer, ask them to reserve again.';
+  }
+  if (raw.contains('INVALID_REASON')) {
+    return 'Add a short reason (3-280 characters) — it is recorded with the '
+        'extension so the new deadline can be explained later.';
+  }
   if (raw.contains('EXTENSION_LIMIT_REACHED')) {
-    return 'This hold has already been extended, and a store cannot be asked '
-        'to wait longer than ${PickupReservation.maxHoldHours} hours. Reserve '
-        'again once it lapses.';
+    // Quotes [PickupReservation.maxHoldHours] — the customer's OWN ceiling —
+    // and then says the store may still add time. It must not quote the absolute
+    // [PickupReservation.maxWindowHours]: a store's goodwill is a favour, not
+    // something the customer may count on, and the number they can act on is
+    // their own budget.
+    return 'You have already been extended once on this hold, so you cannot ask '
+        'again (customer extensions stop at '
+        '${PickupReservation.maxHoldHours} hours). The store can still add '
+        'time on their side if they are willing.';
   }
   if (raw.contains('HOLD_LAPSED')) {
     return 'This hold has already run out of time — nothing can be held for '
@@ -566,6 +959,15 @@ String friendlyPickupReservationError(Object error) {
   if (raw.contains('ALREADY_RESOLVED')) {
     return 'This pickup reservation was already completed, cancelled or '
         'expired. Pull to refresh.';
+  }
+  // The two code-specific NOT_FOUNDs come FIRST: both contain the bare
+  // 'NOT_FOUND' the generic branch below matches, and "that reservation no
+  // longer exists" is the wrong thing to tell a seller holding a typed code.
+  if (raw.contains('NOT_FOUND') && raw.contains('a code is')) {
+    return 'A pickup code is 6 characters — check the code and try again.';
+  }
+  if (raw.contains('NOT_FOUND') && raw.contains('no pickup hold')) {
+    return 'No pickup hold for your store matches that code.';
   }
   if (raw.contains('NOT_FOUND')) {
     return 'That pickup reservation no longer exists.';

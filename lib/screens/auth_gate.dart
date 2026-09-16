@@ -163,6 +163,16 @@ class _AuthGateState extends State<AuthGate> {
     );
     if (pendingDevice != null) return _deviceChallengeGate(pendingDevice);
 
+    // Watch the provider's snapshot of the profile, because it can become
+    // available AFTER this gate's own fetch resolved null: a sign-up confirmed
+    // by tapping the e-mail LINK writes the `profiles` row from a deep link,
+    // which on a cold start races the first read below (the row lands a moment
+    // later). Selecting it is what turns that race into a normal landing
+    // instead of a retry screen for a row that now exists.
+    final providerProfile = context.select<AuthProvider, Map<String, dynamic>?>(
+      (a) => a.profile,
+    );
+
     // Never make a routing decision before the celebration "seen" set is
     // restored. The seller welcome screen must show exactly once per
     // account; deciding with an empty set (prefs still loading) would
@@ -191,6 +201,11 @@ class _AuthGateState extends State<AuthGate> {
                 }
                 if (profileSnapshot.hasError ||
                     profileSnapshot.data == null) {
+                  final lateProfile = providerProfile;
+                  if (lateProfile != null &&
+                      lateProfile['id'] == existingSession.user.id) {
+                    return _routeByRole(lateProfile);
+                  }
                   return _ProfileErrorView(
                     error: profileSnapshot.error,
                     onRetry: () => _retryProfile(existingSession.user),
@@ -237,6 +252,10 @@ class _AuthGateState extends State<AuthGate> {
             }
 
             if (profileSnapshot.hasError || profileSnapshot.data == null) {
+              final lateProfile = providerProfile;
+              if (lateProfile != null && lateProfile['id'] == user.id) {
+                return _routeByRole(lateProfile);
+              }
               return _ProfileErrorView(
                 error: profileSnapshot.error,
                 onRetry: () => _retryProfile(user),
@@ -285,6 +304,10 @@ class _AuthGateState extends State<AuthGate> {
   /// Part B — the new-device step-up. The AAL1 session was already withdrawn
   /// by `AuthProvider.login`, so completing this code is what signs the user
   /// in at all; the device is recorded as trusted at the same time.
+  ///
+  /// When that login could not even mail the code (`sendError`), the step-up
+  /// still owns the screen — with the reason on it — rather than handing the
+  /// user back the sign-in form they just came from.
   Widget _deviceChallengeGate(Map<String, dynamic> pending) {
     final auth = context.read<AuthProvider>();
     return EmailOtpScreen(
@@ -293,6 +316,7 @@ class _AuthGateState extends State<AuthGate> {
       deviceLabel: pending['deviceLabel'] as String?,
       // login() sent it; this screen only resends on demand.
       codeAlreadySent: true,
+      initialError: pending['sendError'] as String?,
       onSend: auth.resendDeviceChallenge,
       onCancel: auth.cancelDeviceChallenge,
       onVerify: (code) => auth.verifyDeviceChallenge(code),

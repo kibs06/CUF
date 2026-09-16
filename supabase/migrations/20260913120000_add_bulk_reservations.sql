@@ -68,14 +68,25 @@ COMMENT ON TABLE public.bulk_reservations IS
 -- 3. RLS ────────────────────────────────────────────────────────────
 ALTER TABLE public.bulk_reservations ENABLE ROW LEVEL SECURITY;
 
+-- Each policy is dropped first so this file is RE-RUNNABLE: `CREATE POLICY` has
+-- no IF NOT EXISTS, so a second apply of this file used to die on the first of
+-- these lines — aborting before the functions further down were replaced, which
+-- meant a function fix in this file could never actually be applied by
+-- re-running it. (See supabase/MIGRATIONS_LIVE_STATUS.md, "safe to re-run".)
+DROP POLICY IF EXISTS "Customers can view their own reservations"
+    ON public.bulk_reservations;
 CREATE POLICY "Customers can view their own reservations"
     ON public.bulk_reservations FOR SELECT
     USING (auth.uid() = customer_id);
 
+DROP POLICY IF EXISTS "Customers can create their own reservations"
+    ON public.bulk_reservations;
 CREATE POLICY "Customers can create their own reservations"
     ON public.bulk_reservations FOR INSERT
     WITH CHECK (auth.uid() = customer_id);
 
+DROP POLICY IF EXISTS "Sellers can view reservations for their store"
+    ON public.bulk_reservations;
 CREATE POLICY "Sellers can view reservations for their store"
     ON public.bulk_reservations FOR SELECT
     USING (
@@ -88,6 +99,8 @@ CREATE POLICY "Sellers can view reservations for their store"
 -- State changes (approve/reject/cancel/fulfill) go through SECURITY DEFINER
 -- RPCs below — no direct UPDATE policy, same as the GCash order RPCs.
 
+DROP POLICY IF EXISTS "Admins can view all reservations"
+    ON public.bulk_reservations;
 CREATE POLICY "Admins can view all reservations"
     ON public.bulk_reservations FOR SELECT
     USING (
@@ -169,6 +182,10 @@ BEGIN
     ) RETURNING id INTO v_id;
 
     -- Notify the seller (store owner).
+    -- ⚠️ `AND s.owner_id IS NOT NULL`: `stores.owner_id` is NULLABLE and
+    -- `notifications.user_id` is NOT NULL, so an ownerless store would fail the
+    -- customer's request entirely (same transaction as the insert above).
+    -- See docs/AI/NOTIFICATION_RECIPIENT_AUDIT.md.
     INSERT INTO public.notifications (user_id, category, title, message)
     SELECT s.owner_id, 'reservations',
            'New bulk reservation request',
@@ -176,7 +193,8 @@ BEGIN
            COALESCE(p.name, 'a product') || ' for resale.'
     FROM public.stores s
     JOIN public.products p ON p.id = p_product_id
-    WHERE s.id = p_store_id;
+    WHERE s.id = p_store_id
+      AND s.owner_id IS NOT NULL;
 
     RETURN v_id;
 END;

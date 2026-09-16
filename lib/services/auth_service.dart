@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../constants/app_constants.dart';
 import '../models/seller_application_data.dart';
 import '../utils/customer_profile_fields.dart' as customer_profile_fields;
+import 'deep_link_service.dart';
 
 /// Result of [AuthService.ensureUser] — the authenticated user plus whether
 /// the e-mail still has to be confirmed before anything can be written for
@@ -145,12 +146,22 @@ class AuthService {
         'full_name': fullName.trim(),
         // Mirrors the profiles columns so the row can be written later from
         // metadata alone, after email confirmation.
+        //
+        // The explicit `role` is ALSO what tells a link-confirmed signup
+        // whether it may write that row at all: the seller flow's signup
+        // (`ensureUser`) carries only a name and must not produce a plain
+        // customer row. See `AuthProvider.completeSignupFromEmailLink`.
         'role': AppConstants.roleCustomer,
         'seller_status': sellerStatus,
         'phone': phone,
         'birthday': birthdayValue,
         'gender': gender,
       },
+      // The confirmation e-mail's button comes back to the APP, not to the
+      // site URL (which the app cannot use at all). See
+      // `DeepLinkService.authConfirmRedirect` for the three places that must
+      // agree on this value.
+      emailRedirectTo: DeepLinkService.authConfirmRedirect,
     );
     final user = response.user;
     if (user == null) throw Exception('Sign up failed. Please try again.');

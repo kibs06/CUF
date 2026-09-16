@@ -48,30 +48,49 @@ class AppConstants {
   // Primary – Burnished Clay (aged leather)
   static const Color primary = Color(0xFF8B5A2B);
 
-  // Secondary – Carob Dark (deep sole color, text & icons)
-  static const Color secondary = Color(0xFF3B2314);
+  // Secondary – Neutral Ink (near-black: text, icons, dark chrome fills)
+  static const Color secondary = Color(0xFF111111);
 
   // Accent – Celadon Teal (AR mode, CTAs, highlights)
   static const Color accent = Color(0xFF4ECDC4);
 
-  // Surface Light – Warm Cream
+  // Surface Light – Page White
   //
-  // The app-wide light surface (page backgrounds, sheets, cards, nav bar).
-  // Repointed at the seller-side cream so the ENTIRE app shares the one warm
-  // cream aesthetic the seller dashboard already uses — the previous value
-  // (#F5F0EB, "off-white suede") read as plain white on the customer home.
-  // Referenced from [SellerTheme.creamBg] so the two can never drift, and so
-  // this also warms every place that uses it as light-on-dark text.
+  // The app-wide light surface (page backgrounds, sheets, cards, dialogs).
+  // `main.dart` maps `colorScheme.surface` here and no screen sets
+  // `ThemeData.scaffoldBackgroundColor`, so a plain Scaffold already inherits
+  // this tone. Referenced from [SellerTheme.creamBg] so the two can never
+  // drift. Was the warm cream #F3E9D8, which read as dingy beside the
+  // photographic product imagery.
+  //
+  // This token is ALSO still used as light-on-dark text; [inkInverse] is the
+  // explicit token for that job — see docs/AI/NEUTRAL_THEME_PLAN.md §5.
   static const Color surfaceLight = SellerTheme.creamBg;
 
-  // Surface Light – Deep Cream
-  // A half-step deeper and warmer than [surfaceLight], used for the bottom
-  // navigation band so the bar reads as its own grounded surface instead of
-  // blending into the page behind it.
-  static const Color creamDeep = Color(0xFFF0DFBB);
+  // Surface Subtle – the light neutral fill.
+  //
+  // Deliberately NOT pure white: a chip, input, popup row or section band has
+  // to stay visible ON a [surfaceLight] page. On the old cream ladder those
+  // fills sat lighter than the page (`SellerTheme.card`); with a white page
+  // they have to go darker instead — lighter is no longer available.
+  static const Color surfaceSubtle = Color(0xFFF5F5F5);
 
-  // Surface Dark – Midnight Canvas (dark mode / AR overlay)
-  static const Color surfaceDark = Color(0xFF1A1208);
+  // Grounded band – the bottom navigation bar's default and section bands.
+  // Retargeted at [surfaceSubtle] so the two can never drift.
+  static const Color creamDeep = surfaceSubtle;
+
+  // Surface Dark – Neutral Black (dark mode / AR overlay)
+  static const Color surfaceDark = Color(0xFF111111);
+
+  // Ink on dark – text and icons sitting on a clay, espresso or black fill.
+  //
+  // Split out of [surfaceLight] deliberately: that token used to serve as both
+  // the page fill AND the light-on-dark ink, because the cream page and the
+  // cream ink happened to be the same value. White clears AA on every dark
+  // fill the app uses (≈5.9:1 on clay, ≈14:1 on espresso), so nothing changes
+  // visually today — but the intent is now explicit, and no future page colour
+  // change can silently repaint button labels.
+  static const Color inkInverse = SellerTheme.creamText;
 
   // Success – Olive Stitch
   static const Color success = Color(0xFF6B8F47);
@@ -79,8 +98,8 @@ class AppConstants {
   // Error – Crimson Welt
   static const Color error = Color(0xFFD64545);
 
-  // Gray color for borders/dividers
-  static const Color borderGray = Color(0xFFD2C7BC);
+  // Neutral hairline for borders/dividers (was the warm #D2C7BC)
+  static const Color borderGray = Color(0xFFE5E5E5);
 
   // --- BRAND COLOR PARSER ---
   /// Safely parse a hex brand color string (e.g. '#8B5A2B') into a Flutter Color.
@@ -108,7 +127,7 @@ class AppConstants {
   static const Color lowStockColor = Color(0xFFEF4444); // urgent red
   static const Color okStockColor = Color(0xFF6B8F47); // safe green
 
-  // Seller surface — espresso/cream palette. These are repointed at the
+  // Seller surface — the shared neutral palette. These are repointed at the
   // SellerTheme tokens so the ENTIRE seller module (every seller screen +
   // seller widget) rethemes consistently without touching each file.
   // Shared customer surfaces that used to reference these (e.g. chat_view)

@@ -88,7 +88,26 @@ BEGIN
   VALUES (p_order_id, p_event, p_actor_id, p_details);
 
   -- Customer in-app notification (lands in notifications, read on open).
-  IF p_notify_customer THEN
+  --
+  -- ⚠️ The RECIPIENT is checked too, and this one is not theoretical — it was
+  -- reproduced end to end. `orders.customer_id` is NULLABLE while
+  -- `notifications.user_id` is NOT NULL, and `expire_overdue_gcash_orders()`
+  -- calls this in a LOOP. Measured behaviour WITHOUT the guard, on a batch of
+  -- two overdue orders where only the second has no customer:
+  --
+  --     ERROR: null value in column "user_id" of relation "notifications"
+  --            violates not-null constraint
+  --     CONTEXT: ... PL/pgSQL function expire_overdue_gcash_orders() line 11 at IF
+  --     after:  BOTH orders still awaiting_payment_confirmation
+  --             notifications written: 0
+  --
+  -- The loop is inside ONE statement, so the 23502 rolls back the cancellations
+  -- it had ALREADY performed for healthy orders. The lesson is that a missing
+  -- recipient is not a skipped notification: it is a failed transaction. While
+  -- such a row exists the sweep resolves nothing at all, on every run — every
+  -- order in the batch keeps its stock reserved and stays stuck. See
+  -- docs/AI/NOTIFICATION_RECIPIENT_AUDIT.md.
+  IF p_notify_customer AND v_customer_id IS NOT NULL THEN
     v_short_id := left(p_order_id::text, 8);
     INSERT INTO public.notifications (user_id, order_id, category, title, message)
     VALUES (

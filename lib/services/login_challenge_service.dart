@@ -55,11 +55,26 @@ class LoginChallengeDecision {
 ///   **Never lock a legitimate user out because of our own plumbing.**
 ///
 /// So every *evaluation* failure (secure storage unavailable, `trusted_devices`
-/// unreadable, device id missing) fails OPEN — the login proceeds exactly as
-/// it did before this feature existed. Only a definite "this device is not
-/// trusted and the account has no TOTP factor" raises the challenge, and once
-/// raised, a failure to *send* the code fails CLOSED (the login does not
-/// complete) because that is the point of the feature.
+/// unreadable, device id missing, the gate probe unreadable) fails OPEN — the
+/// login proceeds exactly as it did before this feature existed. Only a
+/// definite "this device is not trusted, the account has no TOTP factor, and
+/// the SERVER GATE IS ACTUALLY SHUT" raises the challenge, and once raised, a
+/// failure to *send* the code fails CLOSED (the login does not complete)
+/// because that is the point of the feature.
+///
+/// ## Why the gate probe participates
+///
+/// The step-up exists to produce the device secret that
+/// `public.device_is_trusted()` checks — and while enforcement ships OFF
+/// (§3.9), that check returns true without a secret, so demanding a code
+/// denies the user nothing and can only cost them the account: if the code
+/// cannot be mailed (mailer unconfigured, address refused, rate limit), a
+/// fail-closed challenge turns a correct password into "you cannot get in".
+/// `public.device_gate_open()` answers exactly that question, so it is asked
+/// BEFORE the challenge is raised. The cost is one RPC per login for a device
+/// that holds no secret, and the one-time price of the flip: the first login
+/// per device afterwards is challenged once and mints its credential then
+/// (§3.9 step 3).
 class LoginChallengeService {
   LoginChallengeService({
     DeviceTrustGateway? deviceTrust,
@@ -143,7 +158,31 @@ class LoginChallengeService {
       );
     }
 
+    // Would challenge — but only mail a code if the server would actually
+    // refuse this session without one. Probed LAST, so the common paths (a
+    // known device, an MFA account) still cost no extra round trip.
+    if (await _gateIsOpen()) {
+      // Deliberately does NOT record the device: `trust_device()` refuses a
+      // password-only session (42501), so the write could only ever fail, and
+      // the challenge above is what mints the credential once the gate is on.
+      return LoginChallengeDecision.proceed(reason: 'enforcement_off');
+    }
+
     return LoginChallengeDecision.challenge(deviceId: deviceId, deviceLabel: label);
+  }
+
+  /// True when the server gate is OPEN, i.e. nothing is denied for want of a
+  /// device secret — either because enforcement is switched off (§3.9), or
+  /// because this session already proves possession. An UNREADABLE probe is
+  /// treated as open: a probe we cannot read must never be the thing that
+  /// mails a code at a legitimate user (same rule as the repair path below).
+  Future<bool> _gateIsOpen() async {
+    try {
+      return await _deviceTrust.isGateOpen();
+    } catch (e) {
+      debugPrint('[DeviceTrust] gate probe failed: $e');
+      return true;
+    }
   }
 
   /// Emails a sign-in code for [email]. Throws on failure — the caller must
@@ -178,13 +217,7 @@ class LoginChallengeService {
   /// affected install repairs itself instead of showing empty screens.
   Future<bool> needsStepUpOnRestoredSession({required String userId}) async {
     if (await _deviceTrust.hasDeviceSecret(userId)) return false;
-    try {
-      return !await _deviceTrust.isGateOpen();
-    } catch (e) {
-      // A probe we cannot read must not force a code on a legitimate user.
-      debugPrint('[DeviceTrust] gate probe failed: $e');
-      return false;
-    }
+    return !(await _gateIsOpen());
   }
 
   /// Marks the current install's device trusted for [userId] and stores the

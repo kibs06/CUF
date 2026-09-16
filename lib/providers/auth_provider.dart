@@ -40,7 +40,9 @@ class AuthProvider extends ChangeNotifier {
       _pendingSignupVerification;
 
   /// Non-null while a password login is parked behind the new-device email
-  /// OTP step-up (Part B). Holds `{'email', 'deviceId', 'deviceLabel'}`.
+  /// OTP step-up (Part B). Holds `{'email', 'deviceId', 'deviceLabel'}` — and
+  /// `'sendError'` when the challenge code itself could not be mailed, which
+  /// the OTP screen shows on its first frame.
   /// The AAL1 session is withdrawn while this is set — see [login].
   Map<String, dynamic>? _pendingDeviceChallenge;
   Map<String, dynamic>? get pendingDeviceChallenge => _pendingDeviceChallenge;
@@ -337,16 +339,21 @@ class AuthProvider extends ChangeNotifier {
         _currentUser = null;
         _profile = null;
 
-        // Sending the code IS the challenge, so failing to send it must not
-        // complete the login. Surface the mapped error (rate limit, mailer
-        // outage) and let the user retry.
+        // Sending the code IS the challenge, so a failed send must not
+        // complete the login (fail CLOSED). It must not hide the step-up
+        // either: the screen is what can explain "no code arrived" and offer
+        // Resend, whereas the sign-in form cannot — by the time the send has
+        // failed, the AAL1 session created above is withdrawn below and this
+        // provider no longer belongs to the widget that called it, so nothing
+        // would ever have shown the error. Measured Sep 17, 2026: a
+        // rate-limited challenge send dropped the user on the create-account
+        // screen with no message at all, which reads as "login is broken".
+        String? sendError;
         try {
           await _challenge.sendChallengeCode(trimmedEmail);
         } catch (e, st) {
-          _errorMessage = friendlyAuthErrorMessage(e, stackTrace: st);
-          _pendingDeviceChallenge = null;
-          notifyListeners();
-          return false;
+          sendError = friendlyAuthErrorMessage(e, stackTrace: st);
+          debugPrint('[AuthProvider] challenge code could not be sent: $e');
         } finally {
           // Withdraw the AAL1 session either way: an unverified device must
           // not hold a usable token while the code is outstanding.
@@ -361,6 +368,9 @@ class AuthProvider extends ChangeNotifier {
           'email': trimmedEmail,
           'deviceId': decision.deviceId,
           'deviceLabel': decision.deviceLabel,
+          // Read by AuthGate's device gate and shown on the screen's first
+          // frame; absent when the code was mailed successfully.
+          'sendError': ?sendError,
         };
         _errorMessage = null;
         notifyListeners();
@@ -403,6 +413,23 @@ class AuthProvider extends ChangeNotifier {
         if (!started) {
           _errorMessage = friendlyAuthErrorMessage(e, stackTrace: st);
         }
+        notifyListeners();
+        return false;
+      }
+
+      // ── Only a CREDENTIAL rejection counts as a failed sign-in ──
+      // Everything past this point moves counters, sends a lockout e-mail
+      // and files a `failed_logins` row the admin reviews as an intruder
+      // report, so nothing but a definite "that password is wrong" may
+      // reach it. Measured Sep 17, 2026 on the Pixel 4 emulator: with the
+      // device in airplane mode (this screen's own banner already read
+      // "No internet connection") five taps on "Log In" produced the full
+      // 30-minute lockout overlay, and the CORRECT password is then refused
+      // locally for those 30 minutes — for a network outage the user cannot
+      // influence. A transport failure is not evidence of guessing.
+      if (!isCredentialRejection(e)) {
+        debugPrint('[Auth] Sign-in could not be completed: $e');
+        _errorMessage = friendlyAuthErrorMessage(e, stackTrace: st);
         notifyListeners();
         return false;
       }
@@ -640,22 +667,7 @@ class AuthProvider extends ChangeNotifier {
 
       final profile = await _auth.writeProfileFromMetadata(user);
 
-      _pendingSignupVerification = null;
-      _currentUser = {'id': user.id, 'email': user.email};
-      _profile = profile;
-      onLoginHook?.call(user.id);
-
-      // The account now exists on this device — don't challenge it here next
-      // time (this is the false-positive "new device" case to avoid). The
-      // signup code we just verified makes this a stepped-up session, so the
-      // server issues the device secret here.
-      await _recordCurrentDeviceTrusted(user.id);
-
-      try {
-        await AccountManager.instance.saveCurrentSession(profile: _profile);
-      } catch (_) {
-        // Best-effort, as everywhere else.
-      }
+      await _finishSignupSession(user, profile);
 
       return true;
     } catch (e, st) {
@@ -717,6 +729,131 @@ class AuthProvider extends ChangeNotifier {
     _pendingSignupVerification = null;
     _errorMessage = null;
     notifyListeners();
+  }
+
+  /// Finishes a sign-up that was confirmed by TAPPING THE EMAILED LINK
+  /// (`solvision://auth/confirm`) instead of typing the code — see
+  /// `DeepLinkService.isAuthConfirmLink`.
+  ///
+  /// The session itself needs no help: supabase_flutter's deep-link observer
+  /// parses the `#access_token=…` fragment GoTrue redirects with, so the user
+  /// is signed in by the time this runs. What that observer cannot know is the
+  /// ordering contract in `AuthService.signUp` — the `profiles` row is
+  /// deliberately deferred until a session exists, and the verify-CODE screen
+  /// is normally what supplies one. Without this step the link-confirmed
+  /// account lands in the app with no profile row, and AuthGate can only show
+  /// its profile-error screen.
+  ///
+  /// Two deliberate limits:
+  ///  • The row is written ONLY when there is none, and only for an account
+  ///    whose signup metadata carries a `role`. That leaves a re-tapped link,
+  ///    a password-recovery link and a legacy account untouched, and it keeps
+  ///    the SELLER flow out: `ensureUser`'s signup metadata has no role, and
+  ///    that flow's own verification step writes nothing either — a plain
+  ///    customer row is not a pending seller application (§2.1 of
+  ///    `docs/AI/EMAIL_OTP_AND_DEVICE_TRUST_ARCHITECTURE.md`).
+  ///  • A link that arrives with no session is ignored, never guessed at.
+  ///
+  /// Ordering matters in the WARM case: the row is written BEFORE
+  /// `_pendingSignupVerification` is cleared, because AuthGate renders that
+  /// pending state ahead of any profile routing — clearing it first would let
+  /// the gate fetch a profile that does not exist yet.
+  ///
+  /// Returns true when the link left a usable account behind (a row already
+  /// existed, or this wrote it); false when there was nothing to finish, which
+  /// is the correct outcome for a link that is not a first confirmation.
+  Future<bool> completeSignupFromEmailLink() async {
+    final user = await _waitForLinkSession();
+    if (user == null) {
+      debugPrint('[AuthProvider] auth link arrived with no session');
+      return false;
+    }
+
+    // Never finish a signup this install is not waiting on: another account's
+    // link must not be adopted here.
+    final pendingEmail =
+        (_pendingSignupVerification?['email'] as String?)?.trim().toLowerCase();
+    final linkEmail = user.email?.trim().toLowerCase();
+    if (pendingEmail != null && linkEmail != null && pendingEmail != linkEmail) {
+      return false;
+    }
+
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      var profile = await _db.getProfile(user.id);
+      if (profile == null && _carriesSignupRole(user)) {
+        // Exactly the row the verify-code screen would have written.
+        profile = await _auth.writeProfileFromMetadata(user);
+      }
+      if (profile == null) return false;
+
+      await _finishSignupSession(user, profile);
+      return true;
+    } catch (e, st) {
+      _errorMessage = friendlyAuthErrorMessage(e, stackTrace: st);
+      debugPrint('[AuthProvider] link confirmation failed: $e');
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Waits (bounded) for the session the incoming link carries.
+  ///
+  /// supabase_flutter's deep-link observer is a SEPARATE subscription from
+  /// ours, and it is the one that turns `#access_token=…` into a session, so
+  /// this handler can legitimately run first. 20 × 250 ms mirrors the budget
+  /// the shared-product link already waits on for the same reason
+  /// (`DeepLinkHost._openSharedProduct`).
+  Future<User?> _waitForLinkSession() async {
+    for (var attempt = 0; attempt < 20; attempt++) {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user != null) return user;
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+    }
+    return Supabase.instance.client.auth.currentUser;
+  }
+
+  /// True when the account's signup metadata declares a role, i.e. it came
+  /// from the CUSTOMER signup. The seller flow's `ensureUser` stores only a
+  /// name, so it is excluded on purpose (see [completeSignupFromEmailLink]).
+  static bool _carriesSignupRole(User user) {
+    final role = user.userMetadata?['role'];
+    return role is String && role.trim().isNotEmpty;
+  }
+
+  /// Adopts a just-confirmed session and takes the follow-ups both
+  /// confirmation paths owe: clear the pending signup, point the provider at
+  /// the profile, fire the login hook, record THIS device as trusted (so the
+  /// next sign-in here is not challenged as a new device), and save the
+  /// account for quick switching.
+  ///
+  /// Deliberately does not notify: callers own `_isLoading` so their `finally`
+  /// block stays the single place a rebuild is scheduled.
+  Future<void> _finishSignupSession(
+    User user,
+    Map<String, dynamic> profile,
+  ) async {
+    _pendingSignupVerification = null;
+    _currentUser = {'id': user.id, 'email': user.email};
+    _profile = profile;
+    onLoginHook?.call(user.id);
+
+    // The account now exists on this device — don't challenge it here next
+    // time (this is the false-positive "new device" case to avoid). A code or
+    // a link that GoTrue accepted makes this a stepped-up session, so the
+    // server issues the device secret here.
+    await _recordCurrentDeviceTrusted(user.id);
+
+    try {
+      await AccountManager.instance.saveCurrentSession(profile: _profile);
+    } catch (_) {
+      // Best-effort, as everywhere else.
+    }
   }
 
   // ── Email OTP: new-device step-up (ANQUI item 16, Part B) ────────

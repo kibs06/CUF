@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../constants/app_constants.dart';
 import '../../services/pickup_reservation_service.dart';
 import '../../widgets/sole_card.dart';
+import 'pickup_goodwill_screen.dart';
 
 /// The customer's FREE pickup holds (ANQUI item 14): what is being held,
 /// how long is left, and a cancel action.
@@ -33,6 +34,18 @@ class _MyPickupReservationsScreenState
   String? _error;
   bool _busy = false;
 
+  /// The store's goodwill trail for this customer, keyed by reservation. Kept
+  /// as a MAP rather than looked up per tile so the deadline a customer sees
+  /// and the reason it moved are read from one fetch.
+  Map<String, PickupExtensionGrant> _grants = const {};
+
+  /// The same trail as a LIST, newest first, which is what the history screen
+  /// shows. Kept beside the map rather than re-fetched on navigation: the history
+  /// must not be able to disagree with the notes on the holds it came from, and a
+  /// grant belongs to a hold this list may no longer contain (collected, or past
+  /// the holds query's `LIMIT`) — which is exactly what the history is for.
+  List<PickupExtensionGrant> _trail = const [];
+
   /// Re-renders the countdowns without a round trip.
   Timer? _ticker;
 
@@ -60,11 +73,25 @@ class _MyPickupReservationsScreenState
     // lapsed, and let anyone inside the last 2 hours be reminded once.
     await _service.expireStale();
     await _service.sendReminders();
+    // Best-effort, and deliberately its own fetch: a store's goodwill grant is
+    // *explanatory* — it tells the customer why a deadline is later than the 24h
+    // they expected — so failing to read the trail must never take the holds
+    // themselves off the screen.
+    Map<String, PickupExtensionGrant> grants = const {};
+    List<PickupExtensionGrant> trail = const [];
+    try {
+      trail = await _service.fetchMyGrants();
+      grants = latestGrantByReservation(trail);
+    } catch (e) {
+      debugPrint('pickup grant trail unavailable: $e');
+    }
     try {
       final items = await _service.fetchMine();
       if (!mounted) return;
       setState(() {
         _items = items;
+        _grants = grants;
+        _trail = trail;
         _now = DateTime.now();
         _error = null;
       });
@@ -243,6 +270,20 @@ class _MyPickupReservationsScreenState
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
+          // Offered only when there is something to read, the same rule the
+          // seller screen's `Lapsing soon` chip follows: an action that opens an
+          // empty screen is noise. The trail is already loaded for the per-hold
+          // notes, so this needs no round trip.
+          if (_trail.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.volunteer_activism_outlined, size: 20),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => PickupGoodwillScreen(grants: _trail),
+                ),
+              ),
+              tooltip: 'Goodwill history',
+            ),
           IconButton(
             icon: const Icon(Icons.refresh, size: 20),
             onPressed: _busy ? null : _load,
@@ -292,6 +333,7 @@ class _MyPickupReservationsScreenState
               _PickupTile(
                 reservation: r,
                 now: _now,
+                grant: _grants[r.id],
                 onCancel: _busy ? null : () => _cancel(r),
                 onExtend: (_busy || !r.canExtendAt(_now))
                     ? null
@@ -304,7 +346,12 @@ class _MyPickupReservationsScreenState
             const SizedBox(height: 8),
             _sectionLabel('Earlier holds'),
             for (final r in past) ...[
-              _PickupTile(reservation: r, now: _now, onCancel: null),
+              _PickupTile(
+                reservation: r,
+                now: _now,
+                grant: _grants[r.id],
+                onCancel: null,
+              ),
               const SizedBox(height: 12),
             ],
           ],
@@ -381,9 +428,15 @@ class _PickupTile extends StatelessWidget {
   final VoidCallback? onCancel;
   final VoidCallback? onExtend;
 
+  /// The store's most recent goodwill grant on this hold, if any. Printed with
+  /// its reason, because "why is this deadline not 24 hours after I reserved?"
+  /// is a question the screen should answer rather than raise.
+  final PickupExtensionGrant? grant;
+
   const _PickupTile({
     required this.reservation,
     required this.now,
+    this.grant,
     this.onCancel,
     this.onExtend,
   });
@@ -491,6 +544,13 @@ class _PickupTile extends StatelessWidget {
                   ),
               ],
             ),
+            // THE THING THE CUSTOMER SHOWS AT THE COUNTER. It sits with the
+            // countdown rather than in a detail view because those are the two
+            // facts that matter while standing at the till — "what do I show
+            // you" and "have I got time left" — and neither should need a tap.
+            // Only on a live hold: once it is collected there is nothing to
+            // present, and the code is a lookup key rather than a receipt.
+            if (r.pickupCodeLabel != null) _codeBand(r.pickupCodeLabel!),
           // What more time would cost the store, and whether it has already
           // been asked for — the note stays visible after the cap is used, so
           // a later deadline on the seller's side always has an explanation.
@@ -538,6 +598,32 @@ class _PickupTile extends StatelessWidget {
                 ],
               ),
             ),
+          if (grant != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.volunteer_activism_outlined,
+                    size: 14,
+                    color: AppConstants.primary.withValues(alpha: 0.7),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'The store gave you +${grant!.hoursGranted}h — '
+                      '“${grant!.reason}”',
+                      style: AppConstants.bodyStyle(
+                        fontSize: 11.5,
+                        height: 1.3,
+                        color: AppConstants.primary.withValues(alpha: 0.85),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
           if (!r.isActive)
             Text(
@@ -553,6 +639,54 @@ class _PickupTile extends StatelessWidget {
       ),
     );
   }
+
+  Widget _codeBand(String code) => Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(top: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          // `creamDeep` rather than `surfaceLight`: the tile is already on the
+          // light cream surface, so the band has to read as its own grounded
+          // block — the same half-step-deeper token the bottom nav band uses.
+          color: AppConstants.creamDeep,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: AppConstants.primary.withValues(alpha: 0.25),
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.qr_code_2,
+                size: 18, color: AppConstants.primary.withValues(alpha: 0.8)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Show this code at the counter',
+                    style: AppConstants.bodyStyle(
+                      fontSize: 11,
+                      color: AppConstants.secondary.withValues(alpha: 0.7),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  // Selectable so a customer can copy it and text it to
+                  // whoever is collecting on their behalf.
+                  SelectableText(
+                    code,
+                    style: AppConstants.monoStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: AppConstants.primary,
+                    ).copyWith(letterSpacing: 3),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
 
   Widget _chip(String label, Color color) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),

@@ -13,6 +13,8 @@
 > `lib/services/auth_service.dart`. Part B → `lib/services/device_trust_service.dart`,
 > `lib/services/login_challenge_service.dart`, and `login()` in
 > `auth_provider.dart`. Both screens are `lib/screens/shared/email_otp_screen.dart`.
+> Part A has a second entry point too: the e-mail LINK (§2.4) —
+> `completeSignupFromEmailLink`, reached from `DeepLinkHost` in `lib/main.dart`.
 
 ---
 
@@ -38,6 +40,11 @@
   secrets are not.
 - **Enforcement ships OFF** (`device_enforcement_policy.enforcement_enabled`),
   so applying the migration cannot break a client that predates the header.
+- **The email step-up follows that same switch.** `evaluate` probes
+  `device_gate_open()` before mailing a code, so while the gate is off no
+  device is challenged (no code can be undeliverable, no mailer can lock a
+  correct password out) and the first sign-in per device after the flip is
+  challenged once (§3.1, §3.9).
 - **The 6-digit code is an OPERATIONAL requirement, not a code detail.** The
   stock Supabase emails contain only a confirmation **link**. Without a
   template that renders `{{ .Token }}` the verify screen has nothing to
@@ -134,6 +141,68 @@ row already exists — so it must not clobber them:
 | Dev-mode seller submit | Now takes the SAME verification step as production (the code appears in Mailpit at `:54324` locally), so the two paths cannot diverge. |
 | Sign-up while confirmation is OFF | Unchanged: `signUp` returns a session and the profile is written immediately. The app supports both configurations. |
 
+### 2.4 The e-mail LINK, not only the code
+
+The confirmation e-mail carries **both** a 6-digit code and a confirmation
+button. §2.1 covers the code; the button used to be a dead end — it went to the
+Site URL, which on a phone means a browser page the app cannot use, so the
+account was left with no `profiles` row (the ordering contract above) and the
+app could only show its profile-error screen.
+
+```
+mail button  ─►  GoTrue /verify (token consumed server-side)
+                     │  redirect_to = solvision://auth/confirm
+                     ▼
+              app opens (cold start or warm)
+                     ├─ supabase_flutter's deep-link observer
+                     │    parses #access_token=…  ─►  SESSION
+                     └─ DeepLinkHost._onLink
+                          └─ AuthProvider.completeSignupFromEmailLink()
+                               ├─ wait (bounded) for that session
+                               ├─ write the profiles row IF there is none,
+                               │    and only when the signup metadata carries
+                               │    a `role` (i.e. the CUSTOMER signup)
+                               └─ adopt: clear pending signup, login hook,
+                                  record this device trusted, save account
+```
+
+Four decisions worth keeping:
+
+1. **The link is a second way to confirm, not a second way in.** GoTrue does
+   the verification, so the session arrives with `amr: ["otp"]` exactly as the
+   typed code does — §3.7's mint gate is satisfied by either.
+2. **The app still has to finish the signup.** A session is not an account:
+   the `profiles` row is deferred until a session exists, and the verify-code
+   screen is normally what supplies one. `completeSignupFromEmailLink` writes
+   that row, then takes the same follow-ups the code path takes (device trust,
+   saved account) so confirming by link does not make the next sign-in on this
+   phone look like a new device.
+3. **The seller flow is deliberately excluded.** Its `ensureUser` metadata
+   carries only a name, and its own verification step establishes the session
+   while writing nothing — a plain customer row is not a pending seller
+   application (§2.1). The row is therefore written only for an account whose
+   signup metadata declares a role.
+
+   Known bound: the RESEND path is shared with that flow (its verify screen uses
+   the same `sendSignupCode`), so a seller who *taps* the link instead of typing
+   the code arrives signed in with no profile row and lands on the gate's
+   profile-error screen — recoverable by re-entering the application (its draft
+   store restores the work) or by typing the code as that flow expects, but not
+   the path the flow is built around. Returning the link *into* the seller flow
+   would need that flow to own the route; not worth a second entry point until
+   someone actually hits it.
+4. **Nothing breaks if the link never completes.** The redirect only happens
+   when the dashboard allow-lists it (runbook §R8 Step 3b); if it does not, the
+   button falls back to the old web redirect and the typed code still works.
+
+Three places must agree on `solvision://auth/confirm`, and no compiler compares
+them: `DeepLinkService.authConfirmRedirect`, the intent-filter in
+`AndroidManifest.xml` (iOS matches on the scheme alone, already registered), and
+the dashboard's Redirect URLs. `test/services/deep_link_service_test.dart`
+reads the first two (plus the `emailRedirectTo` on sign-up **and on the resend**,
+which builds its own link) so a rename fails at test time rather than in a
+user's inbox.
+
 ---
 
 ## Part B — New-device step-up challenge
@@ -147,11 +216,18 @@ DeviceTrustPolicy.requiresEmailOtpChallenge({
 }) => !deviceKnown && !mfaEnabled;
 ```
 
-| Device | TOTP MFA | Result |
-|---|---|---|
-| known | any | proceed, bump `last_seen_at` |
-| unknown | no | **email OTP challenge** |
-| unknown | yes | proceed, record the device (see §3.4) |
+That line answers "would this device need a credential?" — it is not the
+whole decision. `evaluate` asks the SERVER (`public.device_gate_open()`)
+before it mails anything, because a code that mints a credential nothing
+checks yet is pure friction, and a mailer that cannot deliver it turns a
+correct password into a lockout:
+
+| Device | TOTP MFA | Gate | Result |
+|---|---|---|---|
+| known | any | any | proceed, bump `last_seen_at` |
+| unknown | yes | any | proceed, record the device (see §3.4) |
+| unknown | no | **open** (enforcement OFF — the shipped default) | proceed, **no code mailed** (§3.9) |
+| unknown | no | shut | **email OTP challenge** |
 
 ### 3.2 What "a new device" means
 
@@ -182,6 +258,7 @@ enough, because the gate checks the secret (§3.8).
 login(email, password)
   └─ password OK  →  LoginChallengeService.evaluate(userId)
                         ├─ proceed      → normal login (unchanged)
+                        ├─ gate OPEN    → proceed, no code mailed (§3.1)
                         └─ challenge    → 1. reset the failure counters
                                             2. sendLoginCode(email)
                                             3. signOut()   ◄── the AAL1 session
@@ -223,9 +300,21 @@ one e-mail, once per account — and it doubles as proof that the mailer works.
 
 The check runs in `login()`. An install that is *already* signed in when this
 ships is handled separately and **only if the server is actually gating it** —
-see §3.10. A *failed send* fails the login (§4), which is the one sharp edge:
-a mail outage blocks first-time logins from new devices while known devices
-and existing sessions are unaffected.
+see §3.10.
+
+**While enforcement is OFF, that "one code each" does not happen yet.** The
+same gate probe the repair path uses (§3.10) now also guards the login
+challenge, so a device is asked for a code only when the server would really
+refuse it without one (§3.1). The rollout is therefore invisible until §3.9
+step 3, and the cost moves to the flip: each device's first sign-in afterwards
+is challenged once and mints its credential then.
+
+A *failed send* fails the login (§4), which is the one sharp edge — and it is
+bounded by the paragraph above, because it can only be reached while the gate
+is shut. The user is not dropped: the pending challenge is kept, so the code
+screen shows the mapped reason ("Too many attempts…", the rejected address)
+with Resend and an escape back to sign-in, instead of the sign-in form
+silently reappearing.
 
 ---
 
@@ -350,13 +439,19 @@ Step 3 is a single row — no schema change, no deploy — and it is reversible
 the same way, which is the rollback path if a client turns out not to be
 sending the header.
 
-**Does step 2 cost users anything?** No new UX: the client-side challenge in
-Part B already ran on unfamiliar devices before this migration existed, so
-minting happens at the same moment the code is verified. The one-time extra
-cost is for installs that hold a `trusted_devices` row but no secret (they
-were trusted by the *old* client, which did not mint one): they are challenged
-once more. That is why the client mints eagerly rather than waiting for the
-flip — by the time step 3 happens, most devices already carry a secret.
+**Does step 2 cost users anything?** No — and deliberately so. The client
+challenges a device only when `device_gate_open()` says the server would
+denied it (`evaluate`, §3.1), so while this row is `false` no existing user is
+asked for a code at all. Accounts that sign up (or clear an MFA step-up) after
+this build still mint eagerly, because those are stepped-up sessions that the
+server will trust.
+
+**What the flip costs (step 3).** The first sign-in from each device that was
+never challenged is challenged once, and mints its credential then; a session
+that is already live is left alone until its next launch (§3.10, §10.4). That
+is the one-time price of not asking for a code while the answer changes
+nothing — and it is the reason the flip is safe to make at any time rather
+than needing to precede this build.
 
 ### 3.10 Client changes, and the repair path for in-flight sessions
 
@@ -535,7 +630,8 @@ Through Kong → PostgREST → the RPC, using the client's exact call shape
 | `trusted_devices` unreadable, **no secret held** | **fail CLOSED** — challenge | Nothing proves this install is cleared; proceeding would just hit a shut server gate. |
 | `device_gate_open()` unreadable at startup | **fail OPEN** — no code sent | An unreadable *probe* must not be the thing that mails a code to a legitimate user. |
 | MFA state unreadable | **fail CLOSED** — challenge | Unknown factor state is not evidence of a second factor. Recoverable friction beats a silent hole. |
-| Sending the challenge code fails | **fail CLOSED** — no login | Sending the code *is* the challenge; proceeding anyway would make the feature decorative. The mapped error (rate limit, mailer) is surfaced. |
+| Sending the challenge code fails | **fail CLOSED** — no login | Sending the code *is* the challenge; proceeding anyway would make the feature decorative. The mapped error (rate limit, mailer) is surfaced **on the code screen** — the pending challenge is kept and the error handed to it, because the sign-in form that started the login no longer exists by then (measured Sep 17, 2026: a rate-limited send dropped the user on the create-account screen with no message at all). |
+| `device_gate_open()` returns true (enforcement OFF) | **no code** — proceed | The credential a code would mint is not checked yet (§3.9), so the challenge could only cost the user their account if the mailer is not configured. Probed BEFORE the challenge is raised. |
 | `trust_device()` refused (42501) | **swallowed** — returns null | Expected for an MFA user at AAL1 before their TOTP challenge; the AAL2 mint in §3.10 then succeeds. |
 | Enforcement on, secret rotated or lost | **challenge on the next login** | `evaluate()` treats "secret held but the row is gone" as unknown, so the device is re-challenged and re-minted instead of being left denied. |
 
@@ -566,16 +662,70 @@ e-mails look wrong, `supabase stop && supabase start` once and check
 
 ### 5.1 What the LIVE project needs (dashboard, not repo)
 
-1. **Authentication → Sign In / Providers → Email → "Confirm email": ON.**
+1. **Authentication → SMTP Settings: point GoTrue at the app's own Gmail.**
+   Host `smtp.gmail.com`, port `465`, user + sender `GMAIL_SENDER`, password
+   `GMAIL_APP_PASSWORD` — the same account and App Password the
+   `send-approval-email` / `send-lockout-email` Edge Functions already send
+   through. Without it GoTrue falls back to its **built-in mailer**: a ceiling
+   of **2 messages/hour** on a service with no SLA, and — per
+   `supabase.com/docs/guides/auth/auth-smtp` — delivery restricted to addresses
+   inside the Supabase organization. **Measured Sep 17, 2026: that allowlist
+   did not bite** (a consumer Gmail address received a code e-mail through the
+   built-in mailer), so treat it as documented-but-unconfirmed rather than as
+   the explanation for a missing code. The measured cause of a missing code is
+   item 4 below — a stock, link-only template — which no SMTP setting can
+   compensate for. Saving custom SMTP lifts the ceiling; the project's own then
+   defaults to **30/hour** (`rate_limit_email_sent`) and should be raised for
+   launch. Two caveats: the sender address must be the Gmail account itself (or
+   a Gmail alias), because Gmail rewrites a `From` it does not own; and Gmail's
+   own ceiling is roughly 500 recipients/day on a free account. The step-by-step
+   form of this, including the repeatable Management API `PATCH`, is the **R8
+   runbook** in `docs/fixes/GO_LIVE_PRELAUNCH_CHECKLIST.md`.
+2. **Authentication → Sign In / Providers → Email → "Confirm email": ON.**
    A `config.toml` default does not change the hosted project.
-2. **Authentication → Email Templates → "Confirm signup":** add
+3. **Authentication → Email Templates → "Confirm signup":** add
    `{{ .Token }}` (mirror `supabase/templates/confirmation.html`).
-3. **…→ "Magic Link":** add `{{ .Token }}` (mirror
+4. **…→ "Magic Link":** add `{{ .Token }}` (mirror
    `supabase/templates/magic_link.html`) — without it Part B has nothing to
    send.
-4. Confirm the numbers the app mirrors: `otp_length = 6`,
+5. Confirm the numbers the app mirrors: `otp_length = 6`,
    `otp_expiry = 3600` (1 hour) — these are `EmailOtpPolicy.codeLength` and
    `EmailOtpPolicy.expirySeconds`.
+
+**Observed on the live project (Sep 16, 2026).** A read of `auth_logs` for the
+hosted project shows the gap above is real, not theoretical — GoTrue *is*
+sending, but through its own mailer:
+
+| Log evidence | Reading |
+|---|---|
+| `mail.send` with `mail_from: noreply@mail.app.supabase.io`, `mail_type: magic_link` | The code e-mail **is** dispatched and the templates *are* reaching GoTrue — but it leaves as `noreply@mail.app.supabase.io`, which says custom SMTP is not configured and is a no-reply address with no relationship to the brand |
+| `user_recovery_requested` → `429 over_email_send_rate_limit` ("you can only request this after 54 / 32 / 21 seconds") | The mailer's pacing bites within a minute of retries — so `EmailOtpPolicy.resendCooldownSeconds` (60s) is tuned to an *upstream* limit the user is already colliding with |
+| No `/verify` request anywhere in the 24-hour window | No code has been accepted on this project yet; the step-up cannot complete end-to-end until delivery is reliable |
+| `/otp` → `400 email_address_invalid` for `keithabalo04@gmail.com` | **A separate blocker.** GoTrue rejected an ordinary-looking Gmail address as invalid, so that account can never receive a step-up code at all. Nothing here explains why — needs its own investigation. Note the copy it produces: `friendlyAuthError` maps this code to "That doesn't look like a valid email address" (`lib/utils/auth_error_messages.dart:38`), which is misleading for a well-formed address — the user is told to fix their typing when the rejection came from the server |
+| **Sep 17:** a DELIVERED step-up e-mail, to a consumer Gmail (`jaymeshaine21@gmail.com`), `mail_from: noreply@mail.app.supabase.io`, body headed **"Your sign-in link"** with a `Sign in` button and **no 6-digit code anywhere** | **The measured cause of "I never get a code", and it outranks every delivery question.** The live **Magic-link** template is still stock (link-only), so `verifyOtp` has nothing to accept — paste `supabase/templates/magic_link.html` (dashboard → Authentication → Email Templates) FIRST; only then does the SMTP config matter, and only for sender identity, branding and the 2/hour ceiling. It also proves the documented org-only recipient allowlist did not block this address, and that the built-in mailer does dispatch |
+
+**Why the sender has to be GoTrue and not us.** The code is minted by GoTrue
+and stamped into the session as `amr: ["otp"]`, and §3.7's mint gate needs
+exactly that claim before `trust_device()` will issue a device secret. A
+home-grown sender — say, reusing the Gmail SMTP client already inside the Edge
+Functions — would e-mail a code GoTrue never verified, leaving the session at
+`amr: ["password"]`; the mint is then refused (42501), no device can ever hold
+a credential, and every gated table reads empty once enforcement is flipped
+on. So delivery here is a **configuration** problem, not a code problem: no
+Dart or Edge Function change is required to make the code arrive. The
+constraint is on who **mints** the code, not on who relays the message, so
+pointing GoTrue's own SMTP at the app's Gmail satisfies both goals at once —
+Gmail becomes the sender without the mint gate ever seeing a code it did not
+issue.
+
+`supabase/config.toml` documents the same block for reference but keeps it
+**off locally on purpose** — `[local_smtp]` captures dev e-mail in Mailpit and
+dev mode reads the code from there (§10.7). The hosted project ignores that
+file's value anyway; the dashboard is the switch that matters.
+
+Side benefit: every auth e-mail (confirmation, sign-in code, password reset,
+e-mail change) then leaves from the same mailbox as the approval and lockout
+notices, so users see one consistent sender.
 
 ### 5.2 Verified end-to-end (local stack, GoTrue v2.196.0)
 
@@ -705,6 +855,8 @@ written only by the admin-only `set_device_enforcement(boolean)`.
 | State machine | `login()` / `verifySignupEmail` / `verifyDeviceChallenge` / `resend*` / `cancel*` in `lib/providers/auth_provider.dart` |
 | Gates | `_signupVerificationGate` / `_deviceChallengeGate` in `lib/screens/auth_gate.dart` |
 | Device list UI | `lib/screens/shared/manage_login_device_screen.dart` (Account & Security → Manage Login Device) |
+| E-mail LINK return (deep link, §2.4) | `lib/services/deep_link_service.dart` (`authConfirmRedirect`, `isAuthConfirmLink`), `DeepLinkHost._onLink` in `lib/main.dart`, `AuthProvider.completeSignupFromEmailLink` |
+| Android declaration of that redirect | `android/app/src/main/AndroidManifest.xml` (`solvision://auth/confirm`) — iOS needs only the already-registered `solvision` scheme |
 | Reused by | `lib/screens/auth/customer_register_screen.dart`, `lib/screens/auth/seller_application_flow.dart`, `lib/providers/seller_application_controller.dart`, `lib/services/auth_service.dart` |
 
 ---
@@ -726,6 +878,8 @@ written only by the admin-only `set_device_enforcement(boolean)`.
 | `test/models/account_security_overview_test.dart` | Part D parsing (nulls, wrong types, an empty document, device-key fallbacks) and **every diagnosis rule**: the locked-out-new-phone case, the pluralised variant, enforcement-OFF *suppressing* the device findings, a live lockout outranking an unconfirmed address, an expired lockout staying silent, the three-shape timeline, severity ordering, and that no finding ever claims a device was refused |
 | `test/services/account_security_service_test.dart` | Part D calls the RPC with `p_user_id` and trims it, parses the payload, refuses an empty id without a round trip, and maps **42501 / P0002 / network / empty document** to distinct messages — plus the non-obvious one: the fake RPC builder must complete a *real* `Future` rather than throw from `then`, because `PostgrestFilterBuilder` implements `Future` and an error thrown out of `then` bypasses the caller's `onError` and hangs the test |
 | `test/widgets/admin_account_security_screen_test.dart` | Part D on screen: it asks for the account it was opened with, leads with the diagnosis, renders the credential chips, shows the gate state, **does not blame the credential-less device when enforcement is off**, shows the lockout/unconfirmed-address findings, renders the server's own caveats, handles the empty device list, surfaces a 42501 reason with a working Retry, and never leaks a raw error |
+
+| `test/services/deep_link_service_test.dart` | link routing — the confirm link vs the GCash return vs other `solvision://` hosts, so a confirmation can never be routed into the payment flow — and the **cross-artifact contract** behind `solvision://auth/confirm`: the Dart constant against the Android intent-filter, the `emailRedirectTo` on sign-up *and* on the resend (which builds its own link), and the runbook step that allow-lists it in the dashboard |
 
 The contract test is deliberately cross-artifact: neither a Dart type nor a
 SQL type can catch a renamed header or a dropped exemption, and both of those
@@ -781,7 +935,12 @@ watch it fail, restore the file byte-identically):
 2. **The gate must be switched on deliberately.** `enforcement_enabled` is
    `false` in the migration (§3.9). Until someone flips it, Part C is wired up
    but not enforcing — that is the intended staging, not a bug, but it does
-   mean "the migration is applied" ≠ "the step-up is enforced".
+   mean "the migration is applied" ≠ "the step-up is enforced". The client
+   follows the same switch: while it is `false`, `evaluate` probes
+   `device_gate_open()` and mails no codes (§3.1), so **the email step-up is
+   dormant until the flip** — and the first sign-in per device afterwards is
+   challenged once. Turning it on is therefore a UX-visible event, not a
+   no-op, and it needs the mailer to be working first (§5).
 3. **Storage buckets and edge functions are outside this gate.** Storage has
    its own policies (see `20260901000000_lock_down_storage_buckets.sql`) and
    does receive the header, but no bucket policy reads it; edge functions run

@@ -147,7 +147,16 @@ BEGIN
 
   -- Customer in-app notification (fires even when the customer app is
   -- closed — it lands in the notifications table, read on next open).
-  IF p_notify_customer THEN
+  --
+  -- ⚠️ `AND v_customer_id IS NOT NULL`: `orders.customer_id` is NULLABLE, so the
+  -- RECIPIENT has to be checked, not just the caller's intent. `p_notify_customer`
+  -- says "tell the customer"; it cannot say *whom*. Without this guard a single
+  -- customer-less order raises 23502 on a NOT NULL column — and this function is
+  -- called in a LOOP by `expire_overdue_gcash_orders()`, so one such row aborts
+  -- the entire sweep and every order after it keeps its stock reserved and stays
+  -- stuck in `awaiting_payment_confirmation`. See
+  -- docs/AI/NOTIFICATION_RECIPIENT_AUDIT.md.
+  IF p_notify_customer AND v_customer_id IS NOT NULL THEN
     v_short_id := left(p_order_id::text, 8);
     INSERT INTO public.notifications (user_id, order_id, category, title, message)
     VALUES (
@@ -409,16 +418,22 @@ BEGIN
           'Reference ' || v_ref || ' submitted');
 
   -- Seller notification (in-app; realtime pushes the badge live).
+  -- ⚠️ `orders.store_id` is NULLABLE and `seller_notifications.store_id` is NOT
+  -- NULL, so the recipient is checked before the insert: an order with no store
+  -- has no seller to tell, and an unguarded insert would fail the customer's
+  -- proof submission entirely. See docs/AI/NOTIFICATION_RECIPIENT_AUDIT.md.
   v_short_id := left(p_order_id::text, 8);
-  INSERT INTO public.seller_notifications
-    (store_id, type, title, body, reference_id)
-  VALUES (
-    v_store_id, 'new_order',
-    'Payment awaiting confirmation',
-    'Order #' || v_short_id || ' — ₱' || round(v_total)::text ||
-      ' proof submitted. Verify in your GCash app.',
-    p_order_id
-  );
+  IF v_store_id IS NOT NULL THEN
+    INSERT INTO public.seller_notifications
+      (store_id, type, title, body, reference_id)
+    VALUES (
+      v_store_id, 'new_order',
+      'Payment awaiting confirmation',
+      'Order #' || v_short_id || ' — ₱' || round(v_total)::text ||
+        ' proof submitted. Verify in your GCash app.',
+      p_order_id
+    );
+  END IF;
 
   RETURN jsonb_build_object('order_id', p_order_id, 'submitted', true);
 END;
@@ -475,11 +490,18 @@ BEGIN
   VALUES (p_order_id, 'confirmed', auth.uid(), 'Payment confirmed by seller');
 
   -- Customer in-app notification.
+  -- ⚠️ Guarded on the RECIPIENT: `orders.customer_id` is NULLABLE, and this runs
+  -- in the same transaction as the state change above — so a customer-less order
+  -- would roll the seller's confirmation back with a confusing 23502 instead of
+  -- confirming a payment that was really made. See
+  -- docs/AI/NOTIFICATION_RECIPIENT_AUDIT.md.
   v_short_id := left(p_order_id::text, 8);
-  INSERT INTO public.notifications (user_id, order_id, category, title, message)
-  VALUES (v_customer_id, p_order_id, 'processing',
-          'Payment confirmed',
-          'Order #' || v_short_id || ' — payment received. The store will start preparing your order.');
+  IF v_customer_id IS NOT NULL THEN
+    INSERT INTO public.notifications (user_id, order_id, category, title, message)
+    VALUES (v_customer_id, p_order_id, 'processing',
+            'Payment confirmed',
+            'Order #' || v_short_id || ' — payment received. The store will start preparing your order.');
+  END IF;
 
   RETURN jsonb_build_object(
     'order_id', p_order_id,

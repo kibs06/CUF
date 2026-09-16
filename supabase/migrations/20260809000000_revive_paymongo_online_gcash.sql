@@ -443,12 +443,18 @@ BEGIN
           );
 
         -- 4) Notify the customer (idempotent — title-scoped guard).
+        -- ⚠️ `o.customer_id IS NOT NULL` is a RECIPIENT guard, not an idempotency
+        -- one: `orders.customer_id` is NULLABLE while `notifications.user_id` is
+        -- NOT NULL, so one customer-less order would abort this whole set-based
+        -- statement with 23502 — rolling back the intent-expiry and audit work
+        -- above it. See docs/AI/NOTIFICATION_RECIPIENT_AUDIT.md.
         INSERT INTO public.notifications (user_id, order_id, category, title, message)
         SELECT o.customer_id, o.id, 'returns', 'Payment session expired',
                'Order #' || left(o.id::text, 8) || ' — the GCash payment was not completed within the allowed window. No charge was made; you can place a new order anytime.'
         FROM public.orders o
         JOIN public.payment_intents pi ON pi.order_id = o.id
-        WHERE pi.status = 'expired'
+        WHERE o.customer_id IS NOT NULL
+          AND pi.status = 'expired'
           AND o.status = 'cancelled'
           AND o.payment_status = 'failed'
           AND o.cancellation_reason = 'Payment session expired'

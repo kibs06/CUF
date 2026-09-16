@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -69,12 +72,30 @@ void main() {
       );
     });
 
-    test('email_address_invalid', () {
+    test('email_address_invalid does not assume the address is malformed', () {
+      // GoTrue returned this for a well-formed Gmail address on the live
+      // project, so the copy must fit a correct address too — it may only
+      // point at the possibility of a typo.
       const e = AuthException('Malformed email', code: 'email_address_invalid');
-      expect(
-        friendlyAuthError(e),
-        "That doesn't look like a valid email address.",
+      final message = friendlyAuthError(e);
+      expect(message, contains('rejected'));
+      expect(message, contains('typos'));
+      expect(message, isNot(contains("doesn't look like")));
+    });
+
+    test('email_address_not_authorized reads as a delivery problem, not the '
+        'user\'s address', () {
+      const e = AuthException(
+        'Email address not authorized',
+        statusCode: '422',
+        code: 'email_address_not_authorized',
       );
+      final message = friendlyAuthError(e);
+      expect(message, contains("couldn't deliver"));
+      expect(message, contains('support'));
+      // The tempting-but-wrong copy: the user cannot fix a server refusal by
+      // re-typing their own address.
+      expect(message, isNot(contains('check it for typos')));
     });
 
     test('over_email_send_rate_limit', () {
@@ -135,6 +156,76 @@ void main() {
       expect(message, 'Something went wrong. Please try again.');
       expect(message, isNot(contains('boom')));
       expect(message, isNot(contains('file.dart')));
+    });
+
+    test('a transport failure never reads as a rejected password', () {
+      // Measured on the emulator: with the device offline, five taps on
+      // "Log In" locked the account out for 30 minutes. The copy the user
+      // saw blamed their password, which the device never sent.
+      for (final error in <Object>[
+        AuthRetryableFetchException(),
+        SocketException('Failed host lookup: psczvbfoybqhjeqssimw.supabase.co'),
+        TimeoutException('no response', const Duration(seconds: 30)),
+      ]) {
+        final message = friendlyAuthErrorMessage(error);
+        expect(message, authErrorNetwork, reason: '$error');
+        expect(message, contains('connection'));
+        expect(message, isNot(contains("isn't right")));
+        expect(message, isNot(contains('reset your password')));
+      }
+    });
+  });
+
+  group('isCredentialRejection — what may move the lockout counter', () {
+    test('a wrong password (or an unknown account) counts', () {
+      expect(
+        isCredentialRejection(
+          const AuthException('Invalid login credentials',
+              statusCode: '400', code: 'invalid_credentials'),
+        ),
+        isTrue,
+      );
+      expect(
+        isCredentialRejection(
+          const AuthException('User not found', code: 'user_not_found'),
+        ),
+        isTrue,
+      );
+    });
+
+    test('transport failures do not — the password was never judged', () {
+      expect(isCredentialRejection(AuthRetryableFetchException()), isFalse);
+      expect(isCredentialRejection(SocketException('unreachable')), isFalse);
+      expect(
+        isCredentialRejection(
+          TimeoutException('timed out', const Duration(seconds: 8)),
+        ),
+        isFalse,
+      );
+    });
+
+    test('server-side refusals that are not about the password do not count',
+        () {
+      // Rate limits, a mailer refusal or a 5xx are not brute-force evidence;
+      // counting them locks out users who typed nothing wrong.
+      for (final code in <String>[
+        'over_request_rate_limit',
+        'over_email_send_rate_limit',
+        'email_address_invalid',
+        'email_address_not_authorized',
+        'signup_disabled',
+      ]) {
+        expect(
+          isCredentialRejection(AuthException('server said no', code: code)),
+          isFalse,
+          reason: code,
+        );
+      }
+      expect(
+        isCredentialRejection(const AuthException('fetch failed')),
+        isFalse,
+      );
+      expect(isCredentialRejection(StateError('boom')), isFalse);
     });
   });
 }

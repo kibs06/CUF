@@ -59,6 +59,18 @@
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data android:scheme="solvision" android:host="checkout" android:pathPrefix="/gcash"/>
             </intent-filter>
+            <!-- Deep link: return from the sign-up confirmation e-mail
+                 (solvision://auth/confirm). The path/host here must match
+                 DeepLinkService.authConfirmRedirect exactly — a mismatch means
+                 the e-mail button opens a browser instead of the app. Also
+                 allow-listed in the LIVE project (Authentication → URL
+                 Configuration → Redirect URLs). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="solvision" android:host="auth" android:pathPrefix="/confirm"/>
+            </intent-filter>
             <!-- App Links for product shares (Phase B — DISABLED until a
                  custom domain exists). Shared product links open the app
                  directly to ProductDetailScreen.

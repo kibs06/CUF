@@ -1,5 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'deep_link_service.dart';
+
 /// What an email OTP is being used for. The scope is deliberately narrow
 /// (client decision, ANQUI item 16): this is NOT passwordless login.
 enum EmailOtpPurpose {
@@ -126,7 +128,17 @@ class EmailOtpService implements EmailOtpGateway {
     // `resend` (not a second signUp) is the supported "send it again" call
     // for signup confirmations — it works while the account is unconfirmed
     // and is what the resend button uses.
-    await _auth.resend(email: email.trim(), type: OtpType.signup);
+    //
+    // It needs the same redirect as `signUp`: the link embedded in THIS
+    // e-mail is built from this call's `emailRedirectTo`, so leaving it out
+    // would send a resent confirmation back to the site URL — the exact
+    // browser dead end the deep link exists to remove. (`resend` accepts it
+    // for `OtpType.signup` only, which is the only type used here.)
+    await _auth.resend(
+      email: email.trim(),
+      type: OtpType.signup,
+      emailRedirectTo: DeepLinkService.authConfirmRedirect,
+    );
   }
 
   @override

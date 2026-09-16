@@ -10,6 +10,11 @@ class MockSupabaseClient extends Mock implements SupabaseClient {}
 
 class MockSupabaseQueryBuilder extends Mock implements SupabaseQueryBuilder {}
 
+// Sign-in state, mocked the way `cart_service_test.dart` does it.
+class MockGoTrueClient extends Mock implements GoTrueClient {}
+
+class MockUser extends Mock implements User {}
+
 /// A real [PostgrestFilterBuilder] that records its `eq` chain and resolves the
 /// rows it was given — the same technique `order_service_test.dart` uses,
 /// because `PostgrestFilterBuilder` IS a Future and mocktail cannot `thenReturn`
@@ -26,9 +31,36 @@ class RecordingRowsBuilder extends PostgrestFilterBuilder<PostgrestList> {
   final PostgrestList rows;
   final List<(String, Object)> eqCalls = [];
 
+  /// The trail queries order by `created_at DESC` and cap the number of rows,
+  /// and both matter: the ORDER is what makes "first row wins" the right rule in
+  /// `latestGrantByReservation`, and the cap keeps a busy store's history light.
+  /// Recorded rather than executed, like `eq` above.
+  final List<(String, bool)> orderCalls = [];
+  final List<int> limitCalls = [];
+
   @override
   PostgrestFilterBuilder<PostgrestList> eq(String column, Object value) {
     eqCalls.add((column, value));
+    return this;
+  }
+
+  @override
+  PostgrestTransformBuilder<PostgrestList> order(
+    String column, {
+    bool ascending = false,
+    bool nullsFirst = false,
+    String? referencedTable,
+  }) {
+    orderCalls.add((column, ascending));
+    return this;
+  }
+
+  @override
+  PostgrestTransformBuilder<PostgrestList> limit(
+    int count, {
+    String? referencedTable,
+  }) {
+    limitCalls.add(count);
     return this;
   }
 
@@ -79,6 +111,7 @@ Map<String, dynamic> row({
   String? deadline,
   String? image,
   List<Map<String, dynamic>>? images,
+  String? code = '4F7K2Q',
 }) => {
   'id': 'r-1',
   'customer_id': 'u-1',
@@ -93,6 +126,7 @@ Map<String, dynamic> row({
   'fulfilled_at': null,
   'fulfilled_order_id': null,
   'reminder_sent_at': null,
+  'pickup_code': code,
   'products': {
     'name': 'Sole Runner',
     'stores': {'name': 'CUFMAI Store'},
@@ -121,6 +155,21 @@ void main() {
     when(
       () => mockClient.rpc(any(), params: any(named: 'params')),
     ).thenAnswer((_) => FakeRpcBuilder(value: value, error: error));
+  }
+
+  /// Signs the mock client in as [userId], or out when it is null. Used by the
+  /// customer-side reads, whose scoping comes from `auth.uid()` rather than from
+  /// an argument the caller supplies.
+  void signedInAs(String? userId) {
+    final auth = MockGoTrueClient();
+    when(() => mockClient.auth).thenReturn(auth);
+    if (userId == null) {
+      when(() => auth.currentUser).thenReturn(null);
+      return;
+    }
+    final user = MockUser();
+    when(() => user.id).thenReturn(userId);
+    when(() => auth.currentUser).thenReturn(user);
   }
 
   group('request', () {
@@ -206,6 +255,118 @@ void main() {
     });
   });
 
+  group('the counter code', () {
+    test('a typed code is reduced before the server is asked about it', () async {
+      stubRpc(value: 'r-1');
+
+      expect(await service.resolveCode(' 4f 7k-2q '), 'r-1');
+
+      // What the seller typed is not what gets looked up: case and separators
+      // are the app's problem, so the RPC sees exactly the stored form.
+      verify(
+        () => mockClient.rpc('find_pickup_reservation_by_code',
+            params: {'p_code': '4F7K2Q'}),
+      ).called(1);
+    });
+
+    test('a code that matches nothing raises the copy the seller needs', () async {
+      // In practice the RPC raises NOT_FOUND itself (same message, so the copy
+      // mapper already explains it) — this pins the DEFENSIVE branch for a call
+      // that yields no id, because the alternative is an empty string travelling
+      // to the seller as a hold id.
+      stubRpc(value: null);
+
+      await expectLater(
+        service.resolveCode('4F7K2Q'),
+        throwsA(predicate(
+          (Object e) => friendlyPickupReservationError(e)
+              .contains('No pickup hold for your store matches that code'),
+          'a failure the copy mapper already knows how to explain',
+        )),
+      );
+    });
+
+    test('an empty id is treated as no match, not as a hold', () async {
+      stubRpc(value: '');
+
+      await expectLater(service.resolveCode('4F7K2Q'), throwsA(anything));
+    });
+
+    test('collecting by code sends the code and the seller-chosen method',
+        () async {
+      stubRpc(value: 'order-9');
+
+      final orderId =
+          await service.fulfillByCode(' 4f7-k2q ', paymentMethod: 'gcash');
+
+      expect(orderId, 'order-9');
+      // ONE call: the server resolves the code for THIS store and then runs the
+      // ordinary fulfilment, so a resolve followed by a separate fulfil cannot
+      // race the hold out from under the seller.
+      verify(
+        () => mockClient.rpc('fulfill_pickup_reservation_by_code', params: {
+          'p_code': '4F7K2Q',
+          'p_payment_method': 'gcash',
+        }),
+      ).called(1);
+    });
+
+    test('collecting by code defaults to cash and tolerates a null order id',
+        () async {
+      stubRpc(value: null);
+
+      expect(await service.fulfillByCode('4F7K2Q'), isNull);
+      verify(
+        () => mockClient.rpc('fulfill_pickup_reservation_by_code', params: {
+          'p_code': '4F7K2Q',
+          'p_payment_method': 'cash',
+        }),
+      ).called(1);
+    });
+
+    test('normalisation strips case and separators but invents nothing', () {
+      expect(PickupReservation.normalizeCode('4f7-k2q'), '4F7K2Q');
+      expect(PickupReservation.normalizeCode(' 4F7 K2Q '), '4F7K2Q');
+      // The server deliberately does NOT fold look-alikes into each other, and
+      // neither may the app: an O is not a zero, so a mistyped code must never
+      // normalise into somebody else's hold.
+      expect(PickupReservation.normalizeCode('OOPS'), 'OOPS');
+      expect(PickupReservation.normalizeCode('0O1IL'), '0O1IL');
+    });
+
+    test('the alphabet leaves out the characters that get misread', () {
+      // 1/I/l, 0/O and a spoken-around U are the classic counter confusions.
+      for (final ambiguous in ['I', 'L', 'O', 'U', '0', '1']) {
+        expect(PickupReservation.codeAlphabet, isNot(contains(ambiguous)),
+            reason: '$ambiguous reads as another symbol across a counter');
+      }
+      expect(PickupReservation.codeAlphabet.length, 30);
+      expect(PickupReservation.codeLength, 6);
+    });
+
+    test('the label groups a real code and leaves anything else alone', () {
+      PickupReservation withCode(String? code) => PickupReservation(
+            id: 'r',
+            customerId: 'u',
+            storeId: 's',
+            productId: 'p',
+            size: '40',
+            quantity: 1,
+            status: 'active',
+            pickupCode: code,
+          );
+
+      expect(withCode('4F7K2Q').pickupCodeLabel, '4F7-K2Q');
+      // A row with no code renders nothing rather than a placeholder — a made-up
+      // code is worse than no code, because the seller would type it.
+      expect(withCode(null).pickupCodeLabel, isNull);
+      // Grouping assumes the six-character shape, so anything else passes
+      // through as itself instead of being chopped into a plausible pair.
+      expect(withCode('4F7K').pickupCodeLabel, '4F7K');
+      expect(withCode('4F7K2Q9').pickupCodeLabel, '4F7K2Q9');
+    });
+  });
+
   group('the opportunistic sweeps are never fatal', () {
     test('expireStale returns 0 when the RPC fails', () async {
       stubRpc(error: Exception('offline'));
@@ -253,6 +414,9 @@ void main() {
       expect(r.pickupDeadline, isNotNull);
       expect(r.isActive, isTrue);
       expect(r.isTerminal, isFalse);
+      // The counter code comes with the row, grouped for reading aloud.
+      expect(r.pickupCode, '4F7K2Q');
+      expect(r.pickupCodeLabel, '4F7-K2Q');
     });
 
     test('parses without a product join (the seller-side shape)', () {
@@ -675,6 +839,445 @@ void main() {
     });
   });
 
+  group('the store\'s goodwill grant', () {
+    final now = DateTime.utc(2026, 9, 15, 12, 0);
+
+    PickupReservation hold({
+      String status = 'active',
+      int extensionCount = 0,
+      int storeExtensionCount = 0,
+      Duration? left,
+      DateTime? deadline,
+    }) =>
+        PickupReservation(
+          id: 'r-1',
+          customerId: 'u-1',
+          storeId: 's-1',
+          productId: 'p-1',
+          size: '40',
+          quantity: 1,
+          status: status,
+          extensionCount: extensionCount,
+          storeExtensionCount: storeExtensionCount,
+          pickupDeadline: deadline ?? (left == null ? null : now.add(left)),
+        );
+
+    test('the store budget is its own constant, and the ceiling sums both', () {
+      expect(PickupReservation.maxStoreExtensions, 1);
+      expect(PickupReservation.storeExtensionHours, 24);
+      // The absolute ceiling moved out to 72h because a THIRD budget now
+      // exists — and the customer's own asks still stop exactly where they did.
+      expect(PickupReservation.maxWindowHours, 72);
+      expect(PickupReservation.maxHoldHours, 48);
+      expect(PickupReservation.maxWindowHours,
+          PickupReservation.maxHoldHours +
+              PickupReservation.storeExtensionHours);
+    });
+
+    test('a live hold with the store budget unspent can be given more time', () {
+      final r = hold(left: const Duration(hours: 20));
+      expect(r.storeExtensionsLeft, 1);
+      expect(r.canBeGrantedAt(now), isTrue);
+      expect(r.grantActionLabel, 'Give 24h');
+      expect(r.storeExtended, isFalse);
+    });
+
+    test('the store budget is spent after one grant, and the action goes away',
+        () {
+      final r = hold(storeExtensionCount: 1, left: const Duration(hours: 40));
+      expect(r.storeExtensionsLeft, 0);
+      expect(r.canBeGrantedAt(now), isFalse);
+      expect(r.grantActionLabel, isNull);
+    });
+
+    test('the two budgets are separate: one spent does not spend the other', () {
+      // A store being generous must not consume the customer's allowance, and a
+      // customer using theirs must not stop a store from being generous.
+      final customerUsed =
+          hold(extensionCount: 1, left: const Duration(hours: 44));
+      expect(customerUsed.canExtendAt(now), isFalse);
+      expect(customerUsed.canBeGrantedAt(now), isTrue);
+
+      final storeUsed = hold(storeExtensionCount: 1, left: const Duration(hours: 40));
+      expect(storeUsed.canBeGrantedAt(now), isFalse);
+      expect(storeUsed.canExtendAt(now), isTrue);
+    });
+
+    test('a lapsed or resolved hold is never offered to the store', () {
+      // Past the deadline the units may be released at any moment, so there is
+      // no stock to promise more time on; a resolved hold is already a sale (or
+      // already back on the shelf). Same gates the RPC enforces, so the seller
+      // is never shown an action the server will refuse.
+      expect(hold(left: const Duration(hours: -1)).canBeGrantedAt(now), isFalse);
+      expect(
+        hold(status: 'fulfilled', left: const Duration(hours: -24))
+            .canBeGrantedAt(now),
+        isFalse,
+      );
+      // A malformed row with no deadline has no "before it expires" to judge.
+      expect(hold(deadline: null).canBeGrantedAt(now), isFalse);
+    });
+
+    test('an unknown store extension count is treated as none used', () {
+      // Guessing "already extended" would hide a legitimate action; guessing the
+      // other way only offers one the server refuses with a reason.
+      expect(PickupReservation.fromJson({'id': 'r'}).storeExtensionCount, 0);
+      expect(
+        PickupReservation.fromJson(
+            {'id': 'r', 'store_extension_count': 1}).storeExtensionCount,
+        1,
+      );
+    });
+
+    test('the note tells a store grant apart from the customer\'s own ask', () {
+      expect(hold(left: const Duration(hours: 20)).extensionNote,
+          contains('Extend once for 24h'));
+
+      final granted = hold(storeExtensionCount: 1, left: const Duration(hours: 40));
+      expect(granted.extensionNote, contains('goodwill'));
+
+      // Both budgets spent: the honest answer to "how long can this run?" is now
+      // the ABSOLUTE ceiling, and the customer is told both sides moved it.
+      final both = hold(
+        extensionCount: 1,
+        storeExtensionCount: 1,
+        left: const Duration(hours: 60),
+      );
+      expect(both.extensionNote, contains('you and by the store'));
+      expect(both.extensionNote, contains('72h'));
+      // ...and the note never claims the store's favour as something the
+      // customer is entitled to.
+      expect(both.extensionNote, isNot(contains('guarantee')));
+    });
+
+    test('grantExtension() calls the RPC by name and sends the reason',
+        () async {
+      stubRpc(value: '2026-09-17T10:00:00Z');
+
+      final deadline = await service.grantExtension(
+        reservationId: 'r-1',
+        reason: 'Customer is stuck in traffic',
+      );
+
+      verify(() => mockClient.rpc(
+            'grant_pickup_extension',
+            params: {
+              'p_reservation_id': 'r-1',
+              'p_reason': 'Customer is stuck in traffic',
+            },
+          )).called(1);
+      expect(deadline, isNotNull);
+      expect(deadline!.toUtc().hour, 10);
+    });
+
+    test('grantExtension() tolerates a response with no deadline in it',
+        () async {
+      stubRpc(value: null);
+      expect(
+        await service.grantExtension(reservationId: 'r-1', reason: 'running late'),
+        isNull,
+      );
+    });
+
+    test('the two extension paths are different RPCs, not one toggle', () async {
+      // "The customer asked" and "we chose to give them more time" must never
+      // look alike in the data: the customer path records no reason and spends
+      // the customer budget; the store path demands a reason and spends the
+      // store's own. One RPC serving both would make that distinction a
+      // parameter — and therefore forgettable.
+      stubRpc(value: '2026-09-17T10:00:00Z');
+      await service.extend('r-1');
+      await service.grantExtension(reservationId: 'r-1', reason: 'running late');
+
+      verify(() => mockClient.rpc('extend_pickup_reservation',
+          params: {'p_reservation_id': 'r-1'})).called(1);
+      verify(() => mockClient.rpc('grant_pickup_extension',
+          params: {'p_reservation_id': 'r-1', 'p_reason': 'running late'})).called(1);
+    });
+  });
+
+  group('the grant trail', () {
+    late MockSupabaseQueryBuilder query;
+
+    /// The trail table is read with a select/eq/order/limit chain, so the same
+    /// recording builder as the stats query is used — with `order` and `limit`
+    /// recorded too, since the ORDER is what makes the latest grant the one
+    /// that explains a moved deadline.
+    RecordingRowsBuilder stubTrail(List<Map<String, dynamic>> rows) {
+      query = MockSupabaseQueryBuilder();
+      final filter = RecordingRowsBuilder(rows);
+      when(() => mockClient.from('pickup_reservation_extension_grants'))
+          .thenAnswer((_) => query);
+      when(() => query.select(any())).thenAnswer((_) => filter);
+      return filter;
+    }
+
+    Map<String, dynamic> grantRow({
+      String id = 'g-1',
+      String reservationId = 'r-1',
+      String reason = 'Customer is stuck in traffic',
+      int hours = 24,
+    }) => {
+          'id': id,
+          'reservation_id': reservationId,
+          'customer_id': 'u-1',
+          'store_id': 's-1',
+          'granted_by': 'owner-1',
+          'previous_deadline': '2026-09-16T10:00:00Z',
+          'new_deadline': '2026-09-17T10:00:00Z',
+          'hours_granted': hours,
+          'reason': reason,
+          'created_at': '2026-09-15T09:00:00Z',
+        };
+
+    test('the store reads the trail for ITS store, newest first', () async {
+      final filter = stubTrail([grantRow()]);
+
+      final grants = await service.fetchStoreGrants('s-1');
+
+      expect(filter.eqCalls, [('store_id', 's-1')]);
+      // DESC matters: `latestGrantByReservation` keeps the FIRST row it sees for
+      // a reservation, so an ascending query would print the oldest reason as
+      // the explanation for the newest deadline.
+      expect(filter.orderCalls, [('created_at', false)]);
+      expect(filter.limitCalls, [100]);
+      expect(grants.single.reason, 'Customer is stuck in traffic');
+      expect(grants.single.hoursGranted, 24);
+      expect(grants.single.grantedBy, 'owner-1');
+    });
+
+    test('the customer reads the trail folded to THEIR user id', () async {
+      // The one copy-paste that would leak another customer's history, so it is
+      // pinned: the filter is the signed-in uid, not a caller-supplied id.
+      final filter = stubTrail([grantRow()]);
+      signedInAs('u-7');
+
+      await service.fetchMyGrants(limit: 5);
+
+      expect(filter.eqCalls, [('customer_id', 'u-7')]);
+      expect(filter.limitCalls, [5]);
+    });
+
+    test('a signed-out customer is sent no query at all', () async {
+      signedInAs(null);
+
+      expect(await service.fetchMyGrants(), isEmpty);
+      verifyNever(() => mockClient.from('pickup_reservation_extension_grants'));
+    });
+
+    test('the customer\'s trail also asks for the hold it explains', () async {
+      stubTrail([grantRow()]);
+      signedInAs('u-7');
+
+      await service.fetchMyGrants();
+
+      // The trail's own columns plus the embed. The embed is what makes a grant
+      // readable in the history LIST — a row whose hold is no longer on the
+      // customer's screen still needs a product, a size and a store to mean
+      // anything. The columns are spelled out so a rename cannot quietly feed
+      // the history empty names.
+      verify(
+        () => query.select(
+            'id, reservation_id, customer_id, store_id, granted_by, '
+            'previous_deadline, new_deadline, hours_granted, reason, '
+            'created_at, '
+            'pickup_reservations(size, products(name, stores(name)))'),
+      ).called(1);
+    });
+
+    test('the STORE\'s trail stays a single-table read', () async {
+      stubTrail([grantRow()]);
+
+      await service.fetchStoreGrants('s-1');
+
+      // No embed here on purpose: the seller renders these beside holds it
+      // already has, so the join would be work the screen never reads. Pinned so
+      // "make the two queries match" cannot quietly add it.
+      verify(
+        () => query.select('id, reservation_id, customer_id, store_id, '
+            'granted_by, previous_deadline, new_deadline, hours_granted, '
+            'reason, created_at'),
+      ).called(1);
+    });
+
+    test('the embedded names land on the model', () async {
+      stubTrail([
+        {
+          ...grantRow(),
+          'pickup_reservations': {
+            'size': '42',
+            'products': {
+              'name': 'Sole Runner',
+              'stores': {'name': 'CUFMAI Store'},
+            },
+          },
+        },
+      ]);
+      signedInAs('u-1');
+
+      final grant = (await service.fetchMyGrants()).single;
+
+      expect(grant.storeName, 'CUFMAI Store');
+      expect(grant.productName, 'Sole Runner');
+      expect(grant.size, '42');
+      // The trail's own facts are untouched by the embed.
+      expect(grant.reason, 'Customer is stuck in traffic');
+      expect(grant.hoursGranted, 24);
+    });
+
+    test('a flat row parses with no names rather than throwing', () async {
+      // The same model is built from `fetchStoreGrants`' single-table select, so
+      // the absent embed has to read as "no names" — a nested cast here would
+      // throw inside the list mapping and take the whole trail down with it.
+      stubTrail([grantRow()]);
+      signedInAs('u-1');
+
+      final grant = (await service.fetchMyGrants()).single;
+
+      expect(grant.storeName, '');
+      expect(grant.productName, '');
+      expect(grant.size, '');
+    });
+
+    test('a null to-one embed is read as absent, not as a crash', () async {
+      // PostgREST returns `null` for a to-one join that matched nothing — which
+      // happens when the hold is readable by RLS but the product join is not.
+      stubTrail([
+        {
+          ...grantRow(),
+          'pickup_reservations': {'size': '42', 'products': null},
+        },
+      ]);
+      signedInAs('u-1');
+
+      final grant = (await service.fetchMyGrants()).single;
+
+      expect(grant.size, '42');
+      expect(grant.productName, '');
+      expect(grant.storeName, '');
+    });
+  });
+
+  group('the goodwill summary', () {
+    PickupExtensionGrant grant({
+      String id = 'g',
+      String storeId = 's-1',
+      int hours = 24,
+    }) =>
+        PickupExtensionGrant(
+          id: id,
+          reservationId: 'r-$id',
+          customerId: 'u-1',
+          storeId: storeId,
+          hoursGranted: hours,
+          reason: 'x',
+        );
+
+    test('counts the favours, the hours and the stores', () {
+      final summary = PickupGoodwillSummary.of([
+        grant(id: 'a', storeId: 's-1'),
+        grant(id: 'b', storeId: 's-2'),
+        grant(id: 'c', storeId: 's-1'),
+      ]);
+
+      expect(summary.grants, 3);
+      expect(summary.hours, 72);
+      // Two stores, not three grants: one store being kind twice is one store.
+      expect(summary.stores, 2);
+      expect(summary.isEmpty, isFalse);
+    });
+
+    test('an empty trail is an empty summary, not a stray zero-hour claim', () {
+      final summary = PickupGoodwillSummary.of(const []);
+
+      expect(summary.grants, 0);
+      expect(summary.hours, 0);
+      expect(summary.stores, 0);
+      expect(summary.isEmpty, isTrue);
+    });
+
+    test('a row with no store id does not invent a store', () {
+      // Defensive: the column is NOT NULL, so this is a shape the server cannot
+      // produce — but a count built from a join is exactly where an empty id
+      // would turn into a phantom store in the header.
+      final summary = PickupGoodwillSummary.of([grant(storeId: '')]);
+
+      expect(summary.stores, 0);
+      expect(summary.grants, 1);
+    });
+
+    test('the newest grant per reservation is the one that explains the date',
+        () {
+      // The query guarantees newest-first, so "first row wins" is the rule.
+      final mapped = latestGrantByReservation([
+        PickupExtensionGrant(
+          id: 'g-2',
+          reservationId: 'r-1',
+          customerId: 'u-1',
+          storeId: 's-1',
+          reason: 'newest',
+        ),
+        PickupExtensionGrant(
+          id: 'g-1',
+          reservationId: 'r-1',
+          customerId: 'u-1',
+          storeId: 's-1',
+          reason: 'older',
+        ),
+        PickupExtensionGrant(
+          id: 'g-3',
+          reservationId: 'r-2',
+          customerId: 'u-1',
+          storeId: 's-1',
+          reason: 'other hold',
+        ),
+      ]);
+
+      expect(mapped['r-1']!.reason, 'newest');
+      expect(mapped['r-2']!.reason, 'other hold');
+      expect(mapped.length, 2);
+    });
+
+    test('a trail that arrives oldest-first is a data problem, not a silent one',
+        () {
+      // Nothing can detect the server's ordering from here, so this pins what the
+      // helper DOES do — and the store query test above pins the DESC that makes
+      // it correct.
+      final mapped = latestGrantByReservation([
+        PickupExtensionGrant(
+          id: 'g-1',
+          reservationId: 'r-1',
+          customerId: 'u-1',
+          storeId: 's-1',
+          reason: 'older',
+        ),
+        PickupExtensionGrant(
+          id: 'g-2',
+          reservationId: 'r-1',
+          customerId: 'u-1',
+          storeId: 's-1',
+          reason: 'newest',
+        ),
+      ]);
+      expect(mapped['r-1']!.reason, 'older');
+    });
+
+    test('an empty trail leaves every hold without an explanation', () {
+      expect(latestGrantByReservation(const []), isEmpty);
+    });
+
+    test('the deadline label is the shape the server writes in notifications',
+        () {
+      // The server writes 'Mon DD, HH24:MI'; the seller's confirmation and the
+      // customer's notification must not disagree about the same deadline.
+      final label = formatPickupDeadline(DateTime(2026, 9, 16, 17, 5));
+      expect(label, 'Sep 16, 17:05');
+      // Zero-padded so a column of deadline labels lines up, and LOCAL so it
+      // matches the clock the seller is looking at.
+      expect(formatPickupDeadline(DateTime(2026, 1, 2, 9, 0)), 'Jan 02, 09:00');
+    });
+  });
+
   group('friendlyPickupReservationError', () {
     String mapped(String message) =>
         friendlyPickupReservationError(
@@ -721,10 +1324,38 @@ void main() {
     });
 
     test('a spent extension cap explains the cap, not just "no"', () {
-      final copy = mapped('EXTENSION_LIMIT_REACHED (1) — this hold has already been extended');
+      final copy = mapped(
+          'EXTENSION_LIMIT_REACHED (1) — this hold has already been extended');
       expect(copy, contains('already been extended'));
+      // The customer's OWN ceiling (48h) — never the absolute 72h, which only a
+      // store's goodwill can reach, and which the customer must not read as
+      // something they are owed. (The store's budget is a favour.)
       expect(copy, contains('48 hours'));
-      expect(copy, contains('Reserve again'));
+      expect(copy, isNot(contains('72')));
+      // ...but the refusal still points somewhere useful.
+      expect(copy, contains('store can still add time'));
+    });
+
+    test('the store\'s refusal is never read as the customer\'s cap', () {
+      // `STORE_EXTENSION_LIMIT_REACHED` CONTAINS `EXTENSION_LIMIT_REACHED`, so
+      // the store's branch has to be tested first. If the order flips, a seller
+      // who has already been generous is told about THEIR customer's allowance
+      // — the wrong person, about the wrong budget.
+      final copy = mapped(
+          'STORE_EXTENSION_LIMIT_REACHED (1) — this hold already had a goodwill '
+          'extension');
+      expect(copy, contains('goodwill extension'));
+      expect(copy, isNot(contains('customer extensions stop at')));
+      expect(copy, contains('reserve again'));
+    });
+
+    test('a reason too short to be useful is refused with what to do', () {
+      final copy = mapped('INVALID_REASON — a goodwill extension needs a short '
+          'reason (3-280 characters)');
+      expect(copy, contains('3-280'));
+      // The point of the reason is the paper trail, so the copy says so.
+      expect(copy, contains('recorded'));
+      expect(copy, isNot(contains('INVALID_REASON')));
     });
 
     test('a lapsed hold is not blamed on the customer', () {
@@ -747,6 +1378,22 @@ void main() {
 
     test('the payment method is validated with the seller in mind', () {
       expect(mapped('INVALID_PAYMENT_METHOD'), contains('cash or GCash'));
+    });
+
+    test('a code of the wrong length tells the seller the shape', () {
+      final copy = mapped(
+          'NOT_FOUND — no pickup hold matches that code (a code is 6 characters)');
+      expect(copy, contains('6 characters'));
+      // Not the generic "that reservation no longer exists", which would send a
+      // seller hunting for a hold that was never there.
+      expect(copy, isNot(contains('no longer exists')));
+    });
+
+    test('a code matching nothing is not reported as a deleted hold', () {
+      final copy =
+          mapped('NOT_FOUND — no pickup hold for your store matches that code');
+      expect(copy, contains('No pickup hold for your store'));
+      expect(copy, isNot(contains('no longer exists')));
     });
 
     test('the remaining codes each get their own copy', () {

@@ -266,11 +266,18 @@ BEGIN
   VALUES (p_order_id, auth.uid(), v_ref, v_total, 'confirmed', 'queue');
 
   -- Customer in-app notification.
+  -- ⚠️ Guarded on the RECIPIENT: `orders.customer_id` is NULLABLE, and this runs
+  -- in the same transaction as the state change and the T5 audit row, so a
+  -- customer-less order would roll all of it back with a confusing 23502 instead
+  -- of confirming a payment that was really made.
+  -- See docs/AI/NOTIFICATION_RECIPIENT_AUDIT.md.
   v_short_id := left(p_order_id::text, 8);
-  INSERT INTO public.notifications (user_id, order_id, category, title, message)
-  VALUES (v_customer_id, p_order_id, 'processing',
-          'Payment confirmed',
-          'Order #' || v_short_id || ' — payment received. The store will start preparing your order.');
+  IF v_customer_id IS NOT NULL THEN
+    INSERT INTO public.notifications (user_id, order_id, category, title, message)
+    VALUES (v_customer_id, p_order_id, 'processing',
+            'Payment confirmed',
+            'Order #' || v_short_id || ' — payment received. The store will start preparing your order.');
+  END IF;
 
   RETURN jsonb_build_object(
     'order_id', p_order_id,
