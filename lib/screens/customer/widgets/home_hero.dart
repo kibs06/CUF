@@ -728,6 +728,10 @@ class _HomeHeroState extends State<HomeHero> {
 // ═══════════════════════════════════════════════════════════════
 
 /// Circular icon button with optional unread-count dot or count badge.
+///
+/// Used for the hero's cart bag: the glyph carries [AppConstants.cartIcon] so
+/// the basket reads the same here as it does in every AppBar (and in the
+/// sticky search bar's [CartIconButton] on this very screen).
 class _IconBadge extends StatelessWidget {
   const _IconBadge({
     required this.icon,
@@ -758,7 +762,7 @@ class _IconBadge extends StatelessWidget {
                 color: Colors.white.withValues(alpha: 0.18),
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, size: 18, color: Colors.white),
+              child: Icon(icon, size: 18, color: AppConstants.cartIcon),
             ),
             if (unreadCount > 0 && useAccentBadge)
               Positioned(

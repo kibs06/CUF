@@ -17,8 +17,9 @@ class CartIconButton extends StatefulWidget {
   /// Optional GlobalKey for position detection (fly-to-cart target).
   final GlobalKey? iconKey;
 
-  /// Overrides the bag icon color (defaults to [AppConstants.secondary]).
-  /// Useful on dark/immersive surfaces such as the AR fitting overlay.
+  /// Overrides the bag icon color (defaults to [AppConstants.cartIcon], the
+  /// basket orange). Useful on uniformly dark/immersive surfaces such as the
+  /// AR fitting overlay, which passes a light colour.
   final Color? iconColor;
 
   const CartIconButton({super.key, this.iconKey, this.iconColor});
@@ -103,7 +104,7 @@ class _CartIconButtonState extends State<CartIconButton>
                       ? Icons.shopping_bag
                       : Icons.shopping_bag_outlined,
                   key: ValueKey<bool>(hasItems),
-                  color: widget.iconColor ?? AppConstants.secondary,
+                  color: widget.iconColor ?? AppConstants.cartIcon,
                   size: 26,
                 ),
               ),

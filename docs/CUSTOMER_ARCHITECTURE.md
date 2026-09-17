@@ -381,6 +381,11 @@ Used by Home, MyOrders, Inbox, and ChatView to auto-refresh on reconnect.
 - Bounce animation when cart count increases
 - Navigates to CartScreen on tap
 - `iconKey` param for fly-to-cart overlay positioning
+- Bag glyph defaults to `AppConstants.cartIcon` (basket orange, `0xFFFC5E03`)
+  on every bar — Home/browse, Store, Collection, the product detail and the
+  store hero — because it has to read over both light pages and dark
+  photographic headers. Pass `iconColor` to override it on uniformly dark
+  surfaces (the AR fitting overlay passes a light cream).
 
 ### SoleBottomNav (`lib/widgets/sole_bottom_nav.dart`)
 
