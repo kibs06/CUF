@@ -54,6 +54,14 @@ class AppConstants {
   // Accent – Celadon Teal (AR mode, CTAs, highlights)
   static const Color accent = Color(0xFF4ECDC4);
 
+  // Cart – Basket Orange (the shopping-bag glyph in every app bar)
+  //
+  // A warm orange rather than an ink tone: the bag is the one glyph that
+  // floats over BOTH the light page surfaces and dark photographic headers
+  // (the product-detail sliver, the home hero, the store hero). The old
+  // near-black [secondary] default vanished on those photos.
+  static const Color cartIcon = Color(0xFFFC5E03);
+
   // Surface Light – Page White
   //
   // The app-wide light surface (page backgrounds, sheets, cards, dialogs).
@@ -365,6 +373,28 @@ class AppConstants {
   static bool needsFootProfile(dynamic source) {
     final s = source?.toString();
     return s == null || s.isEmpty || s == footProfileSkipped;
+  }
+
+  /// Whether the customer actually has a foot size on file — the signal the
+  /// home reminder banner keys off ("only show it when they haven't set a
+  /// size"). TWO independent markers count as set:
+  ///
+  ///   • the onboarding source (`ar_scan` / `manual`), and
+  ///   • a stored EU size (`profiles.foot_size_ph`).
+  ///
+  /// `AuthProvider.saveFootProfile` writes both together, but its snapshot
+  /// write is best-effort — a failed write (offline) or a size stored by a
+  /// build that predates the source column can leave only ONE of them
+  /// behind. Either signal still means the customer has a size, so the
+  /// banner must stay out of the way rather than nag them again.
+  static bool hasFootSize(Map<String, dynamic>? profile) {
+    if (profile == null) return false;
+    if (!needsFootProfile(profile['foot_profile_source'])) return true;
+
+    final size = profile['foot_size_ph'];
+    if (size == null) return false;
+    if (size is num) return true;
+    return size.toString().trim().isNotEmpty;
   }
 
   // --- PRIVATE VERIFICATION STORAGE ---

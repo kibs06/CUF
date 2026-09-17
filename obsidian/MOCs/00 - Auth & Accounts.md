@@ -50,7 +50,7 @@ AccountEntryScreen (create mode) ──"Shop as customer?"──▶ CustomerRegi
 | Service | `lib/services/profile_service.dart` | Profile CRUD, avatar upload, account management |
 | UI | `lib/screens/auth/customer_register_screen.dart` | Customer signup: name, email, **birthday (13+, required)**, gender (optional, self-describe), phone, password + strength meter, terms checkbox |
 | UI | `lib/screens/auth/foot_profile_onboarding_screen.dart` | Post-signup foot-profile step — AR scan / manual / skip (never blocks) |
-| Widget | `lib/widgets/customer_foot_profile_banner.dart` | Dismissible home-screen reminder when `foot_profile_source` is NULL/'skipped' |
+| Widget | `lib/widgets/customer_foot_profile_banner.dart` | Dismissible home-screen reminder, shown ONLY when no size is on file (`foot_profile_source` NULL/'skipped' AND `foot_size_ph` NULL) |
 | UI | `lib/screens/auth/seller_application_flow.dart` | 4-step seller application + animated submission checklist |
 | State | `lib/providers/seller_application_controller.dart` | Scoped `ChangeNotifier` holding the seller form + doc uploads across steps |
 | UI | `lib/screens/auth/pending_approval_screen.dart` | Post-apply locked screen |

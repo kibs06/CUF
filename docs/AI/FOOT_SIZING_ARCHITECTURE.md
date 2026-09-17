@@ -41,7 +41,7 @@ User taps "Get Your Foot Size" (Settings → Account)
 | `FootCaptureScreen` | `lib/screens/customer/foot_capture_screen.dart` | Paper-based camera capture (alternative flow) |
 | `FootProcessingScreen` | `lib/screens/customer/foot_processing_screen.dart` | Processes paper-captured image (CV pipeline) |
 | `FootResultsScreen` | `lib/screens/customer/foot_results_screen.dart` | Displays results, size adjustment, save to profile |
-| `CustomerFootProfileBanner` | `lib/widgets/customer_foot_profile_banner.dart` | Reminder banner when no foot profile exists |
+| `CustomerFootProfileBanner` | `lib/widgets/customer_foot_profile_banner.dart` | Reminder banner, shown only when no size is on file (source NULL/'skipped' and `foot_size_ph` NULL) |
 
 ---
 

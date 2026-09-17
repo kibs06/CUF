@@ -195,12 +195,16 @@ deliberately unequal in visual weight:
 ### Reminder banner (skipped / never-touched profiles)
 
 `lib/widgets/customer_foot_profile_banner.dart` — a quiet, dismissible card
-on the HOME screen (one placement, never a pop-up) shown when
-`profiles.foot_profile_source` is `NULL` (pre-feature accounts) or
-`'skipped'` (`AppConstants.needsFootProfile`). Dismiss hides it for the
-SESSION only (in-memory, per account) — "skip" never means "never ask again
-silently". The banner's **Complete** button reopens the same AR scan flow;
-it disappears for good once the profile snapshot is written.
+on the HOME screen (one placement, never a pop-up) shown only when the
+customer has NO size on file: `profiles.foot_profile_source` is `NULL`
+(pre-feature accounts) or `'skipped'` **and** `profiles.foot_size_ph` is
+NULL (`AppConstants.hasFootSize`, which wraps `needsFootProfile`). Either
+signal counts as "set" — the snapshot write is best-effort, so a failed
+source write must not bring the nag back for someone who has a size.
+Dismiss hides it for the SESSION only (in-memory, per account) — "skip"
+never means "never ask again silently". The banner's **Complete** button
+reopens the same AR scan flow; it disappears for good once a size is on
+file (source or `foot_size_ph`).
 
 ---
 

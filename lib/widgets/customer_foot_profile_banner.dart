@@ -11,9 +11,10 @@ import '../screens/customer/foot_instructions_screen.dart';
 /// (in-memory, keyed per account), so "skip" never means "never ask again
 /// silently": the invite comes back on the next session.
 ///
-/// The banner disappears for good once the profile snapshot is written
-/// (`foot_profile_source` = 'ar_scan'/'manual') — the home screen watches
-/// [AuthProvider], which refreshes its profile on every save.
+/// The banner disappears for good once the customer has a foot size on file —
+/// either the profile snapshot (`foot_profile_source` = 'ar_scan'/'manual')
+/// or a stored EU size (`foot_size_ph`), whichever landed first. The home
+/// screen watches [AuthProvider], which refreshes its profile on every save.
 class CustomerFootProfileBanner extends StatefulWidget {
   const CustomerFootProfileBanner({super.key});
 
@@ -31,15 +32,16 @@ class _CustomerFootProfileBannerState extends State<CustomerFootProfileBanner> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final profileId = auth.profile?['id']?.toString() ?? '';
-    final source = auth.profile?['foot_profile_source'];
 
-    // Nothing to remind (completed), wrong account (no profile yet), or
-    // already dismissed this session → stay out of the way.
+    // Wrong account (no profile yet) or already dismissed this session →
+    // stay out of the way.
     if (profileId.isEmpty) return const SizedBox.shrink();
     if (_dismissedForSession.contains(profileId)) {
       return const SizedBox.shrink();
     }
-    if (!AppConstants.needsFootProfile(source)) {
+    // Already has a size (scanned, picked manually, or a size snapshot that
+    // survived a failed source write) → nothing to remind them about.
+    if (AppConstants.hasFootSize(auth.profile)) {
       return const SizedBox.shrink();
     }
 
