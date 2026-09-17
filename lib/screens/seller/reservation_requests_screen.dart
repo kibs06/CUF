@@ -572,6 +572,9 @@ class _SellerReservationTile extends StatelessWidget {
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
+                      // The colour leads: it is the variant the customer is
+                      // asking for, and what the seller has to pull.
+                      '${s['color'] == null ? '' : '${s['color']} · '}'
                       'Size ${s['size']}: ${s['quantity']}',
                       style: AppConstants.bodyStyle(
                         fontSize: 11,

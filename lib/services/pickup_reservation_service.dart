@@ -81,6 +81,15 @@ class PickupReservation {
   final String storeId;
   final String productId;
   final String size;
+
+  /// The variant colour the customer is holding, as the seller named it (null
+  /// on colourless products and on rows created before the column existed).
+  ///
+  /// Informational only: the hold is keyed on `(product_id, size)` — see
+  /// `20260917120000_add_pickup_reservation_color.sql` — because inventory
+  /// itself is colour-blind. It exists so the counter knows WHICH pair to pull
+  /// off the shelf.
+  final String? color;
   final int quantity;
   final int reservedStock;
 
@@ -118,6 +127,7 @@ class PickupReservation {
     required this.storeId,
     required this.productId,
     required this.size,
+    this.color,
     required this.quantity,
     this.reservedStock = 0,
     required this.status,
@@ -299,6 +309,7 @@ class PickupReservation {
       storeId: json['store_id']?.toString() ?? '',
       productId: json['product_id']?.toString() ?? '',
       size: json['size']?.toString() ?? '',
+      color: _parseColor(json['color']),
       quantity: (json['quantity'] as num?)?.toInt() ?? 0,
       reservedStock: (json['reserved_stock'] as num?)?.toInt() ?? 0,
       status: json['status']?.toString() ?? 'active',
@@ -325,6 +336,14 @@ class PickupReservation {
 /// parsers is how one of them ends up wrong.
 DateTime? _parseDate(dynamic v) =>
     v == null ? null : DateTime.tryParse(v.toString())?.toLocal();
+
+/// A variant colour name from the row: trimmed, and null when the column is
+/// absent (a select that predates `color`), null, or blank — so the UI hides
+/// the line instead of rendering an empty "".
+String? _parseColor(dynamic v) {
+  final value = v?.toString().trim() ?? '';
+  return value.isEmpty ? null : value;
+}
 
 /// One row of the goodwill trail (`pickup_reservation_extension_grants`): the
 /// store gave a hold more time, and here is exactly what was given and why.
@@ -633,13 +652,36 @@ class PickupReservationService {
     required String productId,
     required String size,
     required int quantity,
+    String? color,
   }) async {
-    final id = await _client.rpc('request_pickup_reservation', params: {
+    final params = <String, dynamic>{
       'p_product_id': productId,
       'p_size': size,
       'p_quantity': quantity,
-    });
-    return id.toString();
+    };
+    final hasColor = color != null && color.isNotEmpty;
+    if (hasColor) params['p_color'] = color;
+
+    try {
+      final id = await _client.rpc('request_pickup_reservation', params: params);
+      return id.toString();
+    } catch (e) {
+      // `p_color` arrives with 20260917120000_add_pickup_reservation_color.sql.
+      // On a database that has not had it applied yet, the call fails with
+      // "function not found" — and the hold itself must not fail over a
+      // label, so retry without it. The colour is informational; the hold is
+      // keyed on (product_id, size) either way.
+      if (!hasColor) rethrow;
+      debugPrint(
+        '[PickupReservationService] p_color rejected ($e) — retrying without it',
+      );
+      final id = await _client.rpc('request_pickup_reservation', params: {
+        'p_product_id': productId,
+        'p_size': size,
+        'p_quantity': quantity,
+      });
+      return id.toString();
+    }
   }
 
   /// Customer (their own) or the store owner: release the hold early.

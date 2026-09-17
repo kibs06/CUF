@@ -178,9 +178,18 @@ since any later call finishes the job — the sweep is idempotent.
 - `lib/screens/customer/widgets/bulk_reservation_sheet.dart` — bottom sheet
   opened from the product detail screen's *"Buying to resell? Request a bulk
   hold"* link (below the Quantity stepper; only when total stock > 0).
-  Quantity stepper capped at live stock, auto-generated size breakdown
-  (largest-stock-first split of the requested quantity), estimated value,
-  optional note. Discloses the 20% non-refundable deposit up front.
+  A product summary row (thumbnail, name, colour, price), an optional colour
+  picker, then ONE row per size with its own ± stepper — the customer states
+  exactly what they want and the request carries exactly that. Layout mirrors
+  the pickup sheet (`pickup_reservation_sheet.dart`) and both share the pieces
+  in `reservation_sheet_parts.dart`.
+  **Replaced an earlier design** that took a single quantity and auto-split it
+  largest-stock-first across sizes: the seller could not tell that guess apart
+  from a real request, and the deposit was computed on the total either way.
+  `requested_sizes` is JSONB, so each entry now reads
+  `{size, quantity, color?}` — no schema change — and the detail screen passes
+  `_buildStockByColor()` (`{colour: {size: stock}}`, `''` for colourless
+  products) so the sheet can name the variant the hold is for.
 - `lib/screens/customer/bulk_deposit_pay_screen.dart` — deposit payment,
   reusing the direct-GCash payment UX (static QR, exact-amount card, 24h
   countdown, reference + screenshot proof form, mandatory NON-REFUNDABLE

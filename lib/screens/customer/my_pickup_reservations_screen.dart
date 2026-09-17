@@ -492,6 +492,9 @@ class _PickupTile extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
+                      // The colour they chose, echoed back — null on
+                      // colourless products, where the line starts at "Size".
+                      '${r.color == null ? '' : '${r.color} · '}'
                       'Size ${r.size} · ${r.quantity} '
                       '${r.quantity == 1 ? 'pair' : 'pairs'}'
                       '${r.storeName.isNotEmpty ? ' · ${r.storeName}' : ''}',

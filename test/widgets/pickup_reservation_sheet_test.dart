@@ -33,6 +33,10 @@ void main() {
     WidgetTester tester, {
     required Map<String, int> sizes,
     String? initialSize,
+    // Multi-colour products pass their whole {colour: {size: stock}} map
+    // instead; `sizes` then only feeds the colourless case.
+    Map<String, Map<String, int>>? stockByColor,
+    String? initialColor,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -42,7 +46,8 @@ void main() {
               onPressed: () => showPickupReservationSheet(
                 context,
                 product: product,
-                sizesStock: sizes,
+                stockByColor: stockByColor ?? {'': sizes},
+                initialColor: initialColor,
                 initialSize: initialSize,
                 service: mockService,
               ),
@@ -146,6 +151,7 @@ void main() {
           productId: any(named: 'productId'),
           size: any(named: 'size'),
           quantity: any(named: 'quantity'),
+          color: any(named: 'color'),
         ));
   });
 
@@ -161,6 +167,7 @@ void main() {
           productId: any(named: 'productId'),
           size: any(named: 'size'),
           quantity: any(named: 'quantity'),
+          color: any(named: 'color'),
         )).thenAnswer((_) async => 'r-1');
 
     await open(tester, sizes: {'40': 5}, initialSize: '40');
@@ -172,7 +179,75 @@ void main() {
           productId: 'p-1',
           size: '40',
           quantity: 2,
+          // Colourless product: the sheet must send nothing rather than "".
+          color: null,
         )).called(1);
+  });
+
+  testWidgets('a colour product asks which colour and sends the pick', (
+    tester,
+  ) async {
+    when(() => mockService.request(
+          productId: any(named: 'productId'),
+          size: any(named: 'size'),
+          quantity: any(named: 'quantity'),
+          color: any(named: 'color'),
+        )).thenAnswer((_) async => 'r-1');
+
+    await open(
+      tester,
+      sizes: const {},
+      stockByColor: {
+        'Brown': {'40': 3},
+        'Black': {'41': 2},
+      },
+      initialColor: 'Black',
+      initialSize: '41',
+    );
+
+    // Both colours are offered, the carried-over one is the selection, and
+    // only that colour's sizes are on the chips.
+    expect(find.text('Brown'), findsOneWidget);
+    expect(find.text('Black'), findsOneWidget);
+    expect(find.text('41  (2)'), findsOneWidget);
+    expect(find.text('40  (3)'), findsNothing);
+
+    await tester.tap(find.text('Reserve for Pickup').last);
+    await tester.pumpAndSettle();
+
+    verify(() => mockService.request(
+          productId: 'p-1',
+          size: '41',
+          quantity: 1,
+          color: 'Black',
+        )).called(1);
+  });
+
+  testWidgets('switching colour drops a size that colour does not have', (
+    tester,
+  ) async {
+    await open(
+      tester,
+      sizes: const {},
+      stockByColor: {
+        'Brown': {'40': 3},
+        'Black': {'41': 2},
+      },
+      initialColor: 'Brown',
+      initialSize: '40',
+    );
+
+    expect(find.text('40  (3)'), findsOneWidget);
+
+    await tester.tap(find.text('Black'));
+    await tester.pumpAndSettle();
+
+    // "40" exists only in Brown, so the carried-over size is dropped — a hold
+    // is never built for a pair that colour does not have...
+    expect(find.text('40  (3)'), findsNothing);
+    // ...and Black's only in-stock size is auto-selected, exactly as it would
+    // be on first open.
+    expect(find.textContaining('in size 41'), findsOneWidget);
   });
 
   testWidgets('a refusal keeps the sheet open with readable copy', (
@@ -182,6 +257,7 @@ void main() {
           productId: any(named: 'productId'),
           size: any(named: 'size'),
           quantity: any(named: 'quantity'),
+          color: any(named: 'color'),
         )).thenThrow(
       const PostgrestException(
         message: 'RESERVATION_ALREADY_EXISTS',

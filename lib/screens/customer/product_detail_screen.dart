@@ -12,6 +12,7 @@ import '../../utils/cart_helpers.dart';
 import '../../utils/recently_viewed.dart';
 import '../../services/supabase_service.dart';
 import '../../utils/sale_price.dart';
+import '../../utils/variant_swatch_color.dart';
 import '../../widgets/sole_badge.dart';
 import '../../widgets/sole_ar_pill.dart';
 import '../../widgets/sole_review_card.dart';
@@ -578,43 +579,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
   }
 
   /// Map a variant color NAME (free text from sellers) to a swatch color.
-  /// Falls back to a deterministic warm tone from the name when unknown.
-  Color _swatchColorFor(String name) {
-    final n = name.toLowerCase();
-    if (n.contains('brown') || n.contains('tan') || n.contains('camel') ||
-        n.contains('cognac') || n.contains('clay') || n.contains('leather')) {
-      if (n.contains('dark')) return const Color(0xFF4E342E);
-      if (n.contains('light')) return const Color(0xFFA1887F);
-      return AppConstants.primary;
-    }
-    if (n.contains('black') || n.contains('charcoal')) {
-      return const Color(0xFF26221E);
-    }
-    if (n.contains('carob')) return const Color(0xFF3E2723);
-    if (n.contains('white') || n.contains('cream') || n.contains('beige') ||
-        n.contains('off-white') || n.contains('suede')) {
-      return const Color(0xFFF1E8DC);
-    }
-    if (n.contains('gold') || n.contains('mustard') || n.contains('yellow')) {
-      return const Color(0xFFB8860B);
-    }
-    if (n.contains('red') || n.contains('burgundy') || n.contains('maroon')) {
-      return const Color(0xFF9B3B2E);
-    }
-    if (n.contains('green') || n.contains('olive')) return const Color(0xFF5D6B45);
-    if (n.contains('blue') || n.contains('navy')) return const Color(0xFF3F4A63);
-    if (n.contains('grey') || n.contains('gray')) return const Color(0xFF9E948A);
-    // Deterministic warm fallback keyed off the name.
-    const palette = [
-      Color(0xFF8B5A2B),
-      Color(0xFF6B4A2F),
-      Color(0xFFA9703C),
-      Color(0xFF4E342E),
-      Color(0xFF7C5A38),
-      Color(0xFFB8860B),
-    ];
-    return palette[name.hashCode.abs() % palette.length];
-  }
+  ///
+  /// Delegates to the shared mapper so the reservation sheets, which draw the
+  /// same swatches, can never drift from this picker.
+  Color _swatchColorFor(String name) => variantSwatchColor(name);
 
   /// Total stock across all sizes (inventory + variants).
   int _totalStock() {
@@ -628,6 +596,53 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
       total += row['stock'] as int? ?? 0;
     }
     return total;
+  }
+
+  /// Build {colour: {size: stock}} for the reservation sheets.
+  ///
+  /// The sheets must be able to say WHICH variant a hold is for, so unlike
+  /// [_buildSizesMap] (the size picker's map, already filtered to the active
+  /// colour) this keeps every colour separate. A product without colour
+  /// variants uses the single `''` key, which is how the sheets know to hide
+  /// the colour picker.
+  Map<String, Map<String, int>> _buildStockByColor() {
+    final colors = _variantColorNames;
+    final byColor = <String, Map<String, int>>{};
+
+    void add(String color, dynamic size, int stock) {
+      final key = size?.toString();
+      if (key == null || key.isEmpty) return;
+      final sizes = byColor.putIfAbsent(color, () => {});
+      sizes[key] = (sizes[key] ?? 0) + stock;
+    }
+
+    final variants = widget.product['product_variants'] as List<dynamic>? ?? [];
+    if (colors.isEmpty) {
+      // Colourless product: mirror _buildSizesMap (variants + inventory).
+      for (final row in variants) {
+        add('', row['size'], row['stock'] as int? ?? 0);
+      }
+      final inventory = widget.product['inventory'] as List<dynamic>? ?? [];
+      for (final row in inventory) {
+        add('', row['size'], row['stock'] as int? ?? 0);
+      }
+    } else {
+      for (final row in variants) {
+        final color = row['color']?.toString().trim() ?? '';
+        if (color.isEmpty || !colors.contains(color)) continue;
+        add(color, row['size'], row['stock'] as int? ?? 0);
+      }
+    }
+
+    // Sizes sorted numerically inside each colour, like the size picker.
+    return {
+      for (final entry in byColor.entries)
+        entry.key: Map.fromEntries(
+          entry.value.entries.toList()
+            ..sort((a, b) => (int.tryParse(a.key) ?? 0)
+                .compareTo(int.tryParse(b.key) ?? 0)),
+        ),
+    };
   }
 
   /// Build a map of {size: stock} from both inventory and product_variants.
@@ -1719,7 +1734,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                                       await showPickupReservationSheet(
                                     context,
                                     product: widget.product,
-                                    sizesStock: _buildSizesMap(),
+                                    stockByColor: _buildStockByColor(),
+                                    initialColor: _effectiveColor,
                                     initialSize: _selectedSize,
                                   );
                                   // Stock moved out of inventory — refresh the
@@ -1770,7 +1786,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                                 onTap: () => showBulkReservationSheet(
                                   context,
                                   product: widget.product,
-                                  sizesStock: _buildSizesMap(),
+                                  stockByColor: _buildStockByColor(),
+                                  initialColor: _effectiveColor,
                                 ),
                                 child: Padding(
                                   padding: const EdgeInsets.symmetric(

@@ -756,6 +756,7 @@ class _GrantExtensionDialogState extends State<_GrantExtensionDialog> {
         children: [
           Text(
             '${r.quantity} ${r.quantity == 1 ? 'pair' : 'pairs'} of size ${r.size}'
+            '${r.color == null ? '' : ' (${r.color})'}'
             '${r.pickupDeadline == null ? '' : ' — currently until '
                 '${formatPickupDeadline(r.pickupDeadline!)}'}',
             style: AppConstants.bodyStyle(fontSize: 12.5),
@@ -894,6 +895,9 @@ class _PickupAdminTile extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
+            // The colour the customer chose sits FIRST on the line: it is what
+            // decides which pair comes off the shelf.
+            '${r.color != null ? '${r.color} · ' : ''}'
             'Size ${r.size} · ${r.quantity} '
             '${r.quantity == 1 ? 'pair' : 'pairs'}'
             // The counter code, on the tile the seller is looking at while the
