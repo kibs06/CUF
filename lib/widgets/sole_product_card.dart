@@ -24,7 +24,7 @@ class SoleProductCard extends StatelessWidget {
     this.imageAspectRatio,
   });
 
-  /// The card's outer surface — carries the 1px hairline. Exposed so widget
+  /// The card's outer surface — carries the 1px card edge. Exposed so widget
   /// tests can assert the edge is never lightened back into invisibility on
   /// the (also white) page behind it.
   static const Key hairlineKey = Key('product-card-hairline');
@@ -53,8 +53,9 @@ class SoleProductCard extends StatelessWidget {
     final bool onSale = isOnSale(product, now: now);
     final double displayPrice = effectivePrice(product, now: now);
     final int? salePct = salePercent(product, now: now);
-    final DateTime? saleEnd =
-        DateTime.tryParse(product['sale_ends_at']?.toString() ?? '');
+    final DateTime? saleEnd = DateTime.tryParse(
+      product['sale_ends_at']?.toString() ?? '',
+    );
     final List<dynamic> images = product['images'] ?? [];
     final String imageUrl = images.isNotEmpty
         ? images.first
@@ -79,10 +80,7 @@ class SoleProductCard extends StatelessWidget {
               color: AppConstants.surfaceLight,
               borderRadius: AppConstants.cardRadius,
               boxShadow: AppConstants.warmShadow,
-              border: Border.all(
-                color: AppConstants.borderGray,
-                width: 1,
-              ),
+              border: Border.all(color: AppConstants.cardEdge, width: 1),
             ),
             child: Column(
               mainAxisSize: imageAspectRatio != null
@@ -163,16 +161,23 @@ class SoleProductCard extends StatelessWidget {
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     SoleStarRating(
-                                      rating: ((product['avg_rating'] as num?)?.toDouble() ?? 0.0).round(),
+                                      rating:
+                                          ((product['avg_rating'] as num?)
+                                                      ?.toDouble() ??
+                                                  0.0)
+                                              .round(),
                                       size: 13,
                                     ),
                                     const SizedBox(width: 4),
                                     Text(
-                                      ((product['avg_rating'] as num?)?.toDouble() ?? 0.0)
+                                      ((product['avg_rating'] as num?)
+                                                  ?.toDouble() ??
+                                              0.0)
                                           .toStringAsFixed(1),
                                       style: AppConstants.bodyStyle(
                                         fontSize: 10,
-                                        color: AppConstants.secondary.withValues(alpha: 0.5),
+                                        color: AppConstants.secondary
+                                            .withValues(alpha: 0.5),
                                       ),
                                     ),
                                   ],
@@ -183,7 +188,9 @@ class SoleProductCard extends StatelessWidget {
                                 '${compactNumber(product['units_sold'] as int)} sold',
                                 style: AppConstants.bodyStyle(
                                   fontSize: 10,
-                                  color: AppConstants.secondary.withValues(alpha: 0.5),
+                                  color: AppConstants.secondary.withValues(
+                                    alpha: 0.5,
+                                  ),
                                 ),
                               ),
                           ],
@@ -223,11 +230,14 @@ class SoleProductCard extends StatelessWidget {
                                 ),
                                 Text(
                                   '₱${price.toStringAsFixed(2)}',
-                                  style: AppConstants.monoStyle(
-                                    fontSize: 11,
-                                    color: AppConstants.secondary.withValues(alpha: 0.5),
-                                  ).copyWith(
-                                      decoration: TextDecoration.lineThrough),
+                                  style:
+                                      AppConstants.monoStyle(
+                                        fontSize: 11,
+                                        color: AppConstants.secondary
+                                            .withValues(alpha: 0.5),
+                                      ).copyWith(
+                                        decoration: TextDecoration.lineThrough,
+                                      ),
                                 ),
                               ],
                             ),
@@ -244,7 +254,9 @@ class SoleProductCard extends StatelessWidget {
                             product['category'] ?? 'Artisan',
                             style: AppConstants.bodyStyle(
                               fontSize: 10,
-                              color: AppConstants.secondary.withValues(alpha: 0.6),
+                              color: AppConstants.secondary.withValues(
+                                alpha: 0.6,
+                              ),
                             ),
                           ),
                         ],
@@ -299,16 +311,17 @@ class SoleProductCard extends StatelessWidget {
                   height: 20,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    valueColor:
-                        AlwaysStoppedAnimation(AppConstants.primary),
+                    valueColor: AlwaysStoppedAnimation(AppConstants.primary),
                   ),
                 ),
               ),
             ),
             errorWidget: (context, url, error) => Container(
               color: AppConstants.borderGray.withValues(alpha: 0.3),
-              child: const Icon(Icons.broken_image_outlined,
-                  color: AppConstants.primary),
+              child: const Icon(
+                Icons.broken_image_outlined,
+                color: AppConstants.primary,
+              ),
             ),
           ),
           // Sale countdown — a gradient scrim band across the bottom of the

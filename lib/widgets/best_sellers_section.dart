@@ -41,7 +41,12 @@ class BestSellersSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 10),
+          padding: const EdgeInsets.fromLTRB(
+            AppConstants.feedMargin,
+            4,
+            AppConstants.feedMargin,
+            10,
+          ),
           child: Row(
             children: [
               // Expanded + FittedBox(scaleDown) so a narrow screen or a large
@@ -63,7 +68,9 @@ class BestSellersSection extends StatelessWidget {
                         label: 'MOST SOLD',
                         icon: Icons.trending_up,
                         padding: EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
                       ),
                     ],
                   ),
@@ -101,9 +108,12 @@ class BestSellersSection extends StatelessWidget {
           height: railHeight,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppConstants.feedMargin,
+            ),
             itemCount: bestSellers.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 12),
+            separatorBuilder: (_, _) =>
+                const SizedBox(width: AppConstants.productGridGutter),
             itemBuilder: (context, index) {
               final prod = bestSellers[index];
               return HorizontalProductCard(

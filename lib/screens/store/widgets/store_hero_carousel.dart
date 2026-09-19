@@ -11,6 +11,7 @@ class StoreHeroCarousel extends StatefulWidget {
   final ValueChanged<int> onStoreChanged;
   final int currentIndex;
   final Map<String, int> productCounts;
+  final ValueChanged<Store> onEnterStore;
 
   const StoreHeroCarousel({
     super.key,
@@ -19,6 +20,7 @@ class StoreHeroCarousel extends StatefulWidget {
     required this.onStoreChanged,
     required this.currentIndex,
     required this.productCounts,
+    required this.onEnterStore,
   });
 
   @override
@@ -69,8 +71,8 @@ class _StoreHeroCarouselState extends State<StoreHeroCarousel> {
               return StoreHeroCard(
                 store: store,
                 scale: scale,
-                productCount:
-                    widget.productCounts[store.id] ?? 0,
+                productCount: widget.productCounts[store.id] ?? 0,
+                onTap: () => widget.onEnterStore(store),
               );
             },
           ),

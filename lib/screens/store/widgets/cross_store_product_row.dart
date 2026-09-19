@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import '../../../constants/app_constants.dart';
 import '../../../utils/product_grid_ratio.dart';
 import '../../customer/product_detail_screen.dart';
 import '../../../widgets/sole_product_card.dart';
 
-/// "Top Picks from a store" section.
-/// Shows products from a single store in a 2-column layout using Wrap.
-/// No shrinkWrap overhead — cards are laid out naturally.
+/// The focused store's products in the same two-column masonry grid as the
+/// rest of the customer catalog.
 class CrossStoreProductRow extends StatelessWidget {
   final List<Map<String, dynamic>> products;
   final String storeName;
@@ -24,9 +24,13 @@ class CrossStoreProductRow extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Section label
         Padding(
-          padding: const EdgeInsets.fromLTRB(24, 28, 24, 4),
+          padding: const EdgeInsets.fromLTRB(
+            AppConstants.feedMargin,
+            28,
+            AppConstants.feedMargin,
+            4,
+          ),
           child: Row(
             children: [
               Container(
@@ -61,33 +65,28 @@ class CrossStoreProductRow extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 10),
-
-        // 2-column grid using Wrap — no shrinkWrap, no height estimation.
-        // Each child takes ~50% width minus spacing.
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final spacing = 14.0;
-            final cardWidth = (constraints.maxWidth - spacing) / 2;
-
-            return Wrap(
-              spacing: spacing,
-              runSpacing: spacing,
-              children: products.map((product) {
-                return SizedBox(
-                  width: cardWidth,
-                  child: SoleProductCard(
-                    product: product,
-                    imageAspectRatio: productGridRatio(product),
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => ProductDetailScreen(product: product),
-                        ),
-                      );
-                    },
+        MasonryGridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppConstants.feedMargin,
+          ),
+          crossAxisCount: 2,
+          crossAxisSpacing: AppConstants.productGridGutter,
+          mainAxisSpacing: AppConstants.productGridGutter,
+          itemCount: products.length,
+          itemBuilder: (context, index) {
+            final product = products[index];
+            return SoleProductCard(
+              product: product,
+              imageAspectRatio: productGridRatio(product),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => ProductDetailScreen(product: product),
                   ),
                 );
-              }).toList(),
+              },
             );
           },
         ),

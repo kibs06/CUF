@@ -51,8 +51,11 @@ class _RecentlyViewedScreenState extends State<RecentlyViewedScreen> {
     // Only items still in the live catalog — same filtering as the profile
     // strip so the two can never disagree.
     final liveItems = _items
-        .where((item) => productProvider.products.any(
-            (p) => p['id']?.toString() == item['id']))
+        .where(
+          (item) => productProvider.products.any(
+            (p) => p['id']?.toString() == item['id'],
+          ),
+        )
         .toList();
 
     return Scaffold(
@@ -75,28 +78,33 @@ class _RecentlyViewedScreenState extends State<RecentlyViewedScreen> {
               color: AppConstants.primary,
               onRefresh: _load,
               child: MasonryGridView.count(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 80),
+                padding: const EdgeInsets.fromLTRB(
+                  AppConstants.feedMargin,
+                  12,
+                  AppConstants.feedMargin,
+                  80,
+                ),
                 crossAxisCount: 2,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
+                crossAxisSpacing: AppConstants.productGridGutter,
+                mainAxisSpacing: AppConstants.productGridGutter,
                 itemCount: liveItems.length,
                 itemBuilder: (context, index) {
                   final item = liveItems[index];
                   final fullProduct = productProvider.products
                       .cast<Map<String, dynamic>?>()
                       .firstWhere(
-                    (p) => p?['id']?.toString() == item['id'],
-                    orElse: () => null,
-                  );
+                        (p) => p?['id']?.toString() == item['id'],
+                        orElse: () => null,
+                      );
                   return SoleProductCard(
                     product: fullProduct ?? const {},
-                    imageAspectRatio:
-                        productGridRatio(fullProduct ?? item),
+                    imageAspectRatio: productGridRatio(fullProduct ?? item),
                     onTap: () async {
                       await Navigator.of(context).push(
                         MaterialPageRoute(
-                          builder: (_) =>
-                              ProductDetailScreen(product: fullProduct ?? const {}),
+                          builder: (_) => ProductDetailScreen(
+                            product: fullProduct ?? const {},
+                          ),
                         ),
                       );
                       // The tapped product moved to the front — reload so

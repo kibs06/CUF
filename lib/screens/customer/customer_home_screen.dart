@@ -67,8 +67,10 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<ProductProvider>(context, listen: false)
-          .loadProducts(hideOutOfStock: true);
+      Provider.of<ProductProvider>(
+        context,
+        listen: false,
+      ).loadProducts(hideOutOfStock: true);
       // Load banners for the hero carousel
       Provider.of<BannerProvider>(context, listen: false).loadBanners();
       // Load conversations for the floating message button badge
@@ -82,11 +84,14 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
 
     // Auto-refresh products when connection is restored after being offline
     _wasOffline = !ConnectivityService.instance.isOnline;
-    _connectivitySub =
-        ConnectivityService.instance.isOnlineStream.listen((isOnline) {
+    _connectivitySub = ConnectivityService.instance.isOnlineStream.listen((
+      isOnline,
+    ) {
       if (isOnline && _wasOffline && mounted) {
-        Provider.of<ProductProvider>(context, listen: false)
-            .loadProducts(hideOutOfStock: true);
+        Provider.of<ProductProvider>(
+          context,
+          listen: false,
+        ).loadProducts(hideOutOfStock: true);
         Provider.of<BannerProvider>(context, listen: false).loadBanners();
       }
       _wasOffline = !isOnline;
@@ -118,11 +123,9 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   /// a query, so there is no search state to get stuck in — see
   /// `search_results_screen.dart` for the trap this replaced.
   void _openSearchScreen() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const ProductSearchScreen(),
-      ),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const ProductSearchScreen()));
   }
 
   Future<void> _loadConversations() async {
@@ -143,20 +146,21 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   void _initPushNotifications() {
     PushNotificationService.instance.onNavigateToChat =
         (conversationId, storeName) {
-      if (!mounted) return;
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => ChatView(
-            conversationId: conversationId,
-            viewerRole: 'customer',
-            otherPartyName: storeName,
-          ),
-        ),
-      );
-    };
+          if (!mounted) return;
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => ChatView(
+                conversationId: conversationId,
+                viewerRole: 'customer',
+                otherPartyName: storeName,
+              ),
+            ),
+          );
+        };
 
-    PushNotificationService.instance.onNavigateToScreen =
-        (screen, referenceId) {
+    PushNotificationService
+        .instance
+        .onNavigateToScreen = (screen, referenceId) {
       if (!mounted) return;
       switch (screen) {
         case 'order_tracking':
@@ -169,31 +173,28 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
               .eq('id', orderIdValue)
               .single()
               .then((data) {
-            if (mounted) {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => OrderTrackingScreen(order: data),
-                ),
-              );
-            }
-          }).catchError((e) {
-            debugPrint('[Push] Failed to fetch order for deep-link: $e');
-          });
+                if (mounted) {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => OrderTrackingScreen(order: data),
+                    ),
+                  );
+                }
+              })
+              .catchError((e) {
+                debugPrint('[Push] Failed to fetch order for deep-link: $e');
+              });
           break;
         case 'my_reports':
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => const MyReportsScreen(),
-            ),
-          );
+          Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const MyReportsScreen()));
           break;
         case 'my_reservations':
           // Bulk reservation updates (approval + deposit window, etc.)
           // land on the customer's reservations screen.
           Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => const MyReservationsScreen(),
-            ),
+            MaterialPageRoute(builder: (_) => const MyReservationsScreen()),
           );
           break;
       }
@@ -222,14 +223,14 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     // (`SearchResultsScreen`) that owns its own query.
     final filteredProducts = productProvider.getFilteredProducts('');
     // Products currently on sale — powers the dedicated "On Sale" sliver.
-    final saleProducts =
-        allProducts.where(isOnSale).toList();
+    final saleProducts = allProducts.where(isOnSale).toList();
     // Best sellers — the same live `units_sold` set the 'Best Sellers' chip
     // filters by (one rule, see bestSellerProducts). The rail is suppressed
     // while a category is narrowing the catalog, exactly like the "On Sale"
     // section below.
     final bestSellers = productProvider.bestSellers;
-    final showBestSellers = kBestSellersRailEnabled &&
+    final showBestSellers =
+        kBestSellersRailEnabled &&
         bestSellers.isNotEmpty &&
         (productProvider.selectedCategory == null ||
             productProvider.selectedCategory == 'All');
@@ -241,8 +242,9 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     // Sellers sections.
     final isBrowsingWholeCatalog =
         productProvider.selectedCategory == null ||
-            productProvider.selectedCategory == 'All';
-    final showCatalogEndCap = isBrowsingWholeCatalog &&
+        productProvider.selectedCategory == 'All';
+    final showCatalogEndCap =
+        isBrowsingWholeCatalog &&
         !productProvider.isLoading &&
         filteredProducts.isNotEmpty;
     // Distinct workshops behind the catalog, derived from the products already
@@ -267,12 +269,17 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
             color: AppConstants.primary,
             onRefresh: () async {
               await Future.wait([
-                Provider.of<ProductProvider>(context, listen: false)
-                    .loadProducts(hideOutOfStock: true),
-                Provider.of<BannerProvider>(context, listen: false)
-                    .loadBanners(),
+                Provider.of<ProductProvider>(
+                  context,
+                  listen: false,
+                ).loadProducts(hideOutOfStock: true),
+                Provider.of<BannerProvider>(
+                  context,
+                  listen: false,
+                ).loadBanners(),
               ]);
-            },              child: CustomScrollView(
+            },
+            child: CustomScrollView(
               controller: _scrollController,
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
@@ -295,9 +302,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                     },
                     onCartTap: () {
                       Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const CartScreen(),
-                        ),
+                        MaterialPageRoute(builder: (_) => const CartScreen()),
                       );
                     },
                   ),
@@ -353,14 +358,19 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                                   productProvider.selectedCategory ==
                                       'All')) ...[
                             Padding(
-                              padding:
-                                  const EdgeInsets.fromLTRB(20, 4, 20, 10),
+                              padding: const EdgeInsets.fromLTRB(
+                                AppConstants.feedMargin,
+                                4,
+                                AppConstants.feedMargin,
+                                10,
+                              ),
                               child: Row(
                                 children: [
                                   Text(
                                     'On Sale',
                                     style: AppConstants.headlineStyle(
-                                        fontSize: 16),
+                                      fontSize: 16,
+                                    ),
                                   ),
                                   const SizedBox(width: 10),
                                   const _PriceTagBadge(label: 'HOT DEALS'),
@@ -368,8 +378,9 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                               ),
                             ),
                             Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 20),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppConstants.feedMargin,
+                              ),
                               // NOTE: deliberately a plain SliverGrid, NOT masonry.
                               // Two SliverMasonryGrids in one CustomScrollView trigger a
                               // scroll-offset-correction loop in flutter_staggered_grid_view
@@ -382,11 +393,13 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                                 physics: const NeverScrollableScrollPhysics(),
                                 gridDelegate:
                                     const SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: 2,
-                                  crossAxisSpacing: 16,
-                                  mainAxisSpacing: 16,
-                                  childAspectRatio: 0.58,
-                                ),
+                                      crossAxisCount: 2,
+                                      crossAxisSpacing:
+                                          AppConstants.productGridGutter,
+                                      mainAxisSpacing:
+                                          AppConstants.productGridGutter,
+                                      childAspectRatio: 0.58,
+                                    ),
                                 itemCount: saleProducts.length,
                                 itemBuilder: (context, index) {
                                   final prod = saleProducts[index];
@@ -397,7 +410,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                                         MaterialPageRoute(
                                           builder: (context) =>
                                               ProductDetailScreen(
-                                                  product: prod),
+                                                product: prod,
+                                              ),
                                         ),
                                       );
                                     },
@@ -420,29 +434,35 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
 
                           // ── Catalog header + sort ──
                           Padding(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 20.0),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20.0,
+                            ),
                             child: Row(
                               children: [
                                 Expanded(
-                                  child:                                  Text(
+                                  child: Text(
                                     'Artisan Catalog',
                                     style: AppConstants.headlineStyle(
-                                        fontSize: 20),
+                                      fontSize: 20,
+                                    ),
                                   ),
                                 ),
                                 GestureDetector(
                                   onTap: () => _showSortSheet(context),
                                   child: Container(
                                     padding: const EdgeInsets.symmetric(
-                                        horizontal: 10, vertical: 6),
+                                      horizontal: 10,
+                                      vertical: 6,
+                                    ),
                                     decoration: BoxDecoration(
-                                      color: AppConstants.primary
-                                          .withValues(alpha: 0.08),
+                                      color: AppConstants.primary.withValues(
+                                        alpha: 0.08,
+                                      ),
                                       borderRadius: BorderRadius.circular(8),
                                       border: Border.all(
-                                        color: AppConstants.primary
-                                            .withValues(alpha: 0.15),
+                                        color: AppConstants.primary.withValues(
+                                          alpha: 0.15,
+                                        ),
                                       ),
                                     ),
                                     child: Row(
@@ -456,7 +476,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                                         const SizedBox(width: 4),
                                         Text(
                                           sortModeLabel(
-                                              productProvider.sortMode),
+                                            productProvider.sortMode,
+                                          ),
                                           style: AppConstants.bodyStyle(
                                             fontSize: 11,
                                             fontWeight: FontWeight.bold,
@@ -478,28 +499,31 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                             ConnectivityService.instance.isOnline
                                 ? const _CatalogSkeletonGrid()
                                 : NoInternetView(
-                                    onRetry: () =>
-                                        Provider.of<ProductProvider>(
-                                            context,
-                                            listen: false)
-                                            .loadProducts(
-                                                hideOutOfStock: true),
+                                    onRetry: () => Provider.of<ProductProvider>(
+                                      context,
+                                      listen: false,
+                                    ).loadProducts(hideOutOfStock: true),
                                   )
                           else if (allProducts.isEmpty)
                             Padding(
                               padding: const EdgeInsets.only(top: 48),
                               child: Column(
                                 children: [
-                                  Icon(Icons.search_off,
-                                      size: 48,
-                                      color: AppConstants.primary
-                                          .withValues(alpha: 0.5)),
+                                  Icon(
+                                    Icons.search_off,
+                                    size: 48,
+                                    color: AppConstants.primary.withValues(
+                                      alpha: 0.5,
+                                    ),
+                                  ),
                                   const SizedBox(height: 12),
                                   Text(
                                     'No shoes match your criteria.',
                                     style: AppConstants.bodyStyle(
-                                        color: AppConstants.secondary
-                                            .withValues(alpha: 0.6)),
+                                      color: AppConstants.secondary.withValues(
+                                        alpha: 0.6,
+                                      ),
+                                    ),
                                   ),
                                 ],
                               ),
@@ -514,10 +538,11 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                             MasonryGridView.count(
                               key: _catalogKey,
                               crossAxisCount: 2,
-                              crossAxisSpacing: 16,
-                              mainAxisSpacing: 16,
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 20),
+                              crossAxisSpacing: AppConstants.productGridGutter,
+                              mainAxisSpacing: AppConstants.productGridGutter,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppConstants.feedMargin,
+                              ),
                               physics: const NeverScrollableScrollPhysics(),
                               shrinkWrap: true,
                               itemCount: filteredProducts.length,
@@ -530,8 +555,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                                     Navigator.of(context).push(
                                       MaterialPageRoute(
                                         builder: (context) =>
-                                            ProductDetailScreen(
-                                                product: prod),
+                                            ProductDetailScreen(product: prod),
                                       ),
                                     );
                                   },
@@ -563,9 +587,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
               top: 0,
               left: 0,
               right: 0,
-              child: HomeStickySearchBar(
-                onTap: _openSearchScreen,
-              ),
+              child: HomeStickySearchBar(onTap: _openSearchScreen),
             ),
 
           // Floating chat button — only on Home tab
@@ -574,7 +596,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       ),
     );
   }
-
 }
 
 /// A price-tag shaped badge (punched hole + pointed right edge) used to
@@ -628,12 +649,7 @@ class _PriceTagPainter extends CustomPainter {
       ..close()
       ..addOval(Rect.fromCircle(center: holeCenter, radius: holeRadius));
 
-    canvas.drawShadow(
-      path,
-      Colors.black.withValues(alpha: 0.25),
-      2,
-      false,
-    );
+    canvas.drawShadow(path, Colors.black.withValues(alpha: 0.25), 2, false);
     canvas.drawPath(path, Paint()..color = color);
   }
 
@@ -681,7 +697,9 @@ class _CatalogSkeletonGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     return ShimmerGroup(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppConstants.feedMargin,
+        ),
         child: Column(
           children: [
             for (int row = 0; row < 3; row++) ...[
@@ -748,7 +766,8 @@ class _EmptyCategoryView extends StatelessWidget {
     final category = context.read<ProductProvider>().selectedCategory ?? 'All';
     // Pseudo-categories (derived rules, not real category values) get the
     // generic copy instead of "No Best Sellers yet".
-    final isCategoryScoped = category != 'All' &&
+    final isCategoryScoped =
+        category != 'All' &&
         category != 'On Sale' &&
         category != kBestSellersCategory;
 
@@ -808,9 +827,11 @@ class _EmptyCategoryView extends StatelessWidget {
           // Reset action — always offered since this view only appears when
           // a filter actually excluded everything.
           GestureDetector(
-            onTap: onBrowseAll ?? () {
-              context.read<ProductProvider>().selectCategory('All');
-            },
+            onTap:
+                onBrowseAll ??
+                () {
+                  context.read<ProductProvider>().selectCategory('All');
+                },
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
               decoration: BoxDecoration(

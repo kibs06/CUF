@@ -50,7 +50,12 @@ class ProductRailSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 10),
+          padding: const EdgeInsets.fromLTRB(
+            AppConstants.feedMargin,
+            4,
+            AppConstants.feedMargin,
+            10,
+          ),
           child: Row(
             children: [
               // Expanded + FittedBox(scaleDown) so a narrow screen or a large
@@ -77,8 +82,9 @@ class ProductRailSection extends StatelessWidget {
                             // Resolved per paint: `secondary` follows the
                             // published brightness, so this ink is right in
                             // both modes without a theme lookup here.
-                            color:
-                                AppConstants.secondary.withValues(alpha: 0.6),
+                            color: AppConstants.secondary.withValues(
+                              alpha: 0.6,
+                            ),
                           ),
                         ),
                       ],
@@ -93,9 +99,12 @@ class ProductRailSection extends StatelessWidget {
           height: railHeight,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppConstants.feedMargin,
+            ),
             itemCount: products.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 12),
+            separatorBuilder: (_, _) =>
+                const SizedBox(width: AppConstants.productGridGutter),
             itemBuilder: (context, index) {
               final prod = products[index];
               return HorizontalProductCard(

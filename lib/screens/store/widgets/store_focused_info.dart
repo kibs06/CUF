@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../constants/app_constants.dart';
 import '../../../models/store.dart';
-import '../store_profile_screen.dart';
 
 /// Info strip below the carousel showing focused store details.
 /// Animates content with fade+slide when the focused store changes.
@@ -18,7 +17,7 @@ class StoreFocusedInfo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+      padding: const EdgeInsets.symmetric(horizontal: AppConstants.feedMargin),
       child: AnimatedSwitcher(
         duration: const Duration(milliseconds: 250),
         switchInCurve: Curves.easeOut,
@@ -107,82 +106,7 @@ class StoreFocusedInfo extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-            // Enter Store button
-            _EnterStoreButton(store: store),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-/// "Enter Store →" button with micro-interaction arrow nudge.
-class _EnterStoreButton extends StatefulWidget {
-  final Store store;
-  const _EnterStoreButton({required this.store});
-
-  @override
-  State<_EnterStoreButton> createState() => _EnterStoreButtonState();
-}
-
-class _EnterStoreButtonState extends State<_EnterStoreButton> {
-  bool _isPressed = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      height: 48,
-      child: GestureDetector(
-        onTapDown: (_) => setState(() => _isPressed = true),
-        onTapUp: (_) {
-          setState(() => _isPressed = false);
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => StoreProfileScreen(storeId: widget.store.id),
-            ),
-          );
-        },
-        onTapCancel: () => setState(() => _isPressed = false),
-        child: Container(
-          decoration: BoxDecoration(
-            color: AppConstants.primary,
-            borderRadius: AppConstants.buttonRadius,
-            boxShadow: [
-              BoxShadow(
-                color: AppConstants.primary.withAlpha(60),
-                blurRadius: 8,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                'Enter Store',
-                style: AppConstants.bodyStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.bold,
-                  color: AppConstants.surfaceLight,
-                ),
-              ),
-              const SizedBox(width: 8),
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 100),
-                transform: Matrix4.translationValues(
-                  _isPressed ? 2.0 : 0.0,
-                  0,
-                  0,
-                ),
-                child: Icon(
-                  Icons.arrow_forward_rounded,
-                  color: AppConstants.surfaceLight,
-                  size: 18,
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );

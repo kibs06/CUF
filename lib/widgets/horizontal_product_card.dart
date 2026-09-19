@@ -32,14 +32,8 @@ class HorizontalProductCard extends StatelessWidget {
   final String fallbackName;
   final double fallbackPrice;
 
-  /// Thumbnail corner radius — shared by the [ClipRRect] and the hairline
-  /// ring so the two can never drift apart.
-  static const double _thumbRadius = 12;
-
-  /// The always-on hairline ring around the thumbnail. Exposed so widget
-  /// tests can assert the rail card keeps a visible edge on the white page
-  /// (drawing it over a photograph is a regression that is easy to drop).
-  static const Key thumbnailHairlineKey = Key('rail-card-hairline');
+  static const Key cardEdgeKey = Key('rail-card-edge');
+  static const Key thumbnailHairlineKey = cardEdgeKey;
 
   /// First product image, preferring `product_images` (sorted by
   /// display_order) and falling back to the flat `images` list.
@@ -47,8 +41,11 @@ class HorizontalProductCard extends StatelessWidget {
     final raw = product['product_images'] as List? ?? [];
     if (raw.isNotEmpty && raw.first is Map) {
       final images = List<Map<String, dynamic>>.from(raw);
-      images.sort((a, b) => ((a['display_order'] ?? 0) as num)
-          .compareTo(((b['display_order'] ?? 0) as num)));
+      images.sort(
+        (a, b) => ((a['display_order'] ?? 0) as num).compareTo(
+          ((b['display_order'] ?? 0) as num),
+        ),
+      );
       final url = images.first['image_url']?.toString();
       if (url != null && url.isNotEmpty) return url;
     }
@@ -59,8 +56,9 @@ class HorizontalProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final DateTime? stripEnd =
-        DateTime.tryParse(product['sale_ends_at']?.toString() ?? '');
+    final DateTime? stripEnd = DateTime.tryParse(
+      product['sale_ends_at']?.toString() ?? '',
+    );
     // The expiry watcher re-renders this card with a `now` past the sale
     // end, so the compact countdown and the sale price fall back to
     // non-sale together when it expires.
@@ -72,52 +70,54 @@ class HorizontalProductCard extends StatelessWidget {
         final double originalPrice =
             ((product['price'] is num) ? (product['price'] as num) : 0)
                 .toDouble();
-        final String name =
-            product['name']?.toString().isNotEmpty == true
-                ? product['name']!.toString()
-                : fallbackName;
+        final String name = product['name']?.toString().isNotEmpty == true
+            ? product['name']!.toString()
+            : fallbackName;
 
         return SizedBox(
           width: 130,
+          height: 180,
           child: GestureDetector(
             onTap: onTap,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Thumbnail + compact countdown band across its bottom edge
-                // (only for sales that actually end).
-                //
-                // The hairline is a `foregroundDecoration`, NOT a `border`:
-                // a decoration border insets its child by its width, which
-                // would shrink the 130x124 thumbnail and disturb the rail's
-                // fixed 130x180 contract (the text block below is sized by a
-                // FittedBox against the leftover height). Painting it in the
-                // foreground keeps every geometry assertion in
-                // best_sellers_section_test byte-identical.
-                Container(
-                  key: thumbnailHairlineKey,
-                  foregroundDecoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(_thumbRadius),
-                    border: Border.all(
-                      color: AppConstants.borderGray,
-                      width: 1,
+            child: Container(
+              key: cardEdgeKey,
+              decoration: BoxDecoration(
+                color: AppConstants.surfaceLight,
+                borderRadius: AppConstants.cardRadius,
+                border: Border.all(color: AppConstants.cardEdge, width: 1),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Thumbnail + compact countdown band across its bottom edge
+                  // (only for sales that actually end).
+                  //
+                  // The hairline is a `foregroundDecoration`, NOT a `border`:
+                  // a decoration border insets its child by its width, which
+                  // would shrink the 130x124 thumbnail and disturb the rail's
+                  // fixed 130x180 contract (the text block below is sized by a
+                  // FittedBox against the leftover height). Painting it in the
+                  // foreground keeps every geometry assertion in
+                  // best_sellers_section_test byte-identical.
+                  ClipRRect(
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(15),
+                      topRight: Radius.circular(15),
                     ),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(_thumbRadius),
                     child: Stack(
                       fit: StackFit.passthrough,
                       children: [
                         Image.network(
                           firstImage(product, fallbackImageUrl),
-                          width: 130,
+                          width: 128,
                           height: 124,
                           fit: BoxFit.cover,
                           errorBuilder: (_, _, _) => Container(
-                            width: 130,
+                            width: 128,
                             height: 124,
-                            color:
-                                AppConstants.borderGray.withValues(alpha: 0.2),
+                            color: AppConstants.borderGray.withValues(
+                              alpha: 0.2,
+                            ),
                             child: Icon(
                               Icons.image_outlined,
                               color: AppConstants.borderGray,
@@ -137,40 +137,65 @@ class HorizontalProductCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                ),
-                const SizedBox(height: 6),
-                // Text block — Expanded + FittedBox (scaleDown) guarantees
-                // the card never overflows the 180px strip, even when an
-                // on-sale item renders two price lines or the device text
-                // scale is large.
-                Expanded(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.topLeft,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          name,
-                          style: AppConstants.bodyStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
+                  const SizedBox(height: 6),
+                  // Text block — Expanded + FittedBox (scaleDown) guarantees
+                  // the card never overflows the 180px strip, even when an
+                  // on-sale item renders two price lines or the device text
+                  // scale is large.
+                  Expanded(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.topLeft,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            name,
+                            style: AppConstants.bodyStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 2),
-                        if (onSale) ...[
-                          // Sale price hides behind a peel-away tape (same
-                          // reveal state as the cards' tags).
-                          SalePriceTape(
-                            productId: product['id']?.toString() ?? '',
-                            // 11px text → slightly more padding to keep the
-                            // ~40px tap target.
-                            hitPadding: const EdgeInsets.fromLTRB(
-                                10, 20, 10, 9),
-                            child: Text(
+                          const SizedBox(height: 2),
+                          if (onSale) ...[
+                            // Sale price hides behind a peel-away tape (same
+                            // reveal state as the cards' tags).
+                            SalePriceTape(
+                              productId: product['id']?.toString() ?? '',
+                              // 11px text → slightly more padding to keep the
+                              // ~40px tap target.
+                              hitPadding: const EdgeInsets.fromLTRB(
+                                10,
+                                20,
+                                10,
+                                9,
+                              ),
+                              child: Text(
+                                '₱${livePrice.toStringAsFixed(2)}',
+                                style: AppConstants.monoStyle(
+                                  fontSize: 11,
+                                  color: AppConstants.primary,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              '₱${originalPrice.toStringAsFixed(2)}',
+                              style:
+                                  AppConstants.monoStyle(
+                                    fontSize: 9,
+                                    color: AppConstants.secondary.withValues(
+                                      alpha: 0.5,
+                                    ),
+                                  ).copyWith(
+                                    decoration: TextDecoration.lineThrough,
+                                  ),
+                            ),
+                          ] else
+                            Text(
                               '₱${livePrice.toStringAsFixed(2)}',
                               style: AppConstants.monoStyle(
                                 fontSize: 11,
@@ -178,31 +203,12 @@ class HorizontalProductCard extends StatelessWidget {
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                          ),
-                          Text(
-                            '₱${originalPrice.toStringAsFixed(2)}',
-                            style: AppConstants.monoStyle(
-                              fontSize: 9,
-                              color: AppConstants.secondary
-                                  .withValues(alpha: 0.5),
-                            ).copyWith(
-                              decoration: TextDecoration.lineThrough,
-                            ),
-                          ),
-                        ] else
-                          Text(
-                            '₱${livePrice.toStringAsFixed(2)}',
-                            style: AppConstants.monoStyle(
-                              fontSize: 11,
-                              color: AppConstants.primary,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         );

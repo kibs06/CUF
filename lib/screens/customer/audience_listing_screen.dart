@@ -215,10 +215,15 @@ class _AudienceListingScreenState extends State<AudienceListingScreen> {
   Widget _buildGrid(List<Map<String, dynamic>> products) {
     return MasonryGridView.count(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
+      padding: const EdgeInsets.fromLTRB(
+        AppConstants.feedMargin,
+        4,
+        AppConstants.feedMargin,
+        32,
+      ),
       crossAxisCount: 2,
-      crossAxisSpacing: 16,
-      mainAxisSpacing: 16,
+      crossAxisSpacing: AppConstants.productGridGutter,
+      mainAxisSpacing: AppConstants.productGridGutter,
       itemCount: products.length,
       itemBuilder: (context, index) {
         final prod = products[index];
@@ -293,11 +298,7 @@ class _AudienceListingScreenState extends State<AudienceListingScreen> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    Icons.grid_view_outlined,
-                    size: 15,
-                    color: _accentInk,
-                  ),
+                  Icon(Icons.grid_view_outlined, size: 15, color: _accentInk),
                   const SizedBox(width: 6),
                   // Flexible, so the pill wraps its label at a large text scale
                   // rather than overflowing its own row.

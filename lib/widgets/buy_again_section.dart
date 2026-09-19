@@ -52,16 +52,22 @@ class BuyAgainSection extends StatelessWidget {
     // Resolve to live catalog products, preserving purchase order. Products
     // no longer in the catalog (deleted / out of stock) are dropped.
     final purchased = purchasedIds
-        .map((id) => productProvider.products
-            .cast<Map<String, dynamic>?>()
-            .firstWhere((p) => p?['id']?.toString() == id,
-                orElse: () => null))
+        .map(
+          (id) =>
+              productProvider.products.cast<Map<String, dynamic>?>().firstWhere(
+                (p) => p?['id']?.toString() == id,
+                orElse: () => null,
+              ),
+        )
         .whereType<Map<String, dynamic>>()
         .toList();
 
     if (purchased.isEmpty) {
       return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppConstants.feedMargin,
+          vertical: 8,
+        ),
         child: Row(
           children: [
             Icon(
@@ -128,7 +134,8 @@ class BuyAgainSection extends StatelessWidget {
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: purchased.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 12),
+            separatorBuilder: (_, _) =>
+                const SizedBox(width: AppConstants.productGridGutter),
             itemBuilder: (context, index) {
               final prod = purchased[index];
               return HorizontalProductCard(
@@ -153,10 +160,8 @@ class BuyAgainSection extends StatelessWidget {
   void _openAll(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => BuyAgainScreen(
-          orders: orders,
-          onProductOpened: onProductOpened,
-        ),
+        builder: (_) =>
+            BuyAgainScreen(orders: orders, onProductOpened: onProductOpened),
       ),
     );
   }

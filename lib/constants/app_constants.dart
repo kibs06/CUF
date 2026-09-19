@@ -140,10 +140,22 @@ class AppConstants {
   // white page a dark one would.
   static Color get borderGray => AppPalette.of(AppBrightness.current).hairline;
 
+  /// Stronger outline reserved for product card edges.
+  static Color get cardEdge => AppPalette.of(AppBrightness.current).cardEdge;
+
+  /// Shared seam between product cards in every two-column grid and rail.
+  static const double productGridGutter = 8;
+
+  /// Shared horizontal content margin for product feeds and aligned home chrome.
+  static const double feedMargin = 8;
+
   // --- BRAND COLOR PARSER ---
   /// Safely parse a hex brand color string (e.g. '#8B5A2B') into a Flutter Color.
   /// Returns [fallback] if the input is null, empty, or malformed.
-  static Color parseBrandColor(dynamic brandColor, {Color fallback = const Color(0xFF8B5A2B)}) {
+  static Color parseBrandColor(
+    dynamic brandColor, {
+    Color fallback = const Color(0xFF8B5A2B),
+  }) {
     try {
       if (brandColor == null) return fallback;
       final hex = brandColor.toString().replaceAll('#', '');
@@ -240,7 +252,9 @@ class AppConstants {
   static final BorderRadius fieldRadius = BorderRadius.circular(14);
 
   // Full pill — chips, quantity steppers, small badges, destructive pills.
-  static const BorderRadius stadiumRadius = BorderRadius.all(Radius.circular(999));
+  static const BorderRadius stadiumRadius = BorderRadius.all(
+    Radius.circular(999),
+  );
 
   // Premium card treatment (role-choice cards, submission card) — ambient
   // clay shadow instead of a 1px border: high blur, low opacity, and a

@@ -9,6 +9,7 @@ import '../../widgets/shimmer_group.dart';
 import 'widgets/store_hero_carousel.dart';
 import 'widgets/store_focused_info.dart';
 import 'widgets/cross_store_product_row.dart';
+import 'store_profile_screen.dart';
 
 /// Multi-store discovery tab — the "walking through a market" experience.
 /// Hero carousel → focused info → cross-store products.
@@ -62,6 +63,12 @@ class _StoreScreenState extends State<StoreScreen> {
     });
   }
 
+  void _enterStore(Store store) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => StoreProfileScreen(storeId: store.id)),
+    );
+  }
+
   /// Rebuild the per-store product index only when the list reference changes.
   void _reindexIfNeeded(List<Map<String, dynamic>> products) {
     if (identical(products, _indexedFrom)) return;
@@ -85,21 +92,25 @@ class _StoreScreenState extends State<StoreScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final allProducts = context.select<ProductProvider, List<Map<String, dynamic>>>(
-      (p) => p.products,
-    );
+    final allProducts = context
+        .select<ProductProvider, List<Map<String, dynamic>>>((p) => p.products);
     _reindexIfNeeded(allProducts);
 
     final focusedStoreId = _stores.isNotEmpty ? _stores[_focusedIndex].id : '';
     final topPicks = _topPicksByStore[focusedStoreId] ?? const [];
-    final topPicksLimited = topPicks.length > 12 ? topPicks.sublist(0, 12) : topPicks;
+    final topPicksLimited = topPicks.length > 12
+        ? topPicks.sublist(0, 12)
+        : topPicks;
 
     return Scaffold(
       backgroundColor: AppConstants.surfaceLight,
       appBar: widget.hideAppBar
           ? null
           : AppBar(
-              title: Text('Stores', style: AppConstants.headlineStyle(fontSize: 22)),
+              title: Text(
+                'Stores',
+                style: AppConstants.headlineStyle(fontSize: 22),
+              ),
               backgroundColor: Colors.transparent,
               elevation: 0,
               automaticallyImplyLeading: false,
@@ -143,6 +154,7 @@ class _StoreScreenState extends State<StoreScreen> {
                         onStoreChanged: _onStoreChanged,
                         currentIndex: _focusedIndex,
                         productCounts: _productCounts,
+                        onEnterStore: _enterStore,
                       ),
 
                       // Section 2 — Focused Store Info Strip
@@ -185,47 +197,57 @@ class _StoreScreenSkeleton extends StatelessWidget {
             const SizedBox(height: 8),
 
             // Hero carousel card
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 6),
-            child: SkeletonBox(
-              width: double.infinity,
-              height: 260,
-              borderRadius: 24,
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 6),
+              child: SkeletonBox(
+                width: double.infinity,
+                height: 260,
+                borderRadius: 24,
+              ),
             ),
-          ),
-          const SizedBox(height: 20),
+            const SizedBox(height: 20),
 
-          // Focused store info strip
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 20),
-            child: SkeletonBox(width: 200, height: 16),
-          ),
-          const SizedBox(height: 8),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 20),
-            child: SkeletonBox(width: 120, height: 12),
-          ),
-          const SizedBox(height: 24),
-
-          // Section header
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 20),
-            child: SkeletonBox(width: 140, height: 18),
-          ),
-          const SizedBox(height: 12),
-
-          // Cross-store product row
-          SizedBox(
-            height: 190,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              physics: const NeverScrollableScrollPhysics(),
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              itemCount: 3,
-              separatorBuilder: (_, _) => const SizedBox(width: 12),
-              itemBuilder: (context, index) => const _CrossStoreCardSkeleton(),
+            // Focused store info strip
+            const Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: AppConstants.feedMargin,
+              ),
+              child: SkeletonBox(width: 200, height: 16),
             ),
-          ),
+            const SizedBox(height: 8),
+            const Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: AppConstants.feedMargin,
+              ),
+              child: SkeletonBox(width: 120, height: 12),
+            ),
+            const SizedBox(height: 24),
+
+            // Section header
+            const Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: AppConstants.feedMargin,
+              ),
+              child: SkeletonBox(width: 140, height: 18),
+            ),
+            const SizedBox(height: 12),
+
+            // Cross-store product row
+            SizedBox(
+              height: 190,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                physics: const NeverScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppConstants.feedMargin,
+                ),
+                itemCount: 3,
+                separatorBuilder: (_, _) =>
+                    const SizedBox(width: AppConstants.productGridGutter),
+                itemBuilder: (context, index) =>
+                    const _CrossStoreCardSkeleton(),
+              ),
+            ),
           ],
         ),
       ),
@@ -253,4 +275,3 @@ class _CrossStoreCardSkeleton extends StatelessWidget {
     );
   }
 }
-

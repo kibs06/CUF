@@ -428,10 +428,15 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
   Widget _buildGrid(List<Map<String, dynamic>> results) {
     return MasonryGridView.count(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+      padding: const EdgeInsets.fromLTRB(
+        AppConstants.feedMargin,
+        12,
+        AppConstants.feedMargin,
+        32,
+      ),
       crossAxisCount: 2,
-      crossAxisSpacing: 16,
-      mainAxisSpacing: 16,
+      crossAxisSpacing: AppConstants.productGridGutter,
+      mainAxisSpacing: AppConstants.productGridGutter,
       itemCount: results.length,
       itemBuilder: (context, index) {
         final prod = results[index];

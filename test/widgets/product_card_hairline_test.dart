@@ -15,143 +15,175 @@ import 'package:app/widgets/sole_product_card.dart';
 /// Deliberately terse: the test font is Ahem (every glyph a full-size
 /// square), so a long name or category overflows the price row.
 Map<String, dynamic> product({String? saleEndsAt}) => {
-      'id': 'p1',
-      'name': 'Dress Boot',
-      'category': 'Boots',
-      'price': 1399.0,
-      'review_count': 0,
-      'images': <String>['https://example.com/a.jpg'],
-      'sale_ends_at': saleEndsAt,
-    };
+  'id': 'p1',
+  'name': 'Dress Boot',
+  'category': 'Boots',
+  'price': 1399.0,
+  'review_count': 0,
+  'images': <String>['https://example.com/a.jpg'],
+  'sale_ends_at': saleEndsAt,
+};
 
-Widget wrap(Widget child) =>
-    MaterialApp(home: Scaffold(body: Center(child: child)));
+Widget wrap(Widget child) => MaterialApp(
+  home: Scaffold(body: Center(child: child)),
+);
 
 Border borderOf(BoxDecoration? decoration) => decoration!.border! as Border;
 
 void main() {
   group('SoleProductCard (grid card)', () {
-    testWidgets('draws a 1px neutral hairline around the card surface',
-        (tester) async {
-      await tester.pumpWidget(wrap(
-        // Width only: with an imageAspectRatio the masonry card is
-        // self-sizing (MainAxisSize.min), exactly as the grid uses it.
-        SizedBox(
-          width: 240,
-          child: SoleProductCard(
-            product: product(),
-            imageAspectRatio: 1.0,
-            onTap: () {},
+    testWidgets('draws a 1px neutral hairline around the card surface', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        wrap(
+          // Width only: with an imageAspectRatio the masonry card is
+          // self-sizing (MainAxisSize.min), exactly as the grid uses it.
+          SizedBox(
+            width: 240,
+            child: SoleProductCard(
+              product: product(),
+              imageAspectRatio: 1.0,
+              onTap: () {},
+            ),
           ),
         ),
-      ));
+      );
 
-      final container =
-          tester.widget<Container>(find.byKey(SoleProductCard.hairlineKey));
+      final container = tester.widget<Container>(
+        find.byKey(SoleProductCard.hairlineKey),
+      );
       final border = borderOf(container.decoration as BoxDecoration?);
 
       expect(border.top.width, 1);
       expect(border.top.style, BorderStyle.solid);
-      expect(border.top.color, AppConstants.borderGray,
-          reason: 'the card edge must use the neutral hairline token');
-      expect(border.top.color, isNot(AppConstants.surfaceLight),
-          reason: 'a border matching the white page fill is invisible');
+      expect(
+        border.top.color,
+        AppConstants.cardEdge,
+        reason: 'the card edge must use the neutral hairline token',
+      );
+      expect(
+        border.top.color,
+        isNot(AppConstants.surfaceLight),
+        reason: 'a border matching the white page fill is invisible',
+      );
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('image corners stay concentric with the bordered card',
-        (tester) async {
+    testWidgets('image corners stay concentric with the bordered card', (
+      tester,
+    ) async {
       // The card radius is 16 and the image clip is 15 — the 1px difference
       // IS the border's own inset, so the two corners stay concentric. Change
       // one without the other and the image corner visibly pokes out of the
       // hairline.
-      await tester.pumpWidget(wrap(
-        SizedBox(
-          width: 240,
-          child: SoleProductCard(
-            product: product(),
-            imageAspectRatio: 1.0,
-            onTap: () {},
+      await tester.pumpWidget(
+        wrap(
+          SizedBox(
+            width: 240,
+            child: SoleProductCard(
+              product: product(),
+              imageAspectRatio: 1.0,
+              onTap: () {},
+            ),
           ),
         ),
-      ));
+      );
 
-      final container =
-          tester.widget<Container>(find.byKey(SoleProductCard.hairlineKey));
+      final container = tester.widget<Container>(
+        find.byKey(SoleProductCard.hairlineKey),
+      );
       final decoration = container.decoration as BoxDecoration;
       expect(decoration.borderRadius, AppConstants.cardRadius);
 
       final clipRadii = tester
-          .widgetList<ClipRRect>(find.descendant(
-            of: find.byKey(SoleProductCard.hairlineKey),
-            matching: find.byType(ClipRRect),
-          ))
+          .widgetList<ClipRRect>(
+            find.descendant(
+              of: find.byKey(SoleProductCard.hairlineKey),
+              matching: find.byType(ClipRRect),
+            ),
+          )
           .map((c) => c.borderRadius)
           .toList();
       expect(
         clipRadii,
-        contains(const BorderRadius.only(
-          topLeft: Radius.circular(15),
-          topRight: Radius.circular(15),
-        )),
+        contains(
+          const BorderRadius.only(
+            topLeft: Radius.circular(15),
+            topRight: Radius.circular(15),
+          ),
+        ),
       );
       expect(tester.takeException(), isNull);
     });
   });
 
   group('HorizontalProductCard (rail card)', () {
-    testWidgets('rings the thumbnail with the same 1px neutral hairline',
-        (tester) async {
-      await tester.pumpWidget(wrap(
-        SizedBox(
-          height: 180,
-          child: HorizontalProductCard(product: product(), onTap: () {}),
+    testWidgets('wraps the photo, name and price in the same 1px card edge', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        wrap(
+          SizedBox(
+            height: 180,
+            child: HorizontalProductCard(product: product(), onTap: () {}),
+          ),
         ),
-      ));
+      );
 
-      final container = tester
-          .widget<Container>(find.byKey(HorizontalProductCard.thumbnailHairlineKey));
-      final border = borderOf(container.foregroundDecoration as BoxDecoration?);
+      final container = tester.widget<Container>(
+        find.byKey(HorizontalProductCard.cardEdgeKey),
+      );
+      final border = borderOf(container.decoration as BoxDecoration?);
 
       expect(border.top.width, 1);
-      expect(border.top.color, AppConstants.borderGray);
-      expect(container.decoration, isNull,
-          reason: 'a background border would inset the child and break the '
-              '130x180 rail contract — it must be a foregroundDecoration');
+      expect(border.top.color, AppConstants.cardEdge);
+      expect(
+        container.foregroundDecoration,
+        isNull,
+        reason:
+            'the whole rail card owns the edge now; the old thumbnail-only '
+            'foreground ring was the source of the mismatch',
+      );
     });
 
-    testWidgets('the hairline does not resize the 130x124 thumbnail',
-        (tester) async {
-      await tester.pumpWidget(wrap(
-        SizedBox(
-          height: 180,
-          child: HorizontalProductCard(product: product(), onTap: () {}),
+    testWidgets('the card edge insets the thumbnail by exactly its own width', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        wrap(
+          SizedBox(
+            height: 180,
+            child: HorizontalProductCard(product: product(), onTap: () {}),
+          ),
         ),
-      ));
+      );
 
-      expect(tester.getSize(find.byType(Image)).width, 130);
+      expect(tester.getSize(find.byType(Image)).width, 128);
       expect(tester.getSize(find.byType(Image)).height, 124);
     });
 
-    testWidgets('a sale card keeps the same thumbnail geometry',
-        (tester) async {
-      await tester.pumpWidget(wrap(
-        SizedBox(
-          height: 180,
-          child: HorizontalProductCard(
-            product: product(
-              saleEndsAt: DateTime.now()
-                  .add(const Duration(days: 2))
-                  .toIso8601String(),
+    testWidgets('a sale card keeps the same thumbnail geometry', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        wrap(
+          SizedBox(
+            height: 180,
+            child: HorizontalProductCard(
+              product: product(
+                saleEndsAt: DateTime.now()
+                    .add(const Duration(days: 2))
+                    .toIso8601String(),
+              ),
+              onTap: () {},
             ),
-            onTap: () {},
           ),
         ),
-      ));
+      );
 
-      expect(tester.getSize(find.byType(Image)).width, 130);
-      expect(find.byKey(HorizontalProductCard.thumbnailHairlineKey),
-          findsOneWidget);
+      expect(tester.getSize(find.byType(Image)).width, 128);
+      expect(find.byKey(HorizontalProductCard.cardEdgeKey), findsOneWidget);
     });
   });
 }

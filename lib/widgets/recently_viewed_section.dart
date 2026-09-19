@@ -43,7 +43,7 @@ class RecentlyViewedSection extends StatefulWidget {
 class _RecentlyViewedSectionState extends State<RecentlyViewedSection> {
   /// Number of cards kept visible before the fade — exactly two full rows.
   static const int _visibleItems = 4;
-  static const double _spacing = 16;
+  static const double _spacing = AppConstants.productGridGutter;
 
   /// The fade band always covers the partial-card "poke" and never exceeds
   /// these bounds.
@@ -55,8 +55,10 @@ class _RecentlyViewedSectionState extends State<RecentlyViewedSection> {
   static double _provisionalCardHeight(double cellWidth) =>
       cellWidth / 0.78 + 140;
 
-  final List<GlobalKey> _probeKeys =
-      List.generate(_visibleItems, (_) => GlobalKey());
+  final List<GlobalKey> _probeKeys = List.generate(
+    _visibleItems,
+    (_) => GlobalKey(),
+  );
 
   /// Number of probes actually in the tree this build (min(4, item count)).
   int _probeCount = 0;
@@ -152,9 +154,9 @@ class _RecentlyViewedSectionState extends State<RecentlyViewedSection> {
     Map<String, dynamic> item,
   ) {
     return provider.products.cast<Map<String, dynamic>?>().firstWhere(
-          (p) => p?['id']?.toString() == item['id'],
-          orElse: () => null,
-        );
+      (p) => p?['id']?.toString() == item['id'],
+      orElse: () => null,
+    );
   }
 
   @override
@@ -165,13 +167,19 @@ class _RecentlyViewedSectionState extends State<RecentlyViewedSection> {
     // hidden from browse) and deleted products are excluded so the grid
     // never shows a stale price with a dead tap.
     final liveItems = widget.items
-        .where((item) => productProvider.products
-            .any((p) => p['id']?.toString() == item['id']))
+        .where(
+          (item) => productProvider.products.any(
+            (p) => p['id']?.toString() == item['id'],
+          ),
+        )
         .toList();
 
     if (liveItems.isEmpty) {
       return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppConstants.feedMargin,
+          vertical: 8,
+        ),
         child: Row(
           children: [
             Icon(
@@ -201,7 +209,8 @@ class _RecentlyViewedSectionState extends State<RecentlyViewedSection> {
         _scheduleMeasure();
 
         final needsCap = liveItems.length > _visibleItems;
-        final heights = _probeHeights ??
+        final heights =
+            _probeHeights ??
             List.generate(
               _probeCount,
               (_) => _provisionalCardHeight(cellWidth),
@@ -209,6 +218,9 @@ class _RecentlyViewedSectionState extends State<RecentlyViewedSection> {
         final (cap, fadeHeight) = _capAndFade(heights);
 
         final grid = MasonryGridView.count(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppConstants.feedMargin,
+          ),
           crossAxisCount: 2,
           crossAxisSpacing: _spacing,
           mainAxisSpacing: _spacing,
@@ -272,7 +284,7 @@ class _RecentlyViewedSectionState extends State<RecentlyViewedSection> {
                       child: SoleProductCard(
                         product:
                             _liveProduct(productProvider, liveItems[i]) ??
-                                const {},
+                            const {},
                         imageAspectRatio: productGridRatio(liveItems[i]),
                         onTap: () {},
                       ),
@@ -364,7 +376,10 @@ class _SeeMorePill extends StatelessWidget {
         borderRadius: AppConstants.stadiumRadius,
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppConstants.feedMargin,
+            vertical: 8,
+          ),
           decoration: BoxDecoration(
             color: AppConstants.surfaceLight,
             borderRadius: AppConstants.stadiumRadius,

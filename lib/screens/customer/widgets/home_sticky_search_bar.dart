@@ -26,9 +26,9 @@ class HomeStickySearchBar extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: EdgeInsets.fromLTRB(
-        16,
+        AppConstants.feedMargin,
         MediaQuery.of(context).padding.top + 6,
-        12,
+        AppConstants.feedMargin,
         10,
       ),
       decoration: BoxDecoration(
@@ -51,9 +51,7 @@ class HomeStickySearchBar extends StatelessWidget {
               decoration: BoxDecoration(
                 color: AppConstants.surfaceLight,
                 borderRadius: BorderRadius.circular(4),
-                border: Border.all(
-                  color: lineColor.withValues(alpha: 0.6),
-                ),
+                border: Border.all(color: lineColor.withValues(alpha: 0.6)),
               ),
               child: TextField(
                 onTap: onTap,

@@ -24,9 +24,11 @@ class CollectionScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final productProvider = context.watch<ProductProvider>();
     var filtered = productProvider.products
-        .where((p) =>
-            (p['category'] as String).toLowerCase() ==
-            categoryFilter.toLowerCase())
+        .where(
+          (p) =>
+              (p['category'] as String).toLowerCase() ==
+              categoryFilter.toLowerCase(),
+        )
         .toList();
 
     // If storeId provided, further filter by store
@@ -49,7 +51,10 @@ class CollectionScreen extends StatelessWidget {
       body: RefreshIndicator(
         color: AppConstants.primary,
         onRefresh: () async {
-          await Provider.of<ProductProvider>(context, listen: false).loadProducts(hideOutOfStock: true);
+          await Provider.of<ProductProvider>(
+            context,
+            listen: false,
+          ).loadProducts(hideOutOfStock: true);
         },
         child: Stack(
           children: [
@@ -58,7 +63,9 @@ class CollectionScreen extends StatelessWidget {
                 ? ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     children: [
-                      SizedBox(height: MediaQuery.of(context).size.height * 0.2),
+                      SizedBox(
+                        height: MediaQuery.of(context).size.height * 0.2,
+                      ),
                       Center(
                         child: Column(
                           children: [
@@ -81,10 +88,10 @@ class CollectionScreen extends StatelessWidget {
                   )
                 : MasonryGridView.count(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(20),
+                    padding: const EdgeInsets.all(AppConstants.feedMargin),
                     crossAxisCount: 2,
-                    crossAxisSpacing: 16,
-                    mainAxisSpacing: 16,
+                    crossAxisSpacing: AppConstants.productGridGutter,
+                    mainAxisSpacing: AppConstants.productGridGutter,
                     itemCount: filtered.length,
                     itemBuilder: (context, index) {
                       final prod = filtered[index];

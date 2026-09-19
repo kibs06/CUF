@@ -78,7 +78,12 @@ class HomeCategoryRow extends StatelessWidget {
     // here needs a virtualised list).
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+      padding: const EdgeInsets.fromLTRB(
+        AppConstants.feedMargin,
+        6,
+        AppConstants.feedMargin,
+        0,
+      ),
       child: Row(
         children: [
           for (var i = 0; i < chips.length; i++) ...[
@@ -178,7 +183,10 @@ class HomeCategoryRow extends StatelessWidget {
     final painter = TextPainter(
       text: TextSpan(
         text: text,
-        style: AppConstants.bodyStyle(fontSize: 13, fontWeight: FontWeight.w700),
+        style: AppConstants.bodyStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+        ),
       ),
       textDirection: TextDirection.ltr,
     )..layout();

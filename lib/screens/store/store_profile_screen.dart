@@ -122,7 +122,10 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
 
   Future<void> _loadData() async {
     // Refresh products from server so new/removed products appear on pull
-    await Provider.of<ProductProvider>(context, listen: false).loadProducts(hideOutOfStock: true);
+    await Provider.of<ProductProvider>(
+      context,
+      listen: false,
+    ).loadProducts(hideOutOfStock: true);
     final store = await _storeService.fetchStoreById(widget.storeId);
     final stories = await _storeService.getStoryEntriesForStore(widget.storeId);
     // Fetch the DB-truth follower count
@@ -315,10 +318,13 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                               for (final t in store.tags)
                                 Container(
                                   padding: const EdgeInsets.symmetric(
-                                      horizontal: 10, vertical: 4),
+                                    horizontal: 10,
+                                    vertical: 4,
+                                  ),
                                   decoration: BoxDecoration(
-                                    color: AppConstants.primary
-                                        .withValues(alpha: 0.08),
+                                    color: AppConstants.primary.withValues(
+                                      alpha: 0.08,
+                                    ),
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: Text(
@@ -330,14 +336,14 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                                     ),
                                   ),
                                 ),
-                              ],
-                            ),
-                          ],
+                            ],
+                          ),
                         ],
-                      ),
+                      ],
                     ),
                   ),
                 ),
+              ),
 
             // ── Sliver 1.5: Store Reviews (direct "Rate this store") ──
             SliverToBoxAdapter(
@@ -376,7 +382,9 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
               SliverToBoxAdapter(
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppConstants.feedMargin,
+                  ),
                   child: Row(
                     children: [
                       for (var i = 0; i < _collections.length; i++) ...[
@@ -610,7 +618,12 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
             // ── Sliver 5: All Products Grid ──
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 28, 20, 8),
+                padding: const EdgeInsets.fromLTRB(
+                  AppConstants.feedMargin,
+                  28,
+                  AppConstants.feedMargin,
+                  8,
+                ),
                 child: Text(
                   'All Products',
                   style: AppConstants.headlineStyle(fontSize: 18),
@@ -681,11 +694,13 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
               )
             else
               SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppConstants.feedMargin,
+                ),
                 sliver: SliverMasonryGrid.count(
                   crossAxisCount: 2,
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 16,
+                  crossAxisSpacing: AppConstants.productGridGutter,
+                  mainAxisSpacing: AppConstants.productGridGutter,
                   childCount: sorted.length,
                   itemBuilder: (context, index) {
                     final prod = sorted[index];
@@ -870,8 +885,18 @@ class _StoreReviewsSection extends StatelessWidget {
     final dt = DateTime.tryParse(iso ?? '');
     if (dt == null) return '';
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
   }
@@ -966,7 +991,9 @@ class _StoreReviewsSection extends StatelessWidget {
           if (myReview != null) ...[_buildMyReviewCard(context, myReview)],
 
           // Rate CTA — only for eligible verified buyers who haven't rated
-          if (myReview == null && provider.canReviewStore) ...[_buildRateCta(context)],
+          if (myReview == null && provider.canReviewStore) ...[
+            _buildRateCta(context),
+          ],
 
           // Loading indicator on first load
           if (provider.isLoadingStoreLevelReviews && reviews.isEmpty)
@@ -1200,52 +1227,54 @@ class _StoreProfileSkeleton extends StatelessWidget {
           children: [
             // Banner
             const SkeletonBox(
-            width: double.infinity,
-            height: 220,
-            borderRadius: 0,
-          ),
-          const SizedBox(height: 16),
-
-          // Stats chips
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              children: [
-                SkeletonBox(width: 90, height: 12),
-                SizedBox(width: 16),
-                SkeletonBox(width: 70, height: 12),
-                SizedBox(width: 16),
-                SkeletonBox(width: 60, height: 12),
-              ],
+              width: double.infinity,
+              height: 220,
+              borderRadius: 0,
             ),
-          ),
-          const SizedBox(height: 28),
+            const SizedBox(height: 16),
 
-          // Section title
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 20),
-            child: SkeletonBox(width: 180, height: 18),
-          ),
-          const SizedBox(height: 12),
-
-          // Product grid (2 columns x 3 rows)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Column(
-              children: [
-                for (int row = 0; row < 3; row++) ...[
-                  const Row(
-                    children: [
-                      Expanded(child: _StoreProductCardSkeleton()),
-                      SizedBox(width: 16),
-                      Expanded(child: _StoreProductCardSkeleton()),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
+            // Stats chips
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  SkeletonBox(width: 90, height: 12),
+                  SizedBox(width: 16),
+                  SkeletonBox(width: 70, height: 12),
+                  SizedBox(width: 16),
+                  SkeletonBox(width: 60, height: 12),
                 ],
-              ],
+              ),
             ),
-          ),
+            const SizedBox(height: 28),
+
+            // Section title
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20),
+              child: SkeletonBox(width: 180, height: 18),
+            ),
+            const SizedBox(height: 12),
+
+            // Product grid (2 columns x 3 rows)
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppConstants.feedMargin,
+              ),
+              child: Column(
+                children: [
+                  for (int row = 0; row < 3; row++) ...[
+                    const Row(
+                      children: [
+                        Expanded(child: _StoreProductCardSkeleton()),
+                        SizedBox(width: 16),
+                        Expanded(child: _StoreProductCardSkeleton()),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                ],
+              ),
+            ),
           ],
         ),
       ),

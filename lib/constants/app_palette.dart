@@ -31,6 +31,7 @@ class AppPalette {
     required this.hairline,
     required this.hairlineSoft,
     required this.hairlineOnRaised,
+    required this.cardEdge,
     required this.onPage,
     required this.muted,
     required this.mutedStrong,
@@ -67,6 +68,9 @@ class AppPalette {
   /// [raised] rather than [page]. Slightly stronger than [hairline] on light
   /// and on dark, because it is that card's only edge.
   final Color hairlineOnRaised;
+
+  /// The stronger edge used only around product cards.
+  final Color cardEdge;
 
   /// Primary text and icon ink on [page] / [raised].
   final Color onPage;
@@ -107,6 +111,7 @@ class AppPalette {
     hairline: Color(0xFFE5E5E5),
     hairlineSoft: Color(0xFFEFEFEF),
     hairlineOnRaised: Color(0xFFE8E8E8),
+    cardEdge: Color(0xFFC9C9C9),
     onPage: Color(0xFF111111),
     muted: Color(0xFF6B6B6B),
     mutedStrong: Color(0xFF4A4A4A),
@@ -134,6 +139,7 @@ class AppPalette {
     hairline: Color(0xFF555555),
     hairlineSoft: Color(0x24FFFFFF),
     hairlineOnRaised: Color(0xFF3A3A3A),
+    cardEdge: Color(0xFF555555),
     onPage: Color(0xFFF5F5F5),
     muted: Color(0xFFA3A3A3),
     mutedStrong: Color(0xFFD0D0D0),

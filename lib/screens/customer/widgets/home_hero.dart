@@ -20,7 +20,8 @@ class HomeHero extends StatefulWidget {
     super.key,
     this.onCartTap,
     this.cartCount = 0,
-    this.onSearchTap,    this.onAudienceTap,
+    this.onSearchTap,
+    this.onAudienceTap,
   });
 
   /// Called when the cart icon is tapped.
@@ -167,9 +168,7 @@ class _HomeHeroState extends State<HomeHero> {
     final banners = context.select<BannerProvider, List<Map<String, dynamic>>>(
       (p) => p.banners,
     );
-    final isLoading = context.select<BannerProvider, bool>(
-      (p) => p.isLoading,
-    );
+    final isLoading = context.select<BannerProvider, bool>((p) => p.isLoading);
     final categories = context.select<ProductProvider, List<String>>(
       (p) => p.categories,
     );
@@ -271,8 +270,7 @@ class _HomeHeroState extends State<HomeHero> {
                   const Spacer(),
 
                   // Hero text block + CTA + dots
-                  if (displayCount > 0)
-                    _buildBottomContent(activeBanners),
+                  if (displayCount > 0) _buildBottomContent(activeBanners),
                 ],
               ),
             ),
@@ -384,14 +382,17 @@ class _HomeHeroState extends State<HomeHero> {
     final page = _bannerController.page?.round() ?? _bannerIndex;
     final count = _bannerController.position.viewportDimension > 0
         ? (_bannerController.position.maxScrollExtent /
-                _bannerController.position.viewportDimension + 1)
-            .round()
+                      _bannerController.position.viewportDimension +
+                  1)
+              .round()
         : 1;
 
     int targetPage;
     if (velocity.abs() > 300) {
       // Fast swipe — go to next/previous page
-      targetPage = velocity < 0 ? (page + 1).clamp(0, count - 1) : (page - 1).clamp(0, count - 1);
+      targetPage = velocity < 0
+          ? (page + 1).clamp(0, count - 1)
+          : (page - 1).clamp(0, count - 1);
     } else {
       // Slow drag — snap to nearest page
       targetPage = page;
@@ -441,7 +442,12 @@ class _HomeHeroState extends State<HomeHero> {
 
   Widget _buildIconRow() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+      padding: const EdgeInsets.fromLTRB(
+        AppConstants.feedMargin,
+        6,
+        AppConstants.feedMargin,
+        0,
+      ),
       child: Row(
         children: [
           // Search bar — a read-only stand-in for the search page.
@@ -451,9 +457,7 @@ class _HomeHeroState extends State<HomeHero> {
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.85),
                 borderRadius: BorderRadius.circular(4),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.3),
-                ),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
               ),
               child: TextField(
                 onTap: widget.onSearchTap,
@@ -514,10 +518,10 @@ class _HomeHeroState extends State<HomeHero> {
 
   // ── Bottom content with banner data ─────────────────────────
 
-  Widget _buildBottomContent(
-    List<Map<String, dynamic>> banners,
-  ) {
-    final currentBanner = banners.isNotEmpty ? banners[_bannerIndex.clamp(0, banners.length - 1)] : null;
+  Widget _buildBottomContent(List<Map<String, dynamic>> banners) {
+    final currentBanner = banners.isNotEmpty
+        ? banners[_bannerIndex.clamp(0, banners.length - 1)]
+        : null;
     final eyebrow = currentBanner?['eyebrow_text']?.toString();
     final title = currentBanner?['title']?.toString();
     final ctaLabel = currentBanner?['cta_label']?.toString();
@@ -529,7 +533,7 @@ class _HomeHeroState extends State<HomeHero> {
         children: [
           // Hero text block (left)
           Positioned(
-            left: 18,
+            left: AppConstants.feedMargin,
             bottom: 44,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -544,7 +548,8 @@ class _HomeHeroState extends State<HomeHero> {
                       letterSpacing: 2,
                     ),
                   ),
-                if (eyebrow != null && eyebrow.isNotEmpty) const SizedBox(height: 4),
+                if (eyebrow != null && eyebrow.isNotEmpty)
+                  const SizedBox(height: 4),
                 if (title != null && title.isNotEmpty)
                   Text(
                     title.toUpperCase(),
@@ -554,7 +559,9 @@ class _HomeHeroState extends State<HomeHero> {
                       color: Colors.white,
                     ).copyWith(height: 1.05),
                   ),
-                if (ctaLabel != null && ctaLabel.isNotEmpty && linkType != 'none') ...[
+                if (ctaLabel != null &&
+                    ctaLabel.isNotEmpty &&
+                    linkType != 'none') ...[
                   const SizedBox(height: 8),
                   GestureDetector(
                     onTap: () {
@@ -578,7 +585,7 @@ class _HomeHeroState extends State<HomeHero> {
           // Page indicator dots (bottom-left)
           if (banners.length > 1)
             Positioned(
-              left: 18,
+              left: AppConstants.feedMargin,
               bottom: 16,
               child: Row(
                 children: List.generate(banners.length, (i) {
@@ -602,9 +609,6 @@ class _HomeHeroState extends State<HomeHero> {
       ),
     );
   }
-
-
-
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -700,6 +704,3 @@ class _IconBadge extends StatelessWidget {
     );
   }
 }
-
-
-
