@@ -42,8 +42,11 @@ Widget wrap(
 }
 
 /// The arrow's own rect, in global coordinates — [AnimatedSlide] is a paint
-/// translation, so this is where the mark is actually drawn.
-Rect arrowRect(WidgetTester tester) => tester.getRect(find.byType(ArrowGlyph));
+/// translation, so this is where the mark is actually drawn. Offstage widgets
+/// count: once a route covers the card the route keeps it alive but offstage,
+/// and "the covered arrow has not moved" is exactly what the mute test reads.
+Rect arrowRect(WidgetTester tester) =>
+    tester.getRect(find.byType(ArrowGlyph, skipOffstage: false));
 
 void main() {
   testWidgets('is the size poster, with different copy', (tester) async {
@@ -151,5 +154,168 @@ void main() {
     final box = arrowRect(tester);
     expect(box.width, greaterThan(0));
     expect(tester.takeException(), isNull);
+  });
+
+  group('the idle beat', () {
+    /// How far the arrow has drifted from where it was when [pumpWidget]
+    /// ran — positive means it is out on a beat.
+    double driftFrom(WidgetTester tester, Rect rest) =>
+        arrowRect(tester).left - rest.left;
+
+    /// Pumps [window] in 16ms steps and returns the LARGEST drift seen.
+    ///
+    /// Scanning, not sampling: the beat's exact phase at a given wall-clock
+    /// moment depends on which frame the controller first ticks in, and a test
+    /// that bets on that is testing FakeAsync, not the card. What the design
+    /// pins is the envelope — how far out it goes, that it comes back — and
+    /// the envelope is exactly what a scan measures.
+    Future<double> maxDriftOver(
+      WidgetTester tester,
+      Rect rest,
+      Duration window,
+    ) async {
+      var max = 0.0;
+      var remaining = window;
+      const step = Duration(milliseconds: 16);
+      while (remaining > Duration.zero) {
+        final d = remaining < step ? remaining : step;
+        await tester.pump(d);
+        remaining -= d;
+        final drift = driftFrom(tester, rest);
+        if (drift > max) max = drift;
+      }
+      return max;
+    }
+
+    /// One full beat: the hold, then the glide, then the return.
+    Duration beatPeriod() =>
+        SeeMoreCard.idleHold + SeeMoreCard.idleGlide + SeeMoreCard.idleReturn;
+
+    testWidgets('moves on its own: glides out, comes back, and loops', (
+      tester,
+    ) async {
+      await tester.pumpWidget(wrap(SeeMoreCard(onTap: () {})));
+      final rest = arrowRect(tester);
+
+      // One full beat: the arrow went well out (more than a third of the
+      // press travel — a beat that never left the ground would not be a
+      // beat) and came all the way back. The hold is part of what is being
+      // verified here: the SCAN covers stillness and motion alike, so a card
+      // that hummed constantly would still pass the max, but the return-to-
+      // zero at the end of the window is what a hum never does.
+      final first = await maxDriftOver(tester, rest, beatPeriod());
+      expect(first, greaterThan(rest.width * SeeMoreCard.nudge / 3));
+      expect(first, lessThan(rest.width * SeeMoreCard.nudge + 0.5));
+      expect(driftFrom(tester, rest), moreOrLessEquals(0, epsilon: 0.5));
+
+      // The next beat: still looping.
+      final second = await maxDriftOver(tester, rest, beatPeriod());
+      expect(second, greaterThan(rest.width * SeeMoreCard.nudge / 3));
+      expect(driftFrom(tester, rest), moreOrLessEquals(0, epsilon: 0.5));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('pressing pauses the beat and takes the arrow forward', (
+      tester,
+    ) async {
+      await tester.pumpWidget(wrap(SeeMoreCard(onTap: () {})));
+      final rest = arrowRect(tester);
+
+      // Catch the arrow mid-beat, where a naive implementation would let the
+      // loop keep driving under the finger.
+      await maxDriftOver(tester, rest, SeeMoreCard.idleHold);
+      await tester.pump(SeeMoreCard.idleGlide * 0.5);
+      expect(driftFrom(tester, rest), greaterThan(0));
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byType(FitCard)),
+      );
+      await tester.pumpAndSettle();
+
+      // Pressed pose is the FULL travel (the outer slide), and it holds there:
+      // a scanned beat-and-a-half of wall clock moves the arrow no further
+      // and no back — the idle motor is paused, not fighting the press.
+      final pressed = arrowRect(tester);
+      expect(
+        pressed.left - rest.left,
+        moreOrLessEquals(rest.width * SeeMoreCard.nudge, epsilon: 1.0),
+      );
+      final whilePressed = await maxDriftOver(tester, rest, beatPeriod());
+      expect(
+        whilePressed,
+        moreOrLessEquals(rest.width * SeeMoreCard.nudge, epsilon: 0.5),
+      );
+
+      // Release: back to rest, and the beat resumes (a scanned window sees it
+      // glide again).
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(driftFrom(tester, rest), moreOrLessEquals(0, epsilon: 0.5));
+      final afterRelease = await maxDriftOver(tester, rest, beatPeriod());
+      expect(afterRelease, greaterThan(rest.width * SeeMoreCard.nudge / 3));
+      expect(driftFrom(tester, rest), moreOrLessEquals(0, epsilon: 0.5));
+    });
+
+    testWidgets('a reduced-motion platform never starts the beat', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        wrap(SeeMoreCard(onTap: () {}), disableAnimations: true),
+      );
+      final rest = arrowRect(tester);
+
+      // Well past two beats' worth of wall clock: nothing has moved, and
+      // nothing is scheduled to move.
+      final beat =
+          SeeMoreCard.idleHold + SeeMoreCard.idleGlide + SeeMoreCard.idleReturn;
+      await tester.pump(beat + beat);
+      expect(driftFrom(tester, rest), moreOrLessEquals(0, epsilon: 0.5));
+    });
+
+    testWidgets('a covered route disposes the card, motor and all', (
+      tester,
+    ) async {
+      // The home feed pushes a product page from this card, so covered-by-a-
+      // route is the state the app actually leaves it in. An opaque push takes
+      // the covered subtree out of the tree entirely — which stops the beat
+      // the only way that matters: the motor's timer and ticker are disposed
+      // with it. The assertion is that the mid-beat teardown is clean; a
+      // `setState after dispose` here is the exact failure a repeating ticker
+      // would produce.
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => Center(
+                child: ElevatedButton(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const Scaffold(
+                        body: Center(child: Text('the next page')),
+                      ),
+                    ),
+                  ),
+                  child: const Text('go'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // Catch the motor mid-flight, then cover the card.
+      await tester.pump(SeeMoreCard.idleHold + SeeMoreCard.idleGlide * 0.5);
+      await tester.tap(find.text('go'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byType(SeeMoreCard, skipOffstage: false),
+        findsNothing,
+        reason:
+            'an opaque route disposes the covered subtree — the beat '
+            'ends with the card, not alongside it',
+      );
+      expect(tester.takeException(), isNull);
+    });
   });
 }
