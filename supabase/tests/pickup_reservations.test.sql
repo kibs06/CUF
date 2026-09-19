@@ -22,7 +22,7 @@
 -- ══════════════════════════════════════════════════════════════════
 
 begin;
-select plan(129);
+select plan(130);
 
 -- ── helpers ────────────────────────────────────────────────────────
 create or replace function public.tmp_pickup_claims(p_user uuid)
@@ -75,8 +75,17 @@ values ('e0000000-0000-0000-0000-000000000004','40', 5),
 -- ══ 1. Structure ═══════════════════════════════════════════════════
 select has_table('public','pickup_reservations','1: the table exists');
 select has_function('public','request_pickup_reservation',
-                    array['uuid','text','integer'],
-                    '2: request RPC exists');
+                    array['uuid','text','integer','text'],
+                    '2: request RPC exists (4-arg — the colour is the 4th)');
+-- The 3-argument signature is DROPPED by
+-- 20260917120000_add_pickup_reservation_color.sql before the 4-argument one is
+-- created, on purpose: Postgres resolves a 3-argument call against BOTH
+-- signatures and raises 42725 ("function is not unique") rather than preferring
+-- either. If the old signature is ever restored beside the new one, every
+-- already-shipped client call breaks — so its absence is asserted, not assumed.
+select hasnt_function('public','request_pickup_reservation',
+                      array['uuid','text','integer'],
+                      '2b: the superseded 3-arg signature is gone');
 select has_function('public','cancel_pickup_reservation', array['uuid'],
                     '3: cancel RPC exists');
 select has_function('public','fulfill_pickup_reservation', array['uuid','text'],
@@ -948,6 +957,12 @@ select is(public.tmp_pickup_notices(
 --               than against the error message it produced
 -- A clean `db reset` builds the table through §3, so it cannot fail on a stale
 -- table; what it CAN do is refuse to let the declared shape drift silently.
+--
+-- The 19th column, `color`, is NOT declared by this file: it arrives with
+-- 20260917120000_add_pickup_reservation_color.sql. So the set asserted below is
+-- §3/§3b PLUS that migration — and this assertion is what keeps the two from
+-- drifting apart, which is exactly what it caught when the colour migration
+-- landed without it (the 18-column list failed on a table that now has 19).
 select is(
   (select array_agg(column_name order by column_name)::text
      from information_schema.columns
@@ -958,9 +973,11 @@ select is(
             'reserved_stock','status','pickup_deadline','reserved_at',
             'released_at','fulfilled_at','fulfilled_order_id',
             'reminder_sent_at','extension_count','store_extension_count',
-            'pickup_code','created_at'
+            'pickup_code','created_at',
+            -- 20260917120000_add_pickup_reservation_color.sql
+            'color'
           ]) as c),
-  '129: pickup_reservations has exactly the columns §3/§3b declare'
+  '129: pickup_reservations has exactly the columns §3, §3b and the colour migration declare'
 );
 
 select * from finish();
