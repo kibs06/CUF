@@ -210,7 +210,10 @@ where it differs from the sketch:
   copies of one header row + `ListView.separated` + trailing gap, which is how one rail quietly gains a 14px gap
   or a different card size. `lib/widgets/product_rail_section.dart` is now the shared body; `InYourSizeSection`
   was refactored onto it, and it takes an optional muted `meta` line — that parameter is the only difference
-  between "In your size, EU 42" and "Men's". Callers own just the two things that genuinely differ: which
+  between "In your size, EU 42" and "Men's". *(Sep 19, 2026: "In your size" has since left this body — it is
+  the Artisan Catalog's 2-column grid now, `lib/widgets/product_grid_section.dart` — so what the two share is the
+  header, `lib/widgets/product_section_header.dart`. Everything here about the rails themselves still holds.)*
+  Callers own just the two things that genuinely differ: which
   products, and what to say beside the title. It does **not** hide itself — hiding belongs to the section widget,
   which is the only thing that knows whether "nothing" means "not applicable" or "empty catalog".
 - **`AudienceSection` takes the audience, not a title.** The plan said the caller passes `"Men's"`; it takes

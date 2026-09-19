@@ -106,12 +106,12 @@ if (_searchKeyword.isEmpty &&
 
 When the user is searching or has a category chip (incl. `'On Sale'`) active, the section is hidden — the main grid below already shows the relevant items, so it would duplicate.
 
-**⚠️ Important gotcha — this section is a plain `SliverGrid`, NOT masonry.** Two `SliverMasonryGrid`s in one `CustomScrollView` trigger a scroll-offset-correction loop in `flutter_staggered_grid_view` 0.7.0 that yanks the viewport back and makes the bottom of the catalog unreachable. So:
+**This section is a plain `GridView`, NOT masonry.**
 - The section uses `SliverGridDelegateWithFixedCrossAxisCount` (2 columns, `childAspectRatio: 0.58` ≈ the masonry cards' average height).
-- Cards here are rendered **without `imageAspectRatio`** → `SoleProductCard` uses `Expanded` image fill and adapts to any cell height without overflow.
-- The main catalog below keeps `SliverMasonryGrid.count` + deterministic `imageAspectRatio` per product id.
+- Cards here are rendered **without `imageAspectRatio`** → `SoleProductCard` uses `Expanded` image fill and adapts to any cell height without overflow. They are uniform by design, which is exactly what a fixed `childAspectRatio` is for.
+- The main catalog below keeps `MasonryGridView.count` + deterministic `imageAspectRatio` per product id.
 
-**If you change this section: do not switch it to masonry, and do not add `imageAspectRatio` to these cards.**
+**Corrected Sep 19, 2026 — the older warning here overstated the risk.** It said two masonry grids in one `CustomScrollView` trigger a scroll-offset-correction loop in `flutter_staggered_grid_view` 0.7.0 that makes the bottom of the catalog unreachable. That loop was never reproduced with the box-level `MasonryGridView.count` grids this feed actually uses: "Based on your size" is now a second one (`lib/widgets/product_grid_section.dart`) directly above the catalog, and the feed still scrolls to its last card — pinned by `test/widgets/nested_masonry_scroll_test.dart`. What survives, and is the real reason to leave this section alone: its cards are **uniform**, so a deterministic grid is both exact and the honest shape here, and adding `imageAspectRatio` to them would make each card self-sizing inside a fixed cell (the empty-gaps/overflow defect this note was originally guarding against).
 
 ### 4.3 Per-card sale rendering — `lib/widgets/sole_product_card.dart`
 

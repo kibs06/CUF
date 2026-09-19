@@ -49,7 +49,7 @@ A `CustomScrollView` with slivers, wrapped in `RefreshIndicator`. No AppBar — 
    - "NEW ARRIVALS / CRAFTED FOR FALL" headline + floating product cards + "SHOP NOW" CTA + page dots
 2. **Sheet** — `SliverToBoxAdapter` with rounded top corners (`ClipRRect` `borderRadius: 22`), containing:
    - Foot profile banner (conditional — only for incomplete profiles)
-   - In your size rail (conditional — see below)
+   - Based on your size (conditional — see below — a `FitCard` size poster as the first cell of the Artisan Catalog's 2-column masonry grid, not a rail)
    - Men's / Women's / Kids' rails (conditional — see below; gated by `AppConstants.productAudienceEnabled`, **now `true`**, and each hides itself when the catalog holds nothing for that audience — which is every audience today: P4 measured all 15 live products as unset, so the rails render nothing until a seller answers "Who is it for?" on a product)
    - On Sale section (conditional — only when no search + no category filter + sale items exist)
    - Best Sellers rail (**currently gated off** by `kBestSellersRailEnabled = false` in `customer_home_screen.dart`; the widget and its data are kept, so re-enabling is a one-const flip. Also conditional — same gate as On Sale; hidden when nothing has sold). See `docs/AI/HOME_ON_SALE_ARCHITECTURE.md` §4.4
@@ -74,11 +74,33 @@ A `CustomScrollView` with slivers, wrapped in `RefreshIndicator`. No AppBar — 
 - `CartProvider` — `context.select` for `itemCount` (cart badge on hero icon).
 - `MessageProvider` — `context.read` for conversation loading (no watch).
 
-### In your size rail
+### Based on your size grid
 
 `lib/widgets/in_your_size_section.dart` — the first surface where the saved foot
 profile changes what the customer is *shown while shopping*. Products that stock
-their size right now, most-sold first, headed by the size the app believes.
+their size right now, most-sold first, headed by the size the app believes —
+rendered **in the Artisan Catalog's own 2-column masonry grid**, not as a
+horizontal strip. The section is a shelf of the feed the customer already reads,
+instead of a carousel they have to swipe; the body is `ProductGridSection`
+(`lib/widgets/product_grid_section.dart`), and it takes its card heights from the
+catalog's `productGridRatio` rule so the same product is the same card height in
+both grids.
+
+**The heading is a poster tile, not a line of text.** A `FitCard`
+(`lib/widgets/fit_card.dart` — the "Fit Card" pattern: the copy is the whole
+design, every line scaled to the full inner width — the words **and** the size
+value, stacked on one leading of `0.86em` — with the `EU` as a caption sized as
+a fraction of the card, and the value pinned to the card's bottom edge)
+takes the grid's **first cell**, top-left, at the reference
+505×800 proportion — the same footprint as a product card. It reads "Based / on
+your / size" over `EU` and the customer's own number, so the section's name is as
+loud as the products it introduces and the size it was built on is the card's
+hero value rather than 12px muted meta. The tile has no destination yet, so it
+does not claim to be tappable (`onTap` null → no button semantics, no ripple).
+Its colours are the app's roles, not the mockup's warm hexes: fill
+`surfaceSubtle`, edge `hairline`, ink `secondary`, accent `AppPalette.primaryInk`,
+radius `cardRadius` — all brightness-aware, which is what keeps it correct on
+dark. `ProductGridSection` takes either a `title` or a `tile` (assertedmutually exclusive), so a later category tile has one place to plug into.
 
 **The rule lives elsewhere, on purpose.** `lib/utils/size_match.dart` owns the
 match (pure Dart, unit-tested without a widget harness): `stocksMySize()` = an
@@ -89,8 +111,9 @@ the app owns no chart for (`'JP 25'`) or a bare value outside the app's own
 22–48 bands is **skipped, never guessed at**. A sold-out exact size is not
 suggested; a ±½ *near* size is never offered as the customer's size.
 `ProductProvider.productsInSize(euSize)` applies it and ranks the result
-(units sold → rating → name, so the per-load shuffle cannot reorder it), capped
-at `kMySizeRailLimit`.
+(units sold → rating → name, so the per-load shuffle cannot reorder it), and
+returns the **whole** shelf — the preview length is the section's call, not the
+provider's.
 
 **Where the size comes from** — `shoppingEuSizeFrom(profile, measurement:)`: the
 profile snapshot first (written by both the scan results screens and the manual
@@ -101,13 +124,40 @@ only reads one that is already there.
 **Absent-safe**, the same rule the plan sets for every size surface: no size on
 file → nothing; no product stocks it → nothing; a product with no size data →
 not suggested; kill switch `AppConstants.sizeAwareShoppingEnabled` off →
-nothing. The widget carries its own trailing spacing, so a hidden rail leaves
+nothing. The widget carries its own trailing spacing, so a hidden section leaves
 no gap behind it.
+
+**The feed previews ten of them, then hands over.** `kHomePreviewCount` = 10
+(the tile is a cell too, so 1 + 10 + 1 = 12 cells, six clean rows), and when the
+shelf holds more than that the preview is still what a customer reads, and a
+`SeeMoreCard` — the same `FitCard` poster, saying `See` / `more` over a painted
+arrow — always closes the grid in its bottom-RIGHT corner, whether anything was
+cut or not: it is the shelf's door, not a "there is more" promise, and on a
+short catalog it is the only way in. Neither it nor the product beside it is a
+**masonry cell** — the flow packs cells into whichever column is shorter, which
+left the closing row ragged no matter which side the card sat on — so the LAST
+product comes out of the flow to join it and the section closes on one fixed
+row: product left, card right, one cell wide each, one gutter under the packed
+products (`ProductGridSection.trailing`). The flow above keeps the masonry
+look; the ending is the one row this design wants deterministic. Tapping it pushes `SizeListingScreen`
+(`lib/screens/customer/size_listing_screen.dart`), the same shelf uncapped in
+the same order with the same `SoleProductCard`, headed by the size it was built
+on. The card shares the section's absence rules and nothing else: empty catalog,
+no size on file, kill switch off → no section, so no door either.
 
 **Browse gate** (caller-side, like On Sale / Best Sellers): rendered only when
 `_searchKeyword.isEmpty` and `selectedCategory` is `null`/`'All'` — a personal
-rail above a search result or a category filter would read as a second,
+shelf above a search result or a category filter would read as a second,
 unrelated feed.
+
+**Two grids, one scroll view.** The feed now holds this grid *and* the catalog's
+`MasonryGridView.count`. A note in `customer_home_screen.dart` used to warn that
+two masonry grids in one `CustomScrollView` trigger a scroll-offset-correction
+loop; it was never reproduced with these box-level grids, and
+`test/widgets/nested_masonry_scroll_test.dart` pins the behaviour that matters
+(the feed still reaches its last card). The On Sale section stays a plain
+`GridView` on its own merits — its cards are uniform by design, which is what
+`childAspectRatio: 0.58` is tuned for.
 
 ### Audience rails — Men's / Women's / Kids'
 
@@ -143,10 +193,11 @@ this screen — `"Men's"` / `"Women's"` / `"Kids'"` are spelled in exactly one f
 (`lib/utils/product_audience.dart`), and a rail can never be labelled with an
 audience it does not query.
 
-**Shared rail body.** Both this rail and "In your size" render through
+**Shared rail body.** The three audience rails render through
 `lib/widgets/product_rail_section.dart` (header row + `HorizontalProductCard`
-strip + trailing gap). It takes an optional muted `meta` line — that parameter is
-the only visual difference between the two. It does **not** hide itself: hiding
+strip + trailing gap), and share `lib/widgets/product_section_header.dart` (title
++ optional muted `meta` line) with "Based on your size"'s grid. It does **not** hide
+itself: hiding
 belongs to the section widget, which is the only thing that knows whether
 "nothing to show" means "not applicable" (no size on file, no matching audience)
 or "empty catalog".
@@ -320,8 +371,12 @@ All providers are app-root singletons, created in `main.dart` and consumed via `
 | `ShimmerGroup` / `SkeletonBox` | `widgets/shimmer_group.dart` | Loading skeletons |
 | `NoInternetView` | `widgets/no_internet_view.dart` | Offline state |
 | `CustomerFootProfileBanner` | `widgets/customer_foot_profile_banner.dart` | Home — foot sizing reminder |
-| `InYourSizeSection` | `widgets/in_your_size_section.dart` | Home — rail of products that stock the customer's saved size |
-| `ProductRailSection` | `widgets/product_rail_section.dart` | Home — the shared rail body (header + 130×180 strip + trailing gap) all four curated rails render through |
+| `InYourSizeSection` | `widgets/in_your_size_section.dart` | Home — the Artisan Catalog's grid of products that stock the customer's saved size |
+| `ProductGridSection` | `widgets/product_grid_section.dart` | Home — the shared grid body (text header *or* poster tile + 2-col catalog masonry + trailing gap) |
+| `FitCard` | `widgets/fit_card.dart` | The "Fit Card" poster tile — copy scaled to fill the card, no icons; "Based on your size · EU 42" is the reference card. The hero is a value or a widget (`heroWidget`), which is how "See more" carries an arrow |
+| `SeeMoreCard` | `widgets/see_more_card.dart` | Home — the capped grid's last cell: a `FitCard` saying `See` / `more` over a painted `ArrowGlyph`, nudging on press, opening `SizeListingScreen` |
+| `ProductSectionHeader` | `widgets/product_section_header.dart` | Home — the shared section header (title + muted meta) rails and grid both use |
+| `ProductRailSection` | `widgets/product_rail_section.dart` | Home — the shared rail body (header + 130×180 strip + trailing gap) the three audience rails render through |
 | `AudienceSection` | `widgets/audience_section.dart` | Home — one Men's / Women's / Kids' rail (self-hiding, switch-gated) |
 | `HomeCategoryRow` | `screens/customer/widgets/home_category_row.dart` | Home hero — category chips + the audience shelf chips |
 | `CatalogEndCap` | `widgets/catalog_end_cap.dart` | Home — the "that's the whole shelf" sign-off at the end of the catalog |
@@ -343,6 +398,7 @@ lib/
 │   │   ├── buy_again_screen.dart
 │   │   ├── recently_viewed_screen.dart
 │   │   ├── audience_listing_screen.dart  # One audience's whole shelf
+│   │   ├── size_listing_screen.dart   # The size shelf uncapped ("See more")
 │   │   ├── search_results_screen.dart
 │   │   ├── tag_products_screen.dart
 │   │   ├── tracking_screen.dart

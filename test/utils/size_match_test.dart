@@ -10,17 +10,19 @@ import 'package:app/utils/size_match.dart';
 /// a size stored in another system, a bare value outside the app's bands, a
 /// sold-out exact size, and the near-size band.
 Map<String, dynamic> productWithStock(List<(String size, int stock)> rows) => {
-      'id': 'p',
-      'name': 'Artisan Shoe',
-      'inventory': [
-        for (final (size, stock) in rows) {'size': size, 'stock': stock},
-      ],
-    };
+  'id': 'p',
+  'name': 'Artisan Shoe',
+  'inventory': [
+    for (final (size, stock) in rows) {'size': size, 'stock': stock},
+  ],
+};
 
 void main() {
   group('stockByEuSize — the authoritative source', () {
     test('keys inventory rows by EU size', () {
-      final stock = stockByEuSize(productWithStock([('EU 42', 3), ('EU 43', 0)]));
+      final stock = stockByEuSize(
+        productWithStock([('EU 42', 3), ('EU 43', 0)]),
+      );
 
       expect(stock[42], 3);
       expect(stock[43], 0);
@@ -32,8 +34,9 @@ void main() {
 
     test('sums a size across colours', () {
       // Black EU 42: 2 + Brown EU 42: 3 → 5 available on EU 42.
-      final stock =
-          stockByEuSize(productWithStock([('EU 42', 2), ('EU 42', 3)]));
+      final stock = stockByEuSize(
+        productWithStock([('EU 42', 2), ('EU 42', 3)]),
+      );
 
       expect(stock[42], 5);
     });
@@ -120,16 +123,18 @@ void main() {
       expect(matchStockedSize(productWithStock([('EU 43', 3)]), 42), isNull);
     });
 
-    test('equally-near sizes resolve down, never above the customer\'s size',
-        () {
-      // 41.5 and 42.5 are both 0.5 away.
-      final match = matchStockedSize(
-        productWithStock([('EU 42.5', 2), ('EU 41.5', 2)]),
-        42,
-      );
+    test(
+      'equally-near sizes resolve down, never above the customer\'s size',
+      () {
+        // 41.5 and 42.5 are both 0.5 away.
+        final match = matchStockedSize(
+          productWithStock([('EU 42.5', 2), ('EU 41.5', 2)]),
+          42,
+        );
 
-      expect(match?.euSize, 41.5);
-    });
+        expect(match?.euSize, 41.5);
+      },
+    );
 
     test('no size data at all is null, not a guess', () {
       expect(matchStockedSize({'id': 'p'}, 42), isNull);
@@ -200,6 +205,14 @@ void main() {
     test('names the system and drops the pointless decimal', () {
       expect(euSizeLabel(42), 'EU 42');
       expect(euSizeLabel(42.5), 'EU 42.5');
+    });
+  });
+
+  group('euSizeValue', () {
+    test('prints the number alone, for a card that labels the unit itself', () {
+      expect(euSizeValue(42), '42');
+      expect(euSizeValue(42.5), '42.5');
+      expect(euSizeValue(22), '22');
     });
   });
 }

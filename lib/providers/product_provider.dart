@@ -43,13 +43,6 @@ const int kBestSellerLimit = 20;
 int unitsSoldOf(Map<String, dynamic> product, Map<String, int> unitsSold) =>
     unitsSold[product['id']?.toString() ?? ''] ?? 0;
 
-/// How many products the "In your size" rail keeps.
-///
-/// A suggestion rail is a taste, not a second catalog: past a dozen cards the
-/// customer is scrolling a grid again. Same shape as [kBestSellerLimit] — a
-/// catalog smaller than the limit simply returns everything that matches.
-const int kMySizeRailLimit = 12;
-
 /// How many keyword suggestions the search panel shows at once.
 ///
 /// A panel, not a page: past about eight rows it stops being scannable and the
@@ -60,16 +53,16 @@ const int kSearchSuggestionLimit = 8;
 
 /// How many products the "nothing matched" panel offers.
 ///
-/// The same taste-not-a-catalog number as [kMySizeRailLimit] and
-/// [kAudienceRailLimit] — it renders through the same rail.
+/// The same taste-not-a-catalog number as [kAudienceRailLimit] and
+/// [kSearchSuggestionLimit] — it renders through the same rail.
 const int kSearchRelatedLimit = 8;
 
 /// How many products an audience rail (Men's / Women's / Kids') keeps.
 ///
-/// The same taste-not-a-second-catalog rule as [kMySizeRailLimit], and the same
-/// number on purpose: these rails sit beside each other on the home feed, so a
-/// different cap would make one strip visibly shorter for no reason a customer
-/// could see.
+/// The same taste-not-a-second-catalog rule the home preview uses
+/// (`kHomePreviewCount`), and the same number on purpose: these strips sit
+/// beside each other on the home feed, so a different cap would make one
+/// visibly shorter for no reason a customer could see.
 const int kAudienceRailLimit = 12;
 
 /// The 'Best Sellers' set, derived live from the loaded catalog and the
@@ -89,24 +82,22 @@ List<Map<String, dynamic>> bestSellerProducts(
   Map<String, int> unitsSold, {
   int limit = kBestSellerLimit,
 }) {
-  final ranked = products
-      .where((p) => unitsSoldOf(p, unitsSold) > 0)
-      .toList()
+  final ranked = products.where((p) => unitsSoldOf(p, unitsSold) > 0).toList()
     ..sort((a, b) {
-      final byUnits =
-          unitsSoldOf(b, unitsSold).compareTo(unitsSoldOf(a, unitsSold));
+      final byUnits = unitsSoldOf(
+        b,
+        unitsSold,
+      ).compareTo(unitsSoldOf(a, unitsSold));
       if (byUnits != 0) return byUnits;
       final rA = (a['avg_rating'] as num?)?.toDouble() ?? 0;
       final rB = (b['avg_rating'] as num?)?.toDouble() ?? 0;
       final byRating = rB.compareTo(rA);
       if (byRating != 0) return byRating;
-      return (a['name'] ?? '')
-          .toString()
-          .compareTo((b['name'] ?? '').toString());
+      return (a['name'] ?? '').toString().compareTo(
+        (b['name'] ?? '').toString(),
+      );
     });
-  return limit > 0 && ranked.length > limit
-      ? ranked.sublist(0, limit)
-      : ranked;
+  return limit > 0 && ranked.length > limit ? ranked.sublist(0, limit) : ranked;
 }
 
 String sortModeLabel(SortMode mode) {
@@ -237,7 +228,7 @@ class ProductProvider extends ChangeNotifier {
       _products.any((p) => unitsSoldOf(p, _unitsSold) > 0);
 
   /// Products the customer can actually buy right now in [euSize], most-sold
-  /// first — the "In your size" rail's source.
+  /// first — the "Based on your size" grid's source.
   ///
   /// The inclusion rule lives in `size_match.dart` ([stocksMySize]), so this
   /// rail and any later size surface (chip, badge, product-page pre-select)
@@ -251,12 +242,15 @@ class ProductProvider extends ChangeNotifier {
   ///
   /// Ranking is [_compareSuggestions] — units sold, then rating, then name, the
   /// same tie-break [bestSellerProducts] uses, so the per-load catalog shuffle
-  /// cannot reorder the rail under the customer. Unlike the best-seller rule, a
+  /// cannot reorder the shelf under the customer. Unlike the best-seller rule, a
   /// product that has never sold still qualifies on its merits.
-  List<Map<String, dynamic>> productsInSize(
-    double? euSize, {
-    int limit = kMySizeRailLimit,
-  }) {
+  ///
+  /// **[limit] of 0 means the whole shelf**, the same convention
+  /// [productsInAudience] and [productsInSearch] follow. It used to default to a
+  /// rail-sized sample; the home section now decides its own preview length (ten
+  /// cells plus a "See more" card) and asks for the *whole* shelf so that card
+  /// can be honest about what is behind it.
+  List<Map<String, dynamic>> productsInSize(double? euSize, {int limit = 0}) {
     if (euSize == null) return const [];
 
     final matches = _products.where((p) => stocksMySize(p, euSize)).toList()
@@ -290,10 +284,13 @@ class ProductProvider extends ChangeNotifier {
     final wanted = productAudienceFrom(audience);
     if (wanted == null || wanted == kUnisexAudience) return const [];
 
-    final matches = _products
-        .where((p) => productAudienceFrom(p['audience']?.toString()) == wanted)
-        .toList()
-      ..sort(_compareSuggestions);
+    final matches =
+        _products
+            .where(
+              (p) => productAudienceFrom(p['audience']?.toString()) == wanted,
+            )
+            .toList()
+          ..sort(_compareSuggestions);
 
     return limit > 0 && matches.length > limit
         ? matches.sublist(0, limit)
@@ -365,12 +362,14 @@ class ProductProvider extends ChangeNotifier {
 
   /// The ranking every suggestion rail shares — units sold, then rating, then
   /// name (the same tie-break [bestSellerProducts] uses). Kept in one place so
-  /// "In your size" and the audience rails cannot drift into disagreeing about
+  /// "Based on your size" and the audience rails cannot drift into disagreeing about
   /// order, and so a tie is resolved the same way on every reload rather than
   /// inheriting the shuffled catalog order.
   int _compareSuggestions(Map<String, dynamic> a, Map<String, dynamic> b) {
-    final byUnits = unitsSoldOf(b, _unitsSold)
-        .compareTo(unitsSoldOf(a, _unitsSold));
+    final byUnits = unitsSoldOf(
+      b,
+      _unitsSold,
+    ).compareTo(unitsSoldOf(a, _unitsSold));
     if (byUnits != 0) return byUnits;
     final rA = (a['avg_rating'] as num?)?.toDouble() ?? 0;
     final rB = (b['avg_rating'] as num?)?.toDouble() ?? 0;
@@ -631,8 +630,7 @@ class ProductProvider extends ChangeNotifier {
     if (saleFilterActive) {
       filtered = filtered.where((p) => isOnSale(p)).toList();
     } else if (bestSellerFilterActive) {
-      final bestSellerIds =
-          bestSellers.map((p) => p['id']?.toString()).toSet();
+      final bestSellerIds = bestSellers.map((p) => p['id']?.toString()).toSet();
       filtered = filtered
           .where((p) => bestSellerIds.contains(p['id']?.toString()))
           .toList();
@@ -692,9 +690,11 @@ class ProductProvider extends ChangeNotifier {
     int limit = 0,
   }) {
     final matches = _products
-        .where((p) =>
-            matchesSearchQuery(p, query) &&
-            (category == null || p['category'] == category))
+        .where(
+          (p) =>
+              matchesSearchQuery(p, query) &&
+              (category == null || p['category'] == category),
+        )
         .toList();
 
     final sorted = _applySort(matches, sort ?? _sortMode);
@@ -729,8 +729,7 @@ class ProductProvider extends ChangeNotifier {
   List<SearchSuggestion> suggestionsFor(
     String query, {
     int limit = kSearchSuggestionLimit,
-  }) =>
-      searchSuggestionsFor(_products, query: query, limit: limit);
+  }) => searchSuggestionsFor(_products, query: query, limit: limit);
 
   /// What to offer when a search matched nothing: the catalog's own picks,
   /// most-sold then best-rated then name.
@@ -769,9 +768,17 @@ class ProductProvider extends ChangeNotifier {
       case SortMode.priceHighToLow:
         sorted.sort((a, b) => _extractPrice(b).compareTo(_extractPrice(a)));
       case SortMode.nameAZ:
-        sorted.sort((a, b) => (a['name'] ?? '').toString().compareTo((b['name'] ?? '').toString()));
+        sorted.sort(
+          (a, b) => (a['name'] ?? '').toString().compareTo(
+            (b['name'] ?? '').toString(),
+          ),
+        );
       case SortMode.nameZA:
-        sorted.sort((a, b) => (b['name'] ?? '').toString().compareTo((a['name'] ?? '').toString()));
+        sorted.sort(
+          (a, b) => (b['name'] ?? '').toString().compareTo(
+            (a['name'] ?? '').toString(),
+          ),
+        );
       case SortMode.topRated:
         sorted.sort((a, b) {
           final rA = (a['avg_rating'] as num?)?.toDouble() ?? 0;

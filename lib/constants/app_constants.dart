@@ -433,8 +433,8 @@ class AppConstants {
   // --- SIZE-AWARE SHOPPING ---
   /// Whether the customer's saved foot size drives browse surfaces.
   ///
-  /// On: the home feed shows the "In your size" rail, listing only products
-  /// that actually stock the customer's size right now (later phases add the
+  /// On: the home feed shows the "Based on your size" grid, listing only
+  /// products that actually stock the customer's size right now (later phases add the
   /// size chip, card badges and the product-page pre-select — see
   /// `docs/AI/SIZE_AWARE_SHOPPING_PLAN.md`).
   ///

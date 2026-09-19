@@ -326,12 +326,13 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                             child: CustomerFootProfileBanner(),
                           ),
 
-                          // ── In your size (conditional, personal) ──
-                          // The customer's saved size, driving the catalog. It
+                          // ── Based on your size (conditional, personal) ──
+                          // The customer's saved size, driving the catalog —
+                          // rendered in the catalog's own 2-column grid. It
                           // renders itself away when there is no size on file
                           // or nothing stocks it, so only the browse gate
                           // below belongs here — same gate as On Sale / Best
-                          // Sellers, since a personal rail above a category
+                          // Sellers, since a personal shelf above a category
                           // filter would be a second, unrelated feed.
                           if (productProvider.selectedCategory == null ||
                               productProvider.selectedCategory == 'All')
@@ -381,13 +382,18 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                               padding: const EdgeInsets.symmetric(
                                 horizontal: AppConstants.feedMargin,
                               ),
-                              // NOTE: deliberately a plain SliverGrid, NOT masonry.
-                              // Two SliverMasonryGrids in one CustomScrollView trigger a
-                              // scroll-offset-correction loop in flutter_staggered_grid_view
-                              // 0.7.0 that yanks the viewport back partway down the page
-                              // — making the bottom of a long catalog unreachable. The
-                              // catalog grid below keeps masonry; this small section uses
-                              // a deterministic grid (exact extent, no estimation).
+                              // NOTE: deliberately a plain GridView, NOT masonry.
+                              // This section's cards are uniform by design (no
+                              // `imageAspectRatio`, the image fills the cell), which
+                              // is what `childAspectRatio: 0.58` is tuned for — so a
+                              // deterministic grid is both exact and the right shape
+                              // here. (This used to carry a stronger claim, that two
+                              // masonry grids in this scroll view break scrolling;
+                              // that was never reproduced with the box-level
+                              // `MasonryGridView.count` grids the feed actually uses
+                              // — "Based on your size" above is one, and
+                              // `test/widgets/nested_masonry_scroll_test.dart` now
+                              // pins that the feed still reaches its last card.)
                               child: GridView.builder(
                                 shrinkWrap: true,
                                 physics: const NeverScrollableScrollPhysics(),

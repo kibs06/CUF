@@ -37,6 +37,7 @@ void main() {
   /// number of grids it holds.
   const gridFiles = <String, int>{
     'lib/screens/customer/customer_home_screen.dart': 2, // catalog + On Sale
+    'lib/widgets/product_grid_section.dart': 1, // Based on your size
     'lib/screens/customer/search_results_screen.dart': 1,
     'lib/screens/customer/audience_listing_screen.dart': 1,
     'lib/screens/customer/recently_viewed_screen.dart': 1,

@@ -6,18 +6,56 @@ import '../models/foot_measurement.dart';
 import '../providers/auth_provider.dart';
 import '../providers/foot_measurement_provider.dart';
 import '../providers/product_provider.dart';
-import 'best_sellers_section.dart';
-import 'product_rail_section.dart';
+import '../screens/customer/size_listing_screen.dart';
+import '../utils/size_key.dart';
 import '../utils/size_match.dart';
+import 'fit_card.dart';
+import 'product_grid_section.dart';
+import 'see_more_card.dart';
 
-/// "In your size" strip on the customer home — only the products that stock
-/// the customer's saved size right now, as a horizontally-scrolling rail.
+/// How many products the home preview shows before it hands over to the
+/// **See more** card.
+///
+/// Ten, because the tile that opens the grid is a cell too: 1 + 10 + 1 = 12
+/// cells, six full rows on a two-column feed, so the section ends on a clean
+/// edge instead of a half row. A preview is a taste, not a second catalog — the
+/// rest of the shelf is one tap away, and the Artisan Catalog still sits below
+/// this section on the same page.
+///
+/// The card is **not** conditional on the shelf being longer than the preview:
+/// it renders whenever this section does. On a small catalog the preview is the
+/// whole shelf, and the card is still the door to that shelf — a page that
+/// keeps existing while the feed scrolls on, and grows on its own as sellers
+/// add stock. Making it a "there is more" promise instead would hide the only
+/// way in whenever the shelf happens to be short.
+const int kHomePreviewCount = 10;
+
+/// "Based on your size" on the customer home — only the products that stock the
+/// customer's saved size right now, laid out **in the Artisan Catalog's own
+/// 2-column grid** rather than as a horizontal strip.
 ///
 /// This is the first surface that makes the foot profile do something while
 /// shopping: the app has measured the customer's feet since the AR scanner
-/// shipped, and until now nothing on the browse side read the result. The rail
+/// shipped, and until now nothing on the browse side read the result. The grid
 /// answers the question the catalog could not — *which of these pairs actually
-/// come in my size?*
+/// come in my size?* — and it answers it in the shape the customer already
+/// reads the catalog in, so the section is a shelf of the feed instead of a
+/// carousel to swipe through.
+///
+/// **The heading is a poster, not a line of text.** A [FitCard] the size of a
+/// product card takes the grid's first cell (top-left) and says the section's
+/// name at poster scale — "Based / on your / size" over the customer's own
+/// number on the `EU` label. That is what replaced the old text header: the
+/// section's name is now as loud as the products it introduces, and the size it
+/// was reporting in muted 12px meta is the card's hero value. The tile has no
+/// destination yet, so it does not pretend to be tappable.
+///
+/// **The grid closes with the shelf's door.** A [SeeMoreCard] — the same poster
+/// saying `See` / `more` over a painted arrow — takes the grid's last cell and
+/// pushes the full [SizeListingScreen]. It renders whenever this section does:
+/// on a shelf longer than the preview it is the way to the rest of it, and on a
+/// short one it is still the way to the shelf as a place, so the section never
+/// ends on products with no way to say "all of mine live here".
 ///
 /// Where "my size" comes from: [shoppingEuSizeFrom] — the profile snapshot
 /// first (written by both the scan and the manual picker), then a scan already
@@ -27,24 +65,22 @@ import '../utils/size_match.dart';
 /// **Absent-safe by design.** It renders nothing when the kill switch is off,
 /// when the customer has no size on file, or when nothing in the catalog
 /// stocks it — never a guessed size, never a stale stamp (plan §8 R6). It also
-/// carries its own bottom spacing (via [ProductRailSection]), so a hidden rail
-/// leaves no gap behind.
+/// carries its own bottom spacing (via [ProductGridSection]), so a hidden
+/// section leaves no gap behind.
 ///
 /// The match rule is not local: it is [stocksMySize] via
-/// [ProductProvider.productsInSize], so this rail and any later size surface
+/// [ProductProvider.productsInSize], so this section and any later size surface
 /// agree by construction. Availability follows the same authoritative
 /// `inventory` source as the buy button, so a card here can never turn out to
 /// be unbuyable (plan §8 R4).
 ///
-/// The rendering is [ProductRailSection], shared with the audience rails — this
-/// widget decides only whether there is anything to show, and what size to
-/// name.
+/// The rendering is [ProductGridSection] — the same body the catalog's cards
+/// are built from. This widget decides whether there is anything to show, what
+/// size to name, and how much of the shelf the feed previews before the
+/// [SeeMoreCard] hands over to the full [SizeListingScreen]; a personal shelf
+/// that grew without limit would be a second catalog above the real one.
 class InYourSizeSection extends StatelessWidget {
   const InYourSizeSection({super.key});
-
-  /// Strip height — the same 130x180 [HorizontalProductCard] rail the Best
-  /// Sellers / Buy Again / Recently Viewed sections use.
-  static const double railHeight = BestSellersSection.railHeight;
 
   @override
   Widget build(BuildContext context) {
@@ -52,26 +88,57 @@ class InYourSizeSection extends StatelessWidget {
 
     final profile = context.watch<AuthProvider>().profile;
     // Read-only on purpose: this widget never triggers a measurement load.
-    final measurement =
-        context.select<FootMeasurementProvider, FootMeasurement?>(
-      (p) => p.latestMeasurement,
-    );
+    final measurement = context
+        .select<FootMeasurementProvider, FootMeasurement?>(
+          (p) => p.latestMeasurement,
+        );
     final euSize = shoppingEuSizeFrom(profile, measurement: measurement);
     if (euSize == null) return const SizedBox.shrink();
 
-    final products =
-        context.select<ProductProvider, List<Map<String, dynamic>>>(
-      (p) => p.productsInSize(euSize),
-    );
+    // The WHOLE shelf: the preview length is decided below, and the provider
+    // no longer pre-truncates — the "See more" card opens the rest of this
+    // list, so the ranking it opens must be this list's ranking.
+    final products = context
+        .select<ProductProvider, List<Map<String, dynamic>>>(
+          (p) => p.productsInSize(euSize, limit: 0),
+        );
     if (products.isEmpty) return const SizedBox.shrink();
 
-    // The size names what drove the rail (so a wrong one is visible and
-    // correctable in Settings → Size Your Foot) without competing with the
-    // section title for attention.
-    return ProductRailSection(
-      title: 'In your size',
-      meta: euSizeLabel(euSize),
-      products: products,
+    final preview = products.length > kHomePreviewCount
+        ? products.sublist(0, kHomePreviewCount)
+        : products;
+
+    // The card names the size the section was built on (so a wrong one is
+    // visible and correctable in Settings → Size Your Foot): `euSizeValue`
+    // prints the number alone and the label above it carries the unit, rather
+    // than the label's usual "EU 42" repeating the system on both lines.
+    return ProductGridSection(
+      tile: AspectRatio(
+        // A masonry cell is self-sizing and FitCard is content-sized, so the
+        // reference proportion is what gives the poster its shape here — and
+        // what makes the "See more" card a sibling of it rather than a slot of
+        // a different size.
+        aspectRatio: FitCard.aspectRatio,
+        child: FitCard(
+          lines: const ['Based', 'on your', 'size'],
+          // The unit read back off the label rather than spelled here, the
+          // same way every other size surface avoids its own 'EU' literal.
+          heroLabel: sizeSystem(euSizeLabel(euSize)),
+          heroValue: euSizeValue(euSize),
+        ),
+      ),
+      products: preview,
+      // The last cell, always: the shelf's door, not a "there is more" promise.
+      // It is a sibling of the size poster — one cell, the reference proportion
+      // — so the grid closes the way it opens.
+      trailing: AspectRatio(
+        aspectRatio: FitCard.aspectRatio,
+        child: SeeMoreCard(
+          onTap: () => Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const SizeListingScreen())),
+        ),
+      ),
     );
   }
 }

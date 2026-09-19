@@ -395,7 +395,7 @@ void main() {
     });
   });
 
-  group('productsInSize — the "In your size" rail', () {
+  group('productsInSize — the "Based on your size" grid', () {
     test('keeps exactly the products that stock the size right now', () {
       final provider = providerWith(
         [
@@ -496,7 +496,7 @@ void main() {
       expect(second, first);
     });
 
-    test('caps the rail, dropping the least-sold matches', () {
+    test('returns the whole shelf by default, most-sold first', () {
       final provider = providerWith(
         [
           for (var i = 0; i < 20; i++)
@@ -505,11 +505,14 @@ void main() {
         {for (var i = 0; i < 20; i++) 'p$i': i + 1},
       );
 
-      final rail = provider.productsInSize(42);
+      final shelf = provider.productsInSize(42);
 
-      expect(rail.length, kMySizeRailLimit);
-      expect(rail.first['id'], 'p19');
-      expect(rail.map((p) => p['id']), isNot(contains('p0')));
+      // Uncapped, like `productsInAudience`: the home section decides its own
+      // preview length (ten cells + a "See more" card), and needs the whole
+      // shelf to know whether that card belongs there at all.
+      expect(shelf.length, 20);
+      expect(shelf.first['id'], 'p19');
+      expect(shelf.last['id'], 'p0');
     });
 
     test('a catalog with nothing in that size yields an empty rail', () {

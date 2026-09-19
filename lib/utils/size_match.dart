@@ -115,11 +115,7 @@ StockedSize? matchStockedSize(Map<String, dynamic> product, double euSize) {
 
   final exact = stock[euSize];
   if (exact != null) {
-    return StockedSize(
-      euSize: euSize,
-      stock: exact,
-      kind: SizeMatchKind.exact,
-    );
+    return StockedSize(euSize: euSize, stock: exact, kind: SizeMatchKind.exact);
   }
 
   double? nearest;
@@ -152,7 +148,9 @@ StockedSize? matchStockedSize(Map<String, dynamic> product, double euSize) {
 /// sold-out exact size is not available.
 bool stocksMySize(Map<String, dynamic> product, double euSize) {
   final match = matchStockedSize(product, euSize);
-  return match != null && match.kind == SizeMatchKind.exact && match.isAvailable;
+  return match != null &&
+      match.kind == SizeMatchKind.exact &&
+      match.isAvailable;
 }
 
 /// The customer's size for shopping, in EU, or null when they never gave one.
@@ -191,3 +189,11 @@ double? shoppingEuSizeFrom(
 /// Routed through [formatSize] so no surface hardcodes an `'EU '` literal (the
 /// P0 cleanup in the plan's §6).
 String euSizeLabel(double euSize) => formatSize(formatSizeNumber(euSize));
+
+/// The bare number of a resolved EU size — `42.0` → `'42'`, `42.5` → `'42.5'`.
+///
+/// Sibling of [euSizeLabel], for the surfaces that show the value *without* its
+/// unit because the unit is printed separately (`FitCard`'s `EU` hero label
+/// above the value). Same reason the label exists: one place formats a size, so
+/// no surface has to know that a whole size drops its `.0`.
+String euSizeValue(double euSize) => formatSizeNumber(euSize);
