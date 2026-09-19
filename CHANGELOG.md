@@ -1,5 +1,9 @@
 # SoleVision — Changelog
 
+## Unreleased — the grid's stagger is three buckets, all visibly different
+
+- **`productGridRatio` dropped its fourth bucket.** The per-card image ratios were `[1.0, 0.78, 1.22, 0.95]`, keyed off the product id — but **0.95 is 1.0 to the eye**: 5% off square is ~12px on a 2-column card, and when a section's products all hashed into those two near-twin buckets the grid read as uniform rows (reported on "Based on your size", where all four products landed in exactly those two). Two buckets that look the same are not two buckets — the list is now `[1.0, 0.78, 1.22]`, each visibly distinct from the others. Card heights stay deterministic per product (same id → same ratio → same layout on every reload); existing products that hashed to 0.95 now sit in one of the three real buckets, which can shift which column a card is tallest in but not the shared geometry (gutter, margin, width) or any card's identity across surfaces — the ratio is the same function everywhere it is used.
+
 ## Unreleased — The home shelf previews ten, then hands over to a "See more" card
 
 - **The cap is the section's now, and it comes with a way out.** `kHomePreviewCount` = 10 sits in `in_your_size_section.dart` (never a magic number): the tile is a cell too, so 1 + 10 + 1 = 12 cells — six clean rows on the two-column feed — and the eleventh+ match is reached through a card instead of a longer feed. `ProductProvider.productsInSize` defaulted to a rail-sized sample before; it now returns the **whole** shelf (`limit: 0`, the convention `productsInAudience`/`productsInSearch` already follow), because the section is the only thing that knows how long a preview should be — and a pre-truncated list could not tell it whether "See more" was honest. A personal shelf that grew without limit would be a second catalog above the real one.

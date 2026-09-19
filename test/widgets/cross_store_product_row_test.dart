@@ -11,7 +11,7 @@ import 'package:app/widgets/sole_product_card.dart';
 /// so a shorter card leaves dead space beneath it until the next run begins.
 ///
 /// Card heights here come from `productGridRatio`, which varies per product id
-/// (1.0 / 0.78 / 1.22 / 0.95) — so the gap appeared only when two neighbouring
+/// (1.0 / 0.78 / 1.22) — so the gap appeared only when two neighbouring
 /// products had *different* ratios, and vanished when they matched. That is why
 /// it read as a bug that comes and goes: it tracked the catalog, not the code.
 ///
