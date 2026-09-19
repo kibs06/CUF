@@ -134,7 +134,7 @@ class SupabaseService {
   /// refreshed row. Full scan fidelity lives in `foot_measurements`; these
   /// columns are the cheap snapshot other screens read (see migrations
   /// 20260812130000_add_customer_profile_fields.sql and
-  /// 20260917120000_add_foot_size_category.sql).
+  /// 20260917130000_add_foot_size_category.sql).
   ///
   /// [category] is the shopping size scale ('men' | 'women' | 'kids') — the
   /// chart US/UK labels are derived from. It is the one snapshot field that

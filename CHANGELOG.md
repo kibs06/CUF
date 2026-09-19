@@ -116,7 +116,7 @@
 - The manual panel asks the **SHOPPING SIZE** scale the app labels US/UK sizes with (Men's / Women's / Kids'), and the size itself can be entered in **EU, US or UK** — whoever knows only their US size can type it directly. The value that is stored is always the canonical EU size, so nothing downstream has to translate.
 - The size list follows the scale: **Kids' now runs 22 → 35**, mirroring the scan's own children's band in `euSizeChart` (it was 35 → 48 for every scale, so a child wearing EU 28 could not enter their size). Men's/Women's keep 35 → 48. Kids' offers no US/UK choice on purpose — the app owns no kids' US/UK chart, and the men's-derived step would label a child's EU 22 as `US -11`.
 - **The product page's US/UK switcher no longer assumes the men's chart.** It reads `profiles.foot_size_category`, so EU 42 reads `US 10.5` for a woman instead of `US 9`; a Kids' scale keeps the grid in EU. The offsets now live in one place (`lib/utils/size_key.dart`), and the two duplicated `euToUs` bodies delegate to it.
-- **Requires migration `20260917120000_add_foot_size_category.sql` before shipping** — a manual save writes `profiles.foot_size_category`, and without the column it fails on the client.
+- **Requires migration `20260917130000_add_foot_size_category.sql` before shipping** — a manual save writes `profiles.foot_size_category`, and without the column it fails on the client.
 
 ## Unreleased — Bulk reservations: the customer now hears about a decline
 
