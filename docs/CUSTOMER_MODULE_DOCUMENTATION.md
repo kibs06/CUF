@@ -271,12 +271,13 @@ CustomerShell
 
 ### 4.1 CustomerShell (`customer_shell.dart`)
 
-**Purpose:** Root container with bottom navigation. Uses `IndexedStack` to preserve screen state across tab switches.
+**Purpose:** Root container with bottom navigation. Hosts the 4 tabs in a `PageView` with every page wrapped in `KeepAlivePage`, so a tab is built lazily on first visit and its state is then preserved across tab switches.
 
 | Property | Value |
 |----------|-------|
 | Tabs | 4 (Home, Store, Notifications, Profile) |
-| State preservation | `IndexedStack` |
+| State preservation | `KeepAlivePage` wrapper inside the `PageView` (a bare `PageView` disposes off-screen pages) |
+| Re-entry signal | `ActiveTab` — a kept-alive page is not rebuilt on a switch, so screens that refresh on re-entry listen to it |
 | Cart access | `CartIconButton` in AppBar actions |
 
 **Note:** Cart and Inbox are NOT tabs — they are pushed via navigation.

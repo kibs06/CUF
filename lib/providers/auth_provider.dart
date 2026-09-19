@@ -943,7 +943,9 @@ class AuthProvider extends ChangeNotifier {
   /// it mirrors the latest foot_measurements recommendation (full scan
   /// fidelity stays in foot_measurements — this is just the cheap snapshot
   /// other screens read). [widthLabel] is only set by the manual picker
-  /// ('Narrow'/'Regular'/'Wide').
+  /// ('Narrow'/'Regular'/'Wide'). [category] is the shopping size scale
+  /// ('men'/'women'/'kids') the size should be LABELLED with in US/UK; it is
+  /// left untouched when null so a 'skipped' write cannot erase it.
   ///
   /// Updates the local [_profile] so consumers watching this provider
   /// (e.g. the home reminder banner) hide immediately. Deliberately does
@@ -953,6 +955,7 @@ class AuthProvider extends ChangeNotifier {
   Future<bool> saveFootProfile({
     double? sizeEu,
     String? widthLabel,
+    String? category,
     required String source,
   }) async {
     final profileId = _profile?['id']?.toString();
@@ -963,6 +966,7 @@ class AuthProvider extends ChangeNotifier {
         profileId,
         sizeEu: sizeEu,
         widthLabel: widthLabel,
+        category: category,
         source: source,
       );
       _profile = updated;

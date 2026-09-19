@@ -218,6 +218,43 @@ String friendlyReservationError(Object error) {
   return 'Something went wrong. Please try again.';
 }
 
+/// The FCM push body for a declined reservation request.
+///
+/// Mirrors `decide_bulk_reservation`'s in-app message ("The seller declined
+/// your reservation request[: reason].") with one deliberate addition: the
+/// push names the quantity, because the customer's notification is a nudge
+/// they may read with the app closed and several holds in flight — "which
+/// one?" is the first question it has to answer. The in-app row stays the
+/// record of truth.
+@visibleForTesting
+String bulkReservationDeclinedPushBody({
+  required int quantity,
+  String? reason,
+}) {
+  final trimmed = reason?.trim() ?? '';
+  final suffix = trimmed.isEmpty ? '.' : ': $trimmed';
+  return 'The seller declined your $quantity-unit reservation request$suffix';
+}
+
+/// The FCM push body for a rejected deposit proof.
+///
+/// Mirrors `reject_bulk_reservation_deposit`'s in-app message, including the
+/// closing reassurance — a deposit rejection is the one outcome where the
+/// customer may have already sent money, so the push must not read as
+/// "nothing happened". [reason] is read back from the stored row, where the
+/// RPC has already substituted its own default for a blank one.
+@visibleForTesting
+String bulkReservationDepositDeclinedPushBody({
+  required int quantity,
+  String? reason,
+}) {
+  final trimmed = reason?.trim() ?? '';
+  final suffix = trimmed.isEmpty ? '.' : ': $trimmed';
+  return 'The seller could not verify your deposit payment for the '
+      '$quantity-unit reservation$suffix No stock was held. If you already '
+      'sent money, contact the store directly to resolve it.';
+}
+
 /// Data access for bulk (reseller) reservations. Thin RPC/CRUD wrapper —
 /// all stock movement and state rules are enforced server-side.
 class ReservationService {
@@ -342,9 +379,12 @@ class ReservationService {
   /// the customer's 24-hour deposit window — stock moves only after the
   /// store confirms the deposit proof.
   ///
-  /// After a successful approval the customer additionally receives an
-  /// FCM push (fire-and-forget) mirroring the RPC's in-app notification,
-  /// so the deposit window is visible even with the app backgrounded.
+  /// EITHER outcome additionally sends the customer an FCM push
+  /// (fire-and-forget) mirroring the RPC's in-app notification, so a
+  /// decision is visible even with the app backgrounded. A decline is the
+  /// outcome a customer is *least* likely to discover by browsing — nothing
+  /// in their UI changes except the hold quietly disappearing — so it is not
+  /// a lesser case than the approval push.
   Future<void> decideReservation({
     required String reservationId,
     required bool approve,
@@ -359,8 +399,10 @@ class ReservationService {
     });
 
     if (approve) {
-      // Fire-and-forget: push failures must never fail the approval.
+      // Fire-and-forget: push failures must never fail the decision.
       unawaited(_pushCustomerApproved(reservationId: reservationId));
+    } else {
+      unawaited(_pushCustomerDeclined(reservationId: reservationId));
     }
   }
 
@@ -403,6 +445,41 @@ class ReservationService {
     }
   }
 
+  /// FCM push to the customer that the seller declined their reservation
+  /// request. Reads the stored [rejection_reason] (and the quantity) back
+  /// from the row the RPC just decided, so the push repeats the reason the
+  /// seller actually typed — the same text the in-app notification carries.
+  Future<void> _pushCustomerDeclined({
+    required String reservationId,
+  }) async {
+    try {
+      final row = await _client
+          .from('bulk_reservations')
+          .select('customer_id, quantity, rejection_reason')
+          .eq('id', reservationId)
+          .maybeSingle();
+      final customerId = row?['customer_id']?.toString();
+      if (customerId == null || customerId.isEmpty) return;
+
+      final quantity = (row?['quantity'] as num?)?.toInt() ?? 0;
+      final reason = row?['rejection_reason']?.toString();
+
+      await _client.functions.invoke('send-notification-push', body: {
+        'recipientUserId': customerId,
+        'title': 'Bulk reservation declined',
+        'body': bulkReservationDeclinedPushBody(
+          quantity: quantity,
+          reason: reason,
+        ),
+        'type': 'bulk_reservation_declined',
+        'referenceId': reservationId,
+        'screen': 'my_reservations',
+      });
+    } catch (e) {
+      debugPrint('[ReservationService] Push trigger failed: $e');
+    }
+  }
+
   /// Formats a deposit deadline like the RPC's to_char output
   /// ("Sep 14, 14:30 UTC"); falls back to a generic phrase when the
   /// deadline is unexpectedly missing. Supabase returns timestamptz
@@ -432,12 +509,54 @@ class ReservationService {
   }
 
   /// Seller: reject the deposit payment — terminal, nothing was drawn.
+  ///
+  /// The customer gets an FCM push (fire-and-forget) in addition to the
+  /// RPC's in-app notification: this is money they may already have sent, so
+  /// waiting for them to open the app is not good enough. The reason is read
+  /// back from the stored row, where the RPC has substituted its default for
+  /// a blank one, so push and in-app text agree.
   Future<void> rejectDeposit(String reservationId,
       {String? rejectionReason}) async {
     await _client.rpc('reject_bulk_reservation_deposit', params: {
       'p_reservation_id': reservationId,
       'p_reason': rejectionReason,
     });
+
+    unawaited(_pushCustomerDepositDeclined(reservationId: reservationId));
+  }
+
+  /// FCM push to the customer that the store could not verify their deposit
+  /// proof — the hold is gone and any money already sent must be settled
+  /// with the store directly.
+  Future<void> _pushCustomerDepositDeclined({
+    required String reservationId,
+  }) async {
+    try {
+      final row = await _client
+          .from('bulk_reservations')
+          .select('customer_id, quantity, rejection_reason')
+          .eq('id', reservationId)
+          .maybeSingle();
+      final customerId = row?['customer_id']?.toString();
+      if (customerId == null || customerId.isEmpty) return;
+
+      final quantity = (row?['quantity'] as num?)?.toInt() ?? 0;
+      final reason = row?['rejection_reason']?.toString();
+
+      await _client.functions.invoke('send-notification-push', body: {
+        'recipientUserId': customerId,
+        'title': 'Deposit payment declined',
+        'body': bulkReservationDepositDeclinedPushBody(
+          quantity: quantity,
+          reason: reason,
+        ),
+        'type': 'bulk_reservation_deposit_declined',
+        'referenceId': reservationId,
+        'screen': 'my_reservations',
+      });
+    } catch (e) {
+      debugPrint('[ReservationService] Push trigger failed: $e');
+    }
   }
 
   /// Customer: submit the GCash deposit proof (reference + screenshot

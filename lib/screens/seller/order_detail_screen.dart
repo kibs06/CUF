@@ -615,7 +615,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   _timelineStep('Delivered', status == 'delivered' || status == 'received'),
                   _timelineStep('Received', status == 'received'),
                   if (status == 'cancelled') ...[
-                    const Divider(height: 16, color: AppConstants.borderGray),
+                    Divider(height: 16, color: AppConstants.borderGray),
                     _buildCancellationReason(),
                   ],
                 ],

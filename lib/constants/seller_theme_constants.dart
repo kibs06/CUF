@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'app_brightness.dart';
+import 'app_palette.dart';
+
 /// Neutral white/gray palette for the seller dashboard — the same surface
 /// language the customer, admin and auth sides now share, so the whole app
 /// reads as one designed surface. The brand browns below are kept for
@@ -45,23 +48,31 @@ class SellerTheme {
   static const Color blueBg = Color(0xFFE1E9F0);
 
   // ── Neutral surfaces ────────────────────────────────────────────
-  /// Screen background — pure white (was the warm cream `#F3E9D8`).
-  static const Color creamBg = Color(0xFFFFFFFF);
+  //
+  // These four are BRIGHTNESS-AWARE (getters over [AppPalette]), because a
+  // surface that is white in one mode and near-black in the other cannot be a
+  // compile-time constant. The brand and status colours above stay `const`:
+  // they are semantic, not surfaces. See docs/AI/DARK_MODE_PLAN.md.
+  /// Screen background.
+  static Color get creamBg => AppPalette.of(AppBrightness.current).page;
 
-  /// Card surface. The same white as the page on purpose: cards are
-  /// separated by their [cardBorder] hairline rather than by a fill, so a
-  /// card can never look dirty or dingy against the page it sits on.
-  static const Color card = Color(0xFFFFFFFF);
+  /// Card surface. On light it is the same white as the page on purpose:
+  /// cards are separated by their [cardBorder] hairline rather than by a fill,
+  /// so a card can never look dirty against the page it sits on. On dark the
+  /// relationship inverts — the card is *lighter* than the page, because that
+  /// is what reads as raised when shadows are unavailable.
+  static Color get card => AppPalette.of(AppBrightness.current).raised;
 
   /// Hero card gradient end — a subtle neutral wash off the card white.
-  static const Color cardHeroEnd = Color(0xFFF5F5F5);
+  static Color get cardHeroEnd => AppPalette.of(AppBrightness.current).subtle;
 
   /// Hairline card border — cards use a border instead of elevation.
   ///
-  /// This is now load-bearing: with a white card on a white page it is the
-  /// only thing separating the two, so do not lighten it without re-checking
-  /// card legibility on a real device.
-  static const Color cardBorder = Color(0xFFE8E8E8);
+  /// This is load-bearing: with a white card on a white page it is the only
+  /// thing separating the two, so do not lighten it without re-checking card
+  /// legibility on a real device — and on dark it is the card's only edge.
+  static Color get cardBorder =>
+      AppPalette.of(AppBrightness.current).hairlineOnRaised;
 
   // ── GCash card ──────────────────────────────────────────────────
   static const Color gcashBgStart = Color(0xFFF6E9D2);
@@ -69,11 +80,13 @@ class SellerTheme {
   static const Color gcashBorder = Color(0xFFE3CC9C);
 
   // ── Text ────────────────────────────────────────────────────────
-  /// Eyebrow labels, captions, subtitles.
-  static const Color textMuted = Color(0xFF6B6B6B);
+  /// Eyebrow labels, captions, subtitles. BRIGHTNESS-AWARE: muted grey is
+  /// muted *relative to the page*, so the value has to move with it.
+  static Color get textMuted => AppPalette.of(AppBrightness.current).muted;
 
   /// Secondary body text.
-  static const Color textSecondary = Color(0xFF4A4A4A);
+  static Color get textSecondary =>
+      AppPalette.of(AppBrightness.current).mutedStrong;
 
   /// Ink text on espresso fills (buttons, icon tiles). Pure white now — the
   /// same role as [AppConstants.inkInverse], which aliases this token.
@@ -81,11 +94,17 @@ class SellerTheme {
 
   /// Soft card shadow (10px blur, 2px y, low opacity) — the mockup's
   /// treatment, replacing standard Material elevation on dashboard cards.
-  static List<BoxShadow> get cardShadow => [
-        BoxShadow(
-          color: const Color(0xFF3A2415).withValues(alpha: 0.12),
-          blurRadius: 10,
-          offset: const Offset(0, 2),
-        ),
-      ];
+  ///
+  /// Empty on dark: a shadow on a near-black page is invisible, so seller
+  /// cards there rely on [card] being lighter than [creamBg] plus the
+  /// [cardBorder] hairline.
+  static List<BoxShadow> get cardShadow => AppBrightness.isDark
+      ? const <BoxShadow>[]
+      : [
+          BoxShadow(
+            color: const Color(0xFF3A2415).withValues(alpha: 0.12),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ];
 }

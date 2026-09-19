@@ -243,7 +243,7 @@ class _DepositProofReviewSheetState extends State<DepositProofReviewSheet> {
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AppConstants.surfaceLight,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),

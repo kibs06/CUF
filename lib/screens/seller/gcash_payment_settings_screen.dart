@@ -141,7 +141,7 @@ class _GcashPaymentSettingsScreenState extends State<GcashPaymentSettingsScreen>
             final Color bannerColor =
                 isCropped ? AppConstants.success : AppConstants.statusPendingColor;
             return Container(
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 color: AppConstants.surfaceLight,
                 borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
               ),
@@ -309,7 +309,7 @@ class _GcashPaymentSettingsScreenState extends State<GcashPaymentSettingsScreen>
                           });
                         }
                       },
-                      icon: const Icon(
+                      icon: Icon(
                         Icons.crop,
                         size: 18,
                         color: AppConstants.secondary,
@@ -480,7 +480,7 @@ class _GcashPaymentSettingsScreenState extends State<GcashPaymentSettingsScreen>
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppConstants.secondary),
+          icon: Icon(Icons.arrow_back, color: AppConstants.secondary),
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
@@ -687,7 +687,7 @@ class _GcashPaymentSettingsScreenState extends State<GcashPaymentSettingsScreen>
                             ),
                           ),
                         ),
-                        errorWidget: (_, _, _) => const Center(
+                        errorWidget: (_, _, _) => Center(
                           child: Icon(
                             Icons.broken_image_outlined,
                             color: AppConstants.borderGray,

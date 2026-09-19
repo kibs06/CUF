@@ -376,7 +376,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
       fillColor: AppConstants.surfaceLight.withValues(alpha: 0.6),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppConstants.borderGray),
+        borderSide: BorderSide(color: AppConstants.borderGray),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),

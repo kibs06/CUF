@@ -664,7 +664,7 @@ class _FootManualMeasureScreenState extends State<FootManualMeasureScreen>
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.auto_awesome,
+                          Icon(Icons.auto_awesome,
                               color: AppConstants.secondary, size: 16),
                           const SizedBox(width: 8),
                           Text(

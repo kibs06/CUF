@@ -10,25 +10,29 @@ import '../constants/app_constants.dart';
 /// Place static [SkeletonBox]es (or any painted child) inside.
 class ShimmerGroup extends StatelessWidget {
   final Widget child;
-  final Color baseColor;
-  final Color highlightColor;
+
+  /// Nullable so the constructor can stay `const`: the defaults are
+  /// brightness-aware surface tones now, so they are resolved in [build]
+  /// instead of at the declaration.
+  final Color? baseColor;
+  final Color? highlightColor;
 
   const ShimmerGroup({
     super.key,
     required this.child,
-    // Warm cream skeleton tones (they used to be neutral greys, which read as
-    // cold grey slabs against the cream page). Base is the deeper band cream
-    // and the sweep brightens to the card cream, so placeholders stay in the
-    // same warm family as the surfaces they stand in for.
-    this.baseColor = AppConstants.creamDeep,
-    this.highlightColor = AppConstants.sellerCardBg,
+    this.baseColor,
+    this.highlightColor,
   });
 
   @override
   Widget build(BuildContext context) {
     return Shimmer.fromColors(
-      baseColor: baseColor,
-      highlightColor: highlightColor,
+      // Skeleton tones track the surfaces they stand in for: the deeper band
+      // tone as the base, the raised card tone as the sweep's highlight. On
+      // dark both resolve to near-black greys, so the placeholder stays the
+      // same family as the page behind it.
+      baseColor: baseColor ?? AppConstants.creamDeep,
+      highlightColor: highlightColor ?? AppConstants.sellerCardBg,
       child: child,
     );
   }

@@ -5,19 +5,77 @@
 library;
 
 import '../constants/app_constants.dart';
+import 'size_key.dart';
 
-/// EU shoe sizes offered by the manual foot-profile picker, in half-size
-/// steps (35.0 → 48.0) — the same range the scan results screen uses, so a
-/// manually-entered size is directly comparable to an AR-recommended one.
+/// EU shoe sizes offered by the manual foot-profile picker for an adult
+/// scale, in half-size steps (35.0 → 48.0) — the same range the scan results
+/// screen uses, so a manually-entered size is directly comparable to an
+/// AR-recommended one.
 const List<String> customerEuSizes = [
   '35', '35.5', '36', '36.5', '37', '37.5', '38', '38.5', '39', '39.5',
   '40', '40.5', '41', '41.5', '42', '42.5', '43', '43.5', '44', '44.5',
   '45', '45.5', '46', '46.5', '47', '47.5', '48',
 ];
 
+/// EU shoe sizes for the Kids' scale, in the same half-size steps.
+///
+/// Mirrors `euSizeChart`'s own children's band (`foot_measurement_utils.dart`,
+/// 22 → 35). Before this, a child's size could not be entered at all: the
+/// picker offered 35 → 48 for every scale, so a kid wearing EU 28 had to pick
+/// a size they do not wear. The chart hands 36 and up to the women's/men's
+/// bands, so Kids' stops at 35.
+const List<String> customerKidsEuSizes = [
+  '22', '22.5', '23', '23.5', '24', '24.5', '25', '25.5', '26', '26.5',
+  '27', '27.5', '28', '28.5', '29', '29.5', '30', '30.5', '31', '31.5',
+  '32', '32.5', '33', '33.5', '34', '34.5', '35',
+];
+
+/// The EU sizes the manual picker offers for [category]: the children's band
+/// for Kids', the adult band for Men's/Women's — and for an unpicked scale,
+/// since the customer has not narrowed it yet.
+List<String> customerEuSizesFor(String? category) =>
+    category == 'kids' ? customerKidsEuSizes : customerEuSizes;
+
 /// The width labels offered by the manual foot-profile picker. Stored
 /// verbatim in `profiles.foot_width` (see AppConstants.footWidthOptions).
 const List<String> customerFootWidths = AppConstants.footWidthOptions;
+
+/// The "shopping size" scales the app asks about — the same three values the
+/// AR scan stores in `foot_measurements.shoe_category` and the profile
+/// snapshot keeps in `profiles.foot_size_category`.
+///
+/// This is a sizing SCALE, not identity: EU 42 is EU 42 for everyone, but
+/// `FootMeasurement.euToUs` labels it US 9 on the men's chart and US 10.5 on
+/// the women's. A woman shopping men's shoes picks Men's; the account's
+/// `gender` column answers a different question and may be unset.
+const List<(String, String)> customerFootSizeCategories = [
+  ('men', "Men's"),
+  ('women', "Women's"),
+  ('kids', "Kids'"),
+];
+
+/// Display label for a stored `foot_size_category` value ('men' → "Men's").
+/// Null when unset or unrecognised — never a guessed scale.
+String? footSizeCategoryLabel(String? value) {
+  if (value == null) return null;
+  for (final (key, label) in customerFootSizeCategories) {
+    if (key == value) return label;
+  }
+  return null;
+}
+
+/// The saved shopping scale from a `profiles` row as a chart key
+/// (`'men'` | `'women'` | `'kids'`), or null when the customer never picked
+/// one (or the stored value is unrecognised).
+///
+/// Surface the null rather than defaulting it: a guessed scale is what makes
+/// the product page label EU 42 'US 9' for a woman. Callers that must render
+/// a US/UK label anyway use `size_key.dart`'s men's fallback explicitly.
+String? savedFootSizeCategory(Map<String, dynamic>? profile) {
+  if (profile == null) return null;
+  final raw = profile['foot_size_category']?.toString();
+  return footSizeCategoryLabel(raw) == null ? null : raw;
+}
 
 /// Validates a birthday picked at signup.
 ///
@@ -73,4 +131,29 @@ String? resolveGenderValue(String? selectedOption, String? selfDescribeText) {
     return (text == null || text.isEmpty) ? null : text;
   }
   return selectedOption;
+}
+
+/// One-line summary of the saved foot profile for the Settings row:
+/// `'EU 42 · from your AR scan'`, `'EU 40.5 · set manually'`, `'Not set yet'`.
+///
+/// Display-only. Naming the SOURCE matters: a manually-typed size and a
+/// scanned one are both real sizes, but the customer should be able to see
+/// which one the app is holding before they change it.
+String footProfileSummary(Map<String, dynamic>? profile) {
+  if (profile == null || !AppConstants.hasFootSize(profile)) {
+    return 'Not set yet';
+  }
+  final rawSize = profile['foot_size_ph'];
+  if (rawSize == null || rawSize.toString().trim().isEmpty) {
+    return 'Not set yet';
+  }
+  final size = formatSize(rawSize.toString());
+  final scale =
+      footSizeCategoryLabel(profile['foot_size_category']?.toString());
+  final withScale = scale == null ? size : '$size · $scale';
+  return switch (profile['foot_profile_source']?.toString()) {
+    AppConstants.footProfileArScan => '$withScale · from your AR scan',
+    AppConstants.footProfileManual => '$withScale · set manually',
+    _ => withScale,
+  };
 }

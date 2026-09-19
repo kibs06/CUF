@@ -5,7 +5,12 @@ class SolePrimaryButton extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;
   final Color backgroundColor;
-  final Color textColor;
+
+  /// Label/icon ink. Nullable so the constructor stays `const`; resolves to
+  /// [AppConstants.inkInverse] — the fill keeps its brand colour in both
+  /// modes, so the ink on it must not follow the page.
+  final Color? textColor;
+
   final bool isLoading;
   final Widget? icon;
 
@@ -18,7 +23,7 @@ class SolePrimaryButton extends StatelessWidget {
     required this.label,
     required this.onPressed,
     this.backgroundColor = AppConstants.primary,
-    this.textColor = AppConstants.surfaceLight,
+    this.textColor,
     this.isLoading = false,
     this.icon,
     this.expandToFill = true,
@@ -45,7 +50,8 @@ class SolePrimaryButton extends StatelessWidget {
                 height: 24,
                 child: CircularProgressIndicator(
                   strokeWidth: 2.5,
-                  valueColor: AlwaysStoppedAnimation<Color>(textColor),
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                      textColor ?? AppConstants.inkInverse),
                 ),
               )
             : Row(
@@ -60,7 +66,7 @@ class SolePrimaryButton extends StatelessWidget {
                     style: AppConstants.headlineStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      color: textColor,
+                      color: textColor ?? AppConstants.inkInverse,
                     ),
                   ),
                 ],

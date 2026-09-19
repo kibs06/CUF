@@ -229,7 +229,7 @@ class SellerProductRow extends StatelessWidget {
             ),
           ),
           PopupMenuButton<String>(
-            icon: const Icon(Icons.more_horiz, color: AppConstants.secondary),
+            icon: Icon(Icons.more_horiz, color: AppConstants.secondary),
             onSelected: (value) {
               switch (value) {
                 case 'edit':

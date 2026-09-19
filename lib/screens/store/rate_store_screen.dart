@@ -126,7 +126,7 @@ class _RateStoreScreenState extends State<RateStoreScreen> {
         backgroundColor: AppConstants.surfaceLight,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.close, color: AppConstants.secondary),
+          icon: Icon(Icons.close, color: AppConstants.secondary),
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),

@@ -306,7 +306,7 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
             OutlinedButton(
               onPressed: () => Navigator.of(context).pop(),
               style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: AppConstants.surfaceLight),
+                side: BorderSide(color: AppConstants.surfaceLight),
               ),
               child: Text(
                 'Go Back',
@@ -428,7 +428,7 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
                 color: Colors.black.withValues(alpha: 0.5),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.close,
                 color: AppConstants.surfaceLight,
                 size: 20,

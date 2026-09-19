@@ -199,7 +199,7 @@ class _PickupReservationsScreenState extends State<PickupReservationsScreen> {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (ctx) => Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AppConstants.surfaceLight,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),

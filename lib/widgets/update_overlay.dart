@@ -336,7 +336,7 @@ class _UpdateOverlayDialogState extends State<_UpdateOverlayDialog>
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.download_rounded,
                       size: 20,
                       color: AppConstants.secondary,

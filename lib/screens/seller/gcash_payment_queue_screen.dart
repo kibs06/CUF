@@ -251,7 +251,7 @@ class _GcashPaymentQueueScreenState extends State<GcashPaymentQueueScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppConstants.secondary),
+          icon: Icon(Icons.arrow_back, color: AppConstants.secondary),
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
@@ -280,7 +280,7 @@ class _GcashPaymentQueueScreenState extends State<GcashPaymentQueueScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(
+              Icon(
                 Icons.cloud_off_outlined,
                 size: 44,
                 color: AppConstants.secondary,
@@ -489,7 +489,7 @@ class _OrderCard extends StatelessWidget {
                     height: 140,
                     width: double.infinity,
                     color: AppConstants.borderGray.withValues(alpha: 0.15),
-                    child: const Icon(
+                    child: Icon(
                       Icons.image_not_supported_outlined,
                       color: AppConstants.secondary,
                     ),

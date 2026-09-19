@@ -118,7 +118,7 @@ class _QuickMessageSheet extends StatelessWidget {
       maxChildSize: 0.85,
       builder: (context, scrollController) {
         return Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: AppConstants.surfaceLight,
             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),

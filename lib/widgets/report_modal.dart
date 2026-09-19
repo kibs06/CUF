@@ -212,7 +212,7 @@ class _ReportModalSheetState extends State<_ReportModalSheet> {
   Widget build(BuildContext context) {
     return Container(
       height: MediaQuery.of(context).size.height * 0.85,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppConstants.surfaceLight,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),

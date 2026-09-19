@@ -8,7 +8,10 @@ class SellerMetricCard extends StatelessWidget {
   final String? subtitle;
   final Color? subtitleColor;
   final bool isLarge;
-  final Color valueColor;
+  /// The metric's number ink. Nullable so the constructor stays `const`;
+  /// resolves to [AppConstants.secondary] (the page ink), because it is drawn
+  /// on a card surface and must follow the theme.
+  final Color? valueColor;
   final Widget? trailing;
   final VoidCallback? onTap;
 
@@ -19,7 +22,7 @@ class SellerMetricCard extends StatelessWidget {
     this.subtitle,
     this.subtitleColor,
     this.isLarge = false,
-    this.valueColor = AppConstants.secondary,
+    this.valueColor,
     this.trailing,
     this.onTap,
   });
@@ -33,7 +36,7 @@ class SellerMetricCard extends StatelessWidget {
         decoration: BoxDecoration(
           // Hero card gets a subtle gradient (`.card.hero` in the mockup).
           gradient: isLarge
-              ? const LinearGradient(
+              ? LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [SellerTheme.card, SellerTheme.cardHeroEnd],
@@ -91,7 +94,7 @@ class SellerMetricCard extends StatelessWidget {
               style: AppConstants.monoStyle(
                 fontSize: isLarge ? 28 : 22,
                 fontWeight: FontWeight.bold,
-                color: valueColor,
+                color: valueColor ?? AppConstants.secondary,
               ),
             ),
             if (subtitle != null) ...[

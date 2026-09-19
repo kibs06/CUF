@@ -345,14 +345,17 @@ class _NotificationBadgeIcon extends StatelessWidget {
 
   /// The bar's own background — used for the badge's cut-out ring so the
   /// ring blends into the nav band instead of the page behind it.
-  final Color barBackground;
+  /// The band behind the icon — used to cut the badge's ring out of it.
+  /// Nullable so the constructor stays `const`; resolved in [build] because
+  /// the band follows the theme.
+  final Color? barBackground;
 
   const _NotificationBadgeIcon({
     required this.icon,
     required this.unreadCount,
     this.selected = false,
     this.activeColor = AppConstants.primary,
-    this.barBackground = AppConstants.creamDeep,
+    this.barBackground,
   });
 
   @override
@@ -378,7 +381,7 @@ class _NotificationBadgeIcon extends StatelessWidget {
                   color: AppConstants.error,
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: barBackground,
+                    color: barBackground ?? AppConstants.creamDeep,
                     width: 1.5,
                   ),
                 ),

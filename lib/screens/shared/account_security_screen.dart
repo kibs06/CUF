@@ -512,7 +512,7 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
                   ),
                 ),
               const SizedBox(width: 4),
-              const Icon(
+              Icon(
                 Icons.chevron_right,
                 color: AppConstants.borderGray,
                 size: 20,

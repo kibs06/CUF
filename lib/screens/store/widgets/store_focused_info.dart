@@ -175,7 +175,7 @@ class _EnterStoreButtonState extends State<_EnterStoreButton> {
                   0,
                   0,
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.arrow_forward_rounded,
                   color: AppConstants.surfaceLight,
                   size: 18,

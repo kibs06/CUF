@@ -32,6 +32,15 @@ class HorizontalProductCard extends StatelessWidget {
   final String fallbackName;
   final double fallbackPrice;
 
+  /// Thumbnail corner radius — shared by the [ClipRRect] and the hairline
+  /// ring so the two can never drift apart.
+  static const double _thumbRadius = 12;
+
+  /// The always-on hairline ring around the thumbnail. Exposed so widget
+  /// tests can assert the rail card keeps a visible edge on the white page
+  /// (drawing it over a photograph is a regression that is easy to drop).
+  static const Key thumbnailHairlineKey = Key('rail-card-hairline');
+
   /// First product image, preferring `product_images` (sorted by
   /// display_order) and falling back to the flat `images` list.
   static String firstImage(Map<String, dynamic> product, String fallback) {
@@ -77,37 +86,56 @@ class HorizontalProductCard extends StatelessWidget {
               children: [
                 // Thumbnail + compact countdown band across its bottom edge
                 // (only for sales that actually end).
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Stack(
-                    fit: StackFit.passthrough,
-                    children: [
-                      Image.network(
-                        firstImage(product, fallbackImageUrl),
-                        width: 130,
-                        height: 124,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => Container(
+                //
+                // The hairline is a `foregroundDecoration`, NOT a `border`:
+                // a decoration border insets its child by its width, which
+                // would shrink the 130x124 thumbnail and disturb the rail's
+                // fixed 130x180 contract (the text block below is sized by a
+                // FittedBox against the leftover height). Painting it in the
+                // foreground keeps every geometry assertion in
+                // best_sellers_section_test byte-identical.
+                Container(
+                  key: thumbnailHairlineKey,
+                  foregroundDecoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(_thumbRadius),
+                    border: Border.all(
+                      color: AppConstants.borderGray,
+                      width: 1,
+                    ),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(_thumbRadius),
+                    child: Stack(
+                      fit: StackFit.passthrough,
+                      children: [
+                        Image.network(
+                          firstImage(product, fallbackImageUrl),
                           width: 130,
                           height: 124,
-                          color: AppConstants.borderGray.withValues(alpha: 0.2),
-                          child: Icon(
-                            Icons.image_outlined,
-                            color: AppConstants.borderGray,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => Container(
+                            width: 130,
+                            height: 124,
+                            color:
+                                AppConstants.borderGray.withValues(alpha: 0.2),
+                            child: Icon(
+                              Icons.image_outlined,
+                              color: AppConstants.borderGray,
+                            ),
                           ),
                         ),
-                      ),
-                      if (onSale && stripEnd != null)
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          child: SaleCountdownOverlay(
-                            saleEndsAt: stripEnd,
-                            compact: true,
+                        if (onSale && stripEnd != null)
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            child: SaleCountdownOverlay(
+                              saleEndsAt: stripEnd,
+                              compact: true,
+                            ),
                           ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 6),

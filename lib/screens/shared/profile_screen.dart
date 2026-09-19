@@ -7,6 +7,7 @@ import '../../providers/follow_provider.dart';
 import '../../providers/order_provider.dart';
 import '../../utils/notification_formatters.dart';
 import '../../utils/recently_viewed.dart';
+import '../../widgets/active_tab.dart';
 import '../../widgets/buy_again_section.dart';
 import '../../widgets/recently_viewed_section.dart';
 import 'following_list_dialog.dart';
@@ -33,7 +34,18 @@ import '../seller/seller_business_verification_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final bool hideAppBar;
-  const ProfileScreen({super.key, this.hideAppBar = false});
+
+  /// Index of this screen inside the tab host that owns it, when it is hosted
+  /// as a tab. Null (the default) means "not a tab" — a pushed route, or a
+  /// host that does not publish an `ActiveTab` — and disables the re-entry
+  /// rebuild entirely.
+  ///
+  /// It has to be passed in rather than assumed: this screen is the LAST tab of
+  /// three different shells (seller 4, customer 3, admin 5), so there is no
+  /// single index it could hard-code.
+  final int? tabIndex;
+
+  const ProfileScreen({super.key, this.hideAppBar = false, this.tabIndex});
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -71,12 +83,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _loadingRecentlyViewed = false;
   DateTime? _recentlyViewedLoadedAt;
 
+  /// Last tab index this screen saw on screen. See [didChangeDependencies].
+  int? _lastActiveTab;
+
   @override
   void initState() {
     super.initState();
     _nameController = TextEditingController();
     _phoneController = TextEditingController();
     _loadRecentlyViewed();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Re-entry rebuild.
+    //
+    // The TTL blocks in [build] below are written on the assumption that
+    // re-entering the Profile tab re-runs build. That assumption does not hold
+    // on its own: the shell keeps this page mounted, and the widget instance it
+    // passes down is unchanged, so `Element.updateChild` short-circuits and
+    // build never runs again — leaving those checks (Tier 2 status pill, the
+    // My Orders badges, recently-viewed) dead for the rest of the session.
+    //
+    // [ActiveTab] changes value on every switch, so this override runs on a
+    // genuine re-entry. Marking the element dirty is all that is needed: build
+    // then evaluates the TTLs exactly as written, and each one still decides
+    // for itself whether it is stale enough to refresh.
+    //
+    // Only a switch TO this tab counts. Every kept-alive page is a dependent of
+    // [ActiveTab], so this runs on switches between the other tabs too — and
+    // rebuilding (let alone refreshing) for a page the user is not looking at
+    // would turn an unrelated tab tap into background network traffic.
+    final active = ActiveTab.of(context);
+    if (active == null || active == _lastActiveTab) return;
+    _lastActiveTab = active;
+    if (widget.tabIndex == null || active != widget.tabIndex) return;
+    setState(() {});
   }
 
   Future<void> _loadRecentlyViewed() async {
@@ -351,7 +394,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           );
                         },
                   tooltip: 'Settings',
-                  icon: const Icon(
+                  icon: Icon(
                     Icons.settings_outlined,
                     color: AppConstants.secondary,
                   ),
@@ -1003,37 +1046,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
       padding: EdgeInsets.zero,
       child: Column(
         children: [
-          // Pickup holds — the free 24-hour hold a customer makes on a
-          // product page. Separate row from the bulk (reseller) holds below,
-          // because the two are different flows (no deposit, no approval).
-          _settingsRow(
-            icon: Icons.storefront_outlined,
-            title: 'My Pickup Reservations',
-            subtitle: 'Free 24-hour holds waiting for you',
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const MyPickupReservationsScreen(),
-                ),
-              );
-            },
-          ),
-          const Divider(height: 1, color: Color(0xFFE5E7EB)),
-          // Bulk (reseller) reservations — holds requested from product
-          // pages; visible to everyone since any customer can resell.
-          _settingsRow(
-            icon: Icons.inventory_2_outlined,
-            title: 'My Reservations',
-            subtitle: 'Bulk holds you requested from sellers',
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const MyReservationsScreen(),
-                ),
-              );
-            },
-          ),
-          const Divider(height: 1, color: Color(0xFFE5E7EB)),
+          // Both reservation rows are the CUSTOMER's own record of holds THEY
+          // placed: the free 24-hour pickup hold, and the bulk (reseller) hold
+          // requested from a seller. A seller has no such holds — the holds on
+          // a seller's own products belong to the store and are worked in the
+          // seller shell's reservation queue and pickup tiles — so showing
+          // these here only led a seller into an empty customer screen.
+          // Gated on `roleCustomer` rather than "not a seller" so an admin does
+          // not get them either; this matches how the other customer-only
+          // surfaces on this screen are gated.
+          if (auth.userRole == AppConstants.roleCustomer) ...[
+            // Pickup holds — the free 24-hour hold a customer makes on a
+            // product page. Separate row from the bulk (reseller) holds below,
+            // because the two are different flows (no deposit, no approval).
+            _settingsRow(
+              icon: Icons.storefront_outlined,
+              title: 'My Pickup Reservations',
+              subtitle: 'Free 24-hour holds waiting for you',
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const MyPickupReservationsScreen(),
+                  ),
+                );
+              },
+            ),
+            const Divider(height: 1, color: Color(0xFFE5E7EB)),
+            // Bulk (reseller) reservations — holds requested from product
+            // pages; any customer can resell, which is why this is not gated on
+            // a separate "reseller" role.
+            _settingsRow(
+              icon: Icons.inventory_2_outlined,
+              title: 'My Reservations',
+              subtitle: 'Bulk holds you requested from sellers',
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const MyReservationsScreen(),
+                  ),
+                );
+              },
+            ),
+            const Divider(height: 1, color: Color(0xFFE5E7EB)),
+          ],
           // Sellers set up their GCash static QR here (shown at POS checkout).
           if (auth.userRole == AppConstants.roleSeller) ...[
             _settingsRow(
@@ -1106,116 +1161,130 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Material(
                     color: Colors.transparent,
                     child: ListTile(
-                    dense: true,
-                    title: Text(
-                      'Store',
-                      style: AppConstants.bodyStyle(fontSize: 14),
-                    ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (storeName != null) ...[
-                          // Open/Closed pill
-                          Builder(
-                            builder: (context) {
-                              final isOpen = _sellerStore?['is_open'] ?? store?['is_open'] ?? true;
-                              return AnimatedContainer(
-                                duration: const Duration(milliseconds: 300),
-                                curve: Curves.easeInOut,
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: isOpen
-                                      ? AppConstants.success.withValues(alpha: 0.12)
-                                      : AppConstants.error.withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: AnimatedDefaultTextStyle(
+                      dense: true,
+                      title: Text(
+                        'Store',
+                        style: AppConstants.bodyStyle(fontSize: 14),
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (storeName != null) ...[
+                            // Open/Closed pill
+                            Builder(
+                              builder: (context) {
+                                final isOpen =
+                                    _sellerStore?['is_open'] ??
+                                    store?['is_open'] ??
+                                    true;
+                                return AnimatedContainer(
                                   duration: const Duration(milliseconds: 300),
-                                  style: AppConstants.bodyStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: isOpen
-                                        ? AppConstants.success
-                                        : AppConstants.error,
+                                  curve: Curves.easeInOut,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 3,
                                   ),
-                                  child: Text(isOpen ? 'Open' : 'Closed'),
-                                ),
-                              );
-                            },
-                          ),
-                          const SizedBox(width: 8),
-                          // Open/Closed toggle
-                          SizedBox(
-                            height: 24,
-                            child: Switch(
-                              value: _sellerStore?['is_open'] ?? store?['is_open'] ?? true,
-                              onChanged: _isTogglingStore
-                                  ? null
-                                  : (_) => _toggleStoreOpen(),
-                              activeThumbColor: SoleSwitch.thumbColor,
-                              inactiveTrackColor: SoleSwitch.offColor,
-                              inactiveThumbColor: SoleSwitch.thumbColor,
-                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  decoration: BoxDecoration(
+                                    color: isOpen
+                                        ? AppConstants.success.withValues(
+                                            alpha: 0.12,
+                                          )
+                                        : AppConstants.error.withValues(
+                                            alpha: 0.12,
+                                          ),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: AnimatedDefaultTextStyle(
+                                    duration: const Duration(milliseconds: 300),
+                                    style: AppConstants.bodyStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: isOpen
+                                          ? AppConstants.success
+                                          : AppConstants.error,
+                                    ),
+                                    child: Text(isOpen ? 'Open' : 'Closed'),
+                                  ),
+                                );
+                              },
                             ),
-                          ),
-                          const SizedBox(width: 4),
+                            const SizedBox(width: 8),
+                            // Open/Closed toggle
+                            SizedBox(
+                              height: 24,
+                              child: Switch(
+                                value:
+                                    _sellerStore?['is_open'] ??
+                                    store?['is_open'] ??
+                                    true,
+                                onChanged: _isTogglingStore
+                                    ? null
+                                    : (_) => _toggleStoreOpen(),
+                                activeThumbColor: SoleSwitch.thumbColor,
+                                inactiveTrackColor: SoleSwitch.offColor,
+                                inactiveThumbColor: SoleSwitch.thumbColor,
+                                materialTapTargetSize:
+                                    MaterialTapTargetSize.shrinkWrap,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                          ],
+                          if (storeName == null)
+                            Text(
+                              'No store linked',
+                              style: AppConstants.bodyStyle(
+                                fontSize: 13,
+                                color: AppConstants.error,
+                              ),
+                            ),
                         ],
-                        if (storeName == null)
-                          Text(
-                            'No store linked',
-                            style: AppConstants.bodyStyle(
-                              fontSize: 13,
-                              color: AppConstants.error,
+                      ),
+                      onTap: () {
+                        if (store != null) {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => StoreProfileScreen(store: store),
                             ),
-                          ),
-                      ],
+                          );
+                        } else {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const CreateStoreScreen(),
+                            ),
+                          );
+                        }
+                      },
                     ),
-                    onTap: () {
-                      if (store != null) {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => StoreProfileScreen(store: store),
-                          ),
-                        );
-                      } else {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const CreateStoreScreen(),
-                          ),
-                        );
-                      }
-                    },
-                  ),
                   ),
                   const Divider(height: 1, color: Color(0xFFE5E7EB)),
                   Material(
                     color: Colors.transparent,
                     child: ListTile(
-                    dense: true,
-                    title: Text(
-                      'Seller Status',
-                      style: AppConstants.bodyStyle(fontSize: 14),
+                      dense: true,
+                      title: Text(
+                        'Seller Status',
+                        style: AppConstants.bodyStyle(fontSize: 14),
+                      ),
+                      trailing: SoleStatusChip(status: auth.sellerStatus),
                     ),
-                    trailing: SoleStatusChip(status: auth.sellerStatus),
-                  ),
                   ),
                   const Divider(height: 1, color: Color(0xFFE5E7EB)),
                   Material(
                     color: Colors.transparent,
                     child: ListTile(
-                    dense: true,
-                    title: Text(
-                      'Member Since',
-                      style: AppConstants.bodyStyle(fontSize: 14),
-                    ),
-                    trailing: Text(
-                      _formatMemberSince(auth.profile?['created_at']),
-                      style: AppConstants.bodyStyle(
-                        fontSize: 13,
-                        color: Colors.grey.shade600,
+                      dense: true,
+                      title: Text(
+                        'Member Since',
+                        style: AppConstants.bodyStyle(fontSize: 14),
+                      ),
+                      trailing: Text(
+                        _formatMemberSince(auth.profile?['created_at']),
+                        style: AppConstants.bodyStyle(
+                          fontSize: 13,
+                          color: Colors.grey.shade600,
+                        ),
                       ),
                     ),
-                  ),
                   ),
                 ],
               );
@@ -1390,8 +1459,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   color: AppConstants.secondary.withValues(alpha: 0.5),
                 ),
               ),
-        trailing: trailing ??
-            const Icon(Icons.chevron_right, color: AppConstants.borderGray),
+        trailing:
+            trailing ??
+            Icon(Icons.chevron_right, color: AppConstants.borderGray),
         onTap: onTap,
       ),
     );

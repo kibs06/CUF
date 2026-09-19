@@ -55,7 +55,7 @@ class OrderConfirmationView extends StatelessWidget {
         color: AppConstants.success,
         shape: BoxShape.circle,
       ),
-      child: const Icon(
+      child: Icon(
         Icons.check,
         size: 48,
         color: AppConstants.surfaceLight,

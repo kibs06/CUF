@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 import '../constants/app_constants.dart';
 import '../services/product_service.dart';
 import '../services/supabase_service.dart';
+import '../utils/nav_perf.dart';
+import '../utils/product_audience.dart';
+import '../utils/product_search.dart';
 import '../utils/sale_price.dart';
+import '../utils/size_match.dart';
 
 enum SortMode {
   /// Default browse order — the catalog is shuffled once per
@@ -38,6 +42,35 @@ const int kBestSellerLimit = 20;
 /// Units sold for [product] per the [unitsSold] aggregation (absent = 0).
 int unitsSoldOf(Map<String, dynamic> product, Map<String, int> unitsSold) =>
     unitsSold[product['id']?.toString() ?? ''] ?? 0;
+
+/// How many products the "In your size" rail keeps.
+///
+/// A suggestion rail is a taste, not a second catalog: past a dozen cards the
+/// customer is scrolling a grid again. Same shape as [kBestSellerLimit] — a
+/// catalog smaller than the limit simply returns everything that matches.
+const int kMySizeRailLimit = 12;
+
+/// How many keyword suggestions the search panel shows at once.
+///
+/// A panel, not a page: past about eight rows it stops being scannable and the
+/// customer is reading a list instead of searching. The screen above it also
+/// renders "search for `what I typed`" as its own first row, so this is on top
+/// of that.
+const int kSearchSuggestionLimit = 8;
+
+/// How many products the "nothing matched" panel offers.
+///
+/// The same taste-not-a-catalog number as [kMySizeRailLimit] and
+/// [kAudienceRailLimit] — it renders through the same rail.
+const int kSearchRelatedLimit = 8;
+
+/// How many products an audience rail (Men's / Women's / Kids') keeps.
+///
+/// The same taste-not-a-second-catalog rule as [kMySizeRailLimit], and the same
+/// number on purpose: these rails sit beside each other on the home feed, so a
+/// different cap would make one strip visibly shorter for no reason a customer
+/// could see.
+const int kAudienceRailLimit = 12;
 
 /// The 'Best Sellers' set, derived live from the loaded catalog and the
 /// `units_sold` aggregation. Single source of truth for BOTH the home rail and
@@ -107,6 +140,24 @@ class ProductProvider extends ChangeNotifier {
   /// Loaded alongside the catalog; missing id = 0 units.
   Map<String, int> _unitsSold = const {};
 
+  /// Owner of the seller-scoped catalog currently in [_products]: the user id
+  /// that loaded it, and the store id it was scoped to. Both stay null while
+  /// [_products] holds the all-stores catalog (the [loadProducts] path used by
+  /// customers and admins). Recording the user is what stops a customer browse
+  /// — or the next account's seller session — from reading as a cache hit.
+  String? _sellerCatalogUserId;
+  String? _sellerCatalogStoreId;
+
+  /// The seller-catalog fetch in flight, if any. The Dashboard, POS and
+  /// Products tabs all ask for this one catalog and can ask in the same frame;
+  /// a late caller joins this future instead of firing a duplicate query.
+  Future<void>? _sellerCatalogFetch;
+
+  /// Why the last seller-catalog fetch failed, or null when it succeeded (or
+  /// never ran). The Products tab renders its error card + Retry from this, now
+  /// that the provider owns the fetch instead of the screen.
+  Object? _sellerCatalogError;
+
   ProductProvider() : _db = SupabaseService.instance;
 
   /// Test seam: a provider seeded with a catalog + sold-count aggregation and
@@ -135,6 +186,16 @@ class ProductProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get selectedCategory => _selectedCategory;
   SortMode get sortMode => _sortMode;
+
+  /// Why the last seller-catalog load failed, or null.
+  Object? get sellerCatalogError => _sellerCatalogError;
+
+  /// Whether [_products] is [userId]'s own seller-scoped catalog.
+  ///
+  /// Keyed on the user as well as the store: one-store-per-seller means a
+  /// store id alone would let the NEXT account's session read this as a hit.
+  bool _isSellerCatalogOf(String? userId) =>
+      _sellerCatalogStoreId != null && _sellerCatalogUserId == userId;
 
   // Fetch all categories present in the products list, UNIONed with the
   // canonical [AppConstants.productCategories] (the same presets the seller
@@ -175,6 +236,149 @@ class ProductProvider extends ChangeNotifier {
   bool get hasBestSellers =>
       _products.any((p) => unitsSoldOf(p, _unitsSold) > 0);
 
+  /// Products the customer can actually buy right now in [euSize], most-sold
+  /// first — the "In your size" rail's source.
+  ///
+  /// The inclusion rule lives in `size_match.dart` ([stocksMySize]), so this
+  /// rail and any later size surface (chip, badge, product-page pre-select)
+  /// can never disagree about whether a product has the customer's size. It
+  /// reuses the `inventory`/`units_sold` data the catalog already fetched — no
+  /// second query, no schema change.
+  ///
+  /// [euSize] null (signed out, or a customer who never gave a size) returns
+  /// EMPTY, never a guess or a fallback size: every size surface is
+  /// absent-safe by design (plan §8 R6).
+  ///
+  /// Ranking is [_compareSuggestions] — units sold, then rating, then name, the
+  /// same tie-break [bestSellerProducts] uses, so the per-load catalog shuffle
+  /// cannot reorder the rail under the customer. Unlike the best-seller rule, a
+  /// product that has never sold still qualifies on its merits.
+  List<Map<String, dynamic>> productsInSize(
+    double? euSize, {
+    int limit = kMySizeRailLimit,
+  }) {
+    if (euSize == null) return const [];
+
+    final matches = _products.where((p) => stocksMySize(p, euSize)).toList()
+      ..sort(_compareSuggestions);
+
+    return limit > 0 && matches.length > limit
+        ? matches.sublist(0, limit)
+        : matches;
+  }
+
+  /// Products a seller stated as being for [audience], most-sold first — the
+  /// Men's / Women's / Kids' home rails' source.
+  ///
+  /// Sibling of [productsInSize]: filter → rank → cap, so the per-load catalog
+  /// shuffle can never reorder a rail under the customer.
+  ///
+  /// **`null` and `'unisex'` are skipped, never treated as "any audience".**
+  /// A product whose audience is unset stays in the catalog, in search and in
+  /// every category — it is only absent from these curated rails (stated data
+  /// only, never inferred from the size band, plan §1.1). And a `unisex`
+  /// product would otherwise be listed in Men's, Women's AND Kids' at once,
+  /// putting one card three times down the feed (plan §4 R4).
+  ///
+  /// [audience] goes through [productAudienceFrom] and an unrecognised, empty
+  /// or rail-ineligible value (`null`, `'unisex'`, garbage) returns EMPTY —
+  /// never a default audience that would show the wrong customers a rail.
+  List<Map<String, dynamic>> productsForAudience(
+    String? audience, {
+    int limit = kAudienceRailLimit,
+  }) {
+    final wanted = productAudienceFrom(audience);
+    if (wanted == null || wanted == kUnisexAudience) return const [];
+
+    final matches = _products
+        .where((p) => productAudienceFrom(p['audience']?.toString()) == wanted)
+        .toList()
+      ..sort(_compareSuggestions);
+
+    return limit > 0 && matches.length > limit
+        ? matches.sublist(0, limit)
+        : matches;
+  }
+
+  /// Products a seller stated as being for [audience], in an order the caller
+  /// chooses — the audience **listing page**'s source.
+  ///
+  /// Deliberately NOT the same method as [productsForAudience], and the
+  /// difference is the point:
+  ///
+  ///  * [productsForAudience] answers "what belongs in this rail?", where a
+  ///    `unisex` product must be skipped or it would appear in Men's, Women's
+  ///    and Kids' at once (§4 R4) and the rail caps its length anyway.
+  ///  * this one answers "show me the [audience] shelf", which a customer
+  ///    reached by tapping that audience's own chip. `'unisex'` is a real
+  ///    answer there (it is the only way to see those products together), and
+  ///    a page a customer opened deliberately is not capped.
+  ///
+  /// What the two DO share: products whose audience is unset are excluded from
+  /// both. A `null` product is not part of any audience — it stays in the
+  /// catalog, search and category browsing, untouched.
+  ///
+  /// [sort] defaults to [SortMode.featured] (the session's shuffled catalog
+  /// order); the listing page passes its own, exactly like the search results
+  /// page — passing one never re-sorts Home underneath it. [limit] of 0 means
+  /// no cap, the same convention as [productsInSize] and [searchResults].
+  List<Map<String, dynamic>> productsInAudience(
+    String? audience, {
+    SortMode? sort,
+    int limit = 0,
+  }) {
+    final wanted = productAudienceFrom(audience);
+    if (wanted == null) return const [];
+
+    final matches = _products
+        .where((p) => productAudienceFrom(p['audience']?.toString()) == wanted)
+        .toList();
+    final sorted = _applySort(matches, sort ?? SortMode.featured);
+
+    return limit > 0 && sorted.length > limit
+        ? sorted.sublist(0, limit)
+        : sorted;
+  }
+
+  /// The audiences the catalog actually holds products for, in
+  /// [productAudienceOptions] order — the Home category row's audience chips.
+  ///
+  /// Data-derived on purpose, the same rule the 'On Sale' and 'Best Sellers'
+  /// chips already follow: an audience with no products is not offered, because
+  /// a chip that can only ever lead to an empty page is worse than no chip.
+  /// With every product in today's catalog `audience = null` this returns an
+  /// empty list, so Home shows today's row until a seller tags something.
+  ///
+  /// A `unisex` product DOES surface here (unlike in the rails): it is the only
+  /// way for a customer to reach those products as a group.
+  List<String> get audiencesInCatalog {
+    final found = <String>{};
+    for (final product in _products) {
+      final audience = productAudienceFrom(product['audience']?.toString());
+      if (audience != null) found.add(audience);
+    }
+    return [
+      for (final (value, _) in productAudienceOptions)
+        if (found.contains(value)) value,
+    ];
+  }
+
+  /// The ranking every suggestion rail shares — units sold, then rating, then
+  /// name (the same tie-break [bestSellerProducts] uses). Kept in one place so
+  /// "In your size" and the audience rails cannot drift into disagreeing about
+  /// order, and so a tie is resolved the same way on every reload rather than
+  /// inheriting the shuffled catalog order.
+  int _compareSuggestions(Map<String, dynamic> a, Map<String, dynamic> b) {
+    final byUnits = unitsSoldOf(b, _unitsSold)
+        .compareTo(unitsSoldOf(a, _unitsSold));
+    if (byUnits != 0) return byUnits;
+    final rA = (a['avg_rating'] as num?)?.toDouble() ?? 0;
+    final rB = (b['avg_rating'] as num?)?.toDouble() ?? 0;
+    final byRating = rB.compareTo(rA);
+    if (byRating != 0) return byRating;
+    return (a['name'] ?? '').toString().compareTo((b['name'] ?? '').toString());
+  }
+
   /// Load ALL products (customer / admin screens).
   ///
   /// The fetched list is shuffled once right after the fetch so the default
@@ -208,6 +412,12 @@ class ProductProvider extends ChangeNotifier {
       _products = results[0] as List<Map<String, dynamic>>;
       _unitsSold = results[1] as Map<String, int>;
       _stampUnitsSold();
+      // This is the all-stores catalog, not a seller-scoped one: drop the
+      // seller cache identity so a later seller tab fetches its own scoped
+      // list instead of mistaking these rows for its store's cache.
+      _sellerCatalogUserId = null;
+      _sellerCatalogStoreId = null;
+      _sellerCatalogError = null;
       if (reshuffle) {
         _products.shuffle();
       }
@@ -221,26 +431,96 @@ class ProductProvider extends ChangeNotifier {
 
   /// Load only the current seller's products (POS / seller screens).
   ///
+  /// Cache-aware and non-destructive — the two properties that let the
+  /// Dashboard, POS and Products tabs share ONE fetch:
+  ///
+  ///  * **A cache hit is free.** When this seller's catalog is already in
+  ///    [products], this returns without a store lookup, without a catalog
+  ///    query and deliberately without a `notifyListeners()` — so switching to
+  ///    a tab that already has the data cannot repaint (or flash a skeleton
+  ///    over) it.
+  ///  * **A fetch never clears what is on screen.** The previous rows stay
+  ///    until the new ones arrive; only a seller with nothing to show yet sees
+  ///    the loading state. This is why POS/Products no longer blank out on
+  ///    every load.
+  ///  * **Concurrent callers share one request.** The Dashboard's
+  ///    `Future.wait` and POS's `initState` both arrive within the same frame;
+  ///    they join the in-flight fetch instead of stacking two duplicate
+  ///    catalog queries.
+  ///
+  /// Pass [force] to refetch over a warm cache — pull-to-refresh, or after a
+  /// write. The current rows stay visible while it runs.
+  ///
   /// Fetches the seller's store ID via [ProductService] and passes it to
   /// [SupabaseService.fetchProducts] so the query is server-side scoped.
-  ///
-  /// If the seller has no store yet, returns an empty list instead of
-  /// silently fetching all sellers' products.
-  Future<void> loadSellerProducts() async {
-    _isLoading = true;
-    // Clear any previously loaded catalog FIRST so a slow or failed seller
-    // fetch can never flash or keep another store's products. The provider
-    // is an app-root singleton shared across roles — a prior customer-browse
-    // `loadProducts()` may have left the full catalog in memory, and the old
-    // silent catch would have kept showing it if this fetch threw.
-    _products = [];
-    notifyListeners();
+  /// A seller with no store yields an empty list rather than every store's
+  /// products.
+  Future<void> loadSellerProducts({bool force = false}) {
+    final userId = _db.currentUser?.id;
+
+    if (!force && _isSellerCatalogOf(userId)) return Future.value();
+
+    final inFlight = _sellerCatalogFetch;
+    if (inFlight != null) {
+      // A forced refetch exists to observe a write that just landed, so it
+      // cannot simply join a fetch that may have STARTED before that write and
+      // will return pre-write rows. Queue a fresh one behind it instead. An
+      // unforced caller has no such obligation, so it joins.
+      if (!force) return inFlight;
+      return inFlight.whenComplete(() => loadSellerProducts(force: true));
+    }
+
+    final fetch = _fetchSellerProducts();
+    _sellerCatalogFetch = fetch;
+    return fetch.whenComplete(() {
+      // Only the fetch that is still registered clears the slot, so a caller
+      // that force-refreshes mid-flight is never left thinking one is running.
+      if (identical(_sellerCatalogFetch, fetch)) _sellerCatalogFetch = null;
+    });
+  }
+
+  /// The actual seller-catalog fetch. Never call directly — go through
+  /// [loadSellerProducts] so the cache check and in-flight coalescing apply.
+  Future<void> _fetchSellerProducts() async {
+    final userId = _db.currentUser?.id;
+
+    // Anything that is NOT this seller's own catalog has to go before the
+    // fetch resolves. The provider is an app-root singleton shared across
+    // roles: a prior customer browse (`loadProducts()`) or a previous account's
+    // seller session can have left a different list in memory, and showing it
+    // under the seller's Products/POS tab would be wrong (and a cross-account
+    // leak). Rows belonging to THIS seller are the only ones allowed to
+    // survive a refresh.
+    if (!_isSellerCatalogOf(userId)) {
+      _products = [];
+      _sellerCatalogUserId = null;
+      _sellerCatalogStoreId = null;
+    }
+
+    // Loading state only when there is genuinely nothing to show. With rows
+    // already on screen this is a quiet background refresh — that is the whole
+    // point of the cache.
+    if (_products.isEmpty) {
+      _isLoading = true;
+      _sellerCatalogError = null;
+      notifyListeners();
+    }
 
     try {
-      final storeId = await ProductService.instance.getSellerStoreId();
+      // Timed separately from the catalog query below: this is an extra
+      // serialised round trip in front of every seller catalog load, so it is
+      // worth being able to see its cost on its own in the export.
+      final storeId = await PerfTrace.span(
+        'catalog:seller store lookup',
+        ProductService.instance.getSellerStoreId,
+      );
       if (storeId == null) {
         // Seller has no store — keep empty, don't leak all products.
         // MUST clear the loading flag here (no fall-through past the try).
+        _products = [];
+        _sellerCatalogUserId = null;
+        _sellerCatalogStoreId = null;
+        _sellerCatalogError = null;
         _isLoading = false;
         notifyListeners();
         return;
@@ -251,22 +531,59 @@ class ProductProvider extends ChangeNotifier {
       // can never appear (their store_id differs). Products in this store
       // with a NULL seller_id (e.g. admin-seeded) stay visible; rows tagged
       // with a DIFFERENT seller are dropped as not owned.
-      final mySellerId = _db.currentUser?.id;
       _products = fetched.where((p) {
         final belongsToStore = p['store_id']?.toString() == storeId;
         if (!belongsToStore) return false;
-        if (mySellerId == null) return true; // no user context — store only
+        if (userId == null) return true; // no user context — store only
         final ownerId = p['seller_id']?.toString();
-        return ownerId == null || ownerId == mySellerId;
+        return ownerId == null || ownerId == userId;
       }).toList();
+      _sellerCatalogUserId = userId;
+      _sellerCatalogStoreId = storeId;
+      _sellerCatalogError = null;
     } catch (e) {
-      // A failed seller fetch must NEVER leave another store's products on
-      // screen — the list was already cleared above.
+      // A failed fetch must NEVER leave another store's products on screen.
+      // This seller's OWN rows are safe to keep: a refresh that fails should
+      // not blank a grid the seller is already looking at.
       debugPrint('[ProductProvider] loadSellerProducts failed: $e');
-      _products = [];
+      if (!_isSellerCatalogOf(userId)) _products = [];
+      _sellerCatalogError = e;
     }
 
     _isLoading = false;
+    PerfTrace.mark('catalog:seller ready (${_products.length} products)');
+    notifyListeners();
+  }
+
+  /// Drop [id] from the in-memory catalog after a successful delete.
+  ///
+  /// The Products grid owns the delete flow and used to prune its own copy of
+  /// the list; with the provider as the single source of truth the prune has to
+  /// land here. Saves refetching the whole catalog just to lose one card.
+  void removeProductLocally(dynamic id) {
+    final key = id?.toString();
+    final before = _products.length;
+    _products.removeWhere((p) => p['id']?.toString() == key);
+    if (_products.length != before) notifyListeners();
+  }
+
+  /// Replace [id]'s stock in place after an Adjust Stock save, so the grid's
+  /// badges and filters update without a refetch (and without a reload tearing
+  /// down the still-open editor sheet).
+  ///
+  /// Writes BOTH surfaces: the raw `inventory` relation the seller grid reads,
+  /// and the mapped `sizes` map every other surface (POS tiles, customer size
+  /// selectors) reads — keeping them in step the same way [_mapProduct] does.
+  void applyStockLocally(dynamic id, Map<String, int> sizes) {
+    final key = id?.toString();
+    final index = _products.indexWhere((p) => p['id']?.toString() == key);
+    if (index == -1) return;
+    final updated = Map<String, dynamic>.from(_products[index]);
+    updated['inventory'] = sizes.entries
+        .map((e) => {'size': e.key, 'stock': e.value})
+        .toList();
+    updated['sizes'] = Map<String, int>.from(sizes);
+    _products[index] = updated;
     notifyListeners();
   }
 
@@ -352,9 +669,97 @@ class ProductProvider extends ChangeNotifier {
       }).toList();
     }
 
-    // Sort
-    final sorted = List<Map<String, dynamic>>.from(filtered);
-    switch (_sortMode) {
+    return _applySort(filtered, _sortMode);
+  }
+
+  /// Products matching a customer's search [query], most relevant first — the
+  /// search results page's source.
+  ///
+  /// **No query, no network**: the catalog is already loaded, so this filters
+  /// the same list Home renders. The matching rule itself lives in
+  /// `product_search.dart` ([matchesSearchQuery]) so this and the suggestion
+  /// panel can never disagree about what a query means.
+  ///
+  /// [category] is an optional second filter (the results page's category
+  /// chips); null means every category. [sort] defaults to the current catalog
+  /// sort — the results page passes its own, and passing one does NOT change
+  /// what Home is sorted by. [limit] of 0 means no cap, exactly like
+  /// [productsInSize].
+  List<Map<String, dynamic>> searchResults(
+    String query, {
+    String? category,
+    SortMode? sort,
+    int limit = 0,
+  }) {
+    final matches = _products
+        .where((p) =>
+            matchesSearchQuery(p, query) &&
+            (category == null || p['category'] == category))
+        .toList();
+
+    final sorted = _applySort(matches, sort ?? _sortMode);
+    return limit > 0 && sorted.length > limit
+        ? sorted.sublist(0, limit)
+        : sorted;
+  }
+
+  /// The distinct categories this query's matches actually fall into — the
+  /// search results page's chip list, alphabetical.
+  ///
+  /// Derived from the matches **before** any category filter, and only from
+  /// categories that matched something. Deliberately not [categories]: that is
+  /// the whole catalog's vocabulary — it starts with `'All'` (which this page
+  /// renders itself, so listing it again produced two of them), it always
+  /// contains `AppConstants.productCategories` whether or not anything is in
+  /// them, and it appends the 'On Sale' / 'Best Sellers' pseudo-categories. A
+  /// chip that can only lead to "0 results" is worse than no chip.
+  List<String> searchCategories(String query) {
+    final found = <String>{};
+    for (final product in _products) {
+      if (!matchesSearchQuery(product, query)) continue;
+      final category = product['category']?.toString() ?? '';
+      if (category.isNotEmpty) found.add(category);
+    }
+    return found.toList()..sort();
+  }
+
+  /// Keyword suggestions for a partially typed query — the search panel's
+  /// source. Delegates to [searchSuggestionsFor] so the rule is testable
+  /// without a provider.
+  List<SearchSuggestion> suggestionsFor(
+    String query, {
+    int limit = kSearchSuggestionLimit,
+  }) =>
+      searchSuggestionsFor(_products, query: query, limit: limit);
+
+  /// What to offer when a search matched nothing: the catalog's own picks,
+  /// most-sold then best-rated then name.
+  ///
+  /// Deliberately **not** "similar to your query" — a query that matched
+  /// nothing is a query whose words appear nowhere in the catalog (name, tag or
+  /// category), so there is nothing similar to compute from. Rather than invent
+  /// a similarity, this shows the shop's own best, which is honest and — unlike
+  /// a text-overlap heuristic — can never include something the customer was
+  /// already told does not exist. Empty only when the catalog is.
+  List<Map<String, dynamic>> relatedProducts({
+    int limit = kSearchRelatedLimit,
+  }) {
+    final sorted = List<Map<String, dynamic>>.from(_products)
+      ..sort(_compareSuggestions);
+    return limit > 0 && sorted.length > limit
+        ? sorted.sublist(0, limit)
+        : sorted;
+  }
+
+  /// The catalog sort, in one place: [getFilteredProducts] and [searchResults]
+  /// must order the same way, or the same products would read differently on
+  /// Home and on the results page.
+  List<Map<String, dynamic>> _applySort(
+    List<Map<String, dynamic>> items,
+    SortMode mode,
+  ) {
+    final sorted = List<Map<String, dynamic>>.from(items);
+    switch (mode) {
       // Featured = the shuffled order from loadProducts(); no-op here so the
       // session's shuffle is preserved (never re-sorted per keystroke).
       case SortMode.featured:
@@ -416,7 +821,10 @@ class ProductProvider extends ChangeNotifier {
     try {
       final storeId = await ProductService.instance.getSellerStoreId();
       if (storeId != null) {
-        await loadSellerProducts();
+        // Forced: a write just landed, so the warm cache is known-stale and
+        // has to be re-read. [loadSellerProducts] keeps the current rows on
+        // screen while it refetches.
+        await loadSellerProducts(force: true);
       } else {
         await loadProducts();
       }

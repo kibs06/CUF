@@ -6,7 +6,7 @@
 
 ## Screen Structure
 
-The Store tab lives inside `CustomerShell` (`lib/screens/customer/customer_shell.dart`) as the second tab in a 4-tab `IndexedStack`:
+The Store tab lives inside `CustomerShell` (`lib/screens/customer/customer_shell.dart`) as the second tab of four, hosted in a `PageView` where each page is wrapped in `KeepAlivePage` (lazy build on first visit, then kept mounted):
 
 | Index | Tab       | Screen               |
 |-------|-----------|----------------------|

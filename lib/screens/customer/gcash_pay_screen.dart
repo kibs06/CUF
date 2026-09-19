@@ -230,7 +230,7 @@ class _GcashPayScreenState extends State<GcashPayScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppConstants.secondary),
+          icon: Icon(Icons.arrow_back, color: AppConstants.secondary),
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
@@ -259,7 +259,7 @@ class _GcashPayScreenState extends State<GcashPayScreen> {
                 color: AppConstants.success,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.check,
                 size: 48,
                 color: AppConstants.surfaceLight,

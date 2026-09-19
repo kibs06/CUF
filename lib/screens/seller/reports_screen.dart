@@ -463,7 +463,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
           ),
         ),
         style: OutlinedButton.styleFrom(
-          side: const BorderSide(color: AppConstants.borderGray),
+          side: BorderSide(color: AppConstants.borderGray),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),

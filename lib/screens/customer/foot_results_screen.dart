@@ -8,6 +8,7 @@ import '../../providers/foot_measurement_provider.dart';
 // TEMP-DEBUG [NAV-DEBUG]: phase 1b diagnosis — remove after fix verified.
 import '../../services/diag_logger.dart' show navDiag;
 import '../../utils/foot_measurement_utils.dart';
+import '../../utils/size_key.dart';
 
 /// Results screen displaying foot measurements and size recommendations.
 ///
@@ -179,6 +180,7 @@ class _FootResultsScreenState extends State<FootResultsScreen> {
       try {
         await auth.saveFootProfile(
           sizeEu: double.tryParse(saved.effectiveEuSize ?? ''),
+          category: saved.shoeCategory,
           source: _isArScan
               ? AppConstants.footProfileArScan
               : AppConstants.footProfileManual,
@@ -223,7 +225,7 @@ class _FootResultsScreenState extends State<FootResultsScreen> {
         backgroundColor: AppConstants.surfaceLight,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.close, color: AppConstants.secondary),
+          icon: Icon(Icons.close, color: AppConstants.secondary),
           onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst),
         ),
       ),
@@ -476,7 +478,7 @@ class _FootResultsScreenState extends State<FootResultsScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'EU $displayEu',
+            formatSize(displayEu),
             style: AppConstants.monoStyle(
               fontSize: 56,
               fontWeight: FontWeight.bold,

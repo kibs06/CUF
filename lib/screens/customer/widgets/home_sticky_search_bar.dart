@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../constants/app_constants.dart';
-import '../../../services/search_history_service.dart';
 import '../../../widgets/cart_icon_button.dart';
-import 'search_history_overlay.dart';
 
 /// A compact search bar + cart icon that pins to the top of the viewport
 /// once the hero has scrolled out of view.
@@ -10,63 +8,19 @@ import 'search_history_overlay.dart';
 /// Solid background matching the bottom nav bar's cream tone, with a white
 /// search pill and white cart circle — consistent with the sticky_header_preview.html.
 ///
-/// Uses the same [TextEditingController] and [FocusNode] as the hero's
-/// search field so typing in either stays in sync.
-class HomeStickySearchBar extends StatefulWidget {
-  const HomeStickySearchBar({
-    super.key,
-    required this.searchController,
-    required this.searchFocusNode,
-    required this.onSearchChanged,
-    this.onTap,
-  });
+/// **Tap-to-search, not type-in-place.** The field is a read-only stand-in that
+/// opens the search page, where the real field, its suggestion panel and its
+/// results live. Typing here used to filter the Home feed in place, which is
+/// what left a customer stuck inside a query with no clear button and no way
+/// back out (`search_results_screen.dart` documents that fix).
+class HomeStickySearchBar extends StatelessWidget {
+  const HomeStickySearchBar({super.key, this.onTap});
 
-  final TextEditingController searchController;
-  final FocusNode searchFocusNode;
-  final ValueChanged<String>? onSearchChanged;
-
-  /// When provided, tapping the field opens the full-screen search page
-  /// instead of focusing inline (read-only tap-through field).
+  /// Opens the full-screen search page.
   final VoidCallback? onTap;
 
   @override
-  State<HomeStickySearchBar> createState() => _HomeStickySearchBarState();
-}
-
-class _HomeStickySearchBarState extends State<HomeStickySearchBar> {
-  bool _isSearchFocused = false;
-
-  @override
-  void initState() {
-    super.initState();
-    widget.searchFocusNode.addListener(_onFocusChange);
-  }
-
-  @override
-  void didUpdateWidget(covariant HomeStickySearchBar oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.searchFocusNode != widget.searchFocusNode) {
-      oldWidget.searchFocusNode.removeListener(_onFocusChange);
-      widget.searchFocusNode.addListener(_onFocusChange);
-    }
-  }
-
-  @override
-  void dispose() {
-    widget.searchFocusNode.removeListener(_onFocusChange);
-    super.dispose();
-  }
-
-  void _onFocusChange() {
-    final focused = widget.searchFocusNode.hasFocus;
-    if (focused != _isSearchFocused) {
-      setState(() => _isSearchFocused = focused);
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final focused = _isSearchFocused;
     final lineColor = AppConstants.borderGray;
 
     return Container(
@@ -88,47 +42,23 @@ class _HomeStickySearchBarState extends State<HomeStickySearchBar> {
           ),
         ],
       ),
-      child: Stack(
-        clipBehavior: Clip.none,
+      child: Row(
         children: [
-          Row(
-            children: [
           // Search pill — white background, subtle border
           Expanded(
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
+            child: Container(
               height: 38,
               decoration: BoxDecoration(
                 color: AppConstants.surfaceLight,
                 borderRadius: BorderRadius.circular(4),
                 border: Border.all(
-                  color: focused
-                      ? AppConstants.primary
-                      : lineColor.withValues(alpha: 0.6),
-                  width: focused ? 1.5 : 1,
+                  color: lineColor.withValues(alpha: 0.6),
                 ),
-                boxShadow: focused
-                    ? [
-                        BoxShadow(
-                          color: AppConstants.primary.withValues(alpha: 0.12),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ]
-                    : null,
               ),
               child: TextField(
-                controller: widget.searchController,
-                focusNode: widget.onTap != null ? null : widget.searchFocusNode,
-                onTap: widget.onTap,
-                readOnly: widget.onTap != null,
-                showCursor: widget.onTap == null,
-                onChanged: widget.onSearchChanged,
-                textInputAction: TextInputAction.search,
-                onSubmitted: (term) {
-                  SearchHistoryService.instance.record(term);
-                  widget.searchFocusNode.unfocus();
-                },
+                onTap: onTap,
+                readOnly: true,
+                showCursor: false,
                 style: AppConstants.bodyStyle(
                   fontSize: 13,
                   color: AppConstants.secondary,
@@ -170,26 +100,6 @@ class _HomeStickySearchBarState extends State<HomeStickySearchBar> {
 
           // Cart icon — no background circle, matches hero's style
           const CartIconButton(),
-          ],
-        ),
-
-          // Recent-search history dropdown — floats over the page content
-          // (takes no layout space, so the pinned bar never grows).
-          if (_isSearchFocused && widget.searchController.text.isEmpty)
-            Positioned(
-              top: 48, // search row (38px) + 6px top padding + small gap
-              left: 16,
-              right: 62, // aligns with the search pill (cart icon takes the rest)
-              child: SearchHistoryOverlay(
-                horizontalMargin: 0,
-                onSelect: (term) {
-                  widget.searchController.text = term;
-                  widget.onSearchChanged?.call(term);
-                  SearchHistoryService.instance.record(term);
-                  widget.searchFocusNode.unfocus();
-                },
-              ),
-            ),
         ],
       ),
     );

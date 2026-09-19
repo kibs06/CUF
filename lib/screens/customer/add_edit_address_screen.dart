@@ -666,7 +666,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
               20,
               MediaQuery.of(context).padding.bottom + 16,
             ),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: AppConstants.surfaceLight,
               borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
               boxShadow: [
@@ -754,7 +754,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
             fontSize: 13,
             color: AppConstants.secondary.withValues(alpha: 0.4),
           ),
-          prefixIcon: const Padding(
+          prefixIcon: Padding(
             padding: EdgeInsets.only(left: 14, right: 8),
             child: Icon(
               Icons.search,
@@ -784,7 +784,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
                         _searchController.clear();
                         _searchAddress('');
                       },
-                      child: const Padding(
+                      child: Padding(
                         padding: EdgeInsets.only(right: 14),
                         child: Icon(
                           Icons.close,
@@ -956,7 +956,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppConstants.secondary),
+          icon: Icon(Icons.arrow_back, color: AppConstants.secondary),
           onPressed: () {
             if (_showMap) {
               Navigator.of(context).pop();
@@ -1089,7 +1089,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    const Divider(color: AppConstants.borderGray),
+                    Divider(color: AppConstants.borderGray),
                     const SizedBox(height: 8),
                     // Default toggle
                     Row(

@@ -16,6 +16,8 @@ library;
 import 'dart:math' as math;
 import 'dart:ui';
 
+import 'size_key.dart';
+
 // ═══════════════════════════════════════════════════════════════════
 // PAPER DIMENSIONS (known real-world sizes)
 // ═══════════════════════════════════════════════════════════════════
@@ -266,43 +268,26 @@ String? footLengthMmToEuSize(double footLengthMm) {
   return null;
 }
 
-/// Convert an EU size string to a US size with category-specific offset.
+/// Convert an EU size string to a US size on [category]'s chart.
 ///
-/// Offsets sourced from standard conversion charts:
-/// - Men: EU - 33
-/// - Women: EU - 31.5 (women's US runs ~1.5 sizes higher for same EU)
-/// - Kids: EU - 33 (same as men's for kids' sizes)
-///
-/// TODO(human-review): Verify these offset values against an authoritative
-/// conversion chart. The women's offset is approximate and may need per-range tuning.
+/// The offsets (`EU - 33` men / `EU - 31.5` women / `EU - 33` kids) are owned
+/// by `size_key.dart` so the product page's unit switcher labels a size on the
+/// same chart this screen reports it on. Rounded to a whole US size, which is
+/// this screen's existing display convention.
 String? euToUs(String euSize, {String category = 'men'}) {
   final eu = double.tryParse(euSize);
   if (eu == null) return null;
-  double offset;
-  switch (category) {
-    case 'women':
-      offset = 31.5;
-      break;
-    case 'kids':
-      offset = 33.0;
-      break;
-    case 'men':
-    default:
-      offset = 33.0;
-      break;
-  }
-  final us = (eu - offset).round();
-  return '$us';
+  return '${usSizeFromEu(eu, category: category).round()}';
 }
 
 /// Convert an EU size string to a UK size.
 ///
-/// Standard approximation: UK ≈ EU - 33.5 (slightly offset from US).
+/// Standard approximation: UK ≈ EU - 33.5 (the same single chart the product
+/// page's switcher uses).
 String? euToUk(String euSize) {
   final eu = double.tryParse(euSize);
   if (eu == null) return null;
-  final uk = (eu - 33.5).round();
-  return '$uk';
+  return '${ukSizeFromEu(eu).round()}';
 }
 
 // ═══════════════════════════════════════════════════════════════════

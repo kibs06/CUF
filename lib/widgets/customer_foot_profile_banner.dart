@@ -126,7 +126,7 @@ class _CustomerFootProfileBannerState extends State<CustomerFootProfileBanner> {
               setState(() => _dismissedForSession.add(profileId));
             },
             tooltip: 'Hide for now',
-            icon: const Icon(
+            icon: Icon(
               Icons.close_rounded,
               size: 18,
               color: AppConstants.secondary,

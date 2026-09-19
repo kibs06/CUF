@@ -434,7 +434,7 @@ class _UpdateBanner extends StatelessWidget {
                       label: 'Download v${update.version}',
                       backgroundColor: AppConstants.accent,
                       textColor: AppConstants.secondary,
-                      icon: const Icon(Icons.download_rounded,
+                      icon: Icon(Icons.download_rounded,
                           size: 18, color: AppConstants.secondary),
                       onPressed: onDownloadInApp,
                     ),

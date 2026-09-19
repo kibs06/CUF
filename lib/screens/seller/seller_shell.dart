@@ -9,6 +9,9 @@ import '../../providers/message_provider.dart';
 import '../../providers/seller_notification_provider.dart';
 import '../../providers/update_provider.dart';
 import '../../services/push_notification_service.dart';
+import '../../utils/nav_perf.dart';
+import '../../widgets/active_tab.dart';
+import '../../widgets/keep_alive_page.dart';
 import '../../widgets/sole_bottom_nav.dart';
 import '../../widgets/update_overlay.dart';
 import '../../widgets/chat/chat_view.dart';
@@ -42,7 +45,18 @@ class _SellerShellState extends State<SellerShell> {
     const POSScreen(hideAppBar: true),
     const ManageProductsScreen(hideAppBar: true),
     const ManageOrdersScreen(hideAppBar: true),
-    const ProfileScreen(hideAppBar: true),
+    // tabIndex is index-matched to _screens and feeds ProfileScreen's
+    // re-entry refresh; see ActiveTab.
+    const ProfileScreen(hideAppBar: true, tabIndex: 4),
+  ];
+
+  /// Tab names for the perf marks — index-matched to [_screens].
+  static const List<String> _tabLabels = [
+    'Dashboard',
+    'POS',
+    'Products',
+    'Orders',
+    'Profile',
   ];
 
   @override
@@ -135,13 +149,33 @@ class _SellerShellState extends State<SellerShell> {
       appBar: _buildAppBar(),
       body: _screens.isEmpty
           ? const Center(child: Text('Unable to load screen'))
-          : PageView(
-              controller: _pageController,
-              physics: const PageScrollPhysics(),
-              onPageChanged: (index) {
-                setState(() => _currentIndex = index);
-              },
-              children: _screens,
+          // Publishes the on-screen tab so kept-alive pages can tell "I am
+          // visible again" from "I am still off screen" — the one signal the
+          // widget lifecycle no longer provides once pages stop being rebuilt.
+          // See ActiveTab.
+          : ActiveTab(
+              index: _currentIndex,
+              child: PageView(
+                controller: _pageController,
+                physics: const PageScrollPhysics(),
+                onPageChanged: (index) {
+                  setState(() => _currentIndex = index);
+                  // Stamped after the destination has been laid out AND
+                  // painted, so the gap from its `tapped` mark is the latency
+                  // the seller actually feels on the tap.
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    PerfTrace.mark('tab:${_tabLabels[index]} presented');
+                  });
+                },
+                // Every page is wrapped so that a VISITED page survives being
+                // scrolled out of view. Without this the PageView disposes it
+                // and the next visit re-runs initState, refetching the tab's
+                // data and re-showing its skeleton — the bug this fixes.
+                children: [
+                  for (final screen in _screens)
+                    KeepAlivePage(child: screen),
+                ],
+              ),
             ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
@@ -153,6 +187,7 @@ class _SellerShellState extends State<SellerShell> {
           role: AppConstants.roleSeller,
           currentIndex: _currentIndex,
           onTap: (index) {
+            PerfTrace.mark('tab:${_tabLabels[index]} tapped');
             _pageController.jumpToPage(index);
           },
           backgroundColor: SellerTheme.card,
@@ -291,7 +326,7 @@ class _SellerShellState extends State<SellerShell> {
             IconButton(
               onPressed: null,
               tooltip: 'Settings',
-              icon: const Icon(
+              icon: Icon(
                 Icons.settings_outlined,
                 color: AppConstants.secondary,
               ),

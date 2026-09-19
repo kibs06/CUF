@@ -9,7 +9,11 @@ import 'firebase_options.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'constants/app_brightness.dart';
 import 'constants/app_constants.dart';
+import 'constants/app_theme.dart';
+import 'providers/theme_provider.dart';
+import 'services/theme_service.dart';
 import 'providers/auth_provider.dart';
 import 'providers/product_provider.dart';
 import 'providers/cart_provider.dart';
@@ -81,6 +85,16 @@ Future<void> main() async {
 
   // Initialize Supabase — with a timeout to prevent indefinite hang.
   // If this fails or times out, show an error screen instead of a black screen.
+  // Read the saved appearance before the first frame so a dark-mode user
+  // never sees a light flash at launch. Best-effort: the default is
+  // ThemeMode.system, which is also what a fresh install wants.
+  ThemeMode initialThemeMode = ThemeMode.system;
+  try {
+    initialThemeMode = await ThemeService.instance.load();
+  } catch (e) {
+    if (kDebugMode) debugPrint('Theme mode load failed: $e');
+  }
+
   bool supabaseReady = false;
   try {
     await Supabase.initialize(
@@ -120,19 +134,88 @@ Future<void> main() async {
       if (kDebugMode) debugPrint('Firebase init failed (push notifications disabled): $e');
     }
 
-    runApp(const CUFMAIApp());
+    runApp(CUFMAIApp(initialThemeMode: initialThemeMode));
   } else {
     runApp(_SupabaseErrorApp());
   }
 }
 
-class CUFMAIApp extends StatelessWidget {
-  const CUFMAIApp({super.key});
+/// Root of the app: the provider tree, plus the appearance decision that the
+/// rest of the tree paints from.
+class CUFMAIApp extends StatefulWidget {
+  const CUFMAIApp({super.key, this.initialThemeMode = ThemeMode.system});
+
+  /// The persisted appearance choice, read before `runApp` so the very first
+  /// frame already paints in the right palette.
+  final ThemeMode initialThemeMode;
+
+  @override
+  State<CUFMAIApp> createState() => _CUFMAIAppState();
+}
+
+class _CUFMAIAppState extends State<CUFMAIApp> with WidgetsBindingObserver {
+  /// Owned here rather than created inside [MultiProvider] because the root
+  /// itself has to react to it: the entire app's palette depends on the mode.
+  late final ThemeProvider _themeProvider;
+
+  late Brightness _platformBrightness;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _platformBrightness =
+        WidgetsBinding.instance.platformDispatcher.platformBrightness;
+    _themeProvider = ThemeProvider(initialMode: widget.initialThemeMode)
+      ..addListener(_onThemeChanged);
+  }
+
+  /// The user picked a different appearance — rebuild the app in it.
+  void _onThemeChanged() {
+    if (mounted) setState(() {});
+  }
+
+  /// The OS changed its own appearance while we were open. Only matters while
+  /// the choice is [ThemeMode.system], but the value is kept current either
+  /// way so the published brightness can never be stale.
+  @override
+  void didChangePlatformBrightness() {
+    setState(() {
+      _platformBrightness =
+          WidgetsBinding.instance.platformDispatcher.platformBrightness;
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _themeProvider
+      ..removeListener(_onThemeChanged)
+      ..dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final ThemeMode mode = _themeProvider.mode;
+    final bool isDark = mode == ThemeMode.dark ||
+        (mode == ThemeMode.system && _platformBrightness == Brightness.dark);
+    final Brightness brightness =
+        isDark ? Brightness.dark : Brightness.light;
+
+    // Publish the resolved brightness for the token layer, then repaint what
+    // is already on screen. The app paints from static tokens rather than
+    // Theme.of(context), so no widget has registered a dependency that a
+    // theme change could notify — see AppThemeRefresh.rebuildAll.
+    if (AppBrightness.publish(brightness)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        AppThemeRefresh.rebuildAll();
+      });
+    }
+
     return MultiProvider(
       providers: [
+        ChangeNotifierProvider<ThemeProvider>.value(value: _themeProvider),
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => ProductProvider()),
         ChangeNotifierProvider(create: (_) => CartProvider()),
@@ -171,67 +254,12 @@ class CUFMAIApp extends StatelessWidget {
           // Wrap with ConnectivityBanner for mid-session connection loss
           return ConnectivityBanner(child: child ?? const SizedBox.shrink());
         },
-        theme: ThemeData(
-          useMaterial3: true,
-          colorScheme: const ColorScheme(
-            brightness: Brightness.light,
-            primary: AppConstants.primary,
-            onPrimary: AppConstants.surfaceLight,
-            secondary: AppConstants.secondary,
-            onSecondary: AppConstants.surfaceLight,
-            error: AppConstants.error,
-            onError: AppConstants.surfaceLight,
-            surface: AppConstants.surfaceLight,
-            onSurface: AppConstants.secondary,
-          ),
-
-          // Apply custom font themes globally
-         textTheme: GoogleFonts.dmSansTextTheme(ThemeData.light().textTheme)
-              .copyWith(
-                displayLarge: GoogleFonts.playfairDisplay(
-                  color: AppConstants.secondary,
-                ),
-                displayMedium: GoogleFonts.playfairDisplay(
-                  color: AppConstants.secondary,
-                ),
-                displaySmall: GoogleFonts.playfairDisplay(
-                  color: AppConstants.secondary,
-                ),
-                headlineLarge: GoogleFonts.playfairDisplay(
-                  color: AppConstants.secondary,
-                ),
-                headlineMedium: GoogleFonts.playfairDisplay(
-                  color: AppConstants.secondary,
-                ),
-                headlineSmall: GoogleFonts.playfairDisplay(
-                  color: AppConstants.secondary,
-                ),
-              ),
-
-          // Switch theme styles
-          switchTheme: SwitchThemeData(
-            thumbColor: WidgetStateProperty.resolveWith((states) {
-              if (states.contains(WidgetState.selected)) {
-                return AppConstants.surfaceLight;
-              }
-              return AppConstants.primary.withValues(alpha: 0.5);
-            }),
-            trackColor: WidgetStateProperty.resolveWith((states) {
-              if (states.contains(WidgetState.selected)) {
-                return AppConstants.primary;
-              }
-              return AppConstants.borderGray.withValues(alpha: 0.3);
-            }),
-          ),
-
-          // Dialog styles
-          dialogTheme: DialogThemeData(
-            backgroundColor: AppConstants.surfaceLight,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-          ),
-        ),
+        // Both themes are always built; `themeMode` picks between them for
+        // Material widgets, and the same resolved brightness drives the token
+        // layer, so the two can never disagree.
+        theme: buildAppTheme(Brightness.light),
+        darkTheme: buildAppTheme(Brightness.dark),
+        themeMode: mode,
 
         // Start screen is Splash, which auto-navigates to AuthGate
         home: const DeepLinkHost(child: SplashScreen()),
@@ -404,15 +432,19 @@ class _DeepLinkHostState extends State<DeepLinkHost> {
 class _SupabaseErrorApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    // There is no provider tree here (Supabase never came up), so the
+    // appearance is resolved straight from the OS. This is still the first
+    // frame, so publishing cannot invalidate anything already painted.
+    AppBrightness.publish(
+      WidgetsBinding.instance.platformDispatcher.platformBrightness,
+    );
+
     return MaterialApp(
       title: 'CUFMAI',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: AppConstants.primary,
-          brightness: Brightness.light,
-        ),
-      ),
+      theme: buildAppTheme(Brightness.light),
+      darkTheme: buildAppTheme(Brightness.dark),
+      themeMode: ThemeMode.system,
       home: Scaffold(
         backgroundColor: AppConstants.surfaceLight,
         body: Center(

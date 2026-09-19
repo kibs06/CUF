@@ -310,7 +310,7 @@ class _MyReportsScreenState extends State<MyReportsScreen> {
         minChildSize: 0.4,
         maxChildSize: 0.95,
         builder: (context, scrollController) => Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: AppConstants.surfaceLight,
             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),

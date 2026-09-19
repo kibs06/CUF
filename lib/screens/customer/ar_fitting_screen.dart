@@ -5,6 +5,7 @@ import '../../constants/app_constants.dart';
 import '../../providers/product_provider.dart';
 import '../../providers/cart_provider.dart';
 import '../../utils/cart_helpers.dart';
+import '../../utils/size_key.dart';
 import '../../widgets/ar_view_placeholder.dart';
 import '../../widgets/cart_icon_button.dart';
 import '../../widgets/seller/fly_to_order_animation.dart';
@@ -142,7 +143,7 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProv
                   return Column(
                     children: [
                       Text(
-                        'EU $size',
+                        formatSize(size),
                         style: AppConstants.monoStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
@@ -274,7 +275,7 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProv
                     children: [
                       GestureDetector(
                         onTap: () => Navigator.of(context).pop(),
-                        child: const CircleAvatar(
+                        child: CircleAvatar(
                           radius: 18,
                           backgroundColor: Colors.white24,
                           child: Icon(Icons.close, color: AppConstants.surfaceLight, size: 18),
@@ -472,7 +473,7 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProv
                                 ),
                                 child: Center(
                                   child: Text(
-                                    'EU $size',
+                                    formatSize(size),
                                     style: AppConstants.monoStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.bold,
@@ -564,7 +565,7 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProv
                           });
                         },
                         style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: AppConstants.surfaceLight),
+                          side: BorderSide(color: AppConstants.surfaceLight),
                           padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                         ),

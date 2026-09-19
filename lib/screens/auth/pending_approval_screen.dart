@@ -872,7 +872,7 @@ class _ReceivedRow extends StatelessWidget {
                     size: 19,
                     color: AppConstants.success,
                   )
-                : const Icon(
+                : Icon(
                     Icons.radio_button_unchecked_rounded,
                     key: ValueKey('pending'),
                     size: 19,

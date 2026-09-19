@@ -41,12 +41,54 @@ CREATE TABLE public.products (
   sale_price      NUMERIC,                              -- discounted price while on sale
   sale_starts_at  TIMESTAMPTZ,
   sale_ends_at    TIMESTAMPTZ,
+  audience        TEXT CHECK (audience IN ('men','women','kids','unisex')),  -- nullable; see below
   created_at      TIMESTAMPTZ DEFAULT now(),
   updated_at      TIMESTAMPTZ DEFAULT now()
 );
 ```
 
 **RLS:** anyone can `SELECT`; only `role IN ('seller','admin')` can INSERT/UPDATE/DELETE (migration `20260712_tighten_products_rls.sql` verifies `store_id` ownership on top).
+
+### audience — who a product is for
+
+Added by `supabase/migrations/20260918193313_add_product_audience.sql`, applied
+to the live project. Nullable, with a named `products_audience_check` constraint
+(the `DROP CONSTRAINT IF EXISTS` / `ADD CONSTRAINT` pair, so a re-apply
+converges instead of leaving the rule missing beside an existing column — the
+failure mode `supabase/MIGRATIONS_LIVE_STATUS.md` records).
+
+| Value | Meaning |
+|---|---|
+| `'men'` / `'women'` | The item is sold on that chart: US/UK labels are drawn on it (see `SIZE_VARIANT_FLOW.md` §3.5). |
+| `'kids'` | The children's band (EU 22–35), labelled EU-only — there is no child US/UK chart to convert to. |
+| `'unisex'` | Genuinely for anyone. A real answer, but deliberately **not** a rail: listing it in Men's, Women's *and* Kids' would put one card three times down the feed. |
+| `NULL` | **Not set** — every row until a human says otherwise. Readers treat this as "no audience", never as a default: the product appears in no audience rail or shelf, and stays in the catalog, search and every category exactly as before. |
+
+**Stated, never inferred.** `category` is a *style* (`Casual`, `Formal`, `Boots` …)
+and the tag vocabulary is Product type / Material / Sustainability; neither
+carries an audience, and `profiles.gender` describes a person, not an item. Nor
+can the stocked sizes stand in for it: EU is unisex, so Men's and Women's share
+the whole 35→48 band and only the US/UK *chart* differs, while the kids' band
+overlaps the adult one at the top (EU 35 against an adult style at EU 39). A
+size-derived audience would put adult shoes in front of parents shopping for a
+child, so the column stays nullable, is never backfilled by guesswork, and is set
+by a human — seller or admin. The rejection is recorded in
+`PRODUCT_AUDIENCE_PLAN.md` §1.1 and §P4.
+
+**One vocabulary, one file.** `lib/utils/product_audience.dart` owns
+`productAudienceFrom()` (exact match — no trimming, no case folding, so a
+non-canonical value is `null` rather than a default), `productAudienceLabel()`
+(the only place `"Women's"` is spelled), `productAudienceOptions`,
+`productRailAudiences` (`['men','women','kids']`, fixed order) and
+`productSizeChart()` (the chart precedence). No surface compares a raw string or
+spells a label for itself.
+
+**Who reads it.** `ProductProvider.audiencesInCatalog` (Home chips) and
+`productsForAudience()` (rails — excludes `null` *and* `'unisex'`),
+`productsInAudience()` (the listing shelf — includes `'unisex'`),
+`missingAudience()` in the seller's manage-products screen, and
+`MonitorProductsScreen` for admin disclosure. Every customer-visible read is
+gated by `AppConstants.productAudienceEnabled`, the feature's rollback switch.
 
 ### product_variants  (size × color combos)
 

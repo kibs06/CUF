@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../constants/app_constants.dart';
 import '../exceptions/stock_unavailable_exception.dart';
 import '../utils/cart_helpers.dart';
+import '../utils/nav_perf.dart';
 import '../utils/product_stock.dart';
 import 'seller_notification_service.dart';
 
@@ -131,12 +132,18 @@ class SupabaseService {
 
   /// Writes the foot-profile snapshot onto a profiles row and returns the
   /// refreshed row. Full scan fidelity lives in `foot_measurements`; these
-  /// columns are the cheap snapshot other screens read (see migration
-  /// 20260812130000_add_customer_profile_fields.sql).
+  /// columns are the cheap snapshot other screens read (see migrations
+  /// 20260812130000_add_customer_profile_fields.sql and
+  /// 20260917120000_add_foot_size_category.sql).
+  ///
+  /// [category] is the shopping size scale ('men' | 'women' | 'kids') — the
+  /// chart US/UK labels are derived from. It is the one snapshot field that
+  /// is not nulled out when absent, so a partial write cannot lose it.
   Future<Map<String, dynamic>> updateProfileFootSnapshot(
     String profileId, {
     double? sizeEu,
     String? widthLabel,
+    String? category,
     required String source,
   }) async {
     final data = await _client
@@ -144,6 +151,9 @@ class SupabaseService {
         .update({
           'foot_size_ph': sizeEu,
           'foot_width': widthLabel,
+          // Only written when known: a write that does not carry a scale
+          // (e.g. 'skipped') must not erase the one already on file.
+          'foot_size_category': ?category,
           'foot_profile_source': source,
           'foot_profile_updated_at': DateTime.now().toUtc().toIso8601String(),
         })
@@ -191,16 +201,25 @@ class SupabaseService {
     var query = _client
         .from('products')
         .select(
-          '*, stores(name), product_images(image_url, display_order), inventory(size, stock), product_variants(size, stock, color), product_color_images(url, color_name, display_order)',
+          // `is_primary` keeps product_images shaped identically to
+          // ProductService.getSellerProducts(), so the seller grid's
+          // primary-image pick reads the same field on both paths.
+          '*, stores(name), product_images(image_url, display_order, is_primary), inventory(size, stock), product_variants(size, stock, color), product_color_images(url, color_name, display_order)',
         );
 
     if (storeId != null) {
       query = query.eq('store_id', storeId);
     }
 
+    // Perf split (see PerfTrace): `query` covers the HTTP round trip AND the
+    // client's JSON decode; `mapped` covers this app's own row→model mapping.
+    // If `mapped` ever shows up in the export, that half is the part that can
+    // be moved to compute() — the other half cannot.
+    PerfTrace.mark('catalog:query start (store=${storeId ?? 'all'})');
     final data = await query
         .order('created_at', ascending: false)
         .timeout(_defaultTimeout);
+    PerfTrace.mark('catalog:decoded (${(data as List).length} rows)');
 
     var products = (data as List)
         .map((row) => _mapProduct(Map<String, dynamic>.from(row)))
@@ -209,6 +228,7 @@ class SupabaseService {
     if (hideOutOfStock) {
       products = purchasableProducts(products);
     }
+    PerfTrace.mark('catalog:mapped (${products.length} products)');
 
     return products;
   }
@@ -220,7 +240,10 @@ class SupabaseService {
     final data = await _client
         .from('products')
         .select(
-          '*, stores(name), product_images(image_url, display_order), inventory(size, stock), product_variants(size, stock, color), product_color_images(url, color_name, display_order)',
+          // `is_primary` keeps product_images shaped identically to
+          // ProductService.getSellerProducts(), so the seller grid's
+          // primary-image pick reads the same field on both paths.
+          '*, stores(name), product_images(image_url, display_order, is_primary), inventory(size, stock), product_variants(size, stock, color), product_color_images(url, color_name, display_order)',
         )
         .eq('id', productId)
         .maybeSingle()

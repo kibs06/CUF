@@ -116,7 +116,7 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppConstants.secondary),
+          icon: Icon(Icons.arrow_back, color: AppConstants.secondary),
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
@@ -385,7 +385,7 @@ class _CustomizationScreenState extends State<CustomizationScreen> {
                             hintStyle: AppConstants.bodyStyle(fontSize: 13, color: Colors.black38),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(color: AppConstants.borderGray),
+                              borderSide: BorderSide(color: AppConstants.borderGray),
                             ),
                           ),
                         ),

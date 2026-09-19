@@ -539,7 +539,7 @@ class _OrderDetailSheetState extends State<_OrderDetailSheet> {
                           ],
                         ),
                       ),
-                      if (item != items.last) const Divider(height: 1, color: AppConstants.borderGray),
+                      if (item != items.last) Divider(height: 1, color: AppConstants.borderGray),
                     ],
                   ],
                 ),

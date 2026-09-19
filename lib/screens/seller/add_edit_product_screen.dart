@@ -5,6 +5,7 @@ import '../../constants/app_constants.dart';
 import '../../constants/seller_theme_constants.dart';
 import '../../models/product_models.dart';
 import '../../services/product_service.dart';
+import '../../utils/product_audience.dart';
 import '../../widgets/sole_card.dart';
 import '../../widgets/sole_text_field.dart';
 import '../../widgets/sole_primary_button.dart';
@@ -18,7 +19,15 @@ import '../../widgets/seller/tag_selector.dart';
 class AddEditProductScreen extends StatefulWidget {
   final Map<String, dynamic>? product;
 
-  const AddEditProductScreen({super.key, this.product});
+  /// Test seam: production always uses [ProductService.instance].
+  ///
+  /// Injecting a fake is how a widget test can assert the EXACT payload this
+  /// form sends — in particular that the audience "Not set" chip reaches the
+  /// service as `null` rather than an empty string, which is a distinction no
+  /// screen-level assertion can see.
+  final ProductService? productService;
+
+  const AddEditProductScreen({super.key, this.product, this.productService});
 
   @override
   State<AddEditProductScreen> createState() => _AddEditProductScreenState();
@@ -29,7 +38,8 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
   final _nameController = TextEditingController();
   final _priceController = TextEditingController();
   final _descController = TextEditingController();
-  final _productService = ProductService.instance;
+  late final ProductService _productService =
+      widget.productService ?? ProductService.instance;
   final _imagePicker = ImagePicker();
 
   final _barcodeController = TextEditingController();
@@ -37,6 +47,10 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
   DateTime? _saleStartsAt;
   DateTime? _saleEndsAt;
   String _category = 'Casual';
+  // Who the product is for — 'men' | 'women' | 'kids' | 'unisex', or null for
+  // "not set". A closed vocabulary stated by the seller (see
+  // `utils/product_audience.dart`), never inferred from sizes.
+  String? _audience;
   bool _isActive = true;
   bool _isFeatured = false;
   bool _isSaving = false;
@@ -72,6 +86,17 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
 
   bool get isEdit => widget.product != null;
 
+  /// Every size currently on the form, across colours — the sizes that will be
+  /// saved, and what the Kids' audience warning checks.
+  ///
+  /// The form's own data is the honest source here: these are the same variant
+  /// rows `updateProduct` writes and regenerates `inventory` from, so a warning
+  /// based on them cannot disagree with what the customer will eventually see.
+  List<String> get _enteredSizes => [
+        for (final color in _colors)
+          for (final variant in color.variants) variant.size,
+      ];
+
   @override
   void initState() {
     super.initState();
@@ -95,6 +120,8 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
     _descController.text = p['description'] ?? '';
     _barcodeController.text = p['barcode'] ?? '';
     _category = p['category'] ?? 'Casual';
+    // Unrecognised or absent → null ("Not set"), never a guessed audience.
+    _audience = productAudienceFrom(p['audience']?.toString());
     _isActive = p['is_active'] ?? true;
     _isFeatured = p['is_featured'] ?? false;
     _salePriceController.text = (p['sale_price'] ?? '').toString();
@@ -1388,6 +1415,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
           salePrice: salePrice,
           saleStartsAt: _saleStartsAt,
           saleEndsAt: _saleEndsAt,
+          audience: _audience,
         );
         // Sync active status after variant changes
         try {
@@ -1417,6 +1445,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
           salePrice: salePrice,
           saleStartsAt: _saleStartsAt,
           saleEndsAt: _saleEndsAt,
+          audience: _audience,
         );
         // Sync active status for new product
         try {
@@ -1485,7 +1514,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppConstants.secondary),
+          icon: Icon(Icons.arrow_back, color: AppConstants.secondary),
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
@@ -1644,11 +1673,11 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             border: OutlineInputBorder(
               borderRadius: AppConstants.buttonRadius,
-              borderSide: const BorderSide(color: AppConstants.borderGray),
+              borderSide: BorderSide(color: AppConstants.borderGray),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: AppConstants.buttonRadius,
-              borderSide: const BorderSide(color: AppConstants.borderGray),
+              borderSide: BorderSide(color: AppConstants.borderGray),
             ),
           ),
         ),
@@ -1675,7 +1704,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                 ),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppConstants.secondary,
-                  side: const BorderSide(color: AppConstants.borderGray),
+                  side: BorderSide(color: AppConstants.borderGray),
                 ),
               ),
             ),
@@ -1691,7 +1720,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                 ),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppConstants.secondary,
-                  side: const BorderSide(color: AppConstants.borderGray),
+                  side: BorderSide(color: AppConstants.borderGray),
                 ),
               ),
             ),
@@ -1903,6 +1932,26 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
 
   // ── Basic Info ──
 
+  /// The Kids'-vs-sizes warning: a product marked Kids' whose every stocked
+  /// size is an adult size is usually a mis-tapped chip.
+  ///
+  /// Mirrors the existing "⚠ Add photos required" note in the colours section,
+  /// and — like it — only informs: saving is never blocked and nothing the
+  /// seller entered is changed.
+  Widget _buildAudienceSizeWarning() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Text(
+        '⚠ These sizes look like adult sizing — check the audience is right.',
+        style: AppConstants.bodyStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
+          color: AppConstants.statusPendingColor,
+        ),
+      ),
+    );
+  }
+
   Widget _buildBasicInfoSection() {
     return _formCard(
       child: Column(
@@ -1968,6 +2017,29 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
           ),
           const SizedBox(height: 16),
 
+          // Audience — who the product is for.
+          //
+          // Deliberately a CLOSED set with an explicit "Not set" chip. The
+          // value is stated by the seller (never derived from sizes), and an
+          // optional field is the only honest shape for it: a required one
+          // would block editing every product that predates the column and
+          // force a lie on genuinely unisex items.
+          Text(
+            'Who is it for?',
+            style: AppConstants.bodyStyle(
+                fontWeight: FontWeight.bold, fontSize: 14),
+          ),
+          const SizedBox(height: 6),
+          _AudienceChipSelector(
+            value: _audience,
+            onChanged: (value) => setState(() => _audience = value),
+          ),
+          // Soft, non-blocking note — deliberately not a validator: the
+          // seller's stated audience is never overridden or auto-corrected.
+          if (audienceSizeMismatch(audience: _audience, sizes: _enteredSizes))
+            _buildAudienceSizeWarning(),
+          const SizedBox(height: 16),
+
           // Price
           Text(
             'Base Price (₱) *',
@@ -1989,7 +2061,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                   const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               border: OutlineInputBorder(
                 borderRadius: AppConstants.buttonRadius,
-                borderSide: const BorderSide(color: AppConstants.borderGray),
+                borderSide: BorderSide(color: AppConstants.borderGray),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: AppConstants.buttonRadius,
@@ -2160,7 +2232,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                                         errorWidget: (_, _, _) => Container(
                                           color: AppConstants.borderGray
                                               .withValues(alpha: 0.3),
-                                          child: const Icon(Icons.image,
+                                          child: Icon(Icons.image,
                                               size: 20,
                                               color: AppConstants.borderGray),
                                         ),
@@ -2169,7 +2241,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                                       Container(
                                         color: AppConstants.borderGray
                                             .withValues(alpha: 0.3),
-                                        child: const Icon(Icons.image,
+                                        child: Icon(Icons.image,
                                             size: 20,
                                             color: AppConstants.borderGray),
                                       ),
@@ -2951,7 +3023,7 @@ typedef _TagGroup = TagGroup;
 
 const List<_TagGroup> _tagGroups = tagGroups;
 
-const _TagGroup _otherBucketGroup = otherBucketGroup;
+final _TagGroup _otherBucketGroup = otherBucketGroup;
 
 const int _maxCustomTagLength = 30;
 
@@ -3276,12 +3348,12 @@ class _ProductTagSelectorState extends State<_ProductTagSelector> {
                   border: OutlineInputBorder(
                     borderRadius: AppConstants.buttonRadius,
                     borderSide:
-                        const BorderSide(color: AppConstants.borderGray),
+                        BorderSide(color: AppConstants.borderGray),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: AppConstants.buttonRadius,
                     borderSide:
-                        const BorderSide(color: AppConstants.borderGray),
+                        BorderSide(color: AppConstants.borderGray),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: AppConstants.buttonRadius,
@@ -3319,6 +3391,67 @@ class _ProductTagSelectorState extends State<_ProductTagSelector> {
 /// settle back) and an animated fill/border/color transition on selection.
 /// Colors come from the owning [_TagGroup]. The animation only plays on user
 /// interaction — the initial render (edit-mode pre-fill) is static.
+/// Closed-set chip group for a product's audience: Men's / Women's / Kids' /
+/// Unisex, plus an explicit "Not set".
+///
+/// Deliberately NOT `_PresetChipSelector`, whose contract is the opposite of
+/// what this field needs three ways over: it reports a non-nullable `String`
+/// (so "cleared" can only be `''`, which would write an empty string the
+/// column's CHECK rejects), it always offers a free-text "+ Other" chip (the
+/// one thing this vocabulary must not allow), and it cannot express "no
+/// selection" as a deliberate act.
+///
+/// The chips themselves are the same `_TagChip` the category and tag rows
+/// use, so this group looks and animates like the rest of the form without
+/// re-implementing it.
+class _AudienceChipSelector extends StatelessWidget {
+  /// Canonical audience value, or null for "not set".
+  final String? value;
+  final ValueChanged<String?> onChanged;
+
+  /// Matches the rest of the seller UI's selected chips (clay fill / pinned
+  /// inverse ink — the same pair `_PresetChipSelector` uses).
+  static const Color _color = AppConstants.primary;
+  static const Color _onColor = AppConstants.inkInverse;
+
+  const _AudienceChipSelector({required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      // Keyed so a test can scope an assertion to this group instead of to
+      // the whole form (the category and tag selectors legitimately own
+      // "+ Other" chips of their own).
+      key: const ValueKey('audience-chip-group'),
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        // Labels and values come from the shared vocabulary, so this screen
+        // never spells an audience itself.
+        for (final (key, label) in productAudienceOptions)
+          _TagChip(
+            key: ValueKey('audience-chip-$key'),
+            label: label,
+            color: _color,
+            onColor: _onColor,
+            selected: value == key,
+            onTap: () => onChanged(key),
+          ),
+        // Last, so clearing reads as "none of the above" rather than as
+        // another product type.
+        _TagChip(
+          key: const ValueKey('audience-chip-not-set'),
+          label: 'Not set',
+          color: _color,
+          onColor: _onColor,
+          selected: value == null,
+          onTap: () => onChanged(null),
+        ),
+      ],
+    );
+  }
+}
+
 class _TagChip extends StatefulWidget {
   final String label;
   final IconData? icon; // null → text-only chip (used by the category row)
@@ -3328,6 +3461,7 @@ class _TagChip extends StatefulWidget {
   final VoidCallback onTap;
 
   const _TagChip({
+    super.key,
     required this.label,
     this.icon,
     required this.color,
@@ -3761,7 +3895,9 @@ class _PresetChipSelector extends StatefulWidget {
 class _PresetChipSelectorState extends State<_PresetChipSelector> {
   // Matches the rest of the seller UI's selected chips (burnished clay fill).
   static const Color _color = AppConstants.primary;
-  static const Color _onColor = AppConstants.surfaceLight;
+  // Ink on the selected chip's clay fill — pinned, since that fill keeps its
+  // brand colour in both brightnesses.
+  static const Color _onColor = AppConstants.inkInverse;
 
   String _presetLabel(String value) => widget.presetLabels?[value] ?? value;
 
@@ -3929,12 +4065,12 @@ class _PresetChipSelectorState extends State<_PresetChipSelector> {
                   border: OutlineInputBorder(
                     borderRadius: AppConstants.buttonRadius,
                     borderSide:
-                        const BorderSide(color: AppConstants.borderGray),
+                        BorderSide(color: AppConstants.borderGray),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: AppConstants.buttonRadius,
                     borderSide:
-                        const BorderSide(color: AppConstants.borderGray),
+                        BorderSide(color: AppConstants.borderGray),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: AppConstants.buttonRadius,
@@ -4128,12 +4264,12 @@ class _SizeColorSelectorState extends State<_SizeColorSelector> {
                   border: OutlineInputBorder(
                     borderRadius: AppConstants.buttonRadius,
                     borderSide:
-                        const BorderSide(color: AppConstants.borderGray),
+                        BorderSide(color: AppConstants.borderGray),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: AppConstants.buttonRadius,
                     borderSide:
-                        const BorderSide(color: AppConstants.borderGray),
+                        BorderSide(color: AppConstants.borderGray),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: AppConstants.buttonRadius,
@@ -4428,12 +4564,12 @@ class _ColorSwatchPickerState extends State<_ColorSwatchPicker> {
                   border: OutlineInputBorder(
                     borderRadius: AppConstants.buttonRadius,
                     borderSide:
-                        const BorderSide(color: AppConstants.borderGray),
+                        BorderSide(color: AppConstants.borderGray),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: AppConstants.buttonRadius,
                     borderSide:
-                        const BorderSide(color: AppConstants.borderGray),
+                        BorderSide(color: AppConstants.borderGray),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: AppConstants.buttonRadius,
@@ -4570,7 +4706,9 @@ class _SizeMultiSelector extends StatefulWidget {
 class _SizeMultiSelectorState extends State<_SizeMultiSelector> {
   // Matches the rest of the seller UI's selected chips (burnished clay fill).
   static const Color _color = AppConstants.primary;
-  static const Color _onColor = AppConstants.surfaceLight;
+  // Ink on the selected chip's clay fill — pinned, since that fill keeps its
+  // brand colour in both brightnesses.
+  static const Color _onColor = AppConstants.inkInverse;
 
   late final List<String> _selected = List.of(widget.initialSelected);
 
@@ -4713,12 +4851,12 @@ class _SizeMultiSelectorState extends State<_SizeMultiSelector> {
                   border: OutlineInputBorder(
                     borderRadius: AppConstants.buttonRadius,
                     borderSide:
-                        const BorderSide(color: AppConstants.borderGray),
+                        BorderSide(color: AppConstants.borderGray),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: AppConstants.buttonRadius,
                     borderSide:
-                        const BorderSide(color: AppConstants.borderGray),
+                        BorderSide(color: AppConstants.borderGray),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: AppConstants.buttonRadius,

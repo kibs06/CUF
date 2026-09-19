@@ -217,11 +217,13 @@ void main() {
       expect(sizeNumber('garbage'), isNull);
     });
 
-    test('unitOf detects the prefix; bare numbers default to US', () {
+    test('unitOf detects the prefix; bare numbers default to EU', () {
       expect(unitOf('US 7'), 'US');
       expect(unitOf('EU40'), 'EU');
       expect(unitOf('UK 6.5'), 'UK');
-      expect(unitOf('7'), 'US');
+      // Decision #1 (docs/AI/SIZE_AWARE_SHOPPING_PLAN.md §2): bare = EU.
+      expect(unitOf('7'), 'EU');
+      expect(unitOf('40'), 'EU');
     });
 
     test('displaySizeInUnit converts without touching the canonical string', () {
@@ -229,8 +231,25 @@ void main() {
       expect(displaySizeInUnit('US 7', 'UK'), 'UK 6.5');
       expect(displaySizeInUnit('US 7', 'US'), 'US 7');
       expect(displaySizeInUnit('EU 40', 'US'), 'US 7');
+      // A bare size is EU now, not US: '40' means EU 40, so it renders as
+      // US 7 rather than the old, contradictory 'US 40' (plan §4.2).
+      expect(displaySizeInUnit('40', 'US'), 'US 7');
       // Unparseable → falls back to the raw string.
       expect(displaySizeInUnit('garbage', 'EU'), 'garbage');
+    });
+
+    test('displaySizeInUnit labels US on the shopper\'s saved scale', () {
+      // profiles.foot_size_category — EU 42 is US 9 for a man, US 10.5 for a
+      // woman (@see lib/utils/size_key.dart).
+      expect(displaySizeInUnit('EU 42', 'US', category: 'women'), 'US 10.5');
+      expect(displaySizeInUnit('EU 42', 'US', category: 'men'), 'US 9');
+      expect(displaySizeInUnit('EU 42', 'US', category: 'kids'), 'US 9');
+      // No saved scale → the men's chart, never a guessed one.
+      expect(displaySizeInUnit('EU 42', 'US'), 'US 9');
+      expect(displaySizeInUnit('EU 42', 'US', category: 'unset'), 'US 9');
+      // The scale only affects the US label.
+      expect(displaySizeInUnit('EU 42', 'EU', category: 'women'), 'EU 42');
+      expect(displaySizeInUnit('EU 42', 'UK', category: 'women'), 'UK 8.5');
     });
   });
 }

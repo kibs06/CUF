@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../constants/app_constants.dart';
 import '../../../services/pickup_reservation_service.dart';
 import '../../../utils/sale_price.dart';
+import '../../../utils/size_key.dart';
 import '../../../widgets/sole_primary_button.dart';
 import 'reservation_sheet_parts.dart';
 
@@ -176,17 +177,17 @@ class _PickupReservationSheetState extends State<_PickupReservationSheet> {
     final price = effectivePrice(widget.product);
     final available = _available;
     final colors = _colors;
-    // Sizes sorted numerically, like the detail page's picker.
+    // Sizes sorted numerically, like the detail page's picker — half sizes
+    // included, and unparseable keys last (plan §4.3).
     final sortedAvailable = Map.fromEntries(
       available.entries.toList()
-        ..sort((a, b) =>
-            (int.tryParse(a.key) ?? 0).compareTo(int.tryParse(b.key) ?? 0)),
+        ..sort((a, b) => compareSizes(a.key, b.key)),
     );
 
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AppConstants.surfaceLight,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),

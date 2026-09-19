@@ -211,7 +211,7 @@ class _AppErrorToastOverlayState extends State<_AppErrorToastOverlay>
             onPressed: _dismiss,
             tooltip: 'Dismiss',
             visualDensity: VisualDensity.compact,
-            icon: const Icon(
+            icon: Icon(
               Icons.close_rounded,
               size: 18,
               color: AppConstants.surfaceLight,

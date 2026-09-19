@@ -157,11 +157,18 @@ A countdown readout overlaid on the **bottom edge of the product image** telling
 
 ### 4.4 `'Best Sellers'` — the second pseudo-category (added Sep 15, 2026)
 
-The home screen now carries a **Best Sellers** rail beside the On Sale section, fed by the `units_sold` aggregation (§4.1's pattern reused, not a parallel mechanism):
+> **⚠ Currently gated OFF (Sep 17, 2026).** The rail is hidden on the home screen by
+> `kBestSellersRailEnabled = false` in `lib/screens/customer/customer_home_screen.dart`.
+> Nothing was removed: the widget, the provider rule, the chip and every test of them
+> are intact, and flipping that const back to `true` restores the rail with no other
+> change. The `'Best Sellers'` **chip** is deliberately unaffected — it is a catalog
+> filter (like `'On Sale'`), not this rail, and still works when selected.
+
+The home screen carries a **Best Sellers** rail beside the On Sale section, fed by the `units_sold` aggregation (§4.1's pattern reused, not a parallel mechanism):
 
 - **One rule, one place:** `bestSellerProducts(products, unitsSold)` in `lib/providers/product_provider.dart` returns the top `kBestSellerLimit` (= 20) products by `units_sold`, **excluding anything that has never sold**, most-sold first, ties broken on rating then name. Both the chip and the rail call it, so they cannot disagree. `hasBestSellers` gates whether either is offered at all.
 - **Chip:** `categories` appends `kBestSellersCategory` (`'Best Sellers'`) when `hasBestSellers`, and `getFilteredProducts()` applies it through a sibling branch to the `'On Sale'` one (`bestSellerFilterActive`), with the same degradation described in §4.1.
-- **Rail:** `lib/widgets/best_sellers_section.dart` renders a header (`Best Sellers` + a `SoleBadge('MOST SOLD')` + "See all") over a horizontal `ListView` of the shared `HorizontalProductCard` — the same 130×180 strip card as the profile's "Buy Again"/"Recently Viewed" rails. It reads `ProductProvider.bestSellers` (live), so **no extra query**. The home screen renders it only in the default browse state (`_searchKeyword.isEmpty` + no category filter), exactly like the On Sale section in §4.2.
+- **Rail:** `lib/widgets/best_sellers_section.dart` renders a header (`Best Sellers` + a `SoleBadge('MOST SOLD')` + "See all") over a horizontal `ListView` of the shared `HorizontalProductCard` — the same 130×180 strip card as the profile's "Buy Again"/"Recently Viewed" rails. It reads `ProductProvider.bestSellers` (live), so **no extra query**. The home screen renders it only in the default browse state (`_searchKeyword.isEmpty` + no category filter), exactly like the On Sale section in §4.2 — **and only while `kBestSellersRailEnabled` is true (it is currently `false`, see the note above).**
 - **No masonry concern:** it is a horizontal list inside a fixed-height `SizedBox`, not a second grid — §4.2's `flutter_staggered_grid_view` gotcha does not apply.
 
 ---

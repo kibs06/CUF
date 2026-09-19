@@ -169,20 +169,20 @@ class _TagProductsScreenState extends State<TagProductsScreen> {
                         fit: BoxFit.cover,
                         placeholder: (_, _) => Container(
                           color: AppConstants.borderGray.withValues(alpha: 0.3),
-                          child: const Center(
+                          child: Center(
                             child: Icon(Icons.image, color: AppConstants.borderGray),
                           ),
                         ),
                         errorWidget: (_, _, _) => Container(
                           color: AppConstants.borderGray.withValues(alpha: 0.3),
-                          child: const Center(
+                          child: Center(
                             child: Icon(Icons.image_outlined, color: AppConstants.borderGray, size: 32),
                           ),
                         ),
                       )
                     : Container(
                         color: AppConstants.borderGray.withValues(alpha: 0.3),
-                        child: const Center(
+                        child: Center(
                           child: Icon(Icons.image_outlined, color: AppConstants.borderGray, size: 32),
                         ),
                       ),

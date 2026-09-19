@@ -4,7 +4,10 @@ import '../../constants/app_constants.dart';
 import '../../models/update_info.dart';
 import '../../providers/notification_provider.dart';
 import '../../providers/update_provider.dart';
+import '../../utils/nav_perf.dart';
+import '../../widgets/active_tab.dart';
 import '../../widgets/cart_icon_button.dart';
+import '../../widgets/keep_alive_page.dart';
 import '../../widgets/sole_bottom_nav.dart';
 import '../../widgets/update_overlay.dart';
 import 'customer_home_screen.dart';
@@ -28,7 +31,15 @@ class _CustomerShellState extends State<CustomerShell> {
     const CustomerHomeScreen(hideAppBar: true),
     const StoreScreen(hideAppBar: true),
     const NotificationsScreen(hideAppBar: true),
-    const ProfileScreen(hideAppBar: true),
+    const ProfileScreen(hideAppBar: true, tabIndex: 3),
+  ];
+
+  /// Tab names for the perf marks — index-matched to [_screens].
+  static const List<String> _tabLabels = [
+    'Home',
+    'Stores',
+    'Notifications',
+    'Profile',
   ];
 
   @override
@@ -67,13 +78,25 @@ class _CustomerShellState extends State<CustomerShell> {
       appBar: _buildAppBar(),
       body: _screens.isEmpty
           ? const Center(child: Text('Unable to load screen'))
-          : PageView(
-              controller: _pageController,
-              physics: const PageScrollPhysics(),
-              onPageChanged: (index) {
-                setState(() => _currentIndex = index);
-              },
-              children: _screens,
+          // Same host contract as the seller shell: publish the visible tab
+          // and keep each visited page mounted (see ActiveTab / KeepAlivePage),
+          // instead of letting the PageView dispose it and re-run initState.
+          : ActiveTab(
+              index: _currentIndex,
+              child: PageView(
+                controller: _pageController,
+                physics: const PageScrollPhysics(),
+                onPageChanged: (index) {
+                  setState(() => _currentIndex = index);
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    PerfTrace.mark('tab:${_tabLabels[index]} presented');
+                  });
+                },
+                children: [
+                  for (final screen in _screens)
+                    KeepAlivePage(child: screen),
+                ],
+              ),
             ),
       bottomNavigationBar: Consumer<NotificationProvider>(
         builder: (context, notifProvider, _) {
@@ -81,6 +104,7 @@ class _CustomerShellState extends State<CustomerShell> {
             role: AppConstants.roleCustomer,
             currentIndex: _currentIndex,
             onTap: (index) {
+              PerfTrace.mark('tab:${_tabLabels[index]} tapped');
               _pageController.jumpToPage(index);
             },
             notificationUnreadCount: notifProvider.totalUnread,
@@ -153,7 +177,7 @@ class _CustomerShellState extends State<CustomerShell> {
                 );
               },
               tooltip: 'Settings',
-              icon: const Icon(
+              icon: Icon(
                 Icons.settings_outlined,
                 color: AppConstants.secondary,
               ),

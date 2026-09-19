@@ -269,7 +269,7 @@ class _FootProcessingScreenState extends State<FootProcessingScreen>
                           OutlinedButton(
                             onPressed: () => Navigator.of(context).pop(),
                             style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: AppConstants.surfaceLight),
+                              side: BorderSide(color: AppConstants.surfaceLight),
                             ),
                             child: Text(
                               'Try Again',

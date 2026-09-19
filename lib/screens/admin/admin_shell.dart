@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import '../../constants/app_constants.dart';
 import '../../models/update_info.dart';
 import '../../providers/update_provider.dart';
+import '../../widgets/active_tab.dart';
+import '../../widgets/lazy_indexed_stack.dart';
 import '../../widgets/sole_bottom_nav.dart';
 import '../../widgets/update_overlay.dart';
 import 'admin_dashboard_screen.dart';
@@ -28,7 +30,9 @@ class _AdminShellState extends State<AdminShell> {
     const SellerApprovalScreen(),
     const MonitorProductsScreen(),
     const AdminIntruderSuspiciousLoginScreen(),
-    const ProfileScreen(), // Share unified ProfileScreen for tester role changer
+    // Shared unified ProfileScreen (also the tester role changer); tabIndex
+    // feeds its re-entry refresh, see ActiveTab.
+    const ProfileScreen(tabIndex: 5),
   ];
 
   void _showUpdateOverlay(UpdateInfo update) {
@@ -52,7 +56,19 @@ class _AdminShellState extends State<AdminShell> {
       backgroundColor: AppConstants.surfaceLight,
       body: _screens.isEmpty
           ? const Center(child: Text('Unable to load screen'))
-          : IndexedStack(index: _currentIndex, children: _screens),
+          // Lazy host: a tab is constructed the first time it is opened and
+          // kept mounted after that. A plain IndexedStack would build all six
+          // screens — and fire all six screens' fetches — on the first frame.
+          // ActiveTab is separate: pages here are never rebuilt on a switch
+          // either, so it is still the only re-entry signal (the shared
+          // ProfileScreen uses it to run its staleness checks).
+          : ActiveTab(
+              index: _currentIndex,
+              child: LazyIndexedStack(
+                index: _currentIndex,
+                children: _screens,
+              ),
+            ),
       bottomNavigationBar: SoleBottomNav(
         role: AppConstants.roleAdmin,
         currentIndex: _currentIndex,

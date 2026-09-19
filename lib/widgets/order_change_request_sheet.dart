@@ -120,7 +120,7 @@ class _ChangeRequestSheetState extends State<_ChangeRequestSheet> {
   Widget build(BuildContext context) {
     return Container(
       height: MediaQuery.of(context).size.height * 0.85,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppConstants.surfaceLight,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -193,7 +193,7 @@ class _ChangeRequestSheetState extends State<_ChangeRequestSheet> {
                     }
                   },
                   itemBuilder: (context) => [
-                    const PopupMenuItem(
+                    PopupMenuItem(
                       value: 'cancel',
                       child: Row(
                         children: [
@@ -203,7 +203,7 @@ class _ChangeRequestSheetState extends State<_ChangeRequestSheet> {
                         ],
                       ),
                     ),
-                    const PopupMenuItem(
+                    PopupMenuItem(
                       value: 'clear',
                       child: Row(
                         children: [
@@ -214,7 +214,7 @@ class _ChangeRequestSheetState extends State<_ChangeRequestSheet> {
                       ),
                     ),
                     const PopupMenuDivider(),
-                    const PopupMenuItem(
+                    PopupMenuItem(
                       value: 'view_order',
                       child: Row(
                         children: [
@@ -224,7 +224,7 @@ class _ChangeRequestSheetState extends State<_ChangeRequestSheet> {
                         ],
                       ),
                     ),
-                    const PopupMenuItem(
+                    PopupMenuItem(
                       value: 'support',
                       child: Row(
                         children: [

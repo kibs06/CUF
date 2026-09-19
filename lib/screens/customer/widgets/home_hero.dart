@@ -8,8 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../constants/app_constants.dart';
 import '../../../providers/banner_provider.dart';
 import '../../../providers/product_provider.dart';
-import '../../../services/search_history_service.dart';
-import 'search_history_overlay.dart';
+import 'home_category_row.dart';
 
 /// Full-bleed hero at the top of [CustomerHomeScreen].
 ///
@@ -21,10 +20,7 @@ class HomeHero extends StatefulWidget {
     super.key,
     this.onCartTap,
     this.cartCount = 0,
-    this.searchController,
-    this.searchFocusNode,
-    this.onSearchChanged,
-    this.onSearchTap,
+    this.onSearchTap,    this.onAudienceTap,
   });
 
   /// Called when the cart icon is tapped.
@@ -33,18 +29,23 @@ class HomeHero extends StatefulWidget {
   /// Number of items in the cart — shown as a badge on the cart icon.
   final int cartCount;
 
-  /// Controller for the search TextField (owned by parent).
-  final TextEditingController? searchController;
-
-  /// FocusNode for the search TextField (owned by parent).
-  final FocusNode? searchFocusNode;
-
-  /// Called when the search text changes.
-  final ValueChanged<String>? onSearchChanged;
-
-  /// Called when the search field is tapped — opens the full-screen
-  /// search page. When null the field focuses inline as before.
+  /// Called when the search field is tapped — opens the full-screen search
+  /// page.
+  ///
+  /// The field is a **tappable stand-in, never an input**: nothing typed here
+  /// would have anywhere to go, because typing is what the search page owns
+  /// (its own field, its own suggestions, its own results). Keeping the hero
+  /// read-only is what stops a query from ever narrowing this feed — see
+  /// `search_results_screen.dart` for the dead end that caused.
   final VoidCallback? onSearchTap;
+
+  /// Called when one of the audience chips (Men's / Women's / Kids' / Unisex)
+  /// is tapped, with that canonical audience value.
+  ///
+  /// A callback rather than a `Navigator.push` here, for the same reason
+  /// [onCartTap] and [onSearchTap] are: this widget renders the hero, the screen
+  /// that hosts it owns where taps go.
+  final ValueChanged<String>? onAudienceTap;
 
   @override
   State<HomeHero> createState() => _HomeHeroState();
@@ -78,29 +79,19 @@ class _HomeHeroState extends State<HomeHero> {
   late final PageController _bannerController;
   Timer? _bannerTimer;
   int _bannerIndex = 0;
-  bool _isSearchFocused = false;
   bool _isUserDragging = false;
 
   @override
   void initState() {
     super.initState();
     _bannerController = PageController();
-    widget.searchFocusNode?.addListener(_onFocusChange);
   }
 
   @override
   void dispose() {
-    widget.searchFocusNode?.removeListener(_onFocusChange);
     _bannerController.dispose();
     _bannerTimer?.cancel();
     super.dispose();
-  }
-
-  void _onFocusChange() {
-    final focused = widget.searchFocusNode?.hasFocus ?? false;
-    if (focused != _isSearchFocused) {
-      setState(() => _isSearchFocused = focused);
-    }
   }
 
   /// Start or restart the auto-scroll timer.
@@ -186,6 +177,11 @@ class _HomeHeroState extends State<HomeHero> {
       (p) => p.selectedCategory,
     );
     final selectCategory = context.read<ProductProvider>().selectCategory;
+    // Data-derived (an audience with no products is not offered), so this is
+    // empty until a seller tags something — see `audiencesInCatalog`.
+    final audiences = context.select<ProductProvider, List<String>>(
+      (p) => p.audiencesInCatalog,
+    );
 
     // When no real banners exist, use the built-in default carousel.
     final bannerCount = banners.length;
@@ -254,46 +250,29 @@ class _HomeHeroState extends State<HomeHero> {
             bottom: false,
             child: GestureDetector(
               behavior: HitTestBehavior.translucent,
-              // Stack lets the history dropdown FLOAT over the hero (chips,
-              // banner text, everything) instead of squeezing the column —
-              // in-flow it overflowed the fixed hero height by ~10px.
-              child: Stack(
-                clipBehavior: Clip.none,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Icon row: search bar + cart
-                      _buildIconRow(),
-                  // Frosted category chips
-                  _buildChips(categories, selectedCategory, selectCategory),
+                  // Icon row: search bar + cart
+                  _buildIconRow(),
+                  // Frosted category chips + the audience chips. The row
+                  // itself lives in `home_category_row.dart` — it is styled for
+                  // this dark band, but it reads no providers, so it can be
+                  // tested without a Supabase client (which this widget cannot
+                  // be built without, via BannerProvider).
+                  HomeCategoryRow(
+                    categories: categories,
+                    selectedCategory: selectedCategory,
+                    onSelect: selectCategory,
+                    audiences: audiences,
+                    onAudienceTap: widget.onAudienceTap,
+                  ),
 
                   const Spacer(),
 
                   // Hero text block + CTA + dots
                   if (displayCount > 0)
                     _buildBottomContent(activeBanners),
-                ],
-                  ),
-
-                  // Recent-search history dropdown — floats over everything
-                  // below the search bar while it's focused and empty.
-                  if (_isSearchFocused &&
-                      (widget.searchController?.text.isEmpty ?? true))
-                    Positioned(
-                      top: 50, // search row (38px) + its 6px top padding + gap
-                      left: 16,
-                      right: 76, // aligns with the search pill (cart icon takes the rest)
-                      child: SearchHistoryOverlay(
-                        horizontalMargin: 0,
-                        onSelect: (term) {
-                          widget.searchController?.text = term;
-                          widget.onSearchChanged?.call(term);
-                          SearchHistoryService.instance.record(term);
-                          widget.searchFocusNode?.unfocus();
-                        },
-                      ),
-                    ),
                 ],
               ),
             ),
@@ -461,49 +440,25 @@ class _HomeHeroState extends State<HomeHero> {
   // ── Icon row: search + cart ───────────────────────────────────
 
   Widget _buildIconRow() {
-    final focused = _isSearchFocused;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
       child: Row(
         children: [
-          // Search bar — real, functional TextField with focus state
+          // Search bar — a read-only stand-in for the search page.
           Expanded(
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
+            child: Container(
               height: 38,
               decoration: BoxDecoration(
-                color: focused
-                    ? Colors.white
-                    : Colors.white.withValues(alpha: 0.85),
+                color: Colors.white.withValues(alpha: 0.85),
                 borderRadius: BorderRadius.circular(4),
                 border: Border.all(
-                  color: focused
-                      ? AppConstants.primary
-                      : Colors.white.withValues(alpha: 0.3),
-                  width: focused ? 1.5 : 1,
+                  color: Colors.white.withValues(alpha: 0.3),
                 ),
-                boxShadow: focused
-                    ? [
-                        BoxShadow(
-                          color: AppConstants.primary.withValues(alpha: 0.15),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ]
-                    : null,
               ),
               child: TextField(
-                controller: widget.searchController,
-                focusNode: widget.onSearchTap != null ? null : widget.searchFocusNode,
                 onTap: widget.onSearchTap,
-                readOnly: widget.onSearchTap != null,
-                showCursor: widget.onSearchTap == null,
-                onChanged: widget.onSearchChanged,
-                textInputAction: TextInputAction.search,
-                onSubmitted: (term) {
-                  SearchHistoryService.instance.record(term);
-                  widget.searchFocusNode?.unfocus();
-                },
+                readOnly: true,
+                showCursor: false,
                 style: AppConstants.bodyStyle(
                   fontSize: 13,
                   color: AppConstants.secondary,
@@ -519,9 +474,7 @@ class _HomeHeroState extends State<HomeHero> {
                     height: 26,
                     margin: const EdgeInsets.only(left: 8, right: 4),
                     decoration: BoxDecoration(
-                      color: focused
-                          ? AppConstants.primary
-                          : AppConstants.secondary,
+                      color: AppConstants.secondary,
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(
@@ -557,75 +510,6 @@ class _HomeHeroState extends State<HomeHero> {
         ],
       ),
     );
-  }
-
-  // ── Category tabs with underline indicator ─────────────────
-
-  Widget _buildChips(
-    List<String> categories,
-    String? selectedCategory,
-    ValueChanged<String> onSelect,
-  ) {
-    return SizedBox(
-      height: 44,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
-        itemCount: categories.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 4),
-        itemBuilder: (context, index) {
-          final cat = categories[index];
-          final isSelected = selectedCategory == cat;
-          return GestureDetector(
-            onTap: () => onSelect(cat),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    cat,
-                    style: AppConstants.bodyStyle(
-                      fontSize: 13,
-                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                      color: isSelected
-                          ? Colors.white
-                          : Colors.white.withValues(alpha: 0.6),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  // Underline — grows from center on select
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 250),
-                    curve: Curves.easeOutCubic,
-                    height: 2,
-                    width: isSelected ? _measureTextWidth(cat) : 0,
-                    decoration: BoxDecoration(
-                      color: AppConstants.surfaceLight,
-                      borderRadius: BorderRadius.circular(1),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  /// Measure the rendered width of [text] at the tab style.
-  double _measureTextWidth(String text) {
-    final painter = TextPainter(
-      text: TextSpan(
-        text: text,
-        style: AppConstants.bodyStyle(fontSize: 13, fontWeight: FontWeight.w700),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    final w = painter.width;
-    painter.dispose();
-    return w;
   }
 
   // ── Bottom content with banner data ─────────────────────────

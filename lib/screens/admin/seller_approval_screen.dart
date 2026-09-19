@@ -207,7 +207,7 @@ class _SellerApprovalScreenState extends State<SellerApprovalScreen> {
         elevation: 0,
         leading: widget.isStandalonePage
             ? IconButton(
-                icon: const Icon(
+                icon: Icon(
                   Icons.arrow_back,
                   color: AppConstants.secondary,
                 ),

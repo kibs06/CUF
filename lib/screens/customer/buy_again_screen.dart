@@ -100,12 +100,12 @@ class _BuyAgainScreenState extends State<BuyAgainScreen>
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppConstants.secondary),
+          icon: Icon(Icons.arrow_back, color: AppConstants.secondary),
           onPressed: () => Navigator.of(context).pop(),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.search, color: AppConstants.secondary),
+            icon: Icon(Icons.search, color: AppConstants.secondary),
             onPressed: () {
               // TODO: Add search within orders
             },

@@ -15,7 +15,13 @@ import 'foot_scan_session_screen_v2.dart';
 ///
 /// Auto Scan only — Guided Tap / paper modes stay in v1.
 class FootScanSetupScreenV2 extends StatefulWidget {
-  const FootScanSetupScreenV2({super.key});
+  /// When true, renders only the setup CONTENT — no Scaffold, no AppBar — so
+  /// the screen can be embedded as a panel (see `SizeYourFootScreen`, whose
+  /// landing panel this is). The parent then owns the chrome and the
+  /// swipeable panels; the setup flow itself is unchanged.
+  final bool embedded;
+
+  const FootScanSetupScreenV2({super.key, this.embedded = false});
 
   @override
   State<FootScanSetupScreenV2> createState() => _FootScanSetupScreenV2State();
@@ -67,26 +73,7 @@ class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppConstants.surfaceLight,
-      appBar: AppBar(
-        backgroundColor: AppConstants.surfaceLight,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text(
-          'Foot Size 2.0',
-          style: AppConstants.bodyStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: AppConstants.secondary,
-          ),
-        ),
-        centerTitle: true,
-      ),
-      body: Stack(
+    final body = Stack(
         children: [
           AppConstants.noiseOverlay(opacity: 0.03),
           SafeArea(
@@ -164,7 +151,30 @@ class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2> {
             ),
           ),
         ],
+    );
+
+    if (widget.embedded) return body;
+
+    return Scaffold(
+      backgroundColor: AppConstants.surfaceLight,
+      appBar: AppBar(
+        backgroundColor: AppConstants.surfaceLight,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, size: 20),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: Text(
+          'Foot Size 2.0',
+          style: AppConstants.bodyStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: AppConstants.secondary,
+          ),
+        ),
+        centerTitle: true,
       ),
+      body: body,
     );
   }
 

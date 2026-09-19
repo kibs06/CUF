@@ -188,6 +188,7 @@ class _FootScanResultsScreenV2State extends State<FootScanResultsScreenV2>
       try {
         await auth.saveFootProfile(
           sizeEu: double.tryParse(saved.effectiveEuSize ?? ''),
+          category: saved.shoeCategory,
           source: AppConstants.footProfileArScan,
         );
       } catch (e) {

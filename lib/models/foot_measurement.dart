@@ -3,6 +3,10 @@
 /// Each scan captures left and right foot dimensions in millimeters,
 /// derives recommended shoe sizes, and stores metadata about the
 /// scan conditions for confidence tracking.
+library;
+
+import '../utils/size_key.dart';
+
 class FootMeasurement {
   final int? id;
   final String userId;
@@ -304,42 +308,24 @@ class FootMeasurement {
 
   /// EU shoe size to US conversion with category-specific offset.
   ///
-  /// Offsets sourced from standard conversion charts:
-  /// - Men: EU - 33
-  /// - Women: EU - 31.5  (women's US runs ~1.5 sizes higher than men's for same EU)
-  /// - Kids: EU - 33 (same as men's for kids' sizes that overlap the EU chart)
-  ///
-  /// TODO(human-review): Verify these offset values against an authoritative
-  /// conversion chart before shipping. The women's offset is approximate and
-  /// may need tuning per size range.
+  /// The offsets (`EU - 33` men / `EU - 31.5` women / `EU - 33` kids) live in
+  /// `size_key.dart` so the product page's unit switcher labels a size on the
+  /// same chart this scan reports it on. Rounded to a whole US size, which is
+  /// this model's existing display convention.
   static String euToUs(String euSize, {String? category}) {
     final eu = double.tryParse(euSize);
     if (eu == null) return '';
-    double offset;
-    switch (category) {
-      case 'women':
-        offset = 31.5;
-        break;
-      case 'kids':
-        offset = 33.0; // Same as men's for kids' sizes
-        break;
-      case 'men':
-      default:
-        offset = 33.0;
-        break;
-    }
-    final us = (eu - offset).round();
-    return '$us';
+    return '${usSizeFromEu(eu, category: category).round()}';
   }
 
   /// EU shoe size to UK conversion.
   ///
-  /// Standard approximation: UK ≈ EU - 33.5 (slightly offset from US).
+  /// Standard approximation: UK ≈ EU - 33.5 (the same single chart the product
+  /// page's switcher uses).
   static String euToUk(String euSize) {
     final eu = double.tryParse(euSize);
     if (eu == null) return '';
-    final uk = (eu - 33.5).round();
-    return '$uk';
+    return '${ukSizeFromEu(eu).round()}';
   }
 
   /// Format a mm measurement for display (e.g., 265.0 → "265 mm").

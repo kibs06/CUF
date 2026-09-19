@@ -189,7 +189,7 @@ POST-ORDER → cart cleared → confirmation screen
 
 ## Customer Experience (Detailed)
 
-### Bottom Navigation (4 tabs, IndexedStack state preservation)
+### Bottom Navigation (4 tabs, keep-alive state preservation)
 
 | Tab | Screen | Description |
 |-----|--------|-------------|

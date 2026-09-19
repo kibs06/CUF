@@ -11,6 +11,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/cart_provider.dart';
 import '../../providers/order_provider.dart';
 import '../../utils/delivery_date.dart';
+import '../../utils/size_key.dart';
 import '../../services/gcash_payment_service.dart';
 import '../../services/voucher_service.dart';
 import '../../widgets/sole_card.dart';
@@ -918,7 +919,7 @@ class _CheckoutScreenState extends State<CheckoutScreen>
         leading: _checkoutStep == 0
             ? IconButton(
                 icon:
-                    const Icon(Icons.arrow_back, color: AppConstants.secondary),
+                    Icon(Icons.arrow_back, color: AppConstants.secondary),
                 onPressed: () => Navigator.of(context).pop(),
               )
             : null,
@@ -1014,7 +1015,7 @@ class _CheckoutScreenState extends State<CheckoutScreen>
                   for (int i = 0; i < selectedItems.length; i++) ...[
                     _OrderItemRow(item: selectedItems[i]),
                     if (i < selectedItems.length - 1)
-                      const Divider(
+                      Divider(
                           height: 1,
                           color: AppConstants.borderGray,
                           indent: 14,
@@ -1052,7 +1053,7 @@ class _CheckoutScreenState extends State<CheckoutScreen>
                         _buildPaymentRadio(
                             'GCash', 'Pay the store directly via GCash',
                             Icons.account_balance_wallet_outlined),
-                        const Divider(color: AppConstants.borderGray, height: 1),
+                        Divider(color: AppConstants.borderGray, height: 1),
                         _buildPaymentRadio('Cash on Pickup',
                             'Pay cash at Carcar studio', Icons.storefront_outlined),
                       ],
@@ -1153,7 +1154,7 @@ class _CheckoutScreenState extends State<CheckoutScreen>
                       ],
                     ),
                   ),
-                  const Divider(color: AppConstants.borderGray, height: 20),
+                  Divider(color: AppConstants.borderGray, height: 20),
                   _priceRow(
                     'Total Amount Due',
                     '₱${(_paymentMethod == 'GCash' && _gcashFeeAmount != null ? selectedTotal + _gcashFeeAmount! : selectedTotal).toStringAsFixed(2)}',
@@ -1474,7 +1475,7 @@ class _OrderItemRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'EU ${item['size']} · ${item['color']} · Qty: $quantity',
+                  '${formatSize(item['size']?.toString() ?? '')} · ${item['color']} · Qty: $quantity',
                   style: AppConstants.bodyStyle(
                     fontSize: 11,
                     color: AppConstants.secondary.withValues(alpha: 0.5),

@@ -52,7 +52,7 @@ const List<TagGroup> tagGroups = [
     label: 'Product type',
     icon: Icons.category_outlined,
     color: AppConstants.primary,
-    onColor: AppConstants.surfaceLight,
+    onColor: AppConstants.inkInverse,
     presets: [
       TagPreset(id: 'handmade', label: 'Handmade', icon: Icons.handyman_outlined),
       TagPreset(id: 'made_to_order', label: 'Made-to-order', icon: Icons.straighten_outlined),
@@ -65,7 +65,7 @@ const List<TagGroup> tagGroups = [
     label: 'Material',
     icon: Icons.layers_outlined,
     color: Color(0xFFC08552), // leather camel
-    onColor: AppConstants.secondary,
+    onColor: AppConstants.inkOnLightAccent,
     presets: [
       TagPreset(id: 'leather', label: 'Leather', icon: Icons.work_outline),
       TagPreset(id: 'canvas', label: 'Canvas', icon: Icons.texture),
@@ -78,7 +78,7 @@ const List<TagGroup> tagGroups = [
     label: 'Sustainability',
     icon: Icons.eco_outlined,
     color: Color(0xFF556B2F), // dark olive stitch
-    onColor: AppConstants.surfaceLight,
+    onColor: AppConstants.inkInverse,
     presets: [
       TagPreset(id: 'eco_friendly', label: 'Eco-friendly', icon: Icons.eco_outlined),
       TagPreset(id: 'upcycled_materials', label: 'Upcycled materials', icon: Icons.recycling),
@@ -89,7 +89,10 @@ const List<TagGroup> tagGroups = [
 
 /// Neutral bucket for legacy free-text tags (saved before the grouped
 /// selector existed) that don't match any preset. Shown only when present.
-const TagGroup otherBucketGroup = TagGroup(
+///
+/// `final`, not `const`: its fill is the hairline token, which follows the
+/// theme now (a light grey chip would glare on a dark page).
+final TagGroup otherBucketGroup = TagGroup(
   id: 'other',
   label: 'Custom tags',
   icon: Icons.label_outline,
@@ -106,7 +109,7 @@ const List<TagGroup> storeTagGroups = [
     label: 'Craft & heritage',
     icon: Icons.handyman_outlined,
     color: AppConstants.primary,
-    onColor: AppConstants.surfaceLight,
+    onColor: AppConstants.inkInverse,
     presets: [
       TagPreset(id: 'handmade', label: 'Handmade', icon: Icons.handyman_outlined),
       TagPreset(id: 'family_owned', label: 'Family-owned', icon: Icons.family_restroom_outlined),
@@ -119,7 +122,7 @@ const List<TagGroup> storeTagGroups = [
     label: 'Local pride',
     icon: Icons.place_outlined,
     color: Color(0xFFC08552), // leather camel
-    onColor: AppConstants.secondary,
+    onColor: AppConstants.inkOnLightAccent,
     presets: [
       TagPreset(id: 'local', label: 'Local', icon: Icons.location_city_outlined),
       TagPreset(id: 'carcar_made', label: 'Carcar-made', icon: Icons.location_on_outlined),
@@ -132,7 +135,7 @@ const List<TagGroup> storeTagGroups = [
     label: 'Services & offers',
     icon: Icons.storefront_outlined,
     color: Color(0xFF556B2F), // dark olive stitch
-    onColor: AppConstants.surfaceLight,
+    onColor: AppConstants.inkInverse,
     presets: [
       TagPreset(id: 'custom_sizing', label: 'Custom sizing', icon: Icons.straighten_outlined),
       TagPreset(id: 'repairs', label: 'Repairs & resoling', icon: Icons.build_outlined),
@@ -498,12 +501,12 @@ class _TagSelectorState extends State<TagSelector> {
                   border: OutlineInputBorder(
                     borderRadius: AppConstants.buttonRadius,
                     borderSide:
-                        const BorderSide(color: AppConstants.borderGray),
+                        BorderSide(color: AppConstants.borderGray),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: AppConstants.buttonRadius,
                     borderSide:
-                        const BorderSide(color: AppConstants.borderGray),
+                        BorderSide(color: AppConstants.borderGray),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: AppConstants.buttonRadius,

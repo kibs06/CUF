@@ -126,6 +126,36 @@ The variant sheet operates in two modes:
 
 The color sheet always uses color-scoped mode.
 
+### 3.5 Audience-Based Label Precedence (labels only)
+
+**This changes which US/UK chart a size is *read on*. It changes nothing about
+the size contract in §3.3 — the stored string, the parsing and the conversion
+arithmetic are untouched.**
+
+The chart a customer's US/UK label is drawn on used to come only from their own
+saved foot scale. Since P3 of `PRODUCT_AUDIENCE_PLAN.md` a product's stated
+`audience` comes first, resolved in exactly one place — `productSizeChart()` in
+`lib/utils/product_audience.dart`:
+
+| Product audience | Chart used for US/UK |
+|---|---|
+| `'men'` | The men's chart, whatever scale the shopper saved — the *item* is sold on it. |
+| `'women'` | The women's chart, same reasoning. |
+| `'kids'` | EU only, no US/UK conversion offered (there is no child chart — an offset would be a lie). |
+| `'unisex'` | The men's chart (`kDefaultSizeCategory`), the same answer the app gives when nothing is known about the shopper. |
+| `NULL` / unrecognised | **The shopper's own scale, verbatim** — byte-for-byte the label this document describes. |
+
+EU remains the primary label in every case, so a wrong audience cannot make a
+size unreadable, only mislabelled in US/UK — and the seller can see and fix the
+value in the product row.
+
+The helper is called once per product and its result is passed to
+`sizeUnitsForCategory` / `formatSize`'s `category:`; call sites must not rebuild
+the chain, or the product page (§8.3) and the cart can start disagreeing about
+which chart EU 42 is read on. It is also gated by
+`AppConstants.productAudienceEnabled` — with the switch off it returns the saved
+scale for every product, which is why every unset product reads today's label.
+
 ---
 
 ## 4. Data Model
@@ -329,6 +359,11 @@ Select Color / Leather
 - When a color is selected → reads only variants matching that color
 - When no color selected → reads all variants + inventory table
 - Sorts numerically by EU size
+
+**Which chart the US/UK label is drawn on** is decided before this, by
+`productSizeChart()` — the product's stated audience first, the shopper's saved
+scale otherwise. See §3.5; the size strings this map is built from are
+unaffected by it.
 
 ### 8.4 Variant Lookup (Add to Cart)
 

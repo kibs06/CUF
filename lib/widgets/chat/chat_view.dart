@@ -2544,7 +2544,7 @@ class _AttachmentPreviewSheetState extends State<_AttachmentPreviewSheet> {
       maxChildSize: 0.9,
       builder: (context, scrollController) {
         return Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: AppConstants.surfaceLight,
             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),

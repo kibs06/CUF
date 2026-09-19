@@ -783,7 +783,7 @@ class _CaptureRingButtonState extends State<_CaptureRingButton> {
                   shape: BoxShape.circle,
                   color: AppConstants.accent,
                 ),
-                child: const Icon(Icons.center_focus_strong_rounded,
+                child: Icon(Icons.center_focus_strong_rounded,
                     color: AppConstants.secondary, size: 22),
               ),
             ),

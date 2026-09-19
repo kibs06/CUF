@@ -129,7 +129,7 @@ through SECURITY DEFINER RPCs.
 | `decide_bulk_reservation(id, approve, days, reason)` | seller (owner) | Reject → terminal + reason. Approve → opens the customer's 24-hour deposit window: stores `deposit_amount` (ceil 20% of estimated value), `deposit_deadline`, `deposit_status='unpaid'`, `expires_at` (operative only after the deposit). NO stock moves. Notifies customer that a deposit is due |
 | `submit_bulk_reservation_deposit_proof(id, ref, screenshot)` | customer | Direct-GCash proof pattern: validates ownership/state/deadline/reference format/screenshot folder, one proof per reservation, platform-wide reference dedupe (incl. order proofs). No status flip, no stock movement |
 | `confirm_bulk_reservation_deposit(id)` | seller (owner) | **The security control** — verifies proof exists + deadline, then runs the relocated stock draw (largest-first, `FOR UPDATE`), sets `approved`/`reserved_stock`/`deposit_status='paid'`/`deposit_proof_id`. Aborts loudly (`INSUFFICIENT_STOCK_MISSING_<n>`) if stock shrank below quantity |
-| `reject_bulk_reservation_deposit(id, reason)` | seller (owner) | Proof invalid / unverifiable → terminal `rejected`, no stock was ever drawn, deposit stays `unpaid` |
+| `reject_bulk_reservation_deposit(id, reason)` | seller (owner) | Proof invalid / unverifiable → terminal `rejected`, no stock was ever drawn, deposit stays `unpaid`. The Dart service additionally fires an FCM push to the customer (fire-and-forget) — see "Customer push" below |
 | `cancel_bulk_reservation(id)` | customer | Pending/awaiting_deposit → cancelled (no stock, no forfeiture). Approved (paid) → cancelled, stock released exactly once, `deposit_status='forfeited'` (non-refundable). Notifies seller |
 | `fulfill_bulk_reservation(id)` | seller (owner) | Approved (paid) → fulfilled; releases hold; deposit recorded as applied toward the (deferred) eventual sale. Notifies customer |
 | `expire_bulk_reservations()` | any authenticated | Idempotent sweep, TWO separate branches: `awaiting_deposit AND deposit_deadline <= now()` → expire, NO stock release, deposit stays `unpaid`; `approved AND expires_at <= now()` → release stock, deposit `forfeited`. `FOR UPDATE SKIP LOCKED`. Returns count |
@@ -213,16 +213,32 @@ since any later call finishes the job — the sweep is idempotent.
   `bulk_reservation_request`, screen `seller_reservations`, reference = the
   reservation id). `seller_shell.dart` deep-links that screen key to the
   reservation queue. Fire-and-forget — push failures never fail the request.
-- **Customer push:** the seller's `decideReservation` (approve branch)
-  invokes the same edge function against the customer (type
-  `bulk_reservation_approved`, screen `my_reservations`, reference = the
-  reservation id). The body re-states the resolved deposit amount and the
-  24-hour deadline (formatted "Sep 14, 14:30 UTC", matching the RPC's
-  in-app message) read back from the freshly-updated row.
-  `customer_home_screen.dart` deep-links that screen key to My Reservations.
-  Also fire-and-forget. (Lifecycle pushes for deposit-confirmed,
-  fulfilled, declined, and expiry events are not wired yet — the in-app
-  notifications cover them.)
+- **Customer push (three seller decisions):** every way a seller can end a
+  reservation now reaches the customer's device, not just the happy path.
+  All three deep-link to My Reservations via `customer_home_screen.dart`
+  (screen key `my_reservations`) and are fire-and-forget:
+  - `decideReservation` **approve** → type `bulk_reservation_approved`. The
+    body re-states the resolved deposit amount and the 24-hour deadline
+    (formatted "Sep 14, 14:30 UTC", matching the RPC's in-app message) read
+    back from the freshly-updated row.
+  - `decideReservation` **decline** → type `bulk_reservation_declined`. A
+    decline changes nothing in the customer's UI except a hold quietly
+    disappearing, so it needs the push *more* than the approval does. The
+    body repeats the stored `rejection_reason` and adds the quantity — the
+    in-app message omits it, but a notification read with the app closed
+    has to answer "which hold?" on its own.
+  - `rejectDeposit` → type `bulk_reservation_deposit_declined`. This can be
+    money the customer already sent, so the body keeps the RPC's closing
+    reassurance ("No stock was held. If you already sent money, contact the
+    store directly to resolve it.") — the reason is read back from the row,
+    where the RPC has already substituted its default for a blank one, so
+    push and in-app text cannot drift.
+
+  Bodies live in two pure builders
+  (`bulkReservationDeclinedPushBody`, `bulkReservationDepositDeclinedPushBody`)
+  so the wording is unit-tested rather than buried in a fire-and-forget
+  closure. **Still not wired:** pushes for deposit-confirmed, fulfilled and
+  expiry events — the in-app notifications cover them.
 - `lib/screens/seller/seller_dashboard_screen.dart` — "BULK RESERVATIONS"
   metric card (pending + proof-verification count via `fetchPendingCount`,
   non-fatal on error) + alert chip when > 0, both routing to the queue.
@@ -240,8 +256,10 @@ since any later call finishes the job — the sweep is idempotent.
 
 ## 7. Testing notes
 
-- Analyzer clean; full suite green (558 tests — 545 pre-deposit + 13 new
-  model/error tests in `test/services/reservation_service_test.dart`).
+- Analyzer clean; full suite green (`flutter test`).
+  `test/services/reservation_service_test.dart` covers the deposit model
+  fields, the deposit error codes, and the two decision-push body builders
+  (reason / empty reason / whitespace-only reason / RPC default reason).
 - **pgTAP suite (new): `supabase/tests/bulk_reservation_deposits.test.sql`**
   (51 assertions, run by CI's supabase-migrations job) covers: approve →
   awaiting_deposit → submit proof → confirm → reserved (stock drawn

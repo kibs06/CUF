@@ -65,7 +65,7 @@ class _CancellationSheetState extends State<_CancellationSheet> {
       maxChildSize: 0.95,
       builder: (context, scrollController) {
         return Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: AppConstants.surfaceLight,
             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),

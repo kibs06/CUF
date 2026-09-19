@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../constants/app_constants.dart';
 import '../../../services/reservation_service.dart';
 import '../../../utils/sale_price.dart';
+import '../../../utils/size_key.dart';
 import '../../../widgets/sole_primary_button.dart';
 import 'reservation_sheet_parts.dart';
 
@@ -189,17 +190,17 @@ class _BulkReservationSheetState extends State<_BulkReservationSheet> {
   Widget build(BuildContext context) {
     final price = effectivePrice(widget.product);
     final colors = _colors;
-    // Sizes sorted numerically, the same order as the detail page's picker.
+    // Sizes sorted numerically, the same order as the detail page's picker —
+    // half sizes included, and unparseable keys last (plan §4.3).
     final sizes = _sizes.entries.toList()
-      ..sort((a, b) =>
-          (int.tryParse(a.key) ?? 0).compareTo(int.tryParse(b.key) ?? 0));
+      ..sort((a, b) => compareSizes(a.key, b.key));
 
     return Padding(
       // Keyboard inset so the sheet lifts above the note field.
       padding:
           EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AppConstants.surfaceLight,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),

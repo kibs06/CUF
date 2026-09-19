@@ -19,7 +19,12 @@ AuthGate also handles suspended accounts, onboarding vs. login routing, and prof
 
 **File:** `lib/screens/customer/customer_shell.dart`
 
-Uses `IndexedStack` (all 4 tabs stay alive in memory) with a `SoleBottomNav` bottom bar:
+Hosts its 4 tabs in a `PageView` where **every page is wrapped in `KeepAlivePage`** (`lib/widgets/keep_alive_page.dart`) with a `SoleBottomNav` bottom bar:
+
+- Pages are built **lazily** on first visit, then kept mounted — so state survives tab switches and `initState` runs once per session.
+- A `PageView` alone would **dispose** a page the moment it scrolls out of view (its viewport uses `cacheExtent: 0`), which made every tab tap rebuild the screen *and* re-fire its data fetches. `KeepAlivePage` is what prevents that; do not remove it.
+- It is deliberately **not** an `IndexedStack`, which would build all four pages — and run all four screens' fetches — on the first frame.
+- Because a kept-alive page is not rebuilt on a switch, the shell publishes the visible tab through **`ActiveTab`** (`lib/widgets/active_tab.dart`); a screen that must refresh on re-entry listens there (e.g. `ProfileScreen`, which takes a `tabIndex`).
 
 | Index | Label | Screen | Notes |
 |-------|-------|--------|-------|
@@ -40,14 +45,17 @@ A `CustomScrollView` with slivers, wrapped in `RefreshIndicator`. No AppBar — 
 
 1. **HomeHero** — `SliverToBoxAdapter` (344px). Full-bleed hero with gradient background, containing:
    - Icon row: real search `TextField` + cart icon with badge
-   - Category text tabs with underline indicator
+   - Category text tabs with underline indicator, **plus the audience chips** (Men's / Women's / Kids' / Unisex) — see `HomeCategoryRow` below. Order is `All` → audiences → categories → pseudo-categories
    - "NEW ARRIVALS / CRAFTED FOR FALL" headline + floating product cards + "SHOP NOW" CTA + page dots
 2. **Sheet** — `SliverToBoxAdapter` with rounded top corners (`ClipRRect` `borderRadius: 22`), containing:
    - Foot profile banner (conditional — only for incomplete profiles)
+   - In your size rail (conditional — see below)
+   - Men's / Women's / Kids' rails (conditional — see below; gated by `AppConstants.productAudienceEnabled`, **now `true`**, and each hides itself when the catalog holds nothing for that audience — which is every audience today: P4 measured all 15 live products as unset, so the rails render nothing until a seller answers "Who is it for?" on a product)
    - On Sale section (conditional — only when no search + no category filter + sale items exist)
-   - Best Sellers rail (conditional — same gate as On Sale; hidden when nothing has sold). See `docs/AI/HOME_ON_SALE_ARCHITECTURE.md` §4.4
+   - Best Sellers rail (**currently gated off** by `kBestSellersRailEnabled = false` in `customer_home_screen.dart`; the widget and its data are kept, so re-enabling is a one-const flip. Also conditional — same gate as On Sale; hidden when nothing has sold). See `docs/AI/HOME_ON_SALE_ARCHITECTURE.md` §4.4
    - Catalog header + sort button
    - Product grid (`MasonryGridView.count`, 2-col)
+   - Catalog end-cap (`CatalogEndCap`, conditional — see below)
    - Bottom spacing for nav bar
 
 ### Data flow
@@ -58,13 +66,118 @@ A `CustomScrollView` with slivers, wrapped in `RefreshIndicator`. No AppBar — 
 - On `_loadConversations()`: loads chat conversations for the floating message badge + subscribes to realtime inbox.
 - Push notification deep-link handlers: navigates to `ChatView`, `OrderTrackingScreen`, or `MyReportsScreen`.
 - `loadProducts()` also fetches the `units_sold` aggregation in parallel (`SupabaseService.fetchUnitsSold()`) and stamps `units_sold` onto each product — that single value powers the **Best Selling** sort, the **Best Sellers** filter chip and the Best Sellers rail. No second query exists for any of them.
-- Search: hero search bar drives inline filtering via `ProductProvider.getFilteredProducts(_searchKeyword)`.
+- Search: **not on this screen.** The hero and pinned bars are read-only stand-ins that open `ProductSearchScreen` (suggestions, recent + trending terms), which pushes `SearchResultsScreen`. The feed is never narrowed by a query — see `docs/AI/SEARCH_ARCHITECTURE.md` for why, and for what it replaced.
 
 ### Key providers consumed
 
 - `ProductProvider` — `context.watch` for: `products`, `categories`, `selectedCategory`, `sortMode`, `isLoading`, `bestSellers`, `getFilteredProducts()`, `selectCategory()`, `setSortMode()`.
 - `CartProvider` — `context.select` for `itemCount` (cart badge on hero icon).
 - `MessageProvider` — `context.read` for conversation loading (no watch).
+
+### In your size rail
+
+`lib/widgets/in_your_size_section.dart` — the first surface where the saved foot
+profile changes what the customer is *shown while shopping*. Products that stock
+their size right now, most-sold first, headed by the size the app believes.
+
+**The rule lives elsewhere, on purpose.** `lib/utils/size_match.dart` owns the
+match (pure Dart, unit-tested without a widget harness): `stocksMySize()` = an
+exact EU size with stock behind it, read from the authoritative `inventory`
+relation — the same source as the buy button, so the rail can never list
+something unpurchasable. Other systems are converted (US 9 → EU 42); a system
+the app owns no chart for (`'JP 25'`) or a bare value outside the app's own
+22–48 bands is **skipped, never guessed at**. A sold-out exact size is not
+suggested; a ±½ *near* size is never offered as the customer's size.
+`ProductProvider.productsInSize(euSize)` applies it and ranks the result
+(units sold → rating → name, so the per-load shuffle cannot reorder it), capped
+at `kMySizeRailLimit`.
+
+**Where the size comes from** — `shoppingEuSizeFrom(profile, measurement:)`: the
+profile snapshot first (written by both the scan results screens and the manual
+picker, so it holds the most recent size given), then a scan already in memory.
+Deliberately **no fetch** — and the rail never triggers a measurement load, it
+only reads one that is already there.
+
+**Absent-safe**, the same rule the plan sets for every size surface: no size on
+file → nothing; no product stocks it → nothing; a product with no size data →
+not suggested; kill switch `AppConstants.sizeAwareShoppingEnabled` off →
+nothing. The widget carries its own trailing spacing, so a hidden rail leaves
+no gap behind it.
+
+**Browse gate** (caller-side, like On Sale / Best Sellers): rendered only when
+`_searchKeyword.isEmpty` and `selectedCategory` is `null`/`'All'` — a personal
+rail above a search result or a category filter would read as a second,
+unrelated feed.
+
+### Audience rails — Men's / Women's / Kids'
+
+`lib/widgets/audience_section.dart` — one rail per rail-eligible audience, in the
+frame order fixed by `productRailAudiences` (`['men', 'women', 'kids']`), sitting
+between the size rail and On Sale. The home screen **iterates that list** rather
+than listing three widgets, so the order and the `unisex` exclusion are decided
+by one constant instead of by call-site discipline.
+
+**Gated — and the gate is now ON.** `AppConstants.productAudienceEnabled` is
+`true` (flipped at P5 of `docs/AI/PRODUCT_AUDIENCE_PLAN.md`), and the widget
+checks it *before* touching the provider — with the switch off it asks for no
+list at all. Flipping it back to `false` is the whole rollback, so the flag and
+its code paths must stay.
+
+**Turning it on changed nothing on screen, and that is the point.** Every
+surface here is data-derived: all 15 products in the live catalog still have
+`audience = null` (measured at P4 of the plan), so each rail hides itself and
+the audience chips render nothing. The rails stay empty until products are
+tagged — the one honest source being a seller (or an admin), never a guess.
+
+**Stated, never inferred.** `ProductProvider.productsForAudience(audience)` keeps
+products whose `audience` equals the value exactly and ranks them with the same
+`_compareSuggestions` the size rail uses (units sold → rating → name), capped at
+`kAudienceRailLimit`. `null` and `'unisex'` are excluded **hard** — an unset
+product stays in the catalog grid, search and every category and is only absent
+from these three rails, while a `unisex` product in all three would put one card
+three times down the feed. An unrecognised argument returns EMPTY rather than
+defaulting to a rail.
+
+**Header.** The title is `productAudienceLabel(audience)`, not a string passed by
+this screen — `"Men's"` / `"Women's"` / `"Kids'"` are spelled in exactly one file
+(`lib/utils/product_audience.dart`), and a rail can never be labelled with an
+audience it does not query.
+
+**Shared rail body.** Both this rail and "In your size" render through
+`lib/widgets/product_rail_section.dart` (header row + `HorizontalProductCard`
+strip + trailing gap). It takes an optional muted `meta` line — that parameter is
+the only visual difference between the two. It does **not** hide itself: hiding
+belongs to the section widget, which is the only thing that knows whether
+"nothing to show" means "not applicable" (no size on file, no matching audience)
+or "empty catalog".
+
+**Absent-safe, and self-spacing.** Same caller-side browse gate as every other
+conditional rail. When a section renders nothing it renders *nothing* — no
+header, no strip, no residual gap — which is the normal state until P4's
+backfill, so "invisible" has to be the default rather than something this screen
+arranges.
+
+### Catalog end-cap (the feed's finish line)
+
+`lib/widgets/catalog_end_cap.dart` — the closing sign-off: a short clay rule,
+"That's the whole shelf", and the count line. Before it, the feed ended on the
+same product card repeated to the last item followed by blank space, which read
+as the grid breaking rather than the shelf ending.
+
+**Deliberately a signpost only** — no CTA and no product rail. The feed has
+already shown everything it has; the module marks the end and names how much the
+customer just got through.
+
+**Gate** (mirrors On Sale / Best Sellers): rendered only when
+`_searchKeyword.isEmpty` **and** `selectedCategory` is `null`/`'All'` **and**
+the catalog is not loading **and** `filteredProducts` is non-empty. Under a
+search or a category the feed is a slice, so "that's the whole shelf" would be
+false.
+
+**Counts** — `productCount` is the loaded catalog size; `storeCount` is the
+distinct `store_id`s in that same list (the key the Store tab indexes on), so
+the module adds **no query**. `catalogSignpostLine` omits whichever half it
+cannot prove: no shop count yields `'12 pairs'`, no pairs yields no line at all.
 
 ## HomeHero widget
 
@@ -87,12 +200,37 @@ A self-contained `StatefulWidget` (344px) that renders the full-bleed hero secti
 | `onCartTap` | Tap cart icon | Push `CartScreen` |
 | `onCtaTap` | Tap "SHOP NOW →" | `Scrollable.ensureVisible` to product grid |
 | `onProductTap` | Tap floating card | Push `ProductDetailScreen` |
-| `onSearchChanged` | Type in search bar | `setState(_searchKeyword)` → inline grid filter |
+| (none — the bars are tap-only) | Tap a search bar | Push `ProductSearchScreen` via `_openSearchScreen()` |
+| `onAudienceTap` | Tap an audience chip | Push `AudienceListingScreen(audience:)` |
 
 ### State passed from parent
 
-- `searchController` / `searchFocusNode` — owned by `CustomerHomeScreen`, passed down for the real search TextField
+- `onSearchTap` — the only prop either search bar takes; `CustomerHomeScreen` owns the navigation
 - `cartCount` — from `CartProvider.itemCount`
+- `onAudienceTap` — the shelf chips again hand navigation to the screen; the hero reads `ProductProvider.audiencesInCatalog` and passes the canonical catalogue value back
+
+### HomeCategoryRow widget
+
+**File:** `lib/screens/customer/widgets/home_category_row.dart`
+
+The hero's chip strip, extracted so it reads no providers (the hero itself cannot be built in a widget test — `BannerProvider` constructs a live Supabase client).
+
+- **Category chips** drive `ProductProvider.selectCategory()` and grow the animated underline while active — unchanged behaviour. The indicator is `AppConstants.inkInverse` (**pinned**), not a theme token: this row sits on the hero's photo band, which is dark in both brightnesses, so a brightness-aware colour would resolve to the near-black page on dark and vanish into the image.
+- **Audience chips** (`HomeCategoryRow.audiences`, in practice `ProductProvider.audiencesInCatalog`) each open `AudienceListingScreen` for that audience. They are **never underlined**: tapping one leaves this feed instead of narrowing it. Two chips, one look — a row of two visually distinct control types reads as a toolbar.
+- A chip only exists for an audience the catalog **actually holds** (`audiencesInCatalog`), the same rule the `On Sale` / `Best Sellers` chips follow — with today's `audience = null` catalog this is an empty list, so the row is exactly what it was before the feature was switched on.
+- The whole strip is gated by `AppConstants.productAudienceEnabled` (now `true`).
+- The strip is a horizontally scrolling `Row` sized to its content, **not** a fixed-height `ListView` — the fixed 44px clipped the label by 4px at a 1.3× text scale.
+
+### AudienceListingScreen
+
+**File:** `lib/screens/customer/audience_listing_screen.dart`
+
+One audience's entire shelf: header (label + count) with a Back button, its own sort chip (local `SortMode`, default Featured — passing it never re-sorts Home), the `MasonryGridView` of that audience's products, and an empty state when the shelf is bare. Its source is `ProductProvider.productsInAudience()` — uncapped, and the one audience surface that **includes** `unisex` (the rails must skip it, or a house slipper appears in three rails at once). Untagged products appear on no shelf, here or in the rails.
+
+Two constraints a later edit must keep:
+
+- **The header stacks when the text scale is large.** Above a threshold tied to the scaled sort label, the sort chip moves to its own line instead of sharing one with the back button and the title. A sort label is a *word* — squeezing it means ellipsising it, which is a control the customer cannot read. The chip's label is `Flexible` as well, so no font/scale combination can overflow it; it wraps before it would clip.
+- **Accent ink is `AppPalette.primaryInk`, not `AppConstants.primary`.** The brand clay is pinned at `#8B5A2B`, which is only ~3.3:1 on the dark page — under AA for the 11–13px labels on this page (the sort chip, the empty-state pill). The pinned clay stays for fills and hairline tints, where it is decoration rather than something to read.
 
 ## StoreScreen — multi-store discovery tab
 
@@ -173,7 +311,7 @@ All providers are app-root singletons, created in `main.dart` and consumed via `
 
 | Widget | File | Used by |
 |--------|------|---------|
-| `SoleProductCard` | `widgets/sole_product_card.dart` | Home grid, sale section, cross-store row |
+| `SoleProductCard` | `widgets/sole_product_card.dart` | Home grid, sale section, cross-store row. Text-scale safe: its price/category row and rating/sold row wrap rather than overflow on a narrow phone at a large scale (they overflowed at 2.0× until P2's chip-row work surfaced it) |
 | `BestSellersSection` | `widgets/best_sellers_section.dart` | Home — horizontally-scrolling Best Sellers rail (live `units_sold` order) |
 | `HorizontalProductCard` | `widgets/horizontal_product_card.dart` | Home Best Sellers rail, profile Buy Again / Recently Viewed rails |
 | `SoleBottomNav` | `widgets/sole_bottom_nav.dart` | All shells (customer, seller, admin) |
@@ -182,6 +320,11 @@ All providers are app-root singletons, created in `main.dart` and consumed via `
 | `ShimmerGroup` / `SkeletonBox` | `widgets/shimmer_group.dart` | Loading skeletons |
 | `NoInternetView` | `widgets/no_internet_view.dart` | Offline state |
 | `CustomerFootProfileBanner` | `widgets/customer_foot_profile_banner.dart` | Home — foot sizing reminder |
+| `InYourSizeSection` | `widgets/in_your_size_section.dart` | Home — rail of products that stock the customer's saved size |
+| `ProductRailSection` | `widgets/product_rail_section.dart` | Home — the shared rail body (header + 130×180 strip + trailing gap) all four curated rails render through |
+| `AudienceSection` | `widgets/audience_section.dart` | Home — one Men's / Women's / Kids' rail (self-hiding, switch-gated) |
+| `HomeCategoryRow` | `screens/customer/widgets/home_category_row.dart` | Home hero — category chips + the audience shelf chips |
+| `CatalogEndCap` | `widgets/catalog_end_cap.dart` | Home — the "that's the whole shelf" sign-off at the end of the catalog |
 
 ## File tree summary
 
@@ -191,7 +334,7 @@ lib/
 ├── screens/
 │   ├── auth_gate.dart                 # Auth state → role routing
 │   ├── customer/
-│   │   ├── customer_shell.dart        # IndexedStack + bottom nav (4 tabs)
+│   │   ├── customer_shell.dart        # PageView + KeepAlivePage + bottom nav (4 tabs)
 │   │   ├── customer_home_screen.dart  # Main browse tab (this doc's focus)
 │   │   ├── product_detail_screen.dart
 │   │   ├── cart_screen.dart
@@ -199,13 +342,16 @@ lib/
 │   │   ├── my_orders_screen.dart
 │   │   ├── buy_again_screen.dart
 │   │   ├── recently_viewed_screen.dart
+│   │   ├── audience_listing_screen.dart  # One audience's whole shelf
+│   │   ├── search_results_screen.dart
 │   │   ├── tag_products_screen.dart
 │   │   ├── tracking_screen.dart
 │   │   ├── write_review_screen.dart
 │   │   ├── customization_screen.dart
 │   │   └── ar_fitting / foot_*        # AR foot scanning flow
 │   │   └── widgets/
-│   │       └── home_hero.dart         # Full-bleed hero (search, chips, cards, CTA)
+│   │       ├── home_hero.dart         # Full-bleed hero (search, chips, cards, CTA)
+│   │       └── home_category_row.dart # Category chips + audience shelf chips
 │   ├── store/
 │   │   ├── store_screen.dart          # Store discovery tab
 │   │   └── widgets/                   # Carousel, card, info, product row

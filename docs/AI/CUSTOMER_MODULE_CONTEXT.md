@@ -42,7 +42,7 @@ Optimistic updates are used for cart operations (local state first, background s
 
 | # | Screen | File | Purpose |
 |---|--------|------|---------|
-| 1 | CustomerShell | `customer_shell.dart` | Root container, 4-tab IndexedStack |
+| 1 | CustomerShell | `customer_shell.dart` | Root container, 4 tabs in a `PageView` with each page wrapped in `KeepAlivePage` (lazy + state preserved) |
 | 2 | CustomerHomeScreen | `customer_home_screen.dart` | Product grid, search, categories, banner |
 | 3 | ProductDetailScreen | `product_detail_screen.dart` | Image carousel, size/color selectors, add-to-cart |
 | 4 | CartScreen | `cart_screen.dart` | Store-grouped cart, quantity stepper, checkout bar |
@@ -260,7 +260,7 @@ ORDER BY is_default DESC, created_at DESC;
 
 1. **Optimistic updates** — Update local state immediately, sync in background, rollback on failure
 2. **Singleton services** — `static final XyzService instance = XyzService._()`
-3. **IndexedStack** — CustomerShell uses IndexedStack to preserve tab state
+3. **Keep-alive tabs** — CustomerShell hosts its 4 tabs in a `PageView` with every page wrapped in `KeepAlivePage`, so a visited tab stays mounted (state preserved) and a switch does not re-run `initState`. A page that must refresh on re-entry listens to `ActiveTab` instead of relying on `build` re-running
 4. **Composite cart keys** — `productId-size-color` for cart item identification
 5. **Variant resolution** — `resolveVariant()` returns variantId + additionalPrice
 6. **Stock validation** — Double-check live inventory before order placement (race condition protection)

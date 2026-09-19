@@ -65,7 +65,7 @@ flowchart TB
 
 ```mermaid
 flowchart TB
-    Shell["SellerShell<br/>(IndexedStack + NavigationBar)"]
+    Shell["SellerShell<br/>(PageView + KeepAlivePage + SoleBottomNav)"]
 
     Shell --> T0["Tab 0: SellerDashboardScreen"]
     Shell --> T1["Tab 1: POSScreen"]

@@ -218,7 +218,7 @@ class _WriteReviewScreenState extends State<WriteReviewScreen> {
         backgroundColor: AppConstants.surfaceLight,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.close, color: AppConstants.secondary),
+          icon: Icon(Icons.close, color: AppConstants.secondary),
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),

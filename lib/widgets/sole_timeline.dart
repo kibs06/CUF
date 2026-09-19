@@ -38,13 +38,13 @@ class SoleTimeline extends StatelessWidget {
 
         if (isPast) {
           dotColor = AppConstants.success;
-          dotChild = const Icon(Icons.check, size: 12, color: AppConstants.surfaceLight);
+          dotChild = Icon(Icons.check, size: 12, color: AppConstants.surfaceLight);
         } else if (isActive) {
           dotColor = AppConstants.accent;
           dotChild = Container(
             width: 8,
             height: 8,
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: AppConstants.secondary,
               shape: BoxShape.circle,
             ),

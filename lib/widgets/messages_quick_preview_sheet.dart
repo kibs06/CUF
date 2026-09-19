@@ -106,7 +106,7 @@ class _MessagesQuickPreviewSheetState extends State<MessagesQuickPreviewSheet> {
                 ),
               ),
 
-              const Divider(
+              Divider(
                 height: 1,
                 color: AppConstants.borderGray,
                 indent: 20,

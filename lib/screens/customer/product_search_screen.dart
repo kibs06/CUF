@@ -1,31 +1,37 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import '../../../constants/app_constants.dart';
-import '../../../services/search_history_service.dart';
+import 'package:provider/provider.dart';
 
-/// Full-screen search page (Shopee-style) opened when the home search bar
-/// is tapped.
+import '../../../constants/app_constants.dart';
+import '../../../providers/product_provider.dart';
+import '../../../services/search_history_service.dart';
+import '../../../utils/product_search.dart';
+import 'search_results_screen.dart';
+
+/// Full-screen search page (Shopee-style) opened when the home search bar is
+/// tapped.
 ///
 /// Layout:
-///   • Top bar: back arrow + search field with a filled search button
-///   • "Recently Searched" — history chips + trash (clear all)
-///   • "Search Discovery" — trending suggestion chips (🔥-tagged)
+///   • Top bar: back arrow + search field with a clear button and a filled
+///     search button
+///   • **While typing: a suggestion panel** — "search for what I typed", then
+///     catalog-derived keyword suggestions (categories, tags, product names)
+///   • Empty field: "Recently Searched" history chips + trash (clear all), then
+///     "Search Discovery" trending chips (🔥-tagged)
 ///
-/// Choosing a term pops back and hands it to [onSearchSelected]; the home
-/// screen applies it as the active keyword.
+/// **Nothing here filters the Home feed.** Committing a term pushes
+/// [SearchResultsScreen] on top of this page, so Back returns to the search
+/// field with the term still in it, and Back again returns to a Home feed
+/// showing the whole catalog. The previous version popped a term back to Home,
+/// which filtered the feed in place and left the customer inside a search with
+/// no clear button and no way back out — the trap this page no longer creates.
 class ProductSearchScreen extends StatefulWidget {
-  const ProductSearchScreen({
-    super.key,
-    this.initialQuery = '',
-    required this.onSearchSelected,
-  });
+  const ProductSearchScreen({super.key, this.initialQuery = ''});
 
-  /// Pre-fills the field (e.g. the user had already typed something).
+  /// Pre-fills the field (e.g. re-opening search on an existing term).
   final String initialQuery;
-
-  /// Called with the chosen term before popping back to the home screen.
-  final ValueChanged<String> onSearchSelected;
 
   @override
   State<ProductSearchScreen> createState() => _ProductSearchScreenState();
@@ -87,16 +93,26 @@ class _ProductSearchScreenState extends State<ProductSearchScreen> {
     FocusScope.of(context).requestFocus(_focusNode);
   }
 
-  void _commit(String term) {
+  /// Record [term] and show its results. The page stays underneath, so Back
+  /// lands on this field with the term still in it.
+  Future<void> _commit(String term) async {
     final t = term.trim();
     if (t.isEmpty) return;
     SearchHistoryService.instance.record(t);
-    widget.onSearchSelected(t);
-    Navigator.of(context).pop();
+    _focusNode.unfocus();
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => SearchResultsScreen(initialQuery: t),
+      ),
+    );
+    // Coming back, the term just searched belongs at the top of the history.
+    if (mounted) unawaited(_load());
   }
 
   @override
   Widget build(BuildContext context) {
+    final query = _controller.text.trim();
+
     return Scaffold(
       backgroundColor: AppConstants.surfaceLight,
       body: SafeArea(
@@ -105,7 +121,7 @@ class _ProductSearchScreenState extends State<ProductSearchScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildTopBar(),
-            const Divider(height: 1, color: AppConstants.borderGray),
+            Divider(height: 1, color: AppConstants.borderGray),
             Expanded(
               child: _loading
                   ? const SizedBox.shrink()
@@ -113,69 +129,9 @@ class _ProductSearchScreenState extends State<ProductSearchScreen> {
                       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (_recent.isNotEmpty) ...[
-                            _buildSectionHeader(
-                              title: 'Recently Searched',
-                              trailing: GestureDetector(
-                                onTap: () async {
-                                  await SearchHistoryService.instance.clear();
-                                  await _load();
-                                },
-                                child: Icon(
-                                  Icons.delete_outline,
-                                  size: 20,
-                                  color: AppConstants.secondary
-                                      .withValues(alpha: 0.6),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            _buildChipWrap(
-                              terms: _showAllRecent
-                                  ? _recent
-                                  : _recent.take(6).toList(),
-                              onTap: _commit,
-                            ),
-                            if (_recent.length > 6)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 8),
-                                child: GestureDetector(
-                                  onTap: () => setState(
-                                      () => _showAllRecent = !_showAllRecent),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        _showAllRecent ? 'Less' : 'More',
-                                        style: AppConstants.bodyStyle(
-                                          fontSize: 13,
-                                          color: AppConstants.secondary
-                                              .withValues(alpha: 0.6),
-                                        ),
-                                      ),
-                                      Icon(
-                                        _showAllRecent
-                                            ? Icons.expand_less
-                                            : Icons.expand_more,
-                                        size: 18,
-                                        color: AppConstants.secondary
-                                            .withValues(alpha: 0.6),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            const SizedBox(height: 24),
-                          ],
-                          _buildSectionHeader(title: 'Search Discovery'),
-                          const SizedBox(height: 10),
-                          _buildChipWrap(
-                            terms: _discovery,
-                            onTap: _commit,
-                            hotIndices: _hotIndices,
-                          ),
-                        ],
+                        children: query.isNotEmpty
+                            ? _buildSuggestionSection(query)
+                            : _buildDiscoverySections(),
                       ),
                     ),
             ),
@@ -185,7 +141,182 @@ class _ProductSearchScreenState extends State<ProductSearchScreen> {
     );
   }
 
-  // ── Top bar: back + field + filled search button ────────────────
+  // ── Discovery state: recents + trending (no typing yet) ──
+
+  List<Widget> _buildDiscoverySections() {
+    return [
+      if (_recent.isNotEmpty) ...[
+        _buildSectionHeader(
+          title: 'Recently Searched',
+          trailing: GestureDetector(
+            onTap: () async {
+              await SearchHistoryService.instance.clear();
+              await _load();
+            },
+            child: Icon(
+              Icons.delete_outline,
+              size: 20,
+              color: AppConstants.secondary.withValues(alpha: 0.6),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        _buildChipWrap(
+          terms: _showAllRecent ? _recent : _recent.take(6).toList(),
+          onTap: _commit,
+        ),
+        if (_recent.length > 6)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: GestureDetector(
+              onTap: () =>
+                  setState(() => _showAllRecent = !_showAllRecent),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _showAllRecent ? 'Less' : 'More',
+                    style: AppConstants.bodyStyle(
+                      fontSize: 13,
+                      color: AppConstants.secondary.withValues(alpha: 0.6),
+                    ),
+                  ),
+                  Icon(
+                    _showAllRecent
+                        ? Icons.expand_less
+                        : Icons.expand_more,
+                    size: 18,
+                    color: AppConstants.secondary.withValues(alpha: 0.6),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        const SizedBox(height: 24),
+      ],
+      _buildSectionHeader(title: 'Search Discovery'),
+      const SizedBox(height: 10),
+      _buildChipWrap(
+        terms: _discovery,
+        onTap: _commit,
+        hotIndices: _hotIndices,
+      ),
+    ];
+  }
+
+  // ── Typing state: what this query could mean ──
+
+  List<Widget> _buildSuggestionSection(String query) {
+    final suggestions = context.watch<ProductProvider>().suggestionsFor(query);
+
+    return [
+      _buildSectionHeader(title: 'Suggestions'),
+      const SizedBox(height: 6),
+      // The query itself, always first: tapping it is the plain "search what I
+      // typed" the customer may have meant all along.
+      _suggestionRow(
+        key: const ValueKey('search-suggestion-query'),
+        term: query,
+        leading: Icons.search,
+        highlightPrefix: null,
+        onTap: () => _commit(query),
+      ),
+      for (final suggestion in suggestions)
+        _suggestionRow(
+          // Keyed so a test (and a future golden) can target a row without
+          // depending on how its text happens to be split into spans.
+          key: ValueKey('search-suggestion-${suggestion.term}'),
+          term: suggestion.term,
+          leading: switch (suggestion.kind) {
+            SearchSuggestionKind.category => Icons.category_outlined,
+            SearchSuggestionKind.tag => Icons.sell_outlined,
+            SearchSuggestionKind.product => Icons.image_outlined,
+          },
+          // The bit they typed is emphasised, so a row reads as "this is why
+          // you're seeing it".
+          highlightPrefix: query,
+          onTap: () => _commit(suggestion.term),
+        ),
+      if (suggestions.isEmpty)
+        Padding(
+          padding: const EdgeInsets.only(top: 14),
+          child: Text(
+            'No suggestions for that — try "sandals", "leather" or "boots".',
+            style: AppConstants.bodyStyle(
+              fontSize: 13,
+              color: AppConstants.secondary.withValues(alpha: 0.55),
+            ),
+          ),
+        ),
+    ];
+  }
+
+  Widget _suggestionRow({
+    Key? key,
+    required String term,
+    required IconData leading,
+    required String? highlightPrefix,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      key: key,
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 11),
+          child: Row(
+            children: [
+              Icon(
+                leading,
+                size: 17,
+                color: AppConstants.secondary.withValues(alpha: 0.55),
+              ),
+              const SizedBox(width: 12),
+              Expanded(child: _highlighted(term, highlightPrefix)),
+              Icon(
+                Icons.north_west,
+                size: 15,
+                color: AppConstants.secondary.withValues(alpha: 0.35),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// [term] with the typed part in bold ink — the rest stays muted.
+  Widget _highlighted(String term, String? prefix) {
+    final base = AppConstants.bodyStyle(
+      fontSize: 14,
+      color: AppConstants.secondary.withValues(alpha: 0.75),
+    );
+    final typed = prefix?.trim() ?? '';
+    final index =
+        typed.isEmpty ? -1 : term.toLowerCase().indexOf(typed.toLowerCase());
+    if (index < 0) return Text(term, style: base);
+
+    return RichText(
+      text: TextSpan(
+        style: base,
+        children: [
+          if (index > 0) TextSpan(text: term.substring(0, index)),
+          TextSpan(
+            text: term.substring(index, index + typed.length),
+            style: base.copyWith(
+              fontWeight: FontWeight.bold,
+              color: AppConstants.secondary,
+            ),
+          ),
+          if (index + typed.length < term.length)
+            TextSpan(text: term.substring(index + typed.length)),
+        ],
+      ),
+    );
+  }
+
+  // ── Top bar: back + field + clear + filled search button ──────────
 
   Widget _buildTopBar() {
     return Padding(
@@ -193,8 +324,7 @@ class _ProductSearchScreenState extends State<ProductSearchScreen> {
       child: Row(
         children: [
           IconButton(
-            icon: const Icon(Icons.arrow_back,
-                color: AppConstants.secondary),
+            icon: Icon(Icons.arrow_back, color: AppConstants.secondary),
             onPressed: () => Navigator.of(context).pop(),
           ),
           const SizedBox(width: 4),
@@ -237,6 +367,18 @@ class _ProductSearchScreenState extends State<ProductSearchScreen> {
                       ),
                     ),
                   ),
+                  if (_controller.text.isNotEmpty)
+                    GestureDetector(
+                      onTap: () => setState(_controller.clear),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: Icon(
+                          Icons.close,
+                          size: 18,
+                          color: AppConstants.secondary.withValues(alpha: 0.6),
+                        ),
+                      ),
+                    ),
                   // Filled search button (dark square, like the reference)
                   GestureDetector(
                     onTap: () => _commit(_controller.text),

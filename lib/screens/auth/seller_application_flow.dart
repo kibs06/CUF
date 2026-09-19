@@ -2014,7 +2014,7 @@ class _CheckRow extends StatelessWidget {
         ),
       );
     } else {
-      trailing = const Icon(
+      trailing = Icon(
         Icons.radio_button_unchecked_rounded,
         size: 20,
         color: AppConstants.borderGray,

@@ -6,7 +6,7 @@
 
 ## 📌 Overview
 
-Customer shell has a **4-tab bottom nav** (`IndexedStack`, state preserved): **Home** (full-bleed hero, sticky search, featured products, category filter, banner carousel), **Store** (multi-store discovery, follow/unfollow), **Notifications** (order-status feed), **Profile** (account, avatar, notification panel, settings). State mgmt: Provider (`ChangeNotifier`); data via singleton services → Supabase. All product data flows as `Map<String, dynamic>` — **don't refactor to typed models unless a task requires it**.
+Customer shell has a **4-tab bottom nav** (`PageView` + `KeepAlivePage`, so a visited tab stays mounted and state is preserved while unvisited tabs stay lazy; re-entry is signalled by `ActiveTab`): **Home** (full-bleed hero, sticky search, featured products, category filter, banner carousel), **Store** (multi-store discovery, follow/unfollow), **Notifications** (order-status feed), **Profile** (account, avatar, notification panel, settings). State mgmt: Provider (`ChangeNotifier`); data via singleton services → Supabase. All product data flows as `Map<String, dynamic>` — **don't refactor to typed models unless a task requires it**.
 
 ---
 

@@ -18,6 +18,8 @@ import '../../services/sales_service.dart';
 import '../../services/seller_notification_service.dart';
 import '../../services/store_service.dart';
 import '../../services/direct_gcash_service.dart';
+import '../../utils/nav_perf.dart';
+import '../../widgets/active_tab.dart';
 import '../../widgets/error_retry_widget.dart';
 import '../../widgets/shimmer_box.dart';
 import '../../widgets/seller/seller_metric_card.dart';
@@ -105,8 +107,24 @@ class SellerDashboardScreen extends StatefulWidget {
 }
 
 class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
+  /// This screen's index in the seller shell's tab list — the value
+  /// [ActiveTab] reports while the dashboard is the tab on screen.
+  static const int _dashboardTabIndex = 0;
+
+  /// How long a rendered briefing stays fresh. Past this, re-entering the tab
+  /// refreshes it in the background; below it, re-entry does nothing at all.
+  static const Duration _staleAfter = Duration(seconds: 60);
+
   late Future<_DashboardData> _dashboardFuture;
   _DashboardData? _cachedData;
+
+  /// When [_cachedData] was last refreshed — drives the staleness check above.
+  DateTime? _dataFetchedAt;
+
+  /// Last tab index this screen saw on screen, so a switch back can be told
+  /// apart from a rebuild while it was never left.
+  int? _lastActiveTab;
+
   String? _storeId;
   StreamSubscription<bool>? _connectivitySub;
   bool _wasOffline = false;
@@ -139,6 +157,67 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     super.dispose();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Tab re-entry hook. With the shell keeping pages mounted, switching tabs
+    // no longer rebuilds this screen — so this is the only signal that the
+    // seller is looking at the dashboard again. Its one job is to age out the
+    // briefing; re-selection alone never triggers a fetch (see
+    // [_refreshIfStale]). Deferred to after the frame for the same reason the
+    // profile screen defers its refreshes: this can run inside the shell's
+    // build phase.
+    final active = ActiveTab.of(context);
+    if (active == null || active == _lastActiveTab) return;
+    _lastActiveTab = active;
+    if (active != _dashboardTabIndex) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _refreshIfStale();
+    });
+  }
+
+  /// Refresh the briefing only if it has gone stale while the seller was on
+  /// another tab.
+  ///
+  /// No-op until a first load has produced data, and a no-op while that data is
+  /// still inside [_staleAfter] — so tapping between tabs stays free. When it
+  /// does run it must not flash the skeleton: only the future is replaced, and
+  /// the FutureBuilder keeps painting [_cachedData] until the new snapshot
+  /// lands, exactly like pull-to-refresh.
+  void _refreshIfStale() {
+    if (_storeId == null || _cachedData == null) return;
+    final fetchedAt = _dataFetchedAt;
+    if (fetchedAt != null &&
+        DateTime.now().difference(fetchedAt) < _staleAfter) {
+      return;
+    }
+    PerfTrace.mark('dashboard:stale re-entry refresh (age='
+        '${fetchedAt == null ? '?' : DateTime.now().difference(fetchedAt).inSeconds}s)');
+    _startDashboardLoad(context.read<AuthProvider>(), _storeId!);
+  }
+
+  /// Start a dashboard fetch and publish the result as the cached briefing.
+  ///
+  /// Only the future is swapped, never the cache, so a caller that already has
+  /// data keeps painting it and a refresh can never blank the dashboard back to
+  /// its skeleton. Shared by the initial load, offline->online reconnect,
+  /// retry, pull-to-refresh and the staleness re-entry above.
+  void _startDashboardLoad(AuthProvider auth, String storeId) {
+    setState(() => _dashboardFuture = _fetchDashboardData(auth, storeId));
+    _dashboardFuture.then(
+      (data) {
+        if (!mounted) return;
+        setState(() {
+          _cachedData = data;
+          _dataFetchedAt = DateTime.now();
+        });
+      },
+      onError: (Object _) {
+        // Error surfaces via the FutureBuilder; nothing to cache.
+      },
+    );
+  }
+
   Future<void> _loadDashboard() async {
     final auth = context.read<AuthProvider>();
     Map<String, dynamic>? storeId;
@@ -164,16 +243,8 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
       _storeId = id;
       _noStore = false;
       _loadError = null;
-      _dashboardFuture = _fetchDashboardData(auth, id);
     });
-    _dashboardFuture.then(
-      (data) {
-        if (mounted) setState(() => _cachedData = data);
-      },
-      onError: (Object _) {
-        // Error surfaces via the FutureBuilder; nothing to cache.
-      },
-    );
+    _startDashboardLoad(auth, id);
     // Initialize seller notifications for this store
     // Set up subscription first (init is idempotent for same storeId)
     final notifProv = context.read<SellerNotificationProvider>();
@@ -185,7 +256,18 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     msgProv.loadConversationsForStore(id);
   }
 
+  /// Timed wrapper so the exported diag log carries the real cost of the
+  /// whole 12-way fetch. See [PerfTrace].
   Future<_DashboardData> _fetchDashboardData(
+    AuthProvider auth,
+    String storeId,
+  ) =>
+      PerfTrace.span(
+        'dashboard:fetch',
+        () => _fetchDashboardDataInner(auth, storeId),
+      );
+
+  Future<_DashboardData> _fetchDashboardDataInner(
     AuthProvider auth,
     String storeId,
   ) async {
@@ -435,14 +517,10 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                       child: ErrorRetryWidget(
                         message:
                             'Failed to load dashboard data.\n${snapshot.error}',
-                        onRetry: () {
-                          setState(() {
-                            _dashboardFuture = _fetchDashboardData(
-                              context.read<AuthProvider>(),
-                              _storeId!,
-                            );
-                          });
-                        },
+                        onRetry: () => _startDashboardLoad(
+                          context.read<AuthProvider>(),
+                          _storeId!,
+                        ),
                       ),
                     ),
                   );
@@ -456,9 +534,14 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
   }
 
   // ─── STORE LOOKUP STATE ────────────────────────────────────────
-  /// Rendered while [_storeId] is unresolved: spinner while the store
+  /// Rendered while [_storeId] is unresolved: the skeleton while the store
   /// lookup is in flight, an error card if it failed, or the first-time
   /// seller prompt if the seller has no store yet.
+  ///
+  /// The store lookup is a serialised round trip in front of the 12-way fetch,
+  /// so this state is always painted first on a cold launch. It draws the SAME
+  /// skeleton the future below uses rather than a bare spinner: one continuous
+  /// loading visual from the first frame, instead of spinner → skeleton → data.
   Widget _buildStoreLookupState() {
     if (_loadError != null) {
       return Center(
@@ -472,12 +555,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
       );
     }
     if (_noStore) return _buildNoStorePrompt();
-    return const Center(
-      child: Padding(
-        padding: EdgeInsets.all(24),
-        child: CircularProgressIndicator(color: AppConstants.primary),
-      ),
-    );
+    return _buildLoadingSkeleton();
   }
 
   /// First-time seller landing — the dashboard can't render without a
@@ -579,12 +657,11 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     return RefreshIndicator(
       color: AppConstants.primary,
       onRefresh: () async {
-        final auth = context.read<AuthProvider>();
-        final future = _fetchDashboardData(auth, _storeId!);
-        setState(() => _dashboardFuture = future);
+        // Same path as every other refresh: swap the future, keep the cache on
+        // screen. Errors leave the previous briefing up.
+        _startDashboardLoad(context.read<AuthProvider>(), _storeId!);
         try {
-          final data = await future;
-          if (mounted) setState(() => _cachedData = data);
+          await _dashboardFuture;
         } catch (_) {
           // Keep showing stale data; FutureBuilder will handle error state
         }
@@ -720,7 +797,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
           child: Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
+              gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [SellerTheme.card, SellerTheme.cardHeroEnd],
@@ -1446,12 +1523,64 @@ class _PaymentsToConfirmCardState extends State<_PaymentsToConfirmCard> {
   bool _loading = true;
   Timer? _timer;
 
+  /// Last tab index this card saw on screen (see [ActiveTab]).
+  int? _lastActiveTab;
+
+  /// True only while the poll is deliberately stopped because the dashboard is
+  /// off screen. Distinguishes "coming back" (sweep immediately) from the first
+  /// visibility callback of a freshly built card (already fresh — sweeping
+  /// again would just duplicate the query `initState` just fired).
+  bool _paused = false;
+
   @override
   void initState() {
     super.initState();
     _refresh();
+    _startPoll();
+  }
+
+  /// Start (or resume) the 30-second poll.
+  ///
+  /// Idempotent, so it is safe to call from both `initState` and the tab
+  /// visibility hook below.
+  void _startPoll() {
+    if (_timer != null) return;
     // Keep the count fresh + expire overdue orders periodically.
     _timer = Timer.periodic(const Duration(seconds: 30), (_) => _refresh());
+  }
+
+  /// Stop polling while the dashboard is off screen.
+  ///
+  /// The shell keeps this page mounted for the rest of the session, so without
+  /// this the sweep-and-count would keep hitting the backend every 30 seconds
+  /// while the seller is working on POS or the order queue — the one session
+  /// long poll that is genuinely wasted off screen. It sweeps once immediately
+  /// on the way back in, so the count is never stale by more than a frame.
+  void _pausePoll() {
+    _timer?.cancel();
+    _timer = null;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Tab visibility hook. `null` means there is no tab host (this card is only
+    // ever built inside the dashboard, but the dashboard itself can be pushed
+    // as a standalone route) — always visible, so nothing changes.
+    final active = ActiveTab.of(context);
+    if (active == null || active == _lastActiveTab) return;
+    _lastActiveTab = active;
+    if (active == _SellerDashboardScreenState._dashboardTabIndex) {
+      // Only a page that actually stopped polls has something to catch up on.
+      if (_paused) {
+        _paused = false;
+        _refresh();
+      }
+      _startPoll();
+    } else {
+      _paused = true;
+      _pausePoll();
+    }
   }
 
   @override

@@ -227,9 +227,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   child: Column(
                     children: [
                       _buildHealthIndicator('AR Foundation Pipeline', 'Healthy (Unity Ready)', AppConstants.success),
-                      const Divider(color: AppConstants.borderGray, height: 16),
+                      Divider(color: AppConstants.borderGray, height: 16),
                       _buildHealthIndicator('Supabase DB Synced', 'Active Connection Mocked', AppConstants.primary),
-                      const Divider(color: AppConstants.borderGray, height: 16),
+                      Divider(color: AppConstants.borderGray, height: 16),
                       _buildHealthIndicator('Cebu Delivery API', 'Nominal Latency', AppConstants.success),
                     ],
                   ),

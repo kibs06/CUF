@@ -39,7 +39,7 @@ class SizeGuideModal extends StatelessWidget {
       constraints: BoxConstraints(
         maxHeight: MediaQuery.of(context).size.height * 0.65,
       ),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppConstants.surfaceLight,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -94,7 +94,7 @@ class SizeGuideModal extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
               shrinkWrap: true,
               itemCount: _sizes.length,
-              separatorBuilder: (_, _) => const Divider(
+              separatorBuilder: (_, _) => Divider(
                 height: 1,
                 color: AppConstants.borderGray,
               ),

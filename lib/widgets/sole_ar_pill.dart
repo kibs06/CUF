@@ -37,7 +37,7 @@ class SoleARPill extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
+            Icon(
               Icons.remove_red_eye_outlined, // Simple AR / Glasses representation
               color: AppConstants.secondary,
               size: 20,

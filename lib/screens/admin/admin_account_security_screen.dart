@@ -609,7 +609,7 @@ class _AdminAccountSecurityScreenState
         children: [
           Row(
             children: [
-              const Icon(Icons.info_outline, size: 16, color: AppConstants.secondary),
+              Icon(Icons.info_outline, size: 16, color: AppConstants.secondary),
               const SizedBox(width: 8),
               Text(
                 'What this report cannot tell you',

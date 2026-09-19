@@ -177,7 +177,7 @@ class SignupScaffold extends StatelessWidget {
                     // screens it keeps the cream bar + hairline.
                     decoration: lightContent
                         ? null
-                        : const BoxDecoration(
+                        : BoxDecoration(
                             color: AppConstants.surfaceLight,
                             border: Border(
                               top: BorderSide(color: AppConstants.borderGray),

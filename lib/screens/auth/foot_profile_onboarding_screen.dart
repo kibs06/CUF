@@ -210,7 +210,7 @@ class _FootProfileOnboardingScreenState
                   color: AppConstants.secondary.withValues(alpha: 0.12),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.view_in_ar,
                   size: 30,
                   color: AppConstants.secondary,

@@ -254,7 +254,7 @@ class _MfaSettingsScreenState extends State<MfaSettingsScreen> {
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.smartphone_outlined,
+                          Icon(Icons.smartphone_outlined,
                               color: AppConstants.secondary),
                           const SizedBox(width: 14),
                           Expanded(

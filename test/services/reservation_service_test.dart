@@ -176,4 +176,71 @@ void main() {
       );
     });
   });
+
+  group('bulkReservationDeclinedPushBody', () {
+    test('names the quantity and repeats the seller\'s reason', () {
+      expect(
+        bulkReservationDeclinedPushBody(quantity: 10, reason: 'too many units'),
+        'The seller declined your 10-unit reservation request: too many units',
+      );
+    });
+
+    test('a plain decline (empty reason) still reads as a sentence', () {
+      // `decide_bulk_reservation` stores p_rejection_reason verbatim, so a
+      // seller who declines without typing anything leaves '' on the row.
+      expect(
+        bulkReservationDeclinedPushBody(quantity: 3, reason: ''),
+        'The seller declined your 3-unit reservation request.',
+      );
+      expect(
+        bulkReservationDeclinedPushBody(quantity: 3),
+        'The seller declined your 3-unit reservation request.',
+      );
+    });
+
+    test('does not double the separator on whitespace-only reasons', () {
+      expect(
+        bulkReservationDeclinedPushBody(quantity: 1, reason: '   '),
+        'The seller declined your 1-unit reservation request.',
+      );
+    });
+  });
+
+  group('bulkReservationDepositDeclinedPushBody', () {
+    test('carries the reason, the quantity and the no-stock reassurance', () {
+      final body = bulkReservationDepositDeclinedPushBody(
+        quantity: 7,
+        reason: 'reference does not match the amount',
+      );
+
+      expect(
+        body,
+        'The seller could not verify your deposit payment for the 7-unit '
+        'reservation: reference does not match the amount'
+        ' No stock was held. If you already sent money, contact the store '
+        'directly to resolve it.',
+      );
+    });
+
+    test('falls back to the RPC\'s own default reason', () {
+      // `reject_bulk_reservation_deposit` stores
+      // COALESCE(NULLIF(p_reason, ''), 'Deposit payment could not be
+      // verified'), and the client reads that stored value back — so this is
+      // the text a reason-less rejection actually pushes.
+      expect(
+        bulkReservationDepositDeclinedPushBody(
+          quantity: 4,
+          reason: 'Deposit payment could not be verified',
+        ),
+        contains('4-unit reservation: Deposit payment could not be verified'),
+      );
+    });
+
+    test('always says no stock moved, even with no reason at all', () {
+      final body = bulkReservationDepositDeclinedPushBody(quantity: 2);
+      expect(body, 'The seller could not verify your deposit payment for the '
+          '2-unit reservation. No stock was held. If you already sent money, '
+          'contact the store directly to resolve it.');
+    });
+  });
 }

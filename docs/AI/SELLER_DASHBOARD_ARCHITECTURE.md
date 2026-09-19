@@ -1,7 +1,7 @@
 # Seller — Dashboard Architecture
 
 > **Purpose:** Describe the **Seller Dashboard** (`SellerDashboardScreen`) — the Tab 0 landing screen of the seller app — its data flow, UI blocks, and the services/providers it depends on, so AI agents can work on it without re-reading the whole screen.
-> **Last updated:** August 10, 2026
+> **Last updated:** September 18, 2026
 
 ---
 
@@ -38,8 +38,10 @@ SellerShell (lib/screens/seller/seller_shell.dart)
 
 | Layer | File | Role |
 |-------|------|------|
-| Screen | `lib/screens/seller/seller_dashboard_screen.dart` | The dashboard: `_DashboardData` :37, `_loadDashboard` :115, `_fetchDashboardData` :138, `_buildDashboardBody` :423, `_PaymentsToConfirmCard` :1054 |
-| Shell | `lib/screens/seller/seller_shell.dart` | 5-tab host; Dashboard is Tab 0 (`IndexedStack`, so state survives tab switches) |
+| Screen | `lib/screens/seller/seller_dashboard_screen.dart` | The dashboard: `_DashboardData` :44, `didChangeDependencies` (re-entry hook) :161, `_loadDashboard` :221, `_fetchDashboardData` :261, `_fetchDashboardDataInner` :270, `_buildDashboardBody` :656, `_PaymentsToConfirmCard` :1513 |
+| Shell | `lib/screens/seller/seller_shell.dart` | 5-tab host; Dashboard is Tab 0. **`PageView` + `KeepAlivePage`** — a visited tab stays mounted, so state survives tab switches and re-entry does NOT re-run `initState` |
+| Widget | `lib/widgets/keep_alive_page.dart` | Makes a lazily-built `PageView` page survive being scrolled out of view (the tab host's keep-alive mechanism) |
+| Widget | `lib/widgets/active_tab.dart` | Publishes the on-screen tab index. The ONLY re-entry signal a kept-alive page gets, since it is no longer rebuilt on a switch |
 | Widget | `lib/widgets/seller/seller_metric_card.dart` | Block 1 metric cards (large/small variants) |
 | Widget | `lib/widgets/seller/seller_sparkline.dart` | Mini line chart inside the sales metric cards |
 | Widget | `lib/widgets/seller/seller_alert_chip.dart` | Block 2 alert chips |
@@ -204,11 +206,17 @@ Highlighted card → `ReportsScreen` ("Daily revenue, top products & CSV export"
 1. **Future.wait index coupling.** Adding/removing a fetch at :145-159 breaks every index cast at :201-224. Keep a comment next to the array.
 2. **Two order paths, no sync.** Recent Orders (lean, `getRecentOrders`) vs alerts/status summary (fat, `OrderProvider`). They're fetched in the same `Future.wait` but can still disagree (different filters, different limits).
 3. **Side effects inside a "fetch".** `_fetchDashboardData` calls `loadSellerProducts()` and `loadOrders()` — these write shared provider state. `loadOrders()` is NOT store-scoped, so the dashboard's `ordersByStatus`/`staleOrders` derive from the same provider data as the Orders tab.
-4. **No periodic refresh of the main data.** Only pull-to-refresh, init, and reconnect reload. `OrderProvider` updates from other screens won't refresh the dashboard (no `listen`/`watch` on it — only `read`).
-5. **GCash count is a separate live poll** (30s) with its own `_loading` state — it does not participate in `_DashboardData`.
+4. **Refresh paths:** pull-to-refresh, init, offline→online reconnect, and a **staleness refresh on tab re-entry** (`didChangeDependencies` → `_refreshIfStale`, only when the cached briefing is older than 60s — re-selecting the tab is never on its own a reason to fetch). `OrderProvider` updates from other screens still won't refresh the dashboard (no `listen`/`watch` on it — only `read`).
+5. **GCash count is a separate live poll** (30s) with its own `_loading` state — it does not participate in `_DashboardData`. It **pauses while the dashboard is off screen** and sweeps once on the way back in, so it can't keep hitting the backend while the seller works in another tab.
 6. **Stale-order notification is fire-and-forget** — errors are silently swallowed by design; it runs on every dashboard load.
 7. **Revenue lag for POS GCash:** revenue queries require `payment_status = 'paid'`; POS GCash orders stay `pending` until the confirmation poller flips them, so they appear in revenue later than cash.
-8. **`IndexedStack` keeps dashboard alive** across tab switches (SellerShell :92) — init only runs once; returning to the tab does NOT re-fetch.
+8. **Tabs are kept alive, so nothing here is rebuilt on a switch.** `SellerShell` hosts its 5 pages in a `PageView` where each page is wrapped in `KeepAlivePage`. A visited page stays mounted: `initState` runs **once per session**, and returning to the tab does NOT re-run it or re-fetch. Two consequences to know before editing this screen:
+   - A kept-alive page's `build` does not re-run on re-entry either (the widget instance is unchanged, so `Element.updateChild` short-circuits). The tab-visibility hook in `didChangeDependencies` via `ActiveTab` is therefore the *only* re-entry signal — that is what `_refreshIfStale` hangs off.
+   - Timers inside a kept-alive page run for the **whole session** unless they pause themselves when off screen. The GCash poll does; so does the Products tab's 4s alert ticker (`manage_products_screen.dart`). Any new `Timer.periodic` added here needs the same treatment.
+
+   Unvisited tabs are still built lazily — the host does NOT use a bare `IndexedStack`, which would construct all five pages (and fire all five screens' fetches) on the first frame. The `AdminShell` switches by index rather than by scrolling, and wraps its six tabs in `LazyIndexedStack` (`lib/widgets/lazy_indexed_stack.dart`) for that same reason: a slot renders nothing until its index has been visited once, then keeps the page mounted exactly like an `IndexedStack` would.
+
+   The two hosts therefore use different primitives for the same guarantee — `KeepAlivePage` for the `PageView`-based seller/customer shells, `LazyIndexedStack` for the index-based admin shell. If you add a tab to either, it inherits laziness; nothing extra is needed on the screen itself.
 
 ---
 

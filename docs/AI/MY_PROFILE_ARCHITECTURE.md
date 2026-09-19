@@ -1,7 +1,7 @@
 # My Profile — Architecture Reference
 
 > **Purpose:** Give AI agents a working mental model of the customer/seller **My Profile** screen: state, sections, flows, and gotchas. Not exhaustive — read the files for detail.
-> **Last updated:** August 5, 2026
+> **Last updated:** September 18, 2026
 
 ---
 
@@ -11,7 +11,7 @@
 
 ```
 CustomerShell / SellerShell / AdminShell
-  └─ IndexedStack → ProfileScreen (shared/profile_screen.dart)
+  └─ Tab host (lazy, keep-alive) → ProfileScreen (shared/profile_screen.dart)
         ├─ Header: avatar + name + email + role badge (+ "Following" stat for non-sellers)
         ├─ Collapsible edit panel (name/phone)
         ├─ [seller only] Seller section: store card (open/closed toggle), seller status, member since
@@ -24,6 +24,7 @@ CustomerShell / SellerShell / AdminShell
 - **One screen, three roles.** `lib/screens/customer/profile_screen.dart` is just `export '../shared/profile_screen.dart';` — everything lives in `lib/screens/shared/profile_screen.dart`.
 - **No separate profile state.** Profile data lives in `AuthProvider` (a `ChangeNotifier`), not a dedicated provider. The screen is a consumer of it.
 - **Inline editing** (expand/collapse panel), NOT a separate edit screen. `lib/screens/auth/edit_profile_screen.dart` (`EditProfileScreen`) is **dead code** — defined, never instantiated anywhere.
+- **Re-entry is an explicit signal, not a rebuild.** Every shell keeps its tab pages mounted once visited, so returning to the Profile tab does NOT re-run `build` — which means the staleness/TTL guards *inside* `build` (§3) do not fire on their own. `ProfileScreen` therefore overrides `didChangeDependencies`, reads the shell's `ActiveTab`, and marks itself dirty when the Profile tab is the one that became visible. The index is passed in as `ProfileScreen(tabIndex:)` because Profile is the **last** tab of three shells and has no single index it could hard-code. `tabIndex: null` (a pushed route, or any host that publishes no `ActiveTab`) disables the whole mechanism.
 
 ---
 
@@ -75,7 +76,7 @@ CustomerShell / SellerShell / AdminShell
 | Header | `_buildHeader` :317 | CircleAvatar (network image or initials), camera overlay → `_uploadAvatar`, name + edit toggle icon, email, `SoleBadge` role, `_buildFollowingStat` (non-sellers) |
 | Edit panel | `_buildEditPanel` :427 | Collapsible via `_isEditing`; Full Name field, **email locked** (greyed w/ lock icon), Phone field, Save Changes button. Animated with `AnimatedSize`. |
 | Orders panel | `_buildNotificationsPanel` :529 | "My Orders" + View all → `MyOrdersScreen()`. 5 items (Unpaid/Processing/Shipped/Review/Returns), each a `_NotifItem(icon, label, filter)`; badge = `orderProvider.myOrdersCounts[filter]`; tap → `MyOrdersScreen(initialFilter: item.filter)` |
-| Settings | `_buildSettingsCard` :659 | 6 `_settingsRow` ListTiles (see §1) |
+| Settings | `_buildSettingsCard` | `_settingsRow` ListTiles, each role-gated. **My Pickup Reservations** + **My Reservations** are `roleCustomer`-only — they are the customer's own record of holds *they* placed, and a seller parading into them lands on an empty customer screen (the holds on a seller's own products are worked from the seller shell's reservation queue and pickup tiles). **Payment Methods**, **Vouchers** and **Business Verification** are `roleSeller`-only. |
 | Seller section | `_buildSellerSection` :760 | `FutureBuilder` on `_sellerStoreFuture` (`StoreService.getMyStore()`); store name + Open/Closed pill + toggle switch (`_toggleStoreOpen` → `StoreService.toggleStoreOpen`); tapping row → `StoreProfileScreen(store)` or `CreateStoreScreen` if none; `SoleStatusChip(sellerStatus)`; Member Since (`profiles.created_at`) |
 | Logout | `_buildLogoutButton` :903 | Confirm dialog → `auth.logout()` |
 
@@ -122,7 +123,7 @@ RLS: everyone can SELECT; user can INSERT/UPDATE own row (`auth.uid() = id`); ad
 2. **Don't create a separate edit screen** — the pattern is inline editing on the profile screen (`_isEditing` state). `EditProfileScreen` is dead code; don't revive it without a reason.
 3. **`_syncControllers` is called from `build`** — it's idempotent (guarded by `_loadedProfileId`) but be careful adding heavy work there.
 4. **Email is not editable** in the app (locked field); password changes go through a reset email, not a change-password form.
-5. **Seller section only renders for `role == seller`**; admin sees the plain profile (used for the tester role changer).
+5. **Seller section only renders for `role == seller`**; admin sees the plain profile (used for the tester role changer). The two reservation rows in the settings card are the mirror image — gated on `roleCustomer`, not "not a seller", so an admin does not get them either. This is a *shared* screen: before adding a row, decide which roles it is for and gate it the same way.
 6. **Avatar URL cache-busting is required** — same storage path + `upsert` means the URL never changes; the `?t=` timestamp is what makes the new photo show.
 7. **logout() clears state before calling Supabase signOut** — hooks (`onLogoutHook`) fire before sign-out completes; dependent providers must not assume the session is gone at that point.
 8. **Providers are wired once in `main.dart`** (`MultiProvider`, `main.dart:101-115`) — AuthProvider, NotificationProvider, FollowProvider, UpdateProvider are all app-scoped singletons here.

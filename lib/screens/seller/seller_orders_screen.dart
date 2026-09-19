@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/order_provider.dart';
 import '../../services/product_service.dart';
+import '../../utils/size_key.dart';
 import '../../widgets/sole_card.dart';
 import '../../widgets/sole_status_chip.dart';
 
@@ -135,7 +136,7 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              'Size: EU ${order['size']} | Variant: ${order['color']}',
+                              'Size: ${formatSize(order['size']?.toString() ?? '')} | Variant: ${order['color']}',
                               style: AppConstants.bodyStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 14,
@@ -152,7 +153,7 @@ class _SellerOrdersScreenState extends State<SellerOrdersScreen> {
                               overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(height: 12),
-                            const Divider(
+                            Divider(
                               color: AppConstants.borderGray,
                               height: 1,
                             ),

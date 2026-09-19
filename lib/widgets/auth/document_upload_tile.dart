@@ -268,7 +268,7 @@ class DocumentUploadTile extends StatelessWidget {
               ),
               if (uploading) ...[
                 const SizedBox(height: AuthSpacing.s8),
-                const LinearProgressIndicator(
+                LinearProgressIndicator(
                   minHeight: 3,
                   backgroundColor: AppConstants.borderGray,
                   color: AppConstants.primary,
@@ -415,7 +415,7 @@ class DocumentUploadTile extends StatelessWidget {
   Widget _thumbnailPlaceholder() {
     return Container(
       color: AppConstants.surfaceLight,
-      child: const Icon(
+      child: Icon(
         Icons.image_outlined,
         size: 26,
         color: AppConstants.borderGray,

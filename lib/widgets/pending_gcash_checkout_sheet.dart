@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 
 import '../constants/app_constants.dart';
 import '../services/direct_gcash_service.dart';
+import '../utils/size_key.dart';
 import 'sole_card.dart';
 import 'sole_primary_button.dart';
 
@@ -262,7 +263,7 @@ class _PendingGcashCheckoutSheetState extends State<_PendingGcashCheckoutSheet> 
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: AppConstants.secondary
                                     .withValues(alpha: 0.75),
-                                side: const BorderSide(
+                                side: BorderSide(
                                   color: AppConstants.borderGray,
                                 ),
                                 shape: RoundedRectangleBorder(
@@ -444,7 +445,7 @@ class _PendingGcashCheckoutSheetState extends State<_PendingGcashCheckoutSheet> 
     bool showPlusBadge = false,
   }) {
     final metaParts = <String>[
-      if (item.size.isNotEmpty) 'EU ${item.size}',
+      if (item.size.isNotEmpty) formatSize(item.size),
       'Qty ${item.quantity}',
     ];
     return Padding(

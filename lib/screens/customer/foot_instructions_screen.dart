@@ -65,7 +65,7 @@ class _FootInstructionsScreenState extends State<FootInstructionsScreen> {
         backgroundColor: AppConstants.surfaceLight,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppConstants.secondary),
+          icon: Icon(Icons.arrow_back, color: AppConstants.secondary),
           onPressed: () => Navigator.of(context).pop(),
         ),
         // TEMP-DEBUG (Phase 1b diagnostics): share-sheet export of nav_diag.log.
@@ -73,7 +73,7 @@ class _FootInstructionsScreenState extends State<FootInstructionsScreen> {
         actions: [
           if (kNavDiagEnabled)
             IconButton(
-              icon: const Icon(Icons.bug_report, color: AppConstants.secondary),
+              icon: Icon(Icons.bug_report, color: AppConstants.secondary),
               tooltip: 'Export diagnostics log',
               onPressed: () => DiagLogger.instance.export(),
             ),

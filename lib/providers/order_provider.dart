@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../exceptions/stock_unavailable_exception.dart';
 import '../services/order_service.dart';
 import '../services/supabase_service.dart';
+import '../utils/nav_perf.dart';
 
 class OrderProvider extends ChangeNotifier {
   final SupabaseService _db = SupabaseService.instance;
@@ -11,6 +12,12 @@ class OrderProvider extends ChangeNotifier {
   List<Map<String, dynamic>> _customizations = [];
   List<Map<String, dynamic>> _profiles = [];
   bool _isLoading = false;
+
+  /// When [orders] was last fetched successfully; null until the first load
+  /// lands. Lets a caller decide whether a re-fetch is actually warranted
+  /// rather than re-querying on every visit (see the seller Orders tab's
+  /// re-entry staleness check).
+  DateTime? _ordersLoadedAt;
   String? _errorMessage;
   StockUnavailableException? _stockError;
 
@@ -60,6 +67,9 @@ class OrderProvider extends ChangeNotifier {
     }
   }
   bool get isLoading => _isLoading;
+
+  /// When [orders] was last fetched successfully, or null when it never was.
+  DateTime? get ordersLoadedAt => _ordersLoadedAt;
   String? get errorMessage => _errorMessage;
   StockUnavailableException? get stockError => _stockError;
 
@@ -82,14 +92,25 @@ class OrderProvider extends ChangeNotifier {
 
   // Load Orders (UC019, UC023, UC025)
   Future<void> loadOrders() async {
-    _isLoading = true;
-    notifyListeners();
+    // Non-destructive, like the seller catalog: claim the loading state ONLY
+    // when there is nothing to show. A screen that already has orders (the
+    // seller shell loads them for the dashboard on launch, and the Orders tab
+    // keeps its state now) holds its list on screen through this refresh
+    // instead of dropping back to its skeleton.
+    if (_orders.isEmpty) {
+      _isLoading = true;
+      notifyListeners();
+    }
 
     try {
-      _orders = await _db.fetchOrders();
+      _orders = await PerfTrace.span('orders:fetch', () => _db.fetchOrders());
       // Sort: newest first
       _orders.sort((a, b) => b['id'].compareTo(a['id']));
-    } catch (_) {}
+      _ordersLoadedAt = DateTime.now();
+    } catch (_) {
+      // Keep whatever we already had: a failed refresh must not blank a list
+      // the seller is looking at.
+    }
 
     _isLoading = false;
     notifyListeners();

@@ -91,7 +91,7 @@ class _TermsPrivacyScreenState extends State<TermsPrivacyScreen> {
       appBar: AppBar(
         backgroundColor: AppConstants.surfaceLight,
         elevation: 0,
-        iconTheme: const IconThemeData(color: AppConstants.secondary),
+        iconTheme: IconThemeData(color: AppConstants.secondary),
         title: Text(
           switch (widget.policy) {
             CUFMAITermsPolicy.seller => 'Seller Terms & Privacy',
@@ -128,7 +128,7 @@ class _TermsPrivacyScreenState extends State<TermsPrivacyScreen> {
       top: false,
       child: Container(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AppConstants.surfaceLight,
           border: Border(top: BorderSide(color: AppConstants.borderGray)),
         ),
@@ -217,7 +217,7 @@ class _TermsPrivacyScreenState extends State<TermsPrivacyScreen> {
       padding: const EdgeInsets.symmetric(vertical: 28),
       child: Row(
         children: [
-          const Expanded(child: Divider(color: AppConstants.borderGray)),
+          Expanded(child: Divider(color: AppConstants.borderGray)),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Text(
@@ -230,7 +230,7 @@ class _TermsPrivacyScreenState extends State<TermsPrivacyScreen> {
               ),
             ),
           ),
-          const Expanded(child: Divider(color: AppConstants.borderGray)),
+          Expanded(child: Divider(color: AppConstants.borderGray)),
         ],
       ),
     );

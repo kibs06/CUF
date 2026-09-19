@@ -837,7 +837,7 @@ class _ReportDetailSheetState extends State<_ReportDetailSheet> {
                   fillColor: AppConstants.surfaceLight,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: AppConstants.borderGray),
+                    borderSide: BorderSide(color: AppConstants.borderGray),
                   ),
                 ),
               ),
@@ -939,7 +939,7 @@ class _ReportDetailSheetState extends State<_ReportDetailSheet> {
                             fillColor: AppConstants.surfaceLight,
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(color: AppConstants.borderGray),
+                              borderSide: BorderSide(color: AppConstants.borderGray),
                             ),
                           ),
                         ),

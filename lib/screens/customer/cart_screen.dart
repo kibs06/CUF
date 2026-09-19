@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/cart_provider.dart';
+import '../../utils/size_key.dart';
 import '../../widgets/sole_card.dart';
 import '../../widgets/sole_primary_button.dart';
 import '../../widgets/empty_state_widget.dart';
@@ -328,7 +329,7 @@ class _CartItemRow extends StatelessWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          'EU ${item['size']} · ${item['color']}',
+                          '${formatSize(item['size']?.toString() ?? '')} · ${item['color']}',
                           style: AppConstants.bodyStyle(
                             fontSize: 11,
                             color: AppConstants.secondary.withValues(alpha: 0.5),
@@ -616,7 +617,7 @@ class _SoleCheckbox extends StatelessWidget {
             : isIndeterminate
                 ? Container(
                     margin: const EdgeInsets.symmetric(horizontal: 5),
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       color: AppConstants.surfaceLight,
                       borderRadius: BorderRadius.all(Radius.circular(1)),
                     ),

@@ -3,18 +3,34 @@ import 'package:provider/provider.dart';
 
 import '../../constants/app_constants.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/theme_provider.dart';
 import '../../providers/update_provider.dart';
 import '../../services/supabase_service.dart';
+import '../../utils/customer_profile_fields.dart';
 import '../auth/account_entry_screen.dart';
 import '../customer/address_book_screen.dart';
-import '../customer/foot_instructions_screen.dart';
-import '../customer/foot_size_v2/foot_scan_setup_screen_v2.dart';
+import '../customer/size_your_foot_screen.dart';
 import 'account_security_screen.dart';
 import 'account_switcher_screen.dart';
 import 'help_menu_screen.dart';
 import 'terms_privacy_screen.dart';
 import 'whats_new_screen.dart';
 import 'about_cufmai_screen.dart';
+
+/// One row in the appearance sheet.
+class _AppearanceOption {
+  const _AppearanceOption({
+    required this.mode,
+    required this.icon,
+    required this.title,
+    required this.description,
+  });
+
+  final ThemeMode mode;
+  final IconData icon;
+  final String title;
+  final String description;
+}
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -64,27 +80,20 @@ class SettingsScreen extends StatelessWidget {
                   );
                 },
               ),
+              // ONE entry for the foot size. The AR scan (Foot Size 2.0) and
+              // manual entry are swipable panels inside, so the two paths
+              // cannot drift apart in the menu. The subtitle names the current
+              // value and where it came from, so the customer can see what the
+              // app believes before changing it.
               _settingsRow(
                 context: context,
                 icon: Icons.straighten_outlined,
-                title: 'Get Your Foot Size',
+                title: 'Size Your Foot',
+                subtitle: footProfileSummary(auth.profile),
                 onTap: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) => const FootInstructionsScreen(),
-                    ),
-                  );
-                },
-              ),
-              _settingsRow(
-                context: context,
-                icon: Icons.new_releases_outlined,
-                title: 'Get Your Foot Size 2.0',
-                subtitle: 'New · Auto Scan (Beta)',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const FootScanSetupScreenV2(),
+                      builder: (_) => const SizeYourFootScreen(),
                     ),
                   );
                 },
@@ -106,6 +115,19 @@ class SettingsScreen extends StatelessWidget {
                 icon: Icons.swap_horiz,
                 title: 'Switch Account',
                 onTap: () => _openSwitchAccount(context),
+              ),
+            ]),
+            const SizedBox(height: 16),
+
+            // ── Appearance Section ───────────────────────────────
+            _sectionHeader('Appearance'),
+            _buildSection([
+              _settingsRow(
+                context: context,
+                icon: Icons.brightness_6_outlined,
+                title: 'Theme',
+                subtitle: _appearanceSubtitle(context),
+                onTap: () => _showAppearanceSheet(context),
               ),
             ]),
             const SizedBox(height: 16),
@@ -219,6 +241,146 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
+  // ── Appearance ───────────────────────────────────────────────
+  /// The chosen mode, plus what it resolves to right now. "System · Dark" is
+  /// deliberately explicit: it tells the user the app is following the device
+  /// *and* what that currently means, which a bare "System" does not.
+  String _appearanceSubtitle(BuildContext context) {
+    final mode = context.watch<ThemeProvider>().mode;
+    if (mode == ThemeMode.system) {
+      final isDark = MediaQuery.platformBrightnessOf(context) ==
+          Brightness.dark;
+      return 'System · ${isDark ? 'Dark' : 'Light'} (device)';
+    }
+    return ThemeProvider.label(mode);
+  }
+
+  /// System / Light / Dark picker. A sheet rather than an inline switch: the
+  /// three-way choice is the whole point (an on/off switch would silently
+  /// stop following the device), and it matches the home screen's sort sheet.
+  Future<void> _showAppearanceSheet(BuildContext context) async {
+    final provider = context.read<ThemeProvider>();
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppConstants.surfaceLight,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Text(
+                'Appearance',
+                style: AppConstants.bodyStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Text(
+                'Dark mode can follow your device or be pinned.',
+                style: AppConstants.bodyStyle(
+                  fontSize: 12,
+                  color: AppConstants.secondary.withValues(alpha: 0.6),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            for (final option in _appearanceOptions)
+              _appearanceOption(
+                sheetContext,
+                option,
+                selected: provider.mode == option.mode,
+                onTap: () {
+                  provider.setMode(option.mode);
+                  Navigator.of(sheetContext).pop();
+                },
+              ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static const List<_AppearanceOption> _appearanceOptions = [
+    _AppearanceOption(
+      mode: ThemeMode.system,
+      icon: Icons.brightness_auto_outlined,
+      title: 'System',
+      description: 'Match your device setting',
+    ),
+    _AppearanceOption(
+      mode: ThemeMode.light,
+      icon: Icons.light_mode_outlined,
+      title: 'Light',
+      description: 'Always the light theme',
+    ),
+    _AppearanceOption(
+      mode: ThemeMode.dark,
+      icon: Icons.dark_mode_outlined,
+      title: 'Dark',
+      description: 'Always the dark theme',
+    ),
+  ];
+
+  Widget _appearanceOption(
+    BuildContext context,
+    _AppearanceOption option, {
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          child: Row(
+            children: [
+              Icon(option.icon, size: 22, color: AppConstants.primary),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      option.title,
+                      style: AppConstants.bodyStyle(
+                        fontSize: 15,
+                        fontWeight:
+                            selected ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      option.description,
+                      style: AppConstants.bodyStyle(
+                        fontSize: 12,
+                        color: AppConstants.secondary.withValues(alpha: 0.5),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (selected)
+                const Icon(Icons.check, color: AppConstants.primary, size: 20),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   // ── Section header with background ───────────────────────────
   Widget _sectionHeader(String title) {
     return Container(
@@ -304,7 +466,7 @@ class SettingsScreen extends StatelessWidget {
                 ),
               ),
               trailing ??
-                  const Icon(Icons.chevron_right, color: AppConstants.borderGray, size: 20),
+                  Icon(Icons.chevron_right, color: AppConstants.borderGray, size: 20),
             ],
           ),
         ),

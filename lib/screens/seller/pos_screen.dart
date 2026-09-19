@@ -352,7 +352,7 @@ class _POSScreenState extends State<POSScreen>
                 maxHeight: maxSheetHeight,
               ),
 
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 color: AppConstants.surfaceLight,
                 borderRadius: BorderRadius.vertical(
                   top: Radius.circular(20),
@@ -766,7 +766,13 @@ class _POSScreenState extends State<POSScreen>
                     index: _panelIndex,
                     children: [
                       _buildProductsPanel(
-                        productProvider.isLoading,
+                        // Skeleton only when there is genuinely nothing to show.
+                        // A cache hit never flips `isLoading` at all, and the
+                        // provider keeps a warm catalog on screen through a
+                        // refresh, so neither a tab switch nor a background
+                        // reload can blank a grid that already has data.
+                        productProvider.isLoading &&
+                            productProvider.products.isEmpty,
                         products,
                         categories,
                       ),
@@ -866,7 +872,7 @@ class _POSScreenState extends State<POSScreen>
                 suffixIcon: _searchKeyword.isEmpty
                     ? IconButton(
                         onPressed: _openBarcodeScanner,
-                        icon: const Icon(
+                        icon: Icon(
                           Icons.qr_code_scanner,
                           color: AppConstants.secondary,
                         ),
@@ -876,7 +882,7 @@ class _POSScreenState extends State<POSScreen>
                           _searchController.clear();
                           setState(() => _searchKeyword = '');
                         },
-                        icon: const Icon(
+                        icon: Icon(
                           Icons.close,
                           color: AppConstants.secondary,
                         ),
@@ -1981,7 +1987,7 @@ class _CheckoutSheetState extends State<_CheckoutSheet> {
         expand: false,
         builder: (context, scrollController) {
           return Container(
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: AppConstants.surfaceLight,
               borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
             ),
@@ -2331,7 +2337,7 @@ class _CheckoutSheetState extends State<_CheckoutSheet> {
                               child: Image.network(
                                 _gcashQrDisplayUrl!,
                                 fit: BoxFit.contain,
-                                errorBuilder: (_, _, _) => const Center(
+                                errorBuilder: (_, _, _) => Center(
                                   child: Icon(
                                     Icons.broken_image_outlined,
                                     color: AppConstants.borderGray,

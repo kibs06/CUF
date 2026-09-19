@@ -12,15 +12,38 @@ import '../../services/product_service.dart';
 import '../../services/store_service.dart';
 import '../../utils/sale_price.dart';
 import '../../utils/product_grid_ratio.dart';
+import '../../utils/product_audience.dart';
+import '../../widgets/active_tab.dart';
 import '../../widgets/seller/seller_inventory_row.dart';
 import 'add_edit_product_screen.dart';
 import 'create_store_screen.dart';
+
+/// Whether this product's seller has not said who it is for yet.
+///
+/// The one rule behind both the banner's count and the 'Not Set' filter, so the
+/// banner can never claim a number the filter does not then show. Routed through
+/// the shared parser ([productAudienceFrom]) rather than a bare `== null` check,
+/// so a value the vocabulary does not recognise counts as unset here for exactly
+/// the reason the customer-facing rails treat it as unset.
+///
+/// **Stated data only — nothing in this file ever infers an audience**, and
+/// nothing in the app does either. A product's stock sizes cannot answer this
+/// question (an adult style can sit at EU 39 and the kids' band runs to EU 35),
+/// which is why the plan rejects size-based derivation outright and why the
+/// count below is surfaced to the two people who can actually answer it.
+bool missingAudience(Map<String, dynamic> product) =>
+    productAudienceFrom(product['audience']?.toString()) == null;
 
 /// Seller's product list screen — wired to real Supabase data via [ProductService].
 ///
 /// Grid view of products with FAB for adding, tap to edit, long press for actions.
 /// Each product card's long-press menu also exposes an **Adjust Stock** editor
 /// (the standalone inventory screen was merged here).
+///
+/// It also carries the seller-facing half of the audience work: an alert in the
+/// rotating banner for products whose "Who is it for?" is still unset, which
+/// deep-links to the `Not Set` filter. Informational only — the field stays
+/// optional (plan decision #2), so this must never block the screen.
 class ManageProductsScreen extends StatefulWidget {
   /// Optional filter chip to preselect on open (e.g. 'Low Stock') — used by
   /// the dashboard metric and low-stock notifications to deep-link here.
@@ -34,12 +57,47 @@ class ManageProductsScreen extends StatefulWidget {
 }
 
 class _ManageProductsScreenState extends State<ManageProductsScreen> {
+  /// This screen's index in the seller shell's tab list.
+  static const int _productsTabIndex = 2;
+
+  /// Last tab index this screen saw on screen (see [ActiveTab]).
+  int? _lastActiveTab;
+
   final ProductService _productService = ProductService.instance;
   final TextEditingController _searchController = TextEditingController();
 
-  List<Map<String, dynamic>>? _products;
-  bool _isLoading = true;
-  String? _error;
+  /// The shared seller catalog.
+  ///
+  /// [ProductProvider] is the single source of truth for this tab now: the
+  /// Dashboard and POS read the same list, so the three tabs can never
+  /// disagree — and opening this one after either of them costs ZERO round
+  /// trips instead of a second (third) fetch of the same rows through a
+  /// different query.
+  List<Map<String, dynamic>> get _products =>
+      context.read<ProductProvider>().products;
+
+  /// True only when there is nothing to show yet.
+  ///
+  /// A cache hit or a refresh over a warm catalog leaves this false, so the
+  /// grid never shimmers over data it already has.
+  bool get _isLoading {
+    final provider = context.read<ProductProvider>();
+    return provider.isLoading && provider.products.isEmpty;
+  }
+
+  /// Why the shared seller-catalog fetch failed, in the shape the error card
+  /// prints. Failure lives on the provider because the provider owns the fetch
+  /// (and swallows it, so the Dashboard's `Future.wait` is unaffected).
+  String? get _error {
+    final error = context.read<ProductProvider>().sellerCatalogError;
+    return error?.toString().replaceAll('Exception: ', '');
+  }
+
+  /// The filter value the audience nudge deep-links to. A pseudo-filter like
+  /// 'On Sale' / 'Low Stock' rather than a real category — it filters on a
+  /// derived rule, and `missingAudience` is the rule.
+  static const String _noAudienceFilter = 'Not Set';
+
   String _activeFilter = 'All';
   String _search = '';
   bool _isSearching = false;
@@ -58,12 +116,29 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
     _wasOffline = !ConnectivityService.instance.isOnline;
     _connectivitySub = ConnectivityService.instance.isOnlineStream.listen((isOnline) {
       if (isOnline && _wasOffline && mounted) {
-        _loadProducts();
+        _refreshProducts();
       }
       _wasOffline = !isOnline;
     });
-    _loadProducts();
+    _ensureProducts();
     _startAlertTimer();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Tab visibility hook: run the alert rotation only while this tab is the
+    // one on screen. `null` means there is no tab host at all — this screen is
+    // also pushed as a standalone route from the dashboard's low-stock card —
+    // in which case it is always visible and nothing changes.
+    final active = ActiveTab.of(context);
+    if (active == null || active == _lastActiveTab) return;
+    _lastActiveTab = active;
+    if (active == _productsTabIndex) {
+      _startAlertTimer();
+    } else {
+      _pauseAlertTimer();
+    }
   }
 
   @override
@@ -74,7 +149,12 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
     super.dispose();
   }
 
+  /// Start (or resume) the alert rotation.
+  ///
+  /// Idempotent, so it is safe to call from both `initState` and the tab
+  /// visibility hook below.
   void _startAlertTimer() {
+    if (_alertTimer != null) return;
     _alertTimer = Timer.periodic(const Duration(seconds: 4), (_) {
       if (!mounted) return;
       final alerts = _buildAlerts();
@@ -85,28 +165,35 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
     });
   }
 
-  Future<void> _loadProducts() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
+  /// Stop rotating alerts while this tab is off screen.
+  ///
+  /// The shell keeps this page mounted for the rest of the session now, so
+  /// without this the 4-second rotation would keep rebuilding an invisible
+  /// page — and, because the index kept advancing, the seller would come back
+  /// to an alert banner that had scrolled past messages they never saw. Paused
+  /// on the way out and resumed on the way back in, the rotation continues from
+  /// where the seller left it.
+  void _pauseAlertTimer() {
+    _alertTimer?.cancel();
+    _alertTimer = null;
+  }
 
-    try {
-      final products = await _productService.getSellerProducts();
-      if (mounted) {
-        setState(() {
-          _products = products;
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = e.toString().replaceAll('Exception: ', '');
-          _isLoading = false;
-        });
-      }
-    }
+  /// Make sure the shared catalog is loaded, WITHOUT forcing a refetch.
+  ///
+  /// Cache-aware: when the Dashboard or POS already loaded it in this session
+  /// this returns synchronously, so the grid paints real products on its very
+  /// first frame — no skeleton, no round trip.
+  void _ensureProducts() {
+    if (!mounted) return;
+    context.read<ProductProvider>().loadSellerProducts();
+  }
+
+  /// Refetch the shared catalog after something changed (pull-to-refresh, a
+  /// write, or coming back online). The provider keeps the current rows on
+  /// screen while it runs, so this never flashes the shimmer.
+  Future<void> _refreshProducts() {
+    if (!mounted) return Future.value();
+    return context.read<ProductProvider>().loadSellerProducts(force: true);
   }
 
   // ─── HELPERS ────────────────────────────────────────────────────
@@ -155,8 +242,8 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
   bool _isOnSale(Map<String, dynamic> product) => isOnSale(product);
 
   List<Map<String, dynamic>> get _filteredProducts {
-    if (_products == null) return [];
-    var filtered = List<Map<String, dynamic>>.from(_products!);
+    if (_products.isEmpty) return [];
+    var filtered = List<Map<String, dynamic>>.from(_products);
 
     switch (_activeFilter) {
       case 'On Sale':
@@ -177,6 +264,9 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
       case 'Inactive':
         filtered = filtered.where((p) => !_isActive(p)).toList();
         break;
+      case _noAudienceFilter:
+        filtered = filtered.where(missingAudience).toList();
+        break;
     }
 
     if (_search.trim().isNotEmpty) {
@@ -192,23 +282,25 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
   }
 
   int _countFor(String filter) {
-    if (_products == null) return 0;
+    if (_products.isEmpty) return 0;
     switch (filter) {
       case 'On Sale':
-        return _products!.where((p) => _isOnSale(p)).length;
+        return _products.where((p) => _isOnSale(p)).length;
       case 'Low Stock':
-        return _products!.where((p) {
+        return _products.where((p) {
           final stock = _totalStock(p);
           return stock > 0 && stock <= 5;
         }).length;
       case 'Out of Stock':
-        return _products!.where((p) => _totalStock(p) == 0).length;
+        return _products.where((p) => _totalStock(p) == 0).length;
       case 'Featured':
-        return _products!.where((p) => _isFeatured(p)).length;
+        return _products.where((p) => _isFeatured(p)).length;
       case 'Inactive':
-        return _products!.where((p) => !_isActive(p)).length;
+        return _products.where((p) => !_isActive(p)).length;
+      case _noAudienceFilter:
+        return _products.where(missingAudience).length;
       default:
-        return _products!.length;
+        return _products.length;
     }
   }
 
@@ -254,7 +346,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
         builder: (_) => AddEditProductScreen(product: fullProduct),
       ),
     );
-    if (result == true) _loadProducts();
+    if (result == true) _refreshProducts();
   }
 
   Future<void> _deleteProduct(Map<String, dynamic> product) async {
@@ -296,10 +388,10 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
     try {
       await _productService.deleteProduct(product['id'].toString());
       if (mounted) {
-        setState(() {
-          _deletingProductId = null;
-          _products?.removeWhere((p) => p['id'] == product['id']);
-        });
+        setState(() => _deletingProductId = null);
+        // Prune the shared catalog in place — refetching every product just to
+        // lose one card would be a wasted round trip.
+        context.read<ProductProvider>().removeProductLocally(product['id']);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Product deleted successfully.'),
@@ -333,7 +425,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
             backgroundColor: AppConstants.success,
           ),
         );
-        _loadProducts();
+        _refreshProducts();
       }
     } catch (_) {}
   }
@@ -352,7 +444,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
             backgroundColor: AppConstants.success,
           ),
         );
-        _loadProducts();
+        _refreshProducts();
       }
     } catch (_) {}
   }
@@ -369,7 +461,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
               backgroundColor: AppConstants.success,
             ),
           );
-          _loadProducts();
+          _refreshProducts();
         }
       } catch (_) {}
     } else {
@@ -502,7 +594,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
             backgroundColor: AppConstants.success,
           ),
         );
-        _loadProducts();
+        _refreshProducts();
       }
     } catch (_) {}
     safeDisposeCtrl();
@@ -673,7 +765,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
                 ],
               ),
               const SizedBox(height: 16),
-              const Divider(
+              Divider(
                 height: 16,
                 color: AppConstants.borderGray,
               ),
@@ -698,7 +790,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
                   _toggleActive(product);
                 },
               ),
-              const Divider(
+              Divider(
                 height: 16,
                 color: AppConstants.borderGray,
               ),
@@ -734,7 +826,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
     if (imageUrl == null) {
       return Container(
         color: AppConstants.borderGray.withValues(alpha: 0.3),
-        child: const Center(
+        child: Center(
           child: Icon(Icons.image_outlined,
               color: AppConstants.borderGray, size: 22),
         ),
@@ -745,13 +837,13 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
       fit: BoxFit.cover,
       placeholder: (_, _) => Container(
         color: AppConstants.borderGray.withValues(alpha: 0.3),
-        child: const Center(
+        child: Center(
           child: Icon(Icons.image, color: AppConstants.borderGray),
         ),
       ),
       errorWidget: (_, _, _) => Container(
         color: AppConstants.borderGray.withValues(alpha: 0.3),
-        child: const Center(
+        child: Center(
           child: Icon(Icons.broken_image, color: AppConstants.borderGray),
         ),
       ),
@@ -765,11 +857,12 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
   /// product's active status, mirroring the old ManageInventoryScreen
   /// behavior.
   void _showStockEditor(Map<String, dynamic> product) {
-    // getSellerProducts() returns raw rows with an `inventory` relation
-    // (size/stock), not the mapped `sizes` map — build it the same way
-    // SupabaseService._mapProduct does so sizes stay the authoritative source.
-    // Fall back to product_variants (summed per size) when no inventory rows
-    // exist yet (legacy products) so Adjust Stock always has sizes to edit.
+    // The shared catalog keeps the raw `inventory` relation (size/stock)
+    // alongside the mapped `sizes` map (see SupabaseService._mapProduct) —
+    // build from the relation so the editor always starts from what the
+    // database holds. Fall back to product_variants (summed per size) when no
+    // inventory rows exist yet (legacy products) so Adjust Stock always has
+    // sizes to edit.
     final sizes = <String, int>{};
     final inventory =
         product['inventory'] is List ? product['inventory'] as List : [];
@@ -954,7 +1047,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
             },
             child: Container(
               height: sheetHeight,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 color: AppConstants.surfaceLight,
                 borderRadius: BorderRadius.vertical(
                   top: Radius.circular(20),
@@ -1143,22 +1236,22 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
   /// Update the in-memory product's `inventory` relation in place so the
   /// grid's stock badges and filters reflect Adjust Stock changes without a
   /// full reload (which would tear down the still-open editor sheet).
+  ///
+  /// Delegates to the shared catalog so POS tiles and the customer size
+  /// selectors see the new stock in the same frame.
   void _applyStockToLocalProduct(String productId, Map<String, int> sizes) {
     if (!mounted) return;
-    final index =
-        _products?.indexWhere((p) => p['id']?.toString() == productId) ?? -1;
-    if (index == -1) return;
-    final updated = Map<String, dynamic>.from(_products![index]);
-    updated['inventory'] = sizes.entries
-        .map((e) => {'size': e.key, 'stock': e.value})
-        .toList();
-    setState(() => _products![index] = updated);
+    context.read<ProductProvider>().applyStockLocally(productId, sizes);
   }
 
   // ─── BUILD ──────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
+    // Subscribe to the shared seller catalog: a load that finishes on another
+    // tab, a forced refresh, or an in-place edit anywhere repaints this grid
+    // without the screen ever fetching on its own.
+    context.watch<ProductProvider>();
     return Scaffold(
       backgroundColor: AppConstants.sellerSurface,
       appBar: widget.hideAppBar
@@ -1254,7 +1347,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
 
     return RefreshIndicator(
       color: AppConstants.primary,
-      onRefresh: _loadProducts,
+      onRefresh: _refreshProducts,
       child: MasonryGridView.count(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 92),
         crossAxisCount: 2,
@@ -1326,7 +1419,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
                                 placeholder: (_, _) => Container(
                                   color: AppConstants.borderGray
                                       .withValues(alpha: 0.3),
-                                  child: const Center(
+                                  child: Center(
                                     child: Icon(Icons.image,
                                         color: AppConstants.borderGray),
                                   ),
@@ -1334,7 +1427,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
                                 errorWidget: (_, _, _) => Container(
                                   color: AppConstants.borderGray
                                       .withValues(alpha: 0.3),
-                                  child: const Center(
+                                  child: Center(
                                     child: Icon(Icons.broken_image,
                                         color: AppConstants.borderGray),
                                   ),
@@ -1343,7 +1436,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
                             : Container(
                                 color: AppConstants.borderGray
                                     .withValues(alpha: 0.3),
-                                child: const Center(
+                                child: Center(
                                   child: Icon(Icons.image_outlined,
                                       color: AppConstants.borderGray, size: 32),
                                 ),
@@ -1462,7 +1555,22 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        product['category'] ?? '',
+                        // Category then audience on the one muted metadata
+                        // line — the seller sees what's set without opening
+                        // the editor, and the line stays one line tall. An
+                        // audience of "not set" contributes nothing, so
+                        // products that predate the field look unchanged.
+                        //
+                        // The label comes from the shared vocabulary helper;
+                        // this screen never spells an audience itself.
+                        [
+                          if ((product['category'] ?? '').toString().isNotEmpty)
+                            product['category'],
+                          ?productAudienceLabel(
+                              productAudienceFrom(
+                                  product['audience']?.toString()),
+                            ),
+                        ].join(' · '),
                         style: AppConstants.bodyStyle(
                           fontSize: 10,
                           color:
@@ -1500,17 +1608,35 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
 
   /// Alert data for the auto-sliding banner.
   List<_AlertData> _buildAlerts() {
-    if (_products == null || _products!.isEmpty) return [];
+    if (_products.isEmpty) return [];
     final alerts = <_AlertData>[];
 
-    final lowStock = _products!.where((p) {
+    final lowStock = _products.where((p) {
       final stock = _totalStock(p);
       return stock > 0 && stock <= 5;
     }).length;
-    final outOfStock = _products!.where((p) => _totalStock(p) == 0).length;
-    final onSale = _products!.where((p) => _isOnSale(p)).length;
-    final featured = _products!.where((p) => _isFeatured(p)).length;
-    final inactive = _products!.where((p) => !_isActive(p)).length;
+    final outOfStock = _products.where((p) => _totalStock(p) == 0).length;
+    final onSale = _products.where((p) => _isOnSale(p)).length;
+    final featured = _products.where((p) => _isFeatured(p)).length;
+    final inactive = _products.where((p) => !_isActive(p)).length;
+    final noAudience = _products.where(missingAudience).length;
+
+    // First in the rotation, and deliberately: every other alert here reports
+    // something the seller can also see elsewhere (the dashboard counts low
+    // stock, the grid badges mark inactive products, a sale is visible on the
+    // card). "Who is it for?" is written on no other seller surface, so if it
+    // is not said here it is simply invisible — and with the whole live catalog
+    // unset, an unrotated banner would be the only sign the field exists.
+    if (noAudience > 0) {
+      alerts.add(_AlertData(
+        icon: Icons.help_outline,
+        label: '$noAudience product${noAudience != 1 ? 's' : ''} '
+            'missing "Who is it for?"',
+        color: AppConstants.primary,
+        bgColor: AppConstants.primary.withValues(alpha: 0.08),
+        filter: _noAudienceFilter,
+      ));
+    }
 
     if (lowStock > 0) {
       alerts.add(_AlertData(
@@ -1640,6 +1766,9 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
       'Out of Stock',
       'Featured',
       'Inactive',
+      // The persistent half of the audience nudge: the banner rotates away after
+      // a few seconds, so the filter chip is what keeps the list reachable.
+      _noAudienceFilter,
     ];
     return Container(
       height: 54,
@@ -1739,7 +1868,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
             ),
             const SizedBox(height: 20),
             FilledButton.icon(
-              onPressed: _loadProducts,
+              onPressed: _refreshProducts,
               icon: const Icon(Icons.refresh),
               label: const Text('Retry'),
               style: FilledButton.styleFrom(

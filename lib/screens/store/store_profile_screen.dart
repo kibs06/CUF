@@ -744,7 +744,7 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.access_time,
                     size: 14,
                     color: AppConstants.surfaceLight,
@@ -771,7 +771,7 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(
+                Icon(
                   Icons.location_on,
                   size: 14,
                   color: AppConstants.surfaceLight,
@@ -809,7 +809,7 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
               borderRadius: BorderRadius.circular(20),
               border: Border.all(color: AppConstants.surfaceLight, width: 1.5),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.chat_bubble_outline,
               color: AppConstants.surfaceLight,
               size: 16,

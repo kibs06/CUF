@@ -308,7 +308,7 @@ class _GcashRefScannerScreenState extends State<GcashRefScannerScreen> {
                             strokeWidth: 2,
                           ),
                         )
-                      : const Icon(
+                      : Icon(
                           Icons.camera_alt,
                           color: AppConstants.secondary,
                           size: 30,

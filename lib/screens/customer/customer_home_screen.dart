@@ -18,8 +18,14 @@ import '../../widgets/sole_product_card.dart';
 import '../../widgets/shimmer_group.dart';
 import '../../widgets/customer_foot_profile_banner.dart';
 import '../../widgets/best_sellers_section.dart';
+import '../../widgets/catalog_end_cap.dart';
+import '../../widgets/in_your_size_section.dart';
+import '../../widgets/audience_section.dart';
+import '../../widgets/product_sort_sheet.dart';
+import '../../utils/product_audience.dart';
 import '../../widgets/chat/chat_view.dart';
 import 'cart_screen.dart';
+import 'audience_listing_screen.dart';
 import 'product_detail_screen.dart';
 import 'product_search_screen.dart';
 import 'tracking_screen.dart';
@@ -27,6 +33,20 @@ import 'my_reports_screen.dart';
 import 'my_reservations_screen.dart';
 import 'widgets/home_hero.dart';
 import 'widgets/home_sticky_search_bar.dart';
+
+/// Whether the home screen renders the "Best Sellers" rail.
+///
+/// **Off for now** (product decision, not a bug): the rail reads as noise
+/// until the catalog has enough real `units_sold` history for a "MOST SOLD"
+/// strip to mean something.
+///
+/// **Nothing was removed.** `BestSellersSection`, its `HorizontalProductCard`
+/// strip, `ProductProvider.bestSellers`, the 20-item rule, the 'Best Sellers'
+/// filter chip and every test of them stay exactly as they are — flipping this
+/// to `true` restores the rail with no other change. The chip is deliberately
+/// left alone: it is a catalog *filter* (like 'On Sale'), not this rail, and it
+/// still works by selecting it. See `docs/AI/HOME_ON_SALE_ARCHITECTURE.md` §3.
+const bool kBestSellersRailEnabled = false;
 
 class CustomerHomeScreen extends StatefulWidget {
   final bool hideAppBar;
@@ -38,10 +58,7 @@ class CustomerHomeScreen extends StatefulWidget {
 
 class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   final GlobalKey _catalogKey = GlobalKey();
-  final TextEditingController _searchController = TextEditingController();
-  final FocusNode _searchFocusNode = FocusNode();
   final ScrollController _scrollController = ScrollController();
-  String _searchKeyword = '';
   bool _isHeroVisible = true;
   StreamSubscription? _connectivitySub;
   bool _wasOffline = false;
@@ -81,8 +98,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     _connectivitySub?.cancel();
-    _searchController.dispose();
-    _searchFocusNode.dispose();
     super.dispose();
   }
 
@@ -96,21 +111,18 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     }
   }
 
-  /// Open the full-screen search page (recent + discovery chips).
-  /// A chosen term is applied as the home keyword and recorded in history.
-  Future<void> _openSearchScreen() async {
-    await Navigator.of(context).push(
+  /// Open the full-screen search page (suggestions, recent + discovery chips).
+  ///
+  /// A destination, not a filter: the page pushes its own results, and popping
+  /// back here always lands on the full catalog. Nothing on Home is narrowed by
+  /// a query, so there is no search state to get stuck in — see
+  /// `search_results_screen.dart` for the trap this replaced.
+  void _openSearchScreen() {
+    Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => ProductSearchScreen(
-          initialQuery: _searchKeyword,
-          onSearchSelected: (term) {
-            _searchController.text = term;
-          },
-        ),
+        builder: (_) => const ProductSearchScreen(),
       ),
     );
-    if (!mounted) return;
-    setState(() => _searchKeyword = _searchController.text);
   }
 
   Future<void> _loadConversations() async {
@@ -188,81 +200,14 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     };
   }
 
+  /// The catalog's sort sheet — the shared one, so the search results page and
+  /// this feed offer the same orders under the same names.
   void _showSortSheet(BuildContext context) {
     final productProvider = context.read<ProductProvider>();
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        margin: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppConstants.surfaceLight,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
-        // SingleChildScrollView so the option list scrolls instead of
-        // overflowing on shorter screens (7 options now, maybe more later).
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Drag handle
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: AppConstants.borderGray,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Sort by',
-                style: AppConstants.headlineStyle(fontSize: 18),
-              ),
-              const SizedBox(height: 12),
-              ...SortMode.values.map((mode) {
-              final isActive = productProvider.sortMode == mode;
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Material(
-                  color: Colors.transparent,
-                  child: ListTile(
-                    dense: true,
-                    leading: Icon(
-                      isActive
-                          ? Icons.radio_button_checked
-                          : Icons.radio_button_unchecked,
-                      color:
-                          isActive ? AppConstants.primary : AppConstants.borderGray,
-                      size: 20,
-                    ),
-                    title: Text(
-                      sortModeLabel(mode),
-                      style: AppConstants.bodyStyle(
-                        fontSize: 14,
-                        fontWeight:
-                            isActive ? FontWeight.bold : FontWeight.normal,
-                        color: isActive
-                            ? AppConstants.primary
-                            : AppConstants.secondary,
-                      ),
-                    ),
-                    onTap: () {
-                      productProvider.setSortMode(mode);
-                      Navigator.of(ctx).pop();
-                    },
-                  ),
-                ),
-              );
-            }),
-            ],
-          ),
-        ),
-      ),
+    showProductSortSheet(
+      context,
+      current: productProvider.sortMode,
+      onSelected: productProvider.setSortMode,
     );
   }
 
@@ -271,20 +216,42 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     final productProvider = context.watch<ProductProvider>();
     final cartCount = context.select<CartProvider, int>((p) => p.itemCount);
     final allProducts = productProvider.products;
-    final filteredProducts =
-        productProvider.getFilteredProducts(_searchKeyword);
+    // Category filter + sort only. **No search keyword here on purpose**: the
+    // feed is never narrowed by a query, so there is no search state on this
+    // screen to get stuck in. Searching is a destination
+    // (`SearchResultsScreen`) that owns its own query.
+    final filteredProducts = productProvider.getFilteredProducts('');
     // Products currently on sale — powers the dedicated "On Sale" sliver.
     final saleProducts =
         allProducts.where(isOnSale).toList();
     // Best sellers — the same live `units_sold` set the 'Best Sellers' chip
     // filters by (one rule, see bestSellerProducts). The rail is suppressed
-    // while a category or search is narrowing the catalog, exactly like the
-    // "On Sale" section below.
+    // while a category is narrowing the catalog, exactly like the "On Sale"
+    // section below.
     final bestSellers = productProvider.bestSellers;
-    final showBestSellers = _searchKeyword.isEmpty &&
+    final showBestSellers = kBestSellersRailEnabled &&
         bestSellers.isNotEmpty &&
         (productProvider.selectedCategory == null ||
             productProvider.selectedCategory == 'All');
+
+    // ── Catalog end-cap ──
+    // The sign-off is only honest when the grid above really is the WHOLE
+    // catalog: under a category filter the feed is a slice of it, so "that's
+    // the whole shelf" would be a lie. Same gate as the "On Sale" and Best
+    // Sellers sections.
+    final isBrowsingWholeCatalog =
+        productProvider.selectedCategory == null ||
+            productProvider.selectedCategory == 'All';
+    final showCatalogEndCap = isBrowsingWholeCatalog &&
+        !productProvider.isLoading &&
+        filteredProducts.isNotEmpty;
+    // Distinct workshops behind the catalog, derived from the products already
+    // loaded (the same `store_id` the Store tab indexes on) — no second query.
+    final workshopCount = allProducts
+        .map((p) => p['store_id']?.toString() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .length;
 
     return Scaffold(
       backgroundColor: AppConstants.surfaceLight,
@@ -313,12 +280,19 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 SliverToBoxAdapter(
                   child: HomeHero(
                     cartCount: cartCount,
-                    searchController: _searchController,
-                    searchFocusNode: _searchFocusNode,
-                    onSearchChanged: (val) {
-                      setState(() => _searchKeyword = val);
-                    },
                     onSearchTap: _openSearchScreen,
+                    // The audience chips leave the feed for that shelf's own
+                    // listing page, rather than narrowing this one — the same
+                    // reasoning as search being a destination, and what lets
+                    // `unisex` have a shelf at all (the rails skip it).
+                    onAudienceTap: (audience) {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              AudienceListingScreen(audience: audience),
+                        ),
+                      );
+                    },
                     onCartTap: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(
@@ -347,9 +321,34 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                             child: CustomerFootProfileBanner(),
                           ),
 
+                          // ── In your size (conditional, personal) ──
+                          // The customer's saved size, driving the catalog. It
+                          // renders itself away when there is no size on file
+                          // or nothing stocks it, so only the browse gate
+                          // below belongs here — same gate as On Sale / Best
+                          // Sellers, since a personal rail above a category
+                          // filter would be a second, unrelated feed.
+                          if (productProvider.selectedCategory == null ||
+                              productProvider.selectedCategory == 'All')
+                            const InYourSizeSection(),
+
+                          // ── Men's / Women's / Kids' (conditional) ──
+                          // One rail per rail-eligible audience, in the fixed
+                          // order `productRailAudiences` fixes — iterated rather
+                          // than laid out by hand so this list is the only place
+                          // the order (and the `unisex` exclusion) is decided.
+                          // Each renders itself away when the catalog holds
+                          // nothing for that audience, which is the normal case
+                          // until the P4 backfill. Same browse gate as the rails
+                          // around it: a curated rail above a category filter
+                          // would read as a second feed.
+                          if (productProvider.selectedCategory == null ||
+                              productProvider.selectedCategory == 'All')
+                            for (final audience in productRailAudiences)
+                              AudienceSection(audience: audience),
+
                           // ── On Sale section ──
-                          if (_searchKeyword.isEmpty &&
-                              saleProducts.isNotEmpty &&
+                          if (saleProducts.isNotEmpty &&
                               (productProvider.selectedCategory == null ||
                                   productProvider.selectedCategory ==
                                       'All')) ...[
@@ -412,14 +411,9 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                           // ── Best Sellers rail ──
                           if (showBestSellers) ...[
                             BestSellersSection(
-                              onSeeAll: () {
-                                context
-                                    .read<ProductProvider>()
-                                    .selectCategory(kBestSellersCategory);
-                                _searchController.clear();
-                                _searchFocusNode.unfocus();
-                                setState(() => _searchKeyword = '');
-                              },
+                              onSeeAll: () => context
+                                  .read<ProductProvider>()
+                                  .selectCategory(kBestSellersCategory),
                             ),
                             const SizedBox(height: 16),
                           ],
@@ -512,15 +506,9 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                             )
                           else if (filteredProducts.isEmpty)
                             _EmptyCategoryView(
-                              keyword: _searchKeyword,
-                              onBrowseAll: () {
-                                context
-                                    .read<ProductProvider>()
-                                    .selectCategory('All');
-                                _searchController.clear();
-                                _searchFocusNode.unfocus();
-                                setState(() => _searchKeyword = '');
-                              },
+                              onBrowseAll: () => context
+                                  .read<ProductProvider>()
+                                  .selectCategory('All'),
                             )
                           else
                             MasonryGridView.count(
@@ -551,6 +539,13 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                               },
                             ),
 
+                          // ── Catalog end-cap — the feed's finish line ──
+                          if (showCatalogEndCap)
+                            CatalogEndCap(
+                              productCount: allProducts.length,
+                              storeCount: workshopCount,
+                            ),
+
                           // Bottom spacing for nav bar
                           const SizedBox(height: 100),
                         ],
@@ -569,11 +564,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
               left: 0,
               right: 0,
               child: HomeStickySearchBar(
-                searchController: _searchController,
-                searchFocusNode: _searchFocusNode,
-                onSearchChanged: (val) {
-                  setState(() => _searchKeyword = val);
-                },
                 onTap: _openSearchScreen,
               ),
             ),
@@ -660,9 +650,12 @@ class _ProductCardSkeleton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(10),
+      // Same neutral hairline as the loaded SoleProductCard above it, so the
+      // grid does not visibly "grow" edges when the products arrive.
       decoration: BoxDecoration(
         color: AppConstants.surfaceLight,
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppConstants.borderGray, width: 1),
       ),
       child: const Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -708,15 +701,19 @@ class _CatalogSkeletonGrid extends StatelessWidget {
   }
 }
 
-/// Empty state for a category (or search) with no matching products.
+/// Empty state for a category with no matching products.
 ///
 /// Shows a per-category outlined icon in a soft clay circle — modern,
 /// quiet, and on-brand with the app's warm leather palette — plus a
 /// one-line explanation and a "Browse All" reset chip.
+///
+/// Category-scoped only: a customer's search is never applied to this feed, so
+/// there is no "no matches for …" state to render here. A query's empty case
+/// belongs to the page that owns the query (`SearchResultsScreen`), which can
+/// offer the customer something instead of a dead end.
 class _EmptyCategoryView extends StatelessWidget {
-  const _EmptyCategoryView({this.keyword = '', this.onBrowseAll});
+  const _EmptyCategoryView({this.onBrowseAll});
 
-  final String keyword;
   final VoidCallback? onBrowseAll;
 
   /// A representative outlined icon per category; anything unknown falls
@@ -748,7 +745,6 @@ class _EmptyCategoryView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasSearch = keyword.trim().isNotEmpty;
     final category = context.read<ProductProvider>().selectedCategory ?? 'All';
     // Pseudo-categories (derived rules, not real category values) get the
     // generic copy instead of "No Best Sellers yet".
@@ -756,18 +752,15 @@ class _EmptyCategoryView extends StatelessWidget {
         category != 'On Sale' &&
         category != kBestSellersCategory;
 
-    // Message adapts: search-within-category vs category vs search-only.
+    // Message adapts to whether a category is narrowing the feed. There used to
+    // be a pair of search branches here ("No matches for …") — that state no
+    // longer exists on Home, because a query is a destination now and reports
+    // its own empty case (`SearchResultsScreen`).
     final String title;
     final String subtitle;
-    if (hasSearch && isCategoryScoped) {
-      title = 'Nothing in $category for "${keyword.trim()}"';
-      subtitle = 'Try a different search or browse all $category styles';
-    } else if (isCategoryScoped) {
+    if (isCategoryScoped) {
       title = 'No $category yet';
       subtitle = 'New styles land here soon — browse the rest meanwhile';
-    } else if (hasSearch) {
-      title = 'No matches for "${keyword.trim()}"';
-      subtitle = 'Check the spelling or try a shorter word';
     } else {
       title = 'Nothing here yet';
       subtitle = 'Check back soon — new pairs are on the way';
@@ -791,7 +784,7 @@ class _EmptyCategoryView extends StatelessWidget {
               ),
             ),
             child: Icon(
-              isCategoryScoped ? _iconFor(category) : Icons.search_off,
+              _iconFor(category),
               size: 38,
               color: AppConstants.primary.withValues(alpha: 0.75),
             ),
@@ -813,7 +806,7 @@ class _EmptyCategoryView extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           // Reset action — always offered since this view only appears when
-          // a filter/search actually excluded everything.
+          // a filter actually excluded everything.
           GestureDetector(
             onTap: onBrowseAll ?? () {
               context.read<ProductProvider>().selectCategory('All');

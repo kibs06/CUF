@@ -331,7 +331,7 @@ class _GcashPaymentScreenState extends State<GcashPaymentScreen>
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppConstants.secondary),
+          icon: Icon(Icons.arrow_back, color: AppConstants.secondary),
           onPressed: _goHome,
         ),
       ),
@@ -474,11 +474,11 @@ class _GcashPaymentScreenState extends State<GcashPaymentScreen>
               color: AppConstants.primary,
             ),
           ),
-          const Divider(color: AppConstants.borderGray, height: 28),
+          Divider(color: AppConstants.borderGray, height: 28),
           _row('Items + Delivery', orderTotal),
           const SizedBox(height: 6),
           _row('GCash Service Fee', widget.intent.feeAmount),
-          const Divider(color: AppConstants.borderGray, height: 20),
+          Divider(color: AppConstants.borderGray, height: 20),
           _row('Total Due', widget.intent.amount, bold: true),
           if (_phase == _PayPhase.confirming) ...[
             const SizedBox(height: 16),

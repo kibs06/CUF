@@ -2,7 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/product_provider.dart';
+import '../../utils/product_audience.dart';
 import '../../widgets/sole_card.dart';
+
+/// The line the console prints when a product's audience is unset.
+///
+/// Deliberately not a value label: `productAudienceLabel` returns null for
+/// unset, because unset is the absence of a stated audience rather than a
+/// fourth kind of it (the plan's decision #1 keeps `unisex` as the only "for
+/// anyone" answer). Spelled the same as the "Not set" chip on the seller's
+/// form, so an admin reading one and a seller reading the other are looking at
+/// the same state.
+const String kAudienceUnsetLabel = 'Not set';
 
 class MonitorProductsScreen extends StatefulWidget {
   const MonitorProductsScreen({super.key});
@@ -60,6 +71,11 @@ class _MonitorProductsScreenState extends State<MonitorProductsScreen> {
                         final double price = (prod['price'] is int) ? (prod['price'] as int).toDouble() : (prod['price'] ?? 0.0);
                         final sizes = Map<String, dynamic>.from(prod['sizes'] ?? {});
                         final total = _getTotalStock(sizes);
+                        // Through the shared vocabulary — this console never
+                        // spells "Men's" itself, so it cannot drift from the
+                        // seller's form or the customer's rails.
+                        final audience =
+                            productAudienceLabel(prod['audience']?.toString());
 
                         return Container(
                           margin: const EdgeInsets.only(bottom: 12),
@@ -90,8 +106,39 @@ class _MonitorProductsScreenState extends State<MonitorProductsScreen> {
                                   'Category: ${prod['category']}',
                                   style: AppConstants.bodyStyle(fontSize: 12, color: Colors.black45),
                                 ),
+                                const SizedBox(height: 4),
+                                // The audience state, per product. This is the
+                                // admin's half of the backfill picture: the
+                                // seller's own screen counts what is missing,
+                                // and this one shows which is which, without an
+                                // admin having to open the seller's editor.
+                                // Disclosure only — no bulk edit, because this
+                                // console has no selection or action pattern of
+                                // any kind to extend (see the CHANGELOG note).
+                                Row(
+                                  children: [
+                                    Text(
+                                      'Audience: ',
+                                      style: AppConstants.bodyStyle(
+                                          fontSize: 12, color: Colors.black45),
+                                    ),
+                                    Text(
+                                      audience ?? kAudienceUnsetLabel,
+                                      style: AppConstants.bodyStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        // Amber = this app's "needs attention"
+                                        // tone, on the one value an admin comes
+                                        // here to find.
+                                        color: audience == null
+                                            ? AppConstants.statusPendingColor
+                                            : AppConstants.secondary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                                 const SizedBox(height: 12),
-                                const Divider(color: AppConstants.borderGray),
+                                Divider(color: AppConstants.borderGray),
                                 const SizedBox(height: 8),
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,

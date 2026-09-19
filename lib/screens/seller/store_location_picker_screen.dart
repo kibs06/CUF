@@ -475,7 +475,7 @@ class _StoreLocationPickerScreenState extends State<StoreLocationPickerScreen> {
                 20,
                 MediaQuery.of(context).padding.bottom + 16,
               ),
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 color: AppConstants.surfaceLight,
                 borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
                 boxShadow: [
@@ -584,7 +584,7 @@ class _StoreLocationPickerScreenState extends State<StoreLocationPickerScreen> {
             fontSize: 13,
             color: AppConstants.secondary.withValues(alpha: 0.4),
           ),
-          prefixIcon: const Padding(
+          prefixIcon: Padding(
             padding: EdgeInsets.only(left: 14, right: 8),
             child: Icon(Icons.search, size: 20, color: AppConstants.secondary),
           ),

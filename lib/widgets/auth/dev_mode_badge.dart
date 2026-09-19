@@ -21,7 +21,7 @@ class DevModeBadge extends StatelessWidget {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text('Developer mode OFF'),
           duration: Duration(seconds: 2),
           backgroundColor: AppConstants.secondary,

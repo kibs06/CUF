@@ -4,7 +4,11 @@ import '../constants/app_constants.dart';
 class SoleBadge extends StatelessWidget {
   final String label;
   final Color backgroundColor;
-  final Color textColor;
+
+  /// Ink on the badge's fill. Nullable so the constructor stays `const`;
+  /// resolves to [AppConstants.inkInverse] — a badge sits on a coloured fill,
+  /// so its ink must not follow the page.
+  final Color? textColor;
   final IconData? icon;
   final EdgeInsetsGeometry? padding;
 
@@ -12,7 +16,7 @@ class SoleBadge extends StatelessWidget {
     super.key,
     required this.label,
     this.backgroundColor = AppConstants.primary,
-    this.textColor = AppConstants.surfaceLight,
+    this.textColor,
     this.icon,
     this.padding,
   });
@@ -32,7 +36,7 @@ class SoleBadge extends StatelessWidget {
             Icon(
               icon,
               size: 12,
-              color: textColor,
+              color: textColor ?? AppConstants.inkInverse,
             ),
             const SizedBox(width: 4),
           ],

@@ -6,7 +6,7 @@
 
 ## 📌 Overview
 
-The seller app lives in `SellerShell` — a 5-tab host (`IndexedStack`, state survives tab switches). Tab 0 is the **Seller Dashboard** ("morning briefing": sales, attention, orders, stock). Sellers are CUFMAI member artisans; access is gated by `profiles.seller_status = 'approved'` + role flip to `seller` on admin approval. Revenue ALWAYS combines online `orders` + POS `sales_transactions`, filtered `status != 'cancelled'` AND `payment_status = 'paid'`.
+The seller app lives in `SellerShell` — a 5-tab host (`PageView` where each page is wrapped in `KeepAlivePage`, so state survives tab switches and `initState` runs once per session). Pages are built lazily on first visit, and re-entry is signalled by `ActiveTab`. Tab 0 is the **Seller Dashboard** ("morning briefing": sales, attention, orders, stock). Sellers are CUFMAI member artisans; access is gated by `profiles.seller_status = 'approved'` + role flip to `seller` on admin approval. Revenue ALWAYS combines online `orders` + POS `sales_transactions`, filtered `status != 'cancelled'` AND `payment_status = 'paid'`.
 
 ---
 

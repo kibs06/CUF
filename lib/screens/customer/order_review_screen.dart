@@ -44,7 +44,7 @@ class _OrderReviewScreenState extends State<OrderReviewScreen> {
         backgroundColor: AppConstants.surfaceLight,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppConstants.secondary),
+          icon: Icon(Icons.arrow_back, color: AppConstants.secondary),
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),

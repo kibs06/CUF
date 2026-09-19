@@ -5,10 +5,13 @@ import 'package:shimmer/shimmer.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../constants/app_constants.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/cart_provider.dart';
 import '../../providers/product_provider.dart';
 import '../../providers/review_provider.dart';
 import '../../utils/cart_helpers.dart';
+import '../../utils/product_audience.dart';
+import '../../utils/size_key.dart';
 import '../../utils/recently_viewed.dart';
 import '../../services/supabase_service.dart';
 import '../../utils/sale_price.dart';
@@ -425,12 +428,12 @@ class _StoreProductCard extends StatelessWidget {
                         ),
                         errorWidget: (_, _, _) => Container(
                           color: AppConstants.borderGray.withValues(alpha: 0.3),
-                          child: const Icon(Icons.image, color: AppConstants.borderGray, size: 20),
+                          child: Icon(Icons.image, color: AppConstants.borderGray, size: 20),
                         ),
                       )
                     : Container(
                         color: AppConstants.borderGray.withValues(alpha: 0.3),
-                        child: const Icon(Icons.image_outlined, color: AppConstants.borderGray, size: 20),
+                        child: Icon(Icons.image_outlined, color: AppConstants.borderGray, size: 20),
                       ),
               ),
             ),
@@ -605,52 +608,90 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
   /// colour) this keeps every colour separate. A product without colour
   /// variants uses the single `''` key, which is how the sheets know to hide
   /// the colour picker.
+  ///
+  /// Sizes merge by [sizeKey] — the database's digits-only identity — so
+  /// `'EU 40'` and `'40'` are one row here too (plan §4.1). The map key stays
+  /// the variant's real size string, which is what the sheet hands to
+  /// `resolveVariant` when the hold is created.
   Map<String, Map<String, int>> _buildStockByColor() {
     final colors = _variantColorNames;
-    final byColor = <String, Map<String, int>>{};
+    // colour → sizeKey → canonical raw size string (the variant form wins).
+    final canonical = <String, Map<String, String>>{};
+    // colour → sizeKey → stock, split by source so `inventory` can win.
+    final variantStock = <String, Map<String, int>>{};
+    final inventoryStock = <String, Map<String, int>>{};
 
-    void add(String color, dynamic size, int stock) {
-      final key = size?.toString();
-      if (key == null || key.isEmpty) return;
-      final sizes = byColor.putIfAbsent(color, () => {});
+    void bump(
+      Map<String, Map<String, int>> target,
+      String color,
+      String raw,
+      int stock,
+    ) {
+      final key = sizeKey(raw);
+      if (key.isEmpty) return;
+      canonical.putIfAbsent(color, () => {})[key] ??= raw;
+      final sizes = target.putIfAbsent(color, () => {});
       sizes[key] = (sizes[key] ?? 0) + stock;
     }
 
     final variants = widget.product['product_variants'] as List<dynamic>? ?? [];
-    if (colors.isEmpty) {
-      // Colourless product: mirror _buildSizesMap (variants + inventory).
-      for (final row in variants) {
-        add('', row['size'], row['stock'] as int? ?? 0);
+    for (final row in variants) {
+      final color =
+          colors.isEmpty ? '' : (row['color']?.toString().trim() ?? '');
+      if (colors.isNotEmpty && (color.isEmpty || !colors.contains(color))) {
+        continue;
       }
+      final raw = row['size']?.toString();
+      if (raw == null || raw.trim().isEmpty) continue;
+      bump(variantStock, color, raw, row['stock'] as int? ?? 0);
+    }
+
+    if (colors.isEmpty) {
+      // Inventory is not colour-aware, so it only joins a colourless product.
       final inventory = widget.product['inventory'] as List<dynamic>? ?? [];
       for (final row in inventory) {
-        add('', row['size'], row['stock'] as int? ?? 0);
-      }
-    } else {
-      for (final row in variants) {
-        final color = row['color']?.toString().trim() ?? '';
-        if (color.isEmpty || !colors.contains(color)) continue;
-        add(color, row['size'], row['stock'] as int? ?? 0);
+        final raw = row['size']?.toString();
+        if (raw == null || raw.trim().isEmpty) continue;
+        bump(inventoryStock, '', raw, row['stock'] as int? ?? 0);
       }
     }
 
-    // Sizes sorted numerically inside each colour, like the size picker.
-    return {
-      for (final entry in byColor.entries)
-        entry.key: Map.fromEntries(
-          entry.value.entries.toList()
-            ..sort((a, b) => (int.tryParse(a.key) ?? 0)
-                .compareTo(int.tryParse(b.key) ?? 0)),
-        ),
-    };
+    // `inventory` is derived from `product_variants` and is the authoritative
+    // stock source (lib/utils/product_stock.dart), so where it has a row it
+    // wins — summing the two double-counts the same stock (plan §8 R2).
+    final result = <String, Map<String, int>>{};
+    for (final entry in canonical.entries) {
+      final color = entry.key;
+      final byRaw = <String, int>{for (final size in entry.value.entries)
+        size.value: inventoryStock[color]?.containsKey(size.key) == true
+            ? inventoryStock[color]![size.key]!
+            : (variantStock[color]?[size.key] ?? 0)};
+      // Sizes sorted numerically inside each colour, like the size picker.
+      final sorted = byRaw.entries.toList()
+        ..sort((a, b) => compareSizes(a.key, b.key));
+      result[color] = Map.fromEntries(sorted);
+    }
+    return result;
   }
 
   /// Build a map of {size: stock} from both inventory and product_variants.
-  /// If a size exists in both tables, the higher stock value wins.
-  /// Sizes are sorted numerically (EU sizing).
+  ///
+  /// Sizes merge by [sizeKey] — the database matches sizes digits-only
+  /// (`regexp_replace(size, '\D', '', 'g')`), so `'EU 40'` and `'40'` are one
+  /// size and must not become two entries (plan §4.1, R2). The map key stays
+  /// the real size string so `_selectedSize` and variant lookup keep matching
+  /// `product_variants.size`.
+  ///
+  /// Where both tables have a row, `inventory` wins: it is derived from
+  /// `product_variants` and is the authoritative stock source
+  /// (lib/utils/product_stock.dart), so summing the two double-counts.
+  /// Sizes sort numerically, half sizes included ([compareSizes]).
   Map<String, int> _buildSizesMap() {
-    final Map<String, int> sizes = {};
     final activeColor = _effectiveColor;
+    // sizeKey → canonical raw size string (the variant form wins).
+    final canonical = <String, String>{};
+    final variantStock = <String, int>{};
+    final inventoryStock = <String, int>{};
 
     // When a color is selected, filter variants to only that color
     // so the size picker shows only sizes available for that color.
@@ -659,33 +700,37 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
       final rowColor = row['color']?.toString().trim() ?? '';
       // If a color is selected, skip variants that don't match
       if (activeColor != null && rowColor != activeColor) continue;
-      final size = row['size']?.toString();
-      final stock = row['stock'] as int? ?? 0;
-      if (size != null && size.isNotEmpty) {
-        sizes[size] = (sizes[size] ?? 0) + stock;
-      }
+      final raw = row['size']?.toString();
+      if (raw == null || raw.trim().isEmpty) continue;
+      final key = sizeKey(raw);
+      if (key.isEmpty) continue;
+      canonical[key] ??= raw;
+      variantStock[key] = (variantStock[key] ?? 0) + (row['stock'] as int? ?? 0);
     }
 
-    // If no color filter applied, also include inventory table data
+    // Inventory is not colour-aware, so it only joins a colourless product.
     if (activeColor == null) {
       final inventory = widget.product['inventory'] as List<dynamic>? ?? [];
       for (final row in inventory) {
-        final size = row['size']?.toString();
-        final stock = row['stock'] as int? ?? 0;
-        if (size != null && size.isNotEmpty) {
-          sizes[size] = (sizes[size] ?? 0) + stock;
-        }
+        final raw = row['size']?.toString();
+        if (raw == null || raw.trim().isEmpty) continue;
+        final key = sizeKey(raw);
+        if (key.isEmpty) continue;
+        canonical[key] ??= raw;
+        inventoryStock[key] =
+            (inventoryStock[key] ?? 0) + (row['stock'] as int? ?? 0);
       }
     }
 
-    // Sort numerically by EU size
-    final sorted = Map.fromEntries(
-      sizes.entries.toList()
-        ..sort((a, b) =>
-            (int.tryParse(a.key) ?? 0).compareTo(int.tryParse(b.key) ?? 0)),
+    final merged = <String, int>{
+      for (final entry in canonical.entries)
+        entry.value: inventoryStock.containsKey(entry.key)
+            ? inventoryStock[entry.key]!
+            : (variantStock[entry.key] ?? 0),
+    };
+    return Map.fromEntries(
+      merged.entries.toList()..sort((a, b) => compareSizes(a.key, b.key)),
     );
-
-    return sorted;
   }
 
   @override
@@ -1274,6 +1319,26 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
 
   Widget _buildScaffold(BuildContext context, DateTime now) {
     final sizesMap = _buildSizesMap();
+
+    // The scale the US/UK labels are drawn on — EU 42 is 'US 9' on the men's
+    // chart and 'US 10.5' on the women's. `productSizeChart` owns the
+    // precedence in one place: the PRODUCT's own audience first (a woman
+    // browsing a men's-cut shoe reads the men's label), then the shopper's
+    // saved scale, then the men's default. While
+    // `AppConstants.productAudienceEnabled` is false it returns exactly what
+    // this screen passed before the audience column existed, so the labels are
+    // unchanged for every product in the catalog.
+    final sizeChart = productSizeChart(
+      product: widget.product,
+      profile: context.watch<AuthProvider>().profile,
+      audienceEnabled: AppConstants.productAudienceEnabled,
+    );
+    // The units this scale can label honestly (EU only for Kids'), and the one
+    // the grid actually renders in. The customer's preferred unit is kept in
+    // `_sizeUnit` so switching scale back to Men's/Women's restores it.
+    final sizeUnits = sizeUnitsForCategory(sizeChart);
+    final sizeUnit =
+        sizeUnits.contains(_sizeUnit) ? _sizeUnit : sizeUnits.first;
     final double price = (widget.product['price'] is int)
         ? (widget.product['price'] as int).toDouble()
         : (widget.product['price'] ?? 0.0);
@@ -1540,10 +1605,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                             style: AppConstants.bodyStyle(fontWeight: FontWeight.bold, fontSize: 15),
                           ),
                           const SizedBox(width: 10),
-                          _UnitSwitcher(
-                            current: _sizeUnit,
-                            onChanged: (unit) => setState(() => _sizeUnit = unit),
-                          ),
+                          if (sizeUnits.length > 1)
+                            _UnitSwitcher(
+                              current: sizeUnit,
+                              units: sizeUnits,
+                              onChanged: (unit) =>
+                                  setState(() => _sizeUnit = unit),
+                            ),
                           const Spacer(),
                           _SizeHelperLink(
                             icon: Icons.straighten_outlined,
@@ -1607,10 +1675,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                             final isSelected = _selectedSize == size;
 
                             final isLowStock = isAvailable && stock <= 5;
-                            // Label respects the active unit; the canonical
-                            // string stays untouched so variant lookup and
-                            // cart keys keep matching the DB rows.
-                            final label = displaySizeInUnit(size, _sizeUnit);
+                            // Label respects the active unit and the chart the
+                            // product is sold on; the canonical string stays
+                            // untouched so variant lookup and cart keys keep
+                            // matching the DB rows.
+                            final label = displaySizeInUnit(size, sizeUnit,
+                                category: sizeChart);
 
                             return GestureDetector(
                               onTap: isAvailable
@@ -1621,7 +1691,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                                         // (bijective conversion, so this
                                         // always resolves to the same size).
                                         _selectedSize = sizesMap.keys.firstWhere(
-                                          (s) => displaySizeInUnit(s, _sizeUnit) == label,
+                                          (s) =>
+                                              displaySizeInUnit(s, sizeUnit,
+                                                  category: sizeChart) ==
+                                              label,
                                           orElse: () => size,
                                         );
                                       });
@@ -2055,14 +2128,20 @@ class _SizeHelperLink extends StatelessWidget {
   }
 }
 
-/// Tappable unit switcher chip (US / EU / UK) next to the size label.
+/// Tappable unit switcher chip next to the size label.
 /// Opens a small menu — the reference's chevron affordance.
+///
+/// [units] is the set the active shopping scale can label honestly, so a kids'
+/// shopper never sees a US/UK step drawn on a chart this app does not own
+/// (@see sizeUnitsForCategory).
 class _UnitSwitcher extends StatelessWidget {
   final String current;
+  final List<String> units;
   final ValueChanged<String> onChanged;
 
   const _UnitSwitcher({
     required this.current,
+    required this.units,
     required this.onChanged,
   });
 
@@ -2073,7 +2152,7 @@ class _UnitSwitcher extends StatelessWidget {
       onSelected: onChanged,
       tooltip: 'Switch size unit',
       itemBuilder: (context) => [
-        for (final unit in sizeUnits)
+        for (final unit in units)
           PopupMenuItem(
             value: unit,
             child: Row(

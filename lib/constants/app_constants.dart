@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'app_brightness.dart';
+import 'app_palette.dart';
 import 'seller_theme_constants.dart';
 
 class AppConstants {
@@ -45,11 +47,30 @@ class AppConstants {
       'https://raw.githubusercontent.com/kibs06/CUF/main/releases/changelog.json';
 
   // --- COLOR PALETTE ---
-  // Primary – Burnished Clay (aged leather)
+  //
+  // Two kinds of token live here, and the difference is load-bearing for dark
+  // mode (see docs/AI/DARK_MODE_PLAN.md):
+  //
+  //   • PINNED `const` colours — brand and semantic values that must look the
+  //     same in both brightnesses, because they are a fill someone puts ink
+  //     on, a status meaning, or the intentionally-dark canvas of the AR and
+  //     camera screens. They stay compile-time constants.
+  //
+  //   • BRIGHTNESS-AWARE getters — surfaces and ink, which resolve through
+  //     [AppPalette] against [AppBrightness]. These are getters, not `const`,
+  //     so anywhere a `const` expression used one is now a compile error the
+  //     analyzer names for you.
+  //
+  // Primary – Burnished Clay (aged leather). PINNED: it is a fill (buttons,
+  // badges, icon tiles) that other colours are drawn on, and the brand should
+  // not drift between modes. The *ink* role for clay lives on
+  // `AppPalette.primaryInk` for the Phase 3 sweep.
   static const Color primary = Color(0xFF8B5A2B);
 
-  // Secondary – Neutral Ink (near-black: text, icons, dark chrome fills)
-  static const Color secondary = Color(0xFF111111);
+  // Secondary – Ink (text, icons, dark chrome fills). BRIGHTNESS-AWARE: this
+  // is the default colour of every text style below, so flipping it is what
+  // makes ~2,000 text call sites follow the theme.
+  static Color get secondary => AppPalette.of(AppBrightness.current).onPage;
 
   // Accent – Celadon Teal (AR mode, CTAs, highlights)
   static const Color accent = Color(0xFF4ECDC4);
@@ -73,7 +94,7 @@ class AppConstants {
   //
   // This token is ALSO still used as light-on-dark text; [inkInverse] is the
   // explicit token for that job — see docs/AI/NEUTRAL_THEME_PLAN.md §5.
-  static const Color surfaceLight = SellerTheme.creamBg;
+  static Color get surfaceLight => AppPalette.of(AppBrightness.current).page;
 
   // Surface Subtle – the light neutral fill.
   //
@@ -81,14 +102,22 @@ class AppConstants {
   // to stay visible ON a [surfaceLight] page. On the old cream ladder those
   // fills sat lighter than the page (`SellerTheme.card`); with a white page
   // they have to go darker instead — lighter is no longer available.
-  static const Color surfaceSubtle = Color(0xFFF5F5F5);
+  static Color get surfaceSubtle => AppPalette.of(AppBrightness.current).subtle;
 
   // Grounded band – the bottom navigation bar's default and section bands.
   // Retargeted at [surfaceSubtle] so the two can never drift.
-  static const Color creamDeep = surfaceSubtle;
+  static Color get creamDeep => AppPalette.of(AppBrightness.current).band;
 
-  // Surface Dark – Neutral Black (dark mode / AR overlay)
+  // Surface Dark – Neutral Black (AR overlay, camera screens). PINNED: the
+  // screens that use it are dark by design in BOTH brightnesses, so it must
+  // never follow the theme. Do not "fix" it during a dark-mode sweep.
   static const Color surfaceDark = Color(0xFF111111);
+
+  // Ink on a FIXED light-ish accent fill — the camel (`#C08552`) and olive
+  // (`#556B2F`) tag chips keep their hex in both modes, so ink on them must be
+  // pinned too: the brightness-aware [secondary] would put near-white text on
+  // camel in dark mode.
+  static const Color inkOnLightAccent = Color(0xFF111111);
 
   // Ink on dark – text and icons sitting on a clay, espresso or black fill.
   //
@@ -106,8 +135,10 @@ class AppConstants {
   // Error – Crimson Welt
   static const Color error = Color(0xFFD64545);
 
-  // Neutral hairline for borders/dividers (was the warm #D2C7BC)
-  static const Color borderGray = Color(0xFFE5E5E5);
+  // Neutral hairline for borders/dividers (was the warm #D2C7BC).
+  // BRIGHTNESS-AWARE: on a dark page a light hairline vanishes, and on a
+  // white page a dark one would.
+  static Color get borderGray => AppPalette.of(AppBrightness.current).hairline;
 
   // --- BRAND COLOR PARSER ---
   /// Safely parse a hex brand color string (e.g. '#8B5A2B') into a Flutter Color.
@@ -140,24 +171,29 @@ class AppConstants {
   // seller widget) rethemes consistently without touching each file.
   // Shared customer surfaces that used to reference these (e.g. chat_view)
   // now pin their own values so customer UI is unchanged.
-  static const Color sellerSurface = SellerTheme.creamBg;
-  static const Color sellerCardBg = SellerTheme.card;
+  static Color get sellerSurface => AppPalette.of(AppBrightness.current).page;
+  static Color get sellerCardBg => AppPalette.of(AppBrightness.current).raised;
 
   // Neutral shadow for seller cards — soft espresso-tinted (mockup
   // treatment: 10px blur, 2px y, low opacity) instead of Material elevation.
-  static final List<BoxShadow> sellerShadow = SellerTheme.cardShadow;
+  // Collapses to nothing on dark (see [AppPalette.shadow]).
+  static List<BoxShadow> get sellerShadow => SellerTheme.cardShadow;
 
   // --- TYPOGRAPHY ---
   // Headlines - Playfair Display
+  // The three text helpers keep their signatures and their
+  // `color: secondary` *behaviour* without making the default a compile-time
+  // constant — `secondary` is brightness-aware now, so it is resolved at call
+  // time. `Color?` accepts every existing call unchanged.
   static TextStyle headlineStyle({
     double fontSize = 24.0,
     FontWeight fontWeight = FontWeight.bold,
-    Color color = secondary,
+    Color? color,
   }) {
     return GoogleFonts.playfairDisplay(
       fontSize: fontSize,
       fontWeight: fontWeight,
-      color: color,
+      color: color ?? secondary,
     );
   }
 
@@ -165,14 +201,14 @@ class AppConstants {
   static TextStyle bodyStyle({
     double fontSize = 14.0,
     FontWeight fontWeight = FontWeight.normal,
-    Color color = secondary,
+    Color? color,
     double? height,
     double? letterSpacing,
   }) {
     return GoogleFonts.dmSans(
       fontSize: fontSize,
       fontWeight: fontWeight,
-      color: color,
+      color: color ?? secondary,
       height: height,
       letterSpacing: letterSpacing,
     );
@@ -184,12 +220,12 @@ class AppConstants {
   static TextStyle monoStyle({
     double fontSize = 14.0,
     FontWeight fontWeight = FontWeight.normal,
-    Color color = secondary,
+    Color? color,
   }) {
     return GoogleFonts.sora(
       fontSize: fontSize,
       fontWeight: fontWeight,
-      color: color,
+      color: color ?? secondary,
     ).copyWith(fontFeatures: const [FontFeature.tabularFigures()]);
   }
 
@@ -229,14 +265,19 @@ class AppConstants {
     ),
   ];
 
-  // Subtle warm shadow for surfaceLight cards
-  static final List<BoxShadow> warmShadow = [
-    BoxShadow(
-      color: primary.withValues(alpha: 0.08),
-      blurRadius: 12,
-      offset: const Offset(0, 4),
-    ),
-  ];
+  // Subtle warm shadow for surfaceLight cards.
+  // Collapses on dark: a warm tint on near-black is invisible, so cards there
+  // separate by the raised surface tone + hairline instead (which is why the
+  // product cards are hairline-first).
+  static List<BoxShadow> get warmShadow => AppBrightness.isDark
+      ? const <BoxShadow>[]
+      : [
+          BoxShadow(
+            color: primary.withValues(alpha: 0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ];
 
   // Subtle dark overlay shadow
   static final List<BoxShadow> darkShadow = [
@@ -374,6 +415,45 @@ class AppConstants {
     final s = source?.toString();
     return s == null || s.isEmpty || s == footProfileSkipped;
   }
+
+  // --- SIZE-AWARE SHOPPING ---
+  /// Whether the customer's saved foot size drives browse surfaces.
+  ///
+  /// On: the home feed shows the "In your size" rail, listing only products
+  /// that actually stock the customer's size right now (later phases add the
+  /// size chip, card badges and the product-page pre-select — see
+  /// `docs/AI/SIZE_AWARE_SHOPPING_PLAN.md`).
+  ///
+  /// Every size surface is ABSENT-SAFE: no size on file, no catalog match, or
+  /// a size the catalog cannot honestly compare against renders nothing at
+  /// all. So this switch exists only to kill the surfaces wholesale, not to
+  /// stage them — unlike `kBestSellersRailEnabled`, nothing here is
+  /// half-finished. Same one-const kill-switch shape as that rail.
+  static const bool sizeAwareShoppingEnabled = true;
+
+  // --- PRODUCT AUDIENCE (Men's / Women's / Kids') ---
+  /// Gates the product-audience feature — the audience rails and chips on the
+  /// home feed, the audience listing pages, and audience-aware size-chart
+  /// labels.
+  ///
+  /// **Now ON.** It shipped `false` through P2/P3 of
+  /// `docs/AI/PRODUCT_AUDIENCE_PLAN.md` while the surfaces were being built;
+  /// it was flipped once the seller form (P1) made audiences settable and the
+  /// home entry points existed. Turning it on is safe with an untagged
+  /// catalog, and that property is what let it be flipped early: every surface
+  /// is data-derived, so with every product still `audience = null` the rails
+  /// render nothing, the audience chips render nothing, and
+  /// `productSizeChart()` returns the shopper's own scale verbatim — i.e. Home
+  /// and every size label are byte-for-byte what they were with it off.
+  ///
+  /// Flipping it back to `false` is still the whole rollback: no surface is
+  /// half-built behind it.
+  ///
+  /// Everything that reads it: `AudienceSection` (rails),
+  /// `ProductProvider.audiencesInCatalog` as surfaced by `HomeHero` (chips),
+  /// and `productSizeChart()`'s `audienceEnabled` argument at the product
+  /// page. Nothing else reads the audience column.
+  static const bool productAudienceEnabled = true;
 
   /// Whether the customer actually has a foot size on file — the signal the
   /// home reminder banner keys off ("only show it when they haven't set a

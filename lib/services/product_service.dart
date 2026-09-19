@@ -3,6 +3,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/product_models.dart';
+import '../utils/product_audience.dart';
 import 'seller_notification_service.dart';
 
 /// Service handling all product-related Supabase operations for sellers.
@@ -36,6 +37,7 @@ class ProductService {
     double? salePrice,
     DateTime? saleStartsAt,
     DateTime? saleEndsAt,
+    String? audience,
   }) async {
     final sellerId = _client.auth.currentUser!.id;
 
@@ -59,6 +61,12 @@ class ProductService {
           if (saleStartsAt != null)
             'sale_starts_at': saleStartsAt.toIso8601String(),
           if (saleEndsAt != null) 'sale_ends_at': saleEndsAt.toIso8601String(),
+          // Audience — 'men' | 'women' | 'kids' | 'unisex', or SQL NULL for
+          // "not set". Normalised through `productAudienceFrom` so anything
+          // outside the closed vocabulary becomes NULL instead of tripping the
+          // column's CHECK constraint as a 400 (whose message the UI would
+          // flatten into a generic "Something went wrong").
+          'audience': productAudienceFrom(audience),
         })
         .select()
         .single();
@@ -144,12 +152,16 @@ class ProductService {
     double? salePrice,
     DateTime? saleStartsAt,
     DateTime? saleEndsAt,
+    String? audience,
   }) async {
     final sellerId = _client.auth.currentUser!.id;
 
     // 1. Update product row
     //    Sale fields are ALWAYS sent (null clears an existing sale) so the
-    //    form can start/stop a sale by editing those fields.
+    //    form can start/stop a sale by editing those fields. `audience`
+    //    follows the same rule for the same reason: the form's "Not set" chip
+    //    has to be able to clear a value, and a value it can't clear is a
+    //    value the seller is stuck with.
     await _client
         .from('products')
         .update({
@@ -164,6 +176,9 @@ class ProductService {
           'sale_price': salePrice,
           'sale_starts_at': saleStartsAt?.toIso8601String(),
           'sale_ends_at': saleEndsAt?.toIso8601String(),
+          // Normalised like the create path, so an unrecognised value clears
+          // the column rather than failing the CHECK constraint.
+          'audience': productAudienceFrom(audience),
           'updated_at': DateTime.now().toIso8601String(),
         })
         .eq('id', productId);

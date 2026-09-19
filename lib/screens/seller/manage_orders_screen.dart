@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:provider/provider.dart';
 import '../../constants/app_constants.dart';
+import '../../utils/nav_perf.dart';
+import '../../widgets/active_tab.dart';
 import '../../widgets/countdown_delete_button.dart';
 import '../../providers/order_provider.dart';
 import '../../services/connectivity_service.dart';
@@ -24,6 +26,16 @@ class ManageOrdersScreen extends StatefulWidget {
 
 class _ManageOrdersScreenState extends State<ManageOrdersScreen>
     with SingleTickerProviderStateMixin {
+  /// This screen's index in the seller shell's tab list.
+  static const int _ordersTabIndex = 3;
+
+  /// How long a loaded order list stays fresh. Past this, re-entering the tab
+  /// re-fetches in the background; below it, re-entry does nothing at all.
+  static const Duration _staleAfter = Duration(seconds: 60);
+
+  /// Last tab index this screen saw on screen (see [ActiveTab]).
+  int? _lastActiveTab;
+
   late TabController _tabController;
   int _tabIndex = 0;
   final Set<dynamic> _updatingOrderIds = {};
@@ -78,6 +90,39 @@ class _ManageOrdersScreenState extends State<ManageOrdersScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<OrderProvider>(context, listen: false).loadOrders();
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Tab re-entry hook. The shell keeps this page mounted now, so switching
+    // back does not rebuild it — this is the only signal that the seller is
+    // looking at the order queue again, which is the moment to pick up orders
+    // placed in the meantime. Gated on staleness so re-selecting the tab is
+    // never itself a reason to hit the network. Deferred past the frame
+    // because this can run inside the shell's build phase.
+    final active = ActiveTab.of(context);
+    if (active == null || active == _lastActiveTab) return;
+    _lastActiveTab = active;
+    if (active != _ordersTabIndex) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _refreshOrdersIfStale();
+    });
+  }
+
+  /// Re-fetch the order list only when it has aged past [_staleAfter].
+  ///
+  /// Skips entirely while no successful load has happened yet — the initial
+  /// `loadOrders()` below is still in flight then, and stacking a second
+  /// identical fetch on top of it would defeat the point.
+  void _refreshOrdersIfStale() {
+    final provider = context.read<OrderProvider>();
+    final loadedAt = provider.ordersLoadedAt;
+    if (loadedAt == null) return;
+    final age = DateTime.now().difference(loadedAt);
+    if (age < _staleAfter) return;
+    PerfTrace.mark('orders:stale re-entry refresh (age=${age.inSeconds}s)');
+    provider.loadOrders();
   }
 
   @override

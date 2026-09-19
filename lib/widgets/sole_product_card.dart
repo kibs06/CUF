@@ -24,6 +24,11 @@ class SoleProductCard extends StatelessWidget {
     this.imageAspectRatio,
   });
 
+  /// The card's outer surface — carries the 1px hairline. Exposed so widget
+  /// tests can assert the edge is never lightened back into invisibility on
+  /// the (also white) page behind it.
+  static const Key hairlineKey = Key('product-card-hairline');
+
   @override
   Widget build(BuildContext context) {
     // The sale-expiry watcher re-renders this card with a `now` past the
@@ -63,12 +68,19 @@ class SoleProductCard extends StatelessWidget {
         clipBehavior: Clip.none,
         children: [
           Container(
+            key: hairlineKey,
+            // Card fill and page are BOTH pure white, so this 1px hairline
+            // is what actually draws the card's edge (the warm shadow only
+            // adds depth). Uses the neutral hairline token rather than a
+            // tinted clay wash, which vanished at 8% alpha. The 1px border
+            // also insets the child by 1px, which is why the image clip
+            // below uses a 15px radius against this 16px card radius.
             decoration: BoxDecoration(
               color: AppConstants.surfaceLight,
               borderRadius: AppConstants.cardRadius,
               boxShadow: AppConstants.warmShadow,
               border: Border.all(
-                color: AppConstants.primary.withValues(alpha: 0.08),
+                color: AppConstants.borderGray,
                 width: 1,
               ),
             ),
@@ -124,24 +136,48 @@ class SoleProductCard extends StatelessWidget {
                       if ((product['review_count'] as int? ?? 0) > 0 ||
                           (product['units_sold'] as int? ?? 0) > 0) ...[
                         const SizedBox(height: 2),
-                        Row(
+                        // Also a Wrap (see the price row below for the full
+                        // reasoning): the stars and the score are one unit that
+                        // must stay together, and the sold count is the one that
+                        // can move to its own line when the card is narrow at a
+                        // large text scale — a Row here overflowed by 129px at
+                        // 1.3x on a 132px card. The nested Row is `min` because
+                        // a Wrap hands its children unbounded width.
+                        Wrap(
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          alignment: WrapAlignment.spaceBetween,
+                          spacing: 6,
                           children: [
-                            if ((product['review_count'] as int? ?? 0) > 0) ...[
-                              SoleStarRating(
-                                rating: ((product['avg_rating'] as num?)?.toDouble() ?? 0.0).round(),
-                                size: 13,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                ((product['avg_rating'] as num?)?.toDouble() ?? 0.0)
-                                    .toStringAsFixed(1),
-                                style: AppConstants.bodyStyle(
-                                  fontSize: 10,
-                                  color: AppConstants.secondary.withValues(alpha: 0.5),
+                            if ((product['review_count'] as int? ?? 0) > 0)
+                              // Stars and score are one unit and must never be
+                              // separated, and the stars are fixed-size graphics
+                              // while the score doubles at a 2x scale — so at the
+                              // top of the scale the pair needs ~141px in a
+                              // ~108px card. `FittedBox` shrinks the pair rather
+                              // than overflowing it, which keeps the score a real
+                              // number (an ellipsised "4…" would not be one).
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    SoleStarRating(
+                                      rating: ((product['avg_rating'] as num?)?.toDouble() ?? 0.0).round(),
+                                      size: 13,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      ((product['avg_rating'] as num?)?.toDouble() ?? 0.0)
+                                          .toStringAsFixed(1),
+                                      style: AppConstants.bodyStyle(
+                                        fontSize: 10,
+                                        color: AppConstants.secondary.withValues(alpha: 0.5),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                            ],
-                            const Spacer(),
                             if ((product['units_sold'] as int? ?? 0) > 0)
                               Text(
                                 '${compactNumber(product['units_sold'] as int)} sold',
@@ -154,9 +190,18 @@ class SoleProductCard extends StatelessWidget {
                         ),
                       ],
                       const SizedBox(height: 2),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      // A Wrap, not a Row: at the largest text scale a price and
+                      // a category cannot both fit across a two-column card on a
+                      // narrow phone, and a Row overflowed by ~148px doing the
+                      // arithmetic. Wrapping drops the category onto its own line
+                      // at that scale — nothing shrinks and nothing ellipsises,
+                      // which matters most on a price ("₱1099…" is a different
+                      // price; a shrunken one is at least true). On one line it
+                      // is laid out exactly as the Row was.
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        alignment: WrapAlignment.spaceBetween,
+                        spacing: 6,
                         children: [
                           if (onSale) ...[
                             // Sale price (hidden behind a peel-away tape until
