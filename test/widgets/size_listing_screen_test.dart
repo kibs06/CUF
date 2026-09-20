@@ -119,7 +119,14 @@ void main() {
 
     // The end of the shelf is reachable, in the preview's ranking: the very
     // product the arrow stood for is on the page.
-    await tester.scrollUntilVisible(find.text('P0'), 400);
+    // Named explicitly: every product card carries its own photo pager now, so
+    // `find.byType(Scrollable)` is no longer the page's scroll view alone.
+    // `.first` is the page's, being the ancestor of the cards'.
+    await tester.scrollUntilVisible(
+      find.text('P0'),
+      400,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('P0'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

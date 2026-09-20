@@ -358,12 +358,14 @@ All providers are app-root singletons, created in `main.dart` and consumed via `
 | `ConnectivityService` | `services/connectivity_service.dart` | Online/offline stream |
 | `PushNotificationService` | `services/push_notification_service.dart` | FCM setup, deep-link callbacks |
 | `RecentlyViewedService` | `utils/recently_viewed.dart` | Local recently-viewed product history |
+| `productImageUrls` | `utils/product_images.dart` | Every photo on a product map, in the seller's order — reads a raw row's `product_images` and the mapped model's flat `images` |
 
 ## Key widgets (shared)
 
 | Widget | File | Used by |
 |--------|------|---------|
-| `SoleProductCard` | `widgets/sole_product_card.dart` | Home grid, sale section, cross-store row. Text-scale safe: its price/category row and rating/sold row wrap rather than overflow on a narrow phone at a large scale (they overflowed at 2.0× until P2's chip-row work surfaced it) |
+| `SoleProductCard` | `widgets/sole_product_card.dart` | Home grid, sale section, cross-store row. Text-scale safe: its price/category row and rating/sold row wrap rather than overflow on a narrow phone at a large scale (they overflowed at 2.0× until P2's chip-row work surfaced it). Its photo area is a `ProductImagePager` |
+| `ProductImagePager` | `widgets/product_image_pager.dart` | The card's swiped photo: one page per image, dots for the current one, and the sale countdown stacked under them |
 | `BestSellersSection` | `widgets/best_sellers_section.dart` | Home — horizontally-scrolling Best Sellers rail (live `units_sold` order) |
 | `HorizontalProductCard` | `widgets/horizontal_product_card.dart` | Home Best Sellers rail, profile Buy Again / Recently Viewed rails |
 | `SoleBottomNav` | `widgets/sole_bottom_nav.dart` | All shells (customer, seller, admin) |

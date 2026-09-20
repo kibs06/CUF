@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../constants/app_constants.dart';
 import '../utils/sale_price.dart';
 import '../utils/compact_number.dart';
+import '../utils/product_images.dart';
+import 'product_image_pager.dart';
 import 'press_sink.dart';
 import 'sole_star_rating.dart';
 import 'hanging_sale_tag.dart';
 import 'sale_price_tape.dart';
 import 'sale_countdown_overlay.dart';
+
+/// The photo a product with none of its own falls back to.
+const String _fallbackProductImage =
+    'https://images.unsplash.com/photo-1549298916-b41d501d3772?q=80&w=600&auto=format&fit=crop';
 
 class SoleProductCard extends StatelessWidget {
   final dynamic product; // Can be a map or a model
@@ -57,10 +62,12 @@ class SoleProductCard extends StatelessWidget {
     final DateTime? saleEnd = DateTime.tryParse(
       product['sale_ends_at']?.toString() ?? '',
     );
-    final List<dynamic> images = product['images'] ?? [];
-    final String imageUrl = images.isNotEmpty
-        ? images.first
-        : 'https://images.unsplash.com/photo-1549298916-b41d501d3772?q=80&w=600&auto=format&fit=crop';
+    // Every photo, in the seller's order — the card pages through them (see
+    // `ProductImagePager`), and a product with none uses the stand-in above.
+    final List<String> images = productImageUrls(product);
+    final List<String> photos = images.isEmpty
+        ? const [_fallbackProductImage]
+        : images;
 
     // The lift lives under the card, in `PressSink`, so a press can animate the
     // shadow without rebuilding this card (and its image, its text and its sale
@@ -108,7 +115,7 @@ class SoleProductCard extends StatelessWidget {
                   AspectRatio(
                     aspectRatio: imageAspectRatio!,
                     child: _buildImageSection(
-                      imageUrl,
+                      photos,
                       onSale: onSale,
                       saleEndsAt: saleEnd,
                     ),
@@ -116,7 +123,7 @@ class SoleProductCard extends StatelessWidget {
                 else
                   Expanded(
                     child: _buildImageSection(
-                      imageUrl,
+                      photos,
                       onSale: onSale,
                       saleEndsAt: saleEnd,
                     ),
@@ -299,53 +306,23 @@ class SoleProductCard extends StatelessWidget {
   }
 
   Widget _buildImageSection(
-    String imageUrl, {
+    List<String> photos, {
     required bool onSale,
     DateTime? saleEndsAt,
   }) {
     return ClipRRect(
       borderRadius: AppConstants.productCardImageRadius,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          CachedNetworkImage(
-            imageUrl: imageUrl,
-            fit: BoxFit.cover,
-            width: double.infinity,
-            height: double.infinity,
-            placeholder: (context, url) => Container(
-              color: AppConstants.borderGray.withValues(alpha: 0.3),
-              child: const Center(
-                child: SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation(AppConstants.primary),
-                  ),
-                ),
-              ),
-            ),
-            errorWidget: (context, url, error) => Container(
-              color: AppConstants.borderGray.withValues(alpha: 0.3),
-              child: const Icon(
-                Icons.broken_image_outlined,
-                color: AppConstants.primary,
-              ),
-            ),
-          ),
-          // Sale countdown — a gradient scrim band across the bottom of the
-          // image. A pure overlay (never affects masonry sizing or the HOT
-          // DEALS grid contract), and only for sales that actually end
-          // (open-ended sales with a NULL end date show nothing at all).
-          if (onSale && saleEndsAt != null)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: SaleCountdownOverlay(saleEndsAt: saleEndsAt),
-            ),
-        ],
+      child: ProductImagePager(
+        images: photos,
+        // The sale countdown — a gradient scrim band across the bottom of the
+        // photo. A pure overlay (never affects masonry sizing or the HOT DEALS
+        // grid contract), and only for sales that actually end (open-ended
+        // sales with a NULL end date show nothing at all). It is handed to the
+        // pager rather than stacked here so the swipe dots can sit *above* it
+        // instead of on top of it.
+        bottomOverlay: onSale && saleEndsAt != null
+            ? SaleCountdownOverlay(saleEndsAt: saleEndsAt)
+            : null,
       ),
     );
   }
