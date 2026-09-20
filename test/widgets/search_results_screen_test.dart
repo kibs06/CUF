@@ -233,7 +233,7 @@ void main() {
 
     expect(find.byType(SoleProductCard), findsNothing);
     // ...and the page invites a new search rather than claiming a failure.
-    expect(find.text('Search the artisan catalog'), findsOneWidget);
+    expect(find.text('Search the collection'), findsOneWidget);
     expect(find.text('Popular right now'), findsOneWidget);
   });
 
@@ -268,7 +268,7 @@ void main() {
     await tester.pumpWidget(wrap(provider, query: ''));
     await tester.pump();
 
-    expect(find.text('Search the artisan catalog'), findsOneWidget);
+    expect(find.text('Search the collection'), findsOneWidget);
     expect(find.textContaining('No matches'), findsNothing);
     // The filter bar is hidden when there is no query to filter.
     expect(find.text('Featured'), findsNothing);

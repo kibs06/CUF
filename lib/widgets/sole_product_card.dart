@@ -3,6 +3,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../constants/app_constants.dart';
 import '../utils/sale_price.dart';
 import '../utils/compact_number.dart';
+import 'press_sink.dart';
 import 'sole_star_rating.dart';
 import 'hanging_sale_tag.dart';
 import 'sale_price_tape.dart';
@@ -61,8 +62,15 @@ class SoleProductCard extends StatelessWidget {
         ? images.first
         : 'https://images.unsplash.com/photo-1549298916-b41d501d3772?q=80&w=600&auto=format&fit=crop';
 
-    return GestureDetector(
+    // The lift lives under the card, in `PressSink`, so a press can animate the
+    // shadow without rebuilding this card (and its image, its text and its sale
+    // overlay) on every frame of the way down — and so the fill, the radius and
+    // the hairline stay this card's own.
+    return PressSink(
       onTap: onTap,
+      idle: AppConstants.productCardShadow,
+      pressed: AppConstants.productCardShadowPressed,
+      borderRadius: AppConstants.productCardRadius,
       child: Stack(
         // The hanging sale tag is allowed to overlap the card edge, so the
         // outer stack must not clip it.
@@ -71,15 +79,20 @@ class SoleProductCard extends StatelessWidget {
           Container(
             key: hairlineKey,
             // Card fill and page are BOTH pure white, so this 1px hairline
-            // is what actually draws the card's edge (the warm shadow only
-            // adds depth). Uses the neutral hairline token rather than a
-            // tinted clay wash, which vanished at 8% alpha. The 1px border
-            // also insets the child by 1px, which is why the image clip
-            // below uses a 15px radius against this 16px card radius.
+            // is what actually draws the card's edge. Uses the neutral
+            // hairline token rather than a tinted clay wash, which vanished
+            // at 8% alpha. The 1px border also insets the child by 1px,
+            // which is why the image clip below uses
+            // [AppConstants.productCardImageRadius] — the card's corner less
+            // that pixel — rather than this token verbatim.
+            //
+            // The lift is not here: `PressSink` paints it on the box directly
+            // under this one, and animates it to the pressed weight while a
+            // finger is on the card (see the two tokens). The poster cards
+            // alongside this one deliberately stay flat.
             decoration: BoxDecoration(
               color: AppConstants.surfaceLight,
-              borderRadius: AppConstants.cardRadius,
-              boxShadow: AppConstants.warmShadow,
+              borderRadius: AppConstants.productCardRadius,
               border: Border.all(color: AppConstants.cardEdge, width: 1),
             ),
             child: Column(
@@ -291,10 +304,7 @@ class SoleProductCard extends StatelessWidget {
     DateTime? saleEndsAt,
   }) {
     return ClipRRect(
-      borderRadius: const BorderRadius.only(
-        topLeft: Radius.circular(15),
-        topRight: Radius.circular(15),
-      ),
+      borderRadius: AppConstants.productCardImageRadius,
       child: Stack(
         fit: StackFit.expand,
         children: [

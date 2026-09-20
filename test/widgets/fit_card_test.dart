@@ -5,6 +5,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:app/constants/app_brightness.dart';
+import 'package:app/constants/app_constants.dart';
 import 'package:app/constants/app_palette.dart';
 import 'package:app/widgets/fit_card.dart';
 
@@ -81,6 +82,27 @@ void main() {
     expect(find.text('EU'), findsOneWidget);
     expect(find.text('42'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('wears the product family\'s corner by default', (tester) async {
+    // The posters sit in the same grid as the product tiles, so they share the
+    // tiles' corner rather than the app's wider `cardRadius`; a section that
+    // mixed the two would read as two designs.
+    await tester.pumpWidget(wrap(card));
+
+    final shape =
+        tester
+                .widget<Material>(
+                  find
+                      .descendant(
+                        of: find.byType(FitCard),
+                        matching: find.byType(Material),
+                      )
+                      .first,
+                )
+                .shape
+            as RoundedRectangleBorder;
+    expect(shape.borderRadius, AppConstants.productCardRadius);
   });
 
   testWidgets('every line is scaled to the full inner width', (tester) async {
@@ -416,12 +438,123 @@ void main() {
       handle.dispose();
     });
 
-    testWidgets('a card has exactly one hero, a value or a widget', (
-      tester,
-    ) async {
-      expect(() => FitCard(lines: kLines), throwsAssertionError);
+    testWidgets('a card never carries two heroes', (tester) async {
       expect(
         () => FitCard(lines: kLines, heroValue: '42', heroWidget: mark),
+        throwsAssertionError,
+      );
+    });
+  });
+
+  group('a footer', () {
+    // The "The Workshop Collection" poster's shape: the words, then a quiet
+    // word in the corner, and no hero between them. Four lines, because this is
+    // the one card whose name is spelled out.
+    const poster = FitCard(
+      lines: ['THE', 'WORK', 'SHOP', 'COLLECTION'],
+      footerLabel: 'Low to High',
+      semanticsLabel: 'The Workshop Collection, sorted by Price: Low to High.',
+    );
+
+    testWidgets('closes the card in the bottom-right corner', (tester) async {
+      await tester.pumpWidget(wrap(poster));
+
+      final cardBox = tester.getRect(find.byType(FitCard));
+      final footer = tester.getRect(find.text('Low to High'));
+
+      // The inner box's edge (16 padding) less the footer's own inset, which
+      // holds the word off the corner's clip.
+      expect(
+        footer.right,
+        moreOrLessEquals(
+          cardBox.right - 16 - (168 - 32) * FitCard.footerInsetOfWidth,
+          epsilon: 0.5,
+        ),
+      );
+      expect(
+        footer.bottom,
+        moreOrLessEquals(cardBox.bottom - 16, epsilon: 0.5),
+        reason: 'the footer takes the bottom edge the hero would have taken',
+      );
+      // The words stay against the top, and the height between them is the
+      // poster's own gap — the footer is not pushed up under them.
+      expect(
+        tester.getRect(boxOf('THE')).top,
+        moreOrLessEquals(cardBox.top + 16, epsilon: 0.5),
+      );
+      expect(
+        footer.top,
+        greaterThan(tester.getRect(boxOf('COLLECTION')).bottom),
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('four lines are allowed, each still scaled to the width', (
+      tester,
+    ) async {
+      await tester.pumpWidget(wrap(poster));
+
+      const innerWidth = 168.0 - 32;
+      for (final line in const ['THE', 'WORK', 'SHOP', 'COLLECTION']) {
+        expect(
+          tester.getSize(boxOf(line)).width,
+          moreOrLessEquals(innerWidth, epsilon: 0.5),
+        );
+      }
+      // The rhythm the poster depends on: shorter word, bigger glyphs.
+      expect(
+        tester.getSize(boxOf('WORK')).height,
+        greaterThan(tester.getSize(boxOf('COLLECTION')).height),
+      );
+    });
+
+    testWidgets('is sized from the card rather than in pixels', (tester) async {
+      double size() =>
+          tester.widget<Text>(find.text('Low to High')).style!.fontSize!;
+
+      await tester.pumpWidget(wrap(poster, width: 120));
+      final onSmall = size();
+      await tester.pumpWidget(wrap(poster, width: 400));
+      final onLarge = size();
+
+      // The same rule the `EU` label follows: a fraction of the card, so it
+      // stays a caption on any tile instead of a fixed size that reads huge on
+      // a small one and gets lost on a large one.
+      expect(
+        onLarge / onSmall,
+        moreOrLessEquals((400 - 32) / (120 - 32), epsilon: 0.1),
+      );
+      expect(
+        onSmall,
+        moreOrLessEquals((120 - 32) * FitCard.footerSizeOfWidth, epsilon: 0.01),
+      );
+      // And it stays a caption: a corner mark, not a second headline.
+      expect(onSmall, lessThan(0.2 * (120 - 32)));
+    });
+
+    testWidgets('a card of words alone is legal, and has no closer', (
+      tester,
+    ) async {
+      // Both closers are optional now: `lines` is the only required thing.
+      await tester.pumpWidget(
+        wrap(
+          const FitCard(lines: kLines, semanticsLabel: 'Based on your size'),
+        ),
+      );
+
+      expect(find.text('Based'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a footer and a hero are mutually exclusive', (tester) async {
+      expect(
+        () => FitCard(lines: kLines, heroValue: '42', footerLabel: 'Featured'),
+        throwsAssertionError,
+      );
+      // The label belongs to the hero it sits above, so a footer cannot take
+      // one silently.
+      expect(
+        () => FitCard(lines: kLines, heroLabel: 'EU', footerLabel: 'Featured'),
         throwsAssertionError,
       );
     });

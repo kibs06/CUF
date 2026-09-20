@@ -37,7 +37,6 @@ void main() {
   /// number of grids it holds.
   const gridFiles = <String, int>{
     'lib/screens/customer/customer_home_screen.dart': 2, // catalog + On Sale
-    'lib/widgets/product_grid_section.dart': 1, // Based on your size
     'lib/screens/customer/search_results_screen.dart': 1,
     'lib/screens/customer/audience_listing_screen.dart': 1,
     'lib/screens/customer/recently_viewed_screen.dart': 1,
@@ -148,6 +147,45 @@ void main() {
         );
       });
     }
+
+    test('the size grid hands them to its own two-column layout', () {
+      // `product_grid_section.dart` packs its cells itself (it has to place the
+      // closing pair against their own columns), so it has no
+      // `crossAxisSpacing` to read: the tokens are what it passes to the
+      // layout, and the layout is the only place the columns are derived.
+      final code = withoutLineComments(
+        File('lib/widgets/product_grid_section.dart').readAsStringSync(),
+      );
+      expect(
+        RegExp(
+          r'margin:\s*AppConstants\.feedMargin',
+        ).hasMatch(code),
+        isTrue,
+        reason: 'the grid body must inset from AppConstants.feedMargin',
+      );
+      expect(
+        RegExp(
+          r'gutter:\s*AppConstants\.productGridGutter',
+        ).hasMatch(code),
+        isTrue,
+        reason: 'the grid body must seam its columns with the shared gutter',
+      );
+
+      final layout = withoutLineComments(
+        File('lib/widgets/two_column_masonry.dart').readAsStringSync(),
+      );
+      // The layout takes both as parameters: a literal in there would be the
+      // same regression, one layer down.
+      expect(layout, contains('final double margin;'));
+      expect(layout, contains('final double gutter;'));
+      for (final literal in [
+        r'_margin = 8',
+        r'_gutter = 8',
+        r'horizontal: 16',
+      ]) {
+        expect(_count(layout, literal), 0);
+      }
+    });
 
     test(
       'the home Recently Viewed section derives its cell width from them',

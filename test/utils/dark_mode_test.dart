@@ -69,6 +69,8 @@ void main() {
     test('shadows survive on light', () {
       expect(AppConstants.warmShadow, isNotEmpty);
       expect(AppConstants.sellerShadow, isNotEmpty);
+      expect(AppConstants.productCardShadow, isNotEmpty);
+      expect(AppConstants.productCardShadowPressed, isNotEmpty);
     });
   });
 
@@ -104,6 +106,8 @@ void main() {
 
       expect(AppConstants.warmShadow, isEmpty);
       expect(AppConstants.sellerShadow, isEmpty);
+      expect(AppConstants.productCardShadow, isEmpty);
+      expect(AppConstants.productCardShadowPressed, isEmpty);
     });
 
     // testWidgets, not test: the text helpers build GoogleFonts styles, and

@@ -19,7 +19,8 @@ import 'see_more_card.dart';
 /// Ten, because the tile that opens the grid is a cell too: 1 + 10 + 1 = 12
 /// cells, six full rows on a two-column feed, so the section ends on a clean
 /// edge instead of a half row. A preview is a taste, not a second catalog — the
-/// rest of the shelf is one tap away, and the Artisan Catalog still sits below
+/// rest of the shelf is one tap away, and The Workshop Collection still sits
+/// below
 /// this section on the same page.
 ///
 /// The card is **not** conditional on the shelf being longer than the preview:
@@ -31,7 +32,8 @@ import 'see_more_card.dart';
 const int kHomePreviewCount = 10;
 
 /// "Based on your size" on the customer home — only the products that stock the
-/// customer's saved size right now, laid out **in the Artisan Catalog's own
+/// customer's saved size right now, laid out **in The Workshop Collection's
+/// own
 /// 2-column grid** rather than as a horizontal strip.
 ///
 /// This is the first surface that makes the foot profile do something while
@@ -49,6 +51,18 @@ const int kHomePreviewCount = 10;
 /// section's name is now as loud as the products it introduces, and the size it
 /// was reporting in muted 12px meta is the card's hero value. The tile has no
 /// destination yet, so it does not pretend to be tappable.
+///
+/// **The poster bleeds to the card's edge** — `padding: 0`, and its height is
+/// its own content's, where every other [FitCard] keeps its 16 and takes a
+/// caller-imposed box. The poster's whole job is to carry the block, so it gets
+/// no band of card around the words and no fixed proportion to fight: each line
+/// is measured against the card's full width and the card grows to whatever the
+/// copy comes to at that width, which is the only way "Based / on your / size"
+/// and the number under it reach **both** edges. Capping it instead (the
+/// reference `505/800`) left the copy taller than the box, so `FitCard`'s own
+/// `scaleDown` shrank the poster as a block — every line stopping short of the
+/// right edge by the same amount, and the number floating off the bottom. The
+/// card's radius, fill and hairline are untouched.
 ///
 /// **The grid closes with the shelf's door.** A [SeeMoreCard] — the same poster
 /// saying `See` / `more` over a painted arrow — takes the grid's last cell and
@@ -113,31 +127,31 @@ class InYourSizeSection extends StatelessWidget {
     // prints the number alone and the label above it carries the unit, rather
     // than the label's usual "EU 42" repeating the system on both lines.
     return ProductGridSection(
-      tile: AspectRatio(
-        // A masonry cell is self-sizing and FitCard is content-sized, so the
-        // reference proportion is what gives the poster its shape here — and
-        // what makes the "See more" card a sibling of it rather than a slot of
-        // a different size.
-        aspectRatio: FitCard.aspectRatio,
-        child: FitCard(
-          lines: const ['Based', 'on your', 'size'],
-          // The unit read back off the label rather than spelled here, the
-          // same way every other size surface avoids its own 'EU' literal.
-          heroLabel: sizeSystem(euSizeLabel(euSize)),
-          heroValue: euSizeValue(euSize),
-        ),
+      // NO `AspectRatio`, and no inset: the poster is its own box. Capping the
+      // tile at [FitCard.aspectRatio] left the copy taller than the box, so the
+      // card's outer `FittedBox(scaleDown)` shrank the WHOLE poster to fit —
+      // each line short of the right edge by the same band, from the top-left
+      // it scales toward. Bleeding needs the height to follow the copy at the
+      // cell's width (class doc), which is what makes the words span the cell.
+      tile: FitCard(
+        padding: 0,
+        lines: const ['Based', 'on your', 'size'],
+        // The unit read back off the label rather than spelled here, the same
+        // way every other size surface avoids its own 'EU' literal.
+        heroLabel: sizeSystem(euSizeLabel(euSize)),
+        heroValue: euSizeValue(euSize),
       ),
       products: preview,
       // The last cell, always: the shelf's door, not a "there is more" promise.
-      // It is a sibling of the size poster — one cell, the reference proportion
-      // — so the grid closes the way it opens.
-      trailing: AspectRatio(
-        aspectRatio: FitCard.aspectRatio,
-        child: SeeMoreCard(
-          onTap: () => Navigator.of(
-            context,
-          ).push(MaterialPageRoute(builder: (_) => const SizeListingScreen())),
-        ),
+      // It is a sibling of the size poster, one cell wide and in the right
+      // column, so the grid closes the way it opens. No `AspectRatio` here:
+      // the grid measures this card against the anchor product's bottom and
+      // hands it exactly that box (the poster gives up its reference proportion
+      // to close the section on one edge).
+      trailing: SeeMoreCard(
+        onTap: () => Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const SizeListingScreen())),
       ),
     );
   }

@@ -1,5 +1,6 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
-import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:provider/provider.dart';
@@ -16,6 +17,7 @@ import 'package:app/widgets/horizontal_product_card.dart';
 import 'package:app/widgets/in_your_size_section.dart';
 import 'package:app/widgets/see_more_card.dart';
 import 'package:app/widgets/sole_product_card.dart';
+import 'package:app/widgets/two_column_masonry.dart';
 
 /// The "Based on your size" home section — the first surface where the saved foot
 /// profile actually changes what the customer is shown while shopping.
@@ -23,7 +25,8 @@ import 'package:app/widgets/sole_product_card.dart';
 /// What is pinned here is the absent-safety (no size on file, nothing in the
 /// catalog in that size, and no size data on a product must all render
 /// NOTHING — never a guessed size, never a near size offered as theirs) and the
-/// shape: it is the Artisan Catalog's 2-column grid, not a horizontal strip, so
+/// shape: it is The Workshop Collection's 2-column grid, not a horizontal
+/// strip, so
 /// it must lay out on the feed's own geometry and take the catalog's per-product
 /// aspect ratio rather than a rail's fixed 130x180 card.
 ///
@@ -214,7 +217,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('lays the tile and the matches on the Artisan Catalog grid', (
+  testWidgets('lays the tile and the matches on The Workshop Collection grid', (
     tester,
   ) async {
     final provider = ProductProvider.seeded(
@@ -231,11 +234,11 @@ void main() {
 
     // The strip is gone for good: nothing horizontal, nothing left to swipe.
     expect(find.byType(HorizontalProductCard), findsNothing);
-    expect(find.byType(MasonryGridView), findsOneWidget);
+    expect(find.byType(TwoColumnMasonry), findsOneWidget);
 
     // The catalog's own geometry, not a rail's: two columns inset by the feed
     // margin and seamed by the shared gutter.
-    final gridWidth = tester.getSize(find.byType(MasonryGridView)).width;
+    final gridWidth = tester.getSize(find.byType(TwoColumnMasonry)).width;
     final cardWidth =
         (gridWidth -
             AppConstants.feedMargin * 2 -
@@ -244,19 +247,36 @@ void main() {
     // The tile is the first cell: left column, full cell width, and the
     // reference proportion rather than a height of its own. Scoped to the
     // poster — the shelf's door is a FitCard too.
-    final tile = tester.getRect(
-      find.ancestor(of: find.text('Based'), matching: find.byType(FitCard)),
+    final poster = find.ancestor(
+      of: find.text('Based'),
+      matching: find.byType(FitCard),
     );
+    final tile = tester.getRect(poster);
+
+    // The poster bleeds: no inset, so its words span the cell edge to edge
+    // (every other FitCard, the door included, keeps FitCard's own 16).
+    expect(tester.widget<FitCard>(poster).padding, 0);
     final firstCard = tester.getRect(find.byType(SoleProductCard).at(0));
 
-    // The tile is the first cell: left column, full cell width, and the
-    // reference proportion rather than a height of its own.
+    // The tile is the first cell: left column, full cell width, and a height
+    // that is its own copy's — NOT a capped proportion.
     expect(tile.left, moreOrLessEquals(AppConstants.feedMargin, epsilon: 0.5));
     expect(tile.width, moreOrLessEquals(cardWidth, epsilon: 0.5));
-    expect(
-      tile.height,
-      moreOrLessEquals(cardWidth / FitCard.aspectRatio, epsilon: 0.5),
+
+    // And nothing is squeezed: the poster's outer `scaleDown` FittedBox holds
+    // content that already fits its box, so its lines are never shrunk as a
+    // block. (This guard is structural rather than metric-dependent — the test
+    // font is not DM Sans, so the cap that caused the squeeze cannot be seen
+    // from here; 'the poster is its own box' pins it at the source instead.)
+    final shrinkWrap = find
+        .descendant(of: poster, matching: find.byType(FittedBox))
+        .first;
+    final wrapSize = tester.getSize(shrinkWrap);
+    final contentSize = tester.getSize(
+      find.descendant(of: shrinkWrap, matching: find.byType(SizedBox)).first,
     );
+    expect(contentSize.height, lessThanOrEqualTo(wrapSize.height + 0.5));
+    expect(contentSize.width, lessThanOrEqualTo(wrapSize.width + 0.5));
 
     // The first product then takes the row's other cell — same line as the
     // tile, one cell + one gutter to its right — so the tile reads as part of
@@ -268,6 +288,29 @@ void main() {
         tile.left + cardWidth + AppConstants.productGridGutter,
         epsilon: 0.5,
       ),
+    );
+  });
+
+  test('the poster is its own box — the tile carries no proportion cap', () {
+    // Read from the source, because the failure is invisible from a widget
+    // test: at the reference `505/800` the poster's copy comes out taller than
+    // the box IN DM SANS, so `FitCard`'s outer `scaleDown` shrinks the whole
+    // card and every line stops short of the right edge by the same band (the
+    // test font's metrics fit, so no widget test can catch this).
+    final code = File(
+      'lib/widgets/in_your_size_section.dart',
+    ).readAsStringSync();
+
+    expect(
+      code.contains('tile: FitCard('),
+      isTrue,
+      reason: 'the size poster must be handed to the grid uncapped',
+    );
+    expect(
+      RegExp(r'tile:\s*AspectRatio').hasMatch(code),
+      isFalse,
+      reason:
+          'capping the tile pulls every poster line short of the right edge',
     );
   });
 
@@ -345,7 +388,7 @@ void main() {
     expect(find.text('10 pairs · EU 42'), findsOneWidget);
   });
 
-  testWidgets('the arrow is pinned to the bottom-RIGHT, one cell wide', (
+  testWidgets('the door closes the grid in its own column, on one bottom edge', (
     tester,
   ) async {
     await tester.pumpWidget(wrap(shelfOf(11), profile: {'foot_size_ph': 42}));
@@ -353,27 +396,22 @@ void main() {
     await tester.ensureVisible(find.byType(SeeMoreCard));
     await tester.pump();
 
-    final gridWidth = tester.getSize(find.byType(MasonryGridView)).width;
+    final gridWidth = tester.getSize(find.byType(TwoColumnMasonry)).width;
     final cellWidth =
         (gridWidth -
             AppConstants.feedMargin * 2 -
             AppConstants.productGridGutter) /
         2;
-    final grid = tester.getRect(find.byType(MasonryGridView));
+    final grid = tester.getRect(find.byType(TwoColumnMasonry));
     final arrow = tester.getRect(find.byType(SeeMoreCard));
+    final anchor = tester.getRect(find.byType(SoleProductCard).last);
 
-    // One cell, on the reference proportion — the same slot the size poster
-    // opens the grid with, so the section closes the way it starts.
+    // One cell wide, in the RIGHT column whatever the flow above it did: its
+    // left edge is one cell + one gutter past the grid's left edge, and its
+    // right edge is the grid's own right edge. This is the regression the
+    // placed pair exists for — a packed door landed in the LEFT column whenever
+    // the left column of the flow ran short.
     expect(arrow.width, moreOrLessEquals(cellWidth, epsilon: 0.5));
-    expect(
-      arrow.height,
-      moreOrLessEquals(cellWidth / FitCard.aspectRatio, epsilon: 0.5),
-    );
-    // RIGHT column, whatever the masonry flow above it did: its left edge is
-    // one cell + one gutter past the flow's left edge, and its right edge is
-    // the flow's own right edge. This is the regression the pinned position
-    // exists for — the packed version landed in the LEFT column whenever the
-    // left column of the flow ran short.
     expect(
       arrow.left,
       moreOrLessEquals(
@@ -388,9 +426,36 @@ void main() {
       arrow.right,
       moreOrLessEquals(grid.right - AppConstants.feedMargin, epsilon: 0.5),
     );
-    // And it hangs BELOW the flow, one gutter under it — its own row, not a
-    // packed cell.
-    expect(arrow.top, greaterThanOrEqualTo(grid.bottom - 0.5));
+
+    // It hangs off its OWN column — one gutter under the deepest cell in the
+    // right column, never leaving the shorter column's leftover height showing
+    // as a hole above the pair. (The last product anchors the left column at
+    // the same time, which is what leaves nothing to fill.)
+    final rightColumn = tester
+        .widgetList<SoleProductCard>(find.byType(SoleProductCard))
+        .map(
+          (card) => tester.getRect(
+            find.byWidgetPredicate(
+              (widget) => widget is SoleProductCard && identical(widget, card),
+            ),
+          ),
+        )
+        .where((rect) => (rect.left - arrow.left).abs() < 0.5)
+        .map((rect) => rect.bottom)
+        .where((bottom) => bottom <= arrow.top + 0.5);
+    final underTheDoor =
+        rightColumn.isEmpty ? grid.top : rightColumn.reduce((a, b) => a > b ? a : b);
+    expect(
+      arrow.top,
+      moreOrLessEquals(
+        underTheDoor + AppConstants.productGridGutter,
+        epsilon: 0.5,
+      ),
+    );
+
+    // And the pair closes on ONE bottom edge: the door is sized to the anchor's
+    // bottom, so the section does not end on a ragged step.
+    expect(anchor.bottom, moreOrLessEquals(arrow.bottom, epsilon: 0.5));
     expect(tester.takeException(), isNull);
   });
 

@@ -2,7 +2,7 @@
 /// id, so a card's height stays stable across filtering, re-sorting, and
 /// reloads.
 ///
-/// Shared by the Artisan Catalog grid (home), the size shelf, the Recently
+/// Shared by The Workshop Collection grid (home), the size shelf, the Recently
 /// Viewed grid (profile + full-screen), and any other 2-column product grid.
 ///
 /// Three buckets, chosen to be *visually distinct*: 1.0 (square), 0.78

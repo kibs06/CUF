@@ -243,6 +243,30 @@ class AppConstants {
 
   // --- VISUAL LANGUAGE RULES ---
   static final BorderRadius cardRadius = BorderRadius.circular(16);
+
+  /// The product-card family's corner: the grid card, the rail card, and the
+  /// poster cards that share a cell with them ("Based on your size", "See
+  /// more", The Workshop Collection).
+  ///
+  /// Deliberately tighter than [cardRadius]. A feed of photographic tiles reads
+  /// as a catalog of goods when the corner hugs the image rather than curling
+  /// away from it, and the posters sitting in the same grid have to agree or the
+  /// section looks like two designs. It is its own token, not an edit to
+  /// [cardRadius], so every other card in the app (auth, seller, sheets,
+  /// dialogs) keeps the corner it was designed with — and so this one number
+  /// moves the whole family at once.
+  static const double productCardCorner = 10;
+  static final BorderRadius productCardRadius = BorderRadius.circular(
+    productCardCorner,
+  );
+
+  /// The radius a product card's image clip takes: the card's own corner less
+  /// the 1px hairline, which insets the clip's frame. Without the subtraction
+  /// the image's corner pokes past the card's on the top two corners.
+  static final BorderRadius productCardImageRadius = BorderRadius.vertical(
+    top: Radius.circular(productCardCorner - 1),
+  );
+
   static final BorderRadius buttonRadius = BorderRadius.circular(12);
 
   // Organic 20px corners for premium cards (role choice, submission card),
@@ -292,6 +316,71 @@ class AppConstants {
             offset: const Offset(0, 4),
           ),
         ];
+
+  // The lift under product cards — the one card family that carries a real
+  // drop shadow rather than the 8% warm wash above.
+  //
+  // The product card and the page behind it are BOTH pure white (see
+  // `sole_product_card.dart`): the hairline draws the edge, but across a
+  // two-column feed of white-on-white tiles that edge alone reads as printed
+  // rather than raised. Depth comes from two layers instead of one — a wide
+  // ambient shadow plus a tight contact one — which is what a single
+  // 8%-at-12px wash could not do at this card size.
+  //
+  // Deliberately NOT the poster cards' treatment (`FitCard`: "Based on your
+  // size", "See more"), which stay flat: their typography carries the block,
+  // and a shadow under them would read as a floating label.
+  //
+  // Collapses on dark, like [warmShadow] — see [AppPalette.shadow].
+  static List<BoxShadow> get productCardShadow => AppBrightness.isDark
+      ? const <BoxShadow>[]
+      : [
+          BoxShadow(
+            color: _cardShadowTint.withValues(alpha: 0.10),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+            spreadRadius: -4,
+          ),
+          BoxShadow(
+            color: _cardShadowTint.withValues(alpha: 0.05),
+            blurRadius: 3,
+            offset: const Offset(0, 1),
+          ),
+        ];
+
+  // The same card, pressed: the lift all but disappears and what is left pulls
+  // in under the tile, so the card reads as sitting *down* on the page for as
+  // long as the finger is on it.
+  //
+  // Not a second colour and not a flash — the same two-layer construction as
+  // [productCardShadow], tightened (offset 6 → 2, blur 16 → 6, spread -4 → -2,
+  // and the ambient alpha with them). Same length as the idle list on purpose:
+  // `BoxShadow.lerpList` pairs the layers up and cannot interpolate two lists
+  // of different lengths, which is what makes the press an interpolation of one
+  // shadow rather than a swap. Mirrors [premiumCardShadow] /
+  // [premiumCardShadowPressed].
+  //
+  // Collapses on dark with the rest of them.
+  static List<BoxShadow> get productCardShadowPressed => AppBrightness.isDark
+      ? const <BoxShadow>[]
+      : [
+          BoxShadow(
+            color: _cardShadowTint.withValues(alpha: 0.07),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+            spreadRadius: -2,
+          ),
+          BoxShadow(
+            color: _cardShadowTint.withValues(alpha: 0.05),
+            blurRadius: 2,
+            offset: const Offset(0, 1),
+          ),
+        ];
+
+  /// Every shadow's tint — the espresso of [AppPalette]'s own `shadow`
+  /// (`0x148B5A2B`), so each shadow in the app is the same colour at a
+  /// different weight rather than a second, unrelated grey.
+  static const Color _cardShadowTint = Color(0xFF8B5A2B);
 
   // Subtle dark overlay shadow
   static final List<BoxShadow> darkShadow = [

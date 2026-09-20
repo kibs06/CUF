@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../constants/app_constants.dart';
 import '../utils/sale_price.dart';
+import 'press_sink.dart';
 import 'sale_countdown_overlay.dart';
 import 'sale_price_tape.dart';
 
@@ -77,13 +78,20 @@ class HorizontalProductCard extends StatelessWidget {
         return SizedBox(
           width: 130,
           height: 180,
-          child: GestureDetector(
+          // The same lift the grid card carries, painted by `PressSink` and
+          // animated down under a press — a rail of white-on-white tiles needs
+          // it for the same reason (see [AppConstants.productCardShadow]). The
+          // poster cards keep none.
+          child: PressSink(
             onTap: onTap,
+            idle: AppConstants.productCardShadow,
+            pressed: AppConstants.productCardShadowPressed,
+            borderRadius: AppConstants.productCardRadius,
             child: Container(
               key: cardEdgeKey,
               decoration: BoxDecoration(
                 color: AppConstants.surfaceLight,
-                borderRadius: AppConstants.cardRadius,
+                borderRadius: AppConstants.productCardRadius,
                 border: Border.all(color: AppConstants.cardEdge, width: 1),
               ),
               child: Column(
@@ -100,10 +108,7 @@ class HorizontalProductCard extends StatelessWidget {
                   // foreground keeps every geometry assertion in
                   // best_sellers_section_test byte-identical.
                   ClipRRect(
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(15),
-                      topRight: Radius.circular(15),
-                    ),
+                    borderRadius: AppConstants.productCardImageRadius,
                     child: Stack(
                       fit: StackFit.passthrough,
                       children: [

@@ -125,7 +125,7 @@ incapable of contradicting the "no matches" it sits under. It renders through
 | Category filter on results | `SearchResultsScreen` (local) | No | Deliberately not `ProductProvider.selectedCategory`, or a search would re-filter Home underneath |
 | Sort on results | `SearchResultsScreen` (local, default `featured`) | No | Passed into `searchResults()`; `ProductProvider.sortMode` is left alone |
 | `selectedCategory` | `ProductProvider` (global) | Yes — hero tabs, On Sale/Best Sellers gating | Home's catalog filter only |
-| `sortMode` | `ProductProvider` (global) | Yes — Home's sort chip | Unchanged by search |
+| `sortMode` | `ProductProvider` (global) | Yes — Home's collection card (its back is the sort list) | Unchanged by search |
 | `_products` (catalog) | `ProductProvider` (global) | Yes | Both search surfaces read it; neither fetches |
 
 ## File map

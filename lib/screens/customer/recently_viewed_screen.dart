@@ -16,7 +16,7 @@ import 'product_detail_screen.dart';
 /// Loads the persisted recently viewed list fresh on entry, resolves items
 /// against the live catalog (same rules as the profile strip: deleted /
 /// out-of-stock products are dropped), and renders the identical 2-column
-/// masonry grid used by the Artisan Catalog.
+/// masonry grid used by The Workshop Collection.
 class RecentlyViewedScreen extends StatefulWidget {
   const RecentlyViewedScreen({super.key, this.onProductOpened});
 

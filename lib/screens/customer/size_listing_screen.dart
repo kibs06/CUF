@@ -26,7 +26,8 @@ import 'product_detail_screen.dart';
 /// came from never offered.
 ///
 /// Why a page rather than growing the preview in place: the feed already
-/// carries the Artisan Catalog below this section, and a size shelf that grew
+/// carries The Workshop Collection below this section, and a size shelf that
+/// grew
 /// without limit would either duplicate that grid or push it out of reach.
 ///
 /// **Absent-safe, like every other size surface.** It reads the size the same

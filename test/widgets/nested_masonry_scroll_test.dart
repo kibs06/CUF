@@ -9,7 +9,7 @@ import 'package:app/widgets/product_grid_section.dart';
 import 'package:app/widgets/sole_product_card.dart';
 
 /// The home feed carries more than one product grid: "Based on your size" (a
-/// [ProductGridSection]) sits above the Artisan Catalog's own
+/// [ProductGridSection]) sits above The Workshop Collection's own
 /// `MasonryGridView.count`, both inside the same `CustomScrollView`.
 ///
 /// That pairing used to be documented as unsafe — a note in

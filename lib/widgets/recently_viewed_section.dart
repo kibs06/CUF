@@ -12,7 +12,7 @@ import '../utils/product_grid_ratio.dart';
 import 'sole_product_card.dart';
 
 /// "Recently Viewed" grid on the customer profile — same masonry card style
-/// as the Artisan Catalog on the home screen.
+/// as The Workshop Collection on the home screen.
 ///
 /// When more than four items exist (two full rows), the grid is capped at
 /// that height, the bottom of the cut-off area fades into the page

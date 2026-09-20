@@ -119,6 +119,40 @@ String sortModeLabel(SortMode mode) {
   }
 }
 
+/// The same option said shortly — for the "The Workshop Collection" poster,
+/// which shows the current sort in the corner of a card about a third of the
+/// sheet's width.
+///
+/// Two labels rather than one, because the two surfaces are different sizes of
+/// the same promise: the sheet has the room for `Price: Low to High` and is
+/// where the customer is choosing, and the poster has room for `Low to High`
+/// and is where they are *reading* which one is in force. Only the scoping
+/// qualifier is dropped — `Feature`, `Top Rated` and `Best Selling` already read
+/// whole at a glance, so shortening them further would change what they say.
+///
+/// It stays a second switch next to [sortModeLabel] rather than a field on the
+/// enum so that both lists are exhaustive over [SortMode] and a new mode cannot
+/// be added with a label but no short one (the compiler names the missing
+/// case). `product_provider_test.dart` pins every pair.
+String sortModeShortLabel(SortMode mode) {
+  switch (mode) {
+    case SortMode.featured:
+      return 'Featured';
+    case SortMode.priceLowToHigh:
+      return 'Low to High';
+    case SortMode.priceHighToLow:
+      return 'High to Low';
+    case SortMode.nameAZ:
+      return 'A to Z';
+    case SortMode.nameZA:
+      return 'Z to A';
+    case SortMode.topRated:
+      return 'Top Rated';
+    case SortMode.bestSelling:
+      return 'Best Selling';
+  }
+}
+
 class ProductProvider extends ChangeNotifier {
   final SupabaseService _db;
 

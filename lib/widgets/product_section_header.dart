@@ -7,7 +7,7 @@ import '../constants/app_constants.dart';
 /// EU 42").
 ///
 /// Extracted when "Based on your size" stopped being a rail: [ProductRailSection]
-/// (the horizontal strips) and [ProductGridSection] (the Artisan Catalog's
+/// (the horizontal strips) and [ProductGridSection] (The Workshop Collection's
 /// 2-column masonry) are two different bodies over the same header, and a
 /// second copy of a thirty-line row is how one of them ends up at 15px while
 /// the other stays 16.

@@ -15,13 +15,13 @@ import '../../services/push_notification_service.dart';
 import '../../widgets/floating_message_button.dart';
 import '../../widgets/no_internet_view.dart';
 import '../../widgets/sole_product_card.dart';
+import '../../widgets/workshop_collection_card.dart';
 import '../../widgets/shimmer_group.dart';
 import '../../widgets/customer_foot_profile_banner.dart';
 import '../../widgets/best_sellers_section.dart';
 import '../../widgets/catalog_end_cap.dart';
 import '../../widgets/in_your_size_section.dart';
 import '../../widgets/audience_section.dart';
-import '../../widgets/product_sort_sheet.dart';
 import '../../utils/product_audience.dart';
 import '../../widgets/chat/chat_view.dart';
 import 'cart_screen.dart';
@@ -201,14 +201,45 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     };
   }
 
-  /// The catalog's sort sheet — the shared one, so the search results page and
-  /// this feed offer the same orders under the same names.
-  void _showSortSheet(BuildContext context) {
-    final productProvider = context.read<ProductProvider>();
-    showProductSortSheet(
-      context,
-      current: productProvider.sortMode,
-      onSelected: productProvider.setSortMode,
+  /// The collection's poster, at the proportion of a grid cell — one column
+  /// wide and 505/800 tall, the same footprint a product card's cell has in the
+  /// masonry beside it.
+  ///
+  /// It is the tappable thing, and it *turns over*: the sort list is the card's
+  /// back, so choosing an order happens on the card instead of in a sheet over
+  /// the feed. The provider is the state, so a choice re-sorts the grid and
+  /// updates the corner word in one rebuild.
+  Widget _workshopPoster(ProductProvider productProvider) {
+    return AspectRatio(
+      aspectRatio: WorkshopCollectionCard.aspectRatio,
+      child: WorkshopCollectionCard(
+        sort: productProvider.sortMode,
+        onSelected: context.read<ProductProvider>().setSortMode,
+      ),
+    );
+  }
+
+  /// The same poster, standing on its own — the loading and empty states, which
+  /// have no grid to put it in.
+  ///
+  /// It needs a width to hang off: `AspectRatio` on an unbounded height would
+  /// throw, and a `FitCard` that is handed no box is only as tall as its copy.
+  /// The width is the grid's own cell width, so the poster does not change size
+  /// (or jump) when the products arrive and it moves into the grid.
+  Widget _standalonePoster(ProductProvider productProvider) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppConstants.feedMargin),
+      child: LayoutBuilder(
+        builder: (context, constraints) => Align(
+          // The feed's Column centres its children; the collection's first cell
+          // is on the left, whether or not the grid is there.
+          alignment: Alignment.centerLeft,
+          child: SizedBox(
+            width: (constraints.maxWidth - AppConstants.productGridGutter) / 2,
+            child: _workshopPoster(productProvider),
+          ),
+        ),
+      ),
     );
   }
 
@@ -438,67 +469,29 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                             const SizedBox(height: 16),
                           ],
 
-                          // ── Catalog header + sort ──
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 20.0,
+                          // ── The Workshop Collection ──
+                          // The heading IS the collection's grid now: the poster
+                          // below opens it the way "Based on your size" opens
+                          // its own grid, so the first product sits *beside* the
+                          // name instead of under a header row. The row's sort
+                          // chip went with it — tapping the poster turns it over
+                          // onto the sort list (its back), which is where the
+                          // order is chosen from now on; this feed opens no sort
+                          // sheet.
+                          //
+                          // In the states that have no grid — loading, an empty
+                          // catalog, an empty category — the poster stands alone
+                          // in the same top-left cell rather than disappearing:
+                          // it is the section's name, and the name should not
+                          // blink out with the products.
+                          if (productProvider.isLoading ||
+                              allProducts.isEmpty ||
+                              filteredProducts.isEmpty) ...[
+                            _standalonePoster(productProvider),
+                            const SizedBox(
+                              height: AppConstants.productGridGutter,
                             ),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    'Artisan Catalog',
-                                    style: AppConstants.headlineStyle(
-                                      fontSize: 20,
-                                    ),
-                                  ),
-                                ),
-                                GestureDetector(
-                                  onTap: () => _showSortSheet(context),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 6,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: AppConstants.primary.withValues(
-                                        alpha: 0.08,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(
-                                        color: AppConstants.primary.withValues(
-                                          alpha: 0.15,
-                                        ),
-                                      ),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          Icons.sort_outlined,
-                                          size: 14,
-                                          color: AppConstants.primary,
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          sortModeLabel(
-                                            productProvider.sortMode,
-                                          ),
-                                          style: AppConstants.bodyStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.bold,
-                                            color: AppConstants.primary,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          const SizedBox(height: 12),
+                          ],
 
                           // ── Product grid ──
                           if (productProvider.isLoading)
@@ -551,9 +544,15 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                               ),
                               physics: const NeverScrollableScrollPhysics(),
                               shrinkWrap: true,
-                              itemCount: filteredProducts.length,
+                              // +1: the poster is the grid's first cell, so the
+                              // collection opens on its own name with the first
+                              // product beside it.
+                              itemCount: filteredProducts.length + 1,
                               itemBuilder: (context, index) {
-                                final prod = filteredProducts[index];
+                                if (index == 0) {
+                                  return _workshopPoster(productProvider);
+                                }
+                                final prod = filteredProducts[index - 1];
                                 return SoleProductCard(
                                   product: prod,
                                   imageAspectRatio: productGridRatio(prod),
@@ -672,11 +671,12 @@ class _ProductCardSkeleton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(10),
-      // Same neutral hairline as the loaded SoleProductCard above it, so the
-      // grid does not visibly "grow" edges when the products arrive.
+      // Same neutral hairline and the same corner as the loaded
+      // SoleProductCard above it, so the grid neither "grows" edges nor rounds
+      // its tiles off when the products arrive.
       decoration: BoxDecoration(
         color: AppConstants.surfaceLight,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppConstants.productCardCorner),
         border: Border.all(color: AppConstants.borderGray, width: 1),
       ),
       child: const Column(

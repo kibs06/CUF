@@ -393,6 +393,28 @@ void main() {
     test('sortModeLabel is untouched', () {
       expect(sortModeLabel(SortMode.bestSelling), 'Best Selling');
     });
+
+    test('every mode has a short label too, and none of them is longer', () {
+      // The sheet shows the long ones and the Workshop Collection poster shows
+      // the short ones. Both lists are exhaustive over the enum, so a mode
+      // added with only a long label does not compile; this pins the pairs so a
+      // later edit cannot quietly give one surface the other one's words.
+      expect(sortModeShortLabel(SortMode.featured), 'Featured');
+      expect(sortModeShortLabel(SortMode.priceLowToHigh), 'Low to High');
+      expect(sortModeShortLabel(SortMode.priceHighToLow), 'High to Low');
+      expect(sortModeShortLabel(SortMode.nameAZ), 'A to Z');
+      expect(sortModeShortLabel(SortMode.nameZA), 'Z to A');
+      expect(sortModeShortLabel(SortMode.topRated), 'Top Rated');
+      expect(sortModeShortLabel(SortMode.bestSelling), 'Best Selling');
+
+      for (final mode in SortMode.values) {
+        expect(
+          sortModeShortLabel(mode).length,
+          lessThanOrEqualTo(sortModeLabel(mode).length),
+          reason: '$mode is only shortened, never rewritten',
+        );
+      }
+    });
   });
 
   group('productsInSize — the "Based on your size" grid', () {

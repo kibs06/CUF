@@ -122,7 +122,7 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                   child: _query.isEmpty
                       ? _buildPanel(
                           related,
-                          title: 'Search the artisan catalog',
+                          title: 'Search the collection',
                           subtitle:
                               'A style, a material or a color — like '
                               '“loafers” or “handmade”.',

@@ -49,11 +49,11 @@ A `CustomScrollView` with slivers, wrapped in `RefreshIndicator`. No AppBar — 
    - "NEW ARRIVALS / CRAFTED FOR FALL" headline + floating product cards + "SHOP NOW" CTA + page dots
 2. **Sheet** — `SliverToBoxAdapter` with rounded top corners (`ClipRRect` `borderRadius: 22`), containing:
    - Foot profile banner (conditional — only for incomplete profiles)
-   - Based on your size (conditional — see below — a `FitCard` size poster as the first cell of the Artisan Catalog's 2-column masonry grid, not a rail)
+   - Based on your size (conditional — see below — a `FitCard` size poster as the first cell of The Workshop Collection's 2-column masonry grid, not a rail)
    - Men's / Women's / Kids' rails (conditional — see below; gated by `AppConstants.productAudienceEnabled`, **now `true`**, and each hides itself when the catalog holds nothing for that audience — which is every audience today: P4 measured all 15 live products as unset, so the rails render nothing until a seller answers "Who is it for?" on a product)
    - On Sale section (conditional — only when no search + no category filter + sale items exist)
    - Best Sellers rail (**currently gated off** by `kBestSellersRailEnabled = false` in `customer_home_screen.dart`; the widget and its data are kept, so re-enabling is a one-const flip. Also conditional — same gate as On Sale; hidden when nothing has sold). See `docs/AI/HOME_ON_SALE_ARCHITECTURE.md` §4.4
-   - Catalog header + sort button
+   - The Workshop Collection card (the heading; tapping it flips it over onto the sort list)
    - Product grid (`MasonryGridView.count`, 2-col)
    - Catalog end-cap (`CatalogEndCap`, conditional — see below)
    - Bottom spacing for nav bar
@@ -79,7 +79,7 @@ A `CustomScrollView` with slivers, wrapped in `RefreshIndicator`. No AppBar — 
 `lib/widgets/in_your_size_section.dart` — the first surface where the saved foot
 profile changes what the customer is *shown while shopping*. Products that stock
 their size right now, most-sold first, headed by the size the app believes —
-rendered **in the Artisan Catalog's own 2-column masonry grid**, not as a
+rendered **in The Workshop Collection's own 2-column masonry grid**, not as a
 horizontal strip. The section is a shelf of the feed the customer already reads,
 instead of a carousel they have to swipe; the body is `ProductGridSection`
 (`lib/widgets/product_grid_section.dart`), and it takes its card heights from the
@@ -99,8 +99,9 @@ hero value rather than 12px muted meta. The tile has no destination yet, so it
 does not claim to be tappable (`onTap` null → no button semantics, no ripple).
 Its colours are the app's roles, not the mockup's warm hexes: fill
 `surfaceSubtle`, edge `hairline`, ink `secondary`, accent `AppPalette.primaryInk`,
-radius `cardRadius` — all brightness-aware, which is what keeps it correct on
-dark. `ProductGridSection` takes either a `title` or a `tile` (assertedmutually exclusive), so a later category tile has one place to plug into.
+radius `productCardRadius` (the product family's corner, so the poster and the
+tiles beside it are one design) — all brightness-aware, which is what keeps it
+correct on dark. `ProductGridSection` takes either a `title` or a `tile` (assertedmutually exclusive), so a later category tile has one place to plug into.
 
 **The rule lives elsewhere, on purpose.** `lib/utils/size_match.dart` owns the
 match (pure Dart, unit-tested without a widget harness): `stocksMySize()` = an
@@ -371,7 +372,7 @@ All providers are app-root singletons, created in `main.dart` and consumed via `
 | `ShimmerGroup` / `SkeletonBox` | `widgets/shimmer_group.dart` | Loading skeletons |
 | `NoInternetView` | `widgets/no_internet_view.dart` | Offline state |
 | `CustomerFootProfileBanner` | `widgets/customer_foot_profile_banner.dart` | Home — foot sizing reminder |
-| `InYourSizeSection` | `widgets/in_your_size_section.dart` | Home — the Artisan Catalog's grid of products that stock the customer's saved size |
+| `InYourSizeSection` | `widgets/in_your_size_section.dart` | Home — The Workshop Collection's grid of products that stock the customer's saved size |
 | `ProductGridSection` | `widgets/product_grid_section.dart` | Home — the shared grid body (text header *or* poster tile + 2-col catalog masonry + trailing gap) |
 | `FitCard` | `widgets/fit_card.dart` | The "Fit Card" poster tile — copy scaled to fill the card, no icons; "Based on your size · EU 42" is the reference card. The hero is a value or a widget (`heroWidget`), which is how "See more" carries an arrow |
 | `SeeMoreCard` | `widgets/see_more_card.dart` | Home — the capped grid's last cell: a `FitCard` saying `See` / `more` over a painted `ArrowGlyph`, nudging on press, opening `SizeListingScreen` |
