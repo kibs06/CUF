@@ -327,9 +327,13 @@ class AppConstants {
   // ambient shadow plus a tight contact one — which is what a single
   // 8%-at-12px wash could not do at this card size.
   //
-  // Deliberately NOT the poster cards' treatment (`FitCard`: "Based on your
-  // size", "See more"), which stay flat: their typography carries the block,
-  // and a shadow under them would read as a floating label.
+  // The plain poster tiles (`FitCard`: "Based on your size", "See more", "ON
+  // SALE" and The Workshop Collection's front) deliberately stay flat: their
+  // typography carries the block, and a shadow under them would read as a
+  // floating label. The EXCEPTION is The Workshop Collection card itself, which
+  // casts this lift so it reads as an object with a second side rather than as
+  // printed type on the page (see `workshop_collection_card.dart`) — it is a
+  // control that turns over, and depth is what says so.
   //
   // Collapses on dark, like [warmShadow] — see [AppPalette.shadow].
   static List<BoxShadow> get productCardShadow => AppBrightness.isDark

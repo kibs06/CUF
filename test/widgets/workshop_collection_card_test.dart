@@ -3,13 +3,17 @@ import 'dart:io';
 // re-exports it from here.
 import 'dart:ui' show Tristate;
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:app/constants/app_brightness.dart';
 import 'package:app/constants/app_constants.dart';
 import 'package:app/constants/app_palette.dart';
 import 'package:app/providers/product_provider.dart';
+import 'package:app/services/workshop_sort_hint_service.dart';
 import 'package:app/widgets/fit_card.dart';
 import 'package:app/widgets/workshop_collection_card.dart';
 
@@ -68,6 +72,48 @@ Rect cardRect(WidgetTester tester) =>
 Future<void> flip(WidgetTester tester) async {
   await tester.tap(find.byType(WorkshopCollectionCard));
   await tester.pumpAndSettle();
+}
+
+/// The box carrying the turn under the card: the FIRST `Transform` below it,
+/// which is the rotating one (the back's own mirror is nested inside it).
+Finder turnTransform() => find
+    .descendant(
+      of: find.byType(WorkshopCollectionCard),
+      matching: find.byType(Transform),
+    )
+    .first;
+
+/// The angle the card is turned to right now, in radians.
+///
+/// Read off the turn's own matrix rather than inferred from a rotated box's
+/// projected width: a few degrees of lean and a rounding error cannot hide
+/// inside it.
+///
+/// `Matrix4.rotateY(θ)` puts `cos θ` at storage[0] and `-sin θ` at storage[2].
+double turnAngle(WidgetTester tester) {
+  final m = tester.widget<Transform>(turnTransform()).transform.storage;
+  return math.atan2(-m[2], m[0]);
+}
+
+/// The container carrying the poster's lift — the only decorated box under the
+/// card with a shadow on it.
+Finder liftBox() => find
+    .descendant(
+      of: find.byType(WorkshopCollectionCard),
+      matching: find.byWidgetPredicate(
+        (w) =>
+            w is Container &&
+            w.decoration is BoxDecoration &&
+            (((w.decoration! as BoxDecoration).boxShadow?.isNotEmpty) ??
+                false),
+      ),
+    )
+    .first;
+
+/// Whether the one-time hint has been spent in the store.
+Future<bool> hintSpent() async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getBool(WorkshopSortHintService.key) ?? false;
 }
 
 void main() {
@@ -472,7 +518,15 @@ void main() {
       ),
     );
     expect(materials, hasLength(1));
-    expect(materials.first.color, AppPalette.dark.subtle);
+    // The poster family's own defaults (`FitCard.backgroundColor` /
+    // `borderColor`): the page tone, and the poster's thin line rather than the
+    // product cards' heavier frame. With the fill off the page it is the edge
+    // that draws the tile, on the front and on the back alike.
+    expect(materials.first.color, AppPalette.dark.page);
+    final backSide =
+        (materials.first.shape! as RoundedRectangleBorder).side;
+    expect(backSide.color, AppPalette.dark.hairline);
+    expect(backSide.width, FitCard.edgeWidth);
   });
 
   group('in the feed', () {
@@ -552,6 +606,195 @@ void main() {
         home.contains('sortModeLabel('),
         isFalse,
         reason: 'the card shows the short label; the sheet owns the long one',
+      );
+    });
+  });
+
+  group('saying out loud that it turns over', () {
+    setUp(() => SharedPreferences.setMockInitialValues({}));
+
+    testWidgets('the hint arrives on a first run, and a tap spends it', (
+      tester,
+    ) async {
+      await tester.pumpWidget(wrap(card(SortMode.featured)));
+      // The store answering is a frame, not a wait: the card is usable the whole
+      // time — the hint is only ever an addition to it.
+      await tester.pump();
+
+      expect(find.text(WorkshopCollectionCard.hintLabel), findsOneWidget);
+
+      await flip(tester);
+      await tester.pump();
+
+      expect(find.text(WorkshopCollectionCard.hintLabel), findsNothing);
+      expect(
+        await hintSpent(),
+        isTrue,
+        reason: 'one turn of the card is all the hint gets',
+      );
+    });
+
+    testWidgets('a customer who has turned it over before never sees it', (
+      tester,
+    ) async {
+      SharedPreferences.setMockInitialValues({
+        WorkshopSortHintService.key: true,
+      });
+
+      await tester.pumpWidget(wrap(card(SortMode.featured)));
+      await tester.pump();
+
+      expect(find.text(WorkshopCollectionCard.hintLabel), findsNothing);
+    });
+
+    testWidgets('the hint leaves on its own, and stays gone', (tester) async {
+      await tester.pumpWidget(wrap(card(SortMode.featured)));
+      await tester.pump();
+      expect(find.text(WorkshopCollectionCard.hintLabel), findsOneWidget);
+
+      await tester.pump(WorkshopCollectionCard.hintLifetime);
+      await tester.pump();
+
+      expect(find.text(WorkshopCollectionCard.hintLabel), findsNothing);
+      expect(
+        await hintSpent(),
+        isTrue,
+        reason: 'a hint that has had its turn on screen is spent',
+      );
+    });
+
+    testWidgets('it is a label on the card — clear of the words, opposite the '
+        'corner word, and still the card\'s to tap', (tester) async {
+      await tester.pumpWidget(wrap(card(SortMode.featured)));
+      await tester.pump();
+
+      final hint = tester.getRect(find.text(WorkshopCollectionCard.hintLabel));
+      final poster = tester.getRect(find.byType(FitCard));
+      final words = tester.getRect(boxOf('COLLECTION'));
+      final corner = tester.getRect(
+        boxOf(sortModeShortLabel(SortMode.featured)),
+      );
+
+      // Inside the card, under its words — the bottom band is the only empty
+      // space a full-bleed poster has — and opposite the word it is about.
+      expect(hint.left, greaterThanOrEqualTo(poster.left));
+      expect(hint.right, lessThanOrEqualTo(poster.right));
+      expect(
+        hint.top,
+        greaterThanOrEqualTo(words.bottom),
+        reason: 'the hint must not sit on the poster',
+      );
+      expect(
+        hint.left,
+        lessThan(corner.left),
+        reason: 'the hint belongs opposite the corner word it explains',
+      );
+
+      // A label, not a second control: a tap on it is a tap on the card. The
+      // hint sits behind an `IgnorePointer`, so the tap is reported as missing
+      // it and landing on the card underneath — which is exactly the contract.
+      await tester.tap(
+        find.text(WorkshopCollectionCard.hintLabel),
+        warnIfMissed: false,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text(WorkshopCollectionCard.backTitle), findsOneWidget);
+      await tester.pump();
+      expect(await hintSpent(), isTrue);
+    });
+
+    testWidgets('the idle beat leans the card over and squares it again', (
+      tester,
+    ) async {
+      await tester.pumpWidget(wrap(card(SortMode.featured)));
+
+      expect(turnAngle(tester), moreOrLessEquals(0, epsilon: 1e-6));
+
+      // The hold, then the lean: the beat's peak is the flip's first few
+      // degrees, and the turn is the only thing that goes any further.
+      await tester.pump(WorkshopCollectionCard.teaseHold);
+      await tester.pump(WorkshopCollectionCard.teaseOut);
+      expect(
+        turnAngle(tester),
+        moreOrLessEquals(
+          WorkshopCollectionCard.teaseFraction * math.pi,
+          epsilon: 0.002,
+        ),
+        reason: 'the beat must actually tip the card',
+      );
+      expect(
+        find.text(WorkshopCollectionCard.backTitle),
+        findsNothing,
+        reason: 'a hint, never a flip',
+      );
+      expect(find.text('THE'), findsOneWidget);
+
+      // ...and the settle: square again, with nothing left over.
+      await tester.pump(WorkshopCollectionCard.teaseBack);
+      expect(turnAngle(tester), moreOrLessEquals(0, epsilon: 1e-6));
+    });
+
+    testWidgets('a tap mid-beat still lands the card square on its back', (
+      tester,
+    ) async {
+      await tester.pumpWidget(wrap(card(SortMode.featured)));
+
+      // Catch the card mid-lean, where a beat left running would ride into the
+      // flip and leave the back a few degrees off square.
+      await tester.pump(WorkshopCollectionCard.teaseHold);
+      await tester.pump(WorkshopCollectionCard.teaseOut);
+      expect(
+        turnAngle(tester),
+        greaterThan(0.01),
+        reason: 'the card must be mid-lean here',
+      );
+
+      await flip(tester);
+
+      expect(find.text(WorkshopCollectionCard.backTitle), findsOneWidget);
+      expect(turnAngle(tester), moreOrLessEquals(math.pi, epsilon: 1e-3));
+
+      // The beat belongs to the poster: with the back up, nothing leans.
+      await tester.pump(WorkshopCollectionCard.teaseHold);
+      await tester.pump(WorkshopCollectionCard.teaseOut);
+      expect(turnAngle(tester), moreOrLessEquals(math.pi, epsilon: 1e-3));
+    });
+
+    testWidgets('a reduced-motion platform never starts the beat', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        wrap(card(SortMode.featured), reducedMotion: true),
+      );
+
+      // A whole beat's worth of wall clock: the card has not leaned, and the
+      // hint still arrives — state, not travel.
+      await tester.pump(WorkshopCollectionCard.teaseHold);
+      await tester.pump(WorkshopCollectionCard.teaseOut);
+      await tester.pump(WorkshopCollectionCard.teaseBack);
+      expect(turnAngle(tester), moreOrLessEquals(0, epsilon: 1e-6));
+
+      await tester.pump();
+      expect(find.text(WorkshopCollectionCard.hintLabel), findsOneWidget);
+    });
+
+    testWidgets('the poster is lifted off the page, and the lift is under the '
+        'turn', (tester) async {
+      await tester.pumpWidget(wrap(card(SortMode.featured)));
+
+      final decoration =
+          tester.widget<Container>(liftBox()).decoration! as BoxDecoration;
+
+      // The product cards' own lift: a card with two sides is an object
+      // standing on the page, not printed type.
+      expect(decoration.boxShadow, AppConstants.productCardShadow);
+      expect(decoration.borderRadius, AppConstants.productCardRadius);
+
+      // ...and it is cast from OUTSIDE the turn, so it stays where it is while
+      // the card turns over above it.
+      expect(
+        find.ancestor(of: turnTransform(), matching: liftBox()),
+        findsOneWidget,
       );
     });
   });
