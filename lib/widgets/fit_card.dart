@@ -51,7 +51,9 @@ import '../constants/app_palette.dart';
 /// the one thing that is *not* scaled to the width: it is a caption whose size
 /// is a fraction of the card's width ([_labelSizeOfWidth]), so it stays a
 /// caption on any tile instead of a fixed pixel size that reads huge on a small
-/// card and gets lost on a big one.
+/// card and gets lost on a big one. A value may also carry a small mark at its
+/// top ([heroValueSuffix]) — the `%` of a sale poster — which gives those same
+/// digits the width the sign would otherwise have shared with them.
 ///
 /// **The closer is the hero, or a footer, or nothing at all.** A hero is no
 /// longer required: [footerLabel] is the quiet alternative — a word in the
@@ -67,7 +69,11 @@ import '../constants/app_palette.dart';
 /// height follows its content, and a cell that is *too short* for that content
 /// scales the whole poster down (`scaleDown`) instead of painting a striped
 /// overflow. Extra height is spent *between* the words and the closer, so the
-/// number — or the footer — always sits on the card's bottom edge.
+/// number — or the footer — always sits on the card's bottom edge. That band is
+/// the only place a cell taller than the card's copy has to spend its extra
+/// height, and it is why a poster reads as a gap where one is not wanted: the
+/// two ways to close it are to give the copy more to say (more lines) or to let
+/// the words themselves grow, and neither is a number this widget can tune.
 ///
 /// **Bounding it is the caller's job, and [aspectRatio] is the reference.** Give
 /// it a box (the tile does, with `AspectRatio`) and the value lands on that
@@ -91,6 +97,7 @@ class FitCard extends StatelessWidget {
     super.key,
     required this.lines,
     this.heroValue,
+    this.heroValueSuffix,
     this.heroWidget,
     this.heroLabel,
     this.footerLabel,
@@ -112,6 +119,11 @@ class FitCard extends StatelessWidget {
              (heroValue == null && heroWidget == null && heroLabel == null),
          'A card has a hero or a footer, never both — and the label belongs '
          'to the hero it sits above',
+       ),
+       assert(
+         heroValueSuffix == null || heroValue != null,
+         'The mark belongs to a value: it is drawn at the top of the line the '
+         'digits are scaled into',
        );
 
   // Deliberately no `assert(lines.length <= 3)`: a list's `length` is not
@@ -143,6 +155,23 @@ class FitCard extends StatelessWidget {
   /// At most one of [heroValue] / [heroWidget] is given, and neither is
   /// required: a card may close on a [footer] instead, or on the words alone.
   final String? heroValue;
+
+  /// A small mark set at the **top** of the value — the `%` of a sale poster,
+  /// where `61` is the number the card is about and `%` only says what it
+  /// counts.
+  ///
+  /// **Why the mark is not part of the value's string:** the value is scaled to
+  /// the width, so every character in it is paid for in size. `61%` as one
+  /// string gives the digits three characters' worth of width to share; `61`
+  /// with `%` as the suffix gives them all of it but the mark's own fraction
+  /// ([heroSuffixSizeOfWidth]), which is what makes the number the big thing on
+  /// the poster and the sign a mark on it.
+  ///
+  /// The two are one line: the value is scaled to the width the mark leaves,
+  /// and the mark is aligned to the top of that line, so it reads as raised
+  /// rather than as a second, smaller character beside the digits. Sized from
+  /// the card, like the caption and the footer, so it scales with its cell.
+  final String? heroValueSuffix;
 
   /// A hero that is a *mark* rather than a word — the "See more" arrow, and
   /// anything drawn rather than typed. It keeps its own proportions and is
@@ -280,6 +309,20 @@ class FitCard extends StatelessWidget {
   /// card, small enough that the words above stay the loudest thing on it.
   static const double _heroWidgetWidthOfWidth = 0.68;
 
+  /// [heroValueSuffix]'s size, as a fraction of the card's inner width — the
+  /// same "sized from the card, not in pixels" rule the caption and the footer
+  /// follow.
+  ///
+  /// `0.2` lands the mark on about **37px on a full-bleed 2-column cell**
+  /// (~183px), roughly a third of the number it belongs to: read at that size
+  /// the sign says what the number counts without competing with it, which is
+  /// the point of taking it out of the value's string.
+  static const double heroSuffixSizeOfWidth = 0.2;
+
+  /// The air between the value and its mark, as a fraction of the inner width —
+  /// small: the mark belongs to the number, it is not a word beside it.
+  static const double _suffixGapOfWidth = 0.02;
+
   TextStyle _style(
     Color color, {
     double fontSize = _referenceFontSize,
@@ -313,6 +356,39 @@ class FitCard extends StatelessWidget {
     );
   }
 
+  /// The value and its mark as one line: the digits scaled to the width the
+  /// mark leaves, the mark at the top of that line.
+  ///
+  /// The value keeps the [_line] treatment — it is the same `fitWidth` box, so
+  /// it still spans everything but the mark's own fraction — and the mark gets
+  /// its own single line box (`height: 1`) so `start` alignment puts its top on
+  /// the digits' top rather than centring it on their baseline.
+  Widget _valueWithSuffix(
+    String value,
+    String suffix,
+    double innerWidth,
+    Color ink,
+  ) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: _line(value, ink)),
+        SizedBox(width: innerWidth * _suffixGapOfWidth),
+        Text(
+          suffix,
+          maxLines: 1,
+          softWrap: false,
+          textScaler: TextScaler.noScaling,
+          style: _style(
+            ink,
+            fontSize: innerWidth * heroSuffixSizeOfWidth,
+            height: 1,
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = AppPalette.of(AppBrightness.current);
@@ -320,10 +396,13 @@ class FitCard extends StatelessWidget {
     final accent = accentColor ?? palette.primaryInk;
 
     // One label, not five fragments: the card reads as "Based on your size EU
-    // 42", which is what it says on screen. A caller-supplied label wins — a
-    // hero widget paints no words of its own to be collected here.
-    final label =
-        semanticsLabel ?? [...lines, ?heroLabel, ?heroValue].join(' ');
+    // 42", which is what it says on screen — the mark is part of the value's
+    // own word (`61%`), not a fragment of its own. A caller-supplied label wins
+    // — a hero widget paints no words of its own to be collected here.
+    final value = heroValue == null
+        ? null
+        : '${heroValue!}${heroValueSuffix ?? ''}';
+    final label = semanticsLabel ?? [...lines, ?heroLabel, ?value].join(' ');
 
     return Semantics(
       container: true,
@@ -389,11 +468,21 @@ class FitCard extends StatelessWidget {
                               ),
                               const SizedBox(height: 4),
                             ],
-                            if (mark == null)
+                            if (mark == null && heroValueSuffix == null)
                               // The value is the same line as the copy above
                               // it: the number carries the card the way the
                               // words do.
                               _line(heroValue!, accent)
+                            else if (mark == null)
+                              // The number with its own small mark at the top:
+                              // the digits still take the card, the sign does
+                              // not — see [heroValueSuffix].
+                              _valueWithSuffix(
+                                heroValue!,
+                                heroValueSuffix!,
+                                inner.maxWidth,
+                                accent,
+                              )
                             else
                               // A mark, not a word: `Align` opts out of the
                               // stretched width so the glyph keeps its own

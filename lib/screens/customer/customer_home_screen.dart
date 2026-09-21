@@ -14,6 +14,7 @@ import '../../services/connectivity_service.dart';
 import '../../services/push_notification_service.dart';
 import '../../widgets/floating_message_button.dart';
 import '../../widgets/no_internet_view.dart';
+import '../../widgets/on_sale_card.dart';
 import '../../widgets/sole_product_card.dart';
 import '../../widgets/workshop_collection_card.dart';
 import '../../widgets/shimmer_group.dart';
@@ -26,6 +27,7 @@ import '../../utils/product_audience.dart';
 import '../../widgets/chat/chat_view.dart';
 import 'cart_screen.dart';
 import 'audience_listing_screen.dart';
+import 'on_sale_listing_screen.dart';
 import 'product_detail_screen.dart';
 import 'product_search_screen.dart';
 import 'tracking_screen.dart';
@@ -253,8 +255,16 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     // screen to get stuck in. Searching is a destination
     // (`SearchResultsScreen`) that owns its own query.
     final filteredProducts = productProvider.getFilteredProducts('');
-    // Products currently on sale — powers the dedicated "On Sale" sliver.
+    // Products currently on sale — powers the dedicated "On Sale" section,
+    // and the ON SALE poster's number is the best discount among exactly these.
     final saleProducts = allProducts.where(isOnSale).toList();
+    // The poster's figure: derived live from the sale set (never stored), and
+    // floored so a shelf-wide "up to" claim can never overstate a deal. Null
+    // while the catalog is still loading and when nothing valid is on sale —
+    // which is also what hides the card, on its own, with no second condition.
+    final maxDiscount = productProvider.isLoading
+        ? null
+        : maxDiscountPercent(saleProducts);
     // Best sellers — the same live `units_sold` set the 'Best Sellers' chip
     // filters by (one rule, see bestSellerProducts). The rail is suppressed
     // while a category is narrowing the catalog, exactly like the "On Sale"
@@ -385,30 +395,18 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                               AudienceSection(audience: audience),
 
                           // ── On Sale section ──
+                          // The heading IS the section's grid now: the poster
+                          // takes the grid's first cell (the way "Based on your
+                          // size" opens its own grid) and its tap opens the full
+                          // sale list — so the old "On Sale" title row and the
+                          // HOT DEALS badge beside it are gone. The poster says
+                          // the section's name at poster scale, and the live
+                          // figure it carries is the badge the row used to
+                          // only decorate.
                           if (saleProducts.isNotEmpty &&
                               (productProvider.selectedCategory == null ||
                                   productProvider.selectedCategory ==
                                       'All')) ...[
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(
-                                AppConstants.feedMargin,
-                                4,
-                                AppConstants.feedMargin,
-                                10,
-                              ),
-                              child: Row(
-                                children: [
-                                  Text(
-                                    'On Sale',
-                                    style: AppConstants.headlineStyle(
-                                      fontSize: 16,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  const _PriceTagBadge(label: 'HOT DEALS'),
-                                ],
-                              ),
-                            ),
                             Padding(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: AppConstants.feedMargin,
@@ -437,9 +435,32 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                                           AppConstants.productGridGutter,
                                       childAspectRatio: 0.58,
                                     ),
-                                itemCount: saleProducts.length,
+                                // +1: the poster is the grid's first cell, so
+                                // the sale list opens on its own name with the
+                                // best deal beside it — the same shape as the
+                                // catalog's poster. It is DROPPED, not left
+                                // blank, while the figure is unknown (still
+                                // loading, or nothing valid on sale), because a
+                                // poster with no number in it is worse than no
+                                // poster: the grid just closes up.
+                                itemCount:
+                                    saleProducts.length +
+                                    (maxDiscount == null ? 0 : 1),
                                 itemBuilder: (context, index) {
-                                  final prod = saleProducts[index];
+                                  if (maxDiscount != null && index == 0) {
+                                    return OnSaleCard(
+                                      discountPercent: maxDiscount,
+                                      onTap: () => Navigator.of(context).push(
+                                        MaterialPageRoute(
+                                          builder: (_) =>
+                                              const OnSaleListingScreen(),
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                  final prod =
+                                      saleProducts[index -
+                                          (maxDiscount == null ? 0 : 1)];
                                   return SoleProductCard(
                                     product: prod,
                                     onTap: () {
@@ -601,66 +622,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       ),
     );
   }
-}
-
-/// A price-tag shaped badge (punched hole + pointed right edge) used to
-/// emphasize section labels like "HOT DEALS".
-class _PriceTagBadge extends StatelessWidget {
-  const _PriceTagBadge({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: const _PriceTagPainter(color: Color(0xFFFFC107)),
-      child: Padding(
-        padding: const EdgeInsets.only(left: 22, right: 18, top: 5, bottom: 5),
-        child: Text(
-          label,
-          style: AppConstants.monoStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF3B2314),
-          ).copyWith(letterSpacing: 0.5),
-        ),
-      ),
-    );
-  }
-}
-
-class _PriceTagPainter extends CustomPainter {
-  const _PriceTagPainter({required this.color});
-
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    const pointWidth = 12.0;
-    const holeRadius = 6.0;
-    final holeCenter = Offset(14, size.height / 2);
-
-    final path = Path()
-      ..fillType = PathFillType.evenOdd
-      ..addRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(0, 0, size.width - pointWidth, size.height),
-          const Radius.circular(4),
-        ),
-      )
-      ..moveTo(size.width - pointWidth, 0)
-      ..lineTo(size.width, size.height / 2)
-      ..lineTo(size.width - pointWidth, size.height)
-      ..close()
-      ..addOval(Rect.fromCircle(center: holeCenter, radius: holeRadius));
-
-    canvas.drawShadow(path, Colors.black.withValues(alpha: 0.25), 2, false);
-    canvas.drawPath(path, Paint()..color = color);
-  }
-
-  @override
-  bool shouldRepaint(covariant _PriceTagPainter oldDelegate) =>
-      oldDelegate.color != color;
 }
 
 /// Skeleton placeholder for a single catalog product card (loading state).

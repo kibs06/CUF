@@ -194,6 +194,75 @@ void main() {
     );
   });
 
+  group('a hero value with a mark of its own', () {
+    // The ON SALE poster's number: `61` is what the card is about, `%` only
+    // says what it counts — so it rides at the top of the digits, small.
+    const sale = FitCard(
+      lines: ['ON', 'SALE'],
+      heroValue: '61',
+      heroValueSuffix: '%',
+    );
+
+    testWidgets('draws the mark at the top of the digits, sized from the card', (
+      tester,
+    ) async {
+      await tester.pumpWidget(wrap(sale));
+
+      const innerWidth = 168.0 - 32;
+      final cardBox = tester.getRect(find.byType(FitCard));
+      final number = tester.getRect(boxOf('61'));
+      final mark = tester.getRect(find.text('%'));
+
+      // A fraction of the card like the caption and the footer — so it scales
+      // with its cell instead of reading huge on a small tile.
+      expect(
+        tester.widget<Text>(find.text('%')).style!.fontSize!,
+        moreOrLessEquals(
+          innerWidth * FitCard.heroSuffixSizeOfWidth,
+          epsilon: 0.01,
+        ),
+      );
+
+      // Raised: its top is the digits' top and its own short line box stops
+      // well above their bottom — a superscript, not a character sitting on the
+      // digits' baseline.
+      expect(mark.top, moreOrLessEquals(number.top, epsilon: 0.5));
+      expect(mark.bottom, lessThan(number.bottom));
+      expect(mark.height, lessThan(number.height));
+
+      // It takes the last fraction of the line, and the digits carry the rest.
+      expect(mark.right, moreOrLessEquals(cardBox.right - 16, epsilon: 0.5));
+      expect(number.left, moreOrLessEquals(cardBox.left + 16, epsilon: 0.5));
+      expect(number.width, greaterThan(innerWidth * 0.7));
+
+      // And the pair is one line, so the number still lands on the bottom edge.
+      expect(
+        number.bottom,
+        moreOrLessEquals(cardBox.bottom - 16, epsilon: 0.5),
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('the mark is part of the value when the card is announced', (
+      tester,
+    ) async {
+      final handle = tester.ensureSemantics();
+      await tester.pumpWidget(wrap(sale));
+
+      // `61%` is one word to a listener, not a value and a fragment after it.
+      expect(find.bySemanticsLabel('ON SALE 61%'), findsOneWidget);
+      expect(find.bySemanticsLabel('61'), findsNothing);
+      handle.dispose();
+    });
+
+    testWidgets('a mark needs a value to sit on', (tester) async {
+      expect(
+        () => FitCard(lines: kLines, heroValueSuffix: '%'),
+        throwsAssertionError,
+      );
+    });
+  });
+
   testWidgets('the label stays a caption and scales with the card', (
     tester,
   ) async {

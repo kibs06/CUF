@@ -67,3 +67,33 @@ int? salePercent(Map<String, dynamic> product, {DateTime? now}) {
   if (price <= 0) return null;
   return (((price - salePrice) / price) * 100).round();
 }
+
+/// The **best** discount among [products] that are on sale right now, as a
+/// whole percent — or null when nothing valid is on sale.
+///
+/// This is the "ON SALE · UP TO 30%" poster's number, and it is the same rule
+/// as everywhere else on this page: [isOnSale] decides who counts, so a
+/// cleared, not-yet-started or expired sale is never included, and a product
+/// whose `price` is missing or zero is skipped rather than dividing by it. The
+/// set is read live from the loaded catalog, so a refresh, a price change or a
+/// sale ending moves the number on the next rebuild — it is never stored.
+///
+/// **Rounded DOWN, unlike [salePercent]'s badge.** A badge names one product's
+/// own discount; this one is a claim about the whole shelf ("up to"), so 33.3%
+/// has to read 33 — rounding it up would advertise a deal no product in the
+/// catalog actually offers.
+int? maxDiscountPercent(
+  Iterable<Map<String, dynamic>> products, {
+  DateTime? now,
+}) {
+  var best = 0;
+  for (final product in products) {
+    if (!isOnSale(product, now: now)) continue;
+    final price = _asDouble(product['price']) ?? 0;
+    final salePrice = _asDouble(product['sale_price']) ?? 0;
+    if (price <= 0) continue;
+    final pct = ((price - salePrice) / price * 100).floor();
+    if (pct > best) best = pct;
+  }
+  return best > 0 ? best : null;
+}
