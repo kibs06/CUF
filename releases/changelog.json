@@ -1,5 +1,26 @@
 [
   {
+    "latest_version": "1.0.28",
+    "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.28/app-release-1.0.28.apk",
+    "released_at": "2026-09-21",
+    "notes": [
+      "Search is a place now: type a few letters for suggestions, land on a results page you can back out of, and see the shop's own picks when nothing matches",
+      "\"Based on your size\" is a shelf you browse: a poster sized to what fits you, ten pairs, and a See more card that opens the whole list",
+      "\"On Sale\" opens on a poster showing the biggest live discount, and tapping it lists everything on sale",
+      "Both shelves now search, filter and sort where you stand — no trip back to the feed to change your mind",
+      "Shop by audience: Men's, Women's, Kids' and Unisex shelves in the Home category row",
+      "Product cards page through a seller's photos by swiping, without leaving the feed",
+      "The Artisan Catalog is now The Workshop Collection, and its name is a card you can flip to pick the order — the feed no longer opens a sheet",
+      "Cards answer your touch: they sink under a press and sit on a real drop shadow, on a tighter corner",
+      "Dark mode, with a control in Settings",
+      "Size Your Foot takes manual entry with your own scale, plus US and UK labels",
+      "Sellers: say who a product is for, and the audience shelves fill themselves",
+      "Sellers: the performance dashboard switches tabs instantly",
+      "Fixed: a sale card's price no longer leaves a gap under it",
+      "Best Sellers: the home rail is switched off for now — the filter still works"
+    ]
+  },
+  {
     "latest_version": "1.0.27",
     "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.27/app-release-1.0.27.apk",
     "released_at": "2026-09-16",
