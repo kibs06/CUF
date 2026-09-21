@@ -36,6 +36,15 @@ class HorizontalProductCard extends StatelessWidget {
   static const Key cardEdgeKey = Key('rail-card-edge');
   static const Key thumbnailHairlineKey = cardEdgeKey;
 
+  /// How far the name and the price stand off the card's own edge, each side.
+  ///
+  /// The strip is only 130px wide and its type was laid out flush against the
+  /// card, so the first glyph of the name and of the price sat *on* the 1px
+  /// hairline — the block read as bleeding out of the tile rather than as a
+  /// caption inside it. Eight px is the product card's own 12 at this card's
+  /// scale (~6% of the width), and it still leaves ~112px of line for the name.
+  static const double textInset = 8;
+
   /// First product image, preferring `product_images` (sorted by
   /// display_order) and falling back to the flat `images` list.
   static String firstImage(Map<String, dynamic> product, String fallback) {
@@ -148,37 +157,68 @@ class HorizontalProductCard extends StatelessWidget {
                   // on-sale item renders two price lines or the device text
                   // scale is large.
                   Expanded(
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.topLeft,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            name,
-                            style: AppConstants.bodyStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 2),
-                          if (onSale) ...[
-                            // Sale price hides behind a peel-away tape (same
-                            // reveal state as the cards' tags).
-                            SalePriceTape(
-                              productId: product['id']?.toString() ?? '',
-                              // 11px text → slightly more padding to keep the
-                              // ~40px tap target.
-                              hitPadding: const EdgeInsets.fromLTRB(
-                                10,
-                                20,
-                                10,
-                                9,
+                    // The gap is applied OUTSIDE the `FittedBox`, deliberately:
+                    // it is a real inset of the card, so the block is measured
+                    // against the width that is left (and the text scales to
+                    // that) instead of the padding becoming part of the content
+                    // the `scaleDown` shrinks.
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: textInset,
+                      ),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.topLeft,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              name,
+                              style: AppConstants.bodyStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
                               ),
-                              child: Text(
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            if (onSale) ...[
+                              // Sale price hides behind a peel-away tape (same
+                              // reveal state as the cards' tags).
+                              SalePriceTape(
+                                productId: product['id']?.toString() ?? '',
+                                // 11px text → slightly more padding to keep the
+                                // ~40px tap target.
+                                hitPadding: const EdgeInsets.fromLTRB(
+                                  10,
+                                  20,
+                                  10,
+                                  9,
+                                ),
+                                child: Text(
+                                  '₱${livePrice.toStringAsFixed(2)}',
+                                  style: AppConstants.monoStyle(
+                                    fontSize: 11,
+                                    color: AppConstants.primary,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                '₱${originalPrice.toStringAsFixed(2)}',
+                                style:
+                                    AppConstants.monoStyle(
+                                      fontSize: 9,
+                                      color: AppConstants.secondary.withValues(
+                                        alpha: 0.5,
+                                      ),
+                                    ).copyWith(
+                                      decoration: TextDecoration.lineThrough,
+                                    ),
+                              ),
+                            ] else
+                              Text(
                                 '₱${livePrice.toStringAsFixed(2)}',
                                 style: AppConstants.monoStyle(
                                   fontSize: 11,
@@ -186,29 +226,8 @@ class HorizontalProductCard extends StatelessWidget {
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                            ),
-                            Text(
-                              '₱${originalPrice.toStringAsFixed(2)}',
-                              style:
-                                  AppConstants.monoStyle(
-                                    fontSize: 9,
-                                    color: AppConstants.secondary.withValues(
-                                      alpha: 0.5,
-                                    ),
-                                  ).copyWith(
-                                    decoration: TextDecoration.lineThrough,
-                                  ),
-                            ),
-                          ] else
-                            Text(
-                              '₱${livePrice.toStringAsFixed(2)}',
-                              style: AppConstants.monoStyle(
-                                fontSize: 11,
-                                color: AppConstants.primary,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),

@@ -12,10 +12,10 @@ import 'package:app/widgets/sole_product_card.dart';
 /// card fill and the page are the SAME pure white, so the hairline is what
 /// draws the boundary and [AppConstants.productCardShadow] is what makes the
 /// tile read as raised rather than printed. These tests pin the border (colour,
-/// 1px, solid), the lift, and the rail card's no-inset geometry, because all of
-/// them are easy to regress silently — a lighter colour, or a `border` instead
-/// of a `foregroundDecoration`, still compiles and still looks "fine" on a
-/// photo.
+/// 1px, solid), the lift, the rail card's no-inset THUMBNAIL geometry, and the
+/// small inset its text keeps from that edge — all of them easy to regress
+/// silently: a lighter colour, a `border` instead of a `foregroundDecoration`,
+/// or a text block laid out flush left still compiles and still looks "fine".
 
 /// Deliberately terse: the test font is Ahem (every glyph a full-size
 /// square), so a long name or category overflows the price row.
@@ -270,6 +270,37 @@ void main() {
 
       expect(tester.getSize(find.byType(Image)).width, 128);
       expect(tester.getSize(find.byType(Image)).height, 124);
+    });
+
+    testWidgets('the name and the price keep a gap from the card edge', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        wrap(
+          SizedBox(
+            height: 180,
+            child: HorizontalProductCard(product: product(), onTap: () {}),
+          ),
+        ),
+      );
+
+      final card = tester.getRect(
+        find.byKey(HorizontalProductCard.cardEdgeKey),
+      );
+      final name = tester.getRect(find.text('Dress Boot'));
+      final price = tester.getRect(find.text('₱1399.00'));
+
+      // Flush left, the first glyph of each line sat on the 1px hairline itself.
+      // The inset is a real gap on both sides, and the two lines share one left
+      // edge — the padding goes around the block, not around one line of it.
+      expect(
+        name.left - card.left,
+        // The inset plus the 1px hairline, which insets the card's content.
+        moreOrLessEquals(HorizontalProductCard.textInset + 1, epsilon: 0.5),
+      );
+      expect(price.left, moreOrLessEquals(name.left, epsilon: 0.5));
+      expect(card.right - name.right, greaterThanOrEqualTo(1));
+      expect(card.right - price.right, greaterThanOrEqualTo(1));
     });
 
     testWidgets('a sale card keeps the same thumbnail geometry', (
