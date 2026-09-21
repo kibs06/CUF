@@ -53,7 +53,7 @@ A `CustomScrollView` with slivers, wrapped in `RefreshIndicator`. No AppBar — 
    - Men's / Women's / Kids' rails (conditional — see below; gated by `AppConstants.productAudienceEnabled`, **now `true`**, and each hides itself when the catalog holds nothing for that audience — which is every audience today: P4 measured all 15 live products as unset, so the rails render nothing until a seller answers "Who is it for?" on a product)
    - On Sale section (conditional — only when no search + no category filter + sale items exist)
    - Best Sellers rail (**currently gated off** by `kBestSellersRailEnabled = false` in `customer_home_screen.dart`; the widget and its data are kept, so re-enabling is a one-const flip. Also conditional — same gate as On Sale; hidden when nothing has sold). See `docs/AI/HOME_ON_SALE_ARCHITECTURE.md` §4.4
-   - The Workshop Collection card (the heading; tapping it flips it over onto the sort list)
+   - The Workshop Collection card (the heading; tapping it flips it over onto the sort list — it announces that in three ways: an idle beat that tips it a few degrees every ~4.5s, the product cards' lift under it, and a one-time `Tap to sort` hint; see `lib/widgets/workshop_collection_card.dart`)
    - Product grid (`MasonryGridView.count`, 2-col)
    - Catalog end-cap (`CatalogEndCap`, conditional — see below)
    - Bottom spacing for nav bar
@@ -98,7 +98,10 @@ loud as the products it introduces and the size it was built on is the card's
 hero value rather than 12px muted meta. The tile has no destination yet, so it
 does not claim to be tappable (`onTap` null → no button semantics, no ripple).
 Its colours are the app's roles, not the mockup's warm hexes: fill
-`surfaceSubtle`, edge `hairline`, ink `secondary`, accent `AppPalette.primaryInk`,
+`surfaceLight` (the page tone — the tile is drawn by its edge), edge
+`AppPalette.hairline` at `FitCard.edgeWidth` (0.5 — the poster's **own** thin
+line, deliberately not the product cards' `cardEdge` frame: the two share a grid,
+not an edge), ink `secondary`, accent `AppPalette.primaryInk`,
 radius `productCardRadius` (the product family's corner, so the poster and the
 tiles beside it are one design) — all brightness-aware, which is what keeps it
 correct on dark. `ProductGridSection` takes either a `title` or a `tile` (assertedmutually exclusive), so a later category tile has one place to plug into.

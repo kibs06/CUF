@@ -83,7 +83,9 @@ import '../constants/app_palette.dart';
 ///
 /// **Colours come from the app's tokens, not from the reference mockup's
 /// hexes**, because the app paints from brightness-aware roles and ships a dark
-/// mode: fill → [AppConstants.surfaceSubtle], hairline → [AppPalette.hairline],
+/// mode: fill → [AppConstants.surfaceLight] (the *page* tone — see
+/// [backgroundColor]), edge → [edgeColor] at [edgeWidth] (a thin line of the
+/// poster's own, **not** the product cards' — see [borderColor]),
 /// ink → [AppConstants.secondary] (`onPage`), accent → [AppPalette.primaryInk]
 /// (the clay *ink* role, lifted on dark), radius →
 /// [AppConstants.productCardRadius] (these cards share a grid with the product
@@ -137,6 +139,25 @@ class FitCard extends StatelessWidget {
   /// Exposed so a caller in a self-sizing parent has one honest way to bound
   /// this widget rather than inventing a height of its own.
   static const double aspectRatio = 505 / 800;
+
+  /// The poster family's edge colour for the current brightness — what
+  /// [borderColor] defaults to.
+  ///
+  /// Exposed so a card with two faces (The Workshop Collection, which flips
+  /// onto its sort list) can publish the same line on both sides of the turn
+  /// without restating the role.
+  static Color get edgeColor => AppPalette.of(AppBrightness.current).hairline;
+
+  /// The poster's own edge width: **half** the product cards' 1px line.
+  ///
+  /// The posters and the product cards share a grid, not an edge. A product
+  /// card is a filled tile framed by `AppConstants.cardEdge`; a poster is
+  /// page-toned type standing on the same page, and borrowing that full-weight
+  /// frame made it read as a box drawn around the copy instead of as the copy
+  /// itself. Half the line — the same half-width the cart's row divider uses —
+  /// leaves the poster an outline at rest. See [borderColor] for the colour
+  /// half of the same decision.
+  static const double edgeWidth = 0.5;
 
   /// The lines, top to bottom — 2 or 3 short ones (1–2 words, ideally 4–8
   /// characters each), the shortest word ideally alone on its line so it can
@@ -227,10 +248,38 @@ class FitCard extends StatelessWidget {
   /// behind it yet should not advertise a destination it does not have.
   final VoidCallback? onTap;
 
-  /// Card fill. Defaults to [AppConstants.surfaceSubtle].
+  /// Card fill. Defaults to [AppConstants.surfaceLight] — the page tone.
+  ///
+  /// **The poster is a flat tile on the page, not a filled card.** "Based on
+  /// your size", "See more", "ON SALE" and "The Workshop Collection" all sit in
+  /// the same grid as the product cards, and a product card is already page
+  /// toned with a hairline for its edge (see `sole_product_card.dart`). On the
+  /// old [AppConstants.surfaceSubtle] fill the posters read as grey squares
+  /// beside white tiles — a second, differently-coloured surface inside one
+  /// grid — so the fill is now the same tone as the page behind it and the
+  /// hairline is what draws the tile, exactly as it does on a product card.
+  ///
+  /// Dark mode needs nothing here: the page role is brightness-aware, and the
+  /// hairline stays the edge on the dark tone (the same contract
+  /// `sole_product_card.dart` documents). A surface that wants a poster to
+  /// stand off its page can still pass its own fill — every colour remains
+  /// overridable per card.
   final Color? backgroundColor;
 
-  /// 1px card edge. Defaults to [AppPalette.hairline].
+  /// The card's edge. Defaults to [edgeColor] ([AppPalette.hairline] — one step
+  /// lighter than a product card's edge), drawn at [edgeWidth].
+  ///
+  /// **The posters share a grid with the product cards, not their edge.** A
+  /// product card is a filled tile framed by a 1px `AppConstants.cardEdge`;
+  /// a poster is page-toned type standing on the same page, and its frame is
+  /// what makes the two the same family. Borrowing the product card's
+  /// full-weight, darker line made the poster read as a box drawn around the
+  /// copy — the tile stopped looking like type. So the poster keeps a line of
+  /// its own, thinner and lighter than the product cards' on both counts.
+  ///
+  /// On dark the two roles meet anyway (`hairline` and `cardEdge` are both
+  /// `#555555` there) and the width still halves, so the poster's outline stays
+  /// the lighter of the two at every brightness.
   final Color? borderColor;
 
   /// The lines' ink. Defaults to [AppConstants.secondary].
@@ -410,11 +459,14 @@ class FitCard extends StatelessWidget {
       label: label,
       child: ExcludeSemantics(
         child: Material(
-          color: backgroundColor ?? AppConstants.surfaceSubtle,
+          color: backgroundColor ?? AppConstants.surfaceLight,
           clipBehavior: Clip.antiAlias,
           shape: RoundedRectangleBorder(
             borderRadius: borderRadius ?? AppConstants.productCardRadius,
-            side: BorderSide(color: borderColor ?? palette.hairline),
+            side: BorderSide(
+              color: borderColor ?? edgeColor,
+              width: edgeWidth,
+            ),
           ),
           child: InkWell(
             onTap: onTap,

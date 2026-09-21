@@ -645,10 +645,22 @@ void main() {
           ),
         );
         final fill = material.color!;
+        final side =
+            (material.shape! as RoundedRectangleBorder).side;
         final ink = tester.widget<Text>(find.text('Based')).style!.color!;
         final accent = tester.widget<Text>(find.text('42')).style!.color!;
 
-        expect(fill, palette.subtle);
+        // The default fill is the PAGE tone, not a second surface: the posters
+        // sit in the same grid as the page-toned product cards. The edge is the
+        // poster's own thin line, though — lighter than the product cards' and
+        // at half their width — because the posters share the grid, not the
+        // product card's frame: on a page-toned tile that frame read as a box
+        // drawn around the copy. Pinned here so a later "make the posters
+        // visible" tweak cannot quietly put the frame back.
+        expect(fill, palette.page);
+        expect(side.color, palette.hairline);
+        expect(side.width, FitCard.edgeWidth);
+        expect(side.width, lessThan(1));
         expect(accent, palette.primaryInk);
         expect(_contrast(ink, fill), greaterThanOrEqualTo(4.5));
         expect(_contrast(accent, fill), greaterThanOrEqualTo(4.5));
