@@ -757,6 +757,57 @@ class ProductProvider extends ChangeNotifier {
     return found.toList()..sort();
   }
 
+  /// A [shelf] — a list this provider already derived ([productsInSize], an
+  /// audience, the on-sale set, a rail) — narrowed by a search [query] and a
+  /// [category], then ordered by [sort]. The shelf listing pages' one answer to
+  /// "what do search, filter and sort mean on a list that is not the catalog".
+  ///
+  /// **The catalog's own rules, not new ones.** The term goes through
+  /// [matchesSearchQuery] — the same rule the search page and its suggestion
+  /// panel use, so a word means one thing everywhere in the app — and the order
+  /// goes through [_applySort], so the same products read the same way on Home,
+  /// in search and on a shelf. Nothing here writes to the catalog: a shelf page
+  /// narrowing its own list can never re-sort or re-filter the feed underneath
+  /// it.
+  ///
+  /// [sort] of null (or [SortMode.featured]) keeps the shelf's own order — the
+  /// ranking [productsInSize] returns, the catalog order the home feed shows —
+  /// which is what "Featured" has always meant on a listing page.
+  List<Map<String, dynamic>> shelfProducts(
+    List<Map<String, dynamic>> shelf, {
+    String query = '',
+    String? category,
+    SortMode? sort,
+  }) {
+    final term = query.trim();
+    final matches = shelf
+        .where(
+          (p) =>
+              (term.isEmpty || matchesSearchQuery(p, term)) &&
+              (category == null || p['category'] == category),
+        )
+        .toList();
+
+    return _applySort(matches, sort ?? SortMode.featured);
+  }
+
+  /// The distinct categories a [shelf] actually holds, alphabetical — the chip
+  /// list its listing page offers.
+  ///
+  /// Derived from the shelf itself, never from [categories]: that is the whole
+  /// catalog's vocabulary, includes categories with nothing in them and appends
+  /// the 'On Sale' / 'Best Sellers' pseudo-categories. A chip beside a shelf
+  /// that can only lead to an empty grid is worse than no chip — the same rule
+  /// [searchCategories] follows for a query.
+  List<String> shelfCategories(List<Map<String, dynamic>> shelf) {
+    final found = <String>{};
+    for (final product in shelf) {
+      final category = product['category']?.toString() ?? '';
+      if (category.isNotEmpty) found.add(category);
+    }
+    return found.toList()..sort();
+  }
+
   /// Keyword suggestions for a partially typed query — the search panel's
   /// source. Delegates to [searchSuggestionsFor] so the rule is testable
   /// without a provider.

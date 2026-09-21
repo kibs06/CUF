@@ -2,15 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:provider/provider.dart';
 
-import '../../constants/app_brightness.dart';
 import '../../constants/app_constants.dart';
-import '../../constants/app_palette.dart';
 import '../../providers/product_provider.dart';
 import '../../services/search_history_service.dart';
 import '../../utils/product_grid_ratio.dart';
 import '../../widgets/product_rail_section.dart';
-import '../../widgets/product_sort_sheet.dart';
+import '../../widgets/product_sort_chip.dart';
 import '../../widgets/sole_product_card.dart';
+import '../../widgets/underline_category_chip.dart';
 import 'product_detail_screen.dart';
 
 /// The search results page — where the customer's query actually lands.
@@ -262,15 +261,17 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                     // the result count below it (both at 20).
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     children: [
-                      _chip(
+                      UnderlineCategoryChip(
                         label: 'All',
                         selected: selectedCategory == null,
+                        indicatorKey: const ValueKey('search-underline-All'),
                         onTap: () => setState(() => _category = null),
                       ),
                       for (final category in categories)
-                        _chip(
+                        UnderlineCategoryChip(
                           label: category,
                           selected: selectedCategory == category,
+                          indicatorKey: ValueKey('search-underline-$category'),
                           onTap: () => setState(() => _category = category),
                         ),
                     ],
@@ -301,127 +302,10 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
     );
   }
 
-  /// A category tab: the label, and **an underline** when it is the active
-  /// filter.
-  ///
-  /// No box, no fill, no border on the label itself — same reason the hero's
-  /// category tabs are plain text with an underline: a row of bordered chips
-  /// next to a bordered sort button reads as a toolbar of buttons, when only one
-  /// of them is a *state*. The underline says "you are here" without competing
-  /// with the sort control or the results below it, and the row stays legible as
-  /// the chip count changes (which it does, since chips only exist for
-  /// categories the query actually found).
-  Widget _chip({
-    required String label,
-    required bool selected,
-    required VoidCallback onTap,
-  }) {
-    // A Builder, so the ambient style is read from *below* the Scaffold (which
-    // installs Material's `bodyMedium` as the DefaultTextStyle). Reading it from
-    // this State's own context would find no DefaultTextStyle at all, and the
-    // measured underline would come out narrower than the label it sits under —
-    // `bodyMedium` carries `letterSpacing: 0.25`, ~2px on a 7-character label.
-    return Builder(
-      builder: (context) {
-        // The label's effective style: DefaultTextStyle merged with the app's body
-        // style, i.e. the same merge `Text` performs — so the underline is
-        // measured in exactly the style the label is painted in.
-        final labelStyle = DefaultTextStyle.of(context).style.merge(
-          AppConstants.bodyStyle(
-            fontSize: 14,
-            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-            color: selected
-                ? AppConstants.primary
-                : AppConstants.secondary.withValues(alpha: 0.65),
-          ),
-        );
-        return GestureDetector(
-          onTap: onTap,
-          behavior: HitTestBehavior.opaque,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(label, style: labelStyle),
-                const SizedBox(height: 4),
-                // Grows from the centre on select, like the hero's tabs. Width 0
-                // (not a transparent placeholder) so the transition animates.
-                AnimatedContainer(
-                  // Keyed so tests can read this chip's indicator without depending
-                  // on traversal order (same convention as the suggestion rows).
-                  key: ValueKey('search-underline-$label'),
-                  duration: const Duration(milliseconds: 250),
-                  curve: Curves.easeOutCubic,
-                  height: 2,
-                  width: selected ? _measureLabel(label, labelStyle) : 0,
-                  decoration: BoxDecoration(
-                    color: AppConstants.primary,
-                    borderRadius: BorderRadius.circular(1),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  /// The rendered width of [label] in [style] — so the underline spans exactly
-  /// the label. Same technique as the hero's category tabs.
-  double _measureLabel(String text, TextStyle style) {
-    final painter = TextPainter(
-      text: TextSpan(text: text, style: style),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    final width = painter.width;
-    painter.dispose();
-    return width;
-  }
-
-  Widget _sortChip() {
-    return GestureDetector(
-      onTap: () => showProductSortSheet(
-        context,
-        current: _sort,
-        onSelected: (mode) => setState(() => _sort = mode),
-      ),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: AppConstants.primary.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: AppConstants.primary.withValues(alpha: 0.15),
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Clay as ink, not as a fill: `AppConstants.primary` is pinned at
-            // #8B5A2B and only ~3.3:1 on the dark page — under AA for this
-            // 11px label. `AppPalette.primaryInk` is the role token for it.
-            // (The fills and hairline tints above keep the pinned brand clay.)
-            Icon(Icons.sort_outlined, size: 14, color: _accentInk),
-            const SizedBox(width: 4),
-            Text(
-              sortModeLabel(_sort),
-              style: AppConstants.bodyStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                color: _accentInk,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// Clay as INK, rather than [AppConstants.primary] as a fill — see the sort
-  /// chip's comment for why the distinction matters on the dark page.
-  Color get _accentInk => AppPalette.of(AppBrightness.current).primaryInk;
+  Widget _sortChip() => ProductSortChip(
+    sort: _sort,
+    onSelected: (mode) => setState(() => _sort = mode),
+  );
 
   // ── Results ──
 

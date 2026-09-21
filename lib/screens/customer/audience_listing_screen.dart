@@ -8,7 +8,7 @@ import '../../constants/app_palette.dart';
 import '../../providers/product_provider.dart';
 import '../../utils/product_audience.dart';
 import '../../utils/product_grid_ratio.dart';
-import '../../widgets/product_sort_sheet.dart';
+import '../../widgets/product_sort_chip.dart';
 import '../../widgets/sole_product_card.dart';
 import 'product_detail_screen.dart';
 
@@ -165,50 +165,12 @@ class _AudienceListingScreenState extends State<AudienceListingScreen> {
     );
   }
 
-  Widget _sortChip() {
-    return GestureDetector(
-      onTap: () => showProductSortSheet(
-        context,
-        current: _sort,
-        onSelected: (mode) => setState(() => _sort = mode),
-      ),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: AppConstants.primary.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: AppConstants.primary.withValues(alpha: 0.15),
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.sort_outlined, size: 14, color: _accentInk),
-            const SizedBox(width: 4),
-            // Flexible so the chip can never overflow its line: in every realistic
-            // combination (including the stacked header above) the label fits on
-            // one line and this changes nothing, and if a font/scale combination
-            // ever makes it impossible, the label wraps to a second line and only
-            // then ellipsises. A control the customer has to read should degrade
-            // last, not first.
-            Flexible(
-              child: Text(
-                sortModeLabel(_sort),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: AppConstants.bodyStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  color: _accentInk,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  /// The shared chip: the sheet is one sheet and the control above it is one
+  /// control, so an audience shelf cannot offer a fifth set of orders.
+  Widget _sortChip() => ProductSortChip(
+    sort: _sort,
+    onSelected: (mode) => setState(() => _sort = mode),
+  );
 
   // ── The shelf ──
 

@@ -50,8 +50,7 @@ Map<String, dynamic> product({
 ProductProvider providerWith(
   List<Map<String, dynamic>> products,
   Map<String, int> unitsSold,
-) =>
-    ProductProvider.seeded(products: products, unitsSold: unitsSold);
+) => ProductProvider.seeded(products: products, unitsSold: unitsSold);
 
 void main() {
   group('bestSellerProducts — the inclusion rule', () {
@@ -60,10 +59,7 @@ void main() {
       final b = product(id: 'b', name: 'B');
       final c = product(id: 'c', name: 'C');
 
-      final best = bestSellerProducts(
-        [a, b, c],
-        {'a': 5, 'b': 40, 'c': 12},
-      );
+      final best = bestSellerProducts([a, b, c], {'a': 5, 'b': 40, 'c': 12});
 
       expect(best.map((p) => p['id']).toList(), ['b', 'c', 'a']);
     });
@@ -78,18 +74,13 @@ void main() {
     });
 
     test('a brand-new catalog (nothing sold) yields an empty set', () {
-      final best = bestSellerProducts(
-        [product(id: 'a'), product(id: 'b')],
-        {},
-      );
+      final best = bestSellerProducts([product(id: 'a'), product(id: 'b')], {});
 
       expect(best, isEmpty);
     });
 
     test('caps at the limit, dropping the least-sold of the sold ones', () {
-      final products = [
-        for (var i = 0; i < 30; i++) product(id: 'p$i'),
-      ];
+      final products = [for (var i = 0; i < 30; i++) product(id: 'p$i')];
       final units = {for (var i = 0; i < 30; i++) 'p$i': i + 1};
 
       final best = bestSellerProducts(products, units);
@@ -109,9 +100,7 @@ void main() {
     });
 
     test('explicit limit is honoured', () {
-      final products = [
-        for (var i = 0; i < 5; i++) product(id: 'p$i'),
-      ];
+      final products = [for (var i = 0; i < 5; i++) product(id: 'p$i')];
       final units = {for (var i = 0; i < 5; i++) 'p$i': i + 1};
 
       expect(bestSellerProducts(products, units, limit: 3).length, 3);
@@ -119,30 +108,28 @@ void main() {
       expect(bestSellerProducts(products, units, limit: 0).length, 5);
     });
 
-    test('ties break deterministically (rating, then name) despite shuffle',
-        () {
-      final lowerRated = product(
-        id: 'low',
-        name: 'Aaa',
-        avgRating: 3.0,
-      );
-      final higherRated = product(id: 'high', name: 'Zzz', avgRating: 4.9);
-      final units = {'low': 7, 'high': 7};
+    test(
+      'ties break deterministically (rating, then name) despite shuffle',
+      () {
+        final lowerRated = product(id: 'low', name: 'Aaa', avgRating: 3.0);
+        final higherRated = product(id: 'high', name: 'Zzz', avgRating: 4.9);
+        final units = {'low': 7, 'high': 7};
 
-      // Same set in both catalog orders — the ranking must not depend on the
-      // per-load shuffle.
-      final first = bestSellerProducts(
-        [lowerRated, higherRated],
-        units,
-      ).map((p) => p['id']).toList();
-      final second = bestSellerProducts(
-        [higherRated, lowerRated],
-        units,
-      ).map((p) => p['id']).toList();
+        // Same set in both catalog orders — the ranking must not depend on the
+        // per-load shuffle.
+        final first = bestSellerProducts([
+          lowerRated,
+          higherRated,
+        ], units).map((p) => p['id']).toList();
+        final second = bestSellerProducts([
+          higherRated,
+          lowerRated,
+        ], units).map((p) => p['id']).toList();
 
-      expect(first, ['high', 'low']);
-      expect(second, first);
-    });
+        expect(first, ['high', 'low']);
+        expect(second, first);
+      },
+    );
   });
 
   group('categories — the Best Sellers chip', () {
@@ -156,10 +143,7 @@ void main() {
     });
 
     test('no chip at all when nothing has sold (brand-new store)', () {
-      final provider = providerWith(
-        [product(id: 'a'), product(id: 'b')],
-        {},
-      );
+      final provider = providerWith([product(id: 'a'), product(id: 'b')], {});
 
       expect(provider.hasBestSellers, isFalse);
       expect(provider.categories, isNot(contains(kBestSellersCategory)));
@@ -167,10 +151,7 @@ void main() {
 
     test('appears alongside the On Sale chip when both apply', () {
       final provider = providerWith(
-        [
-          product(id: 'a', salePrice: 800),
-          product(id: 'b'),
-        ],
+        [product(id: 'a', salePrice: 800), product(id: 'b')],
         {'b': 9},
       );
 
@@ -218,7 +199,10 @@ void main() {
     test('combines with a search keyword that matches tags', () {
       final provider = providerWith(
         [
-          {...product(id: 'tagged', name: 'Shoe'), 'tags': ['handmade']},
+          {
+            ...product(id: 'tagged', name: 'Shoe'),
+            'tags': ['handmade'],
+          },
           product(id: 'plain', name: 'Shoe'),
         ],
         {'tagged': 5, 'plain': 9},
@@ -244,31 +228,35 @@ void main() {
       expect(provider.getFilteredProducts('').length, kBestSellerLimit);
     });
 
-    test('combines with an explicit sort (best-selling stays most-sold first)',
-        () {
-      final provider = providerWith(
-        [
-          product(id: 'a', price: 100),
-          product(id: 'b', price: 900),
-          product(id: 'c', price: 500),
-        ],
-        {'a': 1, 'b': 50, 'c': 10},
-      );
+    test(
+      'combines with an explicit sort (best-selling stays most-sold first)',
+      () {
+        final provider = providerWith(
+          [
+            product(id: 'a', price: 100),
+            product(id: 'b', price: 900),
+            product(id: 'c', price: 500),
+          ],
+          {'a': 1, 'b': 50, 'c': 10},
+        );
 
-      provider.selectCategory(kBestSellersCategory);
-      provider.setSortMode(SortMode.bestSelling);
+        provider.selectCategory(kBestSellersCategory);
+        provider.setSortMode(SortMode.bestSelling);
 
-      expect(
-        provider.getFilteredProducts('').map((p) => p['id']).toList(),
-        ['b', 'c', 'a'],
-      );
-      // …and a price sort still wins when the customer asks for it.
-      provider.setSortMode(SortMode.priceLowToHigh);
-      expect(
-        provider.getFilteredProducts('').map((p) => p['id']).toList(),
-        ['a', 'c', 'b'],
-      );
-    });
+        expect(provider.getFilteredProducts('').map((p) => p['id']).toList(), [
+          'b',
+          'c',
+          'a',
+        ]);
+        // …and a price sort still wins when the customer asks for it.
+        provider.setSortMode(SortMode.priceLowToHigh);
+        expect(provider.getFilteredProducts('').map((p) => p['id']).toList(), [
+          'a',
+          'c',
+          'b',
+        ]);
+      },
+    );
 
     test('switching back to All restores the whole catalog', () {
       final provider = providerWith(
@@ -286,13 +274,9 @@ void main() {
       expect(provider.getFilteredProducts('').length, 2);
     });
 
-    test(
-        'a chip left selected with nothing sold degrades like an empty '
+    test('a chip left selected with nothing sold degrades like an empty '
         'category (matches On Sale when a sale expires mid-session)', () {
-      final provider = providerWith(
-        [product(id: 'a'), product(id: 'b')],
-        {},
-      );
+      final provider = providerWith([product(id: 'a'), product(id: 'b')], {});
 
       provider.selectCategory(kBestSellersCategory);
 
@@ -344,17 +328,15 @@ void main() {
   group('existing behaviour is unchanged', () {
     test('On Sale chip still filters by the active-sale rule', () {
       final provider = providerWith(
-        [
-          product(id: 'sale', salePrice: 500),
-          product(id: 'full', price: 500),
-        ],
+        [product(id: 'sale', salePrice: 500), product(id: 'full', price: 500)],
         {'full': 3},
       );
 
       provider.selectCategory('On Sale');
 
-      expect(provider.getFilteredProducts('').map((p) => p['id']).toList(),
-          ['sale']);
+      expect(provider.getFilteredProducts('').map((p) => p['id']).toList(), [
+        'sale',
+      ]);
     });
 
     test('a real category still filters by the category field', () {
@@ -368,17 +350,14 @@ void main() {
 
       provider.selectCategory('Boots');
 
-      expect(provider.getFilteredProducts('').map((p) => p['id']).toList(),
-          ['boot']);
+      expect(provider.getFilteredProducts('').map((p) => p['id']).toList(), [
+        'boot',
+      ]);
     });
 
     test('SortMode.bestSelling still sorts the unfiltered catalog', () {
       final provider = providerWith(
-        [
-          product(id: 'a'),
-          product(id: 'b'),
-          product(id: 'never'),
-        ],
+        [product(id: 'a'), product(id: 'b'), product(id: 'never')],
         {'a': 2, 'b': 9},
       );
 
@@ -386,8 +365,11 @@ void main() {
 
       // Never-sold items sort to the bottom rather than disappearing — the
       // sort has always kept them.
-      expect(provider.getFilteredProducts('').map((p) => p['id']).toList(),
-          ['b', 'a', 'never']);
+      expect(provider.getFilteredProducts('').map((p) => p['id']).toList(), [
+        'b',
+        'a',
+        'never',
+      ]);
     });
 
     test('sortModeLabel is untouched', () {
@@ -419,51 +401,46 @@ void main() {
 
   group('productsInSize — the "Based on your size" grid', () {
     test('keeps exactly the products that stock the size right now', () {
-      final provider = providerWith(
-        [
-          product(id: 'fit', stock: [('EU 42', 3)]),
-          product(id: 'other-size', stock: [('EU 40', 3)]),
-          product(id: 'no-data'),
-        ],
-        {},
-      );
+      final provider = providerWith([
+        product(id: 'fit', stock: [('EU 42', 3)]),
+        product(id: 'other-size', stock: [('EU 40', 3)]),
+        product(id: 'no-data'),
+      ], {});
 
       expect(provider.productsInSize(42).map((p) => p['id']).toList(), ['fit']);
     });
 
-    test('a sold-out size is not suggested, and neither is the next size down',
-        () {
-      final provider = providerWith(
-        [
+    test(
+      'a sold-out size is not suggested, and neither is the next size down',
+      () {
+        final provider = providerWith([
           product(id: 'sold-out', stock: [('EU 42', 0)]),
           // Close, but not the customer's size: a suggestion rail offers
           // what they actually wear, not what fits "roughly".
           product(id: 'near', stock: [('EU 41.5', 4)]),
-        ],
-        {},
-      );
+        ], {});
 
-      expect(provider.productsInSize(42), isEmpty);
-    });
+        expect(provider.productsInSize(42), isEmpty);
+      },
+    );
 
     test('no size on file yields no rail — never a fallback size', () {
-      final provider = providerWith(
-        [product(id: 'a', stock: [('EU 42', 3)])],
-        {},
-      );
+      final provider = providerWith([
+        product(id: 'a', stock: [('EU 42', 3)]),
+      ], {});
 
       expect(provider.productsInSize(null), isEmpty);
     });
 
     test('a size stored in another system converts before it is matched', () {
       // US 9 on the men's chart is EU 42 — the same physical size.
-      final provider = providerWith(
-        [product(id: 'us-sized', stock: [('US 9', 2)])],
-        {},
-      );
+      final provider = providerWith([
+        product(id: 'us-sized', stock: [('US 9', 2)]),
+      ], {});
 
-      expect(provider.productsInSize(42).map((p) => p['id']).toList(),
-          ['us-sized']);
+      expect(provider.productsInSize(42).map((p) => p['id']).toList(), [
+        'us-sized',
+      ]);
     });
 
     test('ranks by units sold, not catalog order', () {
@@ -476,47 +453,51 @@ void main() {
         {'low': 1, 'high': 50, 'mid': 10},
       );
 
-      expect(provider.productsInSize(42).map((p) => p['id']).toList(),
-          ['high', 'mid', 'low']);
+      expect(provider.productsInSize(42).map((p) => p['id']).toList(), [
+        'high',
+        'mid',
+        'low',
+      ]);
     });
 
     test('a never-sold product still qualifies (only the best-seller rule '
         'needs sales)', () {
-      final provider = providerWith(
-        [product(id: 'new', name: 'New', stock: [('EU 42', 2)])],
-        {},
-      );
+      final provider = providerWith([
+        product(id: 'new', name: 'New', stock: [('EU 42', 2)]),
+      ], {});
 
       expect(provider.productsInSize(42).map((p) => p['id']).toList(), ['new']);
     });
 
-    test('ties break deterministically (rating, then name) despite shuffle',
-        () {
-      final lowerRated = product(
-        id: 'low',
-        name: 'Aaa',
-        avgRating: 3.0,
-        stock: [('EU 42', 1)],
-      );
-      final higherRated = product(
-        id: 'high',
-        name: 'Zzz',
-        avgRating: 4.9,
-        stock: [('EU 42', 1)],
-      );
+    test(
+      'ties break deterministically (rating, then name) despite shuffle',
+      () {
+        final lowerRated = product(
+          id: 'low',
+          name: 'Aaa',
+          avgRating: 3.0,
+          stock: [('EU 42', 1)],
+        );
+        final higherRated = product(
+          id: 'high',
+          name: 'Zzz',
+          avgRating: 4.9,
+          stock: [('EU 42', 1)],
+        );
 
-      final first = providerWith([lowerRated, higherRated], {})
-          .productsInSize(42)
-          .map((p) => p['id'])
-          .toList();
-      final second = providerWith([higherRated, lowerRated], {})
-          .productsInSize(42)
-          .map((p) => p['id'])
-          .toList();
+        final first = providerWith([
+          lowerRated,
+          higherRated,
+        ], {}).productsInSize(42).map((p) => p['id']).toList();
+        final second = providerWith([
+          higherRated,
+          lowerRated,
+        ], {}).productsInSize(42).map((p) => p['id']).toList();
 
-      expect(first, ['high', 'low']);
-      expect(second, first);
-    });
+        expect(first, ['high', 'low']);
+        expect(second, first);
+      },
+    );
 
     test('returns the whole shelf by default, most-sold first', () {
       final provider = providerWith(
@@ -539,7 +520,9 @@ void main() {
 
     test('a catalog with nothing in that size yields an empty rail', () {
       final provider = providerWith(
-        [product(id: 'a', stock: [('EU 40', 2)])],
+        [
+          product(id: 'a', stock: [('EU 40', 2)]),
+        ],
         {'a': 9},
       );
 
@@ -550,8 +533,7 @@ void main() {
     test('an explicit limit is honoured, and 0 means no cap', () {
       final provider = providerWith(
         [
-          for (var i = 0; i < 5; i++)
-            product(id: 'p$i', stock: [('EU 42', 1)]),
+          for (var i = 0; i < 5; i++) product(id: 'p$i', stock: [('EU 42', 1)]),
         ],
         {for (var i = 0; i < 5; i++) 'p$i': i + 1},
       );
@@ -567,13 +549,10 @@ void main() {
     test('finds the catalog by its OWN vocabulary — the reported dead end', () {
       // "Formal Shoes" matched nothing before: `Formal` is a CATEGORY value,
       // and no product is named it or tagged with it.
-      final provider = providerWith(
-        [
-          product(id: 'oxford', name: 'Classic Oxford', category: 'Formal'),
-          product(id: 'slide', name: 'Beach Slide', category: 'Sandals'),
-        ],
-        {},
-      );
+      final provider = providerWith([
+        product(id: 'oxford', name: 'Classic Oxford', category: 'Formal'),
+        product(id: 'slide', name: 'Beach Slide', category: 'Sandals'),
+      ], {});
 
       expect(
         provider.searchResults('Formal Shoes').map((p) => p['id']).toList(),
@@ -582,21 +561,20 @@ void main() {
     });
 
     test('matches a name, a tag word, or a category word', () {
-      final provider = providerWith(
-        [
-          product(id: 'named', name: 'Derby Brogue'),
-          product(id: 'tagged', name: 'Plain Pair', tags: ['handmade']),
-          product(id: 'categorised', name: 'Plain Pair', category: 'Boots'),
-          product(id: 'other', name: 'Plain Pair', category: 'Sports'),
-        ],
-        {},
-      );
+      final provider = providerWith([
+        product(id: 'named', name: 'Derby Brogue'),
+        product(id: 'tagged', name: 'Plain Pair', tags: ['handmade']),
+        product(id: 'categorised', name: 'Plain Pair', category: 'Boots'),
+        product(id: 'other', name: 'Plain Pair', category: 'Sports'),
+      ], {});
 
       expect(provider.searchResults('brogue').map((p) => p['id']), ['named']);
-      expect(
-          provider.searchResults('handmade').map((p) => p['id']), ['tagged']);
-      expect(
-          provider.searchResults('boots').map((p) => p['id']), ['categorised']);
+      expect(provider.searchResults('handmade').map((p) => p['id']), [
+        'tagged',
+      ]);
+      expect(provider.searchResults('boots').map((p) => p['id']), [
+        'categorised',
+      ]);
       expect(provider.searchResults('nothing-here'), isEmpty);
     });
 
@@ -608,18 +586,15 @@ void main() {
     });
 
     test('the category filter narrows, and null means every category', () {
-      final provider = providerWith(
-        [
-          product(id: 'formal', name: 'Oxford', category: 'Formal'),
-          product(id: 'sandals', name: 'Oxford Slide', category: 'Sandals'),
-        ],
-        {},
-      );
+      final provider = providerWith([
+        product(id: 'formal', name: 'Oxford', category: 'Formal'),
+        product(id: 'sandals', name: 'Oxford Slide', category: 'Sandals'),
+      ], {});
 
-      expect(
-        provider.searchResults('oxford').map((p) => p['id']).toList(),
-        ['formal', 'sandals'],
-      );
+      expect(provider.searchResults('oxford').map((p) => p['id']).toList(), [
+        'formal',
+        'sandals',
+      ]);
       expect(
         provider
             .searchResults('oxford', category: 'Sandals')
@@ -630,13 +605,10 @@ void main() {
     });
 
     test('sorts what it returns WITHOUT changing the catalog sort', () {
-      final provider = providerWith(
-        [
-          product(id: 'pricey', name: 'Oxford', price: 3000),
-          product(id: 'cheap', name: 'Oxford Slide', price: 1000),
-        ],
-        {},
-      );
+      final provider = providerWith([
+        product(id: 'pricey', name: 'Oxford', price: 3000),
+        product(id: 'cheap', name: 'Oxford Slide', price: 1000),
+      ], {});
 
       expect(
         provider
@@ -650,24 +622,20 @@ void main() {
     });
 
     test('an explicit limit is honoured, and 0 means no cap', () {
-      final provider = providerWith(
-        [for (var i = 0; i < 5; i++) product(id: 'p$i', name: 'Oxford $i')],
-        {},
-      );
+      final provider = providerWith([
+        for (var i = 0; i < 5; i++) product(id: 'p$i', name: 'Oxford $i'),
+      ], {});
 
       expect(provider.searchResults('oxford', limit: 3).length, 3);
       expect(provider.searchResults('oxford', limit: 0).length, 5);
     });
 
     test('searchCategories lists only the categories the query found', () {
-      final provider = providerWith(
-        [
-          product(id: 'formal', name: 'Oxford', category: 'Formal'),
-          product(id: 'sandals', name: 'Oxford Slide', category: 'Sandals'),
-          product(id: 'untouched', name: 'Trail Boot', category: 'Boots'),
-        ],
-        {},
-      );
+      final provider = providerWith([
+        product(id: 'formal', name: 'Oxford', category: 'Formal'),
+        product(id: 'sandals', name: 'Oxford Slide', category: 'Sandals'),
+        product(id: 'untouched', name: 'Trail Boot', category: 'Boots'),
+      ], {});
 
       expect(provider.searchCategories('oxford'), ['Formal', 'Sandals']);
       // A category nothing matched is not offered as a filter — a chip that
@@ -681,10 +649,9 @@ void main() {
     });
 
     test('suggestionsFor reads the catalog vocabulary', () {
-      final provider = providerWith(
-        [product(id: 'a', name: 'Classic Oxford', category: 'Formal')],
-        {},
-      );
+      final provider = providerWith([
+        product(id: 'a', name: 'Classic Oxford', category: 'Formal'),
+      ], {});
 
       final terms = provider.suggestionsFor('for').map((s) => s.term).toList();
       expect(terms, contains('Formal'));
@@ -704,52 +671,56 @@ void main() {
         {'low': 1, 'high': 50, 'mid': 10},
       );
 
-      expect(provider.relatedProducts().map((p) => p['id']).toList(),
-          ['high', 'mid', 'low']);
+      expect(provider.relatedProducts().map((p) => p['id']).toList(), [
+        'high',
+        'mid',
+        'low',
+      ]);
       expect(provider.relatedProducts(limit: 2).length, 2);
     });
   });
 
   group('productsForAudience — the Men\'s / Women\'s / Kids\' rails', () {
     test('keeps exactly the products stated as that audience', () {
-      final provider = providerWith(
-        [
-          product(id: 'm', audience: 'men'),
-          product(id: 'w', audience: 'women'),
-          product(id: 'k', audience: 'kids'),
-        ],
-        {},
-      );
+      final provider = providerWith([
+        product(id: 'm', audience: 'men'),
+        product(id: 'w', audience: 'women'),
+        product(id: 'k', audience: 'kids'),
+      ], {});
 
-      expect(provider.productsForAudience('men').map((p) => p['id']).toList(),
-          ['m']);
+      expect(provider.productsForAudience('men').map((p) => p['id']).toList(), [
+        'm',
+      ]);
       expect(
-          provider.productsForAudience('women').map((p) => p['id']).toList(),
-          ['w']);
-      expect(provider.productsForAudience('kids').map((p) => p['id']).toList(),
-          ['k']);
+        provider.productsForAudience('women').map((p) => p['id']).toList(),
+        ['w'],
+      );
+      expect(
+        provider.productsForAudience('kids').map((p) => p['id']).toList(),
+        ['k'],
+      );
     });
 
-    test('unisex appears in NO rail — one card must not fill three strips',
-        () {
-      final provider = providerWith(
-        [product(id: 'any', name: 'House Slipper', audience: 'unisex')],
-        {},
-      );
+    test('unisex appears in NO rail — one card must not fill three strips', () {
+      final provider = providerWith([
+        product(id: 'any', name: 'House Slipper', audience: 'unisex'),
+      ], {});
 
       for (final audience in productRailAudiences) {
-        expect(provider.productsForAudience(audience), isEmpty,
-            reason: 'unisex must stay out of the $audience rail');
+        expect(
+          provider.productsForAudience(audience),
+          isEmpty,
+          reason: 'unisex must stay out of the $audience rail',
+        );
       }
       // Asking for it directly is not a rail, and yields nothing either.
       expect(provider.productsForAudience('unisex'), isEmpty);
     });
 
     test('an unset product is in no rail — but is still in the catalog', () {
-      final provider = providerWith(
-        [product(id: 'legacy', name: 'Legacy Pair')],
-        {},
-      );
+      final provider = providerWith([
+        product(id: 'legacy', name: 'Legacy Pair'),
+      ], {});
 
       for (final audience in productRailAudiences) {
         expect(provider.productsForAudience(audience), isEmpty);
@@ -758,10 +729,9 @@ void main() {
       // The regression this phase must not cause: an unstated audience hides a
       // product from the curated rails ONLY. Search, the catalog grid and
       // category browsing all still see it.
-      expect(
-        provider.getFilteredProducts('').map((p) => p['id']).toList(),
-        ['legacy'],
-      );
+      expect(provider.getFilteredProducts('').map((p) => p['id']).toList(), [
+        'legacy',
+      ]);
       expect(
         provider.getFilteredProducts('legacy').map((p) => p['id']).toList(),
         ['legacy'],
@@ -770,14 +740,14 @@ void main() {
 
     test('an unrecognised or non-rail audience yields an empty rail, never a '
         'default one', () {
-      final provider = providerWith(
-        [product(id: 'm', audience: 'men')],
-        {},
-      );
+      final provider = providerWith([product(id: 'm', audience: 'men')], {});
 
       for (final bad in [null, '', 'Men', 'audience', 'men,women']) {
-        expect(provider.productsForAudience(bad), isEmpty,
-            reason: '$bad is not a canonical rail audience');
+        expect(
+          provider.productsForAudience(bad),
+          isEmpty,
+          reason: '$bad is not a canonical rail audience',
+        );
       }
     });
 
@@ -791,24 +761,35 @@ void main() {
         {'low': 1, 'high': 50, 'mid': 10},
       );
 
-      expect(provider.productsForAudience('men').map((p) => p['id']).toList(),
-          ['high', 'mid', 'low']);
+      expect(provider.productsForAudience('men').map((p) => p['id']).toList(), [
+        'high',
+        'mid',
+        'low',
+      ]);
     });
 
     test('ties break deterministically despite the catalog order', () {
       final lowerRated = product(
-          id: 'low', name: 'Aaa', audience: 'men', avgRating: 3.0);
+        id: 'low',
+        name: 'Aaa',
+        audience: 'men',
+        avgRating: 3.0,
+      );
       final higherRated = product(
-          id: 'high', name: 'Zzz', audience: 'men', avgRating: 4.9);
+        id: 'high',
+        name: 'Zzz',
+        audience: 'men',
+        avgRating: 4.9,
+      );
 
-      final first = providerWith([lowerRated, higherRated], {})
-          .productsForAudience('men')
-          .map((p) => p['id'])
-          .toList();
-      final second = providerWith([higherRated, lowerRated], {})
-          .productsForAudience('men')
-          .map((p) => p['id'])
-          .toList();
+      final first = providerWith([
+        lowerRated,
+        higherRated,
+      ], {}).productsForAudience('men').map((p) => p['id']).toList();
+      final second = providerWith([
+        higherRated,
+        lowerRated,
+      ], {}).productsForAudience('men').map((p) => p['id']).toList();
 
       expect(first, ['high', 'low']);
       expect(second, first);
@@ -816,14 +797,14 @@ void main() {
 
     test('a never-sold product still qualifies — only the best-seller rule '
         'needs sales', () {
-      final provider = providerWith(
-        [product(id: 'new', name: 'New', audience: 'women')],
-        {},
-      );
+      final provider = providerWith([
+        product(id: 'new', name: 'New', audience: 'women'),
+      ], {});
 
       expect(
-          provider.productsForAudience('women').map((p) => p['id']).toList(),
-          ['new']);
+        provider.productsForAudience('women').map((p) => p['id']).toList(),
+        ['new'],
+      );
     });
 
     test('caps at the rail limit, dropping the least-sold matches', () {
@@ -844,10 +825,7 @@ void main() {
 
     test('an explicit limit is honoured, and 0 means no cap', () {
       final provider = providerWith(
-        [
-          for (var i = 0; i < 5; i++)
-            product(id: 'p$i', audience: 'men'),
-        ],
+        [for (var i = 0; i < 5; i++) product(id: 'p$i', audience: 'men')],
         {for (var i = 0; i < 5; i++) 'p$i': i + 1},
       );
 
@@ -861,42 +839,41 @@ void main() {
   /// also what made it safe to turn the feature on with an untagged catalog.
   group('audiencesInCatalog — the Home category row\'s chips', () {
     test('offers only the audiences the catalog holds, in vocabulary order', () {
-      final provider = providerWith(
-        [
-          product(id: 'k', audience: 'kids'),
-          product(id: 'm', audience: 'men'),
-          product(id: 'u', audience: 'unisex'),
-        ],
-        {},
-      );
+      final provider = providerWith([
+        product(id: 'k', audience: 'kids'),
+        product(id: 'm', audience: 'men'),
+        product(id: 'u', audience: 'unisex'),
+      ], {});
 
       // Vocabulary order (men, women, kids, unisex) — not the catalog's order,
       // and `women` is absent because nothing is tagged for it.
       expect(provider.audiencesInCatalog, ['men', 'kids', 'unisex']);
     });
 
-    test('is empty while nothing is tagged — the state of the live catalog', () {
-      final provider = providerWith(
-        [
+    test(
+      'is empty while nothing is tagged — the state of the live catalog',
+      () {
+        final provider = providerWith([
           product(id: 'a'),
           product(id: 'b', audience: 'Men'), // not canonical: not an audience
-        ],
-        {},
-      );
+        ], {});
 
-      expect(provider.audiencesInCatalog, isEmpty);
-    });
+        expect(provider.audiencesInCatalog, isEmpty);
+      },
+    );
 
     test('offers unisex even though no rail does', () {
-      final provider = providerWith(
-        [product(id: 'u', name: 'House Slipper', audience: 'unisex')],
-        {},
-      );
+      final provider = providerWith([
+        product(id: 'u', name: 'House Slipper', audience: 'unisex'),
+      ], {});
 
       expect(provider.audiencesInCatalog, [kUnisexAudience]);
       for (final audience in productRailAudiences) {
-        expect(provider.productsForAudience(audience), isEmpty,
-            reason: 'a unisex product must still stay out of the $audience rail');
+        expect(
+          provider.productsForAudience(audience),
+          isEmpty,
+          reason: 'a unisex product must still stay out of the $audience rail',
+        );
       }
     });
   });
@@ -906,56 +883,57 @@ void main() {
   /// shelf, so unisex is included rather than skipped, and an uncapped list is
   /// what a whole-shelf page shows.
   group('productsInAudience — the audience listing page', () {
-    test('keeps exactly that audience, including unisex, never the untagged', () {
-      final provider = providerWith(
-        [
+    test(
+      'keeps exactly that audience, including unisex, never the untagged',
+      () {
+        final provider = providerWith([
           product(id: 'm', audience: 'men'),
           product(id: 'w', audience: 'women'),
           product(id: 'u', audience: 'unisex'),
           product(id: 'none'),
-        ],
-        {},
-      );
+        ], {});
 
-      List<String> ids(String? audience) => provider
-          .productsInAudience(audience)
-          .map((p) => p['id'].toString())
-          .toList();
+        List<String> ids(String? audience) => provider
+            .productsInAudience(audience)
+            .map((p) => p['id'].toString())
+            .toList();
 
-      expect(ids('men'), ['m']);
-      expect(ids('women'), ['w']);
-      // The one difference from the rail: the page shows the unisex shelf.
-      expect(ids('unisex'), ['u']);
-      expect(ids('men'), isNot(contains('none')));
-      expect(ids('unisex'), isNot(contains('none')));
-    });
+        expect(ids('men'), ['m']);
+        expect(ids('women'), ['w']);
+        // The one difference from the rail: the page shows the unisex shelf.
+        expect(ids('unisex'), ['u']);
+        expect(ids('men'), isNot(contains('none')));
+        expect(ids('unisex'), isNot(contains('none')));
+      },
+    );
 
     test('an unrecognised audience is empty, never a default shelf', () {
-      final provider = providerWith(
-        [product(id: 'm', audience: 'men')],
-        {},
-      );
+      final provider = providerWith([product(id: 'm', audience: 'men')], {});
 
       for (final bad in [null, '', 'Men', 'men,women', 'shoes']) {
-        expect(provider.productsInAudience(bad), isEmpty,
-            reason: '$bad is not a canonical audience');
+        expect(
+          provider.productsInAudience(bad),
+          isEmpty,
+          reason: '$bad is not a canonical audience',
+        );
       }
     });
 
     test('sorts by the page\'s own mode without touching the catalog sort', () {
-      final provider = providerWith(
-        [
-          product(id: 'pricey', name: 'B', price: 3000, audience: 'men'),
-          product(id: 'cheap', name: 'A', price: 900, audience: 'men'),
-        ],
-        {},
-      );
+      final provider = providerWith([
+        product(id: 'pricey', name: 'B', price: 3000, audience: 'men'),
+        product(id: 'cheap', name: 'A', price: 900, audience: 'men'),
+      ], {});
       expect(provider.sortMode, SortMode.featured);
 
-      final lowFirst = provider.productsInAudience('men',
-          sort: SortMode.priceLowToHigh);
-      final highFirst = provider.productsInAudience('men',
-          sort: SortMode.priceHighToLow);
+      final lowFirst = provider.productsInAudience(
+        'men',
+        sort: SortMode.priceLowToHigh,
+      );
+      final highFirst = provider.productsInAudience(
+        'men',
+        sort: SortMode.priceHighToLow,
+      );
 
       expect(lowFirst.map((p) => p['id'].toString()), ['cheap', 'pricey']);
       expect(highFirst.map((p) => p['id'].toString()), ['pricey', 'cheap']);
@@ -963,20 +941,19 @@ void main() {
       expect(provider.sortMode, SortMode.featured);
     });
 
-    test('is not capped at the rail limit, and an explicit limit still works',
-        () {
-      final provider = providerWith(
-        [
+    test(
+      'is not capped at the rail limit, and an explicit limit still works',
+      () {
+        final provider = providerWith([
           for (var i = 0; i < 20; i++)
             product(id: 'p$i', name: 'P$i', audience: 'women'),
-        ],
-        {},
-      );
+        ], {});
 
-      expect(provider.productsInAudience('women').length, 20);
-      expect(provider.productsInAudience('women', limit: 4).length, 4);
-      expect(kAudienceRailLimit, lessThan(20));
-    });
+        expect(provider.productsInAudience('women').length, 20);
+        expect(provider.productsInAudience('women', limit: 4).length, 4);
+        expect(kAudienceRailLimit, lessThan(20));
+      },
+    );
   });
 
   /// The seller tabs (Dashboard / POS / Products) share ONE seller-scoped
@@ -989,10 +966,11 @@ void main() {
   /// repaint every listening tab.
   group('shared seller catalog — in-place edits (no refetch)', () {
     test('removeProductLocally drops exactly the deleted product', () {
-      final provider = providerWith(
-        [product(id: 'a'), product(id: 'b'), product(id: 'c')],
-        {},
-      );
+      final provider = providerWith([
+        product(id: 'a'),
+        product(id: 'b'),
+        product(id: 'c'),
+      ], {});
 
       provider.removeProductLocally('b');
 
@@ -1017,31 +995,38 @@ void main() {
       provider.removeProductLocally('nope');
 
       expect(provider.products.length, 1);
-      expect(notifications, 0,
-          reason: 'a no-op must not repaint every tab that reads this list');
-    });
-
-    test('applyStockLocally rewrites the raw relation AND the mapped sizes',
-        () {
-      final provider = providerWith(
-        [product(id: 'a', stock: [('EU 42', 3)])],
-        {'a': 7},
+      expect(
+        notifications,
+        0,
+        reason: 'a no-op must not repaint every tab that reads this list',
       );
-
-      provider.applyStockLocally('a', {'EU 41': 0, 'EU 42': 9});
-
-      final updated = provider.products.single;
-      // The seller grid's badges/filters read the relation…
-      expect(updated['inventory'], [
-        {'size': 'EU 41', 'stock': 0},
-        {'size': 'EU 42', 'stock': 9},
-      ]);
-      // …and POS tiles / customer size selectors read the mapped map, so
-      // leaving it stale would show sold-out stock as available.
-      expect(updated['sizes'], {'EU 41': 0, 'EU 42': 9});
-      // Rebuilding the map must not drop the stamped sold count.
-      expect(updated['units_sold'], 7);
     });
+
+    test(
+      'applyStockLocally rewrites the raw relation AND the mapped sizes',
+      () {
+        final provider = providerWith(
+          [
+            product(id: 'a', stock: [('EU 42', 3)]),
+          ],
+          {'a': 7},
+        );
+
+        provider.applyStockLocally('a', {'EU 41': 0, 'EU 42': 9});
+
+        final updated = provider.products.single;
+        // The seller grid's badges/filters read the relation…
+        expect(updated['inventory'], [
+          {'size': 'EU 41', 'stock': 0},
+          {'size': 'EU 42', 'stock': 9},
+        ]);
+        // …and POS tiles / customer size selectors read the mapped map, so
+        // leaving it stale would show sold-out stock as available.
+        expect(updated['sizes'], {'EU 41': 0, 'EU 42': 9});
+        // Rebuilding the map must not drop the stamped sold count.
+        expect(updated['units_sold'], 7);
+      },
+    );
 
     test('applyStockLocally is a no-op for an id outside the catalog', () {
       final provider = providerWith([product(id: 'a')], {});
@@ -1056,6 +1041,134 @@ void main() {
 
     test('a fresh seller catalog reports no error', () {
       expect(providerWith([product(id: 'a')], {}).sellerCatalogError, isNull);
+    });
+  });
+
+  group('shelfProducts — narrowing a list that is not the catalog', () {
+    // Two boots, one sneaker, one sandal, in a deliberately unhelpful order and
+    // price order, so "the shelf's own order" and "sorted" cannot be confused.
+    final shelf = [
+      product(id: 'b1', name: 'Chelsea Boot', category: 'Boots', price: 300),
+      product(id: 's1', name: 'Penny Loafer', category: 'Sneakers', price: 100),
+      product(id: 'b2', name: 'Desert Boot', category: 'Boots', price: 200),
+      product(id: 'x1', name: 'Slide', category: 'Sandals', price: 400),
+    ];
+    final provider = providerWith(shelf, const {});
+
+    test('no query, no filter, featured order: the shelf as it arrived', () {
+      final out = provider.shelfProducts(shelf);
+      expect(out.map((p) => p['id']), ['b1', 's1', 'b2', 'x1']);
+      // A copy, never the caller's list: a page cannot reorder its shelf by
+      // accident, and the shelf is the catalog's own list.
+      expect(identical(out, shelf), isFalse);
+      expect(shelf.map((p) => p['id']), ['b1', 's1', 'b2', 'x1']);
+    });
+
+    test('the query goes through the shared search rule', () {
+      // Name match, per word — the same rule the search page uses.
+      expect(provider.shelfProducts(shelf, query: 'boot').map((p) => p['id']), [
+        'b1',
+        'b2',
+      ]);
+      // Multi-word is a WIDER net, not a conjunction: any word matching is
+      // enough (`matchesSearchQuery`), so both boots come back — the rule the
+      // search page already lives by, reused rather than re-thought here.
+      expect(
+        provider
+            .shelfProducts(shelf, query: '  desert boot ')
+            .map((p) => p['id']),
+        ['b1', 'b2'],
+      );
+      // And the category counts as a word, exactly as it does in search — the
+      // shelf's own vocabulary has to work.
+      expect(
+        provider.shelfProducts(shelf, query: 'sandals').map((p) => p['id']),
+        ['x1'],
+      );
+      // A term nothing in the SHELF holds is empty, even when the catalog has
+      // it — the shelf is the whole universe here.
+      expect(provider.shelfProducts(shelf, query: 'derby'), isEmpty);
+    });
+
+    test('the category filter is an exact category, and they combine', () {
+      expect(
+        provider.shelfProducts(shelf, category: 'Boots').map((p) => p['id']),
+        ['b1', 'b2'],
+      );
+      expect(
+        provider
+            .shelfProducts(shelf, query: 'boot', category: 'Boots')
+            .map((p) => p['id']),
+        ['b1', 'b2'],
+      );
+      expect(
+        provider.shelfProducts(shelf, query: 'penny', category: 'Boots'),
+        isEmpty,
+      );
+    });
+
+    test(
+      'the sort is the catalog\'s own, so an order cannot mean two things',
+      () {
+        expect(
+          provider
+              .shelfProducts(shelf, sort: SortMode.priceLowToHigh)
+              .map((p) => p['id']),
+          ['s1', 'b2', 'b1', 'x1'],
+        );
+        expect(
+          provider
+              .shelfProducts(shelf, sort: SortMode.priceHighToLow)
+              .map((p) => p['id']),
+          ['x1', 'b1', 'b2', 's1'],
+        );
+        // Name A→Z, and null means what Featured means: the shelf's own order.
+        expect(
+          provider
+              .shelfProducts(shelf, sort: SortMode.nameAZ)
+              .map((p) => p['id']),
+          ['b1', 'b2', 's1', 'x1'],
+        );
+        expect(
+          provider.shelfProducts(shelf, sort: null).map((p) => p['id']),
+          provider.shelfProducts(shelf).map((p) => p['id']),
+        );
+      },
+    );
+
+    test('a price sort is sale-aware, like every other price in the app', () {
+      final discounted = [
+        product(id: 'd', name: 'Discounted', price: 1000, salePrice: 50),
+        product(id: 'p', name: 'Full Price', price: 200),
+      ];
+      expect(
+        providerWith(discounted, const {})
+            .shelfProducts(discounted, sort: SortMode.priceLowToHigh)
+            .map((p) => p['id']),
+        ['d', 'p'],
+      );
+    });
+  });
+
+  group('shelfCategories — the chips a shelf can offer', () {
+    test('only what the shelf holds, alphabetical, blanks skipped', () {
+      final provider = providerWith(const [], const {});
+      expect(
+        provider.shelfCategories([
+          product(id: 'a', category: 'Sneakers'),
+          product(id: 'b', category: 'Boots'),
+          product(id: 'c', category: 'Boots'),
+          product(id: 'd'),
+        ]),
+        ['Boots', 'Sneakers'],
+      );
+      // A shelf with nothing categorized offers no chips at all — a chip that
+      // can only lead to an empty grid is worse than no chip.
+      expect(
+        provider.shelfCategories([product(id: 'e', category: '')]),
+        isEmpty,
+      );
+      expect(provider.shelfCategories(const []), isEmpty);
     });
   });
 }
