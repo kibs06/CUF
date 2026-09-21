@@ -43,13 +43,47 @@ class SalePriceTape extends StatefulWidget {
   /// below (e.g. the detail screen's bottom-aligned row, where the original
   /// price sits beside the sale price). The same padded box is used in both
   /// the covered and revealed states, so the layout never reflows.
+  ///
+  /// Padding is not the only way to reach 40px: see [targetBelow], which adds
+  /// a line to the target instead. Prefer it wherever the dead air would show,
+  /// since air is visible and a second line is not.
   final EdgeInsets hitPadding;
+
+  /// A line that belongs with the price and shares the tape's tap target,
+  /// without the tape covering it — the strikethrough original price under the
+  /// sale price on a catalog card.
+  ///
+  /// **Why a target needs it at all.** The ≥40px has to come from inside this
+  /// widget's own box: Flutter delivers a tap only within every ancestor's
+  /// bounds, so slack cannot be borrowed from the parent and no overlay can
+  /// reach outside it. On a card, the only 40px available are the price lines
+  /// themselves — which is exactly what this is for. With it, the caller can
+  /// pass a [hitPadding] of a few px ([0, 4, 0, 4] on the product card) and the
+  /// price block keeps a card's normal spacing: the number hugs the content
+  /// above it and the original hugs the number, where the padding-only version
+  /// needed ~26px of dead air around the number that read as a gap in the card:
+  ///
+  /// ```
+  /// SalePriceTape(
+  ///   hitPadding: EdgeInsets.fromLTRB(10, 4, 10, 4),
+  ///   targetBelow: Text('₱150.00', style: strikeThrough),
+  ///   child: Text('₱100.00', style: salePrice),
+  /// )
+  /// ```
+  ///
+  /// The tape's visual still hugs the price alone (its insets are measured
+  /// against the price's own box, not the target's), and this line keeps its
+  /// own text and its own announcement in the semantics tree. A tap anywhere in
+  /// the box — this line included — peels the tape, which is the point of putting
+  /// them in one target.
+  final Widget? targetBelow;
 
   const SalePriceTape({
     super.key,
     required this.productId,
     required this.child,
     this.hitPadding = const EdgeInsets.fromLTRB(10, 18, 10, 8),
+    this.targetBelow,
   });
 
   @override
@@ -217,7 +251,9 @@ class _SalePriceTapeState extends State<SalePriceTape>
         if (v <= 0 || v >= 1) {
           scale = 1.0;
         } else {
-          scale = v < 0.5 ? 1 + 0.05 * (v / 0.5) : 1.05 - 0.05 * ((v - 0.5) / 0.5);
+          scale = v < 0.5
+              ? 1 + 0.05 * (v / 0.5)
+              : 1.05 - 0.05 * ((v - 0.5) / 0.5);
         }
         return Transform.scale(scale: scale, child: child);
       },
@@ -230,33 +266,40 @@ class _SalePriceTapeState extends State<SalePriceTape>
     // state, so the layout never reflows when the tape comes off.
     final Widget paddedPrice = Padding(
       padding: widget.hitPadding,
-      child: price,
+      // While the tape covers the number, the number itself is not announced —
+      // the reveal label is the node a screen reader gets. A line the caller
+      // stacked under it ([targetBelow]) is its own text and keeps its own
+      // announcement.
+      child: showTape ? ExcludeSemantics(child: price) : price,
     );
-
-    if (!showTape) return paddedPrice;
 
     // The visual tape hugs the text with ~8px overhang above and ~4px below,
     // inside the padded box — so it never reaches the strikethrough original
     // price that sits below the box on catalog cards. Clamped so a caller
     // padding with zero bottom slack still gets a sane (non-inverted) box.
-    final double visualTop =
-        (widget.hitPadding.top - 8).clamp(0.0, double.infinity);
-    final double visualBottom =
-        (widget.hitPadding.bottom - 4).clamp(0.0, double.infinity);
+    final double visualTop = (widget.hitPadding.top - 8).clamp(
+      0.0,
+      double.infinity,
+    );
+    final double visualBottom = (widget.hitPadding.bottom - 4).clamp(
+      0.0,
+      double.infinity,
+    );
 
-    return Semantics(
-      button: true,
-      label: 'Sale price hidden, tap to reveal',
-      onTap: _handleTap,
-      excludeSemantics: true,
-      child: Stack(
-        clipBehavior: Clip.none,
-        alignment: Alignment.centerLeft,
-        children: [
-          // The covered price (blurred/frosted by the tape above it).
-          paddedPrice,
-          // Invisible hit area — the whole padded box, so the tap target is
-          // comfortably ≥40px without visually oversizing the tape.
+    // The price's own box: the covered number and the tape over it. The
+    // visual's insets are measured against THIS box (the padded price), so a
+    // line the caller puts under the price — see [targetBelow] — shares the tap
+    // target without the tape ever growing over it.
+    final Widget pricedBox = Stack(
+      clipBehavior: Clip.none,
+      alignment: Alignment.centerLeft,
+      children: [
+        // The covered price (blurred/frosted by the tape above it).
+        paddedPrice,
+        // Invisible hit area — the whole padded box, so the tap target is
+        // comfortably ≥40px without visually oversizing the tape. It exists
+        // only while there is tape to peel (a revealed price is just a price).
+        if (showTape)
           Positioned.fill(
             child: GestureDetector(
               key: const Key('sale-price-tape-overlay'),
@@ -265,10 +308,11 @@ class _SalePriceTapeState extends State<SalePriceTape>
               child: const SizedBox.expand(),
             ),
           ),
-          // The visual tape (shadow + peeled/shimmering strip) — purely
-          // decorative (IgnorePointer), hugging the price text with a small
-          // overhang so it reads as real tape without swallowing the original
-          // price line.
+        // The visual tape (shadow + peeled/shimmering strip) — purely
+        // decorative (IgnorePointer), hugging the price text with a small
+        // overhang so it reads as real tape without swallowing the original
+        // price line.
+        if (showTape)
           Positioned(
             left: 0,
             right: 0,
@@ -287,17 +331,20 @@ class _SalePriceTapeState extends State<SalePriceTape>
                   // The peeled/shimmering tape.
                   Positioned.fill(
                     child: AnimatedBuilder(
-                      animation: Listenable.merge(
-                        [_peelController, _shimmerController],
-                      ),
+                      animation: Listenable.merge([
+                        _peelController,
+                        _shimmerController,
+                      ]),
                       builder: (context, child) {
                         final t = _peelController.value;
                         // Phase A: corner lift (tape resists). Phase B: the
                         // tape comes free and flicks off up-right.
-                        final phaseA = Curves.easeOut
-                            .transform((t / 0.42).clamp(0.0, 1.0));
-                        final phaseB = Curves.easeIn
-                            .transform(((t - 0.42) / 0.58).clamp(0.0, 1.0));
+                        final phaseA = Curves.easeOut.transform(
+                          (t / 0.42).clamp(0.0, 1.0),
+                        );
+                        final phaseB = Curves.easeIn.transform(
+                          ((t - 0.42) / 0.58).clamp(0.0, 1.0),
+                        );
                         final dx = phaseA * 5 + phaseB * 54;
                         final dy = phaseA * -3 + phaseB * -44;
                         final tilt = phaseA * 0.5; // 3D lift toward viewer
@@ -332,6 +379,63 @@ class _SalePriceTapeState extends State<SalePriceTape>
               ),
             ),
           ),
+      ],
+    );
+
+    // What the tape's box holds: the price, and — when the caller owns a line
+    // that belongs with it — that line under it, inside the same tap target.
+    //
+    // The ≥40px target has to come from inside this widget's own box (a tap
+    // outside a box's bounds is never delivered, so slack cannot be borrowed
+    // from a parent). On a catalog card the price and its original are the
+    // cheapest 40px there is, and putting both in the target is what lets the
+    // card keep the block as tight as a card with no sale at all — the padding
+    // alone would have to open ~26px of dead air around the number, which reads
+    // as a gap in the card.
+    final Widget? below = widget.targetBelow;
+    final Widget box = below == null
+        ? pricedBox
+        : Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [pricedBox, below],
+          );
+
+    if (!showTape) return box;
+
+    return Semantics(
+      // Its own node, so the reveal is announced as one phrase rather than
+      // merging into whatever the caller put around the price (a line under it
+      // would otherwise join the label).
+      container: true,
+      // A line the caller put under the price is its own node, not a second
+      // line of this label.
+      explicitChildNodes: below != null,
+      button: true,
+      label: 'Sale price hidden, tap to reveal',
+      onTap: _handleTap,
+      // The subtree is dropped wholesale only when the box holds nothing but the
+      // covered number (the number is excluded on its own above, so a caller's
+      // line under it keeps its own announcement).
+      excludeSemantics: below == null,
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.centerLeft,
+        children: [
+          box,
+          // Invisible hit area over the whole box — the price's own box is
+          // covered by its own (same handler, a one-way reveal), and this one is
+          // what adds the line below it to the target.
+          if (below != null)
+            Positioned.fill(
+              child: ExcludeSemantics(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _handleTap,
+                  child: const SizedBox.expand(),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -378,9 +482,9 @@ Path _tapeShape(Size size, int seed) {
   const steps = 6;
 
   Offset point(double fx, double fy, double amp) => Offset(
-        fx + (r.nextDouble() - 0.5) * amp,
-        fy + (r.nextDouble() - 0.5) * amp,
-      );
+    fx + (r.nextDouble() - 0.5) * amp,
+    fy + (r.nextDouble() - 0.5) * amp,
+  );
 
   final pts = <Offset>[];
   for (var i = 0; i <= steps; i++) {
@@ -474,11 +578,7 @@ class _TapePainter extends CustomPainter {
         ..shader = const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            Color(0x00FFFFFF),
-            Color(0x45FFFFFF),
-            Color(0x00FFFFFF),
-          ],
+          colors: [Color(0x00FFFFFF), Color(0x45FFFFFF), Color(0x00FFFFFF)],
           stops: [0.0, 0.5, 1.0],
         ).createShader(Offset.zero & size),
     );

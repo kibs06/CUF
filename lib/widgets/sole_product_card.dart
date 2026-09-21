@@ -232,34 +232,42 @@ class SoleProductCard extends StatelessWidget {
                         children: [
                           if (onSale) ...[
                             // Sale price (hidden behind a peel-away tape until
-                            // the user reveals it) + always-visible original.
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                SalePriceTape(
-                                  productId: product['id']?.toString() ?? '',
-                                  child: Text(
-                                    '₱${displayPrice.toStringAsFixed(2)}',
-                                    style: AppConstants.monoStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                      color: AppConstants.primary,
-                                    ),
-                                  ),
-                                ),
-                                Text(
-                                  '₱${price.toStringAsFixed(2)}',
-                                  style:
-                                      AppConstants.monoStyle(
-                                        fontSize: 11,
-                                        color: AppConstants.secondary
-                                            .withValues(alpha: 0.5),
-                                      ).copyWith(
-                                        decoration: TextDecoration.lineThrough,
+                            // the user reveals it) + always-visible original,
+                            // as ONE tap target ([SalePriceTape.targetBelow])
+                            // — the ≥40px is the two lines together. That is
+                            // what keeps this block a plain card's spacing: the
+                            // padding-only version had to open ~26px of dead
+                            // air around the number, which showed as a gap
+                            // between the rating row and the price, and again
+                            // between the two prices.
+                            SalePriceTape(
+                              productId: product['id']?.toString() ?? '',
+                              hitPadding: const EdgeInsets.fromLTRB(
+                                10,
+                                4,
+                                10,
+                                4,
+                              ),
+                              targetBelow: Text(
+                                '₱${price.toStringAsFixed(2)}',
+                                style:
+                                    AppConstants.monoStyle(
+                                      fontSize: 11,
+                                      color: AppConstants.secondary.withValues(
+                                        alpha: 0.5,
                                       ),
+                                    ).copyWith(
+                                      decoration: TextDecoration.lineThrough,
+                                    ),
+                              ),
+                              child: Text(
+                                '₱${displayPrice.toStringAsFixed(2)}',
+                                style: AppConstants.monoStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppConstants.primary,
                                 ),
-                              ],
+                              ),
                             ),
                           ] else
                             Text(
