@@ -47,6 +47,14 @@ class SalePriceTape extends StatefulWidget {
   /// Padding is not the only way to reach 40px: see [targetBelow], which adds
   /// a line to the target instead. Prefer it wherever the dead air would show,
   /// since air is visible and a second line is not.
+  ///
+  /// **Pad vertically, not horizontally, wherever the price has to line up.**
+  /// The padding moves the *price text*, so a horizontal inset shifts the number
+  /// away from whatever shares its line — the original price under it, the name
+  /// above it, the same price on a card with no sale. The tape's own overhang
+  /// does not follow the padding (it is measured from the text), so a caller can
+  /// drop the horizontal half and keep the look: the strip is still wider than
+  /// the digits, the digits just start where every other line starts.
   final EdgeInsets hitPadding;
 
   /// A line that belongs with the price and shares the tape's tap target,
@@ -58,14 +66,16 @@ class SalePriceTape extends StatefulWidget {
   /// bounds, so slack cannot be borrowed from the parent and no overlay can
   /// reach outside it. On a card, the only 40px available are the price lines
   /// themselves — which is exactly what this is for. With it, the caller can
-  /// pass a [hitPadding] of a few px ([0, 4, 0, 4] on the product card) and the
-  /// price block keeps a card's normal spacing: the number hugs the content
-  /// above it and the original hugs the number, where the padding-only version
-  /// needed ~26px of dead air around the number that read as a gap in the card:
+  /// pass a vertical-only [hitPadding] (`EdgeInsets.symmetric(vertical: 4)` on
+  /// the product card) and the price block keeps a card's normal spacing: the
+  /// number hugs the content above it and starts on the same left edge as
+  /// everything else, and the original hugs the number — where the padding-only
+  /// version needed ~26px of dead air around the number that read as a gap in
+  /// the card:
   ///
   /// ```
   /// SalePriceTape(
-  ///   hitPadding: EdgeInsets.fromLTRB(10, 4, 10, 4),
+  ///   hitPadding: EdgeInsets.symmetric(vertical: 4),
   ///   targetBelow: Text('₱150.00', style: strikeThrough),
   ///   child: Text('₱100.00', style: salePrice),
   /// )
@@ -78,12 +88,35 @@ class SalePriceTape extends StatefulWidget {
   /// them in one target.
   final Widget? targetBelow;
 
+  /// A widget that belongs on the price's LINE — a product card's category
+  /// label — centered against the number itself.
+  ///
+  /// **Why it has to live here.** Once [targetBelow] is in the box, the box is
+  /// two lines tall, so anything a caller centers against it lands on the seam
+  /// between the two prices: half the original's line below the number, which is
+  /// exactly the "the category didn't align" report. A caller cannot fix that
+  /// from outside — the number's line is not its box — and the two ways out are
+  /// worse: padding the label's box to the tape's shape makes the block a whole
+  /// line taller the moment the label has to take a line of its own (it then
+  /// clips the card), and nudging it up with a transform moves it into the
+  /// price above when it wraps. So the tape owns it: the label shares the
+  /// number's row and is centered on the number's line, or — when the two cannot
+  /// share a row — it drops to a line of its own between the number and the
+  /// original, exactly as a caller's own row would have made it, and costs the
+  /// block no more height than that line.
+  ///
+  /// It is deliberately **not** part of the tap target: the reveal covers the
+  /// number and [targetBelow], which is what a tap on the price means. A tap on
+  /// this belongs to the caller (on a card, opening the product).
+  final Widget? sameLine;
+
   const SalePriceTape({
     super.key,
     required this.productId,
     required this.child,
     this.hitPadding = const EdgeInsets.fromLTRB(10, 18, 10, 8),
     this.targetBelow,
+    this.sameLine,
   });
 
   @override
@@ -107,6 +140,16 @@ class _SalePriceTapeState extends State<SalePriceTape>
 
   // Resting tilt of the stuck-on tape (~3.5°).
   static const double _baseAngle = -0.06;
+
+  // How far the visual tape reaches past the price TEXT on each side. It is a
+  // strip pressed over the number, so it is a little wider than the digits and
+  // a little taller than their line. Deliberately constants measured from the
+  // text rather than derived from [hitPadding]: the padding is the tap target's
+  // business, and a caller that pads only vertically — which a card must, so its
+  // price lines up with everything above it — must not drag the tape in with it.
+  static const double _overhangTop = 8;
+  static const double _overhangBottom = 4;
+  static const double _overhangSide = 10;
 
   int get _seed => widget.productId.hashCode;
 
@@ -273,18 +316,23 @@ class _SalePriceTapeState extends State<SalePriceTape>
       child: showTape ? ExcludeSemantics(child: price) : price,
     );
 
-    // The visual tape hugs the text with ~8px overhang above and ~4px below,
-    // inside the padded box — so it never reaches the strikethrough original
-    // price that sits below the box on catalog cards. Clamped so a caller
-    // padding with zero bottom slack still gets a sane (non-inverted) box.
-    final double visualTop = (widget.hitPadding.top - 8).clamp(
+    // The visual tape hugs the TEXT with a fixed overhang on all four sides, so
+    // it never reaches the strikethrough original price that sits below the box
+    // on catalog cards, and never grows or shrinks with the padding. Clamped so
+    // a caller padding with zero bottom slack still gets a sane (non-inverted)
+    // box.
+    final double visualTop = (widget.hitPadding.top - _overhangTop).clamp(
       0.0,
       double.infinity,
     );
-    final double visualBottom = (widget.hitPadding.bottom - 4).clamp(
-      0.0,
-      double.infinity,
-    );
+    final double visualBottom = (widget.hitPadding.bottom - _overhangBottom)
+        .clamp(0.0, double.infinity);
+    // Horizontally the tape is allowed past the box (the stack does not clip):
+    // the strip is wider than the digits, and with no side padding — which is
+    // what a card wants — that overhang lands outside the box while the price
+    // itself stays flush with the card's other lines.
+    final double visualLeft = widget.hitPadding.left - _overhangSide;
+    final double visualRight = widget.hitPadding.right - _overhangSide;
 
     // The price's own box: the covered number and the tape over it. The
     // visual's insets are measured against THIS box (the padded price), so a
@@ -314,11 +362,14 @@ class _SalePriceTapeState extends State<SalePriceTape>
         // price line.
         if (showTape)
           Positioned(
-            left: 0,
-            right: 0,
+            left: visualLeft,
+            right: visualRight,
             top: visualTop,
             bottom: visualBottom,
             child: IgnorePointer(
+              // Named so a test can measure the strip itself — its overhang is a
+              // constant of the text and must not follow the tap padding.
+              key: const Key('sale-price-tape-visual'),
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [
@@ -392,13 +443,48 @@ class _SalePriceTapeState extends State<SalePriceTape>
     // card keep the block as tight as a card with no sale at all — the padding
     // alone would have to open ~26px of dead air around the number, which reads
     // as a gap in the card.
+    // The number's line: the number, and — when the caller has something that
+    // belongs beside it ([sameLine]) — that too, in a Wrap so the two share a
+    // row while they fit and the label takes its own line when they do not. A
+    // Wrap rather than a Row for the reason the card's own row is one: at the
+    // largest text scale a number and a label cannot both fit across a two-column
+    // card, and the price must never be the thing that shrinks.
+    final Widget? alongside = widget.sameLine;
+    final Widget priceLine = alongside == null
+        ? pricedBox
+        : Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            alignment: WrapAlignment.spaceBetween,
+            spacing: 6,
+            children: [pricedBox, alongside],
+          );
+
     final Widget? below = widget.targetBelow;
     final Widget box = below == null
-        ? pricedBox
+        ? priceLine
         : Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [pricedBox, below],
+            children: [
+              priceLine,
+              // The line below shares the target, and only the line below: as
+              // its own hit area instead of one spanning the whole box, so a
+              // [sameLine] label beside the number stays the caller's to tap.
+              Stack(
+                children: [
+                  below,
+                  Positioned.fill(
+                    child: ExcludeSemantics(
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: _handleTap,
+                        child: const SizedBox.expand(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           );
 
     if (!showTape) return box;
@@ -418,26 +504,7 @@ class _SalePriceTapeState extends State<SalePriceTape>
       // covered number (the number is excluded on its own above, so a caller's
       // line under it keeps its own announcement).
       excludeSemantics: below == null,
-      child: Stack(
-        clipBehavior: Clip.none,
-        alignment: Alignment.centerLeft,
-        children: [
-          box,
-          // Invisible hit area over the whole box — the price's own box is
-          // covered by its own (same handler, a one-way reveal), and this one is
-          // what adds the line below it to the target.
-          if (below != null)
-            Positioned.fill(
-              child: ExcludeSemantics(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: _handleTap,
-                  child: const SizedBox.expand(),
-                ),
-              ),
-            ),
-        ],
-      ),
+      child: box,
     );
   }
 

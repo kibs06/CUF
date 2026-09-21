@@ -68,6 +68,13 @@ class SoleProductCard extends StatelessWidget {
     final List<String> photos = images.isEmpty
         ? const [_fallbackProductImage]
         : images;
+    // The price's style, named once: a sale block and a plain block have to draw
+    // the same number, and two copies of a style are two things to edit.
+    final TextStyle priceStyle = AppConstants.monoStyle(
+      fontSize: 14,
+      fontWeight: FontWeight.bold,
+      color: AppConstants.primary,
+    );
 
     // The lift lives under the card, in `PressSink`, so a press can animate the
     // shadow without rebuilding this card (and its image, its text and its sale
@@ -217,78 +224,59 @@ class SoleProductCard extends StatelessWidget {
                         ),
                       ],
                       const SizedBox(height: 2),
-                      // A Wrap, not a Row: at the largest text scale a price and
-                      // a category cannot both fit across a two-column card on a
-                      // narrow phone, and a Row overflowed by ~148px doing the
-                      // arithmetic. Wrapping drops the category onto its own line
-                      // at that scale — nothing shrinks and nothing ellipsises,
-                      // which matters most on a price ("₱1099…" is a different
-                      // price; a shrunken one is at least true). On one line it
-                      // is laid out exactly as the Row was.
-                      Wrap(
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        alignment: WrapAlignment.spaceBetween,
-                        spacing: 6,
-                        children: [
-                          if (onSale) ...[
-                            // Sale price (hidden behind a peel-away tape until
-                            // the user reveals it) + always-visible original,
-                            // as ONE tap target ([SalePriceTape.targetBelow])
-                            // — the ≥40px is the two lines together. That is
-                            // what keeps this block a plain card's spacing: the
-                            // padding-only version had to open ~26px of dead
-                            // air around the number, which showed as a gap
-                            // between the rating row and the price, and again
-                            // between the two prices.
-                            SalePriceTape(
-                              productId: product['id']?.toString() ?? '',
-                              hitPadding: const EdgeInsets.fromLTRB(
-                                10,
-                                4,
-                                10,
-                                4,
-                              ),
-                              targetBelow: Text(
-                                '₱${price.toStringAsFixed(2)}',
-                                style:
-                                    AppConstants.monoStyle(
-                                      fontSize: 11,
-                                      color: AppConstants.secondary.withValues(
-                                        alpha: 0.5,
-                                      ),
-                                    ).copyWith(
-                                      decoration: TextDecoration.lineThrough,
-                                    ),
-                              ),
-                              child: Text(
-                                '₱${displayPrice.toStringAsFixed(2)}',
-                                style: AppConstants.monoStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppConstants.primary,
-                                ),
-                              ),
-                            ),
-                          ] else
+                      if (onSale)
+                        // The sale price (hidden behind a peel-away tape until
+                        // the customer reveals it), the original under it — the
+                        // two of them ONE tap target, which is what keeps this
+                        // block a plain card's spacing ([SalePriceTape
+                        // .targetBelow]) — and the category riding the number's
+                        // line ([SalePriceTape.sameLine]). All three belong to
+                        // the tape, because only the tape knows where the
+                        // number's line is: handed the category as a sibling, it
+                        // centers on the seam between the two prices.
+                        //
+                        // Vertical padding only: the horizontal half of the tap
+                        // padding is what pushed the number 10px past every
+                        // other line in the card — right of the original under
+                        // it, right of the name above it, right of the same
+                        // price on a card with no sale. The tape's own overhang
+                        // is measured from the text, so its look is unchanged.
+                        SalePriceTape(
+                          productId: product['id']?.toString() ?? '',
+                          hitPadding: const EdgeInsets.symmetric(vertical: 4),
+                          sameLine: _categoryLabel(),
+                          targetBelow: Text(
+                            '₱${price.toStringAsFixed(2)}',
+                            style: _originalPriceStyle,
+                          ),
+                          child: Text(
+                            '₱${displayPrice.toStringAsFixed(2)}',
+                            style: priceStyle,
+                          ),
+                        )
+                      else
+                        // A Wrap, not a Row: at the largest text scale a price
+                        // and a category cannot both fit across a two-column
+                        // card on a narrow phone, and a Row overflowed by ~148px
+                        // doing the arithmetic. Wrapping drops the category onto
+                        // its own line at that scale — nothing shrinks and
+                        // nothing ellipsises, which matters most on a price
+                        // ("₱1099…" is a different price; a shrunken one is at
+                        // least true). On one line it is laid out exactly as the
+                        // Row was, and the category centered against a one-line
+                        // price is centered on it.
+                        Wrap(
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          alignment: WrapAlignment.spaceBetween,
+                          spacing: 6,
+                          children: [
                             Text(
                               '₱${price.toStringAsFixed(2)}',
-                              style: AppConstants.monoStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                color: AppConstants.primary,
-                              ),
+                              style: priceStyle,
                             ),
-                          Text(
-                            product['category'] ?? 'Artisan',
-                            style: AppConstants.bodyStyle(
-                              fontSize: 10,
-                              color: AppConstants.secondary.withValues(
-                                alpha: 0.6,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                            _categoryLabel(),
+                          ],
+                        ),
                     ],
                   ),
                 ),
@@ -309,6 +297,35 @@ class SoleProductCard extends StatelessWidget {
               ),
             ),
         ],
+      ),
+    );
+  }
+
+  /// The strikethrough original price's style.
+  ///
+  /// Shared by the line itself and by the invisible twin that reserves that
+  /// line's height on the price row (see [_categoryLabel]), so the two can never
+  /// disagree about how tall the line is — which is what the alignment is built
+  /// on.
+  TextStyle get _originalPriceStyle => AppConstants.monoStyle(
+    fontSize: 11,
+    color: AppConstants.secondary.withValues(alpha: 0.5),
+  ).copyWith(decoration: TextDecoration.lineThrough);
+
+  /// The product's category, as the label beside the price.
+  ///
+  /// One widget, drawn in whichever of the two price blocks is in play. On a
+  /// card with no sale the block's `Wrap` centers it against the price, which
+  /// puts it on the price's line. On a sale card it is handed to
+  /// [SalePriceTape.sameLine] instead, which centers it on the number's line the
+  /// same way — see that field for why the tape, and not this card, has to own
+  /// that placement.
+  Widget _categoryLabel() {
+    return Text(
+      product['category'] ?? 'Artisan',
+      style: AppConstants.bodyStyle(
+        fontSize: 10,
+        color: AppConstants.secondary.withValues(alpha: 0.6),
       ),
     );
   }

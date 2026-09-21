@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// The tape overlay's own key — the wrapper widget stays in the tree after
 /// reveal (it just returns the plain price), so tests assert on the overlay.
 const _tapeOverlayKey = Key('sale-price-tape-overlay');
+const _tapeVisualKey = Key('sale-price-tape-visual');
 
 /// Taps the tape and runs the full peel (520ms). The bare `pump()` first is
 /// important: the peel is scheduled in a post-frame callback, so it must be
@@ -425,6 +426,177 @@ void main() {
       // the number, both inside the one ≥40px target.
       expect(target.height, greaterThanOrEqualTo(40));
       expect(target.bottom, moreOrLessEquals(original.bottom, epsilon: 1));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('the number sits flush, and the category rides its line', (
+      tester,
+    ) async {
+      Future<void> pumpCard(Widget product) async {
+        await tester.pumpWidget(
+          wrap(SizedBox(width: 240, height: 380, child: product)),
+        );
+        await tester.pump(const Duration(milliseconds: 300));
+      }
+
+      await pumpCard(card());
+      final salePrice = tester.getRect(find.text('₱700.00'));
+      final original = tester.getRect(find.text('₱1000.00'));
+      final name = tester.getRect(find.text('Sale Boot'));
+      final category = tester.getRect(find.text('Boots'));
+
+      // Every line of the block shares one left edge. The tap padding used to
+      // carry a 10px horizontal half, which indented the NUMBER past the
+      // original underneath it and past the name above it — the price looked
+      // "slightly off" against everything else on the card.
+      expect(
+        salePrice.left,
+        moreOrLessEquals(original.left, epsilon: 0.5),
+        reason: 'the number and its original share a left edge',
+      );
+      expect(
+        salePrice.left,
+        moreOrLessEquals(name.left, epsilon: 0.5),
+        reason: 'and so does the name above them',
+      );
+
+      // The category rides the NUMBER's line — not the seam between the two
+      // prices, which is where centering a one-line label against the tape's
+      // two-line box puts it.
+      expect(
+        category.center.dy,
+        moreOrLessEquals(salePrice.center.dy, epsilon: 1),
+        reason: 'the category belongs on the price\'s line',
+      );
+      expect(
+        category.center.dy,
+        lessThan(original.center.dy),
+        reason: 'and lands above the original, never between them',
+      );
+
+      // Which is exactly where it sits on a card with no sale at all — the two
+      // cards must not disagree about the row.
+      await pumpCard(card(onSale: false));
+      final plainPrice = tester.getRect(find.text('₱1000.00'));
+      final plainCategory = tester.getRect(find.text('Boots'));
+      expect(
+        plainCategory.center.dy,
+        moreOrLessEquals(plainPrice.center.dy, epsilon: 1),
+      );
+      // The invariant is the OFFSET from the price, not the absolute Y: a card
+      // with no sale has one price line and so a shorter block, and the whole
+      // block sits higher. What must match is how far the category is from the
+      // price it belongs to.
+      expect(
+        category.center.dy - salePrice.center.dy,
+        moreOrLessEquals(
+          plainCategory.center.dy - plainPrice.center.dy,
+          epsilon: 1,
+        ),
+        reason: 'the category sits the same on both cards',
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('the tape keeps its overhang when the padding goes', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        wrap(SizedBox(width: 240, height: 380, child: card())),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Dropping the horizontal tap padding moved the TEXT, not the tape: the
+      // strip is still wider than the digits it covers, reaching past them on
+      // both sides, so the poster's look is unchanged.
+      final visual = tester.getRect(find.byKey(_tapeVisualKey));
+      final price = tester.getRect(find.text('₱700.00'));
+      expect(
+        visual.left,
+        lessThan(price.left),
+        reason: 'the tape reaches past the digits on the left',
+      );
+      expect(visual.right, greaterThan(price.right));
+      expect(
+        visual.width,
+        greaterThan(price.width),
+        reason: 'the strip is wider than the number it covers',
+      );
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('the label rides the number\'s line (sameLine)', () {
+    Widget card({
+      required String category,
+      bool onSale = true,
+      VoidCallback? onTap,
+    }) => SoleProductCard(
+      product: {
+        'id': 'prod-1',
+        'name': 'Sale Boot',
+        'price': 1000,
+        'sale_price': onSale ? 700 : null,
+        'sale_starts_at': null,
+        'sale_ends_at': null,
+        'images': <String>[],
+        'category': category,
+        'review_count': 0,
+      },
+      onTap: onTap ?? () {},
+    );
+
+    testWidgets('a label too wide for the row takes its own line, above the '
+        'original', (tester) async {
+      // "Sandals" is wider than the room left beside the number at this width,
+      // so the two cannot share a row — and the label then has to take a line of
+      // its own. What it must never do is land on the seam between the two
+      // prices, which is the failure this replaced.
+      await tester.pumpWidget(
+        wrap(
+          SizedBox(width: 183, height: 380, child: card(category: 'Sandals')),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+
+      final category = tester.getRect(find.text('Sandals'));
+      final original = tester.getRect(find.text('₱1000.00'));
+      expect(
+        category.bottom,
+        lessThanOrEqualTo(original.top + 0.5),
+        reason: 'the label goes above the original, never between the prices',
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a tap on the label is the caller\'s, not the reveal', (
+      tester,
+    ) async {
+      var taps = 0;
+      await tester.pumpWidget(
+        wrap(
+          SizedBox(
+            width: 240,
+            height: 380,
+            child: card(category: 'Boots', onTap: () => taps++),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // The label sits on the number's line, inside the tape's own box — but it
+      // is not part of the reveal, which covers the number and the original. A
+      // tap on it is whatever the caller does with a tap (a card opens the
+      // product).
+      await tester.tap(find.text('Boots'));
+      await tester.pump(const Duration(milliseconds: 600));
+
+      expect(
+        find.byKey(_tapeOverlayKey),
+        findsOneWidget,
+        reason: 'the tape is still on the number',
+      );
+      expect(taps, 1, reason: 'the tap reached the card');
       expect(tester.takeException(), isNull);
     });
   });
