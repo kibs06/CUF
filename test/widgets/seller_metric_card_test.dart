@@ -5,7 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 /// The dashboard's "Today's snapshot" row — three equal cards across. This
 /// mirrors `_buildMetricsGrid`'s layout and copy at a given device width so
-/// the narrow-cell behaviour stays guarded.
+/// the narrow-cell behaviour stays guarded. Each card is a label plus its
+/// number: the explanatory line that used to sit under the number is gone.
 ///
 /// NOTE: widget tests render with the fallback test font (Ahem), whose glyphs
 /// are a full em wide — far wider than DM Sans. That makes it ideal for
@@ -27,7 +28,6 @@ Widget snapshotRow({required double deviceWidth}) {
                     label: 'LOW STOCK',
                     value: '1',
                     valueColor: SellerTheme.rust,
-                    subtitle: 'items need restocking',
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -35,7 +35,6 @@ Widget snapshotRow({required double deviceWidth}) {
                   child: SellerMetricCard(
                     label: 'CUSTOM ORDERS',
                     value: '0',
-                    subtitle: 'unreviewed requests',
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -44,7 +43,6 @@ Widget snapshotRow({required double deviceWidth}) {
                     label: 'BULK RESERVATIONS',
                     value: '1',
                     valueColor: SellerTheme.amberDark,
-                    subtitle: 'reseller requests to review',
                   ),
                 ),
               ],
@@ -58,11 +56,6 @@ Widget snapshotRow({required double deviceWidth}) {
 
 void main() {
   const labels = ['LOW STOCK', 'CUSTOM ORDERS', 'BULK RESERVATIONS'];
-  const subtitles = [
-    'items need restocking',
-    'unreviewed requests',
-    'reseller requests to review',
-  ];
 
   // 360dp is the narrowest common Android width (very common in the PH
   // market); 393/412 cover Pixel-class phones.
@@ -78,9 +71,6 @@ void main() {
       expect(find.byType(SellerMetricCard), findsNWidgets(3));
       for (final label in labels) {
         expect(find.text(label), findsOneWidget);
-      }
-      for (final subtitle in subtitles) {
-        expect(find.text(subtitle), findsOneWidget);
       }
     });
 

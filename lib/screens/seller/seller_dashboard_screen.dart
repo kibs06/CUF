@@ -465,7 +465,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
       appBar: widget.hideAppBar
           ? null
           : AppBar(
-              backgroundColor: AppConstants.secondary,
+              backgroundColor: AppConstants.chrome,
               elevation: 0,
               scrolledUnderElevation: 0,
               surfaceTintColor: Colors.transparent,
@@ -880,7 +880,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
         const SizedBox(height: 12),
         // Low Stock / Custom Orders / Bulk Reservations — three equal cards
         // across. IntrinsicHeight + stretch keeps all three the same height
-        // even when a label or subtitle wraps to two lines at this width.
+        // even when a label wraps to two lines at this width.
         IntrinsicHeight(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -893,9 +893,6 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                   valueColor: data.lowStockCount > 0
                       ? SellerTheme.rust
                       : SellerTheme.sage,
-                  subtitle: data.lowStockCount > 0
-                      ? 'items need restocking'
-                      : 'stock levels OK',
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
@@ -912,7 +909,6 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                 child: SellerMetricCard(
                   label: 'CUSTOM ORDERS',
                   value: '${data.pendingCustoms}',
-                  subtitle: 'unreviewed requests',
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
@@ -931,9 +927,6 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                   valueColor: data.pendingReservations > 0
                       ? SellerTheme.amberDark
                       : SellerTheme.sage,
-                  subtitle: data.pendingReservations > 0
-                      ? 'reseller requests to review'
-                      : 'no pending requests',
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
