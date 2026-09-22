@@ -281,7 +281,7 @@ class PickupReservation {
   factory PickupReservation.fromJson(Map<String, dynamic> json) {
     // Joined product fields — the customer-side query nests
     // products(name, stores(name), product_images(...)); the seller-side
-    // nests products(name) + profiles(name).
+    // nests products(name) + profiles(full_name).
     String productName = '';
     String? image;
     String storeName = '';
@@ -301,7 +301,9 @@ class PickupReservation {
       }
     }
     final profile = json['profiles'];
-    if (profile is Map) customerName = profile['name']?.toString();
+    // `full_name`, not `name`: asking PostgREST for `profiles.name` fails the
+    // whole query (42703) — the column is `full_name`.
+    if (profile is Map) customerName = profile['full_name']?.toString();
 
     return PickupReservation(
       id: json['id']?.toString() ?? '',
@@ -727,7 +729,7 @@ class PickupReservationService {
   Future<PickupReservation?> fetchById(String reservationId) async {
     final row = await _client
         .from('pickup_reservations')
-        .select('*, products(name), profiles(name)')
+        .select('*, products(name), profiles(full_name)')
         .eq('id', reservationId)
         .maybeSingle();
     if (row == null) return null;
@@ -763,7 +765,7 @@ class PickupReservationService {
   Future<List<PickupReservation>> fetchForStore(String storeId) async {
     final rows = await _client
         .from('pickup_reservations')
-        .select('*, products(name), profiles(name)')
+        .select('*, products(name), profiles(full_name)')
         .eq('store_id', storeId)
         .order('created_at', ascending: false)
         .limit(100);

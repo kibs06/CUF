@@ -2,6 +2,36 @@ import 'package:app/services/reservation_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  group('the seller queue reads the profile column that exists', () {
+    // The live schema has `profiles.full_name` and no `profiles.name`, so a
+    // `profiles(name)` embed fails the request with 42703 and the queue shows
+    // its generic error state instead of the rows the dashboard counted.
+    test('parses the customer name from full_name', () {
+      final r = BulkReservation.fromJson({
+        'id': 'res-9',
+        'customer_id': 'c1',
+        'store_id': 's1',
+        'product_id': 'p1',
+        'quantity': 4,
+        'status': 'pending',
+        'products': {'name': 'Runner'},
+        'profiles': {'full_name': 'Ana Cruz'},
+      });
+
+      expect(r.customerName, 'Ana Cruz');
+      expect(r.productName, 'Runner');
+      expect(r.isPending, isTrue);
+    });
+
+    test('a missing join leaves the name null, not blank', () {
+      // The queue renders `customerName ?? 'A customer'`; an empty string
+      // would print an empty line instead.
+      final r = BulkReservation.fromJson(const {'id': 'res-10'});
+
+      expect(r.customerName, isNull);
+    });
+  });
+
   group('BulkReservation deposit fields', () {
     test('parses deposit columns from a fetched row', () {
       final r = BulkReservation.fromJson({

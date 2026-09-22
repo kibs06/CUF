@@ -429,7 +429,9 @@ void main() {
         'quantity': 1,
         'status': 'fulfilled',
         'pickup_deadline': '2026-09-16T09:00:00Z',
-        'profiles': {'name': 'Ana'},
+        // The column is `full_name`; `profiles.name` does not exist, and
+        // asking for it fails the whole query (42703).
+        'profiles': {'full_name': 'Ana'},
       });
 
       expect(r.productName, '');

@@ -114,7 +114,8 @@ class BulkReservation {
 
   /// Parses a row fetched with the nested joins used by the fetch methods:
   /// `products(name, product_images(image_url, display_order), stores(name))`
-  /// or `profiles(name)`.
+  /// or `profiles(full_name)` — the profile column is `full_name` (there is no
+  /// `profiles.name`; asking for one fails the whole query with 42703).
   factory BulkReservation.fromJson(Map<String, dynamic> json) {
     String productName = '';
     String? image;
@@ -140,8 +141,11 @@ class BulkReservation {
     String? customerName;
     final profile = json['profiles'];
     if (profile is Map) {
+      // `full_name`, not `name` — see the doc comment above. Left null (not
+      // '') when the join is missing, so the queue's own 'A customer'
+      // fallback still applies.
       customerName =
-          Map<String, dynamic>.from(profile)['name']?.toString() ?? '';
+          Map<String, dynamic>.from(profile)['full_name']?.toString();
     }
     return BulkReservation(
       id: json['id']?.toString() ?? '',
@@ -365,7 +369,7 @@ class ReservationService {
   Future<List<BulkReservation>> fetchStoreReservations(String storeId) async {
     final rows = await _client
         .from('bulk_reservations')
-        .select('*, products(name), profiles(name)')
+        .select('*, products(name), profiles(full_name)')
         .eq('store_id', storeId)
         .order('created_at', ascending: false)
         .limit(100);
