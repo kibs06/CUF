@@ -16,9 +16,10 @@ CustomerShell / SellerShell / AdminShell
         ├─ Collapsible edit panel (name/phone)
         ├─ [seller only] Seller section: store card (open/closed toggle), seller status, member since
         ├─ [non-seller] "My Orders" notification panel (5 category shortcuts w/ badge counts)
-        ├─ Settings card: Foot size, Change Password, Terms, Help, What's New, About
-        └─ Log Out button
+        └─ Settings card: Foot size, Change Password, Terms, Help, What's New, About
 ```
+
+**Logging out is not here.** The profile screen has no logout row for any role — `SettingsScreen` (the gear in the AppBar, live for every role) owns that button, and it is the single place it lives. The seller-only duplicate that used to sit under the support card was removed for exactly that reason: two identical red buttons one tap apart, and the one down here was the harder to reach of the two.
 
 **Key facts:**
 - **One screen, three roles.** `lib/screens/customer/profile_screen.dart` is just `export '../shared/profile_screen.dart';` — everything lives in `lib/screens/shared/profile_screen.dart`.
@@ -78,7 +79,7 @@ CustomerShell / SellerShell / AdminShell
 | Orders panel | `_buildNotificationsPanel` :529 | "My Orders" + View all → `MyOrdersScreen()`. 5 items (Unpaid/Processing/Shipped/Review/Returns), each a `_NotifItem(icon, label, filter)`; badge = `orderProvider.myOrdersCounts[filter]`; tap → `MyOrdersScreen(initialFilter: item.filter)` |
 | Settings | `_buildSettingsCard` | `_settingsRow` ListTiles, each role-gated. **My Pickup Reservations** + **My Reservations** are `roleCustomer`-only — they are the customer's own record of holds *they* placed, and a seller parading into them lands on an empty customer screen (the holds on a seller's own products are worked from the seller shell's reservation queue and pickup tiles). **Payment Methods**, **Vouchers** and **Business Verification** are `roleSeller`-only. |
 | Seller section | `_buildSellerSection` :760 | `FutureBuilder` on `_sellerStoreFuture` (`StoreService.getMyStore()`); store name + Open/Closed pill + toggle switch (`_toggleStoreOpen` → `StoreService.toggleStoreOpen`); tapping row → `StoreProfileScreen(store)` or `CreateStoreScreen` if none; `SoleStatusChip(sellerStatus)`; Member Since (`profiles.created_at`) |
-| Logout | `_buildLogoutButton` :903 | Confirm dialog → `auth.logout()` |
+| Logout | — | **Not on this screen.** `SettingsScreen`'s own Log Out button is the only one, for every role. |
 
 ---
 
