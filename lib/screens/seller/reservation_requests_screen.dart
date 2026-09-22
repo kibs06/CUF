@@ -18,19 +18,49 @@ class ReservationRequestsScreen extends StatefulWidget {
       _ReservationRequestsScreenState();
 }
 
-class _ReservationRequestsScreenState extends State<ReservationRequestsScreen> {
+/// The queue's status groups, in the same order the Orders tab uses: the
+/// everything view first, then the group the seller has to act on, then the
+/// live holds, then the closed ones.
+const List<String> _tabs = ['All', 'Pending', 'Active', 'Resolved'];
+
+/// The filter keys behind [_tabs], index for index — a tab index *is* a filter,
+/// so the tab bar and the list can never disagree about what "Active" means.
+const List<String> _tabFilters = ['all', 'pending', 'active', 'resolved'];
+
+/// "Action needed" amber (amber-700) — the deposit gate's colour, on the status
+/// chip, the deposit line and the verify action alike, so one state keeps one
+/// colour wherever it appears on the card.
+const Color _depositAmber = Color(0xFFB45309);
+
+class _ReservationRequestsScreenState extends State<ReservationRequestsScreen>
+    with SingleTickerProviderStateMixin {
   final _service = ReservationService.instance;
   final _storeService = StoreService.instance;
   List<BulkReservation>? _items;
   String? _storeId;
   String? _error;
-  String _filter = 'all'; // all | pending | approved (active holds) | resolved
+  String _filter = 'all'; // all | pending | active (live holds) | resolved
   bool _busy = false;
+  late final TabController _tabController;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: _tabs.length, vsync: this);
+    // Same wiring as the Orders tab: the list follows the tab once the
+    // indicator has settled, so a mid-flight drag never re-filters the list.
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging) {
+        setState(() => _filter = _tabFilters[_tabController.index]);
+      }
+    });
     _load();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -55,23 +85,44 @@ class _ReservationRequestsScreenState extends State<ReservationRequestsScreen> {
     }
   }
 
-  List<BulkReservation> get _filtered {
-    final items = _items ?? const [];
-    switch (_filter) {
+  /// Whether a reservation belongs to a group. The single definition of the
+  /// grouping: both the list and the tab's count badge read it, so a badge can
+  /// never claim a number the list it labels does not show.
+  bool _matches(BulkReservation r, String filter) {
+    switch (filter) {
       case 'pending':
-        return items.where((r) => r.isPending).toList();
-      case 'approved':
+        return r.isPending;
+      case 'active':
         // "Active" = every live hold: unpaid deposit windows + paid holds.
-        return items.where((r) => r.isAwaitingDeposit || r.isApproved).toList();
+        return r.isAwaitingDeposit || r.isApproved;
       case 'resolved':
-        return items.where((r) => r.isTerminal).toList();
+        return r.isTerminal;
       default:
-        return items;
+        return true;
     }
   }
 
-  int _countOf(String status) =>
-      (_items ?? const []).where((r) => r.status == status).length;
+  List<BulkReservation> get _filtered =>
+      (_items ?? const []).where((r) => _matches(r, _filter)).toList();
+
+  int _countFor(String filter) =>
+      (_items ?? const []).where((r) => _matches(r, filter)).length;
+
+  /// Badge colour per group, the way Orders colours its tab counts: the colour
+  /// names the state being counted (amber = the seller's move, sage = a live
+  /// hold) rather than decorating the number.
+  Color _tabCountColor(String filter) {
+    switch (filter) {
+      case 'pending':
+        return SellerTheme.amber;
+      case 'active':
+        return SellerTheme.sage;
+      case 'resolved':
+        return AppConstants.primary;
+      default:
+        return AppConstants.secondary;
+    }
+  }
 
   Future<void> _decide(BulkReservation r, {required bool approve}) async {
     int? days;
@@ -329,42 +380,60 @@ class _ReservationRequestsScreenState extends State<ReservationRequestsScreen> {
       ),
       body: Column(
         children: [
-          // Filter chips
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-            child: Row(
-              children: [
-                _FilterChip(
-                  label: 'All',
-                  count: (_items ?? []).length,
-                  selected: _filter == 'all',
-                  onTap: () => setState(() => _filter = 'all'),
-                ),
-                const SizedBox(width: 8),
-                _FilterChip(
-                  label: 'Pending',
-                  count: _countOf('pending'),
-                  selected: _filter == 'pending',
-                  onTap: () => setState(() => _filter = 'pending'),
-                ),
-                const SizedBox(width: 8),
-                _FilterChip(
-                  label: 'Active',
-                  count: (_items ?? [])
-                      .where((r) => r.isAwaitingDeposit || r.isApproved)
-                      .length,
-                  selected: _filter == 'approved',
-                  onTap: () => setState(() => _filter = 'approved'),
-                ),
-                const SizedBox(width: 8),
-                _FilterChip(
-                  label: 'Resolved',
-                  count: (_items ?? [])
-                      .where((r) => r.isTerminal)
-                      .length,
-                  selected: _filter == 'resolved',
-                  onTap: () => setState(() => _filter = 'resolved'),
-                ),
+          // Status groups — the same scrollable tab bar, with the same count
+          // badges, as the seller's Orders tab, so the two queues read as one
+          // screen family.
+          Container(
+            color: AppConstants.surfaceLight,
+            child: TabBar(
+              controller: _tabController,
+              isScrollable: true,
+              // Four short labels fit most phones, and M3's scrollable default
+              // (TabAlignment.startOffset) parks them 52px from the left edge,
+              // which reads as a mis-aligned row. Centre them instead; when a
+              // device is too narrow the row still scrolls from the start.
+              tabAlignment: TabAlignment.center,
+              labelColor: AppConstants.secondary,
+              unselectedLabelColor: Colors.grey.shade500,
+              indicatorColor: AppConstants.accent,
+              indicatorSize: TabBarIndicatorSize.label,
+              labelStyle: AppConstants.bodyStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+              unselectedLabelStyle: AppConstants.bodyStyle(fontSize: 12),
+              tabs: [
+                for (var i = 0; i < _tabs.length; i++)
+                  Tab(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(_tabs[i]),
+                        if (_countFor(_tabFilters[i]) > 0) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _tabCountColor(_tabFilters[i])
+                                  .withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              '${_countFor(_tabFilters[i])}',
+                              style: AppConstants.monoStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: _tabCountColor(_tabFilters[i]),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
               ],
             ),
           ),
@@ -384,7 +453,9 @@ class _ReservationRequestsScreenState extends State<ReservationRequestsScreen> {
                                   child: const Text('Retry')),
                             ],
                           )
-                        : const CircularProgressIndicator(),
+                        : const CircularProgressIndicator(
+                            color: AppConstants.primary,
+                          ),
                   )
                 : RefreshIndicator(
                     onRefresh: _load,
@@ -409,10 +480,10 @@ class _ReservationRequestsScreenState extends State<ReservationRequestsScreen> {
                             ],
                           )
                         : ListView.separated(
-                            padding: const EdgeInsets.all(16),
+                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                             itemCount: filtered.length,
                             separatorBuilder: (_, _) =>
-                                const SizedBox(height: 10),
+                                const SizedBox(height: 12),
                             itemBuilder: (context, i) => _SellerReservationTile(
                               reservation: filtered[i],
                               busy: _busy,
@@ -432,65 +503,6 @@ class _ReservationRequestsScreenState extends State<ReservationRequestsScreen> {
                   ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _FilterChip extends StatelessWidget {
-  final String label;
-  final int count;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _FilterChip({
-    required this.label,
-    required this.count,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: selected
-              ? AppConstants.primary.withValues(alpha: 0.12)
-              : AppConstants.secondary.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              label,
-              style: AppConstants.bodyStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: selected
-                    ? AppConstants.primary
-                    : AppConstants.secondary,
-              ),
-            ),
-            if (count > 0) ...[
-              const SizedBox(width: 5),
-              Text(
-                '$count',
-                style: AppConstants.bodyStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  color: selected
-                      ? AppConstants.primary
-                      : AppConstants.secondary.withValues(alpha: 0.6),
-                ),
-              ),
-            ],
-          ],
-        ),
       ),
     );
   }
@@ -517,43 +529,45 @@ class _SellerReservationTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final r = reservation;
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppConstants.surfaceLight,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: AppConstants.borderGray.withValues(alpha: 0.5),
-        ),
+        // Same card as an order card: one card language across the seller's
+        // queues, including the raised fill and hairline that carry dark mode.
+        color: SellerTheme.card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: SellerTheme.cardBorder),
+        boxShadow: SellerTheme.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '${r.quantity} units — ${r.productName}',
-                      style: AppConstants.bodyStyle(
-                          fontWeight: FontWeight.bold, fontSize: 14),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${r.customerName ?? 'A customer'}'
-                      '${r.createdAt != null ? ' · ${_fmt(r.createdAt!)}' : ''}',
-                      style: AppConstants.bodyStyle(
-                        fontSize: 12,
-                        color: AppConstants.secondary,
-                      ),
-                    ),
-                  ],
+              Flexible(
+                child: Text(
+                  '${r.quantity} units — ${r.productName}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppConstants.bodyStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: AppConstants.secondary,
+                  ),
                 ),
               ),
+              const SizedBox(width: 8),
               _StatusChip(status: r.status),
             ],
+          ),
+          Divider(height: 16, color: SellerTheme.cardBorder),
+          Text(
+            '${r.customerName ?? 'A customer'}'
+            '${r.createdAt != null ? ' · ${_fmt(r.createdAt!)}' : ''}',
+            style: AppConstants.bodyStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: AppConstants.secondary,
+            ),
           ),
           // Requested size breakdown (informational)
           if (r.requestedSizes.isNotEmpty) ...[
@@ -591,7 +605,7 @@ class _SellerReservationTile extends StatelessWidget {
               '"${r.note}"',
               style: AppConstants.bodyStyle(
                 fontSize: 12,
-                color: AppConstants.secondary.withValues(alpha: 0.8),
+                color: SellerTheme.textSecondary,
               ).copyWith(fontStyle: FontStyle.italic),
             ),
           ],
@@ -603,7 +617,7 @@ class _SellerReservationTile extends StatelessWidget {
               style: AppConstants.bodyStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: const Color(0xFFB45309), // amber-700
+                color: _depositAmber,
               ),
             ),
             const SizedBox(height: 2),
@@ -611,7 +625,7 @@ class _SellerReservationTile extends StatelessWidget {
               'No stock is held yet — it leaves your inventory only after you confirm their payment.',
               style: AppConstants.bodyStyle(
                 fontSize: 11,
-                color: AppConstants.secondary.withValues(alpha: 0.7),
+                color: SellerTheme.textMuted,
               ),
             ),
           ],
@@ -637,76 +651,85 @@ class _SellerReservationTile extends StatelessWidget {
               ),
             ),
           ],
-          const SizedBox(height: 10),
-          // Actions
+          const SizedBox(height: 12),
+          // Actions — 36px-high buttons on the same 10px radius as an order
+          // card's, so the two queues are tapped the same way.
           if (r.isPending)
             Row(
               children: [
                 Expanded(
-                  child: OutlinedButton(
-                    onPressed: busy ? null : onReject,
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppConstants.error,
-                      side: BorderSide(
-                          color: AppConstants.error.withValues(alpha: 0.5)),
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
+                  child: SizedBox(
+                    height: 36,
+                    child: OutlinedButton(
+                      onPressed: busy ? null : onReject,
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: AppConstants.error),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: Text(
+                        'Decline',
+                        style: AppConstants.bodyStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppConstants.error,
+                        ),
+                      ),
                     ),
-                    child: const Text('Decline',
-                        style: TextStyle(fontSize: 13)),
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 8),
                 Expanded(
-                  flex: 2,
-                  child: ElevatedButton(
-                    onPressed: busy ? null : onApprove,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: SellerTheme.sage,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
+                  child: SizedBox(
+                    height: 36,
+                    child: FilledButton(
+                      onPressed: busy ? null : onApprove,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: SellerTheme.sage,
+                        disabledBackgroundColor:
+                            SellerTheme.sage.withValues(alpha: 0.6),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: busy
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Text(
+                              'Approve & Hold',
+                              style: AppConstants.bodyStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
                     ),
-                    child: const Text('Approve & Hold',
-                        style: TextStyle(fontSize: 13)),
                   ),
                 ),
               ],
             )
+          // The state's one primary action, full width and tinted by state —
+          // the shape an order card's primary button already has.
           else if (r.isAwaitingDeposit)
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: busy ? null : onVerifyDeposit,
-                icon: const Icon(Icons.verified_outlined, size: 16),
-                label: const Text('Verify Deposit Payment',
-                    style: TextStyle(fontSize: 13)),
-                style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFFB45309),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  minimumSize: const Size(44, 36),
-                ),
-              ),
+            _TileAction(
+              label: 'Verify Deposit Payment',
+              color: _depositAmber,
+              busy: busy,
+              onPressed: onVerifyDeposit,
             )
           else if (r.isApproved)
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: busy ? null : onFulfill,
-                icon: const Icon(Icons.check_circle_outline, size: 16),
-                label: const Text('Mark Fulfilled',
-                    style: TextStyle(fontSize: 13)),
-                style: TextButton.styleFrom(
-                  foregroundColor: SellerTheme.sageDark,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  minimumSize: const Size(44, 36),
-                ),
-              ),
+            _TileAction(
+              label: 'Mark Fulfilled',
+              color: SellerTheme.sage,
+              busy: busy,
+              onPressed: onFulfill,
             ),
         ],
       ),
@@ -728,53 +751,113 @@ class _SellerReservationTile extends StatelessWidget {
   }
 }
 
+/// The reservation's state, in the same pill as an order's status chip: a
+/// tinted pill with mono upper-case text. The tint pairs below are the seller
+/// palette's own (see [SellerStatusChip]), so "Pending" here is the same pill
+/// as "Pending" on an order — light-on-dark-legible on both brightnesses.
 class _StatusChip extends StatelessWidget {
   final String status;
   const _StatusChip({required this.status});
 
   @override
   Widget build(BuildContext context) {
-    Color color;
+    Color bg;
+    Color text;
     String label;
     switch (status) {
       case 'pending':
-        color = SellerTheme.amber;
+        bg = SellerTheme.amberBg;
+        text = SellerTheme.amberDark;
         label = 'Pending';
       case 'awaiting_deposit':
-        color = const Color(0xFFB45309); // amber-700 — action needed
+        bg = SellerTheme.amberBg;
+        text = _depositAmber; // action needed — the seller's move
         label = 'Deposit needed';
       case 'approved':
-        color = SellerTheme.sage;
+        bg = SellerTheme.sageBg;
+        text = SellerTheme.sageDark;
         label = 'Reserved';
-      case 'rejected':
-        color = AppConstants.error;
-        label = 'Declined';
-      case 'cancelled':
-        color = AppConstants.secondary;
-        label = 'Cancelled';
-      case 'expired':
-        color = AppConstants.error;
-        label = 'Expired';
       case 'fulfilled':
-        color = AppConstants.primary;
+        bg = SellerTheme.blueBg;
+        text = SellerTheme.blue;
         label = 'Fulfilled';
+      case 'rejected':
+        bg = AppConstants.statusCancelledColor.withValues(alpha: 0.12);
+        text = AppConstants.statusCancelledColor;
+        label = 'Declined';
+      case 'expired':
+        bg = AppConstants.statusCancelledColor.withValues(alpha: 0.12);
+        text = AppConstants.statusCancelledColor;
+        label = 'Expired';
       default:
-        color = AppConstants.secondary;
-        label = status;
+        bg = AppConstants.secondary.withValues(alpha: 0.1);
+        text = AppConstants.secondary;
+        label = status == 'cancelled' ? 'Cancelled' : status;
     }
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(10),
+        color: bg,
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
-        label,
-        style: AppConstants.bodyStyle(
+        label.toUpperCase(),
+        style: AppConstants.monoStyle(
           fontSize: 10,
           fontWeight: FontWeight.bold,
-          color: color,
+          color: text,
         ),
+      ),
+    );
+  }
+}
+
+/// A tile's single primary action: full width, 36px, tinted by the state it
+/// resolves, with the card's spinner while the call is in flight.
+class _TileAction extends StatelessWidget {
+  final String label;
+  final Color color;
+  final bool busy;
+  final VoidCallback onPressed;
+
+  const _TileAction({
+    required this.label,
+    required this.color,
+    required this.busy,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 36,
+      width: double.infinity,
+      child: FilledButton(
+        onPressed: busy ? null : onPressed,
+        style: FilledButton.styleFrom(
+          backgroundColor: color,
+          disabledBackgroundColor: color.withValues(alpha: 0.6),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+        child: busy
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            : Text(
+                label,
+                style: AppConstants.bodyStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
       ),
     );
   }

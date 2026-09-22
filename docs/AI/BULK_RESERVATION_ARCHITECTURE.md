@@ -167,7 +167,7 @@ since any later call finishes the job — the sweep is idempotent.
 **Service — `lib/services/reservation_service.dart`**
 - `BulkReservation` model: parses rows with nested joins
   (`products(name, stores(name), product_images(...))` for the customer side,
-  `products(name), profiles(name)` for the seller side). Helpers: `isPending`,
+  `products(name), profiles(full_name)` for the seller side). Helpers: `isPending`,
   `isApproved`, `isTerminal`, `statusLabel`.
 - `ReservationService.instance` singleton wrapping the RPCs + two SELECT
   queries (`fetchMyReservations`, `fetchStoreReservations`,
@@ -201,10 +201,13 @@ since any later call finishes the job — the sweep is idempotent.
 
 **Seller UI**
 - `lib/screens/seller/reservation_requests_screen.dart` — the queue:
-  filter chips (All/Pending/Active/Resolved), tiles with requested size split
-  + note + countdown, **Approve & request deposit** (deadline picker:
-  1/3/7/14/30 days), **Decline** (reason sheet), **Verify Deposit Payment**
-  (proof review sheet), **Mark Fulfilled**.
+  a status tab bar (All/Pending/Active/Resolved) with per-group count badges
+  — the same bar, badges and card (fill, radius, hairline, shadow, 36px
+  buttons) as the seller's Orders tab, via `SellerTheme` — tiles with requested
+  size split + note + countdown, **Approve & request deposit** (deadline
+  picker: 1/3/7/14/30 days), **Decline** (reason sheet), **Verify Deposit
+  Payment** (proof review sheet), **Mark Fulfilled**. A tab's badge count and
+  the list it labels both read `_matches()`, so the two cannot disagree.
 - `lib/screens/seller/widgets/deposit_proof_review_sheet.dart` — seller's
   proof verification: expected deposit amount, reference, signed-URL
   screenshot, Confirm (draws stock) / Reject (terminal) actions.
