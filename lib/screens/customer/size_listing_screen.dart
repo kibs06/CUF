@@ -20,8 +20,8 @@ import 'product_detail_screen.dart';
 ///
 /// The home section it opens from is honest about being a preview — the size
 /// poster, ten products, and the arrow — so this page is what that arrow means:
-/// the same shelf, same default order (most-sold first, the ranking the preview
-/// also uses), with nothing taken away.
+/// the same shelf, same default order (the catalog's own shuffled order, the
+/// one the preview also uses), with nothing taken away.
 ///
 /// **It searches, filters and sorts *itself*.** A shelf of forty products is a
 /// list a customer wants to narrow — by a word, by a category, by price — and

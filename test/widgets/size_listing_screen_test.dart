@@ -17,7 +17,7 @@ import 'package:app/widgets/underline_category_chip.dart';
 /// The whole shelf behind the home feed's **See more** card.
 ///
 /// What is pinned here: it is the *same* shelf — same inclusion rule, same
-/// ranking, same card, same per-product ratio — with nothing taken away (that is
+/// order, same card, same per-product ratio — with nothing taken away (that is
 /// the whole reason the card exists); it cannot be narrowed *out* of its own
 /// rule by its own search, filter and sort (searching the shelf never widens it
 /// to the catalog, and sorting it never touches the Home feed's order); it is
@@ -52,7 +52,7 @@ Map<String, dynamic> product({
 
 /// A shelf of three, deliberately mixed — two categories, three prices, and a
 /// name order that matches neither — so a filter and a sort can be told apart
-/// from the shelf's own ranking.
+/// from the shelf's own order.
 ProductProvider mixedShelf() => ProductProvider.seeded(
   products: [
     product(
@@ -188,17 +188,18 @@ void main() {
     // shelf's length, so the page is not quietly a second preview.
     expect(find.text('15 pairs · EU 42'), findsOneWidget);
 
-    // The end of the shelf is reachable, in the preview's ranking: the very
-    // product the arrow stood for is on the page.
+    // The end of the shelf is reachable, in the preview's own order: the last
+    // pair — the one the ten-cell preview on Home could not reach — is on the
+    // page.
     // Named explicitly: every product card carries its own photo pager now, so
     // `find.byType(Scrollable)` is no longer the page's scroll view alone.
     // `.first` is the page's, being the ancestor of the cards'.
     await tester.scrollUntilVisible(
-      find.text('P0'),
+      find.text('P14'),
       400,
       scrollable: shelfScroll(),
     );
-    expect(find.text('P0'), findsOneWidget);
+    expect(find.text('P14'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -274,8 +275,9 @@ void main() {
     await tester.pumpWidget(wrap(mixedShelf(), profile: {'foot_size_ph': 42}));
     await tester.pump(const Duration(milliseconds: 300));
 
-    // Featured: the shelf's own ranking (most sold first), which is the order
-    // the home preview showed.
+    // Featured: the shelf's own order — the catalog's shuffled order, the one
+    // the home preview showed. (`mixedShelf` seeds the products in that order,
+    // so this is what the shelf was handed rather than a ranking of its own.)
     expect(cardOrder(tester), ['Chelsea Boot', 'Penny Loafer', 'Desert Boot']);
     expect(find.text('Featured'), findsOneWidget);
 

@@ -7,6 +7,7 @@ import '../../providers/update_provider.dart';
 import '../../utils/nav_perf.dart';
 import '../../widgets/active_tab.dart';
 import '../../widgets/cart_icon_button.dart';
+import '../../widgets/hide_on_scroll_bottom_bar.dart';
 import '../../widgets/keep_alive_page.dart';
 import '../../widgets/sole_bottom_nav.dart';
 import '../../widgets/update_overlay.dart';
@@ -76,40 +77,48 @@ class _CustomerShellState extends State<CustomerShell> {
     return Scaffold(
       backgroundColor: AppConstants.surfaceLight,
       appBar: _buildAppBar(),
-      body: _screens.isEmpty
-          ? const Center(child: Text('Unable to load screen'))
-          // Same host contract as the seller shell: publish the visible tab
-          // and keep each visited page mounted (see ActiveTab / KeepAlivePage),
-          // instead of letting the PageView dispose it and re-run initState.
-          : ActiveTab(
-              index: _currentIndex,
-              child: PageView(
-                controller: _pageController,
-                physics: const PageScrollPhysics(),
-                onPageChanged: (index) {
-                  setState(() => _currentIndex = index);
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    PerfTrace.mark('tab:${_tabLabels[index]} presented');
-                  });
-                },
-                children: [
-                  for (final screen in _screens)
-                    KeepAlivePage(child: screen),
-                ],
+      // The bar gets out of the way while a feed is scrolled and returns on
+      // the drag back up, so a page can be read on a full screen. It wraps the
+      // body as well as the bar because the only honest source for "the page is
+      // moving" is the scroll notifications from inside it; `resetOn` is the
+      // active tab, so a switch never leaves a hidden bar behind.
+      body: HideOnScrollBottomBar(
+        resetOn: _currentIndex,
+        bar: Consumer<NotificationProvider>(
+          builder: (context, notifProvider, _) {
+            return SoleBottomNav(
+              role: AppConstants.roleCustomer,
+              currentIndex: _currentIndex,
+              onTap: (index) {
+                PerfTrace.mark('tab:${_tabLabels[index]} tapped');
+                _pageController.jumpToPage(index);
+              },
+              notificationUnreadCount: notifProvider.totalUnread,
+            );
+          },
+        ),
+        child: _screens.isEmpty
+            ? const Center(child: Text('Unable to load screen'))
+            // Same host contract as the seller shell: publish the visible tab
+            // and keep each visited page mounted (see ActiveTab / KeepAlivePage),
+            // instead of letting the PageView dispose it and re-run initState.
+            : ActiveTab(
+                index: _currentIndex,
+                child: PageView(
+                  controller: _pageController,
+                  physics: const PageScrollPhysics(),
+                  onPageChanged: (index) {
+                    setState(() => _currentIndex = index);
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      PerfTrace.mark('tab:${_tabLabels[index]} presented');
+                    });
+                  },
+                  children: [
+                    for (final screen in _screens)
+                      KeepAlivePage(child: screen),
+                  ],
+                ),
               ),
-            ),
-      bottomNavigationBar: Consumer<NotificationProvider>(
-        builder: (context, notifProvider, _) {
-          return SoleBottomNav(
-            role: AppConstants.roleCustomer,
-            currentIndex: _currentIndex,
-            onTap: (index) {
-              PerfTrace.mark('tab:${_tabLabels[index]} tapped');
-              _pageController.jumpToPage(index);
-            },
-            notificationUnreadCount: notifProvider.totalUnread,
-          );
-        },
       ),
     );
   }

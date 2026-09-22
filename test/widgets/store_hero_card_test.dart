@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:app/models/store.dart';
 import 'package:app/screens/store/widgets/store_hero_card.dart';
+import 'package:app/widgets/sale_countdown_overlay.dart';
+import 'package:app/widgets/store_sale_tag.dart';
 
 /// The store banner is now the ONLY way into a store — the full-width "Enter
 /// Store" button that used to sit in the info strip below it is gone — so the
@@ -31,6 +33,24 @@ Store store() => Store(
 Widget wrap(Widget child) => MaterialApp(
   home: Scaffold(body: Center(child: child)),
 );
+
+/// A catalog product carrying only the fields the sale tag reads. The card never
+/// renders images or inventory, so those stay empty.
+Map<String, dynamic> product({
+  required String id,
+  double price = 1000,
+  double? salePrice,
+  DateTime? endsAt,
+}) => {
+  'id': id,
+  'name': 'Artisan Shoe',
+  'category': 'Sneakers',
+  'price': price,
+  'sale_price': ?salePrice,
+  'sale_ends_at': ?endsAt,
+  'images': const <String>[],
+  'inventory': const <Map<String, dynamic>>[],
+};
 
 void main() {
   /// The card's own scale, as the widget receives it. The card has exactly one
@@ -197,6 +217,170 @@ void main() {
     await tester.tap(find.byType(StoreHeroCard));
     await tester.pumpAndSettle();
 
+    expect(tester.takeException(), isNull);
+  });
+
+  // ── The sale tag ────────────────────────────────────────────────
+
+  testWidgets('a store on sale carries the tag; a full-price one does not', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      wrap(
+        StoreHeroCard(
+          store: store(),
+          productCount: 2,
+          products: [product(id: 'a', price: 1000, salePrice: 700)],
+          onTap: () {},
+        ),
+      ),
+    );
+
+    expect(find.byType(StoreSaleTag), findsOneWidget);
+    expect(find.text('-30%'), findsOneWidget);
+
+    await tester.pumpWidget(
+      wrap(
+        StoreHeroCard(
+          store: store(),
+          productCount: 2,
+          products: [product(id: 'a')],
+          onTap: () {},
+        ),
+      ),
+    );
+
+    expect(find.byType(StoreSaleTag), findsNothing);
+  });
+
+  testWidgets('the tag follows the shared rule — an expired sale is no sale', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      wrap(
+        StoreHeroCard(
+          store: store(),
+          productCount: 2,
+          products: [
+            product(
+              id: 'a',
+              price: 1000,
+              salePrice: 700,
+              endsAt: DateTime.now().subtract(const Duration(hours: 1)),
+            ),
+          ],
+          onTap: () {},
+        ),
+      ),
+    );
+
+    expect(find.byType(StoreSaleTag), findsNothing);
+  });
+
+  testWidgets('nothing on sale leaves no space in the row', (tester) async {
+    await tester.pumpWidget(
+      wrap(
+        StoreHeroCard(
+          store: store(),
+          productCount: 2,
+          products: [product(id: 'a')],
+          onTap: () {},
+        ),
+      ),
+    );
+
+    // The watcher is in the row, but an absent sale contributes a zero-size box
+    // — the gap belongs to the tag, not to the row, so nothing is reserved.
+    expect(tester.getSize(find.byType(StoreSaleEndWatcher)), Size.zero);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('tapping the tag opens the sale, not the store', (tester) async {
+    var entered = 0;
+    var saleTaps = 0;
+    await tester.pumpWidget(
+      wrap(
+        StoreHeroCard(
+          store: store(),
+          productCount: 2,
+          products: [product(id: 'a', price: 1000, salePrice: 700)],
+          onTap: () => entered++,
+          onSaleTap: () => saleTaps++,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byType(StoreSaleTag));
+    await tester.pumpAndSettle();
+
+    expect(saleTaps, 1);
+    expect(
+      entered,
+      0,
+      reason: 'the tag has its own destination — it must not fall through',
+    );
+  });
+
+  testWidgets('the tag clears itself when the last sale ends', (tester) async {
+    await tester.pumpWidget(
+      wrap(
+        StoreHeroCard(
+          store: store(),
+          productCount: 2,
+          products: [
+            product(
+              id: 'a',
+              price: 1000,
+              salePrice: 700,
+              endsAt: DateTime.now().add(const Duration(seconds: 2)),
+            ),
+          ],
+          onTap: () {},
+        ),
+      ),
+    );
+
+    expect(find.byType(StoreSaleTag), findsOneWidget);
+
+    // Nothing rebuilds the Stores tab when a sale expires, so the watcher is
+    // what has to put the tag away.
+    await tester.pump(const Duration(seconds: 3));
+    expect(find.byType(StoreSaleTag), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the pill row survives a narrow phone at a large text scale', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MediaQuery(
+            // The longest storefront the row has to hold at the app's largest
+            // supported scale: rating + count + location + the tag.
+            data: const MediaQueryData(textScaler: TextScaler.linear(1.3)),
+            child: StoreHeroCard(
+              store: Store(
+                id: 's1',
+                name: 'Valladolid Leather Co.',
+                location: 'Valladolid, Carcar City, Cebu',
+                rating: 4.8,
+                createdAt: DateTime(2026, 1, 1),
+              ),
+              productCount: 42,
+              products: [product(id: 'a', price: 1000, salePrice: 700)],
+              onTap: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(StoreSaleTag), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

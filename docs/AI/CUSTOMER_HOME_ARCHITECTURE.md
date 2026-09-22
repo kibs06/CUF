@@ -35,6 +35,15 @@ Hosts its 4 tabs in a `PageView` where **every page is wrapped in `KeepAlivePage
 
 The bottom nav reads `NotificationProvider.totalUnread` via `Consumer` for the bell badge.
 
+### The bar steps aside while a page is scrolled
+
+`HideOnScrollBottomBar` (`lib/widgets/hide_on_scroll_bottom_bar.dart`) wraps the shell's `body` **and** the bar, and collapses the bar out of the layout while the customer scrolls a tab downwards, returning it on the first upward drag (or on reaching the top of the page). It has to own both: "the page is moving" only ever arrives as scroll notifications bubbling out of the page's own scrollable, so a bar sitting outside could not hear it.
+
+- The bar is **collapsed, not covered** — an `AnimatedSize` anchored at its top, with the page growing into the space it leaves. Sliding it over the page would leave the last row of every list behind it.
+- **Threshold + drag-only.** It moves after 24px of travel in one direction, resetting that travel the instant the direction reverses, and ignores ballistic flings (`dragDetails == null`) so a list coasting to its end cannot move the bar on its own. Horizontal strips (category chips, product rails, the store carousel) report a horizontal axis and are ignored.
+- `resetOn: _currentIndex` restores the bar on every tab switch, so a hidden bar never carries over to the next tab.
+- The seller and admin shells still use `Scaffold.bottomNavigationBar` and are unchanged; the widget is written to be reusable if that should follow.
+
 ## CustomerHomeScreen — the main browse tab
 
 **File:** `lib/screens/customer/customer_home_screen.dart`
@@ -78,7 +87,8 @@ A `CustomScrollView` with slivers, wrapped in `RefreshIndicator`. No AppBar — 
 
 `lib/widgets/in_your_size_section.dart` — the first surface where the saved foot
 profile changes what the customer is *shown while shopping*. Products that stock
-their size right now, most-sold first, headed by the size the app believes —
+their size right now, in the catalog's own (per-load shuffled) order, headed by
+the size the app believes —
 rendered **in The Workshop Collection's own 2-column masonry grid**, not as a
 horizontal strip. The section is a shelf of the feed the customer already reads,
 instead of a carousel they have to swipe; the body is `ProductGridSection`
@@ -114,10 +124,11 @@ something unpurchasable. Other systems are converted (US 9 → EU 42); a system
 the app owns no chart for (`'JP 25'`) or a bare value outside the app's own
 22–48 bands is **skipped, never guessed at**. A sold-out exact size is not
 suggested; a ±½ *near* size is never offered as the customer's size.
-`ProductProvider.productsInSize(euSize)` applies it and ranks the result
-(units sold → rating → name, so the per-load shuffle cannot reorder it), and
-returns the **whole** shelf — the preview length is the section's call, not the
-provider's.
+`ProductProvider.productsInSize(euSize)` applies it and hands the result back in
+the catalog's own order — `loadProducts()` shuffles once per load, so the shelf
+is a random draw on every load and stable within one, rather than the units-sold
+ranking it used to apply — and returns the **whole** shelf — the preview length
+is the section's call, not the provider's.
 
 **Where the size comes from** — `shoppingEuSizeFrom(profile, measurement:)`: the
 profile snapshot first (written by both the scan results screens and the manual
@@ -372,6 +383,7 @@ All providers are app-root singletons, created in `main.dart` and consumed via `
 | `BestSellersSection` | `widgets/best_sellers_section.dart` | Home — horizontally-scrolling Best Sellers rail (live `units_sold` order) |
 | `HorizontalProductCard` | `widgets/horizontal_product_card.dart` | Home Best Sellers rail, profile Buy Again / Recently Viewed rails |
 | `SoleBottomNav` | `widgets/sole_bottom_nav.dart` | All shells (customer, seller, admin) |
+| `HideOnScrollBottomBar` | `widgets/hide_on_scroll_bottom_bar.dart` | Customer shell — wraps the tab host so the nav bar collapses away on a downward scroll and returns on the drag back up |
 | `CartIconButton` | `widgets/cart_icon_button.dart` | Home, Store app bars |
 | `FloatingMessageButton` | `widgets/floating_message_button.dart` | Home tab overlay |
 | `ShimmerGroup` / `SkeletonBox` | `widgets/shimmer_group.dart` | Loading skeletons |

@@ -149,6 +149,18 @@ class AppConstants {
   /// Shared horizontal content margin for product feeds and aligned home chrome.
   static const double feedMargin = 8;
 
+  /// The air the home feed's Workshop Collection opens with.
+  ///
+  /// Every curated section above it owns its own TRAILING gap
+  /// ([ProductGridSection] / [ProductRailSection] end with 16), so a section
+  /// that hides itself leaves no residue. The catalog is not one of those
+  /// sections — it is the feed's own grid, and it has no trailing gap to hang
+  /// its lead off — so without this it opened one trailing gap under the On
+  /// Sale section and read as flush against it. This is that lead, and it is a
+  /// token rather than a literal so the feed's most important boundary moves
+  /// as one number.
+  static const double catalogLeadGap = 16;
+
   // --- BRAND COLOR PARSER ---
   /// Safely parse a hex brand color string (e.g. '#8B5A2B') into a Flutter Color.
   /// Returns [fallback] if the input is null, empty, or malformed.

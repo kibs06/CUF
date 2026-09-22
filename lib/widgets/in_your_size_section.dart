@@ -111,7 +111,8 @@ class InYourSizeSection extends StatelessWidget {
 
     // The WHOLE shelf: the preview length is decided below, and the provider
     // no longer pre-truncates — the "See more" card opens the rest of this
-    // list, so the ranking it opens must be this list's ranking.
+    // list, so the order it opens must be this list's order (the shuffled
+    // catalog order the provider hands back).
     final products = context
         .select<ProductProvider, List<Map<String, dynamic>>>(
           (p) => p.productsInSize(euSize, limit: 0),

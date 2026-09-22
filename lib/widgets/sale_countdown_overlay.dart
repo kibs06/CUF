@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../constants/app_constants.dart';
 import '../utils/sale_price.dart';
+import '../utils/store_sale.dart';
 
 /// A single app-wide one-second ticker shared by every visible countdown.
 ///
@@ -143,6 +144,79 @@ class _SaleEndWatcherState extends State<SaleEndWatcher> {
       now = DateTime.now();
     }
     return widget.builder(context, now);
+  }
+}
+
+/// The store-level sibling of [SaleEndWatcher].
+///
+/// [SaleEndWatcher] watches ONE product's `sale_ends_at` and fires once. A
+/// store's sale state is an aggregate over many products, and when the first of
+/// several sales ends the store is usually still on sale — so this one watches
+/// the whole set, re-derives [StoreSale] through the shared rule, and schedules
+/// the *next* end each time instead of freezing after the first. A store whose
+/// last sale ends falls back to `hasSale == false` on its own, with no rebuild
+/// from outside.
+///
+/// The [builder] receives the live [StoreSale] for the moment it renders at, so
+/// a tag built here can never show a figure from a sale that has already ended.
+/// A store whose sales are all open-ended schedules nothing
+/// ([StoreSale.earliestEnd] is null) — no invented urgency, the same rule the
+/// countdown overlay follows.
+class StoreSaleEndWatcher extends StatefulWidget {
+  /// The store's products — the same list the store's product count is built
+  /// from. Only their sale fields are read.
+  final Iterable<Map<String, dynamic>> products;
+
+  final Widget Function(BuildContext context, StoreSale sale) builder;
+
+  const StoreSaleEndWatcher({
+    super.key,
+    required this.products,
+    required this.builder,
+  });
+
+  @override
+  State<StoreSaleEndWatcher> createState() => _StoreSaleEndWatcherState();
+}
+
+class _StoreSaleEndWatcherState extends State<StoreSaleEndWatcher> {
+  /// The clock the summary is derived at. Stays `DateTime.now()` until a sale
+  /// ends, then jumps just past that end so the shared rule excludes it.
+  DateTime _now = DateTime.now();
+
+  Timer? _expiryTimer;
+  DateTime? _scheduledFor;
+
+  @override
+  void dispose() {
+    _expiryTimer?.cancel();
+    super.dispose();
+  }
+
+  /// Re-arm for [sale]'s next end. Called from build because the target moves
+  /// when a sale expires (a later sale is still live) or when the products list
+  /// changes under a rebuild; the `_scheduledFor` guard keeps a steady build
+  /// from churning the timer.
+  void _schedule(StoreSale sale) {
+    final end = sale.earliestEnd;
+    if (end == _scheduledFor) return; // already armed for this moment
+    _expiryTimer?.cancel();
+    _expiryTimer = null;
+    _scheduledFor = end;
+    if (end == null) return; // open-ended — nothing ever expires
+    final delay = end.difference(DateTime.now());
+    if (delay <= Duration.zero) return; // already past — the summary excludes it
+    _expiryTimer = Timer(delay, () {
+      if (!mounted) return;
+      setState(() => _now = end.add(const Duration(seconds: 1)));
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sale = storeSaleFrom(widget.products, now: _now);
+    _schedule(sale);
+    return widget.builder(context, sale);
   }
 }
 

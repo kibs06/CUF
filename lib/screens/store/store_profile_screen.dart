@@ -12,6 +12,7 @@ import '../../utils/product_grid_ratio.dart';
 import '../../widgets/seller/tag_selector.dart';
 import '../../providers/product_provider.dart';
 import '../../providers/review_provider.dart';
+import '../../utils/sale_price.dart';
 import '../../services/message_service.dart';
 import '../../services/store_service.dart';
 import '../../widgets/chat/chat_view.dart';
@@ -30,7 +31,16 @@ import 'widgets/stitch_painter.dart';
 class StoreProfileScreen extends StatefulWidget {
   final String storeId;
 
-  const StoreProfileScreen({super.key, required this.storeId});
+  /// Opens with the store's on-sale filter already on — the Stores tab's sale
+  /// tag lands here. The grid is narrowed, never the store: the filter chip stays
+  /// visible so the customer can clear it back to everything.
+  final bool saleOnly;
+
+  const StoreProfileScreen({
+    super.key,
+    required this.storeId,
+    this.saleOnly = false,
+  });
 
   @override
   State<StoreProfileScreen> createState() => _StoreProfileScreenState();
@@ -45,6 +55,10 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
   bool _isLoading = true;
   String _sortMode = 'Newest';
   int _followerCount = 0;
+
+  /// Whether the store's shelf is filtered to its on-sale products. Seeded from
+  /// [StoreProfileScreen.saleOnly] and owned by the filter chip after that.
+  late bool _saleOnly;
 
   final PageController _featuredController = PageController(
     viewportFraction: 0.88,
@@ -64,8 +78,16 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
     return _storeProducts.where((p) => p['is_featured'] == true).toList();
   }
 
+  /// Whether the store has anything on sale right now — gates the 'On Sale'
+  /// chip (and, from the Stores tab, the hero card's tag). The same shared
+  /// [isOnSale] rule as everything else; never a second sale check.
+  bool get _hasSale => _storeProducts.any(isOnSale);
+
   List<Map<String, dynamic>> get _sortedProducts {
-    final list = List<Map<String, dynamic>>.from(_storeProducts);
+    final base = _saleOnly
+        ? _storeProducts.where((p) => isOnSale(p)).toList()
+        : _storeProducts;
+    final list = List<Map<String, dynamic>>.from(base);
     switch (_sortMode) {
       case 'Price: Low–High':
         list.sort(
@@ -88,6 +110,7 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
   @override
   void initState() {
     super.initState();
+    _saleOnly = widget.saleOnly;
     _loadData();
   }
 
@@ -636,8 +659,47 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Row(
-                  children: ['Newest', 'Price: Low–High', 'Price: High–Low']
-                      .map((mode) {
+                  children: [
+                    // The on-sale filter — present whenever the shelf has a sale
+                    // to show, and kept while the tag's entry left it on even if
+                    // the last sale just ended (so there is always a way back).
+                    // A dead-end chip is not offered: with no sale in the store
+                    // it is not rendered at all.
+                    if (_hasSale || _saleOnly) ...[
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: FilterChip(
+                          label: Text(
+                            'On Sale',
+                            style: AppConstants.bodyStyle(
+                              fontSize: 12,
+                              fontWeight: _saleOnly
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                              color: _saleOnly
+                                  ? AppConstants.surfaceLight
+                                  : AppConstants.secondary,
+                            ),
+                          ),
+                          selected: _saleOnly,
+                          showCheckmark: false,
+                          onSelected: (selected) =>
+                              setState(() => _saleOnly = selected),
+                          selectedColor: AppConstants.primary,
+                          backgroundColor: AppConstants.surfaceLight,
+                          side: BorderSide(
+                            color: _saleOnly
+                                ? Colors.transparent
+                                : AppConstants.borderGray.withAlpha(100),
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                        ),
+                      ),
+                    ],
+                    ...['Newest', 'Price: Low–High', 'Price: High–Low']
+                        .map((mode) {
                         final isSelected = _sortMode == mode;
                         return Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -671,8 +733,8 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                             ),
                           ),
                         );
-                      })
-                      .toList(),
+                        }),
+                  ],
                 ),
               ),
             ),
@@ -684,7 +746,11 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                   padding: const EdgeInsets.all(40),
                   child: Center(
                     child: Text(
-                      'No products in this store yet.',
+                      // A filtered shelf that is empty is not an empty store —
+                      // the chip above is the way back and the words say so.
+                      _saleOnly
+                          ? 'Nothing on sale in this store right now.'
+                          : 'No products in this store yet.',
                       style: AppConstants.bodyStyle(
                         color: AppConstants.secondary.withAlpha(153),
                       ),

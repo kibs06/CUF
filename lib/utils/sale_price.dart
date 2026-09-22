@@ -97,3 +97,26 @@ int? maxDiscountPercent(
   }
   return best > 0 ? best : null;
 }
+
+/// The soonest `sale_ends_at` among [products] that are on sale right now — or
+/// null when nothing valid is on sale, or when every active sale is open-ended.
+///
+/// This is the expiry a *set* of products shares: a store's tag has to fall back
+/// the moment its last live sale ends, and with several sales at different ends
+/// that is a chain, not one date. [isOnSale] decides who counts (an expired or
+/// not-yet-started sale contributes nothing), and a product with no end date is
+/// skipped rather than treated as ending "never" in a way that would hide a
+/// shorter sale behind it.
+DateTime? earliestSaleEnd(
+  Iterable<Map<String, dynamic>> products, {
+  DateTime? now,
+}) {
+  DateTime? earliest;
+  for (final product in products) {
+    if (!isOnSale(product, now: now)) continue;
+    final end = _asDate(product['sale_ends_at']);
+    if (end == null) continue;
+    if (earliest == null || end.isBefore(earliest)) earliest = end;
+  }
+  return earliest;
+}

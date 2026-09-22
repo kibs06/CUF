@@ -85,8 +85,9 @@ class ProductGridSection extends StatelessWidget {
   /// sizes it to reach the anchored product's bottom edge.
   final Widget? trailing;
 
-  /// The cards to show, in the order the provider ranked them. Expected
-  /// non-empty — see the class doc.
+  /// The cards to show, in the order the provider returned them — the shelf's
+  /// own order, which for "Based on your size" is the shuffled catalog order
+  /// rather than a ranking. Expected non-empty — see the class doc.
   final List<Map<String, dynamic>> products;
 
   /// The catalog's column count, stated once so a later grid section cannot

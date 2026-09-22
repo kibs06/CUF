@@ -304,6 +304,34 @@ void main() {
     });
   });
 
+  group('the catalog opens with its own lead', () {
+    test('the token is a section boundary, not a card seam', () {
+      // It exists so the Workshop Collection does not sit flush against the
+      // section above it; at or under the card gutter it would read as another
+      // row of a grid rather than as a new section.
+      expect(
+        AppConstants.catalogLeadGap,
+        greaterThan(AppConstants.productGridGutter),
+      );
+    });
+
+    test('the home feed uses it, and only in front of the catalog', () {
+      final code = withoutLineComments(
+        File(
+          'lib/screens/customer/customer_home_screen.dart',
+        ).readAsStringSync(),
+      );
+
+      expect(
+        _count(code, r'height: AppConstants\.catalogLeadGap'),
+        1,
+        reason:
+            'the sections own their trailing gap; the catalog — which is the '
+            'feed\'s own grid, not a section — opens with this one',
+      );
+    });
+  });
+
   group('the rails match the grids', () {
     for (final path in railFiles) {
       test(path, () {

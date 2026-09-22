@@ -69,6 +69,18 @@ class _StoreScreenState extends State<StoreScreen> {
     );
   }
 
+  /// Enters the store with its on-sale filter already on — the hero card's sale
+  /// tag. The profile then shows only what stocks a sale, with the filter chip
+  /// visible so the customer can widen back to everything.
+  void _enterStoreSale(Store store) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) =>
+            StoreProfileScreen(storeId: store.id, saleOnly: true),
+      ),
+    );
+  }
+
   /// Rebuild the per-store product index only when the list reference changes.
   void _reindexIfNeeded(List<Map<String, dynamic>> products) {
     if (identical(products, _indexedFrom)) return;
@@ -154,7 +166,12 @@ class _StoreScreenState extends State<StoreScreen> {
                         onStoreChanged: _onStoreChanged,
                         currentIndex: _focusedIndex,
                         productCounts: _productCounts,
+                        // The per-store list is the one the counts come from, so
+                        // a sale tag can never describe a different shelf than
+                        // the count beside it (and the profile's own filter).
+                        productsByStore: _topPicksByStore,
                         onEnterStore: _enterStore,
+                        onEnterStoreSale: _enterStoreSale,
                       ),
 
                       // Section 2 — Focused Store Info Strip

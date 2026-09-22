@@ -11,7 +11,15 @@ class StoreHeroCarousel extends StatefulWidget {
   final ValueChanged<int> onStoreChanged;
   final int currentIndex;
   final Map<String, int> productCounts;
+
+  /// storeId → that store's products. Feeds each card's sale tag (and its
+  /// expiry watcher) from the same list the count beside it comes from.
+  final Map<String, List<Map<String, dynamic>>> productsByStore;
+
   final ValueChanged<Store> onEnterStore;
+
+  /// Opens a store pre-filtered to its on-sale products — the card's sale tag.
+  final ValueChanged<Store> onEnterStoreSale;
 
   const StoreHeroCarousel({
     super.key,
@@ -20,7 +28,9 @@ class StoreHeroCarousel extends StatefulWidget {
     required this.onStoreChanged,
     required this.currentIndex,
     required this.productCounts,
+    required this.productsByStore,
     required this.onEnterStore,
+    required this.onEnterStoreSale,
   });
 
   @override
@@ -72,7 +82,12 @@ class _StoreHeroCarouselState extends State<StoreHeroCarousel> {
                 store: store,
                 scale: scale,
                 productCount: widget.productCounts[store.id] ?? 0,
+                products: widget.productsByStore[store.id] ?? const [],
+                // The dangle runs on the focused page only; the peeking
+                // neighbours stay still.
+                isFocused: index == widget.currentIndex,
                 onTap: () => widget.onEnterStore(store),
+                onSaleTap: () => widget.onEnterStoreSale(store),
               );
             },
           ),

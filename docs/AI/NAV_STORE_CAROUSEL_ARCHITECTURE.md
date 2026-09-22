@@ -15,7 +15,7 @@ The Store tab lives inside `CustomerShell` (`lib/screens/customer/customer_shell
 | 2     | Notifications | `NotificationsScreen` |
 | 3     | Profile   | `ProfileScreen`      |
 
-The bottom nav is rendered by `SoleBottomNav` (`lib/widgets/sole_bottom_nav.dart`).
+The bottom nav is rendered by `SoleBottomNav` (`lib/widgets/sole_bottom_nav.dart`), and is wrapped together with the tab host in `HideOnScrollBottomBar` (`lib/widgets/hide_on_scroll_bottom_bar.dart`): scrolling a tab downwards collapses the bar out of the layout for a full screen, and the first drag back up returns it. Scrolling the **Store** tab therefore moves the bar like any other.
 
 ---
 
@@ -48,6 +48,8 @@ All wrapped in a `SingleChildScrollView` with a noise texture overlay (`AppConst
 ### Product Counts & Top Picks
 A cached per-store index (`_reindexIfNeeded()`) tallies products per `store_id` and sorts top-picks by ID descending. The index is only rebuilt when the `products` list reference changes (checked via `identical()`), avoiding O(n) scans on every store swipe. The "Top Picks" section shows the newest products from the **focused** store only, capped at 12.
 
+The same `storeId → products` map is handed to `StoreHeroCarousel` (`productsByStore`), and each card derives its **sale tag** from it — see §1c. Deriving from that one list is deliberate: the tag and the `👟` count beside it can never describe different shelves.
+
 ---
 
 ## Section 1 — `StoreHeroCarousel`
@@ -64,6 +66,8 @@ A `PageView.builder` with a `viewportFraction`-based peek effect and page indica
 | `onStoreChanged`  | `ValueChanged<int>` | Callback when the centered page changes  |
 | `currentIndex`    | `int`               | Index of the focused store               |
 | `productCounts`   | `Map<String, int>`  | Product count per store ID               |
+| `productsByStore` | `Map<String, List<Map<String,dynamic>>>` | Per-store products — feeds each card's sale tag (and its expiry) |
+| `onEnterStoreSale`| `ValueChanged<Store>` | Opens a store pre-filtered to its on-sale products (the tag's tap) |
 
 ### Behavior
 - Fixed height: `SizedBox(height: 280)` containing a `PageView.builder`.
@@ -112,9 +116,30 @@ A single carousel card. Each card is a 260px-tall rounded container (`borderRadi
 | **Tagline** | `bodyStyle(14)`, white at 80% alpha. Shown only if non-empty. |
 | **Hours label** | `bodyStyle(12)`, white at 82% alpha. Prefixed with 🕘. Shown only if `store.hoursLabel != null`. |
 | **Stat pills** | Row of rounded-border containers (borderRadius 20, white border at 30% alpha). Each contains an emoji + text in 11px white. Shows: rating (if store has reviews), product count, location (first segment). |
+| **Sale tag** | Right of the pills, and only when the store is on sale — see §1c. |
 
 ### Scale Animation
 Wrapped in `AnimatedScale(scale: scale, duration: 200ms, curve: Curves.easeOut)`.
+
+---
+
+## Section 1c — The sale tag
+
+**Files:** `lib/widgets/store_sale_tag.dart` (the pill), `lib/utils/store_sale.dart` (the rule), `lib/widgets/sale_countdown_overlay.dart` (`StoreSaleEndWatcher`).
+
+A store that has at least one product on sale right now carries a **hang-tag pill** in the stat row. It borrows the product card's `HangingSaleTag` **motif** — cream paper, a cut top-right corner, a punched amber grommet — but not that widget: the product tag is 72×100 and its tap *reveals* a discount, while this is a 68×28 pill whose whole body opens the store's sale items. It is fixed-size (the row is laid out against that box) and its copy scales **down** inside it at large text scales rather than growing out of it.
+
+**The rule is inherited, never re-decided.** "A store is on sale" = `storeSaleFrom(products)` in `lib/utils/store_sale.dart`, which composes the shared `isOnSale` / `maxDiscountPercent` / `earliestSaleEnd` from `sale_price.dart`. No `stores` column, no second query — the catalog is already in memory.
+
+**Two faces.** `UP TO` / `-30%` (the best live discount, floored, the same qualifier and rule the ON SALE home poster uses). A sale too small to floor (`maxDiscountPercent` returns null) falls back to a bare `ON` / `SALE` rather than printing `-0%` or hiding — a store that IS on sale must not look like one that is not.
+
+**Motion.** Only the focused card runs the idle dangle: a `Timer`-scheduled, `TickerMode`-gated, reduced-motion-aware lean that **ends at zero** every beat — the same shape as `SeeMoreCard`'s glide and the Workshop poster's tease, deliberately not the product tag's continuous pendulum.
+
+**Expiry.** Nothing rebuilds the Stores tab when a sale ends, so the card wraps the tag in `StoreSaleEndWatcher`, the store-level sibling of `SaleEndWatcher`: it re-derives `StoreSale` at each end and schedules the **next** one, so a store with several sales at different ends stays on sale when the first expires and falls back on its own when the last one does. An all-open-ended sale schedules nothing (no invented urgency).
+
+**Absent-safe.** No sale → the tag renders nothing *and* contributes no space: the 6px leading gap belongs to the tag, so an absent sale leaves no hole in the row.
+
+**Tap.** The tag is its own target (nested inside the card's own tap, which opens the store): it opens `StoreProfileScreen(storeId, saleOnly: true)`, whose grid is filtered by the same `isOnSale` rule and keeps a visible, clearable **On Sale** chip — a customer is never stuck inside a filtered view.
 
 ---
 

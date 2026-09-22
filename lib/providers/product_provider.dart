@@ -261,23 +261,27 @@ class ProductProvider extends ChangeNotifier {
   bool get hasBestSellers =>
       _products.any((p) => unitsSoldOf(p, _unitsSold) > 0);
 
-  /// Products the customer can actually buy right now in [euSize], most-sold
-  /// first — the "Based on your size" grid's source.
+  /// Products the customer can actually buy right now in [euSize] — the
+  /// "Based on your size" grid's source.
   ///
   /// The inclusion rule lives in `size_match.dart` ([stocksMySize]), so this
-  /// rail and any later size surface (chip, badge, product-page pre-select)
+  /// shelf and any later size surface (chip, badge, product-page pre-select)
   /// can never disagree about whether a product has the customer's size. It
-  /// reuses the `inventory`/`units_sold` data the catalog already fetched — no
-  /// second query, no schema change.
+  /// reuses the `inventory` data the catalog already fetched — no second
+  /// query, no schema change.
   ///
   /// [euSize] null (signed out, or a customer who never gave a size) returns
   /// EMPTY, never a guess or a fallback size: every size surface is
   /// absent-safe by design (plan §8 R6).
   ///
-  /// Ranking is [_compareSuggestions] — units sold, then rating, then name, the
-  /// same tie-break [bestSellerProducts] uses, so the per-load catalog shuffle
-  /// cannot reorder the shelf under the customer. Unlike the best-seller rule, a
-  /// product that has never sold still qualifies on its merits.
+  /// **The order is the catalog's own, so the shelf is a random draw.** It used
+  /// to rank by units sold (then rating, then name) precisely so the per-load
+  /// shuffle could not reorder it; it now hands the matches back in [_products]
+  /// order instead, and [loadProducts] shuffles that once per load. The shelf is
+  /// therefore random on every load — the same "fresh feed" the catalog below it
+  /// shows — and stable while the customer browses, because a rebuild re-filters
+  /// the same shuffled list rather than reshuffling it. Every product still
+  /// qualifies on its merits: nothing here requires that a product has sold.
   ///
   /// **[limit] of 0 means the whole shelf**, the same convention
   /// [productsInAudience] and [productsInSearch] follow. It used to default to a
@@ -287,8 +291,7 @@ class ProductProvider extends ChangeNotifier {
   List<Map<String, dynamic>> productsInSize(double? euSize, {int limit = 0}) {
     if (euSize == null) return const [];
 
-    final matches = _products.where((p) => stocksMySize(p, euSize)).toList()
-      ..sort(_compareSuggestions);
+    final matches = _products.where((p) => stocksMySize(p, euSize)).toList();
 
     return limit > 0 && matches.length > limit
         ? matches.sublist(0, limit)
@@ -298,8 +301,10 @@ class ProductProvider extends ChangeNotifier {
   /// Products a seller stated as being for [audience], most-sold first — the
   /// Men's / Women's / Kids' home rails' source.
   ///
-  /// Sibling of [productsInSize]: filter → rank → cap, so the per-load catalog
-  /// shuffle can never reorder a rail under the customer.
+  /// Sibling of [productsInSize] in shape (filter → cap) and deliberately not
+  /// in order: a rail is a ranked strip, while the size shelf is a random draw.
+  /// This one ranks through [_compareSuggestions], so the per-load catalog
+  /// shuffle can never reorder it.
   ///
   /// **`null` and `'unisex'` are skipped, never treated as "any audience".**
   /// A product whose audience is unset stays in the catalog, in search and in
@@ -394,11 +399,14 @@ class ProductProvider extends ChangeNotifier {
     ];
   }
 
-  /// The ranking every suggestion rail shares — units sold, then rating, then
-  /// name (the same tie-break [bestSellerProducts] uses). Kept in one place so
-  /// "Based on your size" and the audience rails cannot drift into disagreeing about
-  /// order, and so a tie is resolved the same way on every reload rather than
-  /// inheriting the shuffled catalog order.
+  /// The ranking the audience rails and the search-related rail share — units
+  /// sold, then rating, then name (the same tie-break [bestSellerProducts]
+  /// uses). Kept in one place so those rails cannot drift into disagreeing
+  /// about order, and so a tie is resolved the same way on every reload rather
+  /// than inheriting the shuffled catalog order.
+  ///
+  /// "Based on your size" deliberately does NOT use it: that shelf is a random
+  /// draw in catalog order — see [productsInSize].
   int _compareSuggestions(Map<String, dynamic> a, Map<String, dynamic> b) {
     final byUnits = unitsSoldOf(
       b,
@@ -771,7 +779,8 @@ class ProductProvider extends ChangeNotifier {
   /// it.
   ///
   /// [sort] of null (or [SortMode.featured]) keeps the shelf's own order — the
-  /// ranking [productsInSize] returns, the catalog order the home feed shows —
+  /// order [productsInSize] returns, the shuffled catalog order the home feed
+  /// shows —
   /// which is what "Featured" has always meant on a listing page.
   List<Map<String, dynamic>> shelfProducts(
     List<Map<String, dynamic>> shelf, {

@@ -443,7 +443,11 @@ void main() {
       ]);
     });
 
-    test('ranks by units sold, not catalog order', () {
+    test('hands back the catalog order, so the shelf is a random draw', () {
+      // The catalog arrives already shuffled by `loadProducts()`; the shelf does
+      // not re-rank it, so the order the customer gets is the feed's own —
+      // random per load, and identical on every rebuild of that load. The
+      // distinct sold counts are here to prove they no longer decide the order.
       final provider = providerWith(
         [
           product(id: 'low', name: 'Low', stock: [('EU 42', 1)]),
@@ -454,9 +458,9 @@ void main() {
       );
 
       expect(provider.productsInSize(42).map((p) => p['id']).toList(), [
+        'low',
         'high',
         'mid',
-        'low',
       ]);
     });
 
@@ -469,37 +473,37 @@ void main() {
       expect(provider.productsInSize(42).map((p) => p['id']).toList(), ['new']);
     });
 
-    test(
-      'ties break deterministically (rating, then name) despite shuffle',
-      () {
-        final lowerRated = product(
-          id: 'low',
-          name: 'Aaa',
-          avgRating: 3.0,
-          stock: [('EU 42', 1)],
-        );
-        final higherRated = product(
-          id: 'high',
-          name: 'Zzz',
-          avgRating: 4.9,
-          stock: [('EU 42', 1)],
-        );
+    test('follows the catalog it was given, not a tie-break of its own', () {
+      final lowerRated = product(
+        id: 'low',
+        name: 'Aaa',
+        avgRating: 3.0,
+        stock: [('EU 42', 1)],
+      );
+      final higherRated = product(
+        id: 'high',
+        name: 'Zzz',
+        avgRating: 4.9,
+        stock: [('EU 42', 1)],
+      );
 
-        final first = providerWith([
-          lowerRated,
-          higherRated,
-        ], {}).productsInSize(42).map((p) => p['id']).toList();
-        final second = providerWith([
-          higherRated,
-          lowerRated,
-        ], {}).productsInSize(42).map((p) => p['id']).toList();
+      // The same two products, swept the other way: the shelf echoes the
+      // catalog it was handed rather than re-sorting under the customer, which
+      // is what makes the load's shuffle the shelf's order too.
+      final first = providerWith([
+        lowerRated,
+        higherRated,
+      ], {}).productsInSize(42).map((p) => p['id']).toList();
+      final second = providerWith([
+        higherRated,
+        lowerRated,
+      ], {}).productsInSize(42).map((p) => p['id']).toList();
 
-        expect(first, ['high', 'low']);
-        expect(second, first);
-      },
-    );
+      expect(first, ['low', 'high']);
+      expect(second, ['high', 'low']);
+    });
 
-    test('returns the whole shelf by default, most-sold first', () {
+    test('returns the whole shelf by default, in catalog order', () {
       final provider = providerWith(
         [
           for (var i = 0; i < 20; i++)
@@ -514,8 +518,8 @@ void main() {
       // preview length (ten cells + a "See more" card), and needs the whole
       // shelf to know whether that card belongs there at all.
       expect(shelf.length, 20);
-      expect(shelf.first['id'], 'p19');
-      expect(shelf.last['id'], 'p0');
+      expect(shelf.first['id'], 'p0');
+      expect(shelf.last['id'], 'p19');
     });
 
     test('a catalog with nothing in that size yields an empty rail', () {

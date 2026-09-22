@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../constants/app_constants.dart';
 import '../../../models/store.dart';
+import '../../../widgets/sale_countdown_overlay.dart';
+import '../../../widgets/store_sale_tag.dart';
 import 'stitch_painter.dart';
 
 /// A single hero card for the store carousel.
@@ -11,14 +13,34 @@ class StoreHeroCard extends StatefulWidget {
   final Store store;
   final double scale;
   final int productCount;
+
+  /// The store's products — the same list [productCount] is counted from, so a
+  /// sale tag here can never describe a different shelf than the count beside
+  /// it. Passed through to the tag's expiry watcher, which needs the sale fields
+  /// to fall back when the last sale ends. Empty (the default) renders no tag
+  /// at all.
+  final List<Map<String, dynamic>> products;
+
+  /// Whether this is the carousel's focused page — the only card whose sale tag
+  /// runs its idle dangle.
+  final bool isFocused;
+
   final VoidCallback? onTap;
+
+  /// Opens the store pre-filtered to its on-sale products. Null renders a tag
+  /// with no destination, which is only correct on a card that cannot be
+  /// entered at all.
+  final VoidCallback? onSaleTap;
 
   const StoreHeroCard({
     super.key,
     required this.store,
     this.scale = 1.0,
     this.productCount = 0,
+    this.products = const [],
+    this.isFocused = false,
     this.onTap,
+    this.onSaleTap,
   });
 
   @override
@@ -31,6 +53,7 @@ class _StoreHeroCardState extends State<StoreHeroCard> {
   Store get store => widget.store;
   double get scale => widget.scale;
   int get productCount => widget.productCount;
+  bool get isFocused => widget.isFocused;
 
   @override
   Widget build(BuildContext context) {
@@ -232,6 +255,27 @@ class _StoreHeroCardState extends State<StoreHeroCard> {
                                 '📍 ${store.location.split(',').first}',
                               ),
                             ),
+                            // The sale tag, when the store has one. It brings its
+                            // own leading gap so an absent sale leaves NO
+                            // residual space in the row (the spacing belongs to
+                            // the thing it spaces, not to the row).
+                            if (widget.products.isNotEmpty)
+                              StoreSaleEndWatcher(
+                                products: widget.products,
+                                builder: (context, sale) {
+                                  if (!sale.hasSale) {
+                                    return const SizedBox.shrink();
+                                  }
+                                  return Padding(
+                                    padding: const EdgeInsets.only(left: 6),
+                                    child: StoreSaleTag(
+                                      sale: sale,
+                                      animate: isFocused,
+                                      onTap: widget.onSaleTap ?? () {},
+                                    ),
+                                  );
+                                },
+                              ),
                           ],
                         ),
                       ],

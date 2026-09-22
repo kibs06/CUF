@@ -157,7 +157,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('presents matches most-sold first', (tester) async {
+  testWidgets("presents the matches in the catalog's own order", (tester) async {
     final provider = ProductProvider.seeded(
       products: [
         product(id: 'low', name: 'Low', stock: [('EU 42', 1)]),
@@ -169,7 +169,9 @@ void main() {
     await tester.pumpWidget(wrap(provider, profile: {'foot_size_ph': 42}));
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(renderedNames(tester), ['High', 'Low']);
+    // No re-ranking: the shelf shows what the catalog gave it, so the load's
+    // shuffle is the shelf's (random) order too.
+    expect(renderedNames(tester), ['Low', 'High']);
   });
 
   testWidgets('a string size on the profile works the same', (tester) async {
@@ -353,12 +355,12 @@ void main() {
     await tester.pumpWidget(wrap(shelfOf(11), profile: {'foot_size_ph': 42}));
     await tester.pump(const Duration(milliseconds: 300));
 
-    // Ten, most-sold first: the eleventh match is what the arrow stands for on
-    // a shelf longer than the preview, so the section is a taste of the shelf
-    // rather than a second catalog above the real one.
+    // Ten, in the catalog's own order: the eleventh match is what the arrow
+    // stands for on a shelf longer than the preview, so the section is a taste
+    // of the shelf rather than a second catalog above the real one.
     expect(renderedNames(tester).length, kHomePreviewCount);
-    expect(renderedNames(tester).first, 'P10');
-    expect(renderedNames(tester), isNot(contains('P0')));
+    expect(renderedNames(tester).first, 'P0');
+    expect(renderedNames(tester), isNot(contains('P10')));
     expect(find.byType(SeeMoreCard), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -477,13 +479,13 @@ void main() {
     // the count the preview could not show: eleven, not the ten on the feed.
     expect(find.text('Based on your size'), findsOneWidget);
     expect(find.text('11 pairs · EU 42'), findsOneWidget);
-    // The ranking is the preview's, so the first card is the one the preview
+    // The order is the preview's, so the first card is the one the preview
     // also opened with rather than a reshuffled shelf.
     expect(
       tester
           .widget<SoleProductCard>(find.byType(SoleProductCard).first)
           .product['name'],
-      'P10',
+      'P0',
     );
     expect(tester.takeException(), isNull);
   });

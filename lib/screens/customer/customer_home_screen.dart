@@ -490,6 +490,16 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                             const SizedBox(height: 16),
                           ],
 
+                          // The catalog's own lead. Every section above owns its
+                          // TRAILING gap (so a hidden one leaves no residue), but
+                          // the Workshop Collection is the feed's own grid rather
+                          // than one of those sections — with nothing of its own
+                          // in front, it opened a single trailing gap under the
+                          // On Sale section and read as flush against it.
+                          const SizedBox(
+                            height: AppConstants.catalogLeadGap,
+                          ),
+
                           // ── The Workshop Collection ──
                           // The heading IS the collection's grid now: the poster
                           // below opens it the way "Based on your size" opens
