@@ -1,20 +1,139 @@
-# app
+# SoleVision
 
-A new Flutter project.
+**A multi-role marketplace for handcrafted footwear from Carcar City, Cebu.**
 
-## Getting Started
+Carcar is the hometown of the Philippine shoe industry, but its artisans — mostly members of **CUFMAI** (Carcar United Footwear Manufacturers Association Inc.) — sell through traditional channels with no digital storefront, so buyers outside the city have no easy way to find them. SoleVision gives those makers the tools big brands have — a storefront, an order pipeline, and a point of sale — without replacing the craftsmanship.
 
-This project is a starting point for a Flutter application.
+One Flutter app serves all three roles, with a React portal for web administration.
 
-A few resources to get you started if this is your first Flutter project:
+---
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+## The three roles
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+| Role | Who | What they get |
+|------|-----|---------------|
+| **Customer** | Shoe buyers | Browse stores and products, cart, checkout (cash / GCash / card), order tracking, customized orders, foot sizing, messaging, reviews |
+| **Seller** | CUFMAI artisan members | Storefront, product & inventory management, online order flow, in-person POS, revenue reports, customer chat |
+| **Admin** | Marketplace operator | Seller application review, user & product management, revenue and order analytics |
+
+Access is decided by `profiles.role` (`customer` / `seller` / `admin`) plus `seller_status` (`none` / `pending` / `approved` / `rejected`) — a seller who applies during sign-up lands on a pending screen until an admin approves them.
+
+---
+
+## What's in the app
+
+**Customer**
+- Home feed with a masonry catalog, category rows, audience shelves (Men's / Women's / Kids' / Unisex), an On Sale poster, and a "Based on your size" shelf drawn from a saved foot measurement
+- Search with suggestions, history, and a results page; shelves that search, filter and sort in place
+- Store discovery, store pages, follow/unfollow and store messaging
+- Store-grouped cart, stock validation at checkout, delivery fee, and an address book with map pin-drop
+- Payments via PayMongo (GCash) with a webhook-backed status flow, plus cash on delivery/pickup
+- Order timeline (Placed → Preparing → Ready → Received), vouchers, pickup reservations, and a 5-step custom shoe wizard
+- Foot sizing: AR-assisted scanning and manual entry, with US/UK labels
+- Dark mode, biometric sign-in, MFA, and new-device verification
+
+**Seller**
+- Dashboard with today's sales and order metrics
+- Product and variant management (size / color / stock), with image uploads
+- Online order flow with status management and delivery or pickup handling
+- **POS** for walk-in sales — cash, GCash or card, including custom orders and vouchers
+- Revenue reporting that combines online orders with POS transactions, plus store reviews
+
+**Admin**
+- Seller application approval, user suspension, product management
+- Analytics: revenue, orders, top products and trends
+- Available both in the Flutter app and the React web portal
+
+---
+
+## Tech stack
+
+| Layer | Technology |
+|-------|------------|
+| Mobile app | Flutter 3.44 (Dart), `provider` for state management |
+| Backend | Supabase — PostgreSQL with Row-Level Security, Auth, Storage, Realtime, Edge Functions |
+| Admin portal | React + Vite + Tailwind CSS, TanStack React Query (`admin-portal/`) |
+| Payments | PayMongo (GCash) with Edge Function webhooks (`create-gcash-payment`, `gcash-webhook`); manual GCash QR fallback |
+| Push | Firebase Cloud Messaging + `flutter_local_notifications` |
+| On-device ML | Google ML Kit — pose detection and selfie segmentation (foot sizing, try-on), text recognition |
+| Maps | `flutter_map` + MapTiler geocoding (proxied through an Edge Function) |
+| Currency | Philippine Peso (₱) |
+
+---
+
+## Repository layout
+
+```
+lib/
+  main.dart              App entry, provider wiring, Supabase + Firebase init
+  constants/             Theme, brightness, app-wide constants (incl. update URLs)
+  models/                Data models
+  providers/             State management (one per feature area)
+  screens/
+    auth/  customer/  seller/  admin/  store/  shared/
+  services/              Data access and platform integrations
+    supabase_service.dart, auth_service.dart, order_service.dart, ...
+  utils/                 Pure helpers (pricing, sale rules, formatting)
+  widgets/               Reusable UI
+admin-portal/            React admin web portal
+supabase/
+  migrations/            Ordered SQL migrations (schema, RLS, triggers)
+  functions/             Edge Functions (payments, push, geocoding, uploads)
+releases/                Release tooling + the in-app update manifest
+test/                    Unit + widget tests (mirrors lib/)
+docs/                    Architecture references and session logs
+```
+
+The layering is `screen → provider → service → Supabase`. Business rules live in one place and are inherited — for example, "is this on sale?" is `isOnSale` in `lib/utils/sale_price.dart`, used by the product cards, the home On Sale poster, and the store sale tags alike, so the three can never disagree.
+
+---
+
+## Getting started
+
+### Prerequisites
+
+- Flutter 3.44+ (`flutter --version`)
+- A Supabase project (URL + anon key)
+- Optional, for the pieces that need them: a MapTiler key, Firebase project files, Play/other ML Kit setup
+
+### Configuration
+
+Supabase and MapTiler values live in **`lib/constants/app_constants.dart`**, not in dart-defines. For local builds that also need the release-update check, copy `dart_defines.json.example` → `dart_defines.json` (git-ignored).
+
+### Run
+
+```bash
+flutter pub get
+flutter run
+```
+
+### Test
+
+`flutter test` covers the app without a network or a Supabase instance; tests that would need them use fakes from `mocktail`.
+
+```bash
+flutter analyze lib test     # must stay clean
+flutter test                 # full suite
+flutter test test/utils/sale_price_test.dart   # a single file
+```
+
+CI (`.github/workflows/ci.yml`) runs `flutter analyze --no-pub` and `flutter test --no-pub --coverage` on every push and pull request to `main`.
+
+### Android install notes
+
+Sideloading an APK requires the downloading app (browser, file manager) to have **Install unknown apps** enabled: Android Settings → Apps → Special app access → Install unknown apps. It's a per-app user setting the app cannot request itself.
+
+---
+
+## Documentation
+
+| Document | What it covers |
+|----------|----------------|
+| `docs/ABOUT_SOLEVISION.md` | What the app is, the problem it solves, who it's for |
+| `docs/SoleVision_Complete_Documentation.md` | Master reference — schema, RLS, services, history |
+| `docs/AI_PROJECT_SUMMARY.md` | Quick reference for the whole project |
+| `docs/PROJECT_HANDOFF.md` | Decisions, known issues, what's next |
+| `docs/AI/` | Per-feature architecture notes (checkout, POS, foot sizing, notifications, …) |
 
 ---
 
@@ -108,10 +227,10 @@ your machine instead of pushing a tag:
   calls (pure Dart, no extra deps).
 
 ```bash
-# Example: ship v1.0.1
-./releases/publish.sh 1.0.1 "Fixed login crash|Improved startup time"
+# Example: ship v1.0.29
+./releases/publish.sh 1.0.29 "A store that's on sale now says so|Fixed: a rail card's name sits on its own edge"
 # Windows:
-releases\publish.bat 1.0.1 "Fixed login crash|Improved startup time"
+releases\publish.bat 1.0.29 "A store that's on sale now says so|Fixed: a rail card's name sits on its own edge"
 ```
 
 Requirements: Flutter on PATH and the GitHub CLI (`gh`) installed +
@@ -129,10 +248,3 @@ If you'd rather publish by hand:
 4. Update `releases/version.json` with the new version + APK URL + notes.
 5. Prepend the same entry to `releases/changelog.json`.
 6. Commit and push `pubspec.yaml` + both JSONs to `main`.
-
-### Android "install unknown apps"
-
-Sideloading requires the downloader app (browser, file manager) to have
-**Install unknown apps** enabled: Android Settings → Apps → Special app access
-→ Install unknown apps. This is a per-app user setting — the app can't request
-it itself.
