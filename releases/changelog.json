@@ -1,5 +1,20 @@
 [
   {
+    "latest_version": "1.0.29",
+    "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.29/app-release-1.0.29.apk",
+    "released_at": "2026-09-22",
+    "notes": [
+      "A store that's on sale now says so: a small tag on its card in Stores, and tapping it opens that store's sale items",
+      "The bottom bar gets out of the way as you scroll down a page, and is back the moment you scroll up",
+      "\"Based on your size\" no longer repeats the same best-sellers in the same order — it shuffles fresh with the rest of the feed",
+      "The Workshop Collection starts with a proper gap instead of sitting flush under the On Sale row",
+      "The Workshop poster now says out loud that tapping it changes the order",
+      "Fixed: a sale card's price and category now share the line with the number",
+      "Fixed: a rail card's name and price no longer sit on the card's own edge",
+      "Fixed: posters sit on the page itself, with their own edge, instead of on a second surface"
+    ]
+  },
+  {
     "latest_version": "1.0.28",
     "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.28/app-release-1.0.28.apk",
     "released_at": "2026-09-21",
