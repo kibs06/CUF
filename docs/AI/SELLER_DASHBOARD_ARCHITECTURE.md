@@ -39,15 +39,15 @@ SellerShell (lib/screens/seller/seller_shell.dart)
 | Layer | File | Role |
 |-------|------|------|
 | Screen | `lib/screens/seller/seller_dashboard_screen.dart` | The dashboard: `_DashboardData` :44, `didChangeDependencies` (re-entry hook) :161, `_loadDashboard` :221, `_fetchDashboardData` :261, `_fetchDashboardDataInner` :270, `_buildDashboardBody` :656, `_PaymentsToConfirmCard` :1513 |
-| Shell | `lib/screens/seller/seller_shell.dart` | 5-tab host; Dashboard is Tab 0. **`PageView` + `KeepAlivePage`** — a visited tab stays mounted, so state survives tab switches and re-entry does NOT re-run `initState` |
+| Shell | `lib/screens/seller/seller_shell.dart` | 5-tab host; Dashboard is Tab 0. **`PageView` + `KeepAlivePage`** — a visited tab stays mounted, so state survives tab switches and re-entry does NOT re-run `initState`. The nav bar and the tab host are both handed to **`HideOnScrollBottomBar`** (the same wrapper the customer shell uses), so the bar collapses out of the layout on a downward scroll and hands its 65px back to the page — the briefing is readable full-bleed without the dashboard asking for it. Its trailing `SizedBox(height: 80)` is therefore breathing room only: the bar occupies real layout space above the page, never overlapping it |
 | Widget | `lib/widgets/keep_alive_page.dart` | Makes a lazily-built `PageView` page survive being scrolled out of view (the tab host's keep-alive mechanism) |
 | Widget | `lib/widgets/active_tab.dart` | Publishes the on-screen tab index. The ONLY re-entry signal a kept-alive page gets, since it is no longer rebuilt on a switch |
 | Widget | `lib/widgets/seller/seller_metric_card.dart` | Block 1 metric cards (large/small variants) |
 | Widget | `lib/widgets/seller/seller_sparkline.dart` | Mini line chart inside the sales metric cards |
 | Widget | `lib/widgets/seller/seller_alert_chip.dart` | Block 2 alert chips |
 | Widget | `lib/widgets/seller/seller_order_card.dart` | Block 4 order cards |
-| Widget | `lib/widgets/seller/seller_stacked_area_chart.dart` | Blocks 5 & 6 revenue charts (fl_chart) |
-| Widget | `lib/widgets/seller/seller_revenue_doughnut.dart` | Block 7 online vs in-store doughnut |
+| Widget | `lib/widgets/seller/seller_revenue_columns_chart.dart` | Blocks 5 & 6 revenue trend — one stacked column per bucket (fl_chart `BarChart`) |
+| Widget | `lib/widgets/seller/seller_revenue_doughnut.dart` | Block 7 online vs in-store doughnut (both read `SellerTheme.channelOnline` / `channelInStore`) |
 | Service | `lib/services/sales_service.dart` | Revenue/today/weekly/monthly/trend queries :199-368, :627-700 |
 | Service | `lib/services/order_service.dart` | `getRecentOrders` :154, `getOrderCountByStatus` :241 |
 | Service | `lib/services/store_service.dart` | `getMyStore` :19 (store id + rating) |
@@ -170,9 +170,20 @@ Read-only, limit **3** (note: `SELLER_RECENT_ORDERS_ARCHITECTURE.md` documents a
 
 ### 4.7 Blocks 5-7 — Charts
 
-- **Block 5** Weekly `SellerStackedAreaChart` — `weeklyTrend.points`, labels `['Mon'…'Sun']`, subtitle = week date range (`_getWeekDateRange` :936).
-- **Block 6** Monthly `SellerStackedAreaChart` — `monthlyTrend.points`, month-abbrev x-labels from point dates.
-- **Block 7** `SellerRevenueDoughnutChart` — online vs in-store split of `monthlyTrend`.
+- **Block 5** Weekly `SellerRevenueColumnsChart` — `weeklyTrend.points`, labels `['Mon'…'Sun']`, subtitle = week date range (`_getWeekDateRange` :936).
+- **Block 6** Monthly `SellerRevenueColumnsChart` — `monthlyTrend.points`, month-abbrev x-labels from point dates.
+
+Both are the same widget: **stacked columns**, one per bucket, height = the bucket's total, split online (base) / in-store (top) by `rodStackItems`. Replaced the stacked*area* card, which needed two curves to be read against each other and blended into brown where in-store was small. `isWeekly` only changes the delta chip's wording. See `REVENUE_ARCHITECTURE.md` §7 for the chart internals and `test/widgets/seller_revenue_columns_chart_test.dart` for the stacking contract.
+- **Block 7** `SellerRevenueDoughnutChart` — online vs in-store split of `monthlyTrend`. The ring is an **extruded (3D) doughnut** painted by `Doughnut3DPainter` (same file) instead of fl_chart's `PieChart`: a squashed top face, a dark front wall `depth: 26` px tall, and the far inner wall of the hole blurred into a shadow. `DoughnutSlice` carries one channel's value + colour; `_ExtrudedRing` owns three controllers and two gestures:
+
+- **Draw-in** — 900ms `easeOutCubic`, `progress` 0…1 so the sweep and the extrusion rise together.
+- **Held** — a `Listener` (not the tap callbacks: the pointer is the only thing that cannot be left stuck on when the arena goes to a scroll) raises the ring to the same pose a hop peaks at, and sets it down on up/cancel. One `_offCard` (0…1) composes the hold with the hop's sine arc, capped at 1, so a tap on a held ring rises once and neither can drop the ring out from under the other. Reduced motion gets the pose, not the travel (`PressSink`'s rule).
+- **Tap → hop** — `hopDuration` 1100ms, one `_pose()` record the painter and the figure in the hole both read, so they cannot disagree: `spin` a full revolution through the seam, `lift` 13px, `depth` 26→33, `flatness` 0.55→0.47. Skipped under `MediaQuery.disableAnimations`, and **also skipped when the ring is already off the card** (`_offCard > 0.5`) — letting go of a picked-up ring is a set-down, not a tap; playing the hop on top of the descending hold makes the ring dip, jump back to the top of the hop and land.
+- **Slide → turn** — 1:1 with the finger at `turnPerPixel` (one revolution per 320px, the card's own content width), then `FrictionSimulation(0.16, …)` coasts a flick to a stop, capped at 10 rad/s. `_slide` is an *unbounded* controller, and the painter's `spin` is `_slide.value + hop turn` so the two gestures add instead of restarting each other. A slide stays live under reduced motion — it is direct manipulation, like scroll physics.
+
+Both gestures are `excludeFromSemantics`: they are paint only, with the legend rows carrying the numbers. Public `ringKey` marks the `RepaintBoundary` around the canvas (cheap animation + the hook the geometry tests capture).
+
+**Testing note:** an `AnimationController`'s first frame reports zero elapsed, so a test that starts an animation and then pumps once sees the *start* pose — every hold/hop assertion needs a `pump()` to start the ticker before the `pump(duration)` that advances it. See `test/widgets/seller_revenue_doughnut_3d_test.dart` for the pixel contracts, and mind the trap documented on the painter: **`Path.arcTo(rect, angle, 2π)` fills as nothing at all**, so the lone-slice case is drawn as two ovals under even-odd.
 
 All three cards use `clipBehavior: Clip.antiAlias` (stops y-axis bleed-through in dark mode). Charts use cached trend data on refresh errors.
 

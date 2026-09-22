@@ -158,7 +158,7 @@ All 13 files carrying warm hexes. The two constant files are the source; the res
 | `lib/screens/shared/faq_screen.dart`, `help_menu_screen.dart`, `support_chat_screen.dart`, `whats_new_screen.dart` | **The "settings family"** — all four were swept to the same cream bands; they flip as one group. |
 | `lib/widgets/lockout_overlay.dart`, `lib/widgets/update_overlay.dart` | Full-screen overlays; verify the scrim still reads over the new page tone. |
 
-Also re-check the warm treatments that have no hardcoded hex but were **designed around** cream: `hanging_sale_tag.dart` (cream paper gradient + amber pulse), `sale_price_tape.dart` (frosted warm-cream fill), `signup_scaffold.dart` + `dark_auth_text_field.dart` (cream chrome over video), `app_error_toast.dart` (`#F3ECE1` / `#D9CBB8` on espresso — kept-warm by default since they sit on the dark toast), `sole_bottom_nav.dart` indicator + badge ring, and `seller_weekly_bar.dart` / `seller_stacked_area_chart.dart` (cream-card-specific contrast notes).
+Also re-check the warm treatments that have no hardcoded hex but were **designed around** cream: `hanging_sale_tag.dart` (cream paper gradient + amber pulse), `sale_price_tape.dart` (frosted warm-cream fill), `signup_scaffold.dart` + `dark_auth_text_field.dart` (cream chrome over video), `app_error_toast.dart` (`#F3ECE1` / `#D9CBB8` on espresso — kept-warm by default since they sit on the dark toast), `sole_bottom_nav.dart` indicator + badge ring, and `seller_weekly_bar.dart` / `seller_revenue_columns_chart.dart` (cream-card-specific contrast notes).
 
 ---
 

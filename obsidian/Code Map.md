@@ -105,7 +105,7 @@
 | Folder / file | Role | → MOC |
 |---------------|------|-------|
 | `widgets/` root (`sole_*.dart`, `SoleCard`, `SolePrimaryButton`, `SoleTimeline`, `SoleStarRating`, `SoleStatusChip`, `ShimmerBox`, `EmptyStateWidget`, …) | **Design system** — reuse these, don't introduce raw Material | 🏠 Home (app-wide) |
-| `widgets/seller/` | `seller_metric_card`, `seller_sparkline`, `seller_alert_chip`, `seller_order_card`, `seller_stacked_area_chart`, `seller_revenue_doughnut`, `seller_status_chip`, … | 👞 Seller |
+| `widgets/seller/` | `seller_metric_card`, `seller_sparkline`, `seller_alert_chip`, `seller_order_card`, `seller_revenue_columns_chart`, `seller_revenue_doughnut`, `seller_status_chip`, … | 👞 Seller |
 | `widgets/auth/` | `signup_scaffold`, `auth_text_field`, `password_strength_meter`, `document_upload_tile`, `step_progress_indicator`, `terms_policy_tile` | 🔐 Auth |
 | `widgets/chat/` | `chat_view.dart` — the shared chat UI (both roles) | 🔔 Messaging |
 | `widgets/admin/` | `verification_doc_viewer.dart` (signed-URL doc review zoom) | 🔐 Auth |

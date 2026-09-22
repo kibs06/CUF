@@ -104,7 +104,7 @@ The bottom nav band (`creamDeep #F0DFBB`, asserted by `test/widgets/sole_bottom_
 
 ### 3.8 Content, not chrome
 - **Product photography.** The home masonry and catalog place photos of shoes on cream cards. On dark, images with white studio backgrounds glare; there is no `scrim` token and no image-tint strategy.
-- **Charts.** `fl_chart` in `admin_analytics_screen.dart`, `seller_revenue_doughnut.dart`, `seller_revenue_line_chart.dart`, `seller_stacked_area_chart.dart` — 16 configuration sites with literal grid/axis/tooltip colours.
+- **Charts.** `fl_chart` in `admin_analytics_screen.dart`, `seller_revenue_doughnut.dart`, `seller_revenue_line_chart.dart`, `seller_revenue_columns_chart.dart` — configuration sites with literal grid/axis/tooltip colours. (The seller trend card's *channel* fills are already tokenised as `SellerTheme.channelOnline` / `channelInStore`; its grid, axis labels and tooltip are not.)
 - **Status pills.** `statusPendingColor` (9 fills / 52 fg), `statusConfirmedColor` (9 / 23), plus `success` (80 / 172) and `error` (166 / 321) — mostly `{colour, colour @ 0.1}` pairs expecting a light backdrop.
 - **An off-token cream** — `Color(0xFFF5EDE4)` ×33, used as icon/label colour on dark headers. It would *survive* dark mode, but it shows the palette has already grown literal exceptions the surface guard does not track.
 

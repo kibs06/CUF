@@ -27,7 +27,7 @@ import '../../widgets/seller/seller_alert_chip.dart';
 import '../../widgets/seller/seller_order_card.dart';
 import 'reservation_requests_screen.dart';
 import '../../models/sales_trend_data.dart';
-import '../../widgets/seller/seller_stacked_area_chart.dart';
+import '../../widgets/seller/seller_revenue_columns_chart.dart';
 import '../../widgets/seller/seller_revenue_doughnut.dart';
 import 'manage_orders_screen.dart';
 import 'manage_products_screen.dart';
@@ -701,7 +701,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
             _buildRecentOrders(data),
             const SizedBox(height: 20),
 
-            // Block 5 — Weekly Stacked Area Chart (Online + In-Store)
+            // Block 5 — Weekly Stacked Columns (Online + In-Store)
             Container(
               clipBehavior: Clip.antiAlias,
               padding: const EdgeInsets.all(16),
@@ -711,7 +711,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                 border: Border.all(color: SellerTheme.cardBorder),
                 boxShadow: SellerTheme.cardShadow,
               ),
-              child: SellerStackedAreaChart(
+              child: SellerRevenueColumnsChart(
                 title: 'Revenue — This Week',
                 subtitle: _getWeekDateRange(),
                 points: data.weeklyTrend?.points ?? [],
@@ -724,7 +724,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
             ),
             const SizedBox(height: 20),
 
-            // Block 6 — Monthly Stacked Area Chart
+            // Block 6 — Monthly Stacked Columns
             Container(
               clipBehavior: Clip.antiAlias,
               padding: const EdgeInsets.all(16),
@@ -734,7 +734,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                 border: Border.all(color: SellerTheme.cardBorder),
                 boxShadow: SellerTheme.cardShadow,
               ),
-              child: SellerStackedAreaChart(
+              child: SellerRevenueColumnsChart(
                 title: 'Revenue — Monthly Trend',
                 subtitle: SalesService.monthlyFullLabels().last,
                 points: data.monthlyTrend?.points ?? [],

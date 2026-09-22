@@ -31,6 +31,20 @@ class SellerTheme {
   /// Darker rust — active/pressed states, "Ready" number text.
   static const Color rustDeep = Color(0xFF9C4E22);
 
+  // ── Revenue channels ────────────────────────────────────────────
+  //
+  // The two channels every revenue visual splits into. They live here rather
+  // than on whichever chart happened to be drawn first, because "online is the
+  // rust one" is a fact the trend columns and the doughnut both have to agree
+  // on — the same month must be the same colour in both cards. Aliases, not new
+  // hexes: these are the brand browns above, wearing their data role.
+
+  /// Online orders — the primary data accent.
+  static const Color channelOnline = rust;
+
+  /// POS / in-store sales — the second series, mid espresso.
+  static const Color channelInStore = espressoMid;
+
   // ── Sage ────────────────────────────────────────────────────────
   /// Low-stock-OK state, "Received" status.
   static const Color sage = Color(0xFF5B7B52);

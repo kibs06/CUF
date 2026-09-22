@@ -27,8 +27,9 @@ Revenue
 | Service | `lib/services/sales_service.dart` | ALL revenue queries (today/weekly/monthly/trend/report). Single source of truth for the app's revenue math. |
 | Model | `lib/models/sales_trend_data.dart` | `SalesDataPoint`, `SalesTrendResult`, `SalesChannelFilter` — the chart data contract. |
 | Model | `lib/models/seller_report_data.dart` | `SellerReportData` — Reports screen contract (`weeklyTotal`, `previousPeriodTotal`, `dailyRevenue`, `topProducts`). |
-| Widget | `lib/widgets/seller/seller_stacked_area_chart.dart` | Stacked area chart (fl_chart) used on the dashboard. Online (blue) + In-Store (amber). |
-| Screen | `lib/screens/seller/seller_dashboard_screen.dart` | Consumes `getWeeklyTrend` + `getMonthlyTrend` (Block 6 & 7). |
+| Widget | `lib/widgets/seller/seller_revenue_columns_chart.dart` | Stacked column chart (fl_chart `BarChart`) used on the dashboard. One column per bucket, online at its base, in-store on top. |
+| Constants | `lib/constants/seller_theme_constants.dart` | `channelOnline` / `channelInStore` — the two channel colours, shared by the trend card and the doughnut so both charts agree. |
+| Screen | `lib/screens/seller/seller_dashboard_screen.dart` | Consumes `getWeeklyTrend` + `getMonthlyTrend` (Blocks 5 & 6). |
 | Screen | `lib/screens/seller/reports_screen.dart` | Consumes `getWeeklyReport` (bar chart + top products + comparison). |
 | DB | `supabase/schema.sql` | `orders`, `order_items`, `sales_transactions`, `sales_transaction_items` (§10–13). |
 
@@ -134,24 +135,26 @@ All KPI methods now agree: live POS path (`orders source='pos'`) + `payment_stat
 
 ---
 
-## 7. Chart Widget (`SellerStackedAreaChart`)
+## 7. Chart Widget (`SellerRevenueColumnsChart`)
 
-fl_chart `LineChart`, 220px tall. Layout: **header row** (title/subtitle left, pill legend right) → **headline** (28pt bold, formatted total) → **delta pill chip** → chart → **footer** (scope note only). Modern Stripe/shadcn "Area Chart Gradient Fill" style: smooth curves, soft halo glow, dashed hairline grid.
+fl_chart `BarChart`, plot area 220px tall. Layout: **header row** (title/subtitle left, pill legend right) → **headline** (28pt bold, formatted total) → **delta pill chip** → plot → **footer** (scope note only).
 
-**Stacking:** Online drawn first (bottom), In-Store drawn second **on top** — `inStoreSpots[i] = (online + inStore)` so the amber area sits above the blue one. Both series use `isCurved: true, curveSmoothness: 0.35`.
+This replaced the old stacked-*area* card, which told the same story with two translucent bands and a line through each. Reading it meant judging the gap between two curves and guessing where the upper band began, and the two fills blended into brown wherever in-store was small. Columns turn both questions into lengths.
 
-- Colors: Online `0xFF2563EB` (blue-600), In-Store `0xFFD97706` (amber-600). Area fills are 3-stop gradients `0.32 → 0.14 → 0.0` alpha. Each line has a decorative halo behind it (`barWidth: 10`, alpha `0.09`).
+**Stacking:** one `BarChartGroupData` per bucket holding a **single rod** whose height is the period's **total** (`toY: point.revenue`), split by `rodStackItems` — online `0 → onlineRevenue`, in-store `onlineRevenue → revenue`. Segments of one rod, not two rods side by side: that is what makes the column's height the period's total rather than two independent bars. `barsSpace: 0`, top corners rounded 4.
+
+- Colors: **`SellerTheme.channelOnline` (rust) / `SellerTheme.channelInStore` (mid espresso)** — the same tokens the doughnut splits channels with, so the two cards cannot disagree about which channel is rust. (The old area chart used its own blue/amber pair.) `onlineColor` / `inStoreColor` remain public statics on the widget, now reading those tokens.
+- Column width: `spaceAround` divides the plot into one cell per bucket and the rod takes half a cell, clamped `4…26` — so a two-month window draws columns, not slabs.
 - Y axis: `maxY = (maxPoint*1.2)` snapped **up to the next interval multiple** (`yMaxAligned` — kills overlapping top tick label), interval from a ladder (`_calculateYInterval`): ≤500→100, ≤1k→200, ≤5k→1000, ≤10k→2000, ≤50k→10k, ≤100k→20k, else 50k.
 - Grid: horizontal-only, **dashed** (`dashArray: [4, 6]`), alpha `0.07` — the shadcn hairline signature.
-- X axis labels: `labels` param if provided; otherwise **month abbreviations from `points[i].date`** (`_monthAbbrev`). The dashboard passes `['Mon',…,'Sun']` for the weekly chart and month labels for monthly.
-- Latest-point marker: the top (in-store) series shows a white-ringed dot on its **last** point — the fintech "current value" marker.
-- Touch: vertical guide line (`getTouchedSpotIndicator`) + dark tooltip (rounded 14, soft shadow) with `Online:` / `In-Store:` / `Total:` amounts.
+- X axis labels: `labels` param if provided; otherwise **month abbreviations from `points[i].date`** (`_monthAbbrev`). The dashboard passes `['Mon',…,'Sun']` for the weekly card and falls back to month labels for monthly.
+- Touch: dark tooltip (rounded 14) with the bucket's `Sep 22, 2026` date header then `Online:` / `In-Store:` / `Total:` rows. `getTooltipItem` fires **once per rod**, so there is no null-padding dance here — that ceremony was only needed because a touch between two stacked *lines* catches both series.
 - Delta pill (`_buildDeltaPill`): rounded tinted chip — arrow + `% up/down` in **`AppConstants.success` (olive) / `AppConstants.error` (crimson)**, plus muted "vs ₱prev last week/month" suffix. `_lowBaselineFloor = 500`: prev ≤ 0 → grey "No previous-period data" chip; prev < 500 → muted "Early days" chip (no misleading %).
 - Legend: pill chips (tinted capsule + colored dot).
 - Draw-in animation: 800ms `Curves.easeOutCubic` (premium vs instant).
-- States: loading / error (with `onRetry`) / empty ("No sales yet this period").
+- States: loading / error (with `onRetry`) / empty ("No sales yet this period") — all on the same 220px box as the plot, so the card never resizes as data lands.
 
-**Dashboard wiring** (`seller_dashboard_screen.dart`): `_fetchDashboardData` runs `getWeeklyTrend` + `getMonthlyTrend` (both `channel: all`) inside the same `Future.wait` as the rest of the dashboard; Block 6 renders the weekly chart, Block 7 the monthly chart. Charts use cached data on refresh errors. Both chart cards use `clipBehavior: Clip.antiAlias` (prevents the y-axis bleed through the header in dark mode); dashboard AppBar is hardened with `scrolledUnderElevation: 0, surfaceTintColor: Colors.transparent`.
+**Dashboard wiring** (`seller_dashboard_screen.dart`): `_fetchDashboardData` runs `getWeeklyTrend` + `getMonthlyTrend` (both `channel: all`) inside the same `Future.wait` as the rest of the dashboard; Block 5 renders the weekly card, Block 6 the monthly one. Both pass `points`, `trendResult` (headline + delta), `isWeekly` (delta wording) and — weekly only — the `['Mon'…'Sun']` labels. Charts use cached data on refresh errors. Both chart cards use `clipBehavior: Clip.antiAlias` (prevents the y-axis bleed through the header in dark mode); dashboard AppBar is hardened with `scrolledUnderElevation: 0, surfaceTintColor: Colors.transparent`.
 
 ---
 
@@ -161,9 +164,11 @@ fl_chart `LineChart`, 220px tall. Layout: **header row** (title/subtitle left, p
 2. **`SalesDataPoint.orderCount` is never populated** — a natural candidate to wire up if you add order-count annotations to the chart.
 3. **Revenue definition (fixed):** every revenue query filters `status != 'cancelled'` **and `payment_status = 'paid'`** — dashboard trends, KPI cards, monthly, and Reports all agree. Note POS cash is `paid` at insert; POS GCash starts `pending` until the poller flips it (so GCash revenue appears slightly late).
 4. **`_getOrderIds` = N+1-style chain (2 queries)**; trend methods run it for current AND previous periods → 4+ queries per chart load. If you optimize, prefer a single joined query and keep the store scope via `products`/`order_items`.
-5. **Weekly X labels:** the dashboard passes `['Mon',…,'Sun']`; monthly passes month labels. Only if a caller omits `labels` will the chart fall back to month abbrevs from `points[i].date`.
+5. **Weekly X labels:** the dashboard passes `['Mon',…,'Sun']`; the monthly card passes none, so the chart falls back to month abbrevs from `points[i].date`. Any other caller that omits `labels` gets the same month fallback — a daily window would silently label every column with a month name.
 6. **`isProjected` only marks the last slot when `now.hour < 18`** — the "today is partial" heuristic. If you add projected/forecast styling, this is the hook.
 7. **POS GCash orders** are `payment_status='pending'` until polled to `paid` — they appear in revenue slightly late; cancelled-at-creation orders (`_cancelGcashPayment` deletes them) are removed.
 8. **Weekly buckets are `weekday - 1` (Mon=0)**, not Sunday-start. Monthly buckets are month offsets from the window start; out-of-window rows are dropped.
 9. **`percentChange` is 0 when the previous period had no revenue** — but the delta line now hides the % (shows "No previous-period data to compare", or muted "Early days" below `_lowBaselineFloor = 500`) instead of rendering "0%".
-10. **Dashboard KPI cards and the charts** compute revenue from the same method family (`getTodayRevenue`/`getWeeklyRevenue`/`getMonthlyRevenue` vs `getWeeklyTrend`/`getMonthlyTrend`), all using the paid filter; keep them consistent when you change the definition.
+10. **`getTooltipItems` must return exactly `touchedSpots.length` items.** Returning a single-item list (the natural way to write a shared tooltip body) throws during paint and blanks the chart the moment a touch lands where both stacked series are within `touchSpotThreshold`. Pad with `null` — `List<LineTooltipItem?>.filled(spots.length - 1, null)` — and keep the real payload first. `admin_analytics_screen.dart` (`_areaChart`) already got this right by mapping over `touchedSpots`; `seller_revenue_line_chart.dart` too. The seller trend card no longer hits this at all — it is a `BarChart`, whose `getTooltipItem` fires once per rod.
+11. **Two bar-chart traps.** fl_chart paints the rod's own `color` across the **whole** rod first and then clips each `rodStackItems` entry over it, so segments that don't tile `0 → toY` exactly (from `0` to `onlineRevenue`, then `onlineRevenue` to `revenue`) leave the fallback colour showing through the gap — not white space, a band of the wrong colour. And a channel that is zero for a bucket still needs its stack item, because the stack *is* the rod's structure: a single-channel day reads as one solid column only because the empty segment has no *length*. Test the segment **lengths**, not the item count — `test/widgets/seller_revenue_columns_chart_test.dart` pins both.
+12. **Dashboard KPI cards and the charts** compute revenue from the same method family (`getTodayRevenue`/`getWeeklyRevenue`/`getMonthlyRevenue` vs `getWeeklyTrend`/`getMonthlyTrend`), all using the paid filter; keep them consistent when you change the definition.
