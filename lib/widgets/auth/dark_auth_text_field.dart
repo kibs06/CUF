@@ -80,7 +80,9 @@ class DarkAuthTextField extends StatelessWidget {
         floatingLabelStyle: AppConstants.bodyStyle(
           fontSize: 20,
           fontWeight: FontWeight.bold,
-          color: AppConstants.surfaceLight,
+          // The field sits on the auth video hero: dark in both modes, so the
+          // label is pinned light.
+          color: AppConstants.inkInverse,
         ).copyWith(
           // Soft shadow so the floated label stays readable where it sits
           // on the field's top border, over the video background.

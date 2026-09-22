@@ -218,7 +218,7 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                       height: double.infinity,
                       margin: const EdgeInsets.all(3),
                       decoration: BoxDecoration(
-                        color: AppConstants.secondary,
+                        color: AppConstants.chrome,
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: const Icon(

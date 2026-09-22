@@ -187,6 +187,9 @@ class _FootProfileOnboardingScreenState
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
+                      // theme-guard: the badge's ink flips with it
+                      // (AppConstants.surfaceLight below), so the pill stays
+                      // legible in both modes.
                       color: AppConstants.secondary,
                       borderRadius: BorderRadius.circular(999),
                     ),
@@ -195,6 +198,10 @@ class _FootProfileOnboardingScreenState
                       style: AppConstants.monoStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.bold,
+                        // theme-guard: the two colours here flip together (the
+                        // pill is `secondary`, this is the page tone), so the
+                        // badge stays a dark pill on light and a light pill on
+                        // dark — legible in both.
                         color: AppConstants.surfaceLight,
                         // .copyWith: monoStyle returns a new TextStyle.
                       ).copyWith(letterSpacing: 1.2),
@@ -420,7 +427,7 @@ class _FootProfileOnboardingScreenState
           const SizedBox(height: AuthSpacing.s16),
           SolePrimaryButton(
             label: 'Save my size',
-            backgroundColor: AppConstants.secondary,
+            backgroundColor: AppConstants.chrome,
             isLoading: _isSaving,
             onPressed: _isSaving ? null : _saveManual,
           ),

@@ -384,15 +384,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
               automaticallyImplyLeading: false,
               actions: [
                 IconButton(
-                  onPressed: auth.userRole == AppConstants.roleSeller
-                      ? null
-                      : () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const SettingsScreen(),
-                            ),
-                          );
-                        },
+                  // Live for every role: for a seller this is the only way to
+                  // pick Light / Dark, since the profile screen itself has no
+                  // appearance row. Settings hides the customer-only rows.
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const SettingsScreen(),
+                      ),
+                    );
+                  },
                   tooltip: 'Settings',
                   icon: Icon(
                     Icons.settings_outlined,

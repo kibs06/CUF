@@ -2078,7 +2078,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                         'Buy Now',
                         style: AppConstants.bodyStyle(
                           fontWeight: FontWeight.bold,
-                          color: AppConstants.surfaceLight,
+                          // Ink on the clay fill, which is pinned.
+                          color: AppConstants.inkInverse,
                         ),
                       ),
                     ),

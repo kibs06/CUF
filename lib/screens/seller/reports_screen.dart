@@ -78,7 +78,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
     return Scaffold(
       backgroundColor: AppConstants.sellerSurface,
       appBar: AppBar(
-        backgroundColor: AppConstants.secondary,
+        backgroundColor: AppConstants.chrome,
         elevation: 0,
         title: Text(
           'Reports',

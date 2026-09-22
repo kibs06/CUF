@@ -746,7 +746,7 @@ class _ChatViewState extends State<ChatView> with SingleTickerProviderStateMixin
     return Scaffold(
       backgroundColor: AppConstants.surfaceLight,
       appBar: AppBar(
-        backgroundColor: AppConstants.secondary,
+        backgroundColor: AppConstants.chrome,
         elevation: 0,
         iconTheme: const IconThemeData(
           color: Color(0xFFF5EDE4), // Cream/off-white for visibility

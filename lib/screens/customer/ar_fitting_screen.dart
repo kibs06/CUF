@@ -129,7 +129,7 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProv
             children: [
               Text(
                 'Stock Level: ${_activeProduct['name']}',
-                style: AppConstants.headlineStyle(fontSize: 18, color: AppConstants.surfaceLight),
+                style: AppConstants.headlineStyle(fontSize: 18, color: AppConstants.inkInverse),
               ),
               const SizedBox(height: 16),
               const Divider(color: Colors.white24),
@@ -147,7 +147,7 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProv
                         style: AppConstants.monoStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
-                          color: AppConstants.surfaceLight,
+                          color: AppConstants.inkInverse,
                         ),
                       ),
                       const SizedBox(height: 6),
@@ -278,7 +278,7 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProv
                         child: CircleAvatar(
                           radius: 18,
                           backgroundColor: Colors.white24,
-                          child: Icon(Icons.close, color: AppConstants.surfaceLight, size: 18),
+                          child: Icon(Icons.close, color: AppConstants.inkInverse, size: 18),
                         ),
                       ),
                       const SizedBox(width: 16),
@@ -291,7 +291,7 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProv
                               style: AppConstants.bodyStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
-                                color: AppConstants.surfaceLight,
+                                color: AppConstants.inkInverse,
                               ),
                             ),
                             const SizedBox(height: 2),
@@ -537,7 +537,7 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProv
                     children: [
                       Text(
                         'Virtual Fit Guide',
-                        style: AppConstants.headlineStyle(fontSize: 24, color: AppConstants.surfaceLight),
+                        style: AppConstants.headlineStyle(fontSize: 24, color: AppConstants.inkInverse),
                       ),
                       const SizedBox(height: 24),
                       _buildTutorialStep(
@@ -565,13 +565,13 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProv
                           });
                         },
                         style: OutlinedButton.styleFrom(
-                          side: BorderSide(color: AppConstants.surfaceLight),
+                          side: BorderSide(color: AppConstants.inkInverse),
                           padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                         ),
                         child: Text(
                           'Got It',
-                          style: AppConstants.bodyStyle(color: AppConstants.surfaceLight, fontWeight: FontWeight.bold),
+                          style: AppConstants.bodyStyle(color: AppConstants.inkInverse, fontWeight: FontWeight.bold),
                         ),
                       ),
                     ],
@@ -598,7 +598,7 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProv
             children: [
               Text(
                 title,
-                style: AppConstants.bodyStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppConstants.surfaceLight),
+                style: AppConstants.bodyStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppConstants.inkInverse),
               ),
               const SizedBox(height: 2),
               Text(

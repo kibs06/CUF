@@ -151,8 +151,10 @@ class _AppErrorToastOverlayState extends State<_AppErrorToastOverlay>
       padding: const EdgeInsets.fromLTRB(16, 12, 4, 12),
       decoration: BoxDecoration(
         // Deep espresso (same brown as the login hero) reads as clearly
-        // error-toned without a harsh stock-red bar.
-        color: AppConstants.secondary,
+        // error-toned without a harsh stock-red bar. It is chrome, not the
+        // page ink: the headline and detail below are pinned cream, so the
+        // fill has to stay dark in both modes.
+        color: AppConstants.chrome,
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
@@ -214,7 +216,8 @@ class _AppErrorToastOverlayState extends State<_AppErrorToastOverlay>
             icon: Icon(
               Icons.close_rounded,
               size: 18,
-              color: AppConstants.surfaceLight,
+              // On the espresso toast, which is chrome in both modes.
+              color: AppConstants.inkInverse,
             ),
           ),
         ],

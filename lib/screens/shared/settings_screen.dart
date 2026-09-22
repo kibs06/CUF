@@ -80,36 +80,47 @@ class SettingsScreen extends StatelessWidget {
                   );
                 },
               ),
-              // ONE entry for the foot size. The AR scan (Foot Size 2.0) and
-              // manual entry are swipable panels inside, so the two paths
-              // cannot drift apart in the menu. The subtitle names the current
-              // value and where it came from, so the customer can see what the
-              // app believes before changing it.
-              _settingsRow(
-                context: context,
-                icon: Icons.straighten_outlined,
-                title: 'Size Your Foot',
-                subtitle: footProfileSummary(auth.profile),
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const SizeYourFootScreen(),
-                    ),
-                  );
-                },
-              ),
-              _settingsRow(
-                context: context,
-                icon: Icons.location_on_outlined,
-                title: 'My Addresses',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const AddressBookScreen(),
-                    ),
-                  );
-                },
-              ),
+              // Customer-only: a seller has no foot profile and no delivery
+              // address book, so both rows would only drop them into empty
+              // customer screens. Gated on `roleCustomer` rather than "not a
+              // seller", so an admin does not inherit them either — the same
+              // convention the profile screen's rows use.
+              //
+              // This screen is reachable from the seller profile's settings
+              // icon (it is the only way a seller picks Light/Dark), which is
+              // why the gate lives here rather than on the entry point.
+              if (auth.userRole == AppConstants.roleCustomer) ...[
+                // ONE entry for the foot size. The AR scan (Foot Size 2.0) and
+                // manual entry are swipable panels inside, so the two paths
+                // cannot drift apart in the menu. The subtitle names the current
+                // value and where it came from, so the customer can see what the
+                // app believes before changing it.
+                _settingsRow(
+                  context: context,
+                  icon: Icons.straighten_outlined,
+                  title: 'Size Your Foot',
+                  subtitle: footProfileSummary(auth.profile),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const SizeYourFootScreen(),
+                      ),
+                    );
+                  },
+                ),
+                _settingsRow(
+                  context: context,
+                  icon: Icons.location_on_outlined,
+                  title: 'My Addresses',
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const AddressBookScreen(),
+                      ),
+                    );
+                  },
+                ),
+              ],
               _settingsRow(
                 context: context,
                 icon: Icons.swap_horiz,

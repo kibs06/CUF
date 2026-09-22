@@ -163,7 +163,7 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
     return Scaffold(
       backgroundColor: AppConstants.sellerSurface,
       appBar: AppBar(
-        backgroundColor: AppConstants.secondary,
+        backgroundColor: AppConstants.chrome,
         elevation: 0,
         title: Text(
           'Store Profile',

@@ -58,7 +58,8 @@ class OrderConfirmationView extends StatelessWidget {
       child: Icon(
         Icons.check,
         size: 48,
-        color: AppConstants.surfaceLight,
+        // Ink on the success circle — the fill is pinned, so the mark is too.
+        color: AppConstants.inkInverse,
       ),
     );
 

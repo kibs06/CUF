@@ -306,11 +306,11 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
             OutlinedButton(
               onPressed: () => Navigator.of(context).pop(),
               style: OutlinedButton.styleFrom(
-                side: BorderSide(color: AppConstants.surfaceLight),
+                side: BorderSide(color: AppConstants.inkInverse),
               ),
               child: Text(
                 'Go Back',
-                style: AppConstants.bodyStyle(color: AppConstants.surfaceLight),
+                style: AppConstants.bodyStyle(color: AppConstants.inkInverse),
               ),
             ),
           ],
@@ -430,7 +430,7 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
               ),
               child: Icon(
                 Icons.close,
-                color: AppConstants.surfaceLight,
+                color: AppConstants.inkInverse,
                 size: 20,
               ),
             ),
@@ -457,7 +457,7 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
                   style: AppConstants.bodyStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
-                    color: AppConstants.surfaceLight,
+                    color: AppConstants.inkInverse,
                   ),
                 ),
               ],

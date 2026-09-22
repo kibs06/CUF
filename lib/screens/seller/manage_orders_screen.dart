@@ -751,7 +751,7 @@ class _ManageOrdersScreenState extends State<ManageOrdersScreen>
       appBar: widget.hideAppBar
           ? null
           : AppBar(
-              backgroundColor: AppConstants.secondary,
+              backgroundColor: AppConstants.chrome,
               elevation: 0,
               automaticallyImplyLeading: false,
               title: Text(

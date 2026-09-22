@@ -121,7 +121,9 @@ class SignupScaffold extends StatelessWidget {
                                     fontSize: 11,
                                     fontWeight: FontWeight.w600,
                                     letterSpacing: 1.6,
-                                    color: AppConstants.surfaceLight,
+                                    // `lightContent` means a dark backdrop in
+                                    // both modes: pinned light ink.
+                                    color: AppConstants.inkInverse,
                                   )
                                 : AppConstants.bodyStyle(
                                     fontSize: 12,

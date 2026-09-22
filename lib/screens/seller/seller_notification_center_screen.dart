@@ -100,7 +100,7 @@ class _SellerNotificationCenterScreenState
   PreferredSizeWidget _buildNormalAppBar(
       SellerNotificationProvider provider) {
     return AppBar(
-      backgroundColor: AppConstants.secondary,
+      backgroundColor: AppConstants.chrome,
       elevation: 0,
       title: Text(
         'Notifications',
@@ -137,7 +137,7 @@ class _SellerNotificationCenterScreenState
             .every((n) => provider.selectedIds.contains(n.id));
 
     return AppBar(
-      backgroundColor: AppConstants.secondary,
+      backgroundColor: AppConstants.chrome,
       elevation: 0,
       leading: IconButton(
         icon: const Icon(Icons.close, color: Colors.white),
@@ -483,7 +483,9 @@ class _NotificationSlidable extends StatelessWidget {
               HapticFeedback.selectionClick();
               onView();
             },
-            backgroundColor: AppConstants.secondary,
+            // Chrome, so the pinned white 'View' label keeps its contrast in
+            // dark mode (the fill used to be the page ink, `secondary`).
+            backgroundColor: AppConstants.chrome,
             foregroundColor: Colors.white,
             icon: Icons.open_in_new,
             label: 'View',

@@ -52,7 +52,8 @@ class DevModeBadge extends StatelessWidget {
                   fontSize: 10,
                   fontWeight: FontWeight.bold,
                   letterSpacing: 1,
-                  color: AppConstants.surfaceLight,
+                  // Ink on the clay pill, which keeps its hex in both modes.
+                  color: AppConstants.inkInverse,
                 ),
               ),
             ),

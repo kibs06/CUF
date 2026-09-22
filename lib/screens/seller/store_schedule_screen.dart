@@ -178,7 +178,7 @@ class _StoreScheduleScreenState extends State<StoreScheduleScreen> {
     return Scaffold(
       backgroundColor: AppConstants.sellerSurface,
       appBar: AppBar(
-        backgroundColor: AppConstants.secondary,
+        backgroundColor: AppConstants.chrome,
         elevation: 0,
         title: Text(
           'Store Hours',

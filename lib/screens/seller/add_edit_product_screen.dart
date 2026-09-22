@@ -642,7 +642,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                                 style: AppConstants.monoStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.bold,
-                                  color: AppConstants.surfaceLight,
+                                  color: AppConstants.inkInverse,
                                 ),
                               ),
                             ),
@@ -2701,7 +2701,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                                   style: AppConstants.monoStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.bold,
-                                    color: AppConstants.surfaceLight,
+                                    color: AppConstants.inkInverse,
                                   ),
                                 ),
                               ),

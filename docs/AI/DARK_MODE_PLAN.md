@@ -1,7 +1,7 @@
 # Dark Mode Plan — Brightness-Aware Tokens, System/Light/Dark, Whole App
 
 **Date:** September 17, 2026
-**Status:** **Phases 1–2 and the Settings control are IMPLEMENTED** (September 17, 2026 — see §9 for what shipped and the deviations from this plan). Phases 0, 3 and 5 remain open.
+**Status:** **Phases 1–2 and the Settings control are IMPLEMENTED** (September 17, 2026 — see §9 for what shipped and the deviations from this plan). A chrome-ink pass and a page-token-ink pass landed September 22, 2026 (§11). Phase 0 is open, Phase 3 is partly done, Phase 5 is partly done.
 **Scope:** A real dark theme for every role (customer, seller, POS, admin, auth), selected from Settings as System / Light / Dark.
 **Supersedes:** the counts in `docs/AI/DARK_MODE_AUDIT.md` (measured Sept 15, before the neutral sweep landed). Its **analysis** still stands; its **numbers and hexes** are stale — see §2.
 **Related:** `docs/AI/NEUTRAL_THEME_PLAN.md` (executed — the white/gray ladder now live) · `docs/AI/CREAM_THEME_SYSTEM.md` (the rules it replaced) · `lib/constants/app_constants.dart`, `lib/constants/seller_theme_constants.dart` · `lib/main.dart` · `test/utils/theme_surfaces_test.dart`
@@ -151,9 +151,9 @@ Every role must clear **AA 4.5:1** for body text and **3:1** for large text/icon
 | **0** — real bugs, half a day | ⬜ open | `SystemUiOverlayStyle`/`AnnotatedRegion` for the always-dark screens; Android `values-night` launch theme + dark `launch_background` (today both values folders point at white, so *light* users flash white too) | AR/scanner status-bar icons are legible; no white launch flash on a dark-mode device |
 | **1** — palette as roles | ✅ done | `AppPalette` light + dark role sets; split `surfaceLight`'s two meanings via `inkInverse`; status pairs; chart roles; contrast check each pair | Light mode byte-identical; every role documented with a contrast ratio |
 | **2** — plumbing | ✅ done | `AppBrightness`, token getters, helper defaults, `ThemeService` + `ThemeProvider` in `MultiProvider`, `darkTheme` + `themeMode`, remove both hardcoded `Brightness.light`s | Toggling repaints the whole app; choice survives a restart; `system` follows a live OS flip |
-| **3** — the sweep | ⬜ open | `hairline`/`hairlineSoft` splits (358), `muted` role for the worst of the 957 fades, shadow collapse, dark status pills, chart re-key, pinned-screen audit | Every screen checked in both modes at device size; no unreadable text or invisible divider |
+| **3** — the sweep | ◐ partial (chrome + notifications feed done, §11) | `hairline`/`hairlineSoft` splits (358), `muted` role for the worst of the 957 fades, shadow collapse, dark status pills, chart re-key, pinned-screen audit | Every screen checked in both modes at device size; no unreadable text or invisible divider |
 | **4** — Settings | ✅ done | "Appearance" section, System/Light/Dark, subtitle showing resolved state | Reachable for all roles; applies live; persisted |
-| **5** — guards | ◐ partial | Dual-brightness `theme_surfaces_test`, `test/flutter_test_config.dart` reset, theme tests (§7), optional dark goldens for the main shells | The guard fails if a brightness-blind literal is reintroduced |
+| **5** — guards | ◐ partial (an ink-token-fill guard landed, §11) | Dual-brightness `theme_surfaces_test`, `test/flutter_test_config.dart` reset, theme tests (§7), optional dark goldens for the main shells | The guard fails if a brightness-blind literal is reintroduced |
 
 ---
 
@@ -217,3 +217,42 @@ The 957 alpha-encoded "muted" fades and the 358 hairline fades resolve acceptabl
 ## 10. Definition of done
 
 `themeMode` flips the whole app from Settings; light stays pixel-identical; no screen contains a brightness-blind literal fill, hairline or ink; text, muted, hairline, tint, status and chart roles all resolve per brightness; the always-dark screens stay dark in both modes; the launch screen and status bar match in both; and the guard plus golden set fail if any of that regresses.
+
+---
+
+## 11. The chrome pass (September 22, 2026)
+
+**Reported:** "this didn't pass dark mode — the text are not visible" (customer → Notifications).
+
+**Root cause.** `AppConstants.secondary` is the *page ink* (`#111111` light, `#F5F5F5` dark), but **37 sites used it as a fill** for dark chrome whose ink is pinned light — `AppBar(backgroundColor: AppConstants.secondary)` on the seller shell and every seller/shared detail screen, both notification swipe actions, the search submit button, the auth CTA, the error toast, the order-ID SnackBar. On dark those fills resolved to near-white with white or cream labels on them, so the text was not low-contrast, it was *gone*. The notification feed had the same shape in a second notation: its read cards were `Colors.white` under page ink, and its unread wash was a 4% clay fade over a card that is near-black on dark.
+
+**What shipped**
+
+| Change | Where |
+|---|---|
+| `AppPalette.chrome` — the dark bar/control fill. Light `#111111` (byte-identical to the espresso it replaces), dark `#262626`: dark enough for the pinned white ink (≈15:1) yet still a band above the `#111111` page (1.25:1) | `app_palette.dart`, `AppConstants.chrome` |
+| `AppPalette.unreadTint` (clay 4% light / 34% dark — the wash lands on the page, so the dark value has to be strong enough to separate an unread row from the `#1C1C1C` a read one paints) and `AppConstants.surfaceRaised` (the raised card under its customer-side name) | same |
+| 35 fill sites moved onto `chrome`; 1 SnackBar that pinned white content text moved with them | the sweep |
+| Notification cards: `Colors.white` → `surfaceRaised`, `primary.withValues(alpha: 0.04)` → `unreadTint`, swipe `View`/`Chat` → `chrome` | `notifications_screen.dart`, `seller_notification_center_screen.dart` |
+| New guard: no opaque `AppConstants.secondary` fill in a `Container` / `BoxDecoration` / `SoleCard` / `AppBar` / `SlidableAction` / filled button. Exceptions opt out in place with a `theme-guard:` comment (the RECOMMENDED badge, whose label flips with it, and the timeline's active-dot core, which has no ink on it) | `test/utils/theme_surfaces_test.dart` |
+| `dark_mode_test`: chrome keeps its tone in both modes, white ink clears AA on it, the dark unread wash is distinguishable (≥1.2:1) from the card it sits on and light's stays the whisper it was | `test/utils/dark_mode_test.dart` |
+
+**Second report, same session:** "the login where the links are not seen". `AppConstants.surfaceLight` is the *page* tone, and the pinned-dark screens were using it as **ink** — white on light, `#111111` on dark. So on the auth hero (dark in both modes) "Apply to sell", "Sign in" and "Forgot password?" turned near-black, and the same notation sat on the camera overlays, the store hero, the clay CTAs and the success checkmarks.
+
+| Change | Where |
+|---|---|
+| 33 ink sites moved onto `inkInverse` — the pinned light role. It is the same white on light, so this is a light-mode no-op | `account_entry_screen` (the reported links, the CUFMAI wordmark, the Forgot-password link, the biometric Enable label), `dark_auth_text_field`'s floating label, `onboarding_screen`'s CTA, `dev_mode_badge`, `signup_scaffold`'s light-content eyebrow, the AR / foot-capture / foot-processing overlays and their outlined buttons, `store_hero_card`, the store header's foreground plus its stat icons, outline button and follow pill/chips, the two `Icons.check` marks, the toast's dismiss, the timeline's check |
+| New guard: no text/icon colour drawn in `AppConstants.surfaceLight` (ink calls only — `Icon`, `IconThemeData`, `TextStyle`, the three text helpers, `CircularProgressIndicator`). The one deliberate exception opts out in place: the RECOMMENDED pill flips its fill *and* its ink together | `test/utils/theme_surfaces_test.dart` |
+| `_enclosingCall` reports the last dot segment, so a qualified helper (`AppConstants.bodyStyle`) is matched by the name the call sets use | same |
+
+**Third report, same session:** "do we have light and dark mode on the seller side?" — the theme was already global (the seller module resolves the same `AppConstants` / `SellerTheme` tokens, which is why every §11 fix shows up there too), but a seller had **no way to choose it**: the seller profile's top-right settings icon was wired `onPressed: null`, and `SettingsScreen` carried customer-only rows, so it was never opened for that role. Phase 4's exit criterion — "reachable for all roles" — was therefore unmet.
+
+| Change | Where |
+|---|---|
+| The settings icon on the seller profile is live and opens Settings. Path: seller → Profile → top-right settings → **Appearance → Theme** (System / Light / Dark), the same three-way sheet the customer side uses | `seller_shell.dart` (the shell's own app bar), `profile_screen.dart` (its own app-bar branch, kept in step) |
+| `SettingsScreen` gates its customer-only rows (`Size Your Foot`, `My Addresses`) on `roleCustomer`, so the seller — and an admin — get Account & Security, Appearance, Legal and Support without rows that lead into empty customer screens | `settings_screen.dart` |
+| Tests: a seller sees Appearance and *not* the customer rows; a customer still gets both | `test/widgets/appearance_setting_test.dart` |
+
+**Verified.** `flutter analyze` clean; **1,596 tests pass**, including the full suite unchanged. Light mode is a no-op at every swept site: `chrome`'s light value is exactly the light `secondary`, `unreadTint`'s is clay at 4% (the alpha the rows already painted) and `inkInverse` is white.
+
+**Still open in this phase.** The 957 alpha-encoded muted fades and the 358 hairline fades; status pills keep their light pastel fills; the 16 fl_chart colour sites are still literal; the seller notification rows still use a 4% blue fade for unread (they carry a bold title as a second cue, which is why they were left); charts and the always-dark AR/camera screens still have no `SystemUiOverlayStyle`. **The next class is `surfaceLight` used as a *fill or border* on a pinned-dark surface** — the hero pills, outlines and sheets that intend plain white in both modes — which both guards are blind to by design, because on a normal screen that token is a correct page fill. It needs a screen pass over the pinned-dark heroes rather than a literal ban.

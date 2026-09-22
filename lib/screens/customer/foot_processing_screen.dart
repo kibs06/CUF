@@ -210,7 +210,7 @@ class _FootProcessingScreenState extends State<FootProcessingScreen>
                     style: AppConstants.bodyStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      color: AppConstants.surfaceLight,
+                      color: AppConstants.inkInverse,
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -269,11 +269,11 @@ class _FootProcessingScreenState extends State<FootProcessingScreen>
                           OutlinedButton(
                             onPressed: () => Navigator.of(context).pop(),
                             style: OutlinedButton.styleFrom(
-                              side: BorderSide(color: AppConstants.surfaceLight),
+                              side: BorderSide(color: AppConstants.inkInverse),
                             ),
                             child: Text(
                               'Try Again',
-                              style: AppConstants.bodyStyle(color: AppConstants.surfaceLight),
+                              style: AppConstants.bodyStyle(color: AppConstants.inkInverse),
                             ),
                           ),
                         ],

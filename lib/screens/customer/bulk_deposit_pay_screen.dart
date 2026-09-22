@@ -243,7 +243,7 @@ class _BulkDepositPayScreenState extends State<BulkDepositPayScreen> {
               child: Icon(
                 Icons.check,
                 size: 48,
-                color: AppConstants.surfaceLight,
+                color: AppConstants.inkInverse,
               ),
             ),
             const SizedBox(height: 28),

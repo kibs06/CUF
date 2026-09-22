@@ -4,6 +4,7 @@ import 'package:mocktail/mocktail.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:app/constants/app_constants.dart';
 import 'package:app/providers/auth_provider.dart';
 import 'package:app/providers/theme_provider.dart';
 import 'package:app/providers/update_provider.dart';
@@ -28,16 +29,20 @@ void main() {
   Future<ThemeProvider> pumpSettings(
     WidgetTester tester, {
     ThemeMode initial = ThemeMode.system,
+    String role = AppConstants.roleCustomer,
   }) async {
     final update = _MockUpdateProvider();
     when(() => update.installedVersion).thenReturn(null);
     when(() => update.hasUnviewedUpdate).thenReturn(false);
 
+    final auth = _MockAuthProvider();
+    when(() => auth.userRole).thenReturn(role);
+
     final provider = ThemeProvider(initialMode: initial);
     await tester.pumpWidget(
       MultiProvider(
         providers: [
-          ChangeNotifierProvider<AuthProvider>.value(value: _MockAuthProvider()),
+          ChangeNotifierProvider<AuthProvider>.value(value: auth),
           ChangeNotifierProvider<UpdateProvider>.value(value: update),
           ChangeNotifierProvider<ThemeProvider>.value(value: provider),
         ],
@@ -55,6 +60,27 @@ void main() {
     expect(find.text('Theme'), findsOneWidget);
     // Explicit, not a bare "System": the test platform brightness is light.
     expect(find.text('System · Light (device)'), findsOneWidget);
+  });
+
+  testWidgets('a seller reaches Appearance, without the customer rows',
+      (tester) async {
+    // The seller profile's settings icon opens this screen, which makes it the
+    // only place a seller can pick Light / Dark. The customer-only rows must
+    // not come with it — a seller has no foot profile and no address book.
+    await pumpSettings(tester, role: AppConstants.roleSeller);
+
+    expect(find.text('Appearance'), findsOneWidget);
+    expect(find.text('Theme'), findsOneWidget);
+    expect(find.text('Account & Security'), findsOneWidget);
+    expect(find.text('Size Your Foot'), findsNothing);
+    expect(find.text('My Addresses'), findsNothing);
+  });
+
+  testWidgets('a customer still gets both of those rows', (tester) async {
+    await pumpSettings(tester);
+
+    expect(find.text('Size Your Foot'), findsOneWidget);
+    expect(find.text('My Addresses'), findsOneWidget);
   });
 
   testWidgets('the row reports a pinned mode without the device suffix',

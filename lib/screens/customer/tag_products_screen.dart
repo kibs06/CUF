@@ -77,7 +77,7 @@ class _TagProductsScreenState extends State<TagProductsScreen> {
     return Scaffold(
       backgroundColor: AppConstants.surfaceLight,
       appBar: AppBar(
-        backgroundColor: AppConstants.secondary,
+        backgroundColor: AppConstants.chrome,
         elevation: 0,
         title: Text(
           _tagLabel(widget.tagId),

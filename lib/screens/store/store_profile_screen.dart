@@ -212,14 +212,15 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
               expandedHeight: 220,
               pinned: true,
               backgroundColor: store.color,
-              foregroundColor: AppConstants.surfaceLight,
+              foregroundColor: AppConstants.inkInverse,
               actions: const [CartIconButton()],
               flexibleSpace: FlexibleSpaceBar(
                 title: Text(
                   store.name,
                   style: AppConstants.headlineStyle(
                     fontSize: 15,
-                    color: AppConstants.surfaceLight,
+                    // On the store's own hero: pinned light in both modes.
+                    color: AppConstants.inkInverse,
                   ),
                 ),
                 background: Stack(
@@ -676,8 +677,10 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                               fontWeight: _saleOnly
                                   ? FontWeight.bold
                                   : FontWeight.normal,
+                              // On the selected chip the fill is the pinned clay,
+                              // so the label is pinned light with it.
                               color: _saleOnly
-                                  ? AppConstants.surfaceLight
+                                  ? AppConstants.inkInverse
                                   : AppConstants.secondary,
                             ),
                           ),
@@ -712,7 +715,7 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                                     ? FontWeight.bold
                                     : FontWeight.normal,
                                 color: isSelected
-                                    ? AppConstants.surfaceLight
+                                    ? AppConstants.inkInverse
                                     : AppConstants.secondary,
                               ),
                             ),
@@ -828,7 +831,7 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                   Icon(
                     Icons.access_time,
                     size: 14,
-                    color: AppConstants.surfaceLight,
+                    color: AppConstants.inkInverse,
                   ),
                   const SizedBox(width: 2),
                   Flexible(
@@ -855,7 +858,7 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                 Icon(
                   Icons.location_on,
                   size: 14,
-                  color: AppConstants.surfaceLight,
+                  color: AppConstants.inkInverse,
                 ),
                 const SizedBox(width: 2),
                 Flexible(
@@ -888,11 +891,11 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
             decoration: BoxDecoration(
               color: Colors.transparent,
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: AppConstants.surfaceLight, width: 1.5),
+              border: Border.all(color: AppConstants.inkInverse, width: 1.5),
             ),
             child: Icon(
               Icons.chat_bubble_outline,
-              color: AppConstants.surfaceLight,
+              color: AppConstants.inkInverse,
               size: 16,
             ),
           ),
@@ -1455,9 +1458,11 @@ class _FollowButtonState extends State<_FollowButton>
           curve: Curves.easeOut,
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
-            color: isFollowing ? AppConstants.surfaceLight : Colors.transparent,
+            // The store hero is dark in both modes, so this pill keeps its
+            // light fill and light outline rather than following the page.
+            color: isFollowing ? AppConstants.inkInverse : Colors.transparent,
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: AppConstants.surfaceLight, width: 1.5),
+            border: Border.all(color: AppConstants.inkInverse, width: 1.5),
           ),
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 180),
@@ -1480,7 +1485,7 @@ class _FollowButtonState extends State<_FollowButton>
                     fontWeight: FontWeight.bold,
                     color: isFollowing
                         ? widget.brandColor
-                        : AppConstants.surfaceLight,
+                        : AppConstants.inkInverse,
                   ),
                 ),
               ],

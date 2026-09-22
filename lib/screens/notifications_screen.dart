@@ -577,7 +577,10 @@ class _NotificationSlidable extends StatelessWidget {
               HapticFeedback.selectionClick();
               onView();
             },
-            backgroundColor: AppConstants.secondary,
+            // Chrome: the label and icon are pinned white, so the fill has to
+            // stay dark in both modes (it used to be `secondary`, which is the
+            // page ink and turns near-white on dark).
+            backgroundColor: AppConstants.chrome,
             foregroundColor: Colors.white,
             icon: notification.isMessageNotification
                 ? Icons.chat_bubble_outline
@@ -617,9 +620,13 @@ class _NotificationCardContent extends StatelessWidget {
       child: GestureDetector(
         onTap: onTap,
         child: SoleCard(
+          // Raised, not white: the title and preview are page ink, which is
+          // near-white on dark, so a literal white card left the card with no
+          // readable text. The unread wash is a role for the same reason — a
+          // 4% clay fade over a dark card is invisible.
           color: notification.isRead
-              ? Colors.white
-              : AppConstants.primary.withValues(alpha: 0.04),
+              ? AppConstants.surfaceRaised
+              : AppConstants.unreadTint,
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,

@@ -40,7 +40,7 @@ class PosReceiptDetailScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppConstants.sellerSurface,
       appBar: AppBar(
-        backgroundColor: AppConstants.secondary,
+        backgroundColor: AppConstants.chrome,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
@@ -66,7 +66,10 @@ class PosReceiptDetailScreen extends StatelessWidget {
                     'Order ID copied',
                     style: AppConstants.bodyStyle(color: Colors.white, fontSize: 13),
                   ),
-                  backgroundColor: AppConstants.secondary,
+                  // Chrome, not the page ink: this label is pinned white, and
+                  // a fill that follows the ink token would take it to
+                  // near-white on dark.
+                  backgroundColor: AppConstants.chrome,
                   behavior: SnackBarBehavior.floating,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),

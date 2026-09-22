@@ -38,13 +38,18 @@ class SoleTimeline extends StatelessWidget {
 
         if (isPast) {
           dotColor = AppConstants.success;
-          dotChild = Icon(Icons.check, size: 12, color: AppConstants.surfaceLight);
+          dotChild = Icon(Icons.check,
+              size: 12, color: AppConstants.inkInverse);
         } else if (isActive) {
           dotColor = AppConstants.accent;
+          // The active dot is the *centre* of the accent ring: no ink is drawn
+          // on it, so flipping it with the theme is what keeps it visible — a
+          // dark core on light, a bright core on dark.
           dotChild = Container(
             width: 8,
             height: 8,
             decoration: BoxDecoration(
+              // theme-guard: flips with the theme on purpose (see above).
               color: AppConstants.secondary,
               shape: BoxShape.circle,
             ),

@@ -353,7 +353,8 @@ class _AccountEntryScreenState extends State<AccountEntryScreen>
                   style: AppConstants.headlineStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    color: AppConstants.surfaceLight,
+                    // Ink on the clay fill: pinned light in both modes.
+                    color: AppConstants.inkInverse,
                   ),
                 ),
               ),
@@ -497,7 +498,9 @@ class _AccountEntryScreenState extends State<AccountEntryScreen>
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
                 letterSpacing: 1.6,
-                color: AppConstants.surfaceLight,
+                // This screen is dark in both modes (video hero), so its ink is
+                // the pinned light role, never the page tone.
+                color: AppConstants.inkInverse,
               ),
             ),
             const Spacer(),
@@ -686,7 +689,7 @@ class _AccountEntryScreenState extends State<AccountEntryScreen>
                   style: AppConstants.bodyStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.bold,
-                    color: AppConstants.surfaceLight,
+                    color: AppConstants.inkInverse,
                   ),
                 ),
               ),
@@ -982,13 +985,15 @@ class _CenteredLinkRowState extends State<_CenteredLinkRow> {
                       style: AppConstants.bodyStyle(
                         fontSize: widget.fontSize,
                         fontWeight: FontWeight.bold,
-                        color: AppConstants.surfaceLight,
+                        // Pinned light: the hero behind this row is dark in both
+                        // modes, and the prefix beside it is pinned white too.
+                        color: AppConstants.inkInverse,
                       ).copyWith(
                         decoration: widget.underlineLink
                             ? TextDecoration.underline
                             : TextDecoration.none,
                         decorationColor: widget.underlineLink
-                            ? AppConstants.surfaceLight.withValues(alpha: 0.8)
+                            ? AppConstants.inkInverse.withValues(alpha: 0.8)
                             : null,
                       ),
                     ),

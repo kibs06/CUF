@@ -262,7 +262,7 @@ class _GcashPayScreenState extends State<GcashPayScreen> {
               child: Icon(
                 Icons.check,
                 size: 48,
-                color: AppConstants.surfaceLight,
+                color: AppConstants.inkInverse,
               ),
             ),
             const SizedBox(height: 28),

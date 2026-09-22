@@ -175,7 +175,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         style: AppConstants.headlineStyle(
                           fontSize: 17,
                           fontWeight: FontWeight.bold,
-                          color: AppConstants.surfaceLight,
+                          // Ink on the clay CTA — pinned light, not the page tone.
+                          color: AppConstants.inkInverse,
                         ),
                       ),
                     ),

@@ -1257,7 +1257,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
       appBar: widget.hideAppBar
           ? null
           : AppBar(
-              backgroundColor: AppConstants.secondary,
+              backgroundColor: AppConstants.chrome,
               elevation: 0,
               automaticallyImplyLeading: false,
               title: _isSearching

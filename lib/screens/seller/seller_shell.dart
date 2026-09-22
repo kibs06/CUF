@@ -26,6 +26,7 @@ import 'seller_inbox_screen.dart';
 import 'seller_notification_center_screen.dart';
 import 'pos_history_screen.dart';
 import '../shared/profile_screen.dart';
+import '../shared/settings_screen.dart';
 
 /// Seller shell with 5-tab bottom navigation:
 /// Dashboard, POS, Products, Orders, More
@@ -218,7 +219,7 @@ class _SellerShellState extends State<SellerShell> {
     switch (_currentIndex) {
       case 0: // Dashboard
         return AppBar(
-          backgroundColor: AppConstants.secondary,
+          backgroundColor: AppConstants.chrome,
           elevation: 0,
           scrolledUnderElevation: 0,
           surfaceTintColor: Colors.transparent,
@@ -255,7 +256,7 @@ class _SellerShellState extends State<SellerShell> {
         );
       case 1: // POS
         return AppBar(
-          backgroundColor: AppConstants.secondary,
+          backgroundColor: AppConstants.chrome,
           elevation: 0,
           automaticallyImplyLeading: false,
           iconTheme: const IconThemeData(color: Colors.white),
@@ -283,7 +284,7 @@ class _SellerShellState extends State<SellerShell> {
         );
       case 2: // Products
         return AppBar(
-          backgroundColor: AppConstants.secondary,
+          backgroundColor: AppConstants.chrome,
           elevation: 0,
           automaticallyImplyLeading: false,
           title: Text(
@@ -297,7 +298,7 @@ class _SellerShellState extends State<SellerShell> {
         );
       case 3: // Orders
         return AppBar(
-          backgroundColor: AppConstants.secondary,
+          backgroundColor: AppConstants.chrome,
           elevation: 0,
           automaticallyImplyLeading: false,
           title: Text(
@@ -323,8 +324,17 @@ class _SellerShellState extends State<SellerShell> {
             ),
           ),
           actions: [
+            // Settings is the seller's only route to Appearance → Theme, so it
+            // has to be live: it used to be a disabled icon. The screen itself
+            // hides the customer-only rows for this role.
             IconButton(
-              onPressed: null,
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const SettingsScreen(),
+                  ),
+                );
+              },
               tooltip: 'Settings',
               icon: Icon(
                 Icons.settings_outlined,
@@ -335,7 +345,7 @@ class _SellerShellState extends State<SellerShell> {
         );
       default:
         return AppBar(
-          backgroundColor: AppConstants.secondary,
+          backgroundColor: AppConstants.chrome,
           elevation: 0,
           automaticallyImplyLeading: false,
         );

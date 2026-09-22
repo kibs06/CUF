@@ -31,6 +31,17 @@ double _luminance(Color color) {
       0.0722 * channel(color.b);
 }
 
+/// [foreground], at its own alpha, painted onto [background].
+Color _over(Color foreground, Color background) {
+  final a = foreground.a;
+  return Color.from(
+    alpha: 1,
+    red: foreground.r * a + background.r * (1 - a),
+    green: foreground.g * a + background.g * (1 - a),
+    blue: foreground.b * a + background.b * (1 - a),
+  );
+}
+
 /// WCAG contrast ratio between two opaque colours.
 double _contrast(Color a, Color b) {
   final la = _luminance(a);
@@ -52,6 +63,12 @@ void main() {
       expect(AppConstants.sellerCardBg, const Color(0xFFFFFFFF));
       expect(AppConstants.secondary, const Color(0xFF111111));
       expect(AppConstants.borderGray, const Color(0xFFE5E5E5));
+
+      // The dark chrome keeps its espresso tone — it is the fill the pinned
+      // white ink (app bars, swipe actions) sits on.
+      expect(AppConstants.chrome, const Color(0xFF111111));
+      expect(AppConstants.surfaceRaised, const Color(0xFFFFFFFF));
+      expect(AppConstants.unreadTint.a, closeTo(0.04, 0.005));
 
       expect(SellerTheme.creamBg, const Color(0xFFFFFFFF));
       expect(SellerTheme.card, const Color(0xFFFFFFFF));
@@ -87,6 +104,12 @@ void main() {
       expect(AppConstants.sellerCardBg, AppPalette.dark.raised);
       expect(AppConstants.secondary, AppPalette.dark.onPage);
       expect(AppConstants.borderGray, AppPalette.dark.hairline);
+      expect(AppConstants.surfaceRaised, AppPalette.dark.raised);
+      expect(AppConstants.unreadTint, AppPalette.dark.unreadTint);
+
+      // Chrome moves off the page tone so the bar still reads as a band, but
+      // it must never follow the *ink* token up to near-white.
+      expect(AppConstants.chrome, AppPalette.dark.chrome);
 
       expect(SellerTheme.creamBg, AppPalette.dark.page);
       expect(SellerTheme.card, AppPalette.dark.raised);
@@ -212,6 +235,13 @@ void main() {
             greaterThanOrEqualTo(4.5));
       });
 
+      test('$name: the pinned white ink clears AA on the chrome', () {
+        // App bars, swipe actions and dark buttons keep their tone in both
+        // modes, so their white labels must stay readable on it.
+        expect(_contrast(palette.inkInverse, palette.chrome),
+            greaterThanOrEqualTo(4.5));
+      });
+
       test('$name: the card edge is visible against what is behind it', () {
         // Not a text threshold: a hairline only has to be *distinguishable*,
         // and on dark it is the card's only edge.
@@ -241,6 +271,28 @@ void main() {
       });
     }
 
+    test('an unread row looks different from a read one', () {
+      // A row is painted on the *page*: an unread one is the wash over it, a
+      // read one is the raised card.
+      final darkWash =
+          _over(AppPalette.dark.unreadTint, AppPalette.dark.page);
+      expect(_contrast(darkWash, AppPalette.dark.raised),
+          greaterThanOrEqualTo(1.2),
+          reason: 'on dark, unread has to be distinguishable from read');
+      expect(_contrast(AppPalette.dark.onPage, darkWash),
+          greaterThanOrEqualTo(4.5),
+          reason: 'and the row still has to be readable');
+
+      // Light stays the wash those rows shipped with: a 4% clay whisper on the
+      // white page (light mode must not move), and its ink still clears AA.
+      final lightWash =
+          _over(AppPalette.light.unreadTint, AppPalette.light.page);
+      expect(_contrast(lightWash, AppPalette.light.raised),
+          lessThan(_contrast(darkWash, AppPalette.dark.raised)));
+      expect(_contrast(AppPalette.light.onPage, lightWash),
+          greaterThanOrEqualTo(4.5));
+    });
+
     test('dark is actually dark and light is actually light', () {
       expect(_luminance(AppPalette.dark.page), lessThan(0.05));
       expect(_luminance(AppPalette.light.page), greaterThan(0.8));
@@ -248,6 +300,14 @@ void main() {
           greaterThan(_luminance(AppPalette.dark.page)),
           reason: 'on dark, raised must be LIGHTER than the page or cards '
               'flatten once shadows are gone');
+
+      // The chrome is the one dark token the page ink must not reach: bars
+      // painted with it carry white ink, so it stays dark AND stays visible
+      // as a band rather than melting into the #111111 page.
+      expect(_luminance(AppPalette.dark.chrome), lessThan(0.05));
+      expect(_contrast(AppPalette.dark.chrome, AppPalette.dark.page),
+          greaterThanOrEqualTo(1.2));
+      expect(AppPalette.dark.chrome, isNot(AppPalette.dark.onPage));
     });
   });
 

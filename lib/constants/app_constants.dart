@@ -104,9 +104,38 @@ class AppConstants {
   // they have to go darker instead — lighter is no longer available.
   static Color get surfaceSubtle => AppPalette.of(AppBrightness.current).subtle;
 
+  // Surface Raised – the card / popup tone.
+  //
+  // The customer-side name for the role [sellerCardBg] serves on the seller
+  // side: a card that has to read as *lifted* off the page. On dark the raised
+  // tone is LIGHTER than the page, because depth there comes from the tone
+  // plus a hairline, not from a shadow ([AppPalette.shadow] is transparent on
+  // dark). This is what replaced the hand-written `Colors.white` card fills:
+  // white under near-white dark ink paints a bright slab with no text on it.
+  static Color get surfaceRaised => AppPalette.of(AppBrightness.current).raised;
+
+  // Unread tint – the wash behind an unread notification row.
+  //
+  // A role rather than `primary.withValues(alpha: 0.04)`, because a fade tuned
+  // for a white page lands on a dark card as nothing at all: the role carries
+  // the brightness instead of the call site.
+  static Color get unreadTint => AppPalette.of(AppBrightness.current).unreadTint;
+
   // Grounded band – the bottom navigation bar's default and section bands.
   // Retargeted at [surfaceSubtle] so the two can never drift.
   static Color get creamDeep => AppPalette.of(AppBrightness.current).band;
+
+  // Chrome – the dark bar and control fill (app bars, swipe actions, dark
+  // buttons, the search submit button).
+  //
+  // Deliberately NOT [secondary] any more: that token is the page *ink* and
+  // resolves to #F5F5F5 on dark, while the ink drawn on this chrome is pinned
+  // light (`Colors.white`, [inkInverse], the cream #F5EDE4). Using the ink
+  // token as the fill turned every one of those bars near-white with white
+  // text on it — the "text is not visible in dark mode" bug. Light is
+  // unchanged (#111111, exactly the value the ink token has on light); on dark
+  // it keeps its dark tone so the pinned light ink stays legible.
+  static Color get chrome => AppPalette.of(AppBrightness.current).chrome;
 
   // Surface Dark – Neutral Black (AR overlay, camera screens). PINNED: the
   // screens that use it are dark by design in BOTH brightnesses, so it must

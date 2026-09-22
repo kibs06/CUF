@@ -632,7 +632,7 @@ class _POSScreenState extends State<POSScreen>
       appBar: widget.hideAppBar
           ? null
           : AppBar(
-              backgroundColor: AppConstants.secondary,
+              backgroundColor: AppConstants.chrome,
               elevation: 0,
               automaticallyImplyLeading: widget.isStandalonePage,
               iconTheme: const IconThemeData(color: Colors.white),

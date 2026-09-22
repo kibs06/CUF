@@ -190,7 +190,7 @@ class _PosHistoryScreenState extends State<PosHistoryScreen> {
     return Scaffold(
       backgroundColor: AppConstants.sellerSurface,
       appBar: AppBar(
-        backgroundColor: AppConstants.secondary,
+        backgroundColor: AppConstants.chrome,
         elevation: 0,
         title: Text(
           'POS History',

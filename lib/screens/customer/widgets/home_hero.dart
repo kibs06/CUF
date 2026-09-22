@@ -478,7 +478,7 @@ class _HomeHeroState extends State<HomeHero> {
                     height: 26,
                     margin: const EdgeInsets.only(left: 8, right: 4),
                     decoration: BoxDecoration(
-                      color: AppConstants.secondary,
+                      color: AppConstants.chrome,
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(

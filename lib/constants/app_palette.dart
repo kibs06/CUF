@@ -28,6 +28,7 @@ class AppPalette {
     required this.raised,
     required this.subtle,
     required this.band,
+    required this.chrome,
     required this.hairline,
     required this.hairlineSoft,
     required this.hairlineOnRaised,
@@ -38,6 +39,7 @@ class AppPalette {
     required this.inkInverse,
     required this.primaryInk,
     required this.accentSoft,
+    required this.unreadTint,
     required this.scrim,
     required this.shadow,
   });
@@ -54,6 +56,20 @@ class AppPalette {
 
   /// Grounded band (the bottom navigation bar's default).
   final Color band;
+
+  /// The app's dark bar and control chrome — app bars, swipe actions, dark
+  /// buttons, the search submit button.
+  ///
+  /// It is a *fill*, and the ink on it is pinned light (`Colors.white`,
+  /// `inkInverse`, or the cream `#F5EDE4`), so it has to stay dark in both
+  /// brightnesses. It used to be written as `AppConstants.secondary` — the
+  /// page *ink* — which resolves to `#F5F5F5` on dark, so every one of those
+  /// bars came out near-white with white text on it. That was the "text is not
+  /// visible in dark mode" bug. Light is byte-identical to the espresso it
+  /// replaces; on dark the tone lifts to `#262626` so the bar still reads as a
+  /// band above the `#111111` page (1.25:1) while white ink clears AA on it
+  /// (≈15:1).
+  final Color chrome;
 
   /// Solid 1px border/divider.
   final Color hairline;
@@ -95,6 +111,17 @@ class AppPalette {
   /// A soft teal tint used behind highlighted content.
   final Color accentSoft;
 
+  /// The wash behind content that wants attention — an unread notification
+  /// row.
+  ///
+  /// Light is the brand-clay wash those rows already shipped with (clay at
+  /// 4%). On dark, a 4% wash over the page is a difference nobody can see, so
+  /// the dark value is the same clay at 34%: the wash lands on the `#111111`
+  /// page as a warm tone, which clears the "distinguishable" bar the hairlines
+  /// are held to (1.24:1 against the `#1C1C1C` a *read* card paints) without
+  /// becoming a bright block.
+  final Color unreadTint;
+
   /// Modal barrier / photographic overlay.
   final Color scrim;
 
@@ -108,6 +135,7 @@ class AppPalette {
     raised: Color(0xFFFFFFFF),
     subtle: Color(0xFFF5F5F5),
     band: Color(0xFFF5F5F5),
+    chrome: Color(0xFF111111),
     hairline: Color(0xFFE5E5E5),
     hairlineSoft: Color(0xFFEFEFEF),
     hairlineOnRaised: Color(0xFFE8E8E8),
@@ -118,6 +146,7 @@ class AppPalette {
     inkInverse: Color(0xFFFFFFFF),
     primaryInk: Color(0xFF8B5A2B),
     accentSoft: Color(0x1A4ECDC4),
+    unreadTint: Color(0x0A8B5A2B),
     scrim: Color(0x80000000),
     shadow: Color(0x148B5A2B),
   );
@@ -136,6 +165,7 @@ class AppPalette {
     raised: Color(0xFF1C1C1C),
     subtle: Color(0xFF1F1F1F),
     band: Color(0xFF171717),
+    chrome: Color(0xFF262626),
     hairline: Color(0xFF555555),
     hairlineSoft: Color(0x24FFFFFF),
     hairlineOnRaised: Color(0xFF3A3A3A),
@@ -146,6 +176,7 @@ class AppPalette {
     inkInverse: Color(0xFFFFFFFF),
     primaryInk: Color(0xFFC08A4E),
     accentSoft: Color(0x2E4ECDC4),
+    unreadTint: Color(0x578B5A2B),
     scrim: Color(0xB3000000),
     shadow: Color(0x00000000),
   );

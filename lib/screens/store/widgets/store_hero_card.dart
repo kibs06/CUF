@@ -201,7 +201,8 @@ class _StoreHeroCardState extends State<StoreHeroCard> {
                           style: AppConstants.headlineStyle(
                             fontSize: 26,
                             fontWeight: FontWeight.bold,
-                            color: AppConstants.surfaceLight,
+                            // On the hero photo: pinned light in both modes.
+                            color: AppConstants.inkInverse,
                           ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,

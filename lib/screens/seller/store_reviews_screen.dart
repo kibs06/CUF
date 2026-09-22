@@ -33,7 +33,7 @@ class _SellerReviewsScreenState extends State<SellerReviewsScreen> {
     return Scaffold(
       backgroundColor: AppConstants.sellerSurface,
       appBar: AppBar(
-        backgroundColor: AppConstants.secondary,
+        backgroundColor: AppConstants.chrome,
         elevation: 0,
         title: Text(
           'Customer Reviews',

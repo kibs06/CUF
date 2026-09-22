@@ -29,7 +29,7 @@ class _CustomOrdersScreenState extends State<CustomOrdersScreen> {
     return Scaffold(
       backgroundColor: AppConstants.sellerSurface,
       appBar: AppBar(
-        backgroundColor: AppConstants.secondary,
+        backgroundColor: AppConstants.chrome,
         elevation: 0,
         title: Text(
           'Custom Orders',

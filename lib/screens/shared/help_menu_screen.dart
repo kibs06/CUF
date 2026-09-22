@@ -21,7 +21,7 @@ class HelpMenuScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppConstants.surfaceLight,
       appBar: AppBar(
-        backgroundColor: AppConstants.secondary,
+        backgroundColor: AppConstants.chrome,
         elevation: 0,
         iconTheme: const IconThemeData(color: Color(0xFFF5EDE4), size: 24),
         title: Text(
