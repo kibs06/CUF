@@ -1,5 +1,22 @@
 [
   {
+    "latest_version": "1.0.30",
+    "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.30/app-release-1.0.30.apk",
+    "released_at": "2026-09-22",
+    "notes": [
+      "The app has its own icon now: the CUFMAI C with a loafer inside it",
+      "Fixed: in dark mode the seller's app bars, the POS screens and the notification swipe actions came out near-white, with white text on them",
+      "Fixed: sellers couldn't reach the appearance switch to choose a theme",
+      "Fixed: the Bulk Reservations queue opened onto \"Something went wrong\" instead of the list",
+      "The Bulk Reservations queue now speaks the Orders tab's language — the same tab bar, the same count badges, the same cards",
+      "The weekly and monthly revenue cards stack one column per channel, so a period's total is a height to read instead of two bands to compare by eye",
+      "The revenue ring is a solid object: hold it to pick it up, slide a finger to turn it, tap to send it round",
+      "The seller's bottom bar now steps aside while you scroll down a page, and is back the moment you scroll up",
+      "The dashboard's snapshot cards drop their captions — the numbers were already coloured to say what the words repeated",
+      "Fixed: a profile screen carried two Log Out buttons; the one in Settings is the one that stays"
+    ]
+  },
+  {
     "latest_version": "1.0.29",
     "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.29/app-release-1.0.29.apk",
     "released_at": "2026-09-22",
