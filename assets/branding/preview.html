@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Brand marks — CUFMAI / SoleVision</title>
+<style>
+  :root {
+    --espresso: #3A2415;
+    --clay: #8B5A2B;
+    --rust: #B5622E;
+    --teal: #4ECDC4;
+    --cream: #F5EDE4;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 40px;
+    background: #FFFFFF;
+    color: var(--espresso);
+    font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  h1 { font-size: 22px; letter-spacing: -0.01em; margin: 0 0 4px; }
+  p.lede { margin: 0 0 32px; color: #6B6B6B; font-size: 14px; }
+  .sheet { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+  .card { border: 1px solid #E6E6E6; border-radius: 16px; overflow: hidden; }
+  .card > header { padding: 14px 18px; border-bottom: 1px solid #E6E6E6; }
+  .card h2 { font-size: 14px; margin: 0 0 2px; }
+  .card .note { font-size: 12px; color: #6B6B6B; margin: 0; }
+  .card .file { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px; color: #9A9A9A; }
+  .stage { display: flex; }
+  .stage.light { background: #FFFFFF; }
+  .stage.dark { background: #111111; }
+  .stage div {
+    flex: 1;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 14px;
+    padding: 26px 18px;
+  }
+  .stage img { display: block; }
+  .s180 { width: 180px; height: 180px; }
+  .s128 { width: 128px; height: 128px; }
+  .s120 { width: 120px; height: 120px; }
+  .s64  { width: 64px;  height: 64px; }
+  .s48  { width: 48px;  height: 48px; }
+  .s32  { width: 32px;  height: 32px; }
+  .s24  { width: 24px;  height: 24px; }
+  /* Android adaptive icon: the two layers the launcher composites, shown under
+     the circle mask that crops the corners of the foreground. */
+  .adaptive {
+    position: relative; width: 120px; height: 120px;
+    overflow: hidden; border-radius: 50%;
+    flex: none;
+  }
+  .adaptive.squircle { width: 96px; height: 96px; border-radius: 30%; }
+  .adaptive img { position: absolute; inset: 0; width: 100%; height: 100%; }
+  /* flutter_launcher_icons writes android:inset="16%" on the foreground, so the
+     mark is drawn into the middle 68% of the layer. Mirrored here, or the
+     preview would flatter it. */
+  .adaptive img.fg { inset: 16%; width: 68%; height: 68%; }
+  .palette { margin-top: 36px; display: flex; flex-wrap: wrap; gap: 10px; }
+  .swatch { border-radius: 10px; padding: 10px 14px; font-size: 11px; font-family: ui-monospace, Menlo, monospace; }
+</style>
+</head>
+<body>
+
+<h1>Brand marks — CUFMAI / SoleVision</h1>
+<p class="lede">04 is the mark that ships. 01&ndash;03 are the earlier welt-stitch concepts, kept for reference. Everything is shown on the app's light page and dark page at real sizes, so small-size survival is visible rather than asserted.</p>
+
+<div class="sheet">
+
+  <section class="card">
+    <header>
+      <h2>04 · C &amp; Loafer — the shipped mark</h2>
+      <p class="note">The C stands for CUFMAI. Top row is the launcher icon itself, bottom row is the vector silhouette it was traced from.</p>
+      <p class="file">cufmai-c-mark-1024.png · sole-mark-04-c-loafer.svg</p>
+    </header>
+    <div class="stage light"><div>
+      <img class="s180" src="cufmai-c-mark-1024.png" alt="Launcher icon at 180px">
+      <img class="s120" src="cufmai-c-mark-1024.png" alt="Launcher icon at 120px">
+      <img class="s64" src="cufmai-c-mark-1024.png" alt="Launcher icon at 64px">
+      <img class="s48" src="cufmai-c-mark-1024.png" alt="Launcher icon at 48px">
+      <img class="s32" src="cufmai-c-mark-1024.png" alt="Launcher icon at 32px">
+      <img class="s24" src="cufmai-c-mark-1024.png" alt="Launcher icon at 24px">
+    </div></div>
+    <div class="stage light"><div>
+      <img class="s128" src="sole-mark-04-c-loafer.svg" alt="C mark on light, 128px">
+      <img class="s64" src="sole-mark-04-c-loafer.svg" alt="C mark on light, 64px">
+      <img class="s32" src="sole-mark-04-c-loafer.svg" alt="C mark on light, 32px">
+      <img class="s24" src="sole-mark-04-c-loafer.svg" alt="C mark on light, 24px">
+    </div></div>
+    <div class="stage dark"><div>
+      <img class="s128" src="sole-mark-04-c-loafer.svg" alt="C mark on dark, 128px">
+      <img class="s64" src="sole-mark-04-c-loafer.svg" alt="C mark on dark, 64px">
+      <img class="s32" src="sole-mark-04-c-loafer.svg" alt="C mark on dark, 32px">
+      <img class="s24" src="sole-mark-04-c-loafer.svg" alt="C mark on dark, 24px">
+    </div></div>
+    <div class="stage light"><div>
+      <div class="adaptive">
+        <img src="cufmai-c-mark-adaptive-background-1024.png" alt="Adaptive icon background layer">
+        <img class="fg" src="cufmai-c-mark-adaptive-foreground-1024.png" alt="Adaptive icon foreground layer">
+      </div>
+      <div class="adaptive squircle">
+        <img src="cufmai-c-mark-adaptive-background-1024.png" alt="Adaptive icon background layer, squircle">
+        <img class="fg" src="cufmai-c-mark-adaptive-foreground-1024.png" alt="Adaptive icon foreground layer, squircle">
+      </div>
+    </div></div>
+  </section>
+
+  <section class="card">
+    <header>
+      <h2>01 · Welt</h2>
+      <p class="note">Solid sole, inset stitch. Boldest of the three — the one that survives a launcher icon.</p>
+      <p class="file">sole-mark-01-welt.svg</p>
+    </header>
+    <div class="stage light"><div>
+      <img class="s128" src="sole-mark-01-welt.svg" alt="Welt mark, 128px">
+      <img class="s64" src="sole-mark-01-welt.svg" alt="Welt mark, 64px">
+      <img class="s32" src="sole-mark-01-welt.svg" alt="Welt mark, 32px">
+    </div></div>
+    <div class="stage dark"><div>
+      <img class="s128" src="sole-mark-01-welt.svg" alt="Welt mark on dark, 128px">
+      <img class="s64" src="sole-mark-01-welt.svg" alt="Welt mark on dark, 64px">
+      <img class="s32" src="sole-mark-01-welt.svg" alt="Welt mark on dark, 32px">
+    </div></div>
+  </section>
+
+  <section class="card">
+    <header>
+      <h2>02 · Running Stitch</h2>
+      <p class="note">No fill — just the stitch, plus one teal thread at the toe. Recolours to a single ink for app bars.</p>
+      <p class="file">sole-mark-02-running-stitch.svg</p>
+    </header>
+    <div class="stage light"><div>
+      <img class="s128" src="sole-mark-02-running-stitch.svg" alt="Running Stitch mark, 128px">
+      <img class="s64" src="sole-mark-02-running-stitch.svg" alt="Running Stitch mark, 64px">
+      <img class="s32" src="sole-mark-02-running-stitch.svg" alt="Running Stitch mark, 32px">
+    </div></div>
+    <div class="stage dark"><div>
+      <img class="s128" src="sole-mark-02-running-stitch.svg" alt="Running Stitch mark on dark, 128px">
+      <img class="s64" src="sole-mark-02-running-stitch.svg" alt="Running Stitch mark on dark, 64px">
+      <img class="s32" src="sole-mark-02-running-stitch.svg" alt="Running Stitch mark on dark, 32px">
+    </div></div>
+  </section>
+
+  <section class="card">
+    <header>
+      <h2>03 · Two-Tone Welt</h2>
+      <p class="note">Welt ring in rust, footbed in espresso, stitch between. Most modern; two brand colours at once.</p>
+      <p class="file">sole-mark-03-two-tone-welt.svg</p>
+    </header>
+    <div class="stage light"><div>
+      <img class="s128" src="sole-mark-03-two-tone-welt.svg" alt="Two-Tone Welt mark, 128px">
+      <img class="s64" src="sole-mark-03-two-tone-welt.svg" alt="Two-Tone Welt mark, 64px">
+      <img class="s32" src="sole-mark-03-two-tone-welt.svg" alt="Two-Tone Welt mark, 32px">
+    </div></div>
+    <div class="stage dark"><div>
+      <img class="s128" src="sole-mark-03-two-tone-welt.svg" alt="Two-Tone Welt mark on dark, 128px">
+      <img class="s64" src="sole-mark-03-two-tone-welt.svg" alt="Two-Tone Welt mark on dark, 64px">
+      <img class="s32" src="sole-mark-03-two-tone-welt.svg" alt="Two-Tone Welt mark on dark, 32px">
+    </div></div>
+  </section>
+
+</div>
+
+<div class="palette">
+  <div class="swatch" style="background:#3A2415;color:#F5EDE4">espresso #3A2415</div>
+  <div class="swatch" style="background:#8B5A2B;color:#FFFFFF">clay #8B5A2B</div>
+  <div class="swatch" style="background:#B5622E;color:#FFFFFF">rust #B5622E</div>
+  <div class="swatch" style="background:#4ECDC4;color:#111111">teal #4ECDC4</div>
+  <div class="swatch" style="background:#F5EDE4;color:#3A2415">cream #F5EDE4</div>
+  <div class="swatch" style="background:#2C1207;color:#EBC798">tile #2C1207</div>
+  <div class="swatch" style="background:#EBC798;color:#2C1207">mark gold #EBC798</div>
+</div>
+
+<p class="lede" style="margin-top:24px;max-width:64ch">The two swatches above are the mark's own colours, taken from the source render. They sit outside the app's original five tokens, so the mark reads warmer than the in-app UI around it.</p>
+
+</body>
+</html>

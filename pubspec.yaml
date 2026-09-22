@@ -96,6 +96,11 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
 
+  # Generates every launcher icon from assets/branding/cufmai-c-mark-1024.png.
+  # Not part of the build: run `dart run flutter_launcher_icons` by hand after
+  # the mark changes. See the config at the bottom of this file.
+  flutter_launcher_icons: ^0.14.4
+
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 
@@ -139,3 +144,24 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+# Launcher icons. flutter_launcher_icons generates every Android density and the
+# whole iOS AppIcon set from the single 1024 source below, so the icons are a
+# build product and should never be edited by hand:
+#
+#   node assets/branding/build-icons.mjs   # regenerate the sources
+#   dart run flutter_launcher_icons        # regenerate the icons
+#
+# The two adaptive layers are separate files because Android composites them:
+# the background is the tile's gradient with the mark removed, the foreground is
+# the mark alone, sized to stay inside the circle-safe 66% of the canvas.
+flutter_launcher_icons:
+  image_path: "assets/branding/cufmai-c-mark-1024.png"
+  android: "ic_launcher"
+  ios: true
+  # App Store validation rejects an alpha channel in AppIcon, even an opaque one.
+  remove_alpha_ios: true
+  min_sdk_android: 24
+  adaptive_icon_background: "assets/branding/cufmai-c-mark-adaptive-background-1024.png"
+  adaptive_icon_foreground: "assets/branding/cufmai-c-mark-adaptive-foreground-1024.png"
+  adaptive_icon_monochrome: "assets/branding/cufmai-c-mark-adaptive-foreground-1024.png"

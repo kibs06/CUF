@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Running stitch — a stitched sole outline with a thread leaving the toe">
+  <title>SoleVision mark 02 — Running Stitch</title>
+  <!-- The sole, drawn only as its stitch: no fill, so it survives any surface. -->
+  <path fill="none" stroke="#3A2415" stroke-width="16" stroke-linecap="round" stroke-dasharray="1 26" d="M256,64 C200,64 160,110 160,176 C160,240 182,268 182,300 C182,342 170,378 170,404 C170,450 208,470 256,470 C304,470 342,450 342,404 C342,378 330,342 330,300 C330,268 352,240 352,176 C352,110 312,64 256,64 Z"/>
+  <!-- The loose thread, in the AR accent: the one place the brand's second colour appears. -->
+  <path fill="none" stroke="#4ECDC4" stroke-width="16" stroke-linecap="round" d="M256,64 C256,28 292,12 332,22"/>
+</svg>

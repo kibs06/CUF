@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Two-tone welt — a rust welt ring around an espresso footbed, joined by a stitch">
+  <title>SoleVision mark 03 — Two-Tone Welt</title>
+  <!-- Welt ring: the outer leather that gets stitched to the upper. -->
+  <path fill="#B5622E" d="M256,64 C200,64 160,110 160,176 C160,240 182,268 182,300 C182,342 170,378 170,404 C170,450 208,470 256,470 C304,470 342,450 342,404 C342,378 330,342 330,300 C330,268 352,240 352,176 C352,110 312,64 256,64 Z"/>
+  <!-- Footbed: the same form, scaled down inside the welt. -->
+  <path fill="#3A2415" d="M256,129 C217.9,129 190.7,160.2 190.7,205.1 C190.7,248.6 205.7,267.7 205.7,289.4 C205.7,318 197.5,342.5 197.5,360.2 C197.5,391.4 223.4,405 256,405 C288.6,405 314.5,391.4 314.5,360.2 C314.5,342.5 306.3,318 306.3,289.4 C306.3,267.7 321.3,248.6 321.3,205.1 C321.3,160.2 294.1,129 256,129 Z"/>
+  <!-- Stitch, seated in the middle of the ring so both fills stay legible at icon size. -->
+  <path fill="none" stroke="#F5EDE4" stroke-width="11" stroke-linecap="round" stroke-dasharray="1 21" d="M256,96.5 C209,96.5 175.4,135.1 175.4,190.6 C175.4,244.3 193.8,267.8 193.8,294.7 C193.8,330 183.8,360.2 183.8,382.1 C183.8,420.7 215.7,437.5 256,437.5 C296.3,437.5 328.2,420.7 328.2,382.1 C328.2,360.2 318.2,330 318.2,294.7 C318.2,267.8 336.6,244.3 336.6,190.6 C336.6,135.1 303,96.5 256,96.5 Z"/>
+</svg>
