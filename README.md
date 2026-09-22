@@ -1,8 +1,10 @@
-# SoleVision
+# CUFMAI
 
-**A multi-role marketplace for handcrafted footwear from Carcar City, Cebu.**
+**The official app of the Carcar United Footwear Manufacturers Association, Inc. — a marketplace for handcrafted footwear from Carcar City, Cebu.**
 
-Carcar is the hometown of the Philippine shoe industry, but its artisans — mostly members of **CUFMAI** (Carcar United Footwear Manufacturers Association Inc.) — sell through traditional channels with no digital storefront, so buyers outside the city have no easy way to find them. SoleVision gives those makers the tools big brands have — a storefront, an order pipeline, and a point of sale — without replacing the craftsmanship.
+Carcar City is long known as the "Footwear Capital of the South", and shoemaking is a generations-old heritage craft there, centred on the barangays of Poblacion 3, Liburon and Valladolid. In 2004 the town's independent shoemakers organised as **CUFMAI** — the Carcar United Footwear Manufacturers Association, Inc. — to turn a scattered craft tradition into one recognised local industry.
+
+This app is that association's marketplace. It gives CUFMAI's member artisans the tools big brands have — a storefront, an order pipeline, and a point of sale — while keeping the craft the point: buyers outside Carcar can discover and order handcrafted leather shoes and sandals directly from the makers.
 
 One Flutter app serves all three roles, with a React portal for web administration.
 
