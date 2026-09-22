@@ -15,6 +15,7 @@ import '../../widgets/keep_alive_page.dart';
 import '../../widgets/sole_bottom_nav.dart';
 import '../../widgets/update_overlay.dart';
 import '../../widgets/chat/chat_view.dart';
+import '../../widgets/hide_on_scroll_bottom_bar.dart';
 import 'seller_dashboard_screen.dart';
 import 'pos_screen.dart';
 import 'manage_products_screen.dart';
@@ -148,56 +149,66 @@ class _SellerShellState extends State<SellerShell> {
     return Scaffold(
       backgroundColor: SellerTheme.creamBg,
       appBar: _buildAppBar(),
-      body: _screens.isEmpty
-          ? const Center(child: Text('Unable to load screen'))
-          // Publishes the on-screen tab so kept-alive pages can tell "I am
-          // visible again" from "I am still off screen" — the one signal the
-          // widget lifecycle no longer provides once pages stop being rebuilt.
-          // See ActiveTab.
-          : ActiveTab(
-              index: _currentIndex,
-              child: PageView(
-                controller: _pageController,
-                physics: const PageScrollPhysics(),
-                onPageChanged: (index) {
-                  setState(() => _currentIndex = index);
-                  // Stamped after the destination has been laid out AND
-                  // painted, so the gap from its `tapped` mark is the latency
-                  // the seller actually feels on the tap.
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    PerfTrace.mark('tab:${_tabLabels[index]} presented');
-                  });
-                },
-                // Every page is wrapped so that a VISITED page survives being
-                // scrolled out of view. Without this the PageView disposes it
-                // and the next visit re-runs initState, refetching the tab's
-                // data and re-showing its skeleton — the bug this fixes.
-                children: [
-                  for (final screen in _screens)
-                    KeepAlivePage(child: screen),
-                ],
+      // The bar gets out of the way while a page is scrolled and comes back on
+      // the drag upward, so a long dashboard can be read on a full screen. Same
+      // wrapper the customer shell uses — it has to own the body as well as the
+      // bar, since the page's own scroll notifications are the only honest
+      // source for "the page is moving". `resetOn` is the active tab, so a
+      // switch never strands the seller on a page whose bar is still hidden by
+      // the last one's scroll.
+      body: HideOnScrollBottomBar(
+        resetOn: _currentIndex,
+        bar: Container(
+          decoration: BoxDecoration(
+            border: Border(top: BorderSide(color: SellerTheme.cardBorder)),
+          ),
+          // Same sliding-pill nav as the customer/admin shells, tinted with
+          // the seller palette (no tap ripple/highlight by default).
+          child: SoleBottomNav(
+            role: AppConstants.roleSeller,
+            currentIndex: _currentIndex,
+            onTap: (index) {
+              PerfTrace.mark('tab:${_tabLabels[index]} tapped');
+              _pageController.jumpToPage(index);
+            },
+            backgroundColor: SellerTheme.card,
+            activeColor: SellerTheme.rustDeep,
+            inactiveColor: SellerTheme.textMuted,
+            // Keep the seller's signature amber indicator, now sliding.
+            pillColor: SellerTheme.amberBg,
+            barHeight: 65,
+          ),
+        ),
+        child: _screens.isEmpty
+            ? const Center(child: Text('Unable to load screen'))
+            // Publishes the on-screen tab so kept-alive pages can tell "I am
+            // visible again" from "I am still off screen" — the one signal the
+            // widget lifecycle no longer provides once pages stop being rebuilt.
+            // See ActiveTab.
+            : ActiveTab(
+                index: _currentIndex,
+                child: PageView(
+                  controller: _pageController,
+                  physics: const PageScrollPhysics(),
+                  onPageChanged: (index) {
+                    setState(() => _currentIndex = index);
+                    // Stamped after the destination has been laid out AND
+                    // painted, so the gap from its `tapped` mark is the latency
+                    // the seller actually feels on the tap.
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      PerfTrace.mark('tab:${_tabLabels[index]} presented');
+                    });
+                  },
+                  // Every page is wrapped so that a VISITED page survives being
+                  // scrolled out of view. Without this the PageView disposes it
+                  // and the next visit re-runs initState, refetching the tab's
+                  // data and re-showing its skeleton — the bug this fixes.
+                  children: [
+                    for (final screen in _screens)
+                      KeepAlivePage(child: screen),
+                  ],
+                ),
               ),
-            ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          border: Border(top: BorderSide(color: SellerTheme.cardBorder)),
-        ),
-        // Same sliding-pill nav as the customer/admin shells, tinted with
-        // the seller palette (no tap ripple/highlight by default).
-        child: SoleBottomNav(
-          role: AppConstants.roleSeller,
-          currentIndex: _currentIndex,
-          onTap: (index) {
-            PerfTrace.mark('tab:${_tabLabels[index]} tapped');
-            _pageController.jumpToPage(index);
-          },
-          backgroundColor: SellerTheme.card,
-          activeColor: SellerTheme.rustDeep,
-          inactiveColor: SellerTheme.textMuted,
-          // Keep the seller's signature amber indicator, now sliding.
-          pillColor: SellerTheme.amberBg,
-          barHeight: 65,
-        ),
       ),
     );
   }

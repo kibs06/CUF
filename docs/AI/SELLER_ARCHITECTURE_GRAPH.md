@@ -251,7 +251,7 @@ flowchart TB
 
 | Layer | File | Purpose |
 |---|---|---|
-| **Shell** | `lib/screens/seller/seller_shell.dart` | 5-tab navigation + push deep-links |
+| **Shell** | `lib/screens/seller/seller_shell.dart` | 5-tab navigation + push deep-links; nav bar wrapped in `HideOnScrollBottomBar` so it collapses on a downward scroll |
 | **Screens** | `lib/screens/seller/seller_dashboard_screen.dart` | Metrics, alerts, recent orders, charts |
 | | `lib/screens/seller/pos_screen.dart` | In-person POS, 2-panel layout |
 | | `lib/screens/seller/manage_products_screen.dart` | Product grid (masonry), CRUD actions |

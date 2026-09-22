@@ -39,6 +39,8 @@ The bottom nav reads `NotificationProvider.totalUnread` via `Consumer` for the b
 
 `HideOnScrollBottomBar` (`lib/widgets/hide_on_scroll_bottom_bar.dart`) wraps the shell's `body` **and** the bar, and collapses the bar out of the layout while the customer scrolls a tab downwards, returning it on the first upward drag (or on reaching the top of the page). It has to own both: "the page is moving" only ever arrives as scroll notifications bubbling out of the page's own scrollable, so a bar sitting outside could not hear it.
 
+The **seller shell wraps its nav the same way** (`test/widgets/shell_bottom_bar_contract_test.dart` pins both), so the seller's long dashboard and product grid read full-bleed too. Two rules travel with the pattern: the bar must be the wrapper's `bar:` argument rather than the Scaffold's `bottomNavigationBar:` slot (a bar in the slot is outside the body, where nothing can move it), and the border separating it from the page stays *inside* `bar:` so it leaves with the bar instead of being left behind as a floating hairline.
+
 - The bar is **collapsed, not covered** — an `AnimatedSize` anchored at its top, with the page growing into the space it leaves. Sliding it over the page would leave the last row of every list behind it.
 - **Threshold + drag-only.** It moves after 24px of travel in one direction, resetting that travel the instant the direction reverses, and ignores ballistic flings (`dragDetails == null`) so a list coasting to its end cannot move the bar on its own. Horizontal strips (category chips, product rails, the store carousel) report a horizontal axis and are ignored.
 - `resetOn: _currentIndex` restores the bar on every tab switch, so a hidden bar never carries over to the next tab.
@@ -383,7 +385,7 @@ All providers are app-root singletons, created in `main.dart` and consumed via `
 | `BestSellersSection` | `widgets/best_sellers_section.dart` | Home — horizontally-scrolling Best Sellers rail (live `units_sold` order) |
 | `HorizontalProductCard` | `widgets/horizontal_product_card.dart` | Home Best Sellers rail, profile Buy Again / Recently Viewed rails |
 | `SoleBottomNav` | `widgets/sole_bottom_nav.dart` | All shells (customer, seller, admin) |
-| `HideOnScrollBottomBar` | `widgets/hide_on_scroll_bottom_bar.dart` | Customer shell — wraps the tab host so the nav bar collapses away on a downward scroll and returns on the drag back up |
+| `HideOnScrollBottomBar` | `widgets/hide_on_scroll_bottom_bar.dart` | Customer **and seller** shells — wraps the tab host so the nav bar collapses away on a downward scroll and returns on the drag back up |
 | `CartIconButton` | `widgets/cart_icon_button.dart` | Home, Store app bars |
 | `FloatingMessageButton` | `widgets/floating_message_button.dart` | Home tab overlay |
 | `ShimmerGroup` / `SkeletonBox` | `widgets/shimmer_group.dart` | Loading skeletons |

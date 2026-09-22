@@ -15,7 +15,7 @@ The Store tab lives inside `CustomerShell` (`lib/screens/customer/customer_shell
 | 2     | Notifications | `NotificationsScreen` |
 | 3     | Profile   | `ProfileScreen`      |
 
-The bottom nav is rendered by `SoleBottomNav` (`lib/widgets/sole_bottom_nav.dart`), and is wrapped together with the tab host in `HideOnScrollBottomBar` (`lib/widgets/hide_on_scroll_bottom_bar.dart`): scrolling a tab downwards collapses the bar out of the layout for a full screen, and the first drag back up returns it. Scrolling the **Store** tab therefore moves the bar like any other.
+The bottom nav is rendered by `SoleBottomNav` (`lib/widgets/sole_bottom_nav.dart`), and is wrapped together with the tab host in `HideOnScrollBottomBar` (`lib/widgets/hide_on_scroll_bottom_bar.dart`): scrolling a tab downwards collapses the bar out of the layout for a full screen, and the first drag back up returns it. Both the customer and the seller shell use this wrapper; the admin shell still hands its bar to the Scaffold directly. Scrolling the **Store** tab therefore moves the bar like any other.
 
 ---
 

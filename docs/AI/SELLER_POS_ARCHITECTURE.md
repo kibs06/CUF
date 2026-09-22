@@ -95,7 +95,7 @@
 
 **File:** `lib/screens/seller/seller_shell.dart`
 
-The seller shell is a `StatefulWidget` hosting 5 screens in a `PageView` — each page wrapped in `KeepAlivePage`, so a visited tab stays mounted instead of being disposed when it scrolls out of view — above a `SoleBottomNav` bottom nav. Pages are still built lazily on first visit, and a page's `initState` runs once per session. The shell also publishes the visible tab via `ActiveTab` (`lib/widgets/active_tab.dart`), which is how a kept-alive page detects re-entry (see the Orders tab's staleness refresh).
+The seller shell is a `StatefulWidget` hosting 5 screens in a `PageView` — each page wrapped in `KeepAlivePage`, so a visited tab stays mounted instead of being disposed when it scrolls out of view — above a `SoleBottomNav` bottom nav, which sits inside `HideOnScrollBottomBar` (`lib/widgets/hide_on_scroll_bottom_bar.dart`) so a downward scroll collapses it out of the layout and the first drag up brings it back, the same behaviour the customer shell has. Pages are still built lazily on first visit, and a page's `initState` runs once per session. The shell also publishes the visible tab via `ActiveTab` (`lib/widgets/active_tab.dart`), which is how a kept-alive page detects re-entry (see the Orders tab's staleness refresh).
 
 ```
 SellerShell (5-tab bottom navigation)
