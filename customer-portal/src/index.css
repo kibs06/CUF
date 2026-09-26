@@ -1,0 +1,439 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  The two palettes.
+
+  `:root` is AppPalette.light and `.dark` is AppPalette.dark, ported across as
+  RGB triplets so Tailwind's `rgb(var(--page) / <alpha-value>)` can apply an
+  opacity modifier to any of them (`bg-page/85` is a real class on the header).
+
+  Tokens rather than hexes in components is what makes "the site has a dark
+  mode" a one-file change instead of a sweep, and it is why `clay-ink` exists
+  separately from `clay`: the brand fill is pinned in the app (`clay` is clay in
+  both brightnesses) but Burnished Clay as *text* on #111111 is about 3:1, so
+  the app gives text its own lifted value and so does this.
+
+  `.dark` is applied to `<html>` by `ThemeProvider`, and by a pre-paint inline
+  script in `index.html` so a dark-mode customer never sees a white flash.
+*/
+:root {
+  color-scheme: light;
+
+  --page: 255 255 255;
+  --raised: 255 255 255;
+  --subtle: 245 245 245;
+  --band: 245 245 245;
+  --chrome: 17 17 17;
+
+  --hairline: 229 229 229;
+  --hairline-soft: 239 239 239;
+  --card-edge: 201 201 201;
+
+  --ink: 17 17 17;
+  --muted: 107 107 107;
+  --muted-strong: 74 74 74;
+  --ink-inverse: 255 255 255;
+  --clay-ink: 139 90 43;
+
+  /* Modal scrim: the triplet carries its own alpha, so `bg-scrim` needs no
+     opacity modifier and the two brightnesses can differ. */
+  --scrim: 0 0 0 / 0.5;
+
+  /* Shadow tints — the app's espresso, at the same weights. */
+  --shadow-warm: rgba(139, 90, 43, 0.08);
+  --shadow-card-far: rgba(139, 90, 43, 0.1);
+  --shadow-card-near: rgba(139, 90, 43, 0.05);
+  --shadow-lift-far: rgba(139, 90, 43, 0.2);
+  --shadow-lift-near: rgba(139, 90, 43, 0.07);
+  --shadow-premium: rgba(139, 90, 43, 0.08);
+
+  --shimmer-sweep: rgba(255, 255, 255, 0.65);
+}
+
+.dark {
+  /* Native controls — the date picker, the sort `<select>`, scrollbars —
+     follow this, which is the difference between a dark page and a dark page
+     with two white widgets in it. */
+  color-scheme: dark;
+
+  --page: 17 17 17;
+  --raised: 28 28 28;
+  --subtle: 31 31 31;
+  --band: 23 23 23;
+  --chrome: 38 38 38;
+
+  /*
+    `hairline` is a MID grey, not a near-page one, and that is inherited from
+    the app on purpose: the token is consumed both solid and faded
+    (`border-hairline/30`), and a value tuned for the solid case alone leaves
+    every faded one invisible.
+
+    `hairline-soft` is a solid #333333 rather than the app's 14%-white overlay.
+    On the two surfaces it is used over (#1C1C1C cards, #111111 page) the two
+    read the same, and a solid value keeps the token usable with an opacity
+    modifier.
+  */
+  --hairline: 85 85 85;
+  --hairline-soft: 51 51 51;
+  --card-edge: 85 85 85;
+
+  --ink: 245 245 245;
+  --muted: 163 163 163;
+  --muted-strong: 208 208 208;
+  --ink-inverse: 255 255 255;
+  --clay-ink: 192 138 78;
+
+  /* Heavier than the light scrim: a 50% black over #111111 would barely
+     separate the dialog from the page behind it. */
+  --scrim: 0 0 0 / 0.72;
+
+  /*
+    Neutral black, not the espresso tint — the tint exists to warm a white
+    page, and there is no brightness to darken down here. Kept visible rather
+    than removed (the app makes its shadows transparent on dark) because a
+    card that lifts off the page on hover needs *some* shadow to read as
+    lifted, and #1C1C1C on #111111 is only a small step.
+  */
+  --shadow-warm: rgba(0, 0, 0, 0.5);
+  --shadow-card-far: rgba(0, 0, 0, 0.45);
+  --shadow-card-near: rgba(0, 0, 0, 0.3);
+  --shadow-lift-far: rgba(0, 0, 0, 0.6);
+  --shadow-lift-near: rgba(0, 0, 0, 0.35);
+  --shadow-premium: rgba(0, 0, 0, 0.45);
+
+  /* A 65% white sweep across a dark skeleton is a flash, not a shimmer. */
+  --shimmer-sweep: rgba(255, 255, 255, 0.07);
+}
+
+/*
+  Declared here rather than in `tailwind.config.js`: Tailwind only emits the
+  @keyframes for an animation that a used `animate-*` utility names, so a
+  keyframe in the config that is called from plain CSS below would never ship
+  and the shimmer would sit perfectly still.
+*/
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/*
+  Entrances.
+
+  All of these are CSS animations rather than motion (JS) ones, and every
+  animated element is *conditionally rendered* — it mounts when it appears and
+  unmounts when it goes, with no exit. Both halves of that are deliberate; see
+  "Animations must fail open" in the README for the bug that forced it.
+
+  The short version: a JS entrance writes `opacity: 0` as an inline style and
+  then needs a frame loop to walk it back to 1. If that loop never runs — a
+  background tab, a bundle loading mid-navigation, a dev-server reload — the
+  element is gone for good, because nothing else will ever change that style. A
+  stylesheet animation has no such state: the element's end state is its
+  natural one, so the only thing a missing animation costs is the flourish.
+
+  Keeping them here rather than in `tailwind.config.js` is the same reason the
+  shimmer below is here — Tailwind only emits keyframes that one of its own
+  `animate-*` utilities names.
+*/
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* The collapsing search row. `max-height` needs a concrete number to animate
+   from, which is why the panel carries its own `max-h-*`; 0 → that number is
+   interpolable, 0 → `auto` is not. */
+@keyframes panel-in {
+  from {
+    max-height: 0;
+    opacity: 0;
+  }
+}
+
+/* The cart count popping in as something is added. */
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+}
+
+/* The account menu dropping under its button. */
+@keyframes drop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+}
+
+/* A dialog panel rising into place over its backdrop. */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.98);
+  }
+}
+
+/*
+  The seller's side panel slipping in from the right edge.
+
+  It travels 16px rather than its own width — which is a number the seller sets,
+  16rem to 40rem — because this is an overlay arriving over a page that was
+  already being read, not a page transition, and a drawer that sweeps its full
+  width reads as a navigation.
+*/
+@keyframes slip-in {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+}
+
+/*
+  `backwards`, never `forwards`/`both`.
+
+  With a forwards fill the last keyframe keeps applying after the animation
+  ends, and for `transform` that means the element keeps a computed
+  `matrix(1, 0, 0, 1, 0, 0)` — an identity matrix that is not `none`. A
+  transformed element becomes the containing block for its `position: fixed`
+  descendants, so a modal inside the page wrapper stops being positioned against
+  the viewport. It was: the cancel dialog's `fixed inset-0` backdrop measured
+  1024×256 at y=65 instead of covering the window, and the dialog rendered at
+  the bottom of the page instead of centred.
+
+  `backwards` also fails open harder: the start values are only guaranteed for
+  the instant before the animation begins, so an element whose animation never
+  starts shows its natural state rather than the first keyframe.
+*/
+.page-enter {
+  animation: page-in 260ms cubic-bezier(0.33, 1, 0.68, 1) backwards;
+}
+
+.fade-enter {
+  animation: fade-in 260ms cubic-bezier(0.33, 1, 0.68, 1) backwards;
+}
+
+.panel-enter {
+  animation: panel-in 260ms cubic-bezier(0.33, 1, 0.68, 1) backwards;
+}
+
+.pop-enter {
+  animation: pop-in 150ms cubic-bezier(0.33, 1, 0.68, 1) backwards;
+}
+
+.drop-enter {
+  animation: drop-in 150ms cubic-bezier(0.33, 1, 0.68, 1) backwards;
+}
+
+.rise-enter {
+  animation: rise-in 260ms cubic-bezier(0.33, 1, 0.68, 1) backwards;
+}
+
+.slip-enter {
+  animation: slip-in 220ms cubic-bezier(0.33, 1, 0.68, 1) backwards;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    /*
+      Deliberately NOT `scroll-behavior: smooth`. Route changes reset the
+      scroll position, and with smooth scrolling an inherited behaviour turns
+      arriving on a new page into a long scroll down from wherever the last one
+      ended. Animated *entrances* are what make a page feel considered; a
+      sliding scroll position just delays the content.
+    */
+  }
+
+  body {
+    @apply bg-page font-sans text-ink antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /*
+    Focus is visible for keyboards and quiet for mice. A customer storefront
+    gets navigated with a keyboard more than an admin console does — tabbing
+    through a product grid has to be usable.
+  */
+  :focus-visible {
+    @apply rounded-sm outline-none ring-2 ring-clay/60 ring-offset-2 ring-offset-page;
+  }
+
+  /* The clay ring is right on white and too dim on #111111, so dark borrows
+     the same lifted value the text token uses. */
+  .dark :focus-visible {
+    @apply ring-clay-ink/70;
+  }
+
+  ::selection {
+    @apply bg-clay/20;
+  }
+
+  /*
+    No engine-drawn clear button on a search field, anywhere on the site.
+
+    A `type="search"` input draws an ✕ of its own once there is text in it, and
+    the header's search already has one — which is how a customer who typed a
+    letter ended up with **two ✕ in the same pill**, the browser's doing none of
+    what ours does (clearing the panel, returning focus) and being a different
+    size in every engine. WebKit and Blink both draw it; Firefox never has.
+
+    The header's field no longer uses `type="search"` at all (see `SearchField`,
+    which says out loud what that type was doing), so this rule is the guard for
+    the next search input rather than the fix for that one. It is kept because
+    the failure it prevents is invisible in review and obvious to a customer.
+  */
+  input[type='search']::-webkit-search-decoration,
+  input[type='search']::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  /* Tabular figures wherever a number is compared to another number. */
+  .num {
+    @apply font-numeric;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer components {
+  /*
+    Buttons. One base plus four skins, so every call to action on the site
+    shares a height, a radius and a press behaviour — the small consistencies
+    are most of what "considered" feels like.
+
+    The press is a 2% scale rather than a colour flash: it reads as the button
+    taking weight, which is what a physical control does.
+  */
+  .btn {
+    @apply inline-flex select-none items-center justify-center gap-2 rounded-field px-5 py-3 text-sm font-semibold transition-[background-color,border-color,color,box-shadow,transform] duration-200 ease-out-cubic;
+  }
+
+  .btn:active {
+    @apply scale-[0.98];
+  }
+
+  .btn-primary {
+    @apply bg-clay text-ink-inverse shadow-warm hover:bg-clay/90 hover:shadow-card;
+  }
+
+  /* On a dark hero, where a clay fill would compete with the photograph. */
+  .btn-ghost {
+    @apply border border-white/25 text-white hover:border-white/50 hover:bg-white/10;
+  }
+
+  .btn-outline {
+    @apply border border-hairline bg-raised text-ink hover:border-card-edge hover:bg-subtle;
+  }
+
+  /* A small overline: the eyebrow above a section or a page title. */
+  .overline {
+    @apply text-[11px] font-semibold uppercase tracking-[0.14em] text-muted;
+  }
+
+  /*
+    Skeleton shimmer. The sweep is a gradient that translates across the box
+    rather than an opacity pulse: a pulse makes a grid of placeholders throb in
+    unison, which reads as a loading *error*, while a sweep reads as progress.
+  */
+  .shimmer {
+    @apply relative overflow-hidden bg-subtle;
+  }
+
+  .shimmer::after {
+    content: '';
+    @apply absolute inset-0;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      var(--shimmer-sweep),
+      transparent
+    );
+    transform: translateX(-100%);
+    animation: shimmer 1.6s infinite;
+  }
+
+  /*
+    A hairline that fades at both ends — used under section headings so the
+    rule reads as a flourish rather than a table border.
+  */
+  .rule-fade {
+    background: linear-gradient(
+      90deg,
+      theme('colors.hairline') 0%,
+      theme('colors.hairline-soft') 60%,
+      transparent 100%
+    );
+    height: 1px;
+  }
+}
+
+/*
+  The theme wipe.
+
+  Changing the theme paints two stills of the page — the old theme and the new
+  one — and `useTheme.jsx` clips one of them with a circle that grows out of the
+  click (going light) or shrinks back into it (going dark). See
+  `lib/themeWipeRules.js` for which still is clipped, and why.
+
+  Two overrides are required for any of that to be visible:
+
+  1. **The pair's own cross-fade is switched off.** By default the API cross-
+     fades the two stills into each other with `mix-blend-mode: plus-lighter`,
+     which over opaque light/dark stills blends to white — the wipe would be a
+     flash. The circle is what carries the change here, so the default animation
+     is removed and the blend mode is normal.
+  2. **Going dark, the OUTGOING still must be stacked on top.** The dark
+     direction is the light receding to the cursor, which only reads correctly
+     if the light is the still being clipped; the incoming dark still has to be
+     underneath it, revealed as the circle closes. The attribute is set by
+     `useTheme` for exactly the length of the transition.
+
+  Nothing here is load-bearing for the theme itself: a browser without the API
+  never enters a view transition at all, and the class on `<html>` is applied
+  before any of this runs.
+*/
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+html[data-theme-wipe='dark']::view-transition-old(root) {
+  z-index: 2;
+}
+
+html[data-theme-wipe='dark']::view-transition-new(root) {
+  z-index: 1;
+}
+
+/*
+  The CSS half of reduced-motion. Tailwind's own transitions and the shimmer
+  are covered here; the JS half lives in `useReducedMotion` from motion, which
+  the animated components read directly (CSS cannot reach a JS-driven
+  transform).
+
+  The theme wipe needs no rule here: it is a Web Animations API animation whose
+  duration is set in JS, which the cascade below cannot reach — so `useTheme`
+  checks the same media query itself and skips the transition entirely.
+*/
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

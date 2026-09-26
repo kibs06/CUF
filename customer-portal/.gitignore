@@ -1,0 +1,16 @@
+node_modules
+dist
+dist-ssr
+*.local
+
+# Local env files — the Supabase URL and anon key are the same pair the Flutter
+# app ships in lib/constants/app_constants.dart, but they are still per-deploy
+# config here, so they are not committed.
+.env
+.env.*
+!.env.example
+
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea

@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- Brand colour: Burnished Clay, the same value the app pins. -->
+    <meta name="theme-color" content="#8B5A2B" />
+
+    <!--
+      Real metadata, not a placeholder: this is the whole point of a framework
+      that renders HTML. The Flutter web build could not offer this.
+    -->
+    <title>CUFMAI — Handcrafted Footwear from Carcar City</title>
+    <meta
+      name="description"
+      content="Shop handcrafted leather shoes and sandals direct from Carcar City's artisans. Official marketplace of the Carcar United Footwear Manufacturers Association, Inc."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="CUFMAI — Handcrafted Footwear from Carcar City" />
+    <meta
+      property="og:description"
+      content="Shop handcrafted leather shoes and sandals direct from Carcar City's artisans."
+    />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!--
+      The app's three families: Playfair Display (headlines), DM Sans (body),
+      Sora (prices and figures). `display=swap` so a slow font never blocks the
+      first paint — the fallback shows immediately and swaps in.
+    -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Playfair+Display:wght@500;600;700&family=Sora:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <!--
+      Set the theme before the first paint.
+
+      This has to be inline and it has to be here: the class has to be on
+      <html> before the browser paints the body, and any module — React's own
+      bundle included — arrives too late, which is a white flash on every
+      visit for a dark-mode customer.
+
+      It duplicates `THEME_STORAGE_KEY` and the three mode names from
+      `src/lib/themeRules.js`, which it cannot import. A test pins the two
+      copies together, because a rename landing in only one of them is exactly
+      the silent white flash this script exists to prevent.
+    -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('cufmai.portal.theme-mode')
+          var mode =
+            stored === 'light' || stored === 'dark' || stored === 'system'
+              ? stored
+              : 'system'
+          var dark =
+            mode === 'dark' ||
+            (mode === 'system' &&
+              window.matchMedia('(prefers-color-scheme: dark)').matches)
+          if (dark) document.documentElement.classList.add('dark')
+        } catch (error) {
+          /* No storage, no preference: the light palette is the default. */
+        }
+      })()
+    </script>
+
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
