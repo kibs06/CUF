@@ -48,6 +48,7 @@ npm run preview
 | `/users` | User management |
 | `/seller-applications` | Approve/reject seller applications |
 | `/products` | Product catalog management |
+| `/model-requests` | 3D model requests filed by sellers: claim, close as done against a live model, decline with a reason |
 | `/orders` | Order management |
 | `/transactions` | GCash/PayMongo payment transactions (read-only) |
 | `/analytics` | Charts and trends |

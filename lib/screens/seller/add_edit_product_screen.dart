@@ -8,9 +8,9 @@ import '../../models/product_models.dart';
 import '../../services/product_service.dart';
 import '../../services/shoe_model_upload_service.dart';
 import '../../utils/fit_spec_form.dart';
-import '../../utils/glb_validator.dart';
 import '../../utils/product_audience.dart';
 import '../../utils/shoe_model_upload.dart';
+import '../../widgets/shoe_model_report_card.dart';
 import '../../widgets/sole_card.dart';
 import '../../widgets/sole_text_field.dart';
 import '../../widgets/sole_primary_button.dart';
@@ -2764,118 +2764,24 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
     );
   }
 
-  /// The pass/fail report, failures first.
-  ///
-  /// Passing rows are summarised rather than listed: the seller acts on the
-  /// two sentences that failed, and a wall of green buries them. The limits note
-  /// ships with every green run so "passed the checks" is never read as "this
-  /// is your shoe" (guide §5.2's reviewer rows are the part no byte-check
-  /// covers).
+  /// The pass/fail report — now the **shared** card, because the admin's
+  /// request queue renders the same report for the model it uploads on a
+  /// seller's behalf (roadmap V2.11). One implementation, so "within tolerance"
+  /// cannot come to mean two things on the two surfaces that show it.
   Widget _buildShoeModelReport(ShoeModelAsset asset) {
-    final report = asset.report;
-    final failures = shoeModelReportFailures(report);
-    final warnings = shoeModelReportWarnings(report);
-    final passed = report.passed && asset.bytes.isNotEmpty;
-    final color = passed ? AppConstants.success : AppConstants.error;
+    return ShoeModelReportCard(
+      asset: asset,
+      footer: _shoeModelPublishFooter(),
+    );
+  }
 
-    final measurements = <String>[
-      '${(asset.fileSizeBytes / (1024 * 1024)).toStringAsFixed(2)} MB',
-      if (asset.triangleCount != null)
-        '${asset.triangleCount} triangles',
-      if (asset.meshExternalLengthMm != null)
-        'mesh ${asset.meshExternalLengthMm!.toStringAsFixed(1)} mm long',
-    ].join(' \u00b7 ');
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(passed ? Icons.verified_outlined : Icons.rule_folder_outlined,
-                  size: 16, color: color),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  shoeModelReportHeadline(report),
-                  style: AppConstants.bodyStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: AppConstants.secondary,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            measurements,
-            style: AppConstants.bodyStyle(
-              fontSize: 11,
-              color: AppConstants.secondary.withValues(alpha: 0.6),
-            ),
-          ),
-          if (asset.declaredExternalLengthMm != null &&
-              asset.meshExternalLengthMm != null) ...[
-            const SizedBox(height: 4),
-            Text(
-              'Declared ${asset.declaredExternalLengthMm!.toStringAsFixed(0)} mm '
-              '\u00b7 mesh ${asset.meshExternalLengthMm!.toStringAsFixed(1)} mm '
-              '\u2014 ${_shoeModelLengthDelta(asset)}'
-              ' (tolerance \u00b1${kLengthToleranceMm.toStringAsFixed(0)} mm)',
-              style: AppConstants.bodyStyle(
-                fontSize: 11,
-                color: AppConstants.secondary.withValues(alpha: 0.6),
-              ),
-            ),
-          ],
-          if (failures.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            for (final failure in failures)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Text(
-                  '\u2022 $failure',
-                  style: AppConstants.bodyStyle(
-                    fontSize: 11,
-                    color: AppConstants.secondary,
-                    height: 1.35,
-                  ),
-                ),
-              ),
-          ],
-          if (warnings.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            for (final warning in warnings)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Text(
-                  '\u2022 to confirm: $warning',
-                  style: AppConstants.bodyStyle(
-                    fontSize: 11,
-                    color: AppConstants.secondary.withValues(alpha: 0.7),
-                    height: 1.35,
-                  ),
-                ),
-              ),
-          ],
-          if (passed) ...[
-            const SizedBox(height: 4),
-            Text(
-              kShoeModelPassedLimitsNote,
-              style: AppConstants.bodyStyle(
-                fontSize: 11,
-                color: AppConstants.secondary.withValues(alpha: 0.55),
-                height: 1.35,
-              ),
-            ),
-          ],
+  /// The seller-only half of that card: the publish toggle and the caption
+  /// saying when this file is actually written. The admin's sheet passes no
+  /// footer — its publish is the button it pressed.
+  Widget _shoeModelPublishFooter() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
           // The switch only appears when the file could actually be published:
           // offering "publish now" beside a declaration that would refuse the
           // upload would be a control that lies.
@@ -2922,21 +2828,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
           // is the right behaviour — the save-time gate names the reason in the
           // snackbar instead of a copy invented for a case that cannot happen.
         ],
-      ),
     );
-  }
-
-  /// "within tolerance" / "4.6 mm under" — the honest reading of the delta the
-  /// scale check already judged, so the number never appears without its verdict.
-  String _shoeModelLengthDelta(ShoeModelAsset asset) {
-    final declared = asset.declaredExternalLengthMm!;
-    final mesh = asset.meshExternalLengthMm!;
-    final delta = (mesh - declared).abs();
-    if (delta <= kLengthToleranceMm) {
-      return 'within tolerance (${delta.toStringAsFixed(1)} mm apart)';
-    }
-    final direction = mesh < declared ? 'under' : 'over';
-    return '${delta.toStringAsFixed(1)} mm $direction the declared length';
   }
 
   // ── Tags ──

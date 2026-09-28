@@ -1,0 +1,36 @@
+-- ══════════════════════════════════════════════════════════════════
+-- 3D model requests: a notification category (roadmap V2.11, P3)
+--
+-- ⚠️ WRITTEN AND NOT APPLIED, exactly like the flow it belongs to
+-- (`20260928140000_add_shoe_model_requests.sql`). CI's `Supabase Migrations`
+-- job is the first thing that will apply either — see
+-- `supabase/MIGRATIONS_LIVE_STATUS.md`.
+--
+-- WHY THIS IS A FILE OF ITS OWN, AND WHY IT SORTS BEFORE 20260928140000:
+--
+-- `ALTER TYPE ... ADD VALUE` may not be USED in the same transaction that adds
+-- it, and each migration file runs in one transaction. `20260928140000`'s
+-- `fulfil_shoe_model_request` writes a `'models'` notification, so the label has
+-- to exist by the time that file runs — hence the earlier timestamp. This is the
+-- same shape, for the same reason, as
+-- `20260913110000_add_reservations_notification_category.sql`, which the bulk
+-- reservation RPCs depend on.
+--
+-- WHY A NEW VALUE RATHER THAN REUSING ONE:
+--
+-- The feed maps a category to a filter chip, an icon and a colour
+-- (`lib/screens/notifications_screen.dart`), and the seller's feed groups by it.
+-- Filing "your model is ready" under `approval` would put a 3D asset beside an
+-- application review in every filter a seller uses, and would make the two
+-- indistinguishable in the unread counts. `NotificationCategory` on the Dart
+-- side mirrors this list, and `test/services/notification_category_contract_test.dart`
+-- now asserts the two agree in both directions — which is what would have caught
+-- a category added on one side only.
+--
+-- Additive and inert: no table, no column, no policy, no grant, and nothing
+-- inserts this value until `20260928140000`'s fulfil RPC does.
+-- ══════════════════════════════════════════════════════════════════
+
+-- `IF NOT EXISTS` so a re-apply is a no-op rather than an error — the
+-- convergence rule `MIGRATIONS_LIVE_STATUS.md` states, in one line.
+ALTER TYPE public.notification_category ADD VALUE IF NOT EXISTS 'models';

@@ -9,7 +9,11 @@ import '../models/app_notification.dart'; // for MessagePreview
 class SellerNotification {
   final String id;
   final String storeId;
-  final String type; // 'new_order' | 'stale_order' | 'low_stock' | 'custom_order_request' | 'new_message'
+  /// One of the values `seller_notifications_type_check` admits (see
+  /// `20260928140000_add_shoe_model_requests.sql`, which widened it to add
+  /// 'model_request'): 'new_order' | 'stale_order' | 'low_stock' |
+  /// 'custom_order_request' | 'new_message' | 'model_request'.
+  final String type;
   final String title;
   final String body;
   final String? referenceId;

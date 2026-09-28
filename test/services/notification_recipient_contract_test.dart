@@ -214,6 +214,33 @@ void main() {
       );
     });
 
+    /// Whether [table]'s `store_id` column is declared `NOT NULL` in the DDL,
+    /// read from the migrations rather than taken on trust.
+    ///
+    /// This is what makes a guard *dead code* rather than a safety net: if the
+    /// id cannot be NULL, there is nothing for `IF … IS NOT NULL` to catch — and
+    /// a guard written to satisfy a text search is worse than an exemption,
+    /// because it reads like protection that is really decoration. Checking the
+    /// DDL means the exemption below stops being valid the moment somebody makes
+    /// that column nullable.
+    bool storeIdDeclaredNotNull(String table) {
+      final ddl = RegExp(
+        'create\\s+table\\s+(if\\s+not\\s+exists\\s+)?(public\\.)?'
+        '${RegExp.escape(table)}'
+        // `[\s\S]` rather than `.` with a `(?s)` flag: Dart's RegExp only
+        // accepts an inline flag group at the very start of the pattern.
+        r'\s*\(([\s\S]*?)\n\);',
+        caseSensitive: false,
+      );
+      for (final f in files) {
+        final match = ddl.firstMatch(f.readAsStringSync());
+        if (match == null) continue;
+        return RegExp(r'store_id\s+uuid\s+not\s+null', caseSensitive: false)
+            .hasMatch(match.group(3)!);
+      }
+      return false;
+    }
+
     test('a VALUES insert whose recipient is a raw column is guarded too '
         '(seller_notifications.store_id is NOT NULL)', () {
       // `seller_notifications` is keyed by STORE, not user, so the failure is
@@ -223,15 +250,40 @@ void main() {
           .where((e) => e.text.contains('INSERT INTO public.seller_notifications'))
           .toList();
       expect(storeInserts, isNotEmpty, reason: 'expected at least one site');
+
+      // The one shape that needs no guard: a store id taken from the model
+      // request row the closing RPC has just read or updated. That column is
+      // `NOT NULL` (asserted, not assumed — see above), so the id cannot be
+      // missing and a guard would be unreachable code standing where a real
+      // one should go.
+      final fromRequestRow = RegExp(
+        r'VALUES\s*\(\s*(\n\s*)?(v_store|v_request\.store_id)\b',
+      );
+
       for (final e in storeInserts) {
         final body = enclosingFunctionBody(e.file, e.line);
+        if (body.contains('v_store_id IS NOT NULL') ||
+            e.text.contains('store_id IS NOT NULL')) {
+          continue;
+        }
         expect(
-          body.contains('v_store_id IS NOT NULL') ||
-              e.text.contains('store_id IS NOT NULL'),
+          fromRequestRow.hasMatch(e.text) &&
+              storeIdDeclaredNotNull('shoe_model_requests'),
           isTrue,
           reason: '${e.file}:${e.line} uses a nullable store_id unguarded',
         );
       }
+    });
+
+    test('the exemption above is not vacuous (its column is really NOT NULL)',
+        () {
+      // Without this, `storeIdDeclaredNotNull` could return true for everything
+      // (or the DDL anchor could quietly stop matching) and the guard test above
+      // would pass on an unguarded insert.
+      expect(storeIdDeclaredNotNull('shoe_model_requests'), isTrue,
+          reason: 'the exemption reads this column\'s nullability from its DDL');
+      expect(storeIdDeclaredNotNull('orders'), isFalse,
+          reason: 'orders.store_id is NULLABLE — that is why it needs a guard');
     });
   });
 

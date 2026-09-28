@@ -9,6 +9,7 @@ import {
   Users,
   Store,
   Package,
+  Cuboid,
   ShoppingCart,
   Wallet,
   Flag,
@@ -23,6 +24,7 @@ const NAV_ITEMS = [
   { to: '/users', label: 'Users', icon: Users },
   { to: '/seller-applications', label: 'Seller Applications', icon: Store },
   { to: '/products', label: 'Products', icon: Package },
+  { to: '/model-requests', label: '3D Model Requests', icon: Cuboid },
   { to: '/orders', label: 'Orders', icon: ShoppingCart },
   { to: '/transactions', label: 'Transactions', icon: Wallet },
   { to: '/reports', label: 'Reports', icon: Flag },
@@ -34,6 +36,7 @@ const NAV_ITEMS = [
 export default function Sidebar({ open, onClose }) {
   const { profile, signOut } = useAuth()
   const [highPriorityCount, setHighPriorityCount] = useState(0)
+  const [waitingModelRequests, setWaitingModelRequests] = useState(0)
 
   useEffect(() => {
     const fetchCount = async () => {
@@ -44,6 +47,20 @@ export default function Sidebar({ open, onClose }) {
           .eq('priority', 'high')
           .in('status', ['pending', 'under_review'])
         setHighPriorityCount(count ?? 0)
+      } catch (_) {
+        // silently fail — badge is optional
+      }
+
+      // Sellers' 3D model asks. A queue nobody is told about is a queue nobody
+      // opens: the row is filed from the app, so this badge is the only signal
+      // an admin sitting in the portal gets that there is work waiting.
+      // `requested` and `in_progress` are the two open states.
+      try {
+        const { count } = await supabase
+          .from('shoe_model_requests')
+          .select('*', { count: 'exact', head: true })
+          .in('status', ['requested', 'in_progress'])
+        setWaitingModelRequests(count ?? 0)
       } catch (_) {
         // silently fail — badge is optional
       }
@@ -105,6 +122,11 @@ export default function Sidebar({ open, onClose }) {
                 {item.to === '/reports' && highPriorityCount > 0 && (
                   <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#D64545] px-1.5 text-[10px] font-bold text-white">
                     {highPriorityCount > 9 ? '9+' : highPriorityCount}
+                  </span>
+                )}
+                {item.to === '/model-requests' && waitingModelRequests > 0 && (
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#E8A020] px-1.5 text-[10px] font-bold text-white">
+                    {waitingModelRequests > 9 ? '9+' : waitingModelRequests}
                   </span>
                 )}
               </NavLink>

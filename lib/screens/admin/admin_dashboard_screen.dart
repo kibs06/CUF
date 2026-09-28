@@ -12,6 +12,7 @@ import 'admin_reports_screen.dart';
 import 'admin_analytics_screen.dart';
 import 'admin_settings_screen.dart';
 import 'manage_deletion_requests_screen.dart';
+import 'manage_shoe_model_requests_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -207,6 +208,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         MaterialPageRoute(builder: (_) => const AdminSettingsScreen()),
                       ),
                     ),
+                    // Roadmap V2.10: the seller asks for a 3D model from the
+                    // product's action sheet, and this is where the ask lands.
+                    // Gated like the sheet row, so a build with the switch off
+                    // shows the dashboard that shipped before the feature.
+                    if (AppConstants.shoeModelRequestEnabled)
+                      _toolTile(
+                        icon: Icons.view_in_ar_outlined,
+                        label: '3D Model Requests',
+                        color: AppConstants.primary,
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const ManageShoeModelRequestsScreen()),
+                        ),
+                      ),
                     _toolTile(
                       icon: Icons.delete_sweep_outlined,
                       label: 'Deletion Requests',

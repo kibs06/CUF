@@ -699,6 +699,79 @@ class AppConstants {
   static const bool shoeModelUploadEnabled =
       bool.fromEnvironment('SHOE_MODEL_UPLOAD', defaultValue: true);
 
+  /// Gates the **seller's 3D model request** — the "Request a 3D model" row in
+  /// the product action sheet, and the admin queue that answers it (roadmap
+  /// V2.10, `supabase/migrations/20260928140000_add_shoe_model_requests.sql`).
+  ///
+  /// **OFF by default, and this one waits on an apply rather than on a
+  /// partner.** That migration is **written and NOT applied** (see
+  /// `supabase/MIGRATIONS_LIVE_STATUS.md`), and the row it adds writes through
+  /// an RPC — so on today's database the seller would tap it and be told the
+  /// function does not exist. That is the failure V2.2 already learned to avoid
+  /// by shipping its upload section hidden until the table was verified.
+  ///
+  /// **Why the feature exists at all:** the upload section next door assumes a
+  /// seller who can produce a contract-compliant `.glb`. That is not this
+  /// market — V2.7's first real partner asset came from a marketplace and still
+  /// needed a normaliser run before it passed. So the pipeline gets a second
+  /// door: the seller measures the pair with a ruler, the team does the
+  /// modelling.
+  ///
+  /// **How it is turned on:** `--dart-define=SHOE_MODEL_REQUEST=true`, *after*
+  /// the migration is applied **and verified by object**. The rule this project
+  /// keeps re-learning (V1.3, V2.1, and the docs that denied an apply that had
+  /// already happened) is that the apply is finished when a `--linked` query
+  /// says so, not when the SQL Editor says "Success".
+  ///
+  /// Off means **nothing happens**: no row in the sheet, no admin queue entry
+  /// in the dashboard, and `ShoeModelRequestService` is never constructed.
+  static const bool shoeModelRequestEnabled =
+      bool.fromEnvironment('SHOE_MODEL_REQUEST');
+
+  /// Gates the **admin's model upload** — "Upload a 3D model" on a request in
+  /// the queue, which fetches a `.glb`, publishes it against the requested
+  /// product and closes the ask in one step (roadmap V2.11, the second half of
+  /// the V2.10 flow).
+  ///
+  /// **OFF by default, and it is the first surface where an *admin* writes a
+  /// model row.** It follows the oldest rule in this file: a new visible surface
+  /// ships dark, behind its own switch, so turning it off restores today's
+  /// behaviour exactly. Today that means the queue can still claim, decline and
+  /// close-as-done — it just cannot *make* the model, and the close-as-done
+  /// dialog says so instead of offering a button that could not work.
+  ///
+  /// **[adminModelUploadAllowed] is the constant to read, not this one.** The
+  /// action also needs [shoeModelUploadEnabled] — the pipeline's own "this build
+  /// may write model rows at all" switch — so a build that killed the seller's
+  /// upload does not keep writing models through the admin's door. Both on is
+  /// the only combination that shows it.
+  ///
+  /// **How it is turned on:** `--dart-define=ADMIN_MODEL_UPLOAD=true`, with
+  /// `SHOE_MODEL_REQUEST=true` as well (the action lives inside the queue) and
+  /// `--dart-define=SHOE_MODEL_UPLOAD=false` clearing it again — after
+  /// `20260928140000_add_shoe_model_requests.sql` is applied, since the close
+  /// half is that file's RPC.
+  ///
+  /// **No migration of its own, and that is a design fact rather than a
+  /// coincidence.** An admin may already insert a `product_models` row and
+  /// upload to `shoe-models` — both policies read `public.is_admin()` — and
+  /// `validate-shoe-model` resolves an admin caller through `is_admin()` too. So
+  /// this is the one phase of the pipeline that needed a screen rather than a
+  /// schema.
+  ///
+  /// Off means **nothing happens**: no action on the card, no sheet, and no
+  /// write to either the bucket or the table.
+  static const bool adminModelUploadEnabled =
+      bool.fromEnvironment('ADMIN_MODEL_UPLOAD');
+
+  /// Whether the admin's model upload may be shown at all: **both** this
+  /// surface's switch and the pipeline's own write switch.
+  ///
+  /// One constant rather than the conjunction spelled out at each call site, so
+  /// "which flag turns this off?" has exactly one answer to read.
+  static const bool adminModelUploadAllowed =
+      adminModelUploadEnabled && shoeModelUploadEnabled;
+
   /// Gates the **try-on model prefetch** — warming the local model cache while
   /// the customer is still reading the product page (roadmap V2.6,
   /// `lib/services/try_on_prefetch.dart`).

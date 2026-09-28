@@ -326,6 +326,27 @@ List<String> shoeModelReportWarnings(GlbValidationReport report) => report
     .map((c) => '${c.name} — ${c.detail}')
     .toList(growable: false);
 
+/// "within tolerance (0.4 mm apart)" / "4.6 mm under the declared length" —
+/// the honest reading of the delta the scale check has already judged, so the
+/// number never appears without its verdict.
+///
+/// It lives here rather than in a screen because **two** surfaces now render the
+/// same report side by side: the seller's product form (V2.2) and the admin's
+/// request queue (V2.11), which models a pair on a seller's behalf. One
+/// sentence, one implementation, or the two would drift about what "within
+/// tolerance" means.
+String shoeModelLengthDeltaSentence({
+  required double declaredMm,
+  required double meshMm,
+}) {
+  final delta = (meshMm - declaredMm).abs();
+  if (delta <= kLengthToleranceMm) {
+    return 'within tolerance (${delta.toStringAsFixed(1)} mm apart)';
+  }
+  final direction = meshMm < declaredMm ? 'under' : 'over';
+  return '${delta.toStringAsFixed(1)} mm $direction the declared length';
+}
+
 /// What a green run does **not** prove, in one sentence.
 ///
 /// The validator's own footer says it in eight lines because a partner reads

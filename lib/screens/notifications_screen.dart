@@ -8,10 +8,12 @@ import '../constants/app_constants.dart';
 import '../models/app_notification.dart';
 import '../models/notification_category.dart';
 import '../providers/notification_provider.dart';
+import '../utils/model_notice.dart';
 import '../widgets/sole_card.dart';
 import '../widgets/chat/chat_view.dart';
 import 'customer/tracking_screen.dart';
 import 'customer/my_reports_screen.dart';
+import 'seller/manage_products_screen.dart';
 
 /// Notifications feed screen — the primary entry point via the bottom nav
 /// "Notifications" tab. Also reachable from the profile screen's icon row.
@@ -219,6 +221,36 @@ class _NotificationsScreenState extends State<NotificationsScreen>
         );
       }
       return;
+    }
+
+    // ── 3D model notice: deep-link to the product's actions sheet ──
+    //
+    // The notice is written by the database to the seller who filed the
+    // request (V2.12/V2.13), and it is the only thing in this feed that
+    // announces a *build* rather than an order — which is why it used to be a
+    // dead end: every branch below keys on `order_id` and a model notice has
+    // none. What it does carry is the product it is about, so the tap lands on
+    // that product's actions, where the request row is.
+    //
+    // Gated on the flow's own switch, first, so the rule library is never even
+    // asked while the flow is off (and a notice left over from a try-build
+    // taps through to nothing rather than to a screen that cannot explain it).
+    if (AppConstants.shoeModelRequestEnabled) {
+      final target = modelNoticeTarget(
+        category: notif.category,
+        metadata: notif.metadata,
+      );
+      if (target != null) {
+        if (mounted) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) =>
+                  ManageProductsScreen(initialProductId: target.productId),
+            ),
+          );
+        }
+        return;
+      }
     }
 
     // ── Support/report notification: deep-link to MyReportsScreen ──
@@ -745,6 +777,10 @@ class _NotificationCardContent extends StatelessWidget {
         return Icons.workspace_premium_outlined;
       case NotificationCategory.reservations:
         return Icons.inventory_2_outlined;
+      case NotificationCategory.models:
+        // The same icon the product action sheet's request row uses, so the
+        // notice and the row it points at read as one thing.
+        return Icons.view_in_ar_outlined;
     }
   }
 
@@ -804,6 +840,8 @@ class _NotificationCardContent extends StatelessWidget {
         return AppConstants.primary; // brand brown for the approval badge
       case NotificationCategory.reservations:
         return AppConstants.primary; // brand brown for reservation events
+      case NotificationCategory.models:
+        return const Color(0xFF7E57C2); // deep purple — 3D modelling news
     }
   }
 }

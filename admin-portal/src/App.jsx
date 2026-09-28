@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard.jsx'
 import Users from './pages/Users.jsx'
 import SellerApplications from './pages/SellerApplications.jsx'
 import Products from './pages/Products.jsx'
+import ModelRequests from './pages/ModelRequests.jsx'
 import Orders from './pages/Orders.jsx'
 import Transactions from './pages/Transactions.jsx'
 import Reports from './pages/Reports.jsx'
@@ -25,6 +26,7 @@ export default function App() {
           <Route path="users" element={<Users />} />
           <Route path="seller-applications" element={<SellerApplications />} />
           <Route path="products" element={<Products />} />
+          <Route path="model-requests" element={<ModelRequests />} />
           <Route path="orders" element={<Orders />} />
           <Route path="transactions" element={<Transactions />} />
           <Route path="reports" element={<Reports />} />

@@ -495,6 +495,48 @@ void main() {
       expect(kShoeModelPassedLimitsNote, contains('not that it looks right'));
     });
   });
+
+  /// The declared-vs-mesh sentence is now rendered by TWO surfaces — the
+  /// seller's product form (V2.2) and the admin's request queue (V2.11, P2) —
+  /// which is why it lives in the library rather than in one of them. A drift
+  /// between the two would mean the same report said "within tolerance" on one
+  /// screen and "4.6 mm under" on the other.
+  group('the declared-vs-mesh sentence', () {
+    test('inside the contract tolerance it says so, with the gap', () {
+      expect(
+        shoeModelLengthDeltaSentence(declaredMm: 270, meshMm: 270.4),
+        'within tolerance (0.4 mm apart)',
+      );
+      // Inclusive at the boundary: ±kLengthToleranceMm is the contract's own
+      // tolerance, not slightly inside it.
+      expect(
+        shoeModelLengthDeltaSentence(declaredMm: 270, meshMm: 275),
+        'within tolerance (5.0 mm apart)',
+      );
+    });
+
+    test('outside it, the direction and the distance are named', () {
+      expect(
+        shoeModelLengthDeltaSentence(declaredMm: 270, meshMm: 264.6),
+        '5.4 mm under the declared length',
+      );
+      expect(
+        shoeModelLengthDeltaSentence(declaredMm: 270, meshMm: 278),
+        '8.0 mm over the declared length',
+      );
+    });
+
+    test('the direction reads the MESH against the declaration, both ways', () {
+      expect(
+        shoeModelLengthDeltaSentence(declaredMm: 300, meshMm: 290),
+        startsWith('10.0 mm under'),
+      );
+      expect(
+        shoeModelLengthDeltaSentence(declaredMm: 290, meshMm: 300),
+        startsWith('10.0 mm over'),
+      );
+    });
+  });
 }
 
 /// A 64-character lowercase hex digest of a repeated nibble — the shape

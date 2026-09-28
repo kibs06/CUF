@@ -1,11 +1,11 @@
 {
-  "latest_version": "1.0.31",
-  "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.31/app-release-1.0.31.apk",
+  "latest_version": "1.0.32",
+  "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.32/app-release-1.0.32.apk",
   "released_at": "2026-09-28",
   "notes": [
-    "Sellers can attach a 3D model to a product: paste the handover .glb link and the app fetches it, runs the eleven checks a try-on needs, and shows exactly which ones it failed",
-    "A model that passes is uploaded and held as a draft, so nothing unverified can reach a customer — switching one live is the server's call, and that call goes on next",
-    "Sellers can record a last's real measurements on a product — length, width, heel height and the size they were taken from — so fit advice has one honest source instead of a guess",
-    "Fit numbers can no longer be saved half-filled or implausible: the form and the database enforce the same limits now"
+    "Sellers who cannot produce a 3D file can now ask the CUFMAI team to model the pair — a ruler measurement taken from the product's own actions, and the team does the rest",
+    "The ask lands in a queue that names who has taken it, and it can only be closed against a model that is already live on that product",
+    "Both endings reach the seller in the team's own words — ready, or why it could not be made — on the notification bell, and tapping the notice opens that product",
+    "Ships ready and dark: the request flow is switched on with the team's next rollout, so nothing changes for customers in this build"
   ]
 }

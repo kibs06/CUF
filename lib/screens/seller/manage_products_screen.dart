@@ -13,7 +13,9 @@ import '../../services/store_service.dart';
 import '../../utils/sale_price.dart';
 import '../../utils/product_grid_ratio.dart';
 import '../../utils/product_audience.dart';
+import '../../utils/model_notice.dart';
 import '../../widgets/active_tab.dart';
+import '../../widgets/shoe_model_request_tile.dart';
 import '../../widgets/seller/seller_inventory_row.dart';
 import 'add_edit_product_screen.dart';
 import 'create_store_screen.dart';
@@ -48,9 +50,29 @@ class ManageProductsScreen extends StatefulWidget {
   /// Optional filter chip to preselect on open (e.g. 'Low Stock') — used by
   /// the dashboard metric and low-stock notifications to deep-link here.
   final String? initialFilter;
+
+  /// Optional product to open the action sheet for, as soon as the catalog
+  /// this screen shares can see it.
+  ///
+  /// The 3D-model notice's deep link (roadmap V2.14, `model_notice.dart`): the
+  /// seller is told their model is ready — or that the team could not make one
+  /// — and the tap lands on the product that notice is about, with its request
+  /// row in front of them, rather than on the catalog at large.
+  ///
+  /// Opening it is deliberately **conditional on the product being there**: a
+  /// notice names a product id, and by the time it is tapped that product may
+  /// have been deleted, may belong to another store, or simply not be in the
+  /// list this screen was handed yet. See [_openLinkedProduct].
+  final String? initialProductId;
+
   final bool hideAppBar;
 
-  const ManageProductsScreen({super.key, this.initialFilter, this.hideAppBar = false});
+  const ManageProductsScreen({
+    super.key,
+    this.initialFilter,
+    this.initialProductId,
+    this.hideAppBar = false,
+  });
 
   @override
   State<ManageProductsScreen> createState() => _ManageProductsScreenState();
@@ -105,6 +127,16 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
   StreamSubscription<bool>? _connectivitySub;
   bool _wasOffline = false;
 
+  /// The deep-linked product id, held until it has been honoured.
+  ///
+  /// Cleared the moment it is acted on (or given up on), which is what makes
+  /// the catalog listener below idempotent: `notifyListeners` fires on every
+  /// seller-catalog fetch, and a sheet must not reopen on each one.
+  String? _pendingProductId;
+
+  /// The shared catalog, listened to only while a link is pending.
+  ProductProvider? _catalog;
+
   // Alert banner auto-slide state
   Timer? _alertTimer;
   int _alertIndex = 0;
@@ -120,7 +152,17 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
       }
       _wasOffline = !isOnline;
     });
+    _pendingProductId = widget.initialProductId;
     _ensureProducts();
+    if (_pendingProductId != null) {
+      // A link usually arrives with a warm catalog (the deep link is pushed
+      // over a session that has already loaded one), so the first frame can
+      // resolve it outright. Listening covers the other case — a cold catalog
+      // — without polling and without a second fetch: whatever loads it,
+      // notifies this screen, and the link is honoured then.
+      _catalog = context.read<ProductProvider>()..addListener(_openLinkedProduct);
+      WidgetsBinding.instance.addPostFrameCallback((_) => _openLinkedProduct());
+    }
     _startAlertTimer();
   }
 
@@ -145,6 +187,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
   void dispose() {
     _alertTimer?.cancel();
     _connectivitySub?.cancel();
+    _catalog?.removeListener(_openLinkedProduct);
     _searchController.dispose();
     super.dispose();
   }
@@ -600,6 +643,56 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
     safeDisposeCtrl();
   }
 
+  /// Honour [ManageProductsScreen.initialProductId] — once.
+  ///
+  /// Three outcomes, and the two failures are the reason this is a method and
+  /// not a line in `initState`:
+  ///
+  ///   * **The product is there** — open its actions, which is where the model
+  ///     request lives, so the notice's promise ("it is on your product now")
+  ///     is one tap from the thing it is about.
+  ///   * **Not there *yet*** — the catalog this screen shares may still be
+  ///     fetching. That is not the same as gone, so nothing happens and the
+  ///     listener calls this again when the rows arrive.
+  ///   * **Gone** — deleted since the notice was written, or an id that was
+  ///     never this store's. Say so; do not open an empty sheet, and do not
+  ///     silently do nothing, because a link that looks broken is worse than
+  ///     one that explains itself.
+  ///
+  /// A failed catalog fetch is the fourth case and it is deliberately silent:
+  /// the screen's own error card already owns that story (with a retry), so a
+  /// second message about the same problem would only be noise.
+  void _openLinkedProduct() {
+    final pending = _pendingProductId;
+    if (pending == null || !mounted) return;
+
+    final catalog = context.read<ProductProvider>();
+    final product = linkedProduct(catalog.products, pending);
+
+    if (product == null) {
+      if (catalog.isLoading) return; // not there YET
+      _pendingProductId = null;
+      if (catalog.sellerCatalogError != null) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("That product isn't in your catalog any more."),
+          ),
+        );
+      });
+      return;
+    }
+
+    _pendingProductId = null;
+    // Out of the notifyListeners call stack (and out of build): the sheet is a
+    // route push, which must not happen while the framework is mid-tree.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _showProductActions(product);
+    });
+  }
+
   void _showProductActions(Map<String, dynamic> product) {
     final active = _isActive(product);
     final featured = _isFeatured(product);
@@ -770,6 +863,22 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
                 color: AppConstants.borderGray,
               ),
               // ── Secondary action(s) — extensible row list ───────────
+              // ── 3D model request (roadmap V2.10) ─────────────────────
+              // Above Hide/Delete because it is a request to a person rather
+              // than a state toggle, and the WHOLE block — divider included —
+              // is gated, so a build with the switch off renders the sheet
+              // that shipped before this feature existed.
+              if (AppConstants.shoeModelRequestEnabled) ...[
+                ShoeModelRequestTile(
+                  productId: product['id'].toString(),
+                  product: product,
+                  onChanged: () => _refreshProducts(),
+                ),
+                Divider(
+                  height: 16,
+                  color: AppConstants.borderGray,
+                ),
+              ],
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: Icon(

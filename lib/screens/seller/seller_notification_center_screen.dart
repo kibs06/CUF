@@ -8,6 +8,7 @@ import '../../constants/app_constants.dart';
 import '../../constants/seller_theme_constants.dart';
 import '../../providers/seller_notification_provider.dart';
 import '../../services/seller_notification_service.dart';
+import '../../utils/model_notice.dart';
 import 'manage_orders_screen.dart';
 import 'custom_orders_screen.dart';
 import 'manage_products_screen.dart';
@@ -286,6 +287,34 @@ class _SellerNotificationCenterScreenState
           MaterialPageRoute(
             builder: (_) =>
                 const ManageProductsScreen(initialFilter: 'Low Stock'),
+          ),
+        );
+        break;
+      case kModelRequestSellerType:
+        // ⚠️ The one tap this whole flow ends on (roadmap V2.14). The notice
+        // says the model is ready — or that the team could not make one, with
+        // the reason — and it names the PRODUCT it is about, so the tap goes
+        // to that product's actions rather than to the catalog at large. The
+        // request row is on that sheet, which is where the seller's next move
+        // is either way (open the model, or ask again).
+        //
+        // The switch is checked because a notice left over from a try-build
+        // must not land the seller on a sheet that cannot explain itself —
+        // `ManageProductsScreen` would open the product with no request row on
+        // it, and the seller would have no reason to connect the two.
+        // Degrading to the catalog is the `low_stock` behaviour, which is the
+        // right shape for "somewhere sensible" rather than "nothing".
+        final target = AppConstants.shoeModelRequestEnabled
+            ? modelNoticeTargetFromSellerRow(
+                type: notif.type,
+                referenceId: notif.referenceId,
+              )
+            : null;
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => ManageProductsScreen(
+              initialProductId: target?.productId,
+            ),
           ),
         );
         break;
@@ -679,6 +708,10 @@ class _NotificationRowContent extends StatelessWidget {
         return Icons.design_services_outlined;
       case 'new_message':
         return Icons.chat_bubble_outline;
+      case kModelRequestSellerType:
+        // The same icon the product action sheet's request row uses, so the
+        // notice and the row it points at read as one thing.
+        return Icons.view_in_ar_outlined;
       default:
         return Icons.notifications_none;
     }
@@ -696,6 +729,10 @@ class _NotificationRowContent extends StatelessWidget {
         return AppConstants.statusReadyColor;
       case 'new_message':
         return AppConstants.statusConfirmedColor;
+      case kModelRequestSellerType:
+        // Deep purple — "3D modelling news", the same reading as the customer
+        // feed's `models` colour, so an ending looks the same on either side.
+        return const Color(0xFF7E57C2);
       default:
         return AppConstants.primary;
     }

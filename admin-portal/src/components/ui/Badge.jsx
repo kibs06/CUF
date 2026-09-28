@@ -25,6 +25,16 @@ const VARIANTS = {
   succeeded: 'bg-teal-50 text-teal-700 border border-teal-200',
   failed: 'bg-red-50 text-red-700 border border-red-200',
   expired: 'bg-gray-100 text-gray-600 border border-gray-200',
+  // 3D model requests (ModelRequests page) — three of the table's five states.
+  // `requested` is amber because it is the one an admin has to act on, and
+  // `in_progress` is blue because somebody already has. The other two are reused
+  // rather than declared: `cancelled` is already the order-status red, and a
+  // seller withdrawing an ask is not the same news as a decline, so the page
+  // sends that one to `dismissed` (neutral) instead.
+  requested: 'bg-amber-50 text-amber-700 border border-amber-200',
+  in_progress: 'bg-blue-50 text-blue-700 border border-blue-200',
+  fulfilled: 'bg-teal-50 text-teal-700 border border-teal-200',
+  declined: 'bg-red-50 text-red-700 border border-red-200',
   // Webhook event processing statuses (timeline). NOTE: do not add a key
   // that already exists above (e.g. 'received' is the order status) — the
   // duplicate would silently override the order status tone.

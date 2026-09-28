@@ -146,6 +146,8 @@ class AppNotification {
         return NotificationCategory.approval;
       case 'reservations':
         return NotificationCategory.reservations;
+      case 'models':
+        return NotificationCategory.models;
       default:
         return NotificationCategory.unpaid;
     }

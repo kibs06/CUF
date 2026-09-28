@@ -103,6 +103,9 @@ Columns that are **NOT NULL** and therefore safe as recipients:
 | `IF v_store_owner IS NOT NULL THEN` (bulk) | 3 | ✅ already guarded |
 | `IF v_owner IS NOT NULL` / `IF v_row.owner_id IS NOT NULL` then `v_owners[v_at]` (pickup) | 2 | ✅ already guarded |
 | `v_row.customer_id` (store goodwill grant) | 1 | ✅ NOT NULL column |
+| `v_request.requested_by`, **joined to `profiles`** — `fulfil_shoe_model_request` (V2.12, added 2026-09-28) | 1 | ✅ NOT NULL column, and the join is the guard — see below |
+| the same recipient, this time read from `RETURNING requested_by, product_id` — `decline_shoe_model_request` (V2.13, added 2026-09-28) | 1 | ✅ NOT NULL column, and the same join guard — see below |
+| `shoe_model_requests.store_id` (raw **column**, no recipient row to be missing) — the seller-bell half of both closing RPCs (V2.14, added 2026-09-28) | 2 | ✅ NOT NULL column; no guard exists and none is needed — see below |
 | `submit_gcash_proof` → `seller_notifications` with `v_store_id` | 1 | ❌ **fixed** |
 | `SELECT s.owner_id` with **no** owner filter — `request_bulk_reservation` | 2 (live + superseded copy) | ❌ **fixed** |
 | `v_customer_id` from `orders.customer_id`, unguarded — `cancel_awaiting_gcash_order` | 2 (live + superseded copy) | ❌ **fixed** (batch abort, reproduced) |
@@ -144,6 +147,66 @@ re-apply of the older file would otherwise silently reintroduce the bug.
    audit work above it. See §7: this path cannot be tested.
 
 All eight are now guarded, and each guard names the reason at the site.
+
+**A ninth site arrived later (2026-09-28, roadmap V2.12) and it is deliberately
+not one of the eight.** `fulfil_shoe_model_request` writes the seller's "your 3D
+model is ready" notice in the same transaction that closes the request, because
+a closed ask nobody was told about is the one outcome that flow must not
+produce. Its recipient is `shoe_model_requests.requested_by`, which is
+`NOT NULL` — so the `stores.owner_id` hazard cannot happen here — but
+`notifications.user_id` references `profiles(id)`, and `requested_by` references
+`auth.users(id)`, so a missing profile row would raise `23503` and take the whole
+fulfil with it. The insert therefore selects **`FROM public.profiles p … WHERE
+p.id = v_request.requested_by`**: a profile that is not there yields zero rows
+and the close stands. That is the same idea as the guards above — never let the
+notice decide whether the work lands — reached by a join rather than a
+conditional, which is why the contract test's variable patterns do not (and
+cannot) cover it: there is no nullable column and no local variable to name. It
+is recorded here because that is where this audit's value is — the shape that
+would have been missed, written down at the site and in the list.
+
+**A tenth site joined it the same day (2026-09-28, roadmap V2.13) and it is the
+same site twice.** `decline_shoe_model_request` writes the seller's notice on the
+ending that is not good news, carrying the admin's typed reason — the two halves
+of one act, so a seller hears about either outcome without opening the product.
+It is the same recipient by the same rule (the row's `requested_by`, selected
+through the same `FROM public.profiles p … WHERE p.id = …` join, in the same
+transaction), and the same reason it cannot be a nullable-column guard: there is
+no column to test and no local variable to name. The one difference is *where the
+recipient comes from*: `fulfil` already held the request row in a variable,
+whereas `decline` was a blind `UPDATE`, so its `RETURNING requested_by,
+product_id INTO …` is what makes the recipient an authoritative fact about the
+row actually written. Worth an entry of its own for two reasons: a future sweep
+that greps for `SELECT … INTO v_recipient FROM` would have found the fulfil site
+and walked past this one (the id arrives as an `UPDATE` output, which is the
+shape this audit exists to name), and the negative case is asserted — a decline
+that matched no row writes nothing, so the audit's rule ("never let the notice
+decide whether the work lands") holds in the direction that matters most here,
+where the notice would otherwise be about an ask that is still open.
+
+**An eleventh and twelfth site the same day (2026-09-28, roadmap V2.14), and they
+are the first entries in this list with no guard at all — deliberately.**
+`fulfil_shoe_model_request` and `decline_shoe_model_request` now also write a
+**store-scoped** row to `seller_notifications` (`type = 'model_request'`,
+`reference_id` = the product), because the per-user rows above are rendered only
+by the customer shell's feed and a seller's session lands in `SellerShell`, whose
+bell reads `seller_notifications` — so V2.12/V2.13 told the right person on a
+channel they cannot open. Their recipient is `shoe_model_requests.store_id`, a
+`NOT NULL` column of the row each function has just read or updated, so there is
+no nullable source and no missing row: a guard would be unreachable code.
+
+That "no guard needed" claim is the kind this audit exists to distrust, so it is
+**mechanically checked rather than asserted in prose**:
+`test/services/notification_recipient_contract_test.dart` requires every
+`seller_notifications` insert in the migrations to be guarded for a nullable
+store id, and exempts this shape only while the column it reads is really
+`NOT NULL` — the test parses the `CREATE TABLE` for `shoe_model_requests` and
+asserts `store_id uuid NOT NULL` (and, as a non-vacuity check, that
+`orders.store_id` is still nullable, which is why the guarded sites need their
+guard). Make that column nullable in a later migration and the exemption stops
+being valid the moment it stops being true. This is a third response to the same
+hazard, after the `IS NOT NULL` guard and the `profiles` join: **remove the
+nullable source instead of testing for it.**
 
 **One adjacent fix, required to deploy the above.** The two bulk-reservation
 files were not actually re-runnable: 7 `CREATE POLICY` statements had no

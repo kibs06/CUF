@@ -137,6 +137,7 @@ Defined in `App.jsx`:
 | `/users` | Users | Users grouped by role (customer/seller/admin) |
 | `/seller-applications` | SellerApplications | Approve/reject pending sellers |
 | `/products` | Products | Catalog grouped by store; toggle publish, delete |
+| `/model-requests` | ModelRequests | The 3D model request queue (waiting badge in sidebar): claim, close as done against a live model, decline with a reason |
 | `/orders` | Orders | Order list w/ nested items; status updates |
 | `/transactions` | Transactions | Read-only GCash/PayMongo payments: summary cards, filters, detail modal w/ webhook event timeline, CSV export |
 | `/reports` | Reports | Report moderation (priority badge in sidebar) |
