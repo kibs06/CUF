@@ -1,5 +1,17 @@
 [
   {
+    "latest_version": "1.0.33",
+    "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.33/app-release-1.0.33.apk",
+    "released_at": "2026-09-28",
+    "notes": [
+      "Install update now works: every release is signed with one project key, so Android no longer ends the in-app update with App not installed.",
+      "Signing in on a fresh install lands on the dashboard, instead of waiting for a restart",
+      "A download that stops early now says so and resumes, instead of leaving an APK that can never install",
+      "Sellers who cannot produce a 3D file can ask the CUFMAI team to model the pair — measure the outside of the shoe and the team does the rest",
+      "The ask lands in the team's queue, only a model that is live on that product can close it, and both endings reach the seller in the team's own words"
+    ]
+  },
+  {
     "latest_version": "1.0.32",
     "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.32/app-release-1.0.32.apk",
     "released_at": "2026-09-28",

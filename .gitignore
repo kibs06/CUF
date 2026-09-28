@@ -49,6 +49,15 @@ dart_defines.json
 *.env
 nul
 
+# Android release signing. `android/.gitignore` already excludes what the
+# tooling writes there (key.properties, **/*.jks, **/*.keystore); these are a
+# repo-wide backstop so a keystore generated elsewhere by accident still
+# cannot be committed. The keystore IS the app's identity — see
+# docs/RELEASE_SIGNING.md.
+android/key.properties
+*.jks
+*.keystore
+
 # Local backup secrets + outputs (see backup/README)
 backup/config.ps1
 backup/backups/

@@ -7,6 +7,7 @@ import '../../providers/theme_provider.dart';
 import '../../providers/update_provider.dart';
 import '../../services/supabase_service.dart';
 import '../../utils/customer_profile_fields.dart';
+import '../../widgets/auth/dismiss_on_signin.dart';
 import '../auth/account_entry_screen.dart';
 import '../customer/address_book_screen.dart';
 import '../customer/size_your_foot_screen.dart';
@@ -595,11 +596,17 @@ class SettingsScreen extends StatelessWidget {
       ),
     );
 
-    // If 'add_account' was returned, navigate to login
+    // If 'add_account' was returned, navigate to login. The screen is wrapped
+    // so it dismisses itself on the new sign-in: it is pushed ABOVE AuthGate,
+    // so the gate's root swap (which is what routes a fresh login to a shell)
+    // happens underneath it — without this the user signs in as the second
+    // account and stays on the form. The current account is NOT signed out
+    // here: `logout()` drops it from the multi-account store, which is the
+    // opposite of what "add account" means.
     if (result == 'add_account' && context.mounted) {
       await Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => const AccountEntryScreen(),
+          builder: (_) => const DismissOnSignIn(child: AccountEntryScreen()),
         ),
       );
     }

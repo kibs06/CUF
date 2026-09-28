@@ -286,10 +286,11 @@ lib/
 - **In-App Update Checker**: Self-hosted JSON manifest (not Play Store API).
 - **Manifest URLs**: Configured in `lib/constants/app_constants.dart` (`updateManifestUrl`, `updateChangelogUrl`).
 - **Auto-Release via GitHub Actions**: `.github/workflows/release.yml` triggers on `vX.Y.Z` tag push:
-  1. Builds release APK (debug-signed)
+  1. Signs and builds the release APK with the project release key (repo secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`; **the job fails when they are absent**), then verifies the built APK's signer certificate against the keystore
   2. Rewrites `releases/version.json` + prepends `releases/changelog.json` on `main`
   3. Creates GitHub Release with APK attached
-- **Local Release Script**: `releases/publish.sh` (or `.bat`) — bumps version, builds APK, updates JSON, commits, creates release.
+- **Local Release Script**: `releases/publish.sh` (or `.bat`) — bumps version, builds APK, updates JSON, commits, creates release. Refuses to publish without `android/key.properties`.
+- **Release Key is Irreplaceable**: one key (`android/app/cufmai-release.jks` + `android/key.properties`, both git-ignored and backed up out of band) signs every release. Android only replaces an installed app whose signing certificate matches, so losing or rotating that key means every device must uninstall and reinstall by hand. Never debug-sign a published release. See `docs/RELEASE_SIGNING.md`.
 
 ### 9.2 Versioning
 - **Semantic Versioning**: `MAJOR.MINOR.PATCH` (e.g., `1.4.0`)

@@ -90,6 +90,18 @@ class _WhatsNewScreenState extends State<WhatsNewScreen> {
     try {
       // Download is skipped by the service when this version's APK exists.
       await _installer.downloadAndInstall(update.apkUrl, update.version);
+    } on DownloadIncompleteException catch (e) {
+      // The .part file is still on disk, so tapping Download again resumes it.
+      // That beats the browser fallback, which would restart the whole ~220 MB.
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Download stopped early (${e.receivedBytes ~/ (1024 * 1024)} of '
+            '${e.expectedBytes ~/ (1024 * 1024)} MB) — tap Download to resume.',
+          ),
+          backgroundColor: AppConstants.error,
+        ),
+      );
     } catch (e) {
       messenger.showSnackBar(
         const SnackBar(
@@ -533,13 +545,36 @@ class _InstallReadySection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SolePrimaryButton(
-      label: 'Install update',
-      backgroundColor: AppConstants.success,
-      textColor: Colors.white,
-      icon: const Icon(Icons.install_mobile_rounded,
-          size: 18, color: Colors.white),
-      onPressed: onInstall,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SolePrimaryButton(
+          label: 'Install update',
+          backgroundColor: AppConstants.success,
+          textColor: Colors.white,
+          icon: const Icon(Icons.install_mobile_rounded,
+              size: 18, color: Colors.white),
+          onPressed: onInstall,
+        ),
+        const SizedBox(height: 8),
+        // Transitional note (2026-09-28): releases built before the signing fix
+        // were each signed with a different throwaway key, so the installer
+        // answers this handoff with "App not installed." — and Android reports
+        // nothing back to us, so the screen has to say it in advance. One
+        // manual reinstall moves a device onto the release key, after which
+        // this note (and the failure it explains) is dead weight.
+        // See docs/RELEASE_SIGNING.md.
+        Text(
+          'Getting "App not installed"? This phone holds a build signed with an '
+          'old key: uninstall CUFMAI once and install this version from your '
+          'browser. Later updates install right here.',
+          style: AppConstants.bodyStyle(
+            fontSize: 11,
+            height: 1.4,
+            color: const Color(0xFFF5EDE4).withValues(alpha: 0.7),
+          ),
+        ),
+      ],
     );
   }
 }

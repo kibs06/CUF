@@ -11,6 +11,10 @@ import 'package:path_provider/path_provider.dart';
 /// available as a fallback in the What's New screen).
 ///
 /// Android contract:
+///  • The APK must be signed with the same key as the installed build: Android
+///    refuses a differently-signed replacement (its "App not installed."
+///    dialog) and reports nothing back to the caller. Releases are signed with
+///    `android/app/cufmai-release.jks` — see docs/RELEASE_SIGNING.md.
 ///  • `REQUEST_INSTALL_PACKAGES` is declared in the manifest.
 ///  • The FIRST install attempt bounces the user to the one-time
 ///    "Allow CUFMAI to install apps" toggle; OpenFilex returns
@@ -39,13 +43,25 @@ class ApkInstallerService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Smallest file this service will believe is one of its own APKs. The real
+  /// thing is ~220 MB (ARCore + ML Kit + Filament); anything a few KB under the
+  /// final name was promoted while still truncated, and handing that to the
+  /// installer ends in Android's generic "App not installed." with no way back —
+  /// the file would be reused by every later Install tap.
+  static const int minPlausibleApkBytes = 5 * 1024 * 1024;
+
   /// Path of the APK previously downloaded for [version], or null.
-  /// Used to resume/tap-Install without re-downloading.
+  /// Used to resume/tap-Install without re-downloading. A file too small to be
+  /// a real APK is deleted, so the download starts over instead of being
+  /// retried as-is forever.
   Future<String?> _existingApkPath(String version) async {
     try {
       final dir = await _apkDir();
       final f = File('${dir.path}/cufmai-$version.apk');
-      return f.existsSync() ? f.path : null;
+      if (!f.existsSync()) return null;
+      if (isUsableApkFile(f.lengthSync())) return f.path;
+      f.deleteSync();
+      return null;
     } catch (_) {
       return null;
     }
@@ -147,6 +163,19 @@ class ApkInstallerService extends ChangeNotifier {
         await sink.close();
       }
 
+      // A dropped connection can end the stream without raising, so "the loop
+      // finished" is not "the file is complete". Promoting a short file to the
+      // final name would make it the reusable APK for this version — and it can
+      // only ever fail to install. Keep the .part (so the next tap resumes it)
+      // unless the byte count matches what the server promised.
+      final written = partial.lengthSync();
+      if (!isDownloadComplete(written, total)) {
+        _emit(ApkDownloadState.error(
+          'Download stopped early at $written of $total bytes.',
+        ));
+        throw DownloadIncompleteException(written, total);
+      }
+
       // Complete → promote to the final name.
       final finalFile = File(savePath);
       if (finalFile.existsSync()) finalFile.deleteSync();
@@ -154,6 +183,10 @@ class ApkInstallerService extends ChangeNotifier {
 
       _emit(ApkDownloadState.done(savePath));
       return savePath;
+    } on DownloadIncompleteException {
+      // State was already emitted with the byte counts; the .part file stays
+      // on disk for the resume.
+      rethrow;
     } on DioException catch (e) {
       if (e.type == DioExceptionType.cancel) {
         _emit(ApkDownloadState.idle(message: 'Download cancelled'));
@@ -222,6 +255,39 @@ class ApkInstallerService extends ChangeNotifier {
       if (dir.existsSync()) dir.deleteSync(recursive: true);
     } catch (_) {}
   }
+}
+
+/// Whether a finished byte stream may be promoted to the reusable APK name.
+///
+/// A dropped connection can end the stream without raising, so "the loop
+/// finished" is not "the file is complete": this is the check that keeps a
+/// truncated APK from taking the final name and failing every future install.
+/// An unknown expected length (`<= 0`, e.g. a chunked response) cannot be
+/// checked and is allowed through — the HTTP layer's own timeouts are the only
+/// guard there.
+@visibleForTesting
+bool isDownloadComplete(int writtenBytes, int expectedBytes) =>
+    expectedBytes <= 0 || writtenBytes == expectedBytes;
+
+/// Whether a file sitting under the final APK name is big enough to be one.
+/// Used when reusing a previous download: an implausibly small file is deleted
+/// so the download starts over instead of being retried forever.
+@visibleForTesting
+bool isUsableApkFile(int bytes) =>
+    bytes >= ApkInstallerService.minPlausibleApkBytes;
+
+/// Thrown when the byte stream ended before Content-Length bytes arrived — a
+/// dropped connection, a closing proxy, or a killed download that never
+/// raised. The partial file is kept, so tapping Download again resumes it.
+class DownloadIncompleteException implements Exception {
+  const DownloadIncompleteException(this.receivedBytes, this.expectedBytes);
+
+  final int receivedBytes;
+  final int expectedBytes;
+
+  @override
+  String toString() =>
+      'DownloadIncompleteException($receivedBytes/$expectedBytes bytes)';
 }
 
 /// Immutable status snapshot for the UI.

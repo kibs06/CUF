@@ -20,10 +20,21 @@ name: Release APK
 # Notes are read from the annotated tag message (each line becomes a changelog
 # bullet). If the tag has no message, GitHub auto-generates the release notes.
 #
-# No secrets are required: release builds use the debug signing config
-# (signingConfigs.debug in android/app/build.gradle) and the app reads its
-# Supabase/MapTiler values from lib/constants/app_constants.dart, not
-# dart-defines — so this runs on a plain public repo.
+# Required repo secrets (Settings → Secrets and variables → Actions):
+#   ANDROID_KEYSTORE_BASE64 · ANDROID_KEYSTORE_PASSWORD · ANDROID_KEY_ALIAS
+#   (+ optional ANDROID_KEY_PASSWORD, defaulting to the keystore password)
+# They carry the project's release signing key, created once with
+# `tool/setup_release_signing.sh` — see docs/RELEASE_SIGNING.md.
+#
+# The job FAILS without them, on purpose. A CI runner has no debug keystore,
+# so a build that falls back to `signingConfigs.debug` is signed with a
+# brand-new throwaway key, and Android refuses to replace an installed app
+# whose signer differs: every tester's in-app update ends in "App not
+# installed." Signing with one stable key is the fix, and skipping it silently
+# would ship the same broken update again.
+#
+# The app reads its Supabase/MapTiler values from lib/constants/app_constants.dart,
+# not dart-defines — so the secrets above are the only ones this job needs.
 
 on:
   push:
@@ -63,8 +74,109 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Configure release signing
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+
+          # Without these, android/app/build.gradle falls back to
+          # signingConfigs.debug and the APK gets a runner-generated key that
+          # cannot be installed over any previous release. Stop now and say
+          # exactly what is missing rather than publish a broken update.
+          missing=()
+          [[ -z "${ANDROID_KEYSTORE_BASE64:-}" ]] && missing+=("ANDROID_KEYSTORE_BASE64")
+          [[ -z "${ANDROID_KEYSTORE_PASSWORD:-}" ]] && missing+=("ANDROID_KEYSTORE_PASSWORD")
+          [[ -z "${ANDROID_KEY_ALIAS:-}" ]] && missing+=("ANDROID_KEY_ALIAS")
+          if (( ${#missing[@]} > 0 )); then
+            echo "::error::Missing repository secret(s): ${missing[*]}. Run tool/setup_release_signing.sh, then add them under Settings → Secrets and variables → Actions → Repository secrets. Refusing to publish a debug-signed APK."
+            exit 1
+          fi
+
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/cufmai-release.jks
+          if [[ ! -s android/app/cufmai-release.jks ]]; then
+            echo "::error::ANDROID_KEYSTORE_BASE64 did not decode to a keystore. Re-run 'base64 -w0 android/app/cufmai-release.jks' and update the secret."
+            exit 1
+          fi
+
+          # storeFile is resolved relative to the app module (android/app/).
+          {
+            echo "storePassword=$ANDROID_KEYSTORE_PASSWORD"
+            echo "keyPassword=${ANDROID_KEY_PASSWORD:-$ANDROID_KEYSTORE_PASSWORD}"
+            echo "keyAlias=$ANDROID_KEY_ALIAS"
+            echo "storeFile=cufmai-release.jks"
+          } > android/key.properties
+
+          # Fail here (not 8 minutes into the build) if the secrets don't match
+          # the keystore — wrong password, wrong alias, wrong file.
+          keytool -list -keystore android/app/cufmai-release.jks \
+            -alias "$ANDROID_KEY_ALIAS" -storepass "$ANDROID_KEYSTORE_PASSWORD" >/dev/null
+          echo "✔ Signing key loaded for alias '$ANDROID_KEY_ALIAS'"
+
       - name: Build release APK
-        run: flutter build apk --release
+        shell: bash
+        env:
+          # Optional feature switches for this release, space separated, e.g.
+          #   SHOE_MODEL_REQUEST=true ADMIN_MODEL_UPLOAD=true
+          # Set once in Settings → Secrets and variables → Actions → Variables.
+          # Absent (the default) means the build carries every switch's shipped
+          # default — which is how a flag-gated surface ends up "missing" from a
+          # release that claims it shipped it. See README → "Feature switches in
+          # a release" for the list and the recipe.
+          RELEASE_DART_DEFINES: ${{ vars.RELEASE_DART_DEFINES }}
+        run: |
+          set -euo pipefail
+
+          ARGS=(--release)
+          if [[ -n "${RELEASE_DART_DEFINES:-}" ]]; then
+            read -ra DEFINES <<< "$RELEASE_DART_DEFINES"
+            for define in "${DEFINES[@]}"; do
+              ARGS+=("--dart-define=$define")
+            done
+          fi
+
+          # Echoed, because "does this APK have the request flow?" should be
+          # answerable from the release log rather than by rebuilding it.
+          echo "→ flutter build apk ${ARGS[*]}"
+          flutter build apk "${ARGS[@]}"
+
+      - name: Verify the APK signer is the release key
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+
+          APK="build/app/outputs/flutter-apk/app-release.apk"
+          # Both tools print the fingerprint differently (colons, case, spaces).
+          normalize() { tr -d ':\r' | tr 'A-Z' 'a-z' | tr -d ' '; }
+
+          EXPECTED="$(keytool -list -v -keystore android/app/cufmai-release.jks \
+            -alias "$ANDROID_KEY_ALIAS" -storepass "$ANDROID_KEYSTORE_PASSWORD" \
+            | grep -i 'SHA256:' | head -1 | sed 's/.*SHA256: *//' | normalize)"
+
+          APKSIGNER="$(find "${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}/build-tools" \
+            -maxdepth 2 -type f -name apksigner 2>/dev/null | sort -V | tail -1)"
+          if [[ -z "$APKSIGNER" ]]; then
+            echo "::warning::apksigner not found — skipping the comparison (the key that built this APK has SHA-256 $EXPECTED)."
+            exit 0
+          fi
+
+          ACTUAL="$("$APKSIGNER" verify --print-certs "$APK" \
+            | grep -i 'SHA-256 digest' | head -1 | sed 's/.*digest: *//' | normalize)"
+          if [[ -z "$ACTUAL" || "$ACTUAL" != "$EXPECTED" ]]; then
+            echo "::error::app-release.apk is not signed by the project release key (expected $EXPECTED, got ${ACTUAL:-none}). Publishing it would break the in-app update on every device."
+            exit 1
+          fi
+
+          # The line to keep in the release notes: if this fingerprint ever
+          # changes between releases, installed apps stop being updatable.
+          echo "✔ Signed by the project release key — SHA-256 $EXPECTED"
 
       - name: Create GitHub Release + upload APK
         shell: bash

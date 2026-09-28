@@ -26,6 +26,33 @@ if (flutterVersionName == null) {
     flutterVersionName = '1.0'
 }
 
+// ── Release signing ─────────────────────────────────────────────────────
+// `android/key.properties` (git-ignored) holds the project's release keystore
+// credentials — see docs/RELEASE_SIGNING.md.
+//
+// Why this exists: release builds used `signingConfigs.debug`, and a debug
+// keystore is generated *per machine* (Android Studio/AGP creates
+// $HOME/.android/debug.keystore the first time it signs a build, and a fresh
+// CI runner starts without one). So every GitHub-built release was signed with
+// a brand-new throwaway key, and Android refuses to replace an installed app
+// whose signer differs — the "App not installed." dialog testers hit when the
+// in-app updater handed a new APK to the package installer.
+//
+// One stable project key across every release is what makes an update
+// installable over the previous version.
+//
+// No key.properties (fresh clone, fork, CI without the secrets) → fall back to
+// the debug config so local work still builds. An APK built that way cannot be
+// installed over a release-signed one and must never be published.
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file('key.properties')
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.withReader('UTF-8') { reader ->
+        keystoreProperties.load(reader)
+    }
+}
+def hasReleaseSigning = keystorePropertiesFile.exists() && keystoreProperties['storeFile'] != null
+
 android {
     namespace 'com.solevision.app'
     compileSdkVersion 36
@@ -72,9 +99,26 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // Declared only when the credentials are present: an empty `release` config
+    // fails the build at signing time with "Keystore file not set".
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+                // Relative to this module (android/app/) — same convention as
+                // the Flutter template's key.properties.
+                storeFile file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+            }
+        }
+    }
+
     buildTypes {
         release {
-            signingConfig signingConfigs.debug
+            // Debug fallback keeps local dev builds working; a published APK
+            // must carry the project key instead (see the block above).
+            signingConfig hasReleaseSigning ? signingConfigs.release : signingConfigs.debug
             minifyEnabled false
             shrinkResources false
         }

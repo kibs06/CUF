@@ -2,14 +2,30 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../constants/app_constants.dart';
-import 'account_entry_screen.dart';
 
 /// Three-slide onboarding shown on the very first app launch.
 ///
 /// After completion, sets `has_seen_onboarding = true` in SharedPreferences
 /// so it never shows again.
+///
+/// **It does not navigate.** [onFinished] tells the host (AuthGate's
+/// `_FirstTimeOrLoginRouter`) that the pref is written; the host is what swaps
+/// itself for `AccountEntryScreen`.
+///
+/// This used to be `Navigator.pushReplacement(AccountEntryScreen)` — and since
+/// this screen is a CHILD of AuthGate rather than a route of its own, that call
+/// replaced the gate's own route and unmounted the gate. On a fresh install the
+/// user therefore signed in with nothing left listening for the new session and
+/// sat on the sign-in form until they force-closed the app. Reproduced
+/// 2026-09-28 (see test/screens/onboarding_handoff_test.dart) and fixed by
+/// handing the swap back to the gate.
 class OnboardingScreen extends StatefulWidget {
-  const OnboardingScreen({super.key});
+  const OnboardingScreen({super.key, required this.onFinished});
+
+  /// Called after `has_seen_onboarding` is persisted. The host decides what
+  /// comes next — pushing a route from here would take the gate out of the
+  /// navigation stack again.
+  final VoidCallback onFinished;
 
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -70,13 +86,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('has_seen_onboarding', true);
     if (!mounted) return;
-    Navigator.of(context).pushReplacement(
-      PageRouteBuilder(
-        pageBuilder: (_, animation, _) =>
-            FadeTransition(opacity: animation, child: const AccountEntryScreen()),
-        transitionDuration: const Duration(milliseconds: 500),
-      ),
-    );
+    // The host owns the swap (see the class docs). Nothing is pushed here on
+    // purpose — a route pushed from this widget's context sits ABOVE the gate.
+    widget.onFinished();
   }
 
   @override

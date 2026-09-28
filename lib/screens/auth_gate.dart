@@ -506,8 +506,25 @@ class _FirstTimeOrLoginRouterState extends State<_FirstTimeOrLoginRouter> {
     // AuthGate's StreamBuilder controls all navigation after login.
     // When the stream emits signedIn, AuthGate rebuilds and replaces
     // this widget with the correct shell automatically.
-    if (!_hasSeenOnboarding!) return const OnboardingScreen();
-    return const AccountEntryScreen();
+    //
+    // The same rule applies to what is returned here. Onboarding is a CHILD of
+    // this router, so a route pushed from inside it would replace this gate's
+    // own route and leave the app with no auth listener at all — the fresh
+    // install bug where a successful sign-in did nothing until the app was
+    // restarted (proven 2026-09-28). It reports completion instead, and the
+    // swap to AccountEntryScreen happens right here.
+    //
+    // The swap is animated in place so the handoff keeps the fade the old
+    // `pushReplacement` provided — without borrowing its route semantics.
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 400),
+      child: _hasSeenOnboarding!
+          ? const AccountEntryScreen(key: ValueKey('account-entry'))
+          : OnboardingScreen(
+              key: const ValueKey('onboarding'),
+              onFinished: () => setState(() => _hasSeenOnboarding = true),
+            ),
+    );
   }
 }
 

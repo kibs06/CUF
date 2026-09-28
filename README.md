@@ -137,6 +137,7 @@ Sideloading an APK requires the downloading app (browser, file manager) to have 
 | `docs/SoleVision_Complete_Documentation.md` | Master reference — schema, RLS, services, history |
 | `docs/AI_PROJECT_SUMMARY.md` | Quick reference for the whole project |
 | `docs/PROJECT_HANDOFF.md` | Decisions, known issues, what's next |
+| `docs/RELEASE_SIGNING.md` | The Android release key, why in-app updates require it, the one-time reinstall |
 | `docs/AI/` | Per-feature architecture notes (checkout, POS, foot sizing, notifications, …) |
 
 ---
@@ -197,7 +198,10 @@ pull-to-refresh on that screen forces a fresh fetch.
 The repo ships `.github/workflows/release.yml`, which does the whole release
 whenever you push a `vX.Y.Z` tag:
 
-1. Builds the release APK (debug-signed, same as local builds).
+1. Builds the release APK, signed with the project's release key — supplied to
+   CI through repository secrets, and **the job fails without them** (a
+   debug-signed release cannot be installed over any previous release; see
+   `docs/RELEASE_SIGNING.md`).
 2. Rewrites `releases/version.json` + prepends `releases/changelog.json` on
    `main` (version taken from the tag, notes read from the annotated tag
    message — one bullet per line).
@@ -214,9 +218,57 @@ Improved startup time"
 git push origin v1.0.1
 ```
 
-No secrets are needed: release builds use the debug signing config and the
-app reads its Supabase/MapTiler values from `app_constants.dart`, not
-dart-defines.
+Release builds are signed with `android/app/cufmai-release.jks`, created once
+by `tool/setup_release_signing.sh`, which also prints the four repository
+secrets CI needs (`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`,
+`ANDROID_KEY_ALIAS`, optional `ANDROID_KEY_PASSWORD`). **Every release must be
+signed with that one key** — Android refuses to replace an installed app whose
+signing certificate differs, which is what "App not installed." means when the
+in-app updater hands over a new APK. Read `docs/RELEASE_SIGNING.md` before
+touching any of it. (Supabase/MapTiler values come from `app_constants.dart`,
+not dart-defines, so these are the only secrets involved.)
+
+### Feature switches in a release
+
+New visible surfaces ship **dark**: each one reads a compile-time switch from
+`AppConstants` (`bool.fromEnvironment(...)`), so a build that never passes the
+define behaves exactly like the release before the feature existed. The app's
+switches, and their shipped defaults:
+
+| Switch | Default | What it gates |
+|--------|---------|---------------|
+| `SHOE_MODEL_UPLOAD` | **on** | the seller's 3D-model upload section in the product form |
+| `SHOE_MODEL_REQUEST` | off | the **3D model** row in the seller's product action sheet (ask the CUFMAI team to model the pair) and the admin queue that answers it |
+| `ADMIN_MODEL_UPLOAD` | off | the admin's “Upload a 3D model” action in that queue |
+
+A switch that is never passed is **not** the same as a switch passed as `false`
+— both mean "off", but only the first is invisible in a release log. That is
+how a flag-gated surface ends up reported as "missing" from a build whose
+release notes announce it.
+
+- **In CI (tagged releases):** set the repository variable
+  `RELEASE_DART_DEFINES` (Settings → Secrets and variables → Actions →
+  Variables) to a space-separated list, e.g.
+  `SHOE_MODEL_REQUEST=true ADMIN_MODEL_UPLOAD=true`. The build step passes each
+  one as `--dart-define=` and **echoes the full command** it ran, so the release
+  log answers "does this APK have the request flow?" without rebuilding it.
+  Unset means every switch keeps its shipped default.
+- **Locally:** `dart_defines.json` (git-ignored) — `releases/publish.sh` passes
+  it with `--dart-define-from-file` when it exists.
+  `dart_defines.json.example` lists every switch at its shipped default, so
+  copying it changes nothing.
+
+Turning the **seller 3D-model request** on is two steps, in this order, and the
+first one is not optional — the row it adds writes through an RPC that the live
+project does not have yet (`supabase/MIGRATIONS_LIVE_STATUS.md`):
+
+1. Apply `supabase/manual/20260928140000_add_shoe_model_requests.apply.sql` in
+   the SQL Editor and confirm it with the bundle's PART 2 query.
+2. Set `RELEASE_DART_DEFINES=SHOE_MODEL_REQUEST=true` (and, for the admin's
+   publish action, `ADMIN_MODEL_UPLOAD=true`) and cut a release.
+
+v1.0.32 shipped **before** step 1, which is why its release notes say the flow
+"ships ready and dark".
 
 ### One-command release script (local alternative)
 
@@ -237,16 +289,19 @@ your machine instead of pushing a tag:
 releases\publish.bat 1.0.29 "A store that's on sale now says so|Fixed: a rail card's name sits on its own edge"
 ```
 
-Requirements: Flutter on PATH and the GitHub CLI (`gh`) installed +
-authenticated (`gh auth login`). Install gh with `winget install GitHub.cli`
-(Windows) or `brew install gh` (macOS).
+Requirements: Flutter on PATH, the GitHub CLI (`gh`) installed + authenticated
+(`gh auth login`), and the release signing key in place
+(`android/key.properties` + `android/app/cufmai-release.jks`). Install gh with
+`winget install GitHub.cli` (Windows) or `brew install gh` (macOS). The script
+stops rather than publish a debug-signed APK no device could install.
 
 ### Manual release checklist
 
 If you'd rather publish by hand:
 
 1. Bump `version:` in `pubspec.yaml` (e.g. `1.4.0+8`).
-2. Build the release APK: `flutter build apk --release`.
+2. Build the release APK: `flutter build apk --release` (with
+   `android/key.properties` present, so it is signed with the release key).
 3. Create a GitHub Release tagged `v1.4.0` and attach the APK **renamed** to
    `app-release-1.4.0.apk` (the in-app Download button uses that exact URL).
 4. Update `releases/version.json` with the new version + APK URL + notes.

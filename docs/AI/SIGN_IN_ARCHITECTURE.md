@@ -35,7 +35,9 @@
 - **On successful login:** `AuthProvider` caches `currentUser` + `profile`,
   fires `onLoginHook` (loads `FollowProvider`), and **AuthGate's
   StreamBuilder reacts to the Supabase auth state change** to swap the root
-  widget — `AccountEntryScreen` never navigates itself.
+  widget — `AccountEntryScreen` never navigates itself. The gate can only swap
+  screens it renders itself, which is why nothing may push a route above it or
+  replace its route (gotcha 14).
 - **Two login paths:** email/password (`_submit`) and biometric
   (`_loginWithBiometrics`, shown only when the device supports it AND the
   user has previously enrolled).
@@ -296,3 +298,28 @@ ROUTING       AuthGate StreamBuilder → _routeByRole() → shell
     inside a scroll view (`ConstrainedBox(minHeight)` + `IntrinsicHeight` +
     `Column(end)`), so on short devices / large text / open keyboard it
     scrolls instead of clipping. Safe areas respected in both modes.
+14. **Nothing but the gate may own the swap — two flows learned this the hard
+    way (both reproduced and fixed 2026-09-28).** AuthGate can only route
+    screens it renders *itself*: a route pushed **on top of** it stays on top
+    of the shell it swaps to, and a route pushed **from inside its child**
+    replaces the gate's own route and unmounts it — after which no listener
+    exists and a successful sign-in does precisely nothing until the app is
+    force-closed.
+    - **First launch (the reported bug):** `OnboardingScreen._completeOnboarding`
+      called `Navigator.pushReplacement(AccountEntryScreen)`. The onboarding
+      screen is the gate's CHILD, not a route, so that call replaced the gate's
+      route: the very first sign-in after installing the app left the user on
+      the sign-in panel, and reopening the app (now with a session and no
+      pushed route) landed them on the shell. The screen now reports
+      `onFinished` and `_FirstTimeOrLoginRouter` performs the swap
+      (`test/screens/onboarding_handoff_test.dart` pins this).
+    - **Settings → Switch Account → Add account** pushes `AccountEntryScreen`
+      above the gate, so the gate's swap rendered *underneath* it. That route is
+      now wrapped in `DismissOnSignIn` (`lib/widgets/auth/dismiss_on_signin.dart`),
+      which dismisses it on a **new** sign-in and deliberately not on a token
+      refresh — a refresh fires constantly while a session lives, and popping on
+      one would erase the form mid-typing
+      (`test/widgets/dismiss_on_signin_test.dart`).
+    - The `_openSwitchAccount` handler also deliberately does **not** log the
+      current account out: `AuthProvider.logout()` removes that account from the
+      multi-account store, which is the opposite of "add account".

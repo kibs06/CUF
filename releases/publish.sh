@@ -23,6 +23,14 @@
 # (`gh auth login`). Install gh: `winget install GitHub.cli` (Windows) or
 # `brew install gh` (macOS).
 #
+# Also requires the project's release signing key (`android/key.properties` +
+# `android/app/cufmai-release.jks`, created once by
+# `tool/setup_release_signing.sh`). The APK published here is the one the app's
+# self-updater installs over the previous release, and Android only accepts an
+# update whose signer matches — a debug-signed build gets "App not installed."
+# on every device. The script refuses to publish without the key; see
+# docs/RELEASE_SIGNING.md.
+#
 # Android testers still need "Install unknown apps" enabled for the browser
 # that downloads the APK — see README.
 # ════════════════════════════════════════════════════════════════════════
@@ -52,6 +60,24 @@ if ! command -v gh >/dev/null 2>&1; then
   echo "    winget install GitHub.cli   # or: brew install gh" >&2
   echo "    gh auth login" >&2
   echo "  Without it the Release can't be created." >&2
+  exit 1
+fi
+
+# ── 0b. Release signing key present? ────────────────────────────────────
+# android/app/build.gradle falls back to signingConfigs.debug when
+# android/key.properties is absent, which builds fine and publishes an APK no
+# installed copy of the app can accept. Fail before the 5-minute build.
+if [[ ! -f android/key.properties ]]; then
+  echo "✖ android/key.properties is missing — this release would be debug-signed," >&2
+  echo "  and Android refuses to install it over any previous release." >&2
+  echo "  Run once: tool/setup_release_signing.sh --yes (see docs/RELEASE_SIGNING.md)." >&2
+  exit 1
+fi
+STORE_FILE="$(sed -n 's/^storeFile=//p' android/key.properties | tr -d '\r' | head -1)"
+if [[ -z "$STORE_FILE" || ! -f "android/app/$STORE_FILE" ]]; then
+  echo "✖ android/key.properties names a keystore that is not there (${STORE_FILE:-<unset>})." >&2
+  echo "  Expected: android/app/$STORE_FILE — restore it from your backup" >&2
+  echo "  (the keystore cannot be regenerated without locking out every install)." >&2
   exit 1
 fi
 
