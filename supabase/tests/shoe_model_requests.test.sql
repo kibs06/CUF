@@ -47,6 +47,21 @@
 -- switch to `authenticated`. Switching for every call would have meant
 -- granting the harness's temp table to a client role just to record what an
 -- RPC returned, which is noise in a suite about policy.
+--
+-- A NOTE ON THROWS_OK, because it cost this suite a run: pgTAP's 3-argument
+-- `throws_ok(sql, errcode, x)` reads `x` as the ERRMSG pattern, not the
+-- description, so every call below puts the description in the FOURTH slot
+-- behind an explicit `null` (the `pickup_codes.test.sql`:206 shape). Through
+-- the 3-arg form the two failing closing RPCs still raised 42501 and the suite
+-- still reported a mismatch — against its own prose.
+--
+-- AND ON ROW IDENTITY: an RPC argument that names a request resolves through
+-- `tmp_req_open_id()`, never through `where product_id = …` alone. This suite
+-- files, withdraws, then REFILES product 21 (assertion 28, which is how the
+-- partial index is proved), so from the team's half of the run onwards that
+-- product carries a cancelled row beside the open one. The bare subquery then
+-- returns two rows — a 21000 that aborts the run at whatever assertion happens
+-- to be next, instead of failing the one assertion that is wrong.
 -- ══════════════════════════════════════════════════════════════════
 
 begin;
@@ -71,6 +86,17 @@ $$;
 create or replace function public.tmp_req_msg(p_result json)
 returns text language sql immutable as $$
   select coalesce(p_result ->> 'message', '');
+$$;
+
+-- The queue's identity is the OPEN ask, and a product can carry a closed one
+-- beside it (assertion 28 asks again after a withdrawal). `uq_shoe_model_requests_open`
+-- is what makes this unique; the `limit 1` is belt and braces for the reader.
+create or replace function public.tmp_req_open_id(p_product uuid)
+returns uuid language sql stable as $$
+  select id from public.shoe_model_requests
+   where product_id = p_product
+     and status in ('requested', 'in_progress')
+   limit 1;
 $$;
 
 select set_config('request.jwt.claims', '{"sub":null,"role":null}', true);
@@ -244,6 +270,7 @@ select ok(
 select throws_ok(
   $$select public.request_shoe_model('f1000000-0000-0000-0000-000000000023'::uuid, 260.0)$$,
   '42501',
+  null,
   '23: asking about another store''s product is refused'
 );
 
@@ -258,6 +285,7 @@ select throws_ok(
             'f1000000-0000-0000-0000-000000000011'::uuid,
             'f1000000-0000-0000-0000-000000000001'::uuid, 260.0)$$,
   '42501',
+  null,
   '24: a hand-crafted INSERT is refused, so the rules cannot be skipped'
 );
 reset role;
@@ -286,8 +314,7 @@ select set_config('request.jwt.claims',
 
 insert into tmp_req_results (k, v)
 select 'cancel', public.cancel_shoe_model_request(
-  (select id from public.shoe_model_requests
-    where product_id = 'f1000000-0000-0000-0000-000000000021'));
+  public.tmp_req_open_id('f1000000-0000-0000-0000-000000000021'));
 select is((select tmp_req_ok(v) from tmp_req_results where k='cancel'), true,
           '26: the owner can withdraw an open ask');
 select is(
@@ -312,29 +339,30 @@ select throws_ok(
             'f1000000-0000-0000-0000-000000000011'::uuid,
             'f1000000-0000-0000-0000-000000000001'::uuid, 272.0, 'in_progress')$$,
   '23505',
+  null,
   '29: one open ask per product holds even against a direct INSERT'
 );
 
 -- ⚠️ Admins only, and the guard is in the function body.
 select throws_ok(
   $$select public.claim_shoe_model_request(
-      (select id from public.shoe_model_requests
-        where product_id = 'f1000000-0000-0000-0000-000000000021'))$$,
+      public.tmp_req_open_id('f1000000-0000-0000-0000-000000000021'))$$,
   '42501',
+  null,
   '30: a seller cannot claim an ask'
 );
 select throws_ok(
   $$select public.decline_shoe_model_request(
-      (select id from public.shoe_model_requests
-        where product_id = 'f1000000-0000-0000-0000-000000000021'), 'no')$$,
+      public.tmp_req_open_id('f1000000-0000-0000-0000-000000000021'), 'no')$$,
   '42501',
+  null,
   '31: a seller cannot decline an ask'
 );
 select throws_ok(
   $$select public.fulfil_shoe_model_request(
-      (select id from public.shoe_model_requests
-        where product_id = 'f1000000-0000-0000-0000-000000000021'), 1)$$,
+      public.tmp_req_open_id('f1000000-0000-0000-0000-000000000021'), 1)$$,
   '42501',
+  null,
   '32: a seller cannot close an ask as fulfilled'
 );
 
@@ -344,13 +372,12 @@ select set_config('request.jwt.claims',
 
 insert into tmp_req_results (k, v)
 select 'claim', public.claim_shoe_model_request(
-  (select id from public.shoe_model_requests
-    where product_id = 'f1000000-0000-0000-0000-000000000021'));
+  public.tmp_req_open_id('f1000000-0000-0000-0000-000000000021'));
 select is((select tmp_req_ok(v) from tmp_req_results where k='claim'), true,
           '33: an admin can claim an ask');
 select is(
   (select status || ':' || assigned_to::text from public.shoe_model_requests
-    where product_id = 'f1000000-0000-0000-0000-000000000021'),
+    where id = public.tmp_req_open_id('f1000000-0000-0000-0000-000000000021')),
   'in_progress:f1000000-0000-0000-0000-000000000003',
   '34: …and the queue now says who has it'
 );
@@ -360,8 +387,7 @@ select is(
 -- not live yet.
 insert into tmp_req_results (k, v)
 select 'wrong_product', public.fulfil_shoe_model_request(
-  (select id from public.shoe_model_requests
-    where product_id = 'f1000000-0000-0000-0000-000000000021'),
+  public.tmp_req_open_id('f1000000-0000-0000-0000-000000000021'),
   (select id from public.product_models
     where product_id = 'f1000000-0000-0000-0000-000000000022'));
 select is((select tmp_req_ok(v) from tmp_req_results where k='wrong_product'), false,
@@ -369,8 +395,7 @@ select is((select tmp_req_ok(v) from tmp_req_results where k='wrong_product'), f
 
 insert into tmp_req_results (k, v)
 select 'draft_model', public.fulfil_shoe_model_request(
-  (select id from public.shoe_model_requests
-    where product_id = 'f1000000-0000-0000-0000-000000000021'),
+  public.tmp_req_open_id('f1000000-0000-0000-0000-000000000021'),
   (select id from public.product_models
     where product_id = 'f1000000-0000-0000-0000-000000000021'
       and status = 'draft'));
@@ -397,23 +422,27 @@ select set_config('request.jwt.claims',
 
 insert into tmp_req_results (k, v)
 select 'fulfil', public.fulfil_shoe_model_request(
-  (select id from public.shoe_model_requests
-    where product_id = 'f1000000-0000-0000-0000-000000000021'),
+  public.tmp_req_open_id('f1000000-0000-0000-0000-000000000021'),
   (select id from public.product_models
     where product_id = 'f1000000-0000-0000-0000-000000000021'
       and status = 'active'),
   'Modelled from the samples; length checked on the bench.');
 select is((select tmp_req_ok(v) from tmp_req_results where k='fulfil'), true,
           '38: …and the same request closes against a live model of the right product');
+-- Read by the row that CLOSED, not the open one: product 21 carries the
+-- cancelled ask from assertion 26 as well, which is why these two filter on
+-- the status they are asserting rather than on the product alone.
 select is(
   (select status from public.shoe_model_requests
-    where product_id = 'f1000000-0000-0000-0000-000000000021'),
+    where product_id = 'f1000000-0000-0000-0000-000000000021'
+      and status = 'fulfilled'),
   'fulfilled',
   '39: …reading as fulfilled'
 );
 select ok(
   (select model_id is not null from public.shoe_model_requests
-    where product_id = 'f1000000-0000-0000-0000-000000000021'),
+    where product_id = 'f1000000-0000-0000-0000-000000000021'
+      and status = 'fulfilled'),
   '40: …and naming the model, so the status is a fact rather than a claim'
 );
 
@@ -423,6 +452,7 @@ select throws_ok(
   $$update public.shoe_model_requests set status = 'fulfilled'
      where product_id = 'f1000000-0000-0000-0000-000000000023'$$,
   '23514',
+  null,
   '41: a direct UPDATE cannot reach `fulfilled` without a model_id'
 );
 
@@ -492,8 +522,7 @@ select set_config('request.jwt.claims',
 
 insert into tmp_req_results (k, v)
 select 'decline', public.decline_shoe_model_request(
-  (select id from public.shoe_model_requests
-    where product_id = 'f1000000-0000-0000-0000-000000000023'),
+  public.tmp_req_open_id('f1000000-0000-0000-0000-000000000023'),
   'The samples were not clear enough to model from.');
 select is((select tmp_req_ok(v) from tmp_req_results where k='decline'), true,
           '47: an admin declines an open ask, with a reason');
@@ -529,7 +558,8 @@ select is(
 insert into tmp_req_results (k, v)
 select 'decline_closed', public.decline_shoe_model_request(
   (select id from public.shoe_model_requests
-    where product_id = 'f1000000-0000-0000-0000-000000000021'),
+    where product_id = 'f1000000-0000-0000-0000-000000000021'
+      and status = 'fulfilled'),
   'already done');
 select is((select tmp_req_ok(v) from tmp_req_results where k='decline_closed'), false,
           '51: declining an already-closed ask is refused');
