@@ -443,7 +443,13 @@ SET search_path = public
 AS $$
 BEGIN
   IF NOT public.is_admin() THEN
-    RAISE EXCEPTION 'Only admins can claim model requests';
+    -- `42501` (insufficient_privilege), explicitly — the same code the two
+    -- seller-side guards above raise. A `RAISE EXCEPTION` with no ERRCODE
+    -- produces `P0001`, which is indistinguishable from a bug inside the
+    -- function: the caller cannot tell "not your job" from "this broke", and
+    -- neither could the pgTAP suite, which asserts the code.
+    RAISE EXCEPTION 'Only admins can claim model requests'
+      USING ERRCODE = '42501';
   END IF;
 
   UPDATE public.shoe_model_requests
@@ -486,7 +492,8 @@ DECLARE
   v_model   record;
 BEGIN
   IF NOT public.is_admin() THEN
-    RAISE EXCEPTION 'Only admins can fulfil model requests';
+    RAISE EXCEPTION 'Only admins can fulfil model requests'
+      USING ERRCODE = '42501';
   END IF;
 
   SELECT * INTO v_request
@@ -659,7 +666,8 @@ DECLARE
   v_store     uuid;
 BEGIN
   IF NOT public.is_admin() THEN
-    RAISE EXCEPTION 'Only admins can decline model requests';
+    RAISE EXCEPTION 'Only admins can decline model requests'
+      USING ERRCODE = '42501';
   END IF;
 
   -- `RETURNING … INTO` rather than a second SELECT: the update is where the
