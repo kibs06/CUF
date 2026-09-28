@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
-import { Info } from 'lucide-react'
+import { Copy, Info } from 'lucide-react'
 
+import SellerPeriodPills from '../../components/seller/SellerPeriodPills.jsx'
 import {
   SellerPageBody,
   SellerPageHeader,
@@ -9,16 +10,11 @@ import {
   SellerSection,
 } from '../../components/seller/SellerPage.jsx'
 import CountUp from '../../components/ui/CountUp.jsx'
-import { formatCurrency } from '../../lib/constants.js'
+import { useContextMenu } from '../../components/ui/ContextMenu.jsx'
+import { formatCurrency, pluralize } from '../../lib/constants.js'
 import { orderLines } from '../../lib/orderRules.js'
-import { dailyBuckets } from '../../lib/seller.js'
+import { dailyBuckets, sellerPeriod } from '../../lib/seller.js'
 import { useSellerOrders } from '../../hooks/useSeller.js'
-
-const PERIODS = [
-  { id: '7', label: 'Last 7 days', days: 7 },
-  { id: '30', label: 'Last 30 days', days: 30 },
-  { id: '90', label: 'Last 90 days', days: 90 },
-]
 
 /**
  * Revenue for the seller's online orders.
@@ -55,7 +51,9 @@ export default function SellerReports() {
   const ordersQuery = useSellerOrders(store?.id ?? null)
   const [periodId, setPeriodId] = useState('30')
 
-  const period = PERIODS.find((entry) => entry.id === periodId) ?? PERIODS[1]
+  /* The month by default here, the week on the dashboard — the same list, two
+     pages' own ideas of "recently". */
+  const period = sellerPeriod(periodId, '30')
   const orders = ordersQuery.data ?? []
 
   const report = useMemo(() => buildReport(orders, period.days), [orders, period.days])
@@ -80,23 +78,7 @@ export default function SellerReports() {
         description="From your storefront orders only. In-person POS sales are recorded in the CUFMAI app."
       />
 
-      <div className="flex flex-wrap gap-1.5">
-        {PERIODS.map((entry) => (
-          <button
-            key={entry.id}
-            type="button"
-            onClick={() => setPeriodId(entry.id)}
-            aria-pressed={entry.id === periodId}
-            className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors duration-200 ease-out-cubic ${
-              entry.id === periodId
-                ? 'bg-clay text-ink-inverse'
-                : 'text-muted-strong hover:bg-subtle hover:text-ink'
-            }`}
-          >
-            {entry.label}
-          </button>
-        ))}
-      </div>
+      <SellerPeriodPills value={period.id} onChange={setPeriodId} />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <SellerMetric
@@ -149,7 +131,25 @@ export default function SellerReports() {
           ) : (
             <ul className="space-y-3">
               {report.byDay.map((day) => (
-                <li key={day.key}>
+                <CopyableRow
+                  key={day.key}
+                  label={day.label}
+                  className=""
+                  items={[
+                    {
+                      id: 'copy-day',
+                      label: 'Copy this day',
+                      Icon: Copy,
+                      copy: `${day.label}: ${formatCurrency(day.total)} · ${pluralize(day.count, 'order')}`,
+                    },
+                    {
+                      id: 'copy-takings',
+                      label: 'Copy the takings only',
+                      Icon: Copy,
+                      copy: formatCurrency(day.total),
+                    },
+                  ]}
+                >
                   <div className="flex items-baseline justify-between gap-3 text-sm">
                     <span className="text-ink">{day.label}</span>
                     <span className="num font-semibold text-ink">
@@ -171,7 +171,7 @@ export default function SellerReports() {
                   <p className="mt-1 text-xs text-muted">
                     {day.count} {day.count === 1 ? 'order' : 'orders'}
                   </p>
-                </li>
+                </CopyableRow>
               ))}
             </ul>
           )}
@@ -186,9 +186,24 @@ export default function SellerReports() {
           ) : (
             <ul className="divide-y divide-hairline-soft">
               {report.topProducts.map((product) => (
-                <li
+                <CopyableRow
                   key={product.name}
+                  label={product.name}
                   className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0"
+                  items={[
+                    {
+                      id: 'copy-name',
+                      label: 'Copy product name',
+                      Icon: Copy,
+                      copy: product.name,
+                    },
+                    {
+                      id: 'copy-line',
+                      label: 'Copy this line',
+                      Icon: Copy,
+                      copy: `${product.name}: ${formatCurrency(product.revenue)} · ${pluralize(product.pieces, 'pair')}`,
+                    },
+                  ]}
                 >
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-ink">
@@ -202,13 +217,37 @@ export default function SellerReports() {
                   <span className="num shrink-0 text-sm font-semibold text-ink">
                     {formatCurrency(product.revenue)}
                   </span>
-                </li>
+                </CopyableRow>
               ))}
             </ul>
           )}
         </SellerSection>
       </div>
     </SellerPageBody>
+  )
+}
+
+/**
+ * A report row that has nothing to open, but two things worth copying.
+ *
+ * The reports page is the one place in the seller portal whose rows are *not*
+ * doors: they are readings, and a reading's only useful verb is "put this on the
+ * clipboard" — a month's takings beside last month's, or a product's line to send
+ * to whoever orders the restock. So instead of the link-and-universal-pair the
+ * other lists get, this wrapper carries only the copies the caller names.
+ *
+ * The `li` is the caller's as well, because these two lists are laid out nothing
+ * alike (a stacked bar block, and a two-column row) and a wrapper that imposed a
+ * shape on them would be a wrapper nobody would use.
+ */
+function CopyableRow({ items, label, className = '', children }) {
+  const { onContextMenu, menu } = useContextMenu({ items, label })
+
+  return (
+    <li onContextMenu={onContextMenu} className={className}>
+      {children}
+      {menu}
+    </li>
   )
 }
 

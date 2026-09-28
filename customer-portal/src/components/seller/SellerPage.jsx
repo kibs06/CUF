@@ -180,10 +180,15 @@ export function SellerMetric({ className = '', ...props }) {
  * language rather than a seller-specific one — the app's seller palette is
  * deliberately the same neutral surfaces as everywhere else, with the brand
  * browns reserved for data.
+ *
+ * `className` is for placement only — a section that needs to be a grid item, or
+ * to carry an `id` for the dashboard's jump nav. Anything about how the card
+ * *looks* belongs here, so that two sections on two pages cannot end up with two
+ * different radii.
  */
-export function SellerSection({ title, description, actions, children }) {
+export function SellerSection({ title, description, actions, children, className = '' }) {
   return (
-    <section className="rounded-premium border border-hairline bg-raised shadow-card">
+    <section className={`rounded-premium border border-hairline bg-raised shadow-card ${className}`}>
       {(title || actions) && (
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-hairline-soft px-5 py-4">
           <div className="min-w-0">

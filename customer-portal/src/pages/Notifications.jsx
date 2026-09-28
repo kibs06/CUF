@@ -1,24 +1,14 @@
 import { useMemo } from 'react'
 import { motion } from 'motion/react'
 import { Link, useSearchParams } from 'react-router-dom'
-import {
-  BadgeCheck,
-  BellOff,
-  CalendarClock,
-  CheckCheck,
-  MessageSquare,
-  RotateCcw,
-  Star,
-  Tag,
-  Truck,
-  Wallet,
-  Wrench,
-} from 'lucide-react'
+import { BellOff, CheckCheck } from 'lucide-react'
 
+import { CUSTOMER_CATEGORY_ICONS } from '../components/notifications/notificationIcons.js'
 import EmptyState from '../components/ui/EmptyState'
 import { fadeUp, staggerChildren } from '../components/motion/transitions'
 import { useNotificationActions, useNotifications } from '../hooks/useNotifications.js'
 import { pluralize } from '../lib/constants'
+import { customerNotificationPath } from '../lib/notificationPaths.js'
 import {
   NOTIFICATION_CATEGORIES,
   NOTIFICATION_TABS,
@@ -26,7 +16,6 @@ import {
   isBatchedNotification,
   notificationCategory,
   notificationCategoryLabel,
-  notificationDestination,
   notificationMessageCount,
   notificationPreviews,
   notificationRelativeTime,
@@ -34,19 +23,6 @@ import {
   unreadCountsByCategory,
   unreadNotificationCount,
 } from '../lib/notifications.js'
-
-/** How a category is drawn — the same icon everywhere it appears. */
-const CATEGORY_ICONS = {
-  unpaid: Wallet,
-  processing: Wrench,
-  shipped: Truck,
-  review: Star,
-  returns: RotateCcw,
-  message: MessageSquare,
-  support: Tag,
-  approval: BadgeCheck,
-  reservations: CalendarClock,
-}
 
 /**
  * The notification feed.
@@ -73,11 +49,14 @@ const CATEGORY_ICONS = {
  *
  * ## What a card does when tapped
  *
- * `notificationDestination` decides, and the answer can be `none`: a `support`
- * card points at the app's MyReportsScreen, which the portal does not have, and
- * an `approval` card has nothing behind it here either. Those cards render
- * without a link rather than pretending — a link to a page that does not exist
- * is worse than a card that admits it has nowhere to go yet.
+ * `customerNotificationPath` decides — `notificationDestination` (the port of
+ * the app's `onTap`) with the path put onto it — and the answer can be `null`: a
+ * `support` card points at the app's MyReportsScreen, which the portal does not
+ * have, and an `approval` card has nothing behind it here either. Those cards
+ * render without a link rather than pretending — a link to a page that does not
+ * exist is worse than a card that admits it has nowhere to go yet. The toast
+ * centre asks the same helper, so one notification cannot open one page from the
+ * corner and another from the feed.
  */
 export default function Notifications() {
   const [params, setParams] = useSearchParams()
@@ -168,7 +147,7 @@ export default function Notifications() {
           {NOTIFICATION_CATEGORIES.filter(
             (name) => unreadByCategory[name] > 0 || list.some((row) => notificationCategory(row.category) === name),
           ).map((name) => {
-            const Icon = CATEGORY_ICONS[name]
+            const Icon = CUSTOMER_CATEGORY_ICONS[name]
             const unread = unreadByCategory[name]
             return (
               <button
@@ -268,8 +247,8 @@ export default function Notifications() {
  */
 function NotificationCard({ notification, onOpen }) {
   const category = notificationCategory(notification.category)
-  const Icon = CATEGORY_ICONS[category]
-  const destination = notificationDestination(notification)
+  const Icon = CUSTOMER_CATEGORY_ICONS[category]
+  const to = customerNotificationPath(notification)
   const unread = !notification.is_read
   const batched = isBatchedNotification(notification)
   const previews = notificationPreviews(notification)
@@ -340,20 +319,14 @@ function NotificationCard({ notification, onOpen }) {
     'flex gap-4 rounded-card border bg-raised p-4 shadow-card transition-[transform,border-color,box-shadow] duration-300 ease-out-cubic'
   const unreadEdge = unread ? 'border-l-4 border-l-clay border-y-hairline border-r-hairline' : 'border-hairline'
 
-  if (destination.kind === 'none' || destination.kind === 'reports') {
-    /*
-      Nothing behind it in the portal yet — a support reply (the app's
-      MyReportsScreen has no equivalent here) or an approval with no order.
-      Drawn at rest rather than as a link to somewhere unrelated: a card that
-      goes to the wrong page is worse than one that does not move.
-    */
+  /* `null` is "nowhere in this portal to put it" — a support reply (the app's
+     MyReportsScreen has no equivalent here) or an approval with no order. Drawn
+     at rest rather than as a link to somewhere unrelated: a card that goes to
+     the wrong page is worse than one that does not move. The toast centre asks
+     the same helper, so the corner and the feed cannot point at two places. */
+  if (!to) {
     return <div className={`${shell} ${unreadEdge}`}>{body}</div>
   }
-
-  const to =
-    destination.kind === 'conversation'
-      ? `/messages/${destination.conversationId}`
-      : `/orders/${destination.orderId}`
 
   return (
     <Link

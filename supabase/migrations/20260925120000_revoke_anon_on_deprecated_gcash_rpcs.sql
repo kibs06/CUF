@@ -1,0 +1,96 @@
+-- ══════════════════════════════════════════════════════════════════
+-- Migration: the deprecated gateway-free GCash RPCs are callable by `anon`
+-- Date: 2026-09-25
+--
+-- Found by probing the deployed project while wiring web checkout, and
+-- verified live:
+--
+--   POST /rest/v1/rpc/create_gcash_checkout   (anon key, no bearer)
+--     → {"code":"P0001","message":"No items to order"}
+--
+-- That is the FUNCTION'S OWN validation, not a permission error: the
+-- request executed. An unauthenticated caller can create
+-- `awaiting_payment_confirmation` orders.
+--
+-- Why it happened: `20260905000000_fix_t5_manual_gcash_dedupe_audit.sql`
+-- closed the remote order-creation route by revoking EXECUTE on
+-- `create_gcash_checkout` **from `authenticated`** — which is why a
+-- signed-in customer now gets 42501 — but it never revoked it from
+-- `anon`. The `REVOKE ... FROM PUBLIC` in `20260808210000` does not
+-- cover it either: Supabase installs
+--   ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ... TO anon, authenticated, service_role
+-- so every function created in this schema carries a grant made to
+-- `anon` BY NAME, and only an explicit `REVOKE ... FROM anon` removes
+-- it. Measured state of the five attempt-#5 RPCs before this migration:
+--
+--   RPC                                authenticated   anon
+--   ---------------------------------  -------------   -----------
+--   create_gcash_checkout              DENIED (42501)  EXECUTES
+--   submit_gcash_proof                 EXECUTES        EXECUTES
+--   cancel_my_pending_gcash_checkout   EXECUTES        EXECUTES*
+--   expire_overdue_gcash_orders        granted         EXECUTES
+--   confirm_/reject_gcash_payment      granted         EXECUTES
+--
+--   (* it raises its own 'Not authenticated' guard, but only after the
+--      function has begun executing.)
+--
+-- Why it matters, given the route is deprecated and unmodified by this
+-- migration:
+--
+--   • `orders.customer_id` is NULLABLE, so an anon caller creates orders
+--     that belong to nobody, and each one decrements real inventory
+--     through the `decrement_inventory_on_order` trigger.
+--   • `uq_orders_one_awaiting_payment_confirmation_per_customer` is
+--     keyed on `customer_id`, and Postgres treats NULLs as DISTINCT in a
+--     unique index — so the abuse guard does not bound how many such
+--     orders can be created. It is not a speed bump.
+--   • `expire_overdue_gcash_orders()` cancels orders for EVERY customer
+--     and needs no session at all.
+--
+-- The fix is one line per function and changes nothing else: no
+-- behaviour, no signature, no data, and deliberately NO re-grant to
+-- `authenticated` (see the header of
+-- `20260925130000_sale_aware_create_gcash_checkout.sql` — the route is
+-- closed on purpose and this migration does not re-open it).
+--
+-- ⚠️ `submit`/`cancel`/`confirm`/`reject` keep their `authenticated`
+-- grants so legacy attempt-#5 orders (created 2026-08-08/09) can still
+-- be resolved, exactly as `20260905000000` intended. Only `anon` loses
+-- access, and an anonymous caller was never a legitimate customer,
+-- seller or sweep here.
+-- ══════════════════════════════════════════════════════════════════
+
+REVOKE EXECUTE ON FUNCTION public.create_gcash_checkout(jsonb, text, jsonb) FROM anon;
+REVOKE EXECUTE ON FUNCTION public.submit_gcash_proof(uuid, text, text) FROM anon;
+REVOKE EXECUTE ON FUNCTION public.cancel_my_pending_gcash_checkout(uuid) FROM anon;
+REVOKE EXECUTE ON FUNCTION public.expire_overdue_gcash_orders() FROM anon;
+REVOKE EXECUTE ON FUNCTION public.confirm_gcash_payment(uuid) FROM anon;
+REVOKE EXECUTE ON FUNCTION public.reject_gcash_payment(uuid, text) FROM anon;
+
+-- ══════════════════════════════════════════════════════════════════
+-- VERIFICATION (run after applying)
+-- ══════════════════════════════════════════════════════════════════
+-- 1. Every one of these must now answer 42501 (permission denied) rather
+--    than reaching the function body. Before the fix, the first returned
+--    'No items to order' and the middle two 'Order not found'.
+--
+--    for rpc in create_gcash_checkout submit_gcash_proof \
+--               cancel_my_pending_gcash_checkout expire_overdue_gcash_orders; do
+--      curl -s -X POST "$SUPABASE_URL/rest/v1/rpc/$rpc" \
+--        -H "apikey: $ANON_KEY" -H 'Content-Type: application/json' -d '{}'
+--    done
+--
+-- 2. And `authenticated` still resolves legacy orders (the deliberate
+--    state — `create_gcash_checkout` is expected to be DENIED here):
+--
+--    SELECT p.proname,
+--           has_function_privilege('anon',
+--             p.oid, 'EXECUTE') AS anon_may,
+--           has_function_privilege('authenticated',
+--             p.oid, 'EXECUTE') AS auth_may
+--      FROM pg_proc p
+--     WHERE p.proname IN ('create_gcash_checkout', 'submit_gcash_proof',
+--           'cancel_my_pending_gcash_checkout', 'expire_overdue_gcash_orders',
+--           'confirm_gcash_payment', 'reject_gcash_payment')
+--     ORDER BY 1;
+-- ══════════════════════════════════════════════════════════════════

@@ -1,5 +1,6 @@
-import { ImageOff, Trash2 } from 'lucide-react'
+import { Copy, ImageOff, Link2, Trash2 } from 'lucide-react'
 
+import { useContextMenu } from '../ui/ContextMenu.jsx'
 import { messageAttachment, messageRelativeTime, messageText } from '../../lib/messageRules.js'
 
 /**
@@ -26,14 +27,54 @@ import { messageAttachment, messageRelativeTime, messageText } from '../../lib/m
  * permits deleting your own, and housekeeping is not something to offer on a
  * message you are still reading. The whole bubble is `group`-scoped, so the
  * hover target is the message rather than the page.
+ *
+ * ## The menu is the same controls, found twice
+ *
+ * Right-click offers the bubble's own delete (on your messages, exactly as the
+ * hover button appears), and the two copies a message is good for: its text, and
+ * the link to a photo. Menus here are on both sides of the conversation because
+ * this is one component — a message behaves the same whether the portal is
+ * drawing a seller's thread or a customer's.
  */
 export default function MessageBubble({ message, mine, onDelete }) {
   const text = messageText(message)
   const attachment = messageAttachment(message)
   const pending = Boolean(message.pending)
+  const { onContextMenu, menu } = useContextMenu({
+    items: [
+      ...(text
+        ? [{ id: 'copy-text', label: 'Copy message', Icon: Copy, copy: text }]
+        : []),
+      ...(attachment
+        ? [
+            {
+              id: 'copy-attachment',
+              label: attachment.type === 'video' ? 'Copy video link' : 'Copy photo link',
+              Icon: Link2,
+              copy: attachment.url,
+            },
+          ]
+        : []),
+      ...(mine && !pending && onDelete
+        ? [
+            {
+              id: 'delete',
+              label: 'Delete this message',
+              Icon: Trash2,
+              onSelect: onDelete,
+              tone: 'danger',
+            },
+          ]
+        : []),
+    ],
+    label: 'Message',
+  })
 
   return (
-    <div className={`group flex items-end gap-2 ${mine ? 'justify-end' : 'justify-start'}`}>
+    <div
+      onContextMenu={onContextMenu}
+      className={`group flex items-end gap-2 ${mine ? 'justify-end' : 'justify-start'}`}
+    >
       {mine && !pending && (
         <button
           type="button"
@@ -59,6 +100,7 @@ export default function MessageBubble({ message, mine, onDelete }) {
           {pending ? 'Sending…' : messageRelativeTime(message.created_at)}
         </p>
       </div>
+      {menu}
     </div>
   )
 }

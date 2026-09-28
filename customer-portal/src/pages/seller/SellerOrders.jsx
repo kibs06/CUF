@@ -7,6 +7,8 @@ import {
   SellerPageHeader,
   SellerSection,
 } from '../../components/seller/SellerPage.jsx'
+import { orderRowMenuItems, orderRowPath } from '../../components/seller/sellerRowMenus.js'
+import { useContextMenu } from '../../components/ui/ContextMenu.jsx'
 import EmptyState from '../../components/ui/EmptyState.jsx'
 import { formatCurrency } from '../../lib/constants.js'
 import { orderLines, shortOrderRef } from '../../lib/orderRules.js'
@@ -152,6 +154,10 @@ export default function SellerOrders() {
  * out what it needs is the friction this line removes. It is a *label* here, not
  * a button: the write belongs on the order, where the customer, the address and
  * the lines are all in front of the person pressing it.
+ *
+ * The same three items as the dashboard's rows come up on right-click
+ * (`orderRowMenuItems`), which is also how this list can offer *Open in a new tab*
+ * — the one thing a queue of orders is genuinely looked at two of at once.
  */
 function OrderRow({ order }) {
   const lines = orderLines(order)
@@ -160,11 +166,18 @@ function OrderRow({ order }) {
     0,
   )
   const next = primarySellerAction(order.status)
+  const to = orderRowPath(order)
+  const { onContextMenu, menu } = useContextMenu({
+    items: orderRowMenuItems(order),
+    link: to,
+    label: `Order ${shortOrderRef(order.id)}`,
+  })
 
   return (
     <li>
       <Link
-        to={`/seller/orders/${order.id}`}
+        to={to}
+        onContextMenu={onContextMenu}
         className="flex flex-wrap items-center gap-x-5 gap-y-3 py-4 transition-colors duration-200 ease-out-cubic hover:bg-subtle/50"
       >
         <div className="min-w-[9rem] flex-1">
@@ -204,6 +217,7 @@ function OrderRow({ order }) {
           <StatusPill status={order.status} />
         </div>
       </Link>
+      {menu}
     </li>
   )
 }

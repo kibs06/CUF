@@ -1,50 +1,28 @@
 import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import {
-  BellOff,
-  CheckCheck,
-  CircleAlert,
-  Clock,
-  EyeOff,
-  MessageSquare,
-  PackageMinus,
-  Receipt,
-  RotateCcw,
-  Ruler,
-} from 'lucide-react'
+import { BellOff, CheckCheck, Eye, EyeOff, RotateCcw } from 'lucide-react'
 
+import { SELLER_TYPE_ICONS, sellerNotificationIcon } from '../notifications/notificationIcons.js'
+import { useContextMenu } from '../ui/ContextMenu.jsx'
 import EmptyState from '../ui/EmptyState'
 import {
   useSellerNotificationActions,
   useSellerNotifications,
 } from '../../hooks/useSellerNotifications.js'
 import { pluralize } from '../../lib/constants.js'
+import { sellerNotificationPath } from '../../lib/notificationPaths.js'
 import {
   OTHER_SELLER_NOTIFICATION_TYPE,
   filterSellerNotifications,
   isBatchedSellerNotification,
   notificationPreviews,
   notificationRelativeTime,
-  sellerNotificationDestination,
   sellerNotificationMessageCount,
-  sellerNotificationType,
   sellerNotificationTypeLabel,
   sellerNotificationTypesPresent,
   unreadCountsBySellerType,
   unreadSellerNotificationCount,
 } from '../../lib/sellerNotifications.js'
-
-/** How each type is drawn, in one place so a chip and a card cannot disagree. */
-const TYPE_ICONS = {
-  new_order: Receipt,
-  stale_order: Clock,
-  low_stock: PackageMinus,
-  custom_order_request: Ruler,
-  new_message: MessageSquare,
-  // A type this build has never seen: a question mark rather than a guess at
-  // which of the five above it might have been.
-  [OTHER_SELLER_NOTIFICATION_TYPE]: CircleAlert,
-}
 
 /**
  * The seller's notification feed — the app's `SellerNotificationCenterScreen`.
@@ -136,7 +114,7 @@ export default function SellerNotificationList({ storeId, className = '' }) {
             <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filter by type">
               <Chip label="Everything" active={type === null} onClick={() => setType('')} />
               {present.map((name) => {
-                const Icon = TYPE_ICONS[name]
+                const Icon = SELLER_TYPE_ICONS[name]
                 const unread = unreadByType[name]
 
                 return (
@@ -271,15 +249,39 @@ export default function SellerNotificationList({ storeId, className = '' }) {
  *
  * The two small controls sit above the link rather than inside it: a `button`
  * nested in an `a` is invalid, and a click on "hide" would also navigate.
+ *
+ * Those two controls are also the card's pointer menu, alongside *Open* when the
+ * card goes somewhere and, from the primitive, *Copy link* / *Open in a new tab*.
+ * A hide is the one risky item here, so it is tinted — and it is only ever a
+ * *soft* hide, which the list already offers to undo while the seller is on the
+ * page.
  */
 function NotificationCard({ notification, onOpen, onToggleRead, onHide }) {
-  const type = sellerNotificationType(notification.type)
-  const Icon = TYPE_ICONS[type] ?? CircleAlert
+  const Icon = sellerNotificationIcon(notification)
   const unread = !notification.is_read
   const batched = isBatchedSellerNotification(notification)
   const previews = notificationPreviews(notification)
-  const destination = sellerNotificationDestination(notification)
-  const to = destinationTo(destination)
+  const to = sellerNotificationPath(notification)
+  const { onContextMenu, menu } = useContextMenu({
+    items: [
+      ...(to ? [{ id: 'open', label: 'Open', Icon: Eye, to }] : []),
+      {
+        id: 'toggle-read',
+        label: unread ? 'Mark as read' : 'Mark as unread',
+        Icon: CheckCheck,
+        onSelect: onToggleRead,
+      },
+      {
+        id: 'hide',
+        label: 'Hide this notification',
+        Icon: EyeOff,
+        onSelect: onHide,
+        tone: 'danger',
+      },
+    ],
+    link: to,
+    label: notification.title,
+  })
 
   /*
     The two controls are always drawn, unlike the chat bubble's delete button.
@@ -378,18 +380,23 @@ function NotificationCard({ notification, onOpen, onToggleRead, onHide }) {
     : 'border-hairline'
 
   /* Nothing to open: the card is a panel, and its two controls are the only
-     interactive things in it. */
+     interactive things in it. `sellerNotificationPath` answers `null` for a
+     custom order request (that screen is in the app) and for a type this build
+     does not know — and the toast centre asks the same helper, so the corner
+     and the feed cannot point at two places. */
   if (!to) {
     return (
-      <div className={`${shell} ${unreadEdge}`}>
+      <div onContextMenu={onContextMenu} className={`${shell} ${unreadEdge}`}>
         {controls}
         {body}
+        {menu}
       </div>
     )
   }
 
   return (
     <div
+      onContextMenu={onContextMenu}
       className={`${shell} ${unreadEdge} hover:-translate-y-0.5 hover:border-card-edge hover:shadow-card-lift`}
     >
       <Link
@@ -400,34 +407,9 @@ function NotificationCard({ notification, onOpen, onToggleRead, onHide }) {
       />
       {controls}
       {body}
+      {menu}
     </div>
   )
-}
-
-/**
- * A destination, as a path — or `null` when this portal has nowhere to send it.
- *
- * Kept out of the rules module for the reason `sellerNotificationDestination`
- * gives (no `Link`, no paths in a pure rules file), and kept in one function
- * here so the card and the empty state cannot drift.
- */
-function destinationTo(destination) {
-  switch (destination.kind) {
-    case 'order':
-      return `/seller/orders/${destination.orderId}`
-    case 'orders':
-      return '/seller/orders'
-    case 'product':
-      return `/seller/products/${destination.productId}`
-    case 'products':
-      return '/seller/products'
-    case 'conversation':
-      return `/seller/messages/${destination.conversationId}`
-    case 'messages':
-      return '/seller/messages'
-    default:
-      return null
-  }
 }
 
 function Chip({ label, active, onClick }) {

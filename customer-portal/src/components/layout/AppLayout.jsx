@@ -2,6 +2,7 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom'
 
 import ErrorBoundary from '../ErrorBoundary'
 import PageTransition from '../motion/PageTransition'
+import CustomerNotificationToaster from '../notifications/CustomerNotificationToaster.jsx'
 import SiteFooter from './SiteFooter'
 import SiteHeader from './SiteHeader'
 import { useAuth } from '../../hooks/useAuth.jsx'
@@ -53,6 +54,14 @@ import { isApprovedSeller } from '../../lib/sellerRules.js'
  *
  * Sellers reach their own account page at `/seller/account`, which is why this
  * can close `/settings` too without stranding them.
+ *
+ * ## The toast centre
+ *
+ * Mounted here, once, rather than on each page: a notification that arrives
+ * while the customer is on any customer route should be able to pop, and the
+ * shell is the one component that is on all of them. It is last in the DOM so a
+ * screen reader meets the announcement after the page it is about — see
+ * `CustomerNotificationToaster` for what it draws and why.
  */
 export default function AppLayout() {
   const location = useLocation()
@@ -84,6 +93,8 @@ export default function AppLayout() {
         </PageTransition>
       </main>
       {isHome && <SiteFooter />}
+
+      <CustomerNotificationToaster />
     </div>
   )
 }

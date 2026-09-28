@@ -603,6 +603,205 @@ class AppConstants {
   /// page. Nothing else reads the audience column.
   static const bool productAudienceEnabled = true;
 
+  // --- VIRTUAL FITTING: V1 FIT VERDICT ---
+  /// Gates the **fit verdict card** on product detail — the V1 surface that
+  /// reads the customer's saved scan and the product's last spec and answers
+  /// "how does this size fit me" without any 3D (`lib/utils/fit_engine.dart`,
+  /// `docs/RoadMap/VIRTUAL_FITTING_ROADMAP.md` §V1).
+  ///
+  /// **OFF by default, and off on purpose.** Three things gate the flip:
+  ///
+  ///  • the bands and the 2 mm width grade are **workshop defaults nobody has
+  ///    measured** (architecture §2.6) — V0.8 tunes them with artisan partners;
+  ///  • the spec columns are live but the **catalog is not filled in**: one
+  ///    demo spec and nothing measured (roadmap V1.3 is applied; sellers are
+  ///    the only thing that can move that number), so the card hides itself on
+  ///    nearly every page of today's catalog;
+  ///  • V1.7 shadow mode (log the verdict, show nothing) is where accuracy is
+  ///    eyeballed against artisan opinion *before* a customer reads it.
+  ///
+  /// Off means **nothing happens**: no card, and — like every surface behind
+  /// this switch — no fetch either, since the card is also what loads the
+  /// saved scan's millimetres. Flipping it back to `false` is the whole
+  /// rollback: the columns are nullable and no other surface reads the verdict.
+  ///
+  /// **How it is turned on.** The default is off, and a build opts in with
+  /// `flutter build apk --dart-define=VIRTUAL_FIT=true` (the
+  /// `arTryOnSpikeEnabled` shape) — one command, no source edit, and no way
+  /// for a release build to show the card by accident. Flipping this default
+  /// to `true` is how the real rollout happens, once the sample and the
+  /// V0.8 workshop say the bands are right.
+  ///
+  /// Everything that reads it: `FitVerdictCard` (its only mount point is the
+  /// product page today; the cart reuse is the same widget).
+  static const bool virtualFitEnabled = bool.fromEnvironment('VIRTUAL_FIT');
+
+  /// Gates **shadow mode** — the V1.7 record of what the verdict *would* say,
+  /// written to a log and shown to nobody (`lib/utils/fit_shadow.dart`, one
+  /// sink in `lib/services/fit_shadow_log.dart`).
+  ///
+  /// **OFF by default, and this is the switch that collects the evidence for
+  /// the one above.** The V1 exit criterion is that the verdict matches an
+  /// artisan's opinion on 10 real products; that sample has to exist *before*
+  /// a customer reads a verdict, which is why this can be on while
+  /// [virtualFitEnabled] is off. Turn it on in a build whose diag log can be
+  /// exported, walk (or have a partner walk) real product pages with a saved
+  /// scan, and compare `[FIT]` lines with what the artisan says about each
+  /// shoe.
+  ///
+  /// **How it is turned on:** `--dart-define=VIRTUAL_FIT_SHADOW=true`, with the
+  /// card's own switch left off — that combination is the whole collection
+  /// configuration.
+  ///
+  /// **What turning it on costs:** the product page reads the saved scan once
+  /// per visit for customers who have a foot profile (the same read the card
+  /// makes when it is on), and writes one line per distinct outcome to the
+  /// diag log. Foot millimetres are personal data; they stay in a local file
+  /// the app can share only by explicit user action, and both switches are off
+  /// in a shipped build.
+  ///
+  /// Nothing renders either way — the record is the only output.
+  static const bool virtualFitShadowEnabled = bool.fromEnvironment(
+    'VIRTUAL_FIT_SHADOW',
+  );
+
+  /// Gates the seller's **model upload** — the "3D Model (Optional)" section in
+  /// the product form (roadmap V2.2/V2.3: fetch the handover `.glb`, run the
+  /// authoring contract over it, publish it to `product_models` + the
+  /// `shoe-models` bucket).
+  ///
+  /// **ON by default since 2026-09-28 — the rollout this switch was waiting
+  /// for.** `20260927180000_add_try_on_models.sql` **is applied** on the hosted
+  /// project, verified by object rather than by trust: `product_models` has its
+  /// 17 columns, its two partial unique indexes, its four policies and its
+  /// `updated_at` trigger, and `shoe-models` is a public 8 MiB
+  /// `model/gltf-binary` bucket with folder-scoped seller write policies (see
+  /// `supabase/MIGRATIONS_LIVE_STATUS.md`). The section used to be hidden
+  /// because a shipped build's Upload would have raised "relation does not
+  /// exist"; that is no longer the state of the database.
+  ///
+  /// **How it is turned off:** `--dart-define=SHOE_MODEL_UPLOAD=false`. The kill
+  /// switch matters more now than it did: this is the one surface here that
+  /// writes to a shared table, so turning it off must restore exactly the
+  /// pre-V2.2 product form — and it does, because the section, the link fetch
+  /// and the save-path publish are all read through this one constant.
+  ///
+  /// Off means **nothing happens**: no section, no link fetch, and the save
+  /// path never reaches the model upload. Turning it off is the whole rollback
+  /// — a published model is inert until V3's renderer reads it (the only caller
+  /// of `ShoeModelService` is the V2.6 prefetch), so a draft or stale asset
+  /// cannot reach a customer.
+  ///
+  /// **What is still missing is an asset, not a switch.** The table holds **0
+  /// rows**: the only `.glb` in the repo is V0's 29 KB placeholder, and the
+  /// partner capture sessions (V2.8/V2.9) have not happened. Turning this on
+  /// makes the pipeline *reachable*; nothing makes it *populated* yet.
+  static const bool shoeModelUploadEnabled =
+      bool.fromEnvironment('SHOE_MODEL_UPLOAD', defaultValue: true);
+
+  /// Gates the **try-on model prefetch** — warming the local model cache while
+  /// the customer is still reading the product page (roadmap V2.6,
+  /// `lib/services/try_on_prefetch.dart`).
+  ///
+  /// **ON by default since 2026-09-28**, now that `product_models` is live.
+  ///
+  /// **What that costs, stated plainly, because the renderer is still V3.** The
+  /// class cannot degrade the page — every failure is returned, never thrown —
+  /// and there is **nothing to download yet**: the table holds 0 rows, so the
+  /// live effect on today's catalogue is one extra table read per product page
+  /// view, which finds nothing and stops. The day a seller publishes a model,
+  /// that read starts warming up to ~5 MB **per product page viewed**, on
+  /// whatever connection the customer is on, for a cache nothing reads until V3.
+  ///
+  /// **The hardening to land before models exist in numbers** is the
+  /// `connectivity_plus` guard the service's header names: never pull a model
+  /// over cellular. It is a refinement, not a correctness gap — the prefetch is
+  /// best-effort and its failure is invisible by design.
+  ///
+  /// **How it is turned off:** `--dart-define=TRY_ON_PREFETCH=false`. Off means
+  /// nothing happens: no model table read, no download, no cache write.
+  static const bool tryOnPrefetchEnabled =
+      bool.fromEnvironment('TRY_ON_PREFETCH', defaultValue: true);
+
+  /// Gates the **real AR try-on surface** — V3's platform view, the one that
+  /// puts an actual `.glb` in the camera feed instead of the placeholder
+  /// (`docs/RoadMap/VIRTUAL_FITTING_ROADMAP.md` V3.5/V3.9).
+  ///
+  /// **OFF by default, and this one is unlike the switches above.** It is not
+  /// waiting on a database or on another team: it is waiting on **its own
+  /// renderer**, and on the two facts that decide whether one may ship.
+  ///
+  ///   1. **The renderer route is undecided.** V0.7 measured SceneView + Compose
+  ///      at **+27.7 MB on the release APK against a ≤8 MB budget**, so the phase
+  ///      it would open into is either "accept the size" or "drive Filament
+  ///      directly". V3's `ArTryOnView` is written against one of those.
+  ///   2. **No device numbers and no real asset exist.** V0.6's fps/load matrix
+  ///      needs a physical ARCore phone (finding F14: at feature level 1 no
+  ///      model loads at all on an emulator), and `product_models` holds **0
+  ///      rows**, so there is nothing to render even on a device that supports
+  ///      it.
+  ///
+  /// So this switch is the *last* flip of the pipeline, not the next one: what
+  /// is behind it today is the renderer-independent core (the phase machine, the
+  /// session controller and the capability gate — `lib/providers/try_on/`),
+  /// which is deliberately inert and testable without a device.
+  ///
+  /// **How it is turned on:** `--dart-define=TRY_ON_V3=true` for a device build.
+  /// Off means **nothing happens**: no model resolution on the try-on route, no
+  /// channel traffic at all, and the try-on entry keeps opening the simulated
+  /// screen it opens today (decision D8 — the fallback is a success case, never
+  /// a dead end). Flipping it back is the whole rollback.
+  static const bool tryOnV3Enabled = bool.fromEnvironment('TRY_ON_V3');
+
+  /// **QA/development seam: let the try-on path render the repo's bundled
+  /// block-out.** Default **off**; nothing is constructed and no asset is read
+  /// while it is.
+  ///
+  /// The renderer is unreachable without it. `product_models` is applied and
+  /// verified live but holds **0 rows** (V2.8/V2.9 need a partner's exported
+  /// shoe), so the capability gate answers `modelMissing` on every product and
+  /// the real platform view never gets a model to draw — which is why V3.2 could
+  /// only claim "it compiles". With this on, `ShoeModelService` is pointed at
+  /// `BundledPlaceholderModelDataSource` (`lib/services/try_on_placeholder_model.dart`),
+  /// so resolve → digest verify → `.part` rename → LRU budget → native handover
+  /// all run as production code over a bundled `.glb`.
+  ///
+  /// Two are bundled and the choice is a build one:
+  /// `--dart-define=TRY_ON_QA_MODEL=assets/models/qa_partner_shoe_v1.glb` serves
+  /// the first real partner asset to pass the authoring contract (1.66 MiB,
+  /// 49,954 triangles, three 1024² PBR maps — findings F21/V2.7) instead of the
+  /// 29,340 B block-out. That matters because an untextured block-out cannot
+  /// exercise texture decoding or fill rate, which is where a mid-range phone
+  /// actually differs. An unknown value falls back to the block-out rather than
+  /// throwing.
+  ///
+  /// It is a boundary substitution, not a mock: the only thing that changes is
+  /// where the bytes come from. Delete this flag, the service file, the asset and
+  /// its `pubspec.yaml` line when V2.9 lands a real model (findings §9's
+  /// retirement checklist) — and it must never be on in a build shipped to
+  /// customers, because neither bundled file is a product: the block-out is
+  /// block geometry and the partner asset is unlicensable marketplace content
+  /// whose declared length is an assumption, not a measurement.
+  static const bool tryOnPlaceholderModelEnabled =
+      bool.fromEnvironment('TRY_ON_PLACEHOLDER_MODEL');
+
+  // --- VIRTUAL FITTING: V0 RENDERER SPIKE (dev-only, delete on retirement) ---
+  /// Gates the V0 virtual-fitting renderer spike — a dev-only screen that
+  /// renders a placeholder GLB in AR through the native SceneView integration
+  /// (`com.solevision.app.artryon`), behind a platform view.
+  ///
+  /// **OFF by default.** Enable with
+  /// `flutter run --dart-define=AR_TRY_ON_SPIKE=true`; when off, the entry
+  /// point in `ARVirtualFitScreen` renders nothing and no native view is
+  /// created. It exists to answer the V0 questions in
+  /// `docs/RoadMap/VIRTUAL_FITTING_ROADMAP.md` — frame rate, model load time,
+  /// APK size delta — with the results recorded in
+  /// `docs/RoadMap/AR_TRY_ON_SPIKE_FINDINGS.md`.
+  ///
+  /// Not a product surface: no size or colour selection, no fit verdict, no
+  /// add-to-cart. Those stay in the simulated try-on until V3.
+  static const bool arTryOnSpikeEnabled = bool.fromEnvironment('AR_TRY_ON_SPIKE');
+
   /// Whether the customer actually has a foot size on file — the signal the
   /// home reminder banner keys off ("only show it when they haven't set a
   /// size"). TWO independent markers count as set:

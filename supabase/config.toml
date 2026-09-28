@@ -549,6 +549,15 @@ verify_jwt = false
 # create-gcash-payment-intent and get-payment-status use the default
 # (verify_jwt = true) — they require the customer's JWT.
 
+# validate-shoe-model is the virtual-fitting V2.4 server validator, and its
+# verify_jwt is the default (true) on purpose: it runs *as the seller*, reads
+# the caller's own product_models row, and refuses rows that belong to another
+# store. Calling it anonymously has no identity to check ownership against, so
+# a `--no-verify-jwt` deploy would turn a validator into an open endpoint that
+# can demote other sellers' models to `rejected`.
+[functions.validate-shoe-model]
+verify_jwt = true
+
 # Secrets required at runtime (set on the hosted platform with:
 #   supabase secrets set PAYMONGO_SECRET_KEY=sk_test_... \
 #     PAYMONGO_WEBHOOK_SECRET=whsk_... \

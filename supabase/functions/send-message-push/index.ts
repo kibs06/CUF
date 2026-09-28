@@ -3,7 +3,13 @@
 // Supabase Edge Function: Send FCM push notification when a new message
 // is inserted into the `messages` table.
 //
-// Triggered by: Database pg_net trigger on messages INSERT (both directions)
+// Called by: the CLIENT, after a successful messages INSERT — there is no
+//   pg_net trigger on `messages` and never has been, despite what this comment
+//   used to claim, which is why the portal's replies silently pushed nothing.
+//   - app: lib/services/message_service.dart (_triggerPushNotification)
+//   - portal: customer-portal/src/lib/messagePush.js (triggerMessagePush)
+//   Both directions through one call site on each side, and the recipient is
+//   resolved here from `sender_type` rather than trusted from the body:
 //   - Seller → Customer: notifies the customer
 //   - Customer → Seller: notifies the store owner
 //

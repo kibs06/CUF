@@ -24,7 +24,15 @@
  *                             its comparison against the window before it
  *   statusBreakdown           the status tallies `dashboardTotals` already
  *                             computed and nothing displayed
+ *
+ * Everything below `statusBreakdown` that is not in the app has no Dart
+ * counterpart on purpose: `attentionQueue`, `salesSummary` and `SELLER_PERIODS`
+ * are the web dashboard's own readings of the same rows. They are here, beside
+ * the rules they are built from, so that a figure on the dashboard and the list
+ * it came from cannot be computed two different ways.
  */
+
+import { orderLines } from './orderRules.js'
 
 /**
  * Where an account sits in the seller lifecycle.
@@ -145,10 +153,22 @@ export function primarySellerAction(status) {
  * it. Counting every cancellation as "waiting on you" would turn the
  * dashboard's one alarm into a list of everything that has ever gone wrong, and
  * an alarm that is always lit is not read.
+ *
+ * The reverse is why `ATTENTION_STATUSES` exists. `payment_conflict` has no
+ * transition — there is no status to move a disputed payment *to* without a
+ * person opening the order and looking — so it has no action, and a rule that
+ * equated "waiting on you" with "has a button" quietly left it out of the
+ * dashboard's alarm while the orders page's own *Needs you* tab counted it. A
+ * seller saw "1 needs you" here and two rows there. These are the statuses that
+ * are an obligation with no one-tap answer, and they are named rather than
+ * inferred so the two surfaces can only disagree by editing this line.
  */
+const ATTENTION_STATUSES = new Set(['cancellation_requested', 'payment_conflict'])
+
 export function needsSellerAction(status) {
   const key = String(status ?? '').trim().toLowerCase()
   if (key === 'cancelled') return false
+  if (ATTENTION_STATUSES.has(key)) return true
   return sellerOrderActions(key).length > 0
 }
 
@@ -687,6 +707,218 @@ export function sellerOrderFee(order) {
     0,
   )
   return Math.max(0, Math.round((total - lines) * 100) / 100)
+}
+
+/**
+ * The reporting windows both seller pages offer — one list, two pages.
+ *
+ * The dashboard defaults to the week and the reports page to the month, which
+ * is the whole difference between them: a week is what a maker checks over
+ * breakfast, a month is what they look at when they sit down to it. The two
+ * lists used to be typed out separately, which is two chances for "Last 30
+ * days" to mean 30 days on one page and 4 weeks on the other.
+ */
+export const SELLER_PERIODS = [
+  { id: '7', label: 'Last 7 days', days: 7 },
+  { id: '30', label: 'Last 30 days', days: 30 },
+  { id: '90', label: 'Last 90 days', days: 90 },
+]
+
+/**
+ * A stored or hand-typed period id, or the fallback.
+ *
+ * Tolerant for the reason `normalizeProductView` is: the value can come out of
+ * a URL a customer pasted, and an unrecognised one must not render a page with
+ * no window at all.
+ */
+export function sellerPeriod(id, fallbackId = SELLER_PERIODS[0].id) {
+  const wanted = String(id ?? '')
+  const fallback = String(fallbackId ?? '')
+
+  return (
+    SELLER_PERIODS.find((period) => period.id === wanted) ??
+    SELLER_PERIODS.find((period) => period.id === fallback) ??
+    SELLER_PERIODS[0]
+  )
+}
+
+/**
+ * How long an order has been sitting there, in milliseconds.
+ *
+ * Measured from `created_at`, which is the only timestamp `orders` carries —
+ * there is no `started_at`, so "waiting" means "ordered this long ago". That is
+ * the honest reading for the queue's purpose: the oldest un-started order is the
+ * customer who has waited longest, whatever the maker has done in between.
+ *
+ * Zero for a timestamp that cannot be read, rather than `NaN`: a row this file
+ * cannot date sorts to the end of the queue instead of breaking its sort.
+ */
+export function orderWaitingMs(order, now = Date.now()) {
+  const placed = new Date(order?.created_at ?? NaN).getTime()
+  if (!Number.isFinite(placed)) return 0
+  return Math.max(0, Number(now) - placed)
+}
+
+/**
+ * A waiting time, short: `just now`, `40m`, `3h`, `2d`.
+ *
+ * Bare, with no "ago" on it, because every caller phrases it — the dashboard
+ * says "waiting 2d" and a chat-shaped caller would say "2d ago". The unit is
+ * dropped past a day (`2d`, not `2d 4h`): the queue is sorted by this number, so
+ * the figure's job is to rank the rows, and a maker comparing nine rows needs
+ * the same shape of string on each of them.
+ */
+export function waitingLabel(ms) {
+  const minutes = Math.floor(Math.max(0, Number(ms) || 0) / 60_000)
+  if (minutes < 1) return 'just now'
+  if (minutes < 60) return `${minutes}m`
+
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h`
+
+  return `${Math.floor(hours / 24)}d`
+}
+
+/** How many rows the dashboard's queue card draws before it hands off. */
+export const ATTENTION_QUEUE_LIMIT = 4
+
+/**
+ * The two ways the queue can be read.
+ *
+ * Both are honest answers to "which of these do I do first?" and nothing else
+ * belongs on the list, because the card is a preview: a seller who wants to see
+ * one status at a time has the orders page's tabs, which are built for exactly
+ * that. `value` exists for the maker who is chasing money rather than tidying a
+ * bench — a ₱1,280 pair that has waited 63 days is worth more attention than a
+ * ₱101 one that has waited 55 — and it is not the default because the whole
+ * premise of a queue is that age is the fairest order.
+ */
+export const ATTENTION_SORTS = [
+  { id: 'oldest', label: 'Longest wait' },
+  { id: 'value', label: 'Biggest order' },
+]
+
+/**
+ * A stored or hand-typed sort, or the default.
+ *
+ * Tolerant for the reason `normalizeProductView` is: the value can come out of
+ * `localStorage` or a URL someone edited, and a sort this file has not heard of
+ * must mean "the default" rather than no rows at all.
+ */
+export function attentionSort(value) {
+  const wanted = String(value ?? '').trim().toLowerCase()
+  return ATTENTION_SORTS.find((sort) => sort.id === wanted) ?? ATTENTION_SORTS[0]
+}
+
+/**
+ * The orders waiting on the maker, longest wait first — the dashboard's queue.
+ *
+ * **Oldest first by default, which is the opposite of every other list in the
+ * portal.** The orders page sorts newest first because a maker scanning it is
+ * asking "what came in?". This card is asking something else — "what have I
+ * left standing?" — and the answer is the order that has been waiting longest,
+ * so it is the row at the top. Sorted by arrival it would be a second
+ * recent-orders list beside the first one, which is exactly the card it sits
+ * next to. The caller can ask for `sort: 'value'` instead (see
+ * `ATTENTION_SORTS`); ties are broken by the longest wait either way, so the
+ * same book always produces the same four rows.
+ *
+ * A row is a door into the order rather than a place to write to it. That was a
+ * decision, not a simplification: every status write is a claim about somebody's
+ * shoes that the customer is notified about, and a dashboard row is the one
+ * place where the customer, the address, the thread, the payment and the
+ * customisation are all off screen. The order page has all of it on one screen,
+ * with the same buttons and the confirmation dialog a destructive one needs.
+ */
+export function attentionQueue(
+  orders,
+  { now = Date.now(), limit = ATTENTION_QUEUE_LIMIT, sort = ATTENTION_SORTS[0].id } = {},
+) {
+  const read = attentionSort(sort)
+
+  return (orders ?? [])
+    .filter((order) => needsSellerAction(order?.status))
+    .map((order) => ({ order, waitingMs: orderWaitingMs(order, now) }))
+    .sort(
+      read.id === 'value'
+        ? (a, b) =>
+            (Number(b.order.total_amount) || 0) - (Number(a.order.total_amount) || 0) ||
+            b.waitingMs - a.waitingMs
+        : (a, b) => b.waitingMs - a.waitingMs,
+    )
+    .slice(0, Math.max(0, limit))
+}
+
+/**
+ * The window's readings that are not the chart's job.
+ *
+ * `salesTrend` answers "what shape is this period, and is it up on the one
+ * before?" — it is the chart's input and it says nothing about what was *in* the
+ * money. This answers what a maker asks next: what does an order come to, how
+ * many pairs went out, and which pair is actually selling.
+ *
+ * Three rules it inherits rather than re-deciding: the window is
+ * `dailyBuckets`'s own (local midnight, empty days present, cancelled orders
+ * excluded — see `dashboardTotals` for why), lines come from `orderLines` so a
+ * pair counted here is the pair the receipt counts, and `average` is revenue
+ * over orders rather than over days, because an average day says nothing about
+ * what an order is worth.
+ *
+ * **The best seller is ranked by pairs, not by money.** A maker restocks and
+ * re-photographs in pairs; revenue ranks a single expensive boot above the
+ * sandal that keeps selling out, which is the opposite of what the row is for.
+ * Revenue is still reported beside it, and the ties are broken by money and then
+ * by name so the same week always names the same winner.
+ */
+export function salesSummary(orders, { now = new Date(), days = TREND_WINDOW_DAYS } = {}) {
+  const list = orders ?? []
+  const buckets = dailyBuckets(list, { now, days })
+  const since = buckets[0]?.date.getTime() ?? 0
+
+  const inWindow = []
+  for (const order of list) {
+    if (order?.status === 'cancelled') continue
+    const at = new Date(order?.created_at ?? 0).getTime()
+    if (!Number.isFinite(at) || at < since) continue
+    inWindow.push(order)
+  }
+
+  const revenue = inWindow.reduce(
+    (sum, order) => sum + (Number(order.total_amount) || 0),
+    0,
+  )
+
+  const products = new Map()
+  let pairs = 0
+
+  for (const order of inWindow) {
+    for (const line of orderLines(order)) {
+      const quantity = Number(line.quantity) || 0
+      pairs += quantity
+
+      const name = line.name || 'Product'
+      const current = products.get(name) ?? { name, pairs: 0, revenue: 0 }
+      current.pairs += quantity
+      current.revenue += Number(line.lineTotal) || 0
+      products.set(name, current)
+    }
+  }
+
+  const topProduct =
+    [...products.values()].sort(
+      (a, b) =>
+        b.pairs - a.pairs || b.revenue - a.revenue || a.name.localeCompare(b.name),
+    )[0] ?? null
+
+  return {
+    days,
+    revenue,
+    orderCount: inWindow.length,
+    average: inWindow.length > 0 ? revenue / inWindow.length : 0,
+    pairs,
+    topProduct,
+    unpaidCount: inWindow.filter((order) => order.payment_status !== 'paid').length,
+  }
 }
 
 /**

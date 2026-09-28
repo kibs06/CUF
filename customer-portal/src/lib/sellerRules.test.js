@@ -2,10 +2,15 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
 import {
+  ATTENTION_QUEUE_LIMIT,
+  ATTENTION_SORTS,
   LOW_STOCK_THRESHOLD,
   PRODUCT_VIEWS,
   SELLER_ACCESS,
+  SELLER_PERIODS,
   TREND_WINDOW_DAYS,
+  attentionQueue,
+  attentionSort,
   availableSellerOrderTabs,
   catalogSummary,
   dailyBuckets,
@@ -15,18 +20,22 @@ import {
   lowStockRows,
   needsSellerAction,
   normalizeProductView,
+  orderWaitingMs,
   outOfStockRows,
   primarySellerAction,
+  salesSummary,
   sellerAccess,
   sellerOrderActions,
   sellerOrderFee,
   sellerAccess as access,
+  sellerPeriod,
   salesTrend,
   sortSellerOrders,
   statusBreakdown,
   statusWriteError,
   storeCompleteness,
   tabForStatus,
+  waitingLabel,
 } from './sellerRules.js'
 
 const profile = (over = {}) => ({
@@ -775,6 +784,369 @@ describe('sellerOrderFee', () => {
   it('treats an order with no line rows as all fee-free', () => {
     assert.equal(sellerOrderFee({ total_amount: 900 }), 900)
     assert.equal(sellerOrderFee(null), 0)
+  })
+})
+
+describe('needsSellerAction', () => {
+  it('counts an obligation with no one-tap answer', () => {
+    // `payment_conflict` has no transition — a person has to open the order and
+    // look — but it IS waiting on the maker, and the orders page's own "Needs
+    // you" tab has always counted it. The dashboard alarm used to leave it out.
+    assert.equal(needsSellerAction('payment_conflict'), true)
+    assert.equal(needsSellerAction('cancellation_requested'), true)
+  })
+
+  it('leaves the statuses that are the customer\u2019s move alone', () => {
+    for (const status of [
+      'awaiting_payment',
+      'awaiting_payment_confirmation',
+      'delivered',
+      'received',
+      'cancelled',
+      'a_status_from_the_future',
+      null,
+    ]) {
+      assert.equal(needsSellerAction(status), false)
+    }
+  })
+
+  it('contains everything the orders page\u2019s attention tab contains', () => {
+    // The two surfaces group differently — the tab is decisions, the alarm is
+    // anything blocked — but the tab can never hold a row the alarm calls
+    // quiet. That was the drift: a disputed payment showed in the tab and not
+    // in the count above it.
+    const statuses = [
+      'pending',
+      'placed',
+      'preparing',
+      'ready',
+      'delivered',
+      'received',
+      'cancelled',
+      'cancellation_requested',
+      'payment_conflict',
+      'awaiting_payment',
+      'awaiting_payment_confirmation',
+    ]
+
+    for (const status of statuses) {
+      const inAttentionTab =
+        filterSellerOrders([{ status }], 'attention').length > 0
+      if (inAttentionTab) assert.equal(needsSellerAction(status), true)
+    }
+
+    // And the alarm is the wider of the two, on purpose.
+    assert.equal(needsSellerAction('placed'), true)
+    assert.equal(filterSellerOrders([{ status: 'placed' }], 'attention').length, 0)
+  })
+})
+
+describe('waitingLabel', () => {
+  it('reads in the biggest whole unit that fits', () => {
+    assert.equal(waitingLabel(0), 'just now')
+    assert.equal(waitingLabel(59_000), 'just now')
+    assert.equal(waitingLabel(60_000), '1m')
+    assert.equal(waitingLabel(59 * 60_000), '59m')
+    assert.equal(waitingLabel(60 * 60_000), '1h')
+    assert.equal(waitingLabel(23 * 3_600_000), '23h')
+    assert.equal(waitingLabel(24 * 3_600_000), '1d')
+    assert.equal(waitingLabel(9 * 86_400_000), '9d')
+  })
+
+  it('refuses to print a negative or unreadable wait', () => {
+    assert.equal(waitingLabel(-5_000), 'just now')
+    assert.equal(waitingLabel(null), 'just now')
+    assert.equal(waitingLabel(undefined), 'just now')
+    assert.equal(waitingLabel('soon'), 'just now')
+  })
+})
+
+describe('orderWaitingMs', () => {
+  const now = Date.parse('2026-09-26T12:00:00Z')
+
+  it('measures from created_at', () => {
+    assert.equal(
+      orderWaitingMs({ created_at: '2026-09-26T10:00:00Z' }, now),
+      2 * 3_600_000,
+    )
+  })
+
+  it('clamps a future timestamp to zero rather than to a negative', () => {
+    assert.equal(orderWaitingMs({ created_at: '2026-09-27T12:00:00Z' }, now), 0)
+  })
+
+  it('is zero for a row it cannot date', () => {
+    assert.equal(orderWaitingMs({ created_at: null }, now), 0)
+    assert.equal(orderWaitingMs(null, now), 0)
+  })
+})
+
+describe('attentionQueue', () => {
+  const now = Date.parse('2026-09-26T12:00:00Z')
+
+  const order = (over = {}) => ({
+    id: 'order-1',
+    status: 'placed',
+    created_at: '2026-09-26T11:00:00Z',
+    total_amount: 1200,
+    ...over,
+  })
+
+  it('is oldest first, which is the opposite of every other list here', () => {
+    const queue = attentionQueue(
+      [
+        order({ id: 'fresh', created_at: '2026-09-26T11:30:00Z' }),
+        order({ id: 'stale', created_at: '2026-09-24T09:00:00Z' }),
+        order({ id: 'middling', created_at: '2026-09-26T06:00:00Z' }),
+      ],
+      { now },
+    )
+
+    assert.deepEqual(queue.map((row) => row.order.id), ['stale', 'middling', 'fresh'])
+  })
+
+  it('leaves the finished, the settled and the customer\u2019s-move out of it', () => {
+    const queue = attentionQueue(
+      [
+        order({ id: 'on-the-bench', status: 'preparing' }),
+        order({ id: 'to-hand-over', status: 'ready' }),
+        order({ id: 'done', status: 'received' }),
+        order({ id: 'cancelled', status: 'cancelled' }),
+        order({ id: 'unpaid', status: 'awaiting_payment' }),
+      ],
+      { now },
+    )
+
+    // A `ready` order stays: the pair is finished but not handed over, and
+    // `Mark delivered` is the maker's next act. A `received` one is the buyer's
+    // confirmation, and an `awaiting_payment` one is the buyer's payment.
+    assert.deepEqual(
+      queue.map((row) => row.order.id),
+      ['on-the-bench', 'to-hand-over'],
+    )
+  })
+
+  it('carries the wait, which is what the card sorts and labels by', () => {
+    const [row] = attentionQueue([order({ status: 'preparing' })], { now })
+    assert.equal(row.waitingMs, 3_600_000)
+    assert.equal(row.order.status, 'preparing')
+  })
+
+  it('caps the card at its own limit, and a caller can ask for fewer', () => {
+    const book = Array.from({ length: 9 }, (_, index) =>
+      order({ id: `o${index}`, created_at: `2026-09-2${index % 5 + 1}T09:00:00Z` }),
+    )
+
+    assert.equal(attentionQueue(book, { now }).length, ATTENTION_QUEUE_LIMIT)
+    assert.equal(attentionQueue(book, { now, limit: 2 }).length, 2)
+    assert.deepEqual(attentionQueue(book, { now, limit: 0 }), [])
+  })
+
+  it('sorts a row it cannot date to the end rather than losing the sort', () => {
+    const queue = attentionQueue(
+      [
+        order({ id: 'undated', created_at: null }),
+        order({ id: 'dated', created_at: '2026-09-26T11:00:00Z' }),
+      ],
+      { now },
+    )
+
+    assert.deepEqual(queue.map((row) => row.order.id), ['dated', 'undated'])
+  })
+
+  it('survives an empty book', () => {
+    assert.deepEqual(attentionQueue(null, { now }), [])
+    assert.deepEqual(attentionQueue([], { now }), [])
+  })
+
+  it('can be read by value instead of by age', () => {
+    const book = [
+      order({ id: 'small-old', total_amount: 101, created_at: '2026-09-22T12:00:00Z' }),
+      order({ id: 'big', total_amount: 1280, created_at: '2026-09-24T12:00:00Z' }),
+      order({ id: 'medium', total_amount: 600, created_at: '2026-09-26T11:00:00Z' }),
+    ]
+
+    assert.deepEqual(
+      attentionQueue(book, { now, sort: 'value' }).map((row) => row.order.id),
+      ['big', 'medium', 'small-old'],
+    )
+  })
+
+  it('breaks a value tie by the longest wait, so the order is never arbitrary', () => {
+    const book = [
+      order({ id: 'newer', total_amount: 900, created_at: '2026-09-26T11:00:00Z' }),
+      order({ id: 'older', total_amount: 900, created_at: '2026-09-20T11:00:00Z' }),
+    ]
+
+    assert.deepEqual(
+      attentionQueue(book, { now, sort: 'value' }).map((row) => row.order.id),
+      ['older', 'newer'],
+    )
+  })
+
+  it('reads an unknown sort as the default rather than as an empty queue', () => {
+    const book = [order({ id: 'only' })]
+    for (const sort of ['newest', '', null, 7, {}]) {
+      assert.deepEqual(
+        attentionQueue(book, { now, sort }).map((row) => row.order.id),
+        ['only'],
+      )
+    }
+  })
+})
+
+describe('attentionSort', () => {
+  it('is the wait first — the premise of a queue', () => {
+    assert.equal(ATTENTION_SORTS[0].id, 'oldest')
+    assert.equal(attentionSort(undefined).id, 'oldest')
+    assert.equal(attentionSort('VALUE').id, 'value')
+  })
+
+  it('falls back rather than throwing on a value it did not write', () => {
+    for (const value of ['', null, 42, 'biggest', {}]) {
+      assert.equal(attentionSort(value).id, 'oldest')
+    }
+  })
+})
+
+describe('the reporting windows', () => {
+  it('is one list, with a page\u2019s own default', () => {
+    assert.deepEqual(
+      SELLER_PERIODS.map((period) => period.days),
+      [7, 30, 90],
+    )
+    assert.equal(sellerPeriod('30').days, 30)
+    // The reports page defaults to the month; the dashboard to the week.
+    assert.equal(sellerPeriod(undefined, '30').days, 30)
+  })
+
+  it('falls back rather than rendering a page with no window', () => {
+    for (const value of [null, '', 'week', 7, {}, 'BOGUS']) {
+      assert.equal(sellerPeriod(value).id, '7')
+    }
+    assert.equal(sellerPeriod('BOGUS', '30').id, '30')
+    assert.equal(sellerPeriod('BOGUS', 'nonsense').id, '7')
+  })
+})
+
+describe('salesSummary', () => {
+  const now = new Date('2026-09-26T10:00:00')
+
+  const line = (name, quantity, unitPrice) => ({
+    product_id: name,
+    size: '40',
+    quantity,
+    unit_price: unitPrice,
+    products: { name },
+  })
+
+  const order = (over = {}) => ({
+    id: 'order-1',
+    status: 'placed',
+    payment_status: 'paid',
+    total_amount: 1200,
+    created_at: '2026-09-25T09:00:00',
+    order_items: [line('Sandals', 2, 600)],
+    ...over,
+  })
+
+  it('reads the window the same way the chart does', () => {
+    const summary = salesSummary(
+      [
+        order({ id: 'in', created_at: '2026-09-25T09:00:00' }),
+        order({ id: 'out', created_at: '2026-09-01T09:00:00' }),
+        order({ id: 'cancelled', status: 'cancelled', created_at: '2026-09-24T09:00:00' }),
+      ],
+      { now, days: 7 },
+    )
+
+    assert.equal(summary.orderCount, 1)
+    assert.equal(summary.revenue, 1200)
+    assert.equal(summary.days, 7)
+  })
+
+  it('averages over orders, not over days', () => {
+    const summary = salesSummary(
+      [
+        order({ id: 'a', total_amount: 1000, created_at: '2026-09-25T09:00:00' }),
+        order({ id: 'b', total_amount: 500, created_at: '2026-09-26T09:00:00' }),
+      ],
+      { now, days: 7 },
+    )
+
+    assert.equal(summary.average, 750)
+  })
+
+  it('counts pairs from the lines, the same rows the receipt reads', () => {
+    const summary = salesSummary(
+      [
+        order({
+          id: 'a',
+          created_at: '2026-09-25T09:00:00',
+          order_items: [line('Sandals', 2, 600), line('Boots', 1, 900)],
+        }),
+      ],
+      { now, days: 7 },
+    )
+
+    assert.equal(summary.pairs, 3)
+  })
+
+  it('ranks the best seller by pairs, with money and name breaking ties', () => {
+    const summary = salesSummary(
+      [
+        order({
+          id: 'a',
+          created_at: '2026-09-25T09:00:00',
+          order_items: [line('Boots', 1, 3000), line('Sandals', 4, 500)],
+        }),
+      ],
+      { now, days: 7 },
+    )
+
+    // Four pairs of sandals beat one expensive pair of boots: this row is what
+    // to restock, not what made the most money.
+    assert.equal(summary.topProduct.name, 'Sandals')
+    assert.equal(summary.topProduct.pairs, 4)
+    assert.equal(summary.topProduct.revenue, 2000)
+  })
+
+  it('names the same winner every time when a week is genuinely tied', () => {
+    const tied = () =>
+      salesSummary(
+        [
+          order({
+            id: 'a',
+            created_at: '2026-09-25T09:00:00',
+            order_items: [line('Zenith', 2, 700), line('Alpine', 2, 700)],
+          }),
+        ],
+        { now, days: 7 },
+      ).topProduct.name
+
+    assert.equal(tied(), 'Alpine')
+    assert.equal(tied(), tied())
+  })
+
+  it('counts what is still unpaid in the window', () => {
+    const summary = salesSummary(
+      [
+        order({ id: 'a', payment_status: 'unpaid', created_at: '2026-09-25T09:00:00' }),
+        order({ id: 'b', payment_status: 'paid', created_at: '2026-09-25T09:00:00' }),
+      ],
+      { now, days: 7 },
+    )
+
+    assert.equal(summary.unpaidCount, 1)
+  })
+
+  it('survives an empty window', () => {
+    const summary = salesSummary([], { now, days: 7 })
+    assert.equal(summary.revenue, 0)
+    assert.equal(summary.average, 0)
+    assert.equal(summary.pairs, 0)
+    assert.equal(summary.topProduct, null)
+    assert.equal(salesSummary(null, { now }).orderCount, 0)
   })
 })
 

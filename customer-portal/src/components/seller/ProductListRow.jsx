@@ -4,6 +4,8 @@ import { ImageOff, Package, Pencil } from 'lucide-react'
 
 import QuickStockPanel from './QuickStockPanel.jsx'
 import SizeStockChips from './SizeStockChips.jsx'
+import { productRowMenuItems, productRowPath } from './sellerRowMenus.js'
+import { useContextMenu } from '../ui/ContextMenu.jsx'
 import Switch from '../ui/Switch.jsx'
 import { formatCurrency } from '../../lib/constants.js'
 import { stockState, stockSummary } from '../../lib/sizeSystems.js'
@@ -37,10 +39,20 @@ import { useUpdateSellerProduct } from '../../hooks/useSeller.js'
  * low" are on every screen size, in the name's own line, and the per-size detail
  * is one tap away on the row itself. The row is a link to the product — that is
  * what the stretched link and the pencil mean.
+ *
+ * Right-click opens the row's menu (`productRowMenuItems`, the same items the grid
+ * card offers), which is where the *numbers* view gets the two things a catalogue
+ * owner wants from it without leaving the list: the storefront in another tab, and
+ * the SKU on the clipboard.
  */
 export default function ProductListRow({ product, storeId }) {
   const mutation = useUpdateSellerProduct(storeId)
   const [stockOpen, setStockOpen] = useState(false)
+  const { onContextMenu, menu } = useContextMenu({
+    items: productRowMenuItems(product),
+    link: productRowPath(product),
+    label: product.name,
+  })
 
   const cover = product.images?.[0] ?? null
   const stock = stockSummary(product.inventory)
@@ -53,7 +65,10 @@ export default function ProductListRow({ product, storeId }) {
     mutation.mutate({ productId: product.id, patch: { is_published: next } })
 
   return (
-    <li className="relative transition-colors duration-200 ease-out-cubic hover:bg-subtle/50">
+    <li
+      onContextMenu={onContextMenu}
+      className="relative transition-colors duration-200 ease-out-cubic hover:bg-subtle/50"
+    >
       <Link
         to={`/seller/products/${product.id}`}
         className="absolute inset-0 z-20"
@@ -182,6 +197,7 @@ export default function ProductListRow({ product, storeId }) {
           </div>
         )}
       </div>
+      {menu}
     </li>
   )
 }

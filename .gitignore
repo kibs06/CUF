@@ -59,3 +59,15 @@ android/build/
 
 # Codebuff/Freebuff agent workspace (APK builds, screenshots, logs) — tooling, not source
 .freebuff/
+
+# Local agent/tooling state — installed skills, per-machine agent config and
+# debug parity output. None of it is source the app builds from, and none of it
+# should be published: it is regenerated per machine.
+.agents/
+.claude/
+.parity/
+skills-lock.json
+
+# Freebuff session transcripts — a local record of one conversation, not
+# documentation for the project.
+freebuff-chat-*.md

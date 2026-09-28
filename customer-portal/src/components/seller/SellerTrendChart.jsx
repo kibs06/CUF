@@ -1,5 +1,6 @@
-import { Minus, TrendingDown, TrendingUp } from 'lucide-react'
+import { Copy, Minus, TrendingDown, TrendingUp } from 'lucide-react'
 
+import { useContextMenu } from '../ui/ContextMenu.jsx'
 import { formatCurrency, formatCurrencyCompact } from '../../lib/constants.js'
 
 /**
@@ -43,6 +44,22 @@ import { formatCurrency, formatCurrencyCompact } from '../../lib/constants.js'
  * its own column by exactly the height of its caption. That is the shape of bug
  * that only shows up on the one day it matters.
  *
+ * ## A long window is the same chart, with its labels moved
+ *
+ * The dashboard can now ask for a month or a quarter, and thirty truncated
+ * weekday initials is not an axis — it is a row of the same seven letters over
+ * and over, which reads as a broken chart rather than a long one. So past ten
+ * points the per-day label goes, the bars tighten to `gap-1`, and the axis
+ * becomes three dates: the first day, the middle and the last. Nothing is lost
+ * for a screen reader, because the readings were never in those labels — every
+ * point already carries its own `sr-only` sentence and its own `title`, and both
+ * survive at any density.
+ *
+ * The three dates are `aria-hidden` on purpose: they are the visual axis for the
+ * shape, while the accessible version of the same data is the list underneath.
+ * Announcing "Sep 1, Sep 15, Sep 30" between two sets of readings would be a
+ * third, worse telling of what is already there.
+ *
  * ## Accessibility
  *
  * The bars are `aria-hidden` decoration and each day carries its real figures in
@@ -61,6 +78,19 @@ export default function SellerTrendChart({
 
   const peak = Math.max(0, ...points.map((point) => point.revenue))
 
+  /*
+    Where a weekday stops being an axis. Seven bars are a week a maker reads
+    left to right; thirty bars with thirty initials is the same seven letters
+    five times and reads as a rendering fault — so the label moves to the axis
+    instead. Ten rather than twelve because the break should happen before the
+    initials start to collide, not after.
+  */
+  const dense = points.length > 10
+
+  const axisDates = dense
+    ? [points[0], points[Math.floor((points.length - 1) / 2)], points[points.length - 1]]
+    : []
+
   return (
     <figure className={className}>
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
@@ -78,11 +108,35 @@ export default function SellerTrendChart({
             </p>
           </div>
         ) : (
-          <ol className="flex items-end gap-1.5">
-            {points.map((point) => (
-              <DayBar key={point.key} point={point} peak={peak} />
-            ))}
-          </ol>
+          <>
+            <ol className={dense ? 'flex items-end gap-1' : 'flex items-end gap-1.5'}>
+              {points.map((point) => (
+                <DayBar
+                  key={point.key}
+                  point={point}
+                  peak={peak}
+                  showLabel={!dense}
+                  dense={dense}
+                />
+              ))}
+            </ol>
+
+            {dense && (
+              <div
+                aria-hidden="true"
+                className="mt-2 flex justify-between text-[10px] font-semibold uppercase tracking-[0.08em] text-muted"
+              >
+                {axisDates.map((point) => (
+                  <span key={point.key}>
+                    {point.date.toLocaleDateString('en-PH', {
+                      month: 'short',
+                      day: 'numeric',
+                    })}
+                  </span>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -104,8 +158,15 @@ export default function SellerTrendChart({
  * Everything above the weekday initial is decoration; the reading lives in the
  * `sr-only` span. `title` is set as well because a maker who wants to check one
  * bar against another should not have to open the orders list to do it.
+ *
+ * `showLabel` is false in a dense window (see the docblock): the label moves to
+ * the axis, and the bar keeps its tooltip and its reading either way.
+ *
+ * Right-click puts that same reading on the clipboard. It is the one thing a
+ * chart cannot do for a seller — a bar is not selectable text, and "what did we
+ * take on Saturday" is a sentence that ends up in a message home.
  */
-function DayBar({ point, peak }) {
+function DayBar({ point, peak, showLabel = true, dense = false }) {
   const share = peak > 0 ? (point.revenue / peak) * 100 : 0
   const weekday = point.date.toLocaleDateString('en-PH', { weekday: 'narrow' })
 
@@ -117,8 +178,24 @@ function DayBar({ point, peak }) {
     point.orderCount === 1 ? '1 order' : `${point.orderCount} orders`
   }${point.isProjected ? ', so far today' : ''}`
 
+  const { onContextMenu, menu } = useContextMenu({
+    items: [
+      { id: 'copy-day', label: 'Copy this day’s figures', Icon: Copy, copy: reading },
+      {
+        id: 'copy-takings',
+        label: 'Copy the takings only',
+        Icon: Copy,
+        copy: formatCurrency(point.revenue),
+      },
+    ],
+    label: reading,
+  })
+
   return (
-    <li className="flex min-w-0 flex-1 flex-col items-center gap-2">
+    <li
+      onContextMenu={onContextMenu}
+      className="flex min-w-0 flex-1 flex-col items-center gap-2"
+    >
       <span className="sr-only">{reading}</span>
 
       {/* The plot box. `items-end` is what makes a bar grow upward. */}
@@ -130,7 +207,8 @@ function DayBar({ point, peak }) {
         <span
           style={point.revenue > 0 ? { height: `${Math.max(6, share)}%` } : undefined}
           className={[
-            'w-full rounded-t-[4px] transition-[height] duration-300 ease-out-cubic',
+            'w-full transition-[height] duration-300 ease-out-cubic',
+            dense ? 'rounded-t-[2px]' : 'rounded-t-[4px]',
             point.revenue > 0
               ? point.isProjected
                 ? // Lighter: the day is still running.
@@ -142,15 +220,18 @@ function DayBar({ point, peak }) {
         />
       </span>
 
-      <span
-        aria-hidden="true"
-        className={[
-          'text-[10px] font-semibold uppercase tracking-[0.08em]',
-          point.isProjected ? 'text-ink' : 'text-muted',
-        ].join(' ')}
-      >
-        {weekday}
-      </span>
+      {showLabel && (
+        <span
+          aria-hidden="true"
+          className={[
+            'text-[10px] font-semibold uppercase tracking-[0.08em]',
+            point.isProjected ? 'text-ink' : 'text-muted',
+          ].join(' ')}
+        >
+          {weekday}
+        </span>
+      )}
+      {menu}
     </li>
   )
 }

@@ -3,9 +3,14 @@ import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../constants/app_constants.dart';
 import '../../constants/seller_theme_constants.dart';
+import '../../exceptions/shoe_model_upload_exception.dart';
 import '../../models/product_models.dart';
 import '../../services/product_service.dart';
+import '../../services/shoe_model_upload_service.dart';
+import '../../utils/fit_spec_form.dart';
+import '../../utils/glb_validator.dart';
 import '../../utils/product_audience.dart';
+import '../../utils/shoe_model_upload.dart';
 import '../../widgets/sole_card.dart';
 import '../../widgets/sole_text_field.dart';
 import '../../widgets/sole_primary_button.dart';
@@ -27,7 +32,21 @@ class AddEditProductScreen extends StatefulWidget {
   /// screen-level assertion can see.
   final ProductService? productService;
 
-  const AddEditProductScreen({super.key, this.product, this.productService});
+  /// Test seam for the 3D model pipeline (roadmap V2.2/V2.3).
+  ///
+  /// Production builds the service itself ([ShoeModelUploadService.createDefault]
+  /// — dio over the handover link, Supabase for the two writes). A widget test
+  /// passes a real service wired to fake sources, which is stronger than faking
+  /// the service: the digest, the version arithmetic and the reuse decision are
+  /// then the production code paths, with only the socket and the table stubbed.
+  final ShoeModelUploadService? shoeModelUploadService;
+
+  const AddEditProductScreen({
+    super.key,
+    this.product,
+    this.productService,
+    this.shoeModelUploadService,
+  });
 
   @override
   State<AddEditProductScreen> createState() => _AddEditProductScreenState();
@@ -44,6 +63,54 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
 
   final _barcodeController = TextEditingController();
   final _salePriceController = TextEditingController();
+
+  // "3D & fit" — the four numbers a customer's fit verdict is computed from
+  // (`utils/fit_engine.dart`). All optional; the rules for what counts as a
+  // usable spec live in `utils/fit_spec_form.dart` so this form, the database
+  // CHECKs and the engine cannot drift apart.
+  final _lastLengthController = TextEditingController();
+  final _lastWidthController = TextEditingController();
+  final _heelHeightController = TextEditingController();
+  final _fitRefSizeController = TextEditingController();
+
+  // "3D model" — the handover `.glb` this product will be rendered from
+  // (roadmap V2.2/V2.3). The section is gated by
+  // `AppConstants.shoeModelUploadEnabled`, which ships **on** since 2026-09-28:
+  // the `product_models` table and `shoe-models` bucket were verified applied on
+  // the hosted project that day (17 columns, 4 policies, 0 rows), after the docs
+  // had claimed "not applied" for a day. `--dart-define=SHOE_MODEL_UPLOAD=false`
+  // hides the section again and is the whole rollback.
+  // All the rules — the link check, the declaration, the readiness gate, the
+  // storage path and the row payload — live in `utils/shoe_model_upload.dart`,
+  // and the pass/fail report is `utils/glb_validator.dart`, so this screen only
+  // holds state and renders it.
+  late final ShoeModelUploadService _shoeModelService =
+      widget.shoeModelUploadService ?? ShoeModelUploadService.createDefault();
+  final _shoeModelUrlController = TextEditingController();
+  final _shoeModelLengthController = TextEditingController();
+  final _shoeModelSizeController = TextEditingController();
+
+  /// The last file that came back off the link — **pass or fail**. A failed
+  /// report is kept on purpose: the seller has to be able to read which rows
+  /// failed, and [ShoeModelAsset.isPublishable] is what stops it being uploaded.
+  ShoeModelAsset? _shoeModelAsset;
+
+  /// Transport or gate failure copy (bad link, unreachable host), shown beside
+  /// the section. Validation failures are not errors — they are the report.
+  String? _shoeModelError;
+
+  /// A fetch/validate pass is in flight (the button is disabled while true).
+  bool _shoeModelChecking = false;
+
+  /// Whether a checked, passing model is handed to the server validator now or
+  /// held as a `draft` for later. Defaults on, matching the roadmap's V2.9
+  /// ("upload → status='active'" — which since V2.4 means *the server* writes
+  /// that status: switching this off just skips the call).
+  bool _shoeModelPublishActive = true;
+
+  /// `'left'` or `'right'` — `product_models.shoe_side`; the renderer mirrors it.
+  String _shoeModelSide = 'right';
+
   DateTime? _saleStartsAt;
   DateTime? _saleEndsAt;
   String _category = 'Casual';
@@ -129,6 +196,15 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
         DateTime.tryParse(p['sale_starts_at']?.toString() ?? '');
     _saleEndsAt = DateTime.tryParse(p['sale_ends_at']?.toString() ?? '');
 
+    // Fit specs — prefilled only when the whole spec is one the engine would
+    // accept (see `fitSpecFieldTexts`), so a half-filled or implausible row
+    // does not show the seller numbers the app is quietly ignoring.
+    final fitTexts = fitSpecFieldTexts(p);
+    _lastLengthController.text = fitTexts.lastLengthMm;
+    _lastWidthController.text = fitTexts.lastWidthMm;
+    _heelHeightController.text = fitTexts.heelHeightMm;
+    _fitRefSizeController.text = fitTexts.refSizeEu;
+
     // Tags — passed through raw; the grouped selector parses every stored
     // string (presets, `custom:<group>:<text>` entries, and legacy free text)
     // and pre-selects / re-renders the right chips.
@@ -203,6 +279,13 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
 
   @override
   void dispose() {
+    _lastLengthController.dispose();
+    _lastWidthController.dispose();
+    _heelHeightController.dispose();
+    _fitRefSizeController.dispose();
+    _shoeModelUrlController.dispose();
+    _shoeModelLengthController.dispose();
+    _shoeModelSizeController.dispose();
     _nameController.dispose();
     _priceController.dispose();
     _descController.dispose();
@@ -1332,8 +1415,31 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
 
   // ─── SAVE ───────────────────────────────────────────────────────
 
+  /// The four "3D & fit" fields as one outcome — the same rule the inline
+  /// validators use, so save-time and inline errors are never two opinions.
+  FitSpecFormResult _parseFitSpecs() => FitSpecFormResult.fromFields(
+        lastLengthMm: _lastLengthController.text,
+        lastWidthMm: _lastWidthController.text,
+        heelHeightMm: _heelHeightController.text,
+        refSizeEu: _fitRefSizeController.text,
+      );
+
+  /// Inline validator for one fit field: the sentence the shared rules produce
+  /// for *that* field, or null when it is fine.
+  String? _validateFitField(FitSpecField field) =>
+      _parseFitSpecs().messageFor(field);
+
   Future<void> _saveProduct() async {
     if (!_formKey.currentState!.validate()) return;
+
+    // The fit fields are validated per-field above; this is the belt-and-braces
+    // pass that also yields the spec itself. `null` is a deliberate answer —
+    // "nothing measured yet" — and clears the columns.
+    final fitSpecs = _parseFitSpecs();
+    if (fitSpecs.isError) {
+      _showSnackBar(fitSpecs.error!, isError: true);
+      return;
+    }
 
     // Validation checks
     if (_imageItems.isEmpty) {
@@ -1416,6 +1522,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
           saleStartsAt: _saleStartsAt,
           saleEndsAt: _saleEndsAt,
           audience: _audience,
+          fitSpecs: fitSpecs.specs,
         );
         // Sync active status after variant changes
         try {
@@ -1423,8 +1530,21 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
         } catch (_) {
           // Silently fail — status will self-correct on next update
         }
+        // See the create branch: the model attaches after the row is saved and
+        // can never roll the product save back.
+        final model = await _publishStagedShoeModel(
+          productId: productId,
+          storeId: _storeId!,
+        );
         if (mounted) {
-          _showSnackBar('Product updated!');
+          if (model.error != null) {
+            _showSnackBar(model.error!,
+                isError: true, duration: const Duration(seconds: 6));
+          } else if (model.note != null) {
+            _showSnackBar('Product updated! ${model.note}');
+          } else {
+            _showSnackBar('Product updated!');
+          }
           Navigator.of(context).pop(true);
         }
       } else {
@@ -1446,6 +1566,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
           saleStartsAt: _saleStartsAt,
           saleEndsAt: _saleEndsAt,
           audience: _audience,
+          fitSpecs: fitSpecs.specs,
         );
         // Sync active status for new product
         try {
@@ -1453,8 +1574,22 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
         } catch (_) {
           // Silently fail — status will self-correct on next update
         }
+        // The 3D model, when the seller staged one. It runs after the row
+        // exists (a model hangs off a product) and never rolls the product
+        // back — a saved product with no model behaves exactly as it does today.
+        final model = await _publishStagedShoeModel(
+          productId: productId,
+          storeId: _storeId!,
+        );
         if (mounted) {
-          _showSnackBar('Product saved!');
+          if (model.error != null) {
+            _showSnackBar(model.error!,
+                isError: true, duration: const Duration(seconds: 6));
+          } else if (model.note != null) {
+            _showSnackBar('Product saved! ${model.note}');
+          } else {
+            _showSnackBar('Product saved!');
+          }
           Navigator.of(context).pop(true);
         }
       }
@@ -1569,6 +1704,26 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
                       'Sizes & Variants', Icons.straighten_outlined),
                   const SizedBox(height: 8),
                   _buildVariantsSection(),
+
+                  const SizedBox(height: 24),
+
+                  // ─── SECTION 5b: 3D & FIT (OPTIONAL) ─────────
+                  _buildSectionHeader(
+                      '3D & Fit (Optional)', Icons.view_in_ar_outlined),
+                  const SizedBox(height: 8),
+                  _buildFitSpecsSection(),
+
+                  // ─── SECTION 5c: 3D MODEL (OPTIONAL, V2.2/V2.3) ──
+                  // Gated because the `product_models` table and the
+                  // `shoe-models` bucket are written but not applied — a form
+                  // section that can only fail is worse than an absent one.
+                  if (AppConstants.shoeModelUploadEnabled) ...[
+                    const SizedBox(height: 24),
+                    _buildSectionHeader(
+                        '3D Model (Optional)', Icons.view_in_ar),
+                    const SizedBox(height: 8),
+                    _buildShoeModelSection(),
+                  ],
 
                   const SizedBox(height: 24),
 
@@ -2145,6 +2300,643 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
         ],
       ),
     );
+  }
+
+  // ── 3D & fit ──
+
+  /// The four numbers behind every fit verdict this product will ever show.
+  ///
+  /// Optional by design: a seller who has not measured a last yet still lists
+  /// the product, and it simply shows no fit advice — which is the honest
+  /// outcome, and better than a guessed one. What the copy has to get across is
+  /// the *inside* measurement, because the outside of a sole is 8–15 mm longer
+  /// and would size every customer half a size too big.
+  Widget _buildFitSpecsSection() {
+    return _formCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Measure one pair in your most-sold size and the app can tell a '
+            'customer how this shoe will fit them. Optional — without these '
+            'numbers the product simply shows no fit advice.',
+            style: AppConstants.bodyStyle(
+              fontSize: 12,
+              color: AppConstants.secondary.withValues(alpha: 0.6),
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: _showLastMeasuringGuide,
+              icon: const Icon(Icons.straighten, size: 16),
+              label: const Text('How to measure your last'),
+              style: TextButton.styleFrom(
+                padding: EdgeInsets.zero,
+                foregroundColor: AppConstants.primary,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          SoleTextField(
+            labelText: 'Last length (mm)',
+            hintText: 'e.g. 275',
+            controller: _lastLengthController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            validator: (_) => _validateFitField(FitSpecField.lastLengthMm),
+          ),
+          const SizedBox(height: 12),
+          SoleTextField(
+            labelText: 'Measured at (EU size)',
+            hintText: 'e.g. 42',
+            controller: _fitRefSizeController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            validator: (_) => _validateFitField(FitSpecField.refSizeEu),
+          ),
+          const SizedBox(height: 12),
+          SoleTextField(
+            labelText: 'Last width (mm, optional)',
+            hintText: 'e.g. 98',
+            controller: _lastWidthController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            validator: (_) => _validateFitField(FitSpecField.lastWidthMm),
+          ),
+          const SizedBox(height: 12),
+          SoleTextField(
+            labelText: 'Heel height (mm, optional)',
+            hintText: 'e.g. 25',
+            controller: _heelHeightController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            validator: (_) => _validateFitField(FitSpecField.heelHeightMm),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Measure INSIDE the shoe — heel to toe along the insole. The '
+            'outside of the sole is 8–15 mm longer and would size customers '
+            'too big.',
+            style: AppConstants.bodyStyle(
+              fontSize: 12,
+              color: AppConstants.secondary.withValues(alpha: 0.5),
+              height: 1.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The measuring instructions, in the same order a seller's hands would
+  /// follow them. Kept short on purpose: a guide nobody finishes is a guide
+  /// that produces wrong numbers.
+  void _showLastMeasuringGuide() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+        decoration: BoxDecoration(
+          color: AppConstants.sellerCardBg,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          border: Border.all(color: SellerTheme.cardBorder),
+        ),
+        child: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'How to measure your last',
+                  style: AppConstants.headlineStyle(fontSize: 18),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'One pair, five minutes. These are the numbers behind every '
+                  'fit verdict the app shows.',
+                  style: AppConstants.bodyStyle(
+                    fontSize: 13,
+                    color: AppConstants.secondary.withValues(alpha: 0.6),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                for (final (index, step) in _lastMeasuringSteps.indexed) ...[
+                  Text(
+                    '${index + 1}.  $step',
+                    style: AppConstants.bodyStyle(fontSize: 13, height: 1.5),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                const SizedBox(height: 4),
+                Text(
+                  'Not measured yet? Leave all four fields empty. The product '
+                  'lists normally and shows no fit advice — which is better '
+                  'than advice from a number nobody checked.',
+                  style: AppConstants.bodyStyle(
+                    fontSize: 12,
+                    color: AppConstants.secondary.withValues(alpha: 0.5),
+                    height: 1.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  static const List<String> _lastMeasuringSteps = [
+    'Pick the pair in the size you sell most. If you sell many sizes, use the '
+        'one you measured — the app grades the rest from it, 6.67 mm per size.',
+    'Lay a tape or ruler flat inside the shoe, along the insole.',
+    'Measure from the very back of the heel to the tip of the toe. Write the '
+        'number in millimetres: a men\'s EU 42 is usually around 275.',
+    'Optional: measure across the widest part of the insole, edge to edge, '
+        'for the last width.',
+    'Write down which EU size you measured. That is the "Measured at" field — '
+        'without it the other numbers cannot be used.',
+  ];
+
+  // ── 3D model (V2.2/V2.3) ──
+
+  /// The declaration as the shared rules read it — the same call the inline
+  /// validators and the publish gate make, so the sentence under a field and
+  /// the reason an upload is refused are never two opinions.
+  ShoeModelDeclarationResult _parseShoeModelDeclaration() =>
+      ShoeModelDeclarationResult.fromFields(
+        externalLengthMm: _shoeModelLengthController.text,
+        authoredSizeEu: _shoeModelSizeController.text,
+      );
+
+  String? _validateShoeModelField(ShoeModelField field) =>
+      _parseShoeModelDeclaration().messageFor(field);
+
+  /// True when what is on screen could be published — a passing file plus a
+  /// declaration the scale check could use. Drives the summary line and the
+  /// publish switch's visibility, never the upload itself (the service and the
+  /// database are the ones that decide).
+  bool get _shoeModelReady =>
+      _shoeModelAsset?.isPublishable == true &&
+      !_parseShoeModelDeclaration().isError;
+
+  /// Fetches the link and runs the authoring contract over it.
+  ///
+  /// A file that fails checks is **not** an error: the report is the product of
+  /// this method, and the seller has to see which rows failed. Only a transport
+  /// problem becomes [_shoeModelError].
+  Future<void> _checkShoeModel() async {
+    final url = _shoeModelUrlController.text.trim();
+    if (url.isEmpty) {
+      setState(() => _shoeModelError =
+          'Paste the link to the exported .glb first.');
+      return;
+    }
+
+    final declaration = _parseShoeModelDeclaration();
+    if (declaration.isError) {
+      setState(() => _shoeModelError = declaration.error);
+      return;
+    }
+
+    setState(() {
+      _shoeModelChecking = true;
+      _shoeModelError = null;
+      // The previous file is dropped now rather than kept beside the spinner:
+      // a stale report next to a new link is how a seller publishes the wrong
+      // model.
+      _shoeModelAsset = null;
+    });
+
+    try {
+      final asset = await _shoeModelService.fetchAndValidate(
+        url: url,
+        declaredExternalLengthMm: declaration.externalLengthMm,
+        authoredSizeEu: declaration.authoredSizeEu,
+        shoeSide: _shoeModelSide,
+        label: _nameController.text.trim().isEmpty
+            ? '<upload>'
+            : _nameController.text.trim(),
+      );
+      if (!mounted) return;
+      setState(() => _shoeModelAsset = asset);
+    } on ShoeModelUploadException catch (e) {
+      if (!mounted) return;
+      setState(() => _shoeModelError = e.message);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _shoeModelError =
+          'Could not check that file. Check the connection and try again.');
+    } finally {
+      if (mounted) setState(() => _shoeModelChecking = false);
+    }
+  }
+
+  /// Publishes the staged model once the product row exists.
+  ///
+  /// Returns the sentence to show, split into a failure and a success note. The
+  /// **product save is never rolled back by a model failure**: a saved product
+  /// with no model degrades to exactly today's behaviour (no try-on), whereas
+  /// losing the product would lose the seller's work — the D8 rule, applied to
+  /// the write path.
+  Future<({String? error, String? note})> _publishStagedShoeModel({
+    required String productId,
+    required String storeId,
+  }) async {
+    if (!AppConstants.shoeModelUploadEnabled) {
+      return (error: null, note: null);
+    }
+
+    final asset = _shoeModelAsset;
+    if (asset == null) return (error: null, note: null);
+
+    final gate = shoeModelUploadGate(
+      productId: productId,
+      asset: asset,
+      declaration: _parseShoeModelDeclaration(),
+    );
+    if (!gate.ready) {
+      return (
+        error: 'Product saved, but the 3D model was not attached: '
+            '${gate.message}',
+        note: null,
+      );
+    }
+
+    try {
+      final outcome = await _shoeModelService.publish(
+        storeId: storeId,
+        productId: productId,
+        asset: asset,
+        active: _shoeModelPublishActive,
+      );
+
+      // The server validator (V2.4) has the last word on whether the model is
+      // visible, and its three answers are three different sentences: refused
+      // (the seller has rows to fix — an error), no verdict (the model is safe
+      // as a draft and publishing again retries), or accepted.
+      final verdict = outcome.serverVerdict;
+      if (verdict != null && verdict.refused) {
+        return (
+          error: 'Product saved, but ${verdict.sellerMessage}',
+          note: null,
+        );
+      }
+      if (verdict != null && !verdict.passed) {
+        return (
+          error: null,
+          note: '3D model ${outcome.summary}. ${verdict.sellerMessage}',
+        );
+      }
+      return (error: null, note: '3D model ${outcome.summary}.');
+    } on ShoeModelUploadException catch (e) {
+      return (
+        error: 'Product saved, but the 3D model did not upload: ${e.message}',
+        note: null,
+      );
+    } catch (_) {
+      return (
+        error: 'Product saved, but the 3D model did not upload. Open the '
+            'product again to retry.',
+        note: null,
+      );
+    }
+  }
+
+  /// The model section: a link to the handover `.glb`, the declared length the
+  /// scale check measures against, and the pass/fail table.
+  ///
+  /// The copy leads with what the model *buys* the seller, because a partner
+  /// produces it and the seller is the one holding the phone: "customers can see
+  /// this shoe on their own foot" is the reason they will chase the file down.
+  Widget _buildShoeModelSection() {
+    final asset = _shoeModelAsset;
+
+    return _formCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Attach the 3D model of this shoe so a customer can see it on their '
+            'own foot. Optional — without a model the try-on keeps showing the '
+            'simulated preview. Ask your studio partner for the exported .glb '
+            'and the declared length from its handover sheet.',
+            style: AppConstants.bodyStyle(
+              fontSize: 12,
+              color: AppConstants.secondary.withValues(alpha: 0.6),
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 12),
+          SoleTextField(
+            labelText: 'Link to the .glb',
+            hintText: 'https://…',
+            controller: _shoeModelUrlController,
+            keyboardType: TextInputType.url,
+            autocorrect: false,
+            enableSuggestions: false,
+          ),
+          const SizedBox(height: 12),
+          SoleTextField(
+            labelText: 'Declared length (mm, outside)',
+            hintText: 'e.g. 283',
+            controller: _shoeModelLengthController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            validator: (_) =>
+                _validateShoeModelField(ShoeModelField.externalLengthMm),
+          ),
+          const SizedBox(height: 12),
+          SoleTextField(
+            labelText: 'Authored at (EU size, optional)',
+            hintText: 'e.g. 42',
+            controller: _shoeModelSizeController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            validator: (_) =>
+                _validateShoeModelField(ShoeModelField.authoredSizeEu),
+          ),
+          const SizedBox(height: 12),
+          _buildShoeSideChoices(),
+          const SizedBox(height: 14),
+          // Deliberately NOT a `SolePrimaryButton`: the form has exactly one
+          // primary action (Save, at the bottom), and a second full-width
+          // primary button halfway down would compete with it. This is a
+          // secondary step — nothing is written until Save.
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: OutlinedButton.icon(
+              onPressed: _shoeModelChecking ? null : _checkShoeModel,
+              icon: _shoeModelChecking
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.cloud_download_outlined, size: 16),
+              label: Text(_shoeModelChecking ? 'Checking…' : 'Check the file'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppConstants.primary,
+                side: BorderSide(
+                  color: AppConstants.primary.withValues(alpha: 0.4),
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: AppConstants.buttonRadius,
+                ),
+              ),
+            ),
+          ),
+          if (_shoeModelError != null) ...[
+            const SizedBox(height: 12),
+            _buildShoeModelNotice(_shoeModelError!, isError: true),
+          ],
+          if (asset != null) ...[
+            const SizedBox(height: 14),
+            _buildShoeModelReport(asset),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// `product_models.shoe_side` — which foot the mesh was authored for. The
+  /// renderer mirrors it, so a wrong answer is a wrong shoe on screen; two
+  /// chips rather than a dropdown because there are exactly two answers.
+  Widget _buildShoeSideChoices() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Modelled foot',
+          style: AppConstants.bodyStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: AppConstants.secondary.withValues(alpha: 0.7),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            for (final side in const ['right', 'left'])
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(
+                  label: Text(side == 'right' ? 'Right shoe' : 'Left shoe'),
+                  selected: _shoeModelSide == side,
+                  onSelected: (_) => setState(() => _shoeModelSide = side),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildShoeModelNotice(String message, {bool isError = false}) {
+    final color = isError ? AppConstants.error : AppConstants.success;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(isError ? Icons.error_outline : Icons.check_circle_outline,
+              size: 16, color: color),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: AppConstants.bodyStyle(
+                fontSize: 12,
+                color: AppConstants.secondary,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The pass/fail report, failures first.
+  ///
+  /// Passing rows are summarised rather than listed: the seller acts on the
+  /// two sentences that failed, and a wall of green buries them. The limits note
+  /// ships with every green run so "passed the checks" is never read as "this
+  /// is your shoe" (guide §5.2's reviewer rows are the part no byte-check
+  /// covers).
+  Widget _buildShoeModelReport(ShoeModelAsset asset) {
+    final report = asset.report;
+    final failures = shoeModelReportFailures(report);
+    final warnings = shoeModelReportWarnings(report);
+    final passed = report.passed && asset.bytes.isNotEmpty;
+    final color = passed ? AppConstants.success : AppConstants.error;
+
+    final measurements = <String>[
+      '${(asset.fileSizeBytes / (1024 * 1024)).toStringAsFixed(2)} MB',
+      if (asset.triangleCount != null)
+        '${asset.triangleCount} triangles',
+      if (asset.meshExternalLengthMm != null)
+        'mesh ${asset.meshExternalLengthMm!.toStringAsFixed(1)} mm long',
+    ].join(' \u00b7 ');
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(passed ? Icons.verified_outlined : Icons.rule_folder_outlined,
+                  size: 16, color: color),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  shoeModelReportHeadline(report),
+                  style: AppConstants.bodyStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppConstants.secondary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            measurements,
+            style: AppConstants.bodyStyle(
+              fontSize: 11,
+              color: AppConstants.secondary.withValues(alpha: 0.6),
+            ),
+          ),
+          if (asset.declaredExternalLengthMm != null &&
+              asset.meshExternalLengthMm != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Declared ${asset.declaredExternalLengthMm!.toStringAsFixed(0)} mm '
+              '\u00b7 mesh ${asset.meshExternalLengthMm!.toStringAsFixed(1)} mm '
+              '\u2014 ${_shoeModelLengthDelta(asset)}'
+              ' (tolerance \u00b1${kLengthToleranceMm.toStringAsFixed(0)} mm)',
+              style: AppConstants.bodyStyle(
+                fontSize: 11,
+                color: AppConstants.secondary.withValues(alpha: 0.6),
+              ),
+            ),
+          ],
+          if (failures.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            for (final failure in failures)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Text(
+                  '\u2022 $failure',
+                  style: AppConstants.bodyStyle(
+                    fontSize: 11,
+                    color: AppConstants.secondary,
+                    height: 1.35,
+                  ),
+                ),
+              ),
+          ],
+          if (warnings.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            for (final warning in warnings)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Text(
+                  '\u2022 to confirm: $warning',
+                  style: AppConstants.bodyStyle(
+                    fontSize: 11,
+                    color: AppConstants.secondary.withValues(alpha: 0.7),
+                    height: 1.35,
+                  ),
+                ),
+              ),
+          ],
+          if (passed) ...[
+            const SizedBox(height: 4),
+            Text(
+              kShoeModelPassedLimitsNote,
+              style: AppConstants.bodyStyle(
+                fontSize: 11,
+                color: AppConstants.secondary.withValues(alpha: 0.55),
+                height: 1.35,
+              ),
+            ),
+          ],
+          // The switch only appears when the file could actually be published:
+          // offering "publish now" beside a declaration that would refuse the
+          // upload would be a control that lies.
+          if (_shoeModelReady) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _shoeModelPublishActive
+                        ? 'Publish it now (customers get it when the try-on '
+                            'ships)'
+                        : 'Keep it as a draft for now',
+                    style: AppConstants.bodyStyle(
+                      fontSize: 12,
+                      color: AppConstants.secondary.withValues(alpha: 0.7),
+                    ),
+                  ),
+                ),
+                SoleSwitch(
+                  value: _shoeModelPublishActive,
+                  onChanged: (value) =>
+                      setState(() => _shoeModelPublishActive = value),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              isEdit
+                  ? 'Saving the product uploads this file.'
+                  : 'Saving the product uploads this file, once the product '
+                      'exists.',
+              style: AppConstants.bodyStyle(
+                fontSize: 11,
+                color: AppConstants.secondary.withValues(alpha: 0.55),
+              ),
+            ),
+          ],
+          // There is deliberately no third state here. A passing report implies
+          // publishable in every path that can reach this widget: the
+          // declaration is parsed *before* the fetch, and the byte cap is
+          // enforced by the fetcher before the validator ever runs. A source
+          // that somehow bypassed the cap would leave this panel silent, which
+          // is the right behaviour — the save-time gate names the reason in the
+          // snackbar instead of a copy invented for a case that cannot happen.
+        ],
+      ),
+    );
+  }
+
+  /// "within tolerance" / "4.6 mm under" — the honest reading of the delta the
+  /// scale check already judged, so the number never appears without its verdict.
+  String _shoeModelLengthDelta(ShoeModelAsset asset) {
+    final declared = asset.declaredExternalLengthMm!;
+    final mesh = asset.meshExternalLengthMm!;
+    final delta = (mesh - declared).abs();
+    if (delta <= kLengthToleranceMm) {
+      return 'within tolerance (${delta.toStringAsFixed(1)} mm apart)';
+    }
+    final direction = mesh < declared ? 'under' : 'over';
+    return '${delta.toStringAsFixed(1)} mm $direction the declared length';
   }
 
   // ── Tags ──

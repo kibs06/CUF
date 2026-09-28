@@ -1,4 +1,6 @@
 import 'dart:ui';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../constants/app_constants.dart';
@@ -9,13 +11,61 @@ import '../../utils/size_key.dart';
 import '../../widgets/ar_view_placeholder.dart';
 import '../../widgets/cart_icon_button.dart';
 import '../../widgets/seller/fly_to_order_animation.dart';
+import 'ar_try_on_spike_screen.dart';
+import '../../providers/try_on/try_on_mode.dart';
+import '../../providers/try_on/try_on_phase.dart';
+import '../../providers/try_on/try_on_session_controller.dart';
+import '../../services/ar_try_on_channel.dart';
+import '../../services/try_on_placeholder_model.dart';
 
 class ARVirtualFitScreen extends StatefulWidget {
   final Map<String, dynamic>? preselectedProduct;
 
+  /// **The capability gate's availability half (roadmap V3.9), threaded now.**
+  ///
+  /// `true` means a verified model is already cached for this product, so the
+  /// only thing still between this screen and a real render is AR support —
+  /// which is discovered when a session tries to start, by
+  /// `TryOnSessionController`.
+  ///
+  /// **Nothing renders it yet, and that is deliberate.** Swapping the placeholder
+  /// for the platform view is V3.5, and it will be written against the renderer
+  /// route V0.7 has not settled. This parameter exists ahead of it because
+  /// architecture §2.3's whole point is that the *call sites stop changing*: the
+  /// entry that can answer this question (product detail, from the V2.6
+  /// prefetch) hands over the same answer today, so V3.5 edits one file instead
+  /// of chasing five. Every other entry — the home card, the store and
+  /// collection rows — leaves it `false` and keeps the simulated feed, which is
+  /// D8's fallback rule rather than a gap.
+  final bool modelAvailable;
+
+  /// **The V3 switch (V3.5), read by the caller and passed in** — the same shape as
+  /// `TryOnPrefetch(enabled:)` and `TryOnSessionController(enabled:)`, so a test can
+  /// drive both configurations in one run and this screen never picks a default of
+  /// its own.
+  ///
+  /// With it **false** the platform view is never built, the controller is never
+  /// constructed and no channel call is made: V0's F19 ruling is that the flag gates
+  /// *side effects*, not just what is painted.
+  final bool tryOnEnabled;
+
+  /// Test seam: a session controller to drive instead of building one.
+  final TryOnSessionController? tryOnSessionController;
+
+  /// Test seam: the widget that stands in for the platform view.
+  ///
+  /// `AndroidView` cannot be mounted under `flutter test` (there is no platform-view
+  /// registry), so the real view is reached through a seam rather than built inline —
+  /// the same harness boundary the V2.6 page tests had to document.
+  final Widget Function()? tryOnViewBuilder;
+
   const ARVirtualFitScreen({
     super.key,
     this.preselectedProduct,
+    this.modelAvailable = false,
+    this.tryOnEnabled = AppConstants.tryOnV3Enabled,
+    this.tryOnSessionController,
+    this.tryOnViewBuilder,
   });
 
   @override
@@ -30,6 +80,20 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProv
   late ValueNotifier<bool> _isTracking;
   bool _showTutorial = true;
   bool _isAddingToCart = false;
+
+  /// The V3 session. Present only when the switch is on **and** the entry says a
+  /// model is cached — never constructed otherwise, which is what makes F19 hold.
+  TryOnSessionController? _tryOn;
+
+  /// True while the platform view occupies the camera-feed slot.
+  ///
+  /// It starts true when a session is possible and flips **off** the moment the
+  /// controller reports a degradation, so a refused ARCore start lands on the
+  /// simulated feed (D8) instead of a black rectangle the customer cannot explain.
+  bool _tryOnShowingView = false;
+
+  /// Whether this screen built [_tryOn] and must therefore dispose it.
+  bool _ownsTryOn = false;
 
   // GlobalKeys for the fly-to-cart overlay animation (Add to Cart → cart icon)
   final GlobalKey _addToCartButtonKey = GlobalKey();
@@ -65,6 +129,41 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProv
 
     _isTracking = ValueNotifier<bool>(false);
 
+    // ── V3.5: the real renderer, when the gate says there is something to render ──
+    // The order here is F17 and it is load-bearing. The platform view is mounted by
+    // `build` and `startAr` is called *from* its `onPlatformViewCreated`, so the
+    // session is only ever requested once the view provably exists. The model
+    // handover goes the other way — it happens now, before the view can exist,
+    // because the native plugin parks it (F18), which is exactly the bug the V0
+    // plugin shipped.
+    if (widget.tryOnSessionController != null) {
+      _tryOn = widget.tryOnSessionController;
+    } else if (_tryOnWanted) {
+      _ownsTryOn = true;
+      _tryOn = TryOnSessionController(
+        productId: _activeProduct['id'].toString(),
+        // The product-level default. A per-colour override would have to resolve a
+        // variant out of this map's `sizes` shape, and the app's variants are colour
+        // *and* size (V2.2's D-2 deferral), so a colour-scoped model would render on
+        // one size only.
+        enabled: true,
+        models: AppConstants.tryOnPlaceholderModelEnabled
+            ? placeholderModelService()
+            : null,
+      );
+    }
+    // Derived, not assumed: an injected controller may have degraded *before* this
+    // screen existed (a retry after a refusal), in which case the simulated feed
+    // is what should paint on the very first frame.
+    final controller = _tryOn;
+    _tryOnShowingView = _tryOnWanted &&
+        (controller == null ||
+            controller.degradeReason == TryOnDegradeReason.none);
+    if (_tryOn != null) {
+      _tryOn!.addListener(_onTryOnChanged);
+      _tryOn!.prepareModel();
+    }
+
     // Simulated tracking lock on after 2.5 seconds
     Future.delayed(const Duration(milliseconds: 2500), () {
       if (mounted) {
@@ -89,8 +188,59 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProv
   void dispose() {
     _pulseController.dispose();
     _particleController.dispose();
+    // D1: the platform view owns native teardown; disposing the controller cancels
+    // its subscriptions and stops listening, and makes no `stopSession` call.
+    if (_ownsTryOn) _tryOn?.dispose();
     _isTracking.dispose();
     super.dispose();
+  }
+
+  /// True only when the switch is on **and** the entry says a model is cached.
+  ///
+  /// The availability half arrives from the caller (product detail, from the V2.6
+  /// prefetch). This screen never guesses it, because answering costs a table read
+  /// that the page a customer came from has already paid for.
+  bool get _tryOnWanted => widget.tryOnEnabled && widget.modelAvailable;
+
+  /// Rebuilds on the session's own events, and **falls back rather than sticking**.
+  void _onTryOnChanged() {
+    final controller = _tryOn;
+    if (controller == null || !mounted) return;
+
+    final degraded = controller.degradeReason != TryOnDegradeReason.none;
+    // Derived rather than toggled. The first version of this flipped the flag
+    // whenever `degraded` matched the current value, which turned the view *on* for
+    // an entry that had no model and therefore no session to show — caught by
+    // `test/widgets/ar_fitting_try_on_swap_test.dart`. The gate is still ANDed in
+    // here, so a product without a model can never be shown a session.
+    final desired = _tryOnWanted && !degraded;
+    if (desired != _tryOnShowingView) {
+      setState(() => _tryOnShowingView = desired);
+    }
+    if (_tryOnShowingView && controller.phase == TryOnPhase.searching) {
+      // Real ARCore tracking replaces the simulated 2.5 s lock-on.
+      _isTracking.value = true;
+    }
+  }
+
+  /// The real renderer, or null so [ARViewPlaceholder] keeps its simulated feed.
+  Widget? _tryOnArView() {
+    if (!_tryOnShowingView) return null;
+    final injected = widget.tryOnViewBuilder;
+    if (injected != null) return injected();
+    // Android only: there is no native plugin on iOS, and an `AndroidView` there
+    // throws instead of degrading.
+    if (defaultTargetPlatform != TargetPlatform.android) return null;
+    return AndroidView(
+      viewType: kArTryOnViewType,
+      // The platform view must be able to receive taps: that is how the shoe gets
+      // placed (V3.4), and a tap only reaches native if Flutter hands the gesture
+      // arena over.
+      gestureRecognizers: <Factory<OneSequenceGestureRecognizer>>{
+        Factory<OneSequenceGestureRecognizer>(() => EagerGestureRecognizer()),
+      },
+      onPlatformViewCreated: (_) => _tryOn?.startAr(arViewReady: true),
+    );
   }
 
   void _switchProduct(Map<String, dynamic> product) {
@@ -239,8 +389,8 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProv
       body: Stack(
         children: [
           // Immersive Camera Feed View
-          const SizedBox.expand(
-            child: ARViewPlaceholder(),
+          SizedBox.expand(
+            child: ARViewPlaceholder(arView: _tryOnArView()),
           ),
 
           // Animated particle scatter effect at borders
@@ -489,6 +639,40 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProv
                         ),
                       ),
                       const SizedBox(height: 14),
+
+                      // ── Dev-only: V0 renderer spike entry point ──
+                      // Opens the native SceneView spike that renders a real
+                      // glTF shoe in AR. Never enabled in a shipped build:
+                      // `arTryOnSpikeEnabled` is false unless the build passes
+                      // --dart-define=AR_TRY_ON_SPIKE=true. See
+                      // docs/RoadMap/VIRTUAL_FITTING_ROADMAP.md (V0) — delete
+                      // this block with the spike.
+                      if (AppConstants.arTryOnSpikeEnabled) ...[
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 38,
+                          child: OutlinedButton.icon(
+                            onPressed: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const ArTryOnSpikeScreen(),
+                              ),
+                            ),
+                            icon: const Icon(Icons.science_outlined, size: 16),
+                            label: const Text('SPIKE: real AR renderer'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppConstants.accent,
+                              side: BorderSide(
+                                color: AppConstants.accent
+                                    .withValues(alpha: 0.6),
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: AppConstants.buttonRadius,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
 
                       // Add to Cart
                       SizedBox(

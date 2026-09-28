@@ -14,6 +14,8 @@ import '../../utils/product_audience.dart';
 import '../../utils/size_key.dart';
 import '../../utils/recently_viewed.dart';
 import '../../services/supabase_service.dart';
+import '../../providers/try_on/try_on_mode.dart';
+import '../../services/try_on_prefetch.dart';
 import '../../utils/sale_price.dart';
 import '../../utils/variant_swatch_color.dart';
 import '../../widgets/sole_badge.dart';
@@ -25,6 +27,7 @@ import 'checkout_screen.dart';
 import 'tag_products_screen.dart';
 import 'write_review_screen.dart';
 import '../../widgets/cart_icon_button.dart';
+import '../../widgets/fit_verdict_card.dart';
 import '../../widgets/seller/fly_to_order_animation.dart';
 import '../../widgets/seller/tag_selector.dart';
 import '../../widgets/size_guide_modal.dart';
@@ -38,9 +41,18 @@ import 'widgets/pickup_reservation_sheet.dart';
 class ProductDetailScreen extends StatefulWidget {
   final Map<String, dynamic> product;
 
+  /// Test seam for the V2.6 model prefetch.
+  ///
+  /// Production builds the real one (the `virtualFitEnabled`-style switch is
+  /// inside `TryOnPrefetch` itself). A test injects one wired to fake model rows
+  /// and a temp cache directory, so it can prove the page survives a prefetch
+  /// that fails — which is the whole promise of mounting one here.
+  final TryOnPrefetch? tryOnPrefetch;
+
   const ProductDetailScreen({
     super.key,
     required this.product,
+    this.tryOnPrefetch,
   });
 
   @override
@@ -770,7 +782,89 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
       // Inventory data missing — fetch it from Supabase
       _fetchInventory();
     }
+
+    _prefetchTryOnModel();
   }
+
+  /// What the V2.6 prefetch found, kept because the try-on entry needs the
+  /// answer (V3.9) and a fire-and-forget future has nowhere else to leave it.
+  /// Declared beside its only reader and writer on purpose.
+  TryOnPrefetchResult? _tryOnPrefetchResult;
+
+  /// Warms the model cache for the selection the page opens on (V2.6).
+  ///
+  /// **Fire-and-forget, and safe to be.** `TryOnPrefetch` converts every
+  /// failure — no model, no table, no network, a hash mismatch, an unwritable
+  /// cache — into a returned outcome, so this future never completes with an
+  /// error and `.ignore()` hides nothing. The page does not await it: a
+  /// prefetch that can delay the first frame would be a worse version of the
+  /// problem it exists to solve.
+  ///
+  /// Only the *initial* selection is warmed. Re-warming on every size or colour
+  /// tap would download a model per tap, and whether the rendered model even
+  /// depends on the selection is a question only V3 can answer — it is per
+  /// variant in the schema (D-2) and product-level in practice today.
+  void _prefetchTryOnModel() {
+    if (!AppConstants.tryOnPrefetchEnabled && widget.tryOnPrefetch == null) {
+      return; // nothing is mounted, so nothing is read
+    }
+
+    final productId = widget.product['id']?.toString() ?? '';
+    if (productId.isEmpty) return;
+
+    final size = _selectedSize;
+    if (size == null) return;
+
+    final variants = widget.product['product_variants'] as List<dynamic>? ?? [];
+    final variantId = resolveVariant(
+      variants: variants,
+      size: size,
+      color: _effectiveColor,
+    ).variantId;
+
+    final prefetch = widget.tryOnPrefetch ??
+        TryOnPrefetch(enabled: AppConstants.tryOnPrefetchEnabled);
+    prefetch
+        .prefetch(productId: productId, variantId: variantId)
+        .then(_recordTryOnAvailability)
+        .ignore();
+  }
+
+  /// Records the prefetch's answer.
+  ///
+  /// The rebuild is deliberate — it can flip the try-on entry from the simulated
+  /// screen to the real renderer, which is a capability change rather than a
+  /// decoration — and it is compared by value so a re-prefetch for the same
+  /// selection cannot rebuild in a loop.
+  void _recordTryOnAvailability(TryOnPrefetchResult result) {
+    if (!mounted) return;
+    final current = _tryOnPrefetchResult;
+    if (current?.outcome == result.outcome && current?.path == result.path) {
+      return;
+    }
+    setState(() => _tryOnPrefetchResult = result);
+  }
+
+  /// **The product-detail half of V3's capability gate (roadmap V3.9).**
+  ///
+  /// True only when the switch is on *and* a verified model is already on disk.
+  /// "The product has a row" is a different question from "there is something to
+  /// render": the native side is handed a local path and never does HTTP
+  /// (architecture §2.8), so availability means *cached* — which is exactly what
+  /// the prefetch above proves. The AR half of the gate cannot be answered from
+  /// here, because it is only discovered when a session tries to start; it is the
+  /// session controller's to report.
+  bool get _tryOnModelAvailable =>
+      // The QA seam short-circuits the question (V3.5): with the bundled block-out
+      // flag on there *is* something to render even though `product_models` has no
+      // row for this product, which is what makes the same path reachable on a desk
+      // as it is with a partner asset. The gate's question is literally "is there
+      // something to render", so answering it from the bundle is not a lie.
+      AppConstants.tryOnPlaceholderModelEnabled ||
+      tryOnModelAvailable(
+        enabled: AppConstants.tryOnV3Enabled,
+        hasLocalModel: _tryOnPrefetchResult?.hasLocalModel ?? false,
+      );
 
   /// Fetch inventory and variant data if the parent screen didn't include it.
   Future<void> _fetchInventory() async {
@@ -1790,6 +1884,17 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                           ),
                         ),
                         const SizedBox(height: 8),
+                        // ── Fit verdict (V1 of the virtual-fitting roadmap) ──
+                        // Sits under the grid it is about and above the buy
+                        // controls, because it answers the question the size
+                        // buttons just asked. Renders nothing — and leaves no
+                        // gap — when the feature is off, the product carries
+                        // no last spec, or the customer has no scan to grade
+                        // against; the widget owns all of that.
+                        FitVerdictCard(
+                          product: widget.product,
+                          selectedSize: _selectedSize,
+                        ),
                         _buildQuantityStepper(),
                         // Pickup hold — FREE, 1-2 pairs of one size, held 24h.
                         // A different flow from the bulk (reseller) hold
@@ -2001,7 +2106,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
               onPressed: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (context) => ARVirtualFitScreen(preselectedProduct: widget.product),
+                    builder: (context) => ARVirtualFitScreen(
+                      preselectedProduct: widget.product,
+                      modelAvailable: _tryOnModelAvailable,
+                    ),
                   ),
                 );
               },

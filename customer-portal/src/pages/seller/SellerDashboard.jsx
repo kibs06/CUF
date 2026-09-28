@@ -1,14 +1,10 @@
+import { useMemo, useState } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
-import {
-  ArrowRight,
-  CircleAlert,
-  ClipboardList,
-  Package,
-  Plus,
-  Store,
-} from 'lucide-react'
+import { ClipboardList, Plus, Store } from 'lucide-react'
 
 import StatusPill from '../../components/orders/StatusPill'
+import SellerAttentionQueue from '../../components/seller/SellerAttentionQueue.jsx'
+import SellerPeriodPills from '../../components/seller/SellerPeriodPills.jsx'
 import SellerTrendChart from '../../components/seller/SellerTrendChart.jsx'
 import {
   SellerFigure,
@@ -16,15 +12,24 @@ import {
   SellerPageHeader,
   SellerSection,
 } from '../../components/seller/SellerPage.jsx'
-import EmptyState from '../../components/ui/EmptyState.jsx'
+import {
+  lowStockRowMenuItems,
+  orderRowMenuItems,
+  orderRowPath,
+} from '../../components/seller/sellerRowMenus.js'
+import { useContextMenu } from '../../components/ui/ContextMenu.jsx'
 import CountUp from '../../components/ui/CountUp.jsx'
-import { formatCurrency, formatCurrencyCompact } from '../../lib/constants.js'
+import EmptyState from '../../components/ui/EmptyState.jsx'
+import Reveal from '../../components/ui/Reveal.jsx'
+import { formatCurrency, formatCurrencyCompact, pluralize } from '../../lib/constants.js'
 import { shortOrderRef } from '../../lib/orderRules.js'
 import {
   dashboardTotals,
   lowStockRows,
   outOfStockRows,
+  salesSummary,
   salesTrend,
+  sellerPeriod,
   sortSellerOrders,
   statusBreakdown,
   storeCompleteness,
@@ -43,18 +48,31 @@ const RECENT_LIMIT = 6
  *
  * ## The page reads top to bottom as three questions
  *
- *   1. **Is anything on fire?** The alert strip, and only when it is. It is the
- *      first thing on the page because an order nobody started is the one thing
- *      that costs a seller money while they read.
- *   2. **How am I doing?** Four figures, then the week as a chart. The figures
- *      are what a maker quotes; the chart is what tells them whether the week is
- *      going well, and a summary line cannot carry a shape.
+ *   1. **What needs me, and how am I doing?** One row answering both: the queue
+ *      on the right, the day's takings on the left. They share a row because
+ *      they are one question at 8am, and because the queue is only *half* a
+ *      dashboard on its own — "17 orders are blocked on you" lands differently
+ *      beside "₱0 today" than under it. The queue is actionable rather than a
+ *      sentence about itself: each row carries the single next step, so a maker
+ *      no longer has to leave the page to understand the alarm.
+ *   2. **How is the business going?** The window the seller picks — a week, a
+ *      month or a quarter — as a chart plus the three readings a chart cannot
+ *      give: what an order comes to, how many pairs left the workshop, and which
+ *      pair is actually selling.
  *   3. **What is the state of the shop?** Columns below: **time** on the left
- *      (the week's trend, then the orders that just came in) and **state** on the
- *      right (where the order book sits, what is running out, what the storefront
- *      is still missing). Splitting by time and state rather than by size is
- *      what makes the left column readable as a sequence and the right column
- *      readable as a checklist.
+ *      (the window's sales, then the orders that just came in) and **state** on
+ *      the right (where the order book sits, what is running out, what the
+ *      storefront is still missing). Splitting by time and state rather than by
+ *      size is what makes the left column readable as a sequence and the right
+ *      column readable as a checklist.
+ *
+ * ## The period is state, not a URL parameter
+ *
+ * Every filter in this portal lives in the URL, and this one is the exception
+ * for the reason the reports page's is: it is not a filter on a list, it is a
+ * choice about how much of the same data to draw, and the page underneath is
+ * identical at every setting. A pasted link that reopened somebody else's window
+ * would be a setting, not a link.
  *
  * ## The first-run state
  *
@@ -71,23 +89,23 @@ const RECENT_LIMIT = 6
  * the page to say nothing the seller did not already know, and it is wrong for
  * anyone working past midnight. The date is the same shape of fact and is
  * *useful*: a seller who has not slept reads what day it is, and "orders today"
- * below it has something to be today relative to. The three-way split by hour
- * went with it, so nothing on this page has to know what time it is.
+ * below it has something to be today relative to.
  *
  * ## One number leads, three support it, and the sizes say so
  *
- * `SellerFigure`'s three arrangements are used as three ranks here, not as three
- * styles: **Sales today** is `hero` (60px, the accent) and stands alone, the three
- * counts beside it are a `row` list (24px, one right edge) rather than three more
- * figure stacks, and the section headings below are small caps. Before, the hero
- * was 60px next to three 30px figures — a 2× step between a number and the numbers
- * it is made of, which read as four readings of the same kind in a row, with the
- * eye left to guess where to start.
+ * `SellerFigure`'s arrangements are used as ranks here, not as styles: **Sales
+ * today** is `hero` (60px, the accent) and stands alone, the three counts under
+ * it are a `row` list (24px, one right edge), and the section headings below are
+ * small caps. The support list is a *list* as well as a smaller one — label
+ * left, figure right, an inset rule between them and a boundary rule above the
+ * set — which is what makes "17 open orders" read as the state behind "₱0
+ * today" rather than as a second headline.
  *
- * The support column is a *list* as well as a smaller one: label left, figure
- * right, an inset rule between them and a boundary rule against the hero that
- * turns vertical at `lg`. That is what makes "17 open orders" read as the state
- * behind "₱0 today" rather than as a second headline.
+ * Every figure counts up when it arrives, which is the one animation here doing
+ * work rather than decorating: the data lands after the first paint, so a count
+ * is what tells the seller the page has finished filling in, and it is the only
+ * cue that a refetched total has changed. `CountUp` fails open, so no figure is
+ * ever a zero waiting for an animation that may not run.
  */
 export default function SellerDashboard() {
   const { store } = useOutletContext()
@@ -96,11 +114,22 @@ export default function SellerDashboard() {
   const ordersQuery = useSellerOrders(storeId)
   const productsQuery = useSellerProducts(storeId)
 
+  const [periodId, setPeriodId] = useState('7')
+  const period = sellerPeriod(periodId)
+
   const orders = ordersQuery.data ?? []
   const products = productsQuery.data ?? []
 
   const totals = dashboardTotals(orders)
-  const trend = salesTrend(orders)
+  const trend = useMemo(
+    () => salesTrend(orders, { days: period.days }),
+    [orders, period.days],
+  )
+  const summary = useMemo(
+    () => salesSummary(orders, { days: period.days }),
+    [orders, period.days],
+  )
+
   const statuses = statusBreakdown(orders)
   const low = lowStockRows(products)
   const out = outOfStockRows(products)
@@ -117,9 +146,7 @@ export default function SellerDashboard() {
         description={
           loading
             ? 'Loading your workshop…'
-            : `${totals.orderCountToday} ${
-                totals.orderCountToday === 1 ? 'order' : 'orders'
-              } today · ${totals.openCount} still open.`
+            : `${pluralize(totals.orderCountToday, 'order')} today · ${totals.openCount} still open.`
         }
         actions={
           <>
@@ -127,9 +154,11 @@ export default function SellerDashboard() {
               <ClipboardList className="h-4 w-4" aria-hidden="true" />
               Orders
             </Link>
-            <Link to="/seller/products" className="btn btn-primary">
-              <Package className="h-4 w-4" aria-hidden="true" />
-              Products
+            {/* One primary action per page, and this is the one that makes
+                money: adding a pair beats re-reading the list. */}
+            <Link to="/seller/products/new" className="btn btn-primary">
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              New product
             </Link>
           </>
         }
@@ -140,382 +169,455 @@ export default function SellerDashboard() {
       ) : (
         <>
           {/*
-            The alert strip exists only when there is something to act on. A
-            permanent "0 orders need you" banner teaches the seller to ignore the
-            space, which is the opposite of what it is for.
+            One row, two readings of "where do I stand": the day's money on the
+            left, the work on the right.
+
+            The queue is first in the DOM and second on screen from `lg` up,
+            which is the order a phone wants. A seller opening this on a phone is
+            more often asking what needs them than what they have taken, and the
+            swap costs the tab order nothing: the money panel is words, not
+            controls, and the queue's rows all lead to the same place the list
+            does.
+
+            **The row is as tall as the taller card, and the money panel fills it.**
+            Left to its own height it ended a third of the way down the queue and
+            left a hole under it — the gap was not padding, it was the row. So the
+            panel stretches and its own content is anchored at both ends: the
+            figure at the top, the three readings on the bottom rule, which is the
+            same rule the queue's last row sits above. The one card that must not
+            stretch is the calm "nothing is blocked on you" strip, which asks for
+            `self-start` itself.
           */}
-          {totals.needsActionCount > 0 && (
-            <div className="flex flex-wrap items-center gap-3 rounded-card border border-amber/30 bg-amber/[0.10] px-5 py-4">
-              <CircleAlert
-                className="h-5 w-5 shrink-0 text-amber"
-                aria-hidden="true"
-              />
-              <p className="flex-1 text-sm text-ink">
-                <span className="font-semibold">
-                  {totals.needsActionCount}{' '}
-                  {totals.needsActionCount === 1 ? 'order is' : 'orders are'}
-                </span>{' '}
-                waiting on you — to be started, marked ready, or handed over.
-              </p>
-              <Link
-                to="/seller/orders?tab=attention"
-                className="inline-flex items-center gap-1.5 text-sm font-semibold text-clay-ink underline-offset-4 hover:underline"
-              >
-                Open the queue
-                <ArrowRight className="h-4 w-4" aria-hidden="true" />
-              </Link>
-            </div>
-          )}
+          <div className="grid gap-5 lg:grid-cols-2">
+            <SellerAttentionQueue orders={orders} loading={ordersQuery.isLoading} />
 
-          {/*
-            The figures, with the hierarchy in the sizes.
+            {/*
+              The hero stands alone as one big figure and the three readings sit
+              under it behind a rule, stacked at every width. It used to lay the
+              three out beside the hero from `lg` up, which stopped being right
+              the moment this panel shared a row: half the page is not enough for
+              a 60px total and a 240px column of captions next to it, and a hero
+              that has to shrink to fit is not the figure the page is built
+              around.
+            */}
+            <div className="flex flex-col rounded-premium border border-hairline bg-raised p-5 shadow-premium sm:p-7 lg:order-first">
+              <div className="flex flex-1 flex-col gap-6">
+                <SellerFigure
+                  label="Sales today"
+                  value={
+                    <CountUp value={totals.salesToday} format={formatCurrencyCompact} />
+                  }
+                  tone="accent"
+                  size="hero"
+                  hint={
+                    totals.unpaidToday > 0
+                      ? `${totals.unpaidToday} of today's orders ${
+                          totals.unpaidToday === 1 ? 'is' : 'are'
+                        } unpaid · cancelled orders excluded.`
+                      : 'Orders placed today · cancelled orders excluded.'
+                  }
+                />
 
-            **Money is the hero** and the three counts are the state that produced
-            it — and the arrangement says so rather than leaving it to size alone.
-            `formatCurrencyCompact` for the hero specifically: cents are noise at
-            60px, and it is the helper's documented purpose (`formatCurrency` stays
-            on every line item, where the exact amount is the point).
-
-            The three support the hero without repeating it, which is why they are
-            `row` and not three more stacks: a label and a figure against one right
-            edge reads as *a list of the shop's state*, where three stacks read as
-            three more headline numbers. They carry no hints either — the label is
-            the whole sentence ("Running out", "Waiting on you"), and the card below
-            each of them already explains itself, so a hint repeated in two places
-            is how the two start disagreeing.
-
-            The padding is deliberately tighter than the cards below it (`p-5`
-            against their `p-5` *plus* a header), because this panel is one reading
-            and three figures rather than a section with a body — and the boundary
-            between the two halves is a rule that turns from horizontal to vertical
-            at `lg`, which is the gap that needed highlighting.
-
-            Every figure counts up when it arrives. That is the one animation here
-            that is doing work rather than decorating: the data lands after the
-            first paint, so a count is what tells the seller the page has finished
-            filling in — and it is the only cue that a refetched total has changed.
-            `CountUp` fails open (see its docblock), so the number is never a zero
-            waiting for an animation that may not run, and each figure is formatted
-            by the same helper it would have been formatted by anyway.
-          */}
-          {/* `mt-1` on top of the body's `gap-6`: the page's own rhythm already
-              separates its blocks, and the hero gets a little more than that — the
-              one panel whose whole job is to be looked at first. */}
-          <div className="mt-1 rounded-premium border border-hairline bg-raised p-5 shadow-premium sm:p-7">
-            <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:gap-10">
-              <SellerFigure
-                label="Sales today"
-                value={
-                  <CountUp
-                    value={totals.salesToday}
-                    format={formatCurrencyCompact}
+                {/* The state behind the figure: label left, reading right, one
+                    inset rule between them, and a boundary rule above the set.
+                    `mt-auto` is what pins the set to the bottom of a stretched
+                    panel — see the row's docblock. */}
+                <div className="mt-auto flex flex-col divide-y divide-hairline-soft border-t border-hairline-soft pt-1">
+                  <SellerFigure
+                    layout="row"
+                    className="py-2.5"
+                    label="Waiting on you"
+                    value={<CountUp value={totals.needsActionCount} />}
+                    tone={totals.needsActionCount > 0 ? 'alert' : 'neutral'}
                   />
-                }
-                tone="accent"
-                size="hero"
-                className="lg:flex-1"
-                hint={
-                  totals.unpaidToday > 0
-                    ? `${totals.unpaidToday} of today's orders ${
-                        totals.unpaidToday === 1 ? 'is' : 'are'
-                      } unpaid · cancelled orders excluded.`
-                    : 'Orders placed today · cancelled orders excluded.'
-                }
-              />
-
-              {/*
-                The supporting readings, and the boundary that separates the two
-                halves of this panel: a top rule while they sit under the hero,
-                and a left rule once they sit beside it.
-              */}
-              <div className="flex flex-col divide-y divide-hairline-soft border-t border-hairline-soft pt-1 lg:min-w-[15rem] lg:border-l lg:border-t-0 lg:pl-10 lg:pt-0">
-                <SellerFigure
-                  layout="row"
-                  className="py-2.5"
-                  label="Waiting on you"
-                  value={<CountUp value={totals.needsActionCount} />}
-                  tone={totals.needsActionCount > 0 ? 'alert' : 'neutral'}
-                />
-                <SellerFigure
-                  layout="row"
-                  className="py-2.5"
-                  label="Open orders"
-                  value={<CountUp value={totals.openCount} />}
-                />
-                <SellerFigure
-                  layout="row"
-                  className="py-2.5"
-                  label="Running out"
-                  value={<CountUp value={low.length} />}
-                  tone={low.length > 0 ? 'alert' : 'neutral'}
-                />
+                  <SellerFigure
+                    layout="row"
+                    className="py-2.5"
+                    label="Open orders"
+                    value={<CountUp value={totals.openCount} />}
+                  />
+                  <SellerFigure
+                    layout="row"
+                    className="py-2.5"
+                    label="Running out"
+                    value={<CountUp value={low.length} />}
+                    tone={low.length > 0 ? 'alert' : 'neutral'}
+                  />
+                </div>
               </div>
             </div>
           </div>
 
-          {/*
-            Tighter than the page's own rhythm (the body gaps its children by 6).
-            The columns are *groups of cards*, and cards inside a group belong to
-            each other more closely than the groups belong to the page — which is
-            the whole use of two different gaps.
-          */}
+          {/* Tighter than the page's own rhythm (the body gaps its children by
+              6). The columns are *groups of cards*, and cards inside a group
+              belong to each other more closely than the groups belong to the
+              page — which is the whole use of two different gaps. */}
           <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
-            {/* ── Time: the week, then the orders that just landed. ── */}
+            {/* ── Time: the window, then the orders that just landed. ── */}
             <div className="flex flex-col gap-5">
               {loading ? (
-                <div className="shimmer h-64 rounded-premium" />
+                <div className="shimmer h-72 rounded-premium" />
               ) : (
                 <SellerSection
-                  title="This week"
-                  description="What was ordered in the last seven days."
+                  title="Sales"
+                  description="What was ordered in the window, against the window before it."
                   actions={
-                    <Link
-                      to="/seller/reports"
-                      className="text-sm font-semibold text-clay-ink underline-offset-4 hover:underline"
-                    >
-                      Full report
-                    </Link>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <SellerPeriodPills
+                        value={period.id}
+                        onChange={setPeriodId}
+                        label="Sales window"
+                      />
+                      <Link
+                        to="/seller/reports"
+                        className="text-sm font-semibold text-clay-ink underline-offset-4 hover:underline"
+                      >
+                        Full report
+                      </Link>
+                    </div>
                   }
                 >
-                  <SellerTrendChart trend={trend} />
+                  <SellerTrendChart
+                    trend={trend}
+                    label={`Sales, last ${pluralize(period.days, 'day')}`}
+                  />
+
+                  {/*
+                    The three readings the chart cannot give. `Sales` opens the
+                    door to the money; these answer what a maker asks next, and
+                    they re-derive from the same period pills above them — which
+                    is why they count up like the rest of the page: switching
+                    windows changes numbers that a silent re-render would change
+                    invisibly.
+
+                    The best seller is a *name*, so it is the one reading here
+                    not set in the numeric face — `SellerFigure`'s figures are all
+                    figures, and a product name in Sora would be a price
+                    pretending to be a shoe. It keeps the same size, so the row
+                    still reads as one line of three.
+                  */}
+                  <dl className="mt-6 grid gap-5 border-t border-hairline-soft pt-5 sm:grid-cols-3">
+                    <Reading
+                      label="Average order"
+                      value={
+                        <CountUp
+                          value={summary.average}
+                          format={formatCurrency}
+                          className="num text-2xl font-semibold text-ink"
+                        />
+                      }
+                      hint={`Across ${pluralize(summary.orderCount, 'order')}.`}
+                    />
+                    <Reading
+                      label="Pairs sold"
+                      value={
+                        <CountUp
+                          value={summary.pairs}
+                          className="num text-2xl font-semibold text-ink"
+                        />
+                      }
+                      hint="Counted from the lines on those orders."
+                    />
+                    <Reading
+                      label="Best seller"
+                      value={
+                        <span className="block truncate text-2xl font-semibold text-ink">
+                          {summary.topProduct ? summary.topProduct.name : '—'}
+                        </span>
+                      }
+                      hint={
+                        summary.topProduct
+                          ? `${pluralize(summary.topProduct.pairs, 'pair')} — the pair to keep in stock.`
+                          : 'Nothing sold in this window yet.'
+                      }
+                    />
+                  </dl>
                 </SellerSection>
               )}
 
-              <SellerSection
-                title="Recent orders"
-                description="The newest orders against your storefront."
-                actions={
-                  <Link
-                    to="/seller/orders"
-                    className="text-sm font-semibold text-clay-ink underline-offset-4 hover:underline"
-                  >
-                    See all
-                  </Link>
-                }
-              >
-                {ordersQuery.isLoading ? (
-                  <div className="space-y-3">
-                    {[0, 1, 2].map((key) => (
-                      <div key={key} className="shimmer h-16 rounded-card" />
-                    ))}
-                  </div>
-                ) : recent.length === 0 ? (
-                  <EmptyState
-                    Icon={ClipboardList}
-                    title="No orders yet"
-                    description="When a customer buys from your storefront, the order lands here and on your phone at the same time."
-                    className="py-10"
-                  />
-                ) : (
-                  /*
-                    Two things per row: the order's own identity on the **very
-                    left**, its money on the right.
+              <Reveal>
+                <SellerSection
+                  title="Recent orders"
+                  description="The newest orders against your storefront."
+                  actions={
+                    <Link
+                      to="/seller/orders"
+                      className="text-sm font-semibold text-clay-ink underline-offset-4 hover:underline"
+                    >
+                      See all
+                    </Link>
+                  }
+                >
+                  {ordersQuery.isLoading ? (
+                    <div className="space-y-3">
+                      {[0, 1, 2].map((key) => (
+                        <div key={key} className="shimmer h-16 rounded-card" />
+                      ))}
+                    </div>
+                  ) : recent.length === 0 ? (
+                    <EmptyState
+                      Icon={ClipboardList}
+                      title="No orders yet"
+                      description="When a customer buys from your storefront, the order lands here and on your phone at the same time."
+                      className="py-10"
+                    />
+                  ) : (
+                    /*
+                      Two things per row: the order's own identity on the **very
+                      left**, its money on the right. The ref and the customer
+                      line are the first column; the status goes *under* them,
+                      so the six refs, the six names and the six statuses all
+                      start on one vertical line at the card's left edge, and the
+                      six amounts all end on another at its right edge.
 
-                    The ref and the customer line are the first column; the
-                    status goes *under* them, and the amount sits alone on the
-                    right. So the six refs, the six names and the six statuses
-                    all start on one vertical line at the card's left edge, and
-                    the six amounts all end on another at its right edge.
-
-                    ## Why the status went there, and not in a column of its own
-
-                    It was a third column on the right, and it takes two forms
-                    to learn the same lesson. Left to its own width, a pill's
-                    size pushed its amount sideways, so six rows of "₱ amount +
-                    pill" read as six ragged lines. Given a fixed track, the
-                    pills still could not sit still: the labels differ by 100px
-                    (measured, Sora loaded — `Ready` is 74px, `Needs review`
-                    116, `Cancellation requested` 173.9), so lining **both**
-                    edges up means a 176px capsule around a 74px word, which is
-                    140px of empty ring on the common statuses.
-
-                    The reason it is the wrong question is that a status is not
-                    a column of numbers — it is part of **what the order is**.
-                    "Cancelled" belongs beside the order that was cancelled, not
-                    floating in the right-hand margin where its only alignment
-                    is with other statuses. Put it under the ref and the
-                    alignment it needs is free: every pill starts where every
-                    ref starts, and no label has to be padded to fit a track.
-
-                    Both remaining edges still line up by construction rather
-                    than by measurement — the identity column is the `1fr`, the
-                    amount is the last track and `text-right`, so the money ends
-                    on the row's own right edge whatever its length, and `.num`
-                    keeps the figures tabular so they do not shift as they
-                    count. `items-start` keeps an amount on the ref's line rather
-                    than the middle of a taller row.
-
-                    The amounts count, for the reason the hero counts: the rows
-                    land *after* the first paint, and figures that arrive
-                    motionless under a total that just counted read as two kinds
-                    of number. Each amount's length sets its own pace
-                    (`lib/countUpRules.js`) and `CountUp` fails open, so a row
-                    is never a `₱0.00` waiting for an animation.
-                  */
-                  <ul className="divide-y divide-hairline-soft">
-                    {recent.map((order) => (
-                      <li key={order.id}>
-                        <Link
-                          to={`/seller/orders/${order.id}`}
-                          className="-mx-2 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-2 rounded-field px-2 py-3 transition-colors duration-200 ease-out-cubic hover:bg-subtle/60 sm:gap-x-5"
-                        >
-                          <div className="min-w-0">
-                            <p className="num text-sm font-semibold text-ink">
-                              {shortOrderRef(order.id)}
-                            </p>
-                            <p className="mt-0.5 truncate text-xs text-muted">
-                              {order.customer_name} · {formatDate(order.created_at)}
-                            </p>
-                          </div>
-                          <CountUp
-                            value={order.total_amount}
-                            format={formatCurrency}
-                            className="num col-start-2 row-start-1 text-right text-sm font-semibold text-ink"
-                          />
-                          {/* Col 1, row 2: the same left edge as the ref above
-                              it, which is the whole point of the move. */}
-                          <StatusPill
-                            status={order.status}
-                            className="col-start-1 row-start-2 justify-self-start"
-                          />
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </SellerSection>
+                      A status is not a column of numbers — it is part of what the
+                      order *is*, and "Cancelled" belongs beside the order that
+                      was cancelled rather than floating in the right margin where
+                      its only alignment is with other statuses. Both remaining
+                      edges line up by construction rather than by measurement:
+                      the identity column is the `1fr`, the amount is the last
+                      track and `text-right`, and `.num` keeps the figures tabular
+                      so they do not shift as they count.
+                    */
+                    <ul className="divide-y divide-hairline-soft">
+                      {recent.map((order) => (
+                        <RecentOrderRow key={order.id} order={order} />
+                      ))}
+                    </ul>
+                  )}
+                </SellerSection>
+              </Reveal>
             </div>
 
             {/* ── State: where the book sits, what is short, what is missing. ── */}
             <div className="flex flex-col gap-5">
-              <SellerSection
-                title="Where your orders are"
-                description="Every order on the book, by status."
-              >
-                {ordersQuery.isLoading ? (
-                  <div className="shimmer h-24 rounded-card" />
-                ) : statuses.length === 0 ? (
-                  <p className="text-sm text-muted">
-                    No orders on the book right now.
-                  </p>
-                ) : (
-                  /* Wraps rather than scrolls: a status mix is read at a glance,
-                     and a strip that hides half of itself behind a scroll is the
-                     one thing a mix is useless as. */
-                  <ul className="flex flex-wrap gap-2">
-                    {statuses.map((row) => (
-                      <li key={row.status}>
-                        {/*
-                          The chip is a door into the tab that actually holds
-                          these orders (`tabForStatus`), not a link to the
-                          unfiltered list — "3 cancelled" opening the same page
-                          as every other chip teaches a seller the chips do
-                          nothing.
-                        */}
-                        <Link
-                          to={`/seller/orders?tab=${row.tab}`}
-                          aria-label={`${row.count} ${
-                            row.count === 1 ? 'order' : 'orders'
-                          } in this status — open the queue`}
-                          className="inline-flex items-center gap-2 rounded-full bg-subtle/70 py-1 pl-1.5 pr-3 transition-colors duration-200 ease-out-cubic hover:bg-subtle"
-                        >
-                          <StatusPill status={row.status} />
+              <Reveal delay={0.04}>
+                <SellerSection
+                  title="Where your orders are"
+                  description="Every order on the book, by status."
+                >
+                  {ordersQuery.isLoading ? (
+                    <div className="shimmer h-24 rounded-card" />
+                  ) : statuses.length === 0 ? (
+                    <p className="text-sm text-muted">No orders on the book right now.</p>
+                  ) : (
+                    /* Wraps rather than scrolls: a status mix is read at a glance,
+                       and a strip that hides half of itself behind a scroll is the
+                       one thing a mix is useless as. */
+                    <ul className="flex flex-wrap gap-2">
+                      {statuses.map((row) => (
+                        <li key={row.status}>
+                          {/* The chip is a door into the tab that actually holds
+                              these orders (`tabForStatus`), not a link to the
+                              unfiltered list — "3 cancelled" opening the same
+                              page as every other chip teaches a seller the chips
+                              do nothing. */}
+                          <Link
+                            to={`/seller/orders?tab=${row.tab}`}
+                            aria-label={`${pluralize(row.count, 'order')} in this status — open the queue`}
+                            className="inline-flex items-center gap-2 rounded-full bg-subtle/70 py-1 pl-1.5 pr-3 transition-colors duration-200 ease-out-cubic hover:bg-subtle"
+                          >
+                            <StatusPill status={row.status} />
+                            <span
+                              aria-hidden="true"
+                              className="num text-sm font-semibold text-ink"
+                            >
+                              {row.count}
+                            </span>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </SellerSection>
+              </Reveal>
+
+              <Reveal delay={0.06}>
+                <SellerSection
+                  title="Running out"
+                  description={
+                    out.length > 0
+                      ? `Sizes with 5 pairs or fewer. ${pluralize(out.length, 'size')} already sold out — a different job, on the products page.`
+                      : 'Sizes with 5 pairs or fewer — not the sold-out ones, which are a different job.'
+                  }
+                  actions={
+                    out.length > 0 ? (
+                      <Link
+                        to="/seller/products"
+                        className="text-sm font-semibold text-clay-ink underline-offset-4 hover:underline"
+                      >
+                        {pluralize(out.length, 'size')} sold out
+                      </Link>
+                    ) : null
+                  }
+                >
+                  {productsQuery.isLoading ? (
+                    <div className="shimmer h-24 rounded-card" />
+                  ) : low.length === 0 ? (
+                    <p className="text-sm text-muted">
+                      Nothing is running low. Sizes that are already sold out are
+                      on the products page.
+                    </p>
+                  ) : (
+                    <ul className="divide-y divide-hairline-soft">
+                      {low.slice(0, 6).map((row) => (
+                        <LowStockRow key={`${row.productId}-${row.size}`} row={row} />
+                      ))}
+                    </ul>
+                  )}
+                  {low.length > 6 && (
+                    <Link
+                      to="/seller/products"
+                      className="mt-4 inline-block text-sm font-semibold text-clay-ink underline-offset-4 hover:underline"
+                    >
+                      {low.length - 6} more
+                    </Link>
+                  )}
+                </SellerSection>
+              </Reveal>
+
+              {/* The storefront checklist only appears while something is
+                  missing. Once the store is complete it would be a card telling
+                  a seller that nothing is wrong, which is a card worth deleting
+                  rather than reading. */}
+              {!completeness.complete && (
+                <Reveal delay={0.08}>
+                  <SellerSection
+                    title="Finish your storefront"
+                    description="Customers see these before they see your shoes."
+                  >
+                    <ul className="space-y-2.5">
+                      {completeness.missing.map((item) => (
+                        <li key={item} className="flex items-start gap-2.5 text-sm">
                           <span
                             aria-hidden="true"
-                            className="num text-sm font-semibold text-ink"
-                          >
-                            {row.count}
-                          </span>
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </SellerSection>
-
-              <SellerSection
-                title="Running out"
-                description={
-                  out.length > 0
-                    ? `Sizes with 5 pairs or fewer. ${out.length} more ${
-                        out.length === 1 ? 'size is' : 'sizes are'
-                      } already sold out — a different job, on the products page.`
-                    : 'Sizes with 5 pairs or fewer — not the sold-out ones, which are a different job.'
-                }
-              >
-                {productsQuery.isLoading ? (
-                  <div className="shimmer h-24 rounded-card" />
-                ) : low.length === 0 ? (
-                  <p className="text-sm text-muted">
-                    Nothing is running low. Sizes that are already sold out are on
-                    the products page.
-                  </p>
-                ) : (
-                  <ul className="divide-y divide-hairline-soft">
-                    {low.slice(0, 6).map((row) => (
-                      <li
-                        key={`${row.productId}-${row.size}`}
-                        className="flex items-center justify-between gap-3 py-2.5 first:pt-0"
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-ink">
-                            {row.name}
-                          </p>
-                          <p className="text-xs text-muted">Size {row.size}</p>
-                        </div>
-                        <span className="num shrink-0 text-sm font-semibold text-amber">
-                          {row.stock} left
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {low.length > 6 && (
-                  <Link
-                    to="/seller/products"
-                    className="mt-4 inline-block text-sm font-semibold text-clay-ink underline-offset-4 hover:underline"
-                  >
-                    {low.length - 6} more
-                  </Link>
-                )}
-              </SellerSection>
-
-              {/*
-                The storefront checklist only appears while something is missing.
-                Once the store is complete it would be a card telling a seller
-                that nothing is wrong, which is a card worth deleting rather than
-                reading.
-              */}
-              {!completeness.complete && (
-                <SellerSection
-                  title="Finish your storefront"
-                  description="Customers see these before they see your shoes."
-                >
-                  <ul className="space-y-2.5">
-                    {completeness.missing.map((item) => (
-                      <li key={item} className="flex items-start gap-2.5 text-sm">
-                        <span
-                          aria-hidden="true"
-                          className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-clay"
-                        />
-                        <span className="text-muted-strong">{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  <Link
-                    to="/seller/store"
-                    className="mt-5 inline-flex items-center gap-1.5 text-sm font-semibold text-clay-ink underline-offset-4 hover:underline"
-                  >
-                    <Store className="h-4 w-4" aria-hidden="true" />
-                    Edit the storefront
-                  </Link>
-                </SellerSection>
+                            className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-clay"
+                          />
+                          <span className="text-muted-strong">{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <Link
+                      to="/seller/store"
+                      className="mt-5 inline-flex items-center gap-1.5 text-sm font-semibold text-clay-ink underline-offset-4 hover:underline"
+                    >
+                      <Store className="h-4 w-4" aria-hidden="true" />
+                      Edit the storefront
+                    </Link>
+                  </SellerSection>
+                </Reveal>
               )}
             </div>
           </div>
         </>
       )}
     </SellerPageBody>
+  )
+}
+
+/**
+ * One reading beside a chart: a label, a figure, and the line that qualifies it.
+ *
+ * A `dt`/`dd` pair inside the dashboard's own `<dl>`, rather than a
+ * `SellerMetric` card: three cards would be three more surfaces on a page that
+ * already has nine, and they all report the *same window* as the chart directly
+ * above them — which is a heading, not three boxes.
+ */
+function Reading({ label, value, hint }) {
+  return (
+    <div>
+      <dt className="text-xs font-semibold uppercase tracking-[0.08em] text-muted">
+        {label}
+      </dt>
+      <dd className="mt-2">{value}</dd>
+      {hint && <p className="mt-1 text-xs leading-relaxed text-muted">{hint}</p>}
+    </div>
+  )
+}
+
+/**
+ * One of the newest orders: the same row the orders page draws, at a smaller
+ * size.
+ *
+ * It exists as a component rather than as markup inside the list's `map` for one
+ * reason — it carries the pointer's own menu (`useContextMenu`), and a hook needs
+ * a component to live in. The menu is the same `orderRowMenuItems` the orders page
+ * and the queue use, so an order offers the same things wherever it is spotted: no
+ * fifth control on a row that is mostly two lines of text.
+ */
+function RecentOrderRow({ order }) {
+  const to = orderRowPath(order)
+  const { onContextMenu, menu } = useContextMenu({
+    items: orderRowMenuItems(order),
+    link: to,
+    label: `Order ${shortOrderRef(order.id)}`,
+  })
+
+  return (
+    <li>
+      <Link
+        to={to}
+        onContextMenu={onContextMenu}
+        className="-mx-2 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-2 rounded-field px-2 py-3 transition-colors duration-200 ease-out-cubic hover:bg-subtle/60 sm:gap-x-5"
+      >
+        <div className="min-w-0">
+          <p className="num text-sm font-semibold text-ink">
+            {shortOrderRef(order.id)}
+          </p>
+          <p className="mt-0.5 truncate text-xs text-muted">
+            {order.customer_name} · {formatDate(order.created_at)}
+          </p>
+        </div>
+        <CountUp
+          value={order.total_amount}
+          format={formatCurrency}
+          className="num col-start-2 row-start-1 text-right text-sm font-semibold text-ink"
+        />
+        <StatusPill
+          status={order.status}
+          className="col-start-1 row-start-2 justify-self-start"
+        />
+      </Link>
+      {menu}
+    </li>
+  )
+}
+
+/**
+ * One size that is nearly gone.
+ *
+ * The row is a link to the product rather than a number in a list: "3 left in EU
+ * 40" is a job, and the page that does the job is one tap away — and right-click
+ * is the shortcut for the two things a seller does with a low-stock line away from
+ * the product page, which is copying the name to a restock list and opening it.
+ */
+function LowStockRow({ row }) {
+  const to = `/seller/products/${row.productId}`
+  const { onContextMenu, menu } = useContextMenu({
+    items: lowStockRowMenuItems(row),
+    link: to,
+    label: `${row.name}, size ${row.size}`,
+  })
+
+  return (
+    <li>
+      <Link
+        to={to}
+        onContextMenu={onContextMenu}
+        className="-mx-2 flex items-center justify-between gap-3 rounded-field px-2 py-2.5 transition-colors duration-200 ease-out-cubic hover:bg-subtle/60"
+      >
+        <span className="min-w-0">
+          <span className="block truncate text-sm font-medium text-ink">
+            {row.name}
+          </span>
+          <span className="block text-xs text-muted">Size {row.size}</span>
+        </span>
+        <span className="num shrink-0 text-sm font-semibold text-amber">
+          {row.stock} left
+        </span>
+      </Link>
+      {menu}
+    </li>
   )
 }
 

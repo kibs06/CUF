@@ -22,7 +22,16 @@ plugins {
     // START: FlutterFire Configuration
     id "com.google.gms.google-services" version "4.4.4" apply false
     // END: FlutterFire Configuration
-    id "org.jetbrains.kotlin.android" version "2.2.20" apply false
+    // Bumped 2.2.20 -> 2.4.20 for the virtual-fitting renderer spike: SceneView
+    // 4.42.0 is compiled with Kotlin 2.4.20 and its class metadata is not
+    // readable by the 2.2.x compiler. See
+    // docs/RoadMap/VIRTUAL_FITTING_ROADMAP.md (V0.1) and
+    // docs/RoadMap/AR_TRY_ON_SPIKE_FINDINGS.md.
+    id "org.jetbrains.kotlin.android" version "2.4.20" apply false
+    // Compose compiler — versioned in lockstep with Kotlin. Needed only because
+    // SceneView 4.x is Compose-native (its own Flutter bridge hosts it in a
+    // ComposeView inside a PlatformView).
+    id "org.jetbrains.kotlin.plugin.compose" version "2.4.20" apply false
 }
 
 include ":app"

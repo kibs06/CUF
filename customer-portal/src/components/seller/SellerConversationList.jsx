@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
-import { MessageSquare, MessageSquareOff, Receipt } from 'lucide-react'
+import { Copy, Eye, MessageSquare, MessageSquareOff, Receipt } from 'lucide-react'
 
+import { useContextMenu } from '../ui/ContextMenu.jsx'
 import EmptyState from '../ui/EmptyState'
 import { useStoreConversations } from '../../hooks/useSellerMessages.js'
 import { getInitials, pluralize } from '../../lib/constants.js'
@@ -130,6 +131,11 @@ export default function SellerConversationList({ storeId, onOpen, className = ''
  * The avatar is the customer's initials on the brand tint rather than a photo —
  * the portal has no customer pictures, and a row of grey circles would say
  * "someone" where two letters say who.
+ *
+ * Right-click offers the row's own two things — the thread, and the customer's
+ * name on the clipboard — plus, inside the side panel only, a way back into the
+ * panel: the menu's plain *Open* navigates, which in a panel is the one route that
+ * closes it.
  */
 function ConversationRow({ conversation, onOpen }) {
   const name = sellerConversationName(conversation)
@@ -137,71 +143,95 @@ function ConversationRow({ conversation, onOpen }) {
   const badge = unreadBadgeLabel(conversation.unread_count)
 
   const to = `/seller/messages/${conversation.id}`
+  const { onContextMenu, menu } = useContextMenu({
+    items: [
+      { id: 'open', label: 'Open conversation', Icon: Eye, to },
+      { id: 'copy-name', label: 'Copy customer name', Icon: Copy, copy: name },
+      ...(onOpen
+        ? [
+            {
+              id: 'panel',
+              label: 'Open in the side panel',
+              Icon: MessageSquare,
+              onSelect: () => onOpen(conversation.id),
+            },
+          ]
+        : []),
+    ],
+    link: to,
+    label: name,
+  })
 
   return (
-    <Link
-      to={to}
-      onClick={(event) => {
-        if (!onOpen) return
-        /*
-          A plain left click is the panel's; anything else — middle click,
-          ⌘/ctrl, shift, alt, or a click some other handler already claimed —
-          keeps its normal meaning and opens the real page. That is the whole
-          reason these rows stayed links.
-        */
-        if (
-          event.defaultPrevented ||
-          event.button !== 0 ||
-          event.metaKey ||
-          event.ctrlKey ||
-          event.shiftKey ||
-          event.altKey
-        ) {
-          return
-        }
-        event.preventDefault()
-        onOpen(conversation.id)
-      }}
-      aria-label={`${name}${badge ? `, ${badge} unread` : ''}`}
-      className={`flex items-center gap-4 rounded-card border bg-raised p-4 shadow-card transition-[transform,border-color,box-shadow] duration-300 ease-out-cubic hover:-translate-y-0.5 hover:border-card-edge hover:shadow-card-lift ${
-        unread ? 'border-l-4 border-l-clay border-y-hairline border-r-hairline' : 'border-hairline'
-      }`}
-    >
-      <span
-        aria-hidden="true"
-        className="num flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-clay/10 text-sm font-semibold text-clay-ink"
+    <>
+      <Link
+        to={to}
+        onContextMenu={onContextMenu}
+        onClick={(event) => {
+          if (!onOpen) return
+          /*
+            A plain left click is the panel's; anything else — middle click,
+            ⌘/ctrl, shift, alt, or a click some other handler already claimed —
+            keeps its normal meaning and opens the real page. That is the whole
+            reason these rows stayed links.
+          */
+          if (
+            event.defaultPrevented ||
+            event.button !== 0 ||
+            event.metaKey ||
+            event.ctrlKey ||
+            event.shiftKey ||
+            event.altKey
+          ) {
+            return
+          }
+          event.preventDefault()
+          onOpen(conversation.id)
+        }}
+        aria-label={`${name}${badge ? `, ${badge} unread` : ''}`}
+        className={`flex items-center gap-4 rounded-card border bg-raised p-4 shadow-card transition-[transform,border-color,box-shadow] duration-300 ease-out-cubic hover:-translate-y-0.5 hover:border-card-edge hover:shadow-card-lift ${
+          unread ? 'border-l-4 border-l-clay border-y-hairline border-r-hairline' : 'border-hairline'
+        }`}
       >
-        {getInitials(name)}
-      </span>
-
-      <div className="min-w-0 flex-1">
-        <div className="flex items-baseline gap-3">
-          <p
-            className={`min-w-0 flex-1 truncate ${
-              unread ? 'font-semibold text-ink' : 'font-medium text-muted-strong'
-            }`}
-          >
-            {name}
-          </p>
-          <time
-            dateTime={conversation.last_message_at ?? undefined}
-            className="shrink-0 text-xs text-muted"
-          >
-            {messageRelativeTime(conversation.last_message_at)}
-          </time>
-        </div>
-
-        <p className="mt-1 truncate text-sm text-muted">{conversationPreview(conversation)}</p>
-      </div>
-
-      {badge && (
         <span
           aria-hidden="true"
-          className="num inline-flex h-6 min-w-[1.5rem] shrink-0 items-center justify-center rounded-full bg-clay px-1.5 text-xs font-semibold text-ink-inverse"
+          className="num flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-clay/10 text-sm font-semibold text-clay-ink"
         >
-          {badge}
+          {getInitials(name)}
         </span>
-      )}
-    </Link>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline gap-3">
+            <p
+              className={`min-w-0 flex-1 truncate ${
+                unread ? 'font-semibold text-ink' : 'font-medium text-muted-strong'
+              }`}
+            >
+              {name}
+            </p>
+            <time
+              dateTime={conversation.last_message_at ?? undefined}
+              className="shrink-0 text-xs text-muted"
+            >
+              {messageRelativeTime(conversation.last_message_at)}
+            </time>
+          </div>
+
+          <p className="mt-1 truncate text-sm text-muted">
+            {conversationPreview(conversation)}
+          </p>
+        </div>
+
+        {badge && (
+          <span
+            aria-hidden="true"
+            className="num inline-flex h-6 min-w-[1.5rem] shrink-0 items-center justify-center rounded-full bg-clay px-1.5 text-xs font-semibold text-ink-inverse"
+          >
+            {badge}
+          </span>
+        )}
+      </Link>
+      {menu}
+    </>
   )
 }

@@ -4,6 +4,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 
 import ErrorBoundary from '../ErrorBoundary'
 import PageTransition from '../motion/PageTransition'
+import SellerNotificationToaster from '../notifications/SellerNotificationToaster.jsx'
 import SellerHeader from './SellerHeader.jsx'
 import SellerPanelContent from './SellerPanels.jsx'
 import SellerSidePanel from './SellerSidePanel.jsx'
@@ -46,6 +47,10 @@ import { supabase } from '../../lib/supabase.js'
  *     happens at the machine, not after navigating to a settings page. The bar
  *     owns the click and the shell owns the navigation, which is why the menu
  *     takes the handler rather than calling `signOut` itself.
+ *  6. **The toast centre**, so an order arriving while the seller is on any page
+ *     can pop without the page being the one that owns it — see
+ *     `SellerNotificationToaster`, which reads the query the bar's bell and the
+ *     realtime channels above already keep warm.
  *
  * There is no "Back to the shop" link, and its absence is deliberate. There used
  * to be one, and it is gone because the shop is closed to sellers — `AppLayout`
@@ -99,6 +104,14 @@ export default function SellerLayout() {
 
           <SellerPanel storeId={storeId} />
         </div>
+
+        {/*
+          Outside the `<main>`/panel row on purpose: the toast is not part of
+          the page's layout, and a card that is a flex sibling of a resizable
+          panel would either narrow the panel or be narrowed by it. It also
+          keeps the announcement last in the DOM, after the work it is about.
+        */}
+        <SellerNotificationToaster storeId={storeId} />
       </div>
     </SellerPanelProvider>
   )

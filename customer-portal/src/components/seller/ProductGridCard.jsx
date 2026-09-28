@@ -4,6 +4,8 @@ import { ImageOff, Package, Pencil } from 'lucide-react'
 
 import QuickStockPanel from './QuickStockPanel.jsx'
 import SizeStockChips from './SizeStockChips.jsx'
+import { productRowMenuItems, productRowPath } from './sellerRowMenus.js'
+import { useContextMenu } from '../ui/ContextMenu.jsx'
 import Switch from '../ui/Switch.jsx'
 import { formatCurrency } from '../../lib/constants.js'
 import { stockState, stockSummary } from '../../lib/sizeSystems.js'
@@ -39,10 +41,23 @@ import { useUpdateSellerProduct } from '../../hooks/useSeller.js'
  * under the price, which is the part of a tile nobody reads. On the image they
  * are unmissable and they cost no vertical space, which is what pays for the
  * size chips underneath.
+ *
+ * ## Right-click, and why it is on the `li`
+ *
+ * The card has four interactive things in it already (a stretched link, a switch,
+ * a stock button, and the panel that button opens), so the menu hangs off the
+ * `li` and catches the whole tile rather than the link's own box. The primitive
+ * steps aside for text fields, which matters here: the quick-stock panel's inputs
+ * keep the browser's menu, and its paste.
  */
 export default function ProductGridCard({ product, storeId }) {
   const mutation = useUpdateSellerProduct(storeId)
   const [stockOpen, setStockOpen] = useState(false)
+  const { onContextMenu, menu } = useContextMenu({
+    items: productRowMenuItems(product),
+    link: productRowPath(product),
+    label: product.name,
+  })
 
   const cover = product.images?.[0] ?? null
   const stock = stockSummary(product.inventory)
@@ -61,7 +76,10 @@ export default function ProductGridCard({ product, storeId }) {
     mutation.mutate({ productId: product.id, patch: { is_published: next } })
 
   return (
-    <li className="group relative flex flex-col overflow-hidden rounded-card border border-hairline bg-raised shadow-card transition-[border-color,box-shadow] duration-300 ease-out-cubic hover:border-card-edge hover:shadow-card-lift">
+    <li
+      onContextMenu={onContextMenu}
+      className="group relative flex flex-col overflow-hidden rounded-card border border-hairline bg-raised shadow-card transition-[border-color,box-shadow] duration-300 ease-out-cubic hover:border-card-edge hover:shadow-card-lift"
+    >
       <Link
         to={`/seller/products/${product.id}`}
         className="absolute inset-0 z-20 rounded-card"
@@ -185,6 +203,7 @@ export default function ProductGridCard({ product, storeId }) {
           </div>
         )}
       </div>
+      {menu}
     </li>
   )
 }

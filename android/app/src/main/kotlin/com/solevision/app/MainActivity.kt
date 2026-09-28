@@ -5,10 +5,23 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import com.solevision.app.arfoot.ArFootSizingPlugin
 import com.solevision.app.arfoot.DiagRelay
+import com.solevision.app.artryon.ArTryOnSpikePlugin
+import com.solevision.app.tryon.ArTryOnPlugin
 
 class MainActivity : FlutterActivity() {
 
     private var arFootSizingPlugin: ArFootSizingPlugin? = null
+
+    // V0 virtual-fitting renderer spike (dev-only; no Dart entry point unless
+    // built with --dart-define=AR_TRY_ON_SPIKE=true). Registered here and not
+    // worked into ArFootSizingPlugin, so the shipped scan cannot be affected.
+    private var arTryOnSpikePlugin: ArTryOnSpikePlugin? = null
+
+    // V3 production try-on (docs/RoadMap/VIRTUAL_FITTING_ROADMAP.md V3.1/V3.2): the platform view,
+    // the ARCore session and the Filament-direct renderer. The Dart side gates every entry behind
+    // AppConstants.tryOnV3Enabled, so registering it here costs a build with the flag off nothing
+    // but the registration — there is no Dart call site until the flag is on.
+    private var arTryOnPlugin: ArTryOnPlugin? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -16,6 +29,12 @@ class MainActivity : FlutterActivity() {
         // Register the ARCore foot scanning plugin
         arFootSizingPlugin = ArFootSizingPlugin(this)
         arFootSizingPlugin!!.registerWith(flutterEngine)
+
+        arTryOnSpikePlugin = ArTryOnSpikePlugin(this)
+        arTryOnSpikePlugin!!.registerWith(flutterEngine)
+
+        arTryOnPlugin = ArTryOnPlugin(this)
+        arTryOnPlugin!!.registerWith(flutterEngine)
         // TEMPORARY (Phase 1b diagnostics) — remove with DiagRelay.kt.
         DiagRelay.log("activity", "configureFlutterEngine")
     }
@@ -25,6 +44,10 @@ class MainActivity : FlutterActivity() {
         DiagRelay.log("activity", "cleanUpFlutterEngine (engine detaching)")
         arFootSizingPlugin?.unregister()
         arFootSizingPlugin = null
+        arTryOnSpikePlugin?.unregister()
+        arTryOnSpikePlugin = null
+        arTryOnPlugin?.unregister()
+        arTryOnPlugin = null
         super.cleanUpFlutterEngine(flutterEngine)
     }
 

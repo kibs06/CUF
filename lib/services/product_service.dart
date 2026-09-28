@@ -3,6 +3,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/product_models.dart';
+import '../utils/fit_engine.dart';
 import '../utils/product_audience.dart';
 import 'seller_notification_service.dart';
 
@@ -38,6 +39,7 @@ class ProductService {
     DateTime? saleStartsAt,
     DateTime? saleEndsAt,
     String? audience,
+    FitSpecs? fitSpecs,
   }) async {
     final sellerId = _client.auth.currentUser!.id;
 
@@ -67,6 +69,13 @@ class ProductService {
           // column's CHECK constraint as a 400 (whose message the UI would
           // flatten into a generic "Something went wrong").
           'audience': productAudienceFrom(audience),
+          // Fit specs — the four numbers a customer's verdict is computed from
+          // (`utils/fit_engine.dart`). Optional: a product whose last was never
+          // measured simply shows no fit advice. The form refuses the
+          // half-filled shapes (`utils/fit_spec_form.dart`), and the columns
+          // carry CHECK constraints matching the engine's bounds, so an
+          // implausible value cannot reach a customer as a confident verdict.
+          ..._fitSpecColumns(fitSpecs),
         })
         .select()
         .single();
@@ -153,6 +162,7 @@ class ProductService {
     DateTime? saleStartsAt,
     DateTime? saleEndsAt,
     String? audience,
+    FitSpecs? fitSpecs,
   }) async {
     final sellerId = _client.auth.currentUser!.id;
 
@@ -179,6 +189,11 @@ class ProductService {
           // Normalised like the create path, so an unrecognised value clears
           // the column rather than failing the CHECK constraint.
           'audience': productAudienceFrom(audience),
+          // Fit specs are ALWAYS sent, like the sale fields and the audience:
+          // the form's own "nothing measured yet" state has to be able to clear
+          // a spec that was entered by mistake, and a value the seller cannot
+          // clear is a value they are stuck with.
+          ..._fitSpecColumns(fitSpecs),
           'updated_at': DateTime.now().toIso8601String(),
         })
         .eq('id', productId);
@@ -471,6 +486,25 @@ class ProductService {
   }
 
   // ─── PRIVATE HELPERS ────────────────────────────────────────────
+
+  /// The four `products` columns a fit spec lives in.
+  ///
+  /// Null clears all four — the caller's "nothing measured yet" state. The
+  /// column names live here and nowhere else on the write path, so a rename
+  /// cannot leave a stale copy in one of the two callers, and the update path
+  /// gets the always-send behaviour the sale and audience fields have for the
+  /// same reason: the form has to be able to take a value back.
+  ///
+  /// Deliberately does not carry `FitSpecs.sizeStepMm` / `widthGradeMm`: those
+  /// are grading assumptions the app applies when reading a spec, not facts the
+  /// seller measured, and storing them per product would freeze today's guess
+  /// into every row.
+  Map<String, dynamic> _fitSpecColumns(FitSpecs? fitSpecs) => {
+        'last_length_mm': fitSpecs?.lastLengthMm,
+        'last_width_mm': fitSpecs?.lastWidthMm,
+        'heel_height_mm': fitSpecs?.heelHeightMm,
+        'fit_ref_size_eu': fitSpecs?.refSizeEu,
+      };
 
   /// Upload a list of image files to Supabase Storage and return their public URLs.
   ///

@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:app/models/product_models.dart';
 import 'package:app/screens/seller/add_edit_product_screen.dart';
 import 'package:app/services/product_service.dart';
+import 'package:app/utils/fit_engine.dart';
 
 /// A [ProductService] that records what the form sends instead of talking to
 /// Supabase.
@@ -43,6 +44,7 @@ class _RecordingProductService implements ProductService {
     DateTime? saleStartsAt,
     DateTime? saleEndsAt,
     String? audience,
+    FitSpecs? fitSpecs,
   }) async {
     updateProductCalled = true;
     capturedAudience = audience;

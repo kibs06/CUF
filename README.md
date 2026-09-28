@@ -6,7 +6,7 @@ Carcar City is long known as the "Footwear Capital of the South", and shoemaking
 
 This app is that association's marketplace. It gives CUFMAI's member artisans the tools big brands have — a storefront, an order pipeline, and a point of sale — while keeping the craft the point: buyers outside Carcar can discover and order handcrafted leather shoes and sandals directly from the makers.
 
-One Flutter app serves all three roles, with a React portal for web administration.
+One Flutter app serves all three roles. Two React apps run alongside it against the same Supabase project: the admin portal (`admin-portal/`) and the customer-facing storefront (`customer-portal/`).
 
 ---
 
@@ -55,6 +55,7 @@ Access is decided by `profiles.role` (`customer` / `seller` / `admin`) plus `sel
 | Mobile app | Flutter 3.44 (Dart), `provider` for state management |
 | Backend | Supabase — PostgreSQL with Row-Level Security, Auth, Storage, Realtime, Edge Functions |
 | Admin portal | React + Vite + Tailwind CSS, TanStack React Query (`admin-portal/`) |
+| Customer storefront | React + Vite + Tailwind CSS, TanStack React Query, `motion` for animation (`customer-portal/`) |
 | Payments | PayMongo (GCash) with Edge Function webhooks (`create-gcash-payment`, `gcash-webhook`); manual GCash QR fallback |
 | Push | Firebase Cloud Messaging + `flutter_local_notifications` |
 | On-device ML | Google ML Kit — pose detection and selfie segmentation (foot sizing, try-on), text recognition |
@@ -78,6 +79,7 @@ lib/
   utils/                 Pure helpers (pricing, sale rules, formatting)
   widgets/               Reusable UI
 admin-portal/            React admin web portal
+customer-portal/         React customer storefront (web)
 supabase/
   migrations/            Ordered SQL migrations (schema, RLS, triggers)
   functions/             Edge Functions (payments, push, geocoding, uploads)

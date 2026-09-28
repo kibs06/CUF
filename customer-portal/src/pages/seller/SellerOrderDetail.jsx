@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { Link, useOutletContext, useParams } from 'react-router-dom'
-import { ArrowLeft, Loader2, PackageOpen } from 'lucide-react'
+import { ArrowLeft, Copy, Loader2, Mail, MapPin, PackageOpen } from 'lucide-react'
 
 import StatusPill from '../../components/orders/StatusPill'
+import { useContextMenu } from '../../components/ui/ContextMenu.jsx'
 import {
   SellerPageBody,
   SellerSection,
@@ -116,16 +117,7 @@ export default function SellerOrderDetail() {
         </Link>
 
         <div className="mt-4 flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="overline">{formatDate(order.created_at)}</p>
-            <h1 className="num mt-1.5 font-display text-2xl font-semibold text-ink sm:text-3xl">
-              {shortOrderRef(order.id)}
-            </h1>
-            <p className="mt-2 text-sm text-muted">
-              {order.customer_name}
-              {order.customer_email && ` · ${order.customer_email}`}
-            </p>
-          </div>
+          <OrderIdentity order={order} address={address} />
 
           <div className="flex flex-col items-end gap-3">
             <StatusPill status={order.status} />
@@ -266,16 +258,7 @@ export default function SellerOrderDetail() {
             </dl>
 
             {address.length > 0 && (
-              <div className="mt-5 border-t border-hairline-soft pt-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted">
-                  Deliver to
-                </p>
-                <address className="mt-2 space-y-0.5 text-sm not-italic leading-relaxed text-ink">
-                  {address.map((line) => (
-                    <p key={line}>{line}</p>
-                  ))}
-                </address>
-              </div>
+              <DeliverTo lines={address} recipient={order.customer_name} />
             )}
 
             {order.customer_email && (
@@ -314,6 +297,116 @@ export default function SellerOrderDetail() {
         </div>
       </div>
     </SellerPageBody>
+  )
+}
+
+/**
+ * The order's identity — date, reference, who ordered — with the pointer's menu
+ * carrying the three things that get retyped somewhere else.
+ *
+ * It is a component rather than markup in the page because the menu is a hook,
+ * and the page has early returns for loading and for a missing order: a hook below
+ * one of those is a hook that runs on some renders and not others. Here it is
+ * mounted only once there is an order to name.
+ *
+ * Everything offered is **already on the screen** — nothing new is being added to
+ * the feature, it is being made copyable, which is the one thing a screen full of
+ * reference numbers cannot do for itself.
+ */
+function OrderIdentity({ order, address = [] }) {
+  const addressText = address.join('\n')
+  const { onContextMenu, menu } = useContextMenu({
+    items: [
+      { id: 'copy-ref', label: 'Copy order reference', Icon: Copy, copy: shortOrderRef(order.id) },
+      ...(order.customer_name
+        ? [
+            {
+              id: 'copy-name',
+              label: 'Copy customer name',
+              Icon: Copy,
+              copy: order.customer_name,
+            },
+          ]
+        : []),
+      ...(order.customer_email
+        ? [
+            {
+              id: 'copy-email',
+              label: 'Copy customer email',
+              Icon: Mail,
+              copy: order.customer_email,
+            },
+          ]
+        : []),
+      ...(addressText
+        ? [
+            {
+              id: 'copy-address',
+              label: 'Copy delivery address',
+              Icon: MapPin,
+              copy: addressText,
+            },
+          ]
+        : []),
+    ],
+    label: `Order ${shortOrderRef(order.id)}`,
+  })
+
+  return (
+    <div onContextMenu={onContextMenu}>
+      <p className="overline">{formatDate(order.created_at)}</p>
+      <h1 className="num mt-1.5 font-display text-2xl font-semibold text-ink sm:text-3xl">
+        {shortOrderRef(order.id)}
+      </h1>
+      <p className="mt-2 text-sm text-muted">
+        {order.customer_name}
+        {order.customer_email && ` · ${order.customer_email}`}
+      </p>
+      {menu}
+    </div>
+  )
+}
+
+/**
+ * Where the parcel goes — the one block on this page a seller retypes into a
+ * courier, which is why right-clicking it copies the whole address.
+ *
+ * The lines are joined with newlines rather than spaces or commas: every form the
+ * address gets pasted into wants a line per field, and a single line wrapping in
+ * the wrong place is an address the courier has to guess at. The recipient goes on
+ * top for the same reason — it is the first line of a delivery note.
+ */
+function DeliverTo({ lines, recipient }) {
+  const { onContextMenu, menu } = useContextMenu({
+    items: [
+      {
+        id: 'copy-address',
+        label: 'Copy delivery address',
+        Icon: MapPin,
+        copy: [recipient, ...lines].filter(Boolean).join('\n'),
+      },
+      {
+        id: 'copy-lines',
+        label: 'Copy address lines only',
+        Icon: Copy,
+        copy: lines.join('\n'),
+      },
+    ],
+    label: 'Delivery address',
+  })
+
+  return (
+    <div onContextMenu={onContextMenu} className="mt-5 border-t border-hairline-soft pt-4">
+      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted">
+        Deliver to
+      </p>
+      <address className="mt-2 space-y-0.5 text-sm not-italic leading-relaxed text-ink">
+        {lines.map((line) => (
+          <p key={line}>{line}</p>
+        ))}
+      </address>
+      {menu}
+    </div>
   )
 }
 
