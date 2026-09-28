@@ -52,7 +52,8 @@ admin-portal/
 ├── vite.config.js              # React plugin only
 ├── tailwind.config.js          # Brand theme (colors, fonts)
 ├── postcss.config.js
-├── .env                        # VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
+├── .env                        # VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY,
+│                               #   optional VITE_ADMIN_MODEL_UPLOAD (P2, off by default)
 ├── supabase/
 │   └── admin_policies.sql      # RLS policies + optional columns
 └── src/
@@ -61,7 +62,15 @@ admin-portal/
     ├── index.css               # Tailwind + base styles
     ├── lib/
     │   ├── supabase.js         # Single shared Supabase client
-    │   └── constants.js        # Roles, statuses, formatters, SVG logo
+    │   ├── constants.js        # Roles, statuses, formatters, SVG logo
+    │   ├── errors.js           # Refusal classification: code → sentence + detail (see “Failed requests”)
+    │   ├── errors.test.js      # Tests for those rules; run by `npm test`
+    │   ├── modelPublish.js     # The publish rules, ported from the Flutter upload sheet (see “Publishing a model”)
+    │   ├── modelPublish.test.js         # Tests for those rules
+    │   ├── modelPublish.contract.test.js # Reads the numbers back out of the migration that owns them
+    │   ├── askDelivery.js      # Whether a closing action told the seller, and in what words (see “The other end of the loop”)
+    │   ├── askDelivery.test.js          # Tests for those claims
+    │   └── askDelivery.contract.test.js # Reads the SQL — and this portal's own source — to keep the claim true
     ├── hooks/                  # Data-access layer (React Query)
     │   ├── useAuth.jsx         # Auth context provider + hook
     │   ├── useDashboard.js     # Stats, recent lists, sparkline, approve/reject
@@ -71,7 +80,10 @@ admin-portal/
     │   ├── useProducts.js      # Products grouped by store, mutations
     │   ├── useOrders.js        # Orders + status updates
     │   ├── useTransactions.js  # GCash/PayMongo intents + webhook events
-    │   └── useAnalytics.js     # Time-series aggregation for charts
+    │   ├── useAnalytics.js     # Time-series aggregation for charts
+    │   ├── useModelRequests.js # The 3D model-request queue + its three closing RPCs
+    │   ├── usePublishModel.js  # P2: bytes → bucket → draft row → `validate-shoe-model` → close
+    │   └── useDeviceGate.js    # `device_gate_open()` — “empty” vs “hidden”, for gated tables
     ├── pages/                  # One component per route
     │   ├── Login.jsx
     │   ├── Dashboard.jsx
@@ -81,7 +93,8 @@ admin-portal/
     │   ├── Orders.jsx
     │   ├── Reports.jsx
     │   ├── Analytics.jsx
-    │   └── Settings.jsx
+    │   ├── Settings.jsx
+    │   └── ModelRequests.jsx   # 3D model queue: claim / close against a live model / decline
     └── components/
         ├── ErrorBoundary.jsx
         ├── layout/             # App shell
@@ -92,10 +105,11 @@ admin-portal/
         ├── ui/                 # Reusable primitives
         │   ├── AvatarInitials, Badge, DataTable, EmptyState, Modal,
         │   ├── Skeleton, StatCard, Toast
-        └── users/, products/   # Feature-specific components
-            ├── UserSection, UserRow, UserDetailModal
-            └── StoreGroup, ProductCard, ProductListRow,
-                ProductDetailModal, AddProductModal
+        ├── users/, products/   # Feature-specific components
+        │   ├── UserSection, UserRow, UserDetailModal
+        │   └── StoreGroup, ProductCard, ProductListRow,
+        │       ProductDetailModal, AddProductModal
+        └── model-requests/     # UploadModelModal — the P2 publish-then-close dialog
 ```
 
 ## Data Flow (Layer Model)
@@ -112,6 +126,68 @@ Pages never talk to Supabase directly — a few exceptions exist (e.g. `Reports.
 - One `QueryClient` created in `main.jsx` with `staleTime: 30s`, `retry: 1`.
 - Every query key is namespaced per feature, e.g. `['dashboard-stats']`, `['admin-users']`, `['seller-applications', status]`, `['orders']`, `['analytics', days]`.
 - Mutations invalidate dependent keys on success, e.g. approving a seller invalidates `['seller-applications']`, `['recent-pending-applications']`, `['dashboard-stats']`, `['users']`.
+
+### Failed requests (why a refusal is classified)
+
+`src/lib/errors.js` turns whatever the server sent into a sentence *and* keeps the server's own words. A client that cannot tell why it was refused has no move: it retries what will never work, or gives up on what a reload would fix. This is the portal's half of a rule the database side had to learn in the same week — a `RAISE EXCEPTION` with no ERRCODE reports `P0001`, which is indistinguishable from a bug inside the function.
+
+| Code the server sent | Kind | What the admin is told |
+|---|---|---|
+| `42501` | `not_admin` | the session is not an admin's → sign out and back in |
+| `PGRST301`, `PGRST302`, `401` | `session_expired` | the session expired; nothing was sent |
+| `42804`, `42883`, `42P01`, `3F000`, `PGRST202`, `PGRST205` | `db_behind_code` | the database is behind this build → apply the migration |
+| `PGRST200`, `PGRST204`, `42703`, `42P10` | `schema_drift` | the page and the database have drifted apart |
+| (no code; a fetch failure) | `offline` | the server is unreachable; nothing was sent |
+| anything else | `unknown` | the server's message, verbatim |
+
+`42501` means **not an admin** and nothing else: it is what the model-request RPCs' `is_admin()` guards raise deliberately, after they were fixed to carry an ERRCODE at all. Hooks wrap with `toPortalError(error, fallback)` rather than `new Error(error.message)`, because the code lives on the object and a message-only copy destroys the one field that decides the sentence. The raw text travels as `detail` and is printed whenever it differs from that sentence.
+
+**A gated table looks empty, not refused.** The device gate's policy is `USING (device_is_trusted() OR is_admin())`, and a policy like that hides *rows* instead of raising — so "nothing waiting" and "this session cannot see the queue" are the same response from PostgREST. `useDeviceGate()` asks `public.device_gate_open()`, the function that exists for exactly this (its comment: distinguish "empty" from "gated"), and the queue says which one it is. The probe never throws, and reports `null` for unknown: a probe whose job is to explain a blank screen must not be able to blank it.
+
+### Publishing a model (P2 — publish and close in one step)
+
+Roadmap V2.11's P2, and the action the queue was missing: without it “Close as done” could only ever point at a model somebody else had already published. `usePublishModel.js` runs the same pipeline as `ShoeModelUploadService.publish` in the app, in the same order, for the same reasons:
+
+1. **the bytes and their digest** — from a picked file (checked for size *before* being read into memory) or a link;
+2. **the object first, the row second** — a row whose object is missing renders as “no model”, while an object with no row is simply invisible;
+3. **the row lands as a `draft`, never `active`** — between the insert and the server's answer the only state the catalog can observe is a hidden one;
+4. **`validate-shoe-model` judges the stored bytes** — the function is the only caller the database lets write `status = 'active'` (V2.4), and it resolves `is_admin()` through the caller's own client;
+5. **the close runs last** — the fulfil RPC requires an `active` model of the same product, so it is attempted only when there is something to point at.
+
+**The declaration rules are the sheet's, not a new set.** `modelPublish.js` mirrors `lib/utils/shoe_model_upload.dart`: the length is in **millimetres not centimetres** (a `27` is refused as a likely `270`), the band is the column's own 100–400 mm, a size without a length is refused, and a length more than ±5 mm from the seller's measurement is a **warning, not a gate**. `modelPublish.contract.test.js` reads that band, the EU band, the bucket's 8 MB cap, its `allowed_mime_types`, and the three admitted `status` values straight out of `20260927180000_add_try_on_models.sql`, so a rule that drifts fails the test rather than reaching an admin as a wrong refusal.
+
+**What is deliberately not ported: the 11-check authoring contract.** That contract already has two implementations — the Dart reference and the TypeScript mirror inside `validate-shoe-model`, parity-checked over 22 fixtures — and a third would be a third place for eleven rules to drift. The app's client-side run is a courtesy that saves a round trip; the server is the authority. So the portal uploads, asks, and shows the server's answer: a refusal names the failing rows, the row stays a hidden draft, and the ask stays open.
+
+**Two sources, because a browser is not a phone.** The app has no file picker (no dependency can select a `.glb`), so a link is its only source; a browser gets a picker for free and is also the one client whose link downloads can be refused by the host's CORS rules. Both feed the same pipeline.
+
+**Three endings, and the third is the one that matters.** *closed* — the model is live and the ask is fulfilled; *not live* — the server refused it, the reason is shown and the dialog stays open; *live but still open* — the model passed the server and the close failed, so the modal reports it and the toast treats it as an error, because a live model with a waiting seller is a state somebody has to act on, not a state to report as success.
+
+The whole surface is behind `MODEL_UPLOAD_ENABLED` (`lib/constants.js`), off unless `VITE_ADMIN_MODEL_UPLOAD=true`. Two reasons for that, and the second is the interesting one: the app's reason is that nothing can go live by accident while the path ends at the server; the portal's extra reason is that this path also needs the request-flow migration applied to the live project (`20260928140000`), and until that happens a publish here would fail in a way that reads like a bug in this page.
+
+### The other end of the loop (P3 — the seller is told)
+
+P2 let the queue *answer* an ask. Answering told nobody, which is the same gap one level down: the seller's stateful row in the product action sheet only speaks to a seller who opens it, and a week of somebody else's work is long enough for them to file the same ask twice.
+
+That half is built, and it is built **in the database**: `fulfil_shoe_model_request` and `decline_shoe_model_request` write the seller's notice inside the transaction that closes the ask, so "closed" and "told" cannot disagree. This page does not send it. An app-side send was rejected for the reason the app's own phase gives — a notice a client can decline to send is a courtesy rather than a fact — and every client would have to remember.
+
+**Two channels, because one was correct and unreadable at the same time.** `public.notifications` is the generic per-user feed; a seller's session lands in `SellerShell`, whose bell reads `public.seller_notifications`, keyed by store. So each closing RPC writes both rows, and the portal's sentence names both, because a claim that covers one of two channels is the bug V2.14 had to go and fix.
+
+**What the page says, per ending.** `askDelivery.js` decides, and `askDelivery.contract.test.js` keeps it honest:
+
+| How it ended | Delivery | Why |
+|---|---|---|
+| closed | told | the RPC wrote both notices after the `UPDATE`, in one plpgsql body — one transaction |
+| not live | not told | nothing went live and the ask is untouched, so there is nothing to tell |
+| live but open | not told *yet* | the ask is still open, so no notice exists — the one ending a green tick would have hidden |
+| declined | told, with the reason | the RPC quotes `p_reason` verbatim, and this page refuses to send a blank one |
+
+**Three things the portal is not allowed to do**, each guarded by reading its own source:
+
+- send a notice itself — the RPC is the writer, and a second sender would deliver twice while the fact stayed the RPC's;
+- close an ask by writing `shoe_model_requests` — the closing RPCs are the only path, which is also what makes "closed ⇒ told" structural rather than hopeful;
+- claim a delivery it cannot see. Both notice tables grant SELECT to the recipient alone and **no admin policy exists**, so "told at 14:02" is unreadable from this session and would have to be invented. `NOTICE_NOT_READABLE_SENTENCE` says so in the dialog instead.
+
+**The honest limit of the guard:** it reads the migration file, not the live project. `20260928140000` was hand-applied to the live database in an **older revision** and must be re-applied (see `supabase/MIGRATIONS_LIVE_STATUS.md`), and a close against that older revision writes no notice at all — which is why this phase's claim is pinned to the file CI applies, and why both switches stay off until the re-apply is done.
 
 ### Client State (Context)
 
@@ -137,7 +213,7 @@ Defined in `App.jsx`:
 | `/users` | Users | Users grouped by role (customer/seller/admin) |
 | `/seller-applications` | SellerApplications | Approve/reject pending sellers |
 | `/products` | Products | Catalog grouped by store; toggle publish, delete |
-| `/model-requests` | ModelRequests | The 3D model request queue (waiting badge in sidebar): claim, close as done against a live model, decline with a reason |
+| `/model-requests` | ModelRequests | The 3D model request queue (waiting badge in sidebar): claim, **publish a model and close in one step** (P2, dark by default), close as done against a live model, decline with a reason — the seller is told on both closing paths (P3) |
 | `/orders` | Orders | Order list w/ nested items; status updates |
 | `/transactions` | Transactions | Read-only GCash/PayMongo payments: summary cards, filters, detail modal w/ webhook event timeline, CSV export |
 | `/reports` | Reports | Report moderation (priority badge in sidebar) |
@@ -186,12 +262,13 @@ Read-only visibility into `payment_intents` + `payment_webhook_events` (admin SE
 ```
 VITE_SUPABASE_URL=...
 VITE_SUPABASE_ANON_KEY=...
+VITE_ADMIN_MODEL_UPLOAD=false   # optional; true gives the queue its “Upload a model” action (P2)
 ```
 
 - `npm run dev` → local dev server (port 5173).
 - `npm run build` → static bundle in `dist/` (hostable on any static host, e.g. Netlify/Vercel).
 - `npm run preview` → serve the built bundle locally.
-- No tests or lint config are currently present.
+- `npm test` → Node's own runner (`node --test`) over `src/lib/*.test.js`. No test framework and no extra dependency; no lint config is present.
 
 ## Database Entities Used
 
@@ -203,11 +280,14 @@ VITE_SUPABASE_ANON_KEY=...
 - `orders` — customer/store/total/status
 - `order_items` — line items joined to products
 - `reports` — user reports with `priority` (`high`) and `status`
+- `shoe_model_requests` — a seller's ask for a 3D model of one product (`external_length_mm` etc., the seller's own measurement), closed by one of three admin RPCs
+- `product_models` — the published models, one row per product/version: `storage_path`, `sha256`, `status` (`draft`/`active`/`rejected`), and the author's declared `authored_length_mm`/`authored_size_eu`. Objects live in the public `shoe-models` bucket (8 MB, `model/gltf-binary`)
+- `notifications`, `seller_notifications` — the seller's notice on both channels, written by the closing RPCs. **Read-only from here, and not readable at all**: both grant SELECT to the recipient, and the portal only ever names what was written
 
 ## Known Notes / Caveats
 
 - Charts use full-table reads and client-side aggregation — fine at small scale, but heavy at scale.
 - `reports` RLS assumes the mobile app's policies allow admin reads; no admin-specific `reports` policy exists in `admin_policies.sql`.
 - Realtime for `profiles` must be enabled in the Supabase dashboard (`ALTER PUBLICATION supabase_realtime ADD TABLE public.profiles`).
-- `dist/` is committed to the repo; it can be regenerated with `npm run build`.
+- `dist/` is gitignored build output; regenerate with `npm run build`.
 - **Admin suspension enforcement** lives in `supabase/migrations/20260813000000_admin_suspension_enforcement.sql` (RLS hard-ban: `is_admin()`/`is_seller_or_admin()` exclude suspended accounts, `is_suspended()` write blocks, guard triggers). It must be applied to the DB **before** the Users page loads (it selects `suspended_reason`/`suspended_at`) — see `supabase/MIGRATIONS_LIVE_STATUS.md`. Full-stack reference: `docs/AI/ADMIN_SUSPENSION_ARCHITECTURE.md`.

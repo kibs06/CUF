@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { AlertTriangle, Check, Cuboid, Hand, Loader2, Ruler } from 'lucide-react'
+import { AlertTriangle, Check, Cuboid, Hand, Loader2, Ruler, Upload } from 'lucide-react'
 import Badge from '../components/ui/Badge.jsx'
 import EmptyState from '../components/ui/EmptyState.jsx'
 import Modal from '../components/ui/Modal.jsx'
@@ -14,7 +14,21 @@ import {
   useModelRequests,
   useProductModels,
 } from '../hooks/useModelRequests.js'
-import { formatDateTime } from '../lib/constants.js'
+import UploadModelModal from '../components/model-requests/UploadModelModal.jsx'
+import { useDeviceGate } from '../hooks/useDeviceGate.js'
+import { describeError } from '../lib/errors.js'
+import { MODEL_UPLOAD_ENABLED, formatDateTime } from '../lib/constants.js'
+// ⚠️ P3: every "the seller has been told" in this page comes from one module,
+// because the claim is about SQL this page does not own — see `askDelivery.js`
+// and the contract test beside it.
+import {
+  NOTICE_NOT_READABLE_SENTENCE,
+  declineDeliverySentence,
+  declineHeadline,
+  deliveryHeadline,
+  noteReachesSeller,
+} from '../lib/askDelivery.js'
+import { MODELLING_ENDING } from '../lib/modelPublish.js'
 
 // The three buckets the Flutter queue uses. Same names on purpose: an admin who
 // has used the app should not have to learn a second vocabulary for the same
@@ -67,6 +81,7 @@ function Measurement({ label, value, icon: Icon }) {
 export default function ModelRequests() {
   const [tab, setTab] = useState('waiting')
   const [fulfilTarget, setFulfilTarget] = useState(null)
+  const [uploadTarget, setUploadTarget] = useState(null)
   const [declineTarget, setDeclineTarget] = useState(null)
   const [declineReason, setDeclineReason] = useState('')
   const [busyId, setBusyId] = useState(null)
@@ -78,6 +93,18 @@ export default function ModelRequests() {
   const decline = useDeclineModelRequest()
 
   const rows = useMemo(() => data ?? [], [data])
+
+  // ⚠️ There are two ways to see nothing here and they are not the same news.
+  // The device gate hides ROWS rather than raising, so an empty queue is
+  // ambiguous by construction — "Nothing waiting" is the one sentence an admin
+  // must not be told when the truth is "this session is not an admin's". The
+  // probe is only asked for once the list has actually come back empty, which
+  // is what `enabled` is doing.
+  const queueError = isError
+    ? describeError(error, 'Could not load the model-request queue.')
+    : null
+  const gate = useDeviceGate({ enabled: !isLoading && !isError && rows.length === 0 })
+  const gatedEmpty = !isLoading && !isError && rows.length === 0 && gate.data === false
 
   const byStatus = (statuses) => rows.filter((r) => statuses.includes(r.status))
 
@@ -99,7 +126,7 @@ export default function ModelRequests() {
       await claim.mutateAsync(row.id)
       showToast(`You are now on ${row.products?.name ?? 'that request'}`)
     } catch (e) {
-      showToast(e.message ?? 'Could not claim that request', 'error')
+      showToast(describeError(e, 'Could not claim that request').message, 'error')
     } finally {
       setBusyId(null)
     }
@@ -110,10 +137,12 @@ export default function ModelRequests() {
     setBusyId(fulfilTarget.id)
     try {
       await fulfil.mutateAsync({ requestId: fulfilTarget.id, modelId, note })
-      showToast('Request closed — the seller has been told')
+      // The RPC wrote the notice inside the transaction that set `fulfilled`, so
+      // this claim is the database's rather than this page's (P3).
+      showToast(`Request closed. ${deliveryHeadline(MODELLING_ENDING.CLOSED)}`)
       setFulfilTarget(null)
     } catch (e) {
-      showToast(e.message ?? 'Could not close that request', 'error')
+      showToast(describeError(e, 'Could not close that request').message, 'error')
     } finally {
       setBusyId(null)
     }
@@ -124,11 +153,14 @@ export default function ModelRequests() {
     setBusyId(declineTarget.id)
     try {
       await decline.mutateAsync({ requestId: declineTarget.id, reason: declineReason })
-      showToast('Request declined — the seller has the reason')
+      // Same rule: `decline_shoe_model_request` carries the reason into the
+      // seller's notice, so an empty field is refused here AND reads as nothing
+      // to act on there.
+      showToast(`Request declined. ${declineHeadline()}`)
       setDeclineTarget(null)
       setDeclineReason('')
     } catch (e) {
-      showToast(e.message ?? 'Could not decline that request', 'error')
+      showToast(describeError(e, 'Could not decline that request').message, 'error')
     } finally {
       setBusyId(null)
     }
@@ -193,15 +225,27 @@ export default function ModelRequests() {
         </div>
       )}
 
-      {/* Error */}
+      {/* Error — the sentence first, the server's own words under it */}
       {isError && (
         <div className="rounded-2xl border border-[#D9D0C7] bg-white p-8 text-center">
-          <p className="text-sm text-[#D64545]">{error.message}</p>
+          <p className="text-sm font-semibold text-[#D64545]">{queueError.message}</p>
+          {queueError.detail && queueError.detail !== queueError.message && (
+            <p className="mt-2 text-xs text-[#6B5C4E]">The server said: {queueError.detail}</p>
+          )}
         </div>
       )}
 
-      {/* Empty */}
-      {!isLoading && !isError && visible.length === 0 && (
+      {/* Empty because it is HIDDEN, which is not the same as empty */}
+      {gatedEmpty && (
+        <EmptyState
+          Icon={AlertTriangle}
+          title="The server is not showing this queue"
+          description="This session is signed in, but the database does not treat it as an admin's — and the device gate hides rows instead of raising, so this reads empty rather than refused. Sign out and back in; if it persists, check the account's role."
+        />
+      )}
+
+      {/* Empty for the ordinary reason */}
+      {!isLoading && !isError && visible.length === 0 && !gatedEmpty && (
         <EmptyState
           Icon={Cuboid}
           title={tab === 'waiting' ? 'Nothing waiting' : 'Nothing here yet'}
@@ -245,6 +289,23 @@ export default function ModelRequests() {
 
                   {isOpen && (
                     <div className="flex items-center gap-2">
+                      {/* P2 (V2.11), and the action this queue was missing: without it
+                          "Close as done" could only ever point at a model somebody else
+                          had already published. Dark by default — see
+                          `MODEL_UPLOAD_ENABLED`. Offered whether or not somebody has
+                          claimed the ask: claiming says whose desk it is, it does not
+                          put the file out of anyone else's reach. */}
+                      {MODEL_UPLOAD_ENABLED && (
+                        <button
+                          type="button"
+                          disabled={busyId === row.id}
+                          onClick={() => setUploadTarget(row)}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-[#8B5A2B] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#6B4423] disabled:opacity-50"
+                        >
+                          <Upload size={13} />
+                          Upload a model
+                        </button>
+                      )}
                       {!claimed && (
                         <button
                           type="button"
@@ -327,6 +388,28 @@ export default function ModelRequests() {
         busy={!!fulfilTarget && busyId === fulfilTarget.id}
       />
 
+      {/* ─── Upload the model and close it (P2) ───────────────────── */}
+      <UploadModelModal
+        // ⚠️ Keyed on the request so opening it for a second row builds fresh
+        // state: the declaration is prefilled from THAT ask's measurement, and a
+        // reused component would carry the previous row's numbers into it.
+        key={uploadTarget?.id ?? 'closed'}
+        request={uploadTarget}
+        onClose={() => setUploadTarget(null)}
+        onDone={(result) => {
+          setUploadTarget(null)
+          // `live_but_open` is the one ending that is neither good news nor a
+          // failure: the model is live and the seller still reads "waiting".
+          // It is toasted as an error because somebody has to act on it — and
+          // the sentence says where delivery stands, because "published" and
+          // "told" are two different facts in exactly that case.
+          showToast(
+            `${result.message} ${deliveryHeadline(result.ending)}`,
+            result.ending === MODELLING_ENDING.CLOSED ? 'success' : 'error',
+          )
+        }}
+      />
+
       {/* ─── Decline ─────────────────────────────────────────────── */}
       <Modal
         open={!!declineTarget}
@@ -377,6 +460,12 @@ export default function ModelRequests() {
           className="w-full rounded-xl border border-[#D9D0C7] bg-[#F5F0EB] px-3 py-2 text-sm text-[#3B2314] outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
           placeholder="e.g. The photos did not show the shape of the toe clearly enough to model from."
         />
+        {/* Live, and deliberately live: this is the sentence the seller's bell
+            will hold, so an admin writing it can see what arrives. Blank fields
+            get the honest version rather than an empty quote. */}
+        <p className="mt-2 rounded-xl border border-[#F5F0EB] bg-[#FBF8F5] px-3 py-2 text-[11px] leading-relaxed text-[#6B5C4E]">
+          {declineDeliverySentence({ reason: declineReason })}
+        </p>
       </Modal>
     </div>
   )
@@ -394,6 +483,9 @@ function FulfilModal({ request, onClose, onConfirm, busy }) {
   const [selected, setSelected] = useState(null)
   const [note, setNote] = useState('')
   const { data: models, isLoading, isError, error } = useProductModels(request?.product_id)
+  const modelsError = isError
+    ? describeError(error, 'Could not read that product’s models.')
+    : null
 
   const active = (models ?? []).filter((m) => m.status === 'active')
   const drafts = (models ?? []).filter((m) => m.status !== 'active')
@@ -455,7 +547,10 @@ function FulfilModal({ request, onClose, onConfirm, busy }) {
             <AlertTriangle size={14} />
             Could not read this product&apos;s models
           </p>
-          <p className="mt-1 text-xs">{error.message}</p>
+          <p className="mt-1 text-xs">{modelsError.message}</p>
+          {modelsError.detail && modelsError.detail !== modelsError.message && (
+            <p className="mt-1 text-xs opacity-70">The server said: {modelsError.detail}</p>
+          )}
         </div>
       )}
 
@@ -519,7 +614,12 @@ function FulfilModal({ request, onClose, onConfirm, busy }) {
           className="w-full rounded-xl border border-[#D9D0C7] bg-[#F5F0EB] px-3 py-2 text-sm text-[#3B2314] outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
           placeholder="Anything they should know about the model…"
         />
+        <p className="mt-1.5 text-[11px] leading-relaxed text-[#6B5C4E]">{noteReachesSeller()}</p>
       </div>
+
+      <p className="mt-3 text-[11px] leading-relaxed text-[#6B5C4E]">
+        {NOTICE_NOT_READABLE_SENTENCE}
+      </p>
     </Modal>
   )
 }

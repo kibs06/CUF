@@ -1,0 +1,73 @@
+name: Admin Portal
+
+# Builds the Vite admin portal and runs its tests.
+#
+# Until this job existed the portal had NO CI at all, which is not the same as
+# having a passing one: a broken import, a bad JSX tag or a duplicate object key
+# could only be found by running `npm run build` by hand on the machine that was
+# editing the file. That is how a duplicate `Badge` variant key reached a commit
+# as a build warning nobody was watching for — and why the request queue's own
+# error handling shipped with no test on it either.
+#
+# Runs only when the portal changes (and manually via workflow_dispatch), the
+# same shape as the Supabase job: a separate app with its own lockfile.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'admin-portal/**'
+      - '.github/workflows/admin-portal.yml'
+  pull_request:
+    paths:
+      - 'admin-portal/**'
+      - '.github/workflows/admin-portal.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: admin-portal-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  portal:
+    name: Build & test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    defaults:
+      run:
+        working-directory: admin-portal
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          # 22 is the LTS line the portal is developed against; `npm test` is
+          # Node's own runner (`node --test`), so there is no test framework to
+          # pin separately.
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: admin-portal/package-lock.json
+
+      # `npm ci`, not `npm install`: the lockfile is committed, so a lockfile
+      # that has drifted from package.json should fail this job loudly rather
+      # than resolve something else and pass.
+      - name: Install dependencies
+        run: npm ci
+
+      # The pure rules — how a refusal is classified, and what sentence the
+      # admin reads for it. No framework, no jsdom, no network.
+      - name: Test
+        run: npm test
+
+      # The build is the only check that sees a bad import or a malformed JSX
+      # tag in a file no test touches, which is most of them: the portal ships
+      # as static files, so nothing reads them back at runtime.
+      - name: Build
+        run: npm run build

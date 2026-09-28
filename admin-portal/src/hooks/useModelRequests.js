@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
+import { toPortalError } from '../lib/errors.js'
 
 // ─── The queue ─────────────────────────────────────────────────────
 //
@@ -38,7 +39,11 @@ export function useModelRequests() {
         .select(QUEUE_SELECT)
         .order('created_at', { ascending: false })
 
-      if (error) throw error
+      // Wrapped, not re-thrown bare: the CODE on this object is what decides
+      // whether the page says "the database is behind this build" or "your
+      // session expired", and a `new Error(error.message)` copy would throw it
+      // away. See `lib/errors.js`.
+      if (error) throw toPortalError(error, 'Could not load the model-request queue.')
       return data ?? []
     },
   })
@@ -84,7 +89,7 @@ export function useProductModels(productId) {
         .eq('product_id', productId)
         .order('version', { ascending: false })
 
-      if (error) throw error
+      if (error) throw toPortalError(error, 'Could not read that product’s models.')
       return data ?? []
     },
   })
@@ -98,10 +103,19 @@ export function useProductModels(productId) {
 // null` does not mean it worked, and a missing body is not success either: the
 // Flutter side keeps the same rule (`ShoeModelRequestOutcome.fromRpc`, where a
 // null body is explicitly not success), and this is that rule in JS.
+//
+// The two halves fail differently and are kept different:
+//   * a RAISED error carries a code, and the code decides what to say — the
+//     admin guards raise 42501 deliberately, and a stale database answers 42804
+//     or PGRST202 long before the request gets anywhere. Those are wrapped, not
+//     re-worded, so the code survives to the page.
+//   * a RETURNED refusal is the database's own sentence about this exact ask
+//     ("somebody has already taken it"), which is already the right thing to
+//     show and must not be replaced by a generic one.
 const readOutcome = (data, error, fallback) => {
-  if (error) throw new Error(error.message)
+  if (error) throw toPortalError(error, fallback)
   if (!data || data.success !== true) {
-    throw new Error(data?.message ?? fallback)
+    throw toPortalError(new Error(data?.message ?? fallback), fallback)
   }
   return data
 }

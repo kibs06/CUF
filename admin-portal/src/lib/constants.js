@@ -8,6 +8,22 @@ export const SHOE_SOLE_SVG = `<svg viewBox="0 0 100 100" fill="none" xmlns="http
   <line x1="46" y1="78" x2="54" y2="78" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
 </svg>`
 
+// ─── Can an admin publish a model from this portal? (roadmap P2, V2.11) ──
+//
+// The Flutter admin queue's own switch is `AppConstants.adminModelUploadAllowed`
+// — off — and this is the portal's equivalent, for the same reason and one
+// more. The app's reason: the whole publish path ends in `validate-shoe-model`,
+// which is the only caller the database lets write `product_models.status =
+// 'active'`, so with the switch off nothing can go live by accident. The
+// portal's extra reason: this path also *needs the request-flow migration applied
+// to the live project* (`20260928140000`), and until that happens a publish here
+// would fail in a way that reads like a bug in this page.
+//
+// Off unless `VITE_ADMIN_MODEL_UPLOAD=true` is set in `.env`, so a plain build
+// behaves exactly like yesterday's — the same "ships dark" convention the app
+// uses for every phase of this pipeline.
+export const MODEL_UPLOAD_ENABLED = import.meta.env.VITE_ADMIN_MODEL_UPLOAD === 'true'
+
 export const ROLES = {
   CUSTOMER: 'customer',
   SELLER: 'seller',
