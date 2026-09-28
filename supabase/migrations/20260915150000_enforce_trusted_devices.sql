@@ -496,6 +496,24 @@ AS $$
     'stores', 'banners', 'inventory', 'story_entries', 'store_follows',
     'reviews', 'store_reviews', 'review_images', 'product_reviews',
     'payment_fee_config',
+    -- virtual fitting V2.1 (`20260927180000_add_try_on_models.sql`): a seller's
+    -- 3D handover. Exempt ON PURPOSE, and the opposite of a leak — an `active`
+    -- row is world-readable already (that is what the RLS policy on that table
+    -- says), and the gate would sit directly across the customer's product page,
+    -- which reads this table to warm the renderer's model cache. Gating it would
+    -- lock a customer out of the very bytes V3 hands to the camera. It holds
+    -- nothing customer-private either: a storage path, a digest, a triangle
+    -- count and the seller's own declared length, all of it the seller's own
+    -- work.
+    --
+    -- ⚠️ Added 2026-09-28, found by `supabase/tests/admin_account_security.test.sql`
+    -- assertion 31 in CI, not by hand — which is the guard doing its job: the
+    -- table was created months after the sweep above and would otherwise have
+    -- been gated silently the first time `install_device_gate_policies()` was
+    -- re-run with the gate switched on. The hosted project's copy of this
+    -- function still predates the entry (see `MIGRATIONS_LIVE_STATUS.md`), so
+    -- re-apply this file before re-running that installer.
+    'product_models',
 
     -- ── device-scoped, not account-sensitive: the push token is
     --    registered right after login and leaking it would give an

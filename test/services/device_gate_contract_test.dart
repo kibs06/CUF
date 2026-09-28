@@ -177,6 +177,30 @@ void main() {
       }
     });
 
+    test('the virtual-fitting table is exempt too, for a different reason', () {
+      // `product_models` is NOT a bootstrap table — the step-up never reads it.
+      // It is exempt because the customer's own PRODUCT PAGE reads it: V2.6's
+      // prefetch warms the renderer's model cache from this table, so a
+      // `Require a trusted device` policy here would put a step-up wall in front
+      // of ordinary browsing, in front of the one shopper who has not signed in
+      // to anything.
+      //
+      // Dropping the entry does not fail loudly in the app — the gate is off
+      // today — it gates the table SILENTLY the first time
+      // install_device_gate_policies() is re-run with enforcement on. That is
+      // not hypothetical: this entry was added on 2026-09-28 because the Docker
+      // pgTAP job caught the missing name (admin_account_security assertion 31,
+      // "have: product_models"), and a failure forty minutes into a container
+      // run is worth repeating in the 2-second loop.
+      expect(
+        exemptionList(),
+        contains("'product_models'"),
+        reason: 'product_models must stay exempt or a customer browsing a '
+            'product page is challenged for a device the day enforcement is '
+            'switched on',
+      );
+    });
+
     test('the genuinely private tables are NEVER exempt', () {
       // The other half of the pgTAP invariant. That suite proves every RLS
       // table is gated OR exempt — it cannot tell a correct exemption from a
