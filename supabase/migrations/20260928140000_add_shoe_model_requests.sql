@@ -276,7 +276,17 @@ DECLARE
   v_store_id uuid;
   v_owner    uuid;
   v_open     uuid;
-  v_live     uuid;
+  -- ⚠️ BIGINT, like `product_models.id` itself — NOT uuid like every other id in
+  -- this function. This variable was declared `uuid` in the first version of
+  -- this file and the mistake hid behind the common path for a day: the SELECT
+  -- below only assigns it when it FINDS a live model, so asking about a product
+  -- without one worked perfectly and asking about a product WITH one raised
+  -- `invalid input syntax for type uuid: "2"` — a Postgres trying to cast model
+  -- id 2 into a uuid. CI's `Supabase Migrations` job is what found it, on the
+  -- first run that ever executed this function (`request_shoe_model`, pgTAP
+  -- assertion 21). Same trap as `model_id` in the table below, in a local
+  -- variable this time.
+  v_live     bigint;
   v_new_id   uuid;
 BEGIN
   IF v_user_id IS NULL THEN
