@@ -17,6 +17,7 @@ import {
   Settings,
   LogOut,
   Image,
+  Sparkles,
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -24,12 +25,16 @@ const NAV_ITEMS = [
   { to: '/users', label: 'Users', icon: Users },
   { to: '/seller-applications', label: 'Seller Applications', icon: Store },
   { to: '/products', label: 'Products', icon: Package },
-  { to: '/model-requests', label: '3D Model Requests', icon: Cuboid },
+  { to: '/model-requests', label: '3D Fitting Requests', icon: Cuboid },
   { to: '/orders', label: 'Orders', icon: ShoppingCart },
   { to: '/transactions', label: 'Transactions', icon: Wallet },
   { to: '/reports', label: 'Reports', icon: Flag },
   { to: '/analytics', label: 'Analytics', icon: BarChart2 },
   { to: '/banners', label: 'Banners', icon: Image },
+  // A component surface rather than a data one: it reads nothing from Supabase
+  // and owns no rows. Kept in the main nav because it is the reference for the
+  // AI voice-assistant visual, and a reference nobody can find is a demo.
+  { to: '/ai', label: 'AI', icon: Sparkles },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
 

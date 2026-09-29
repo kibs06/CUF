@@ -14,6 +14,7 @@ import Reports from './pages/Reports.jsx'
 import Analytics from './pages/Analytics.jsx'
 import Settings from './pages/Settings.jsx'
 import Banners from './pages/Banners.jsx'
+import Ai from './pages/Ai.jsx'
 
 export default function App() {
   return (
@@ -32,6 +33,7 @@ export default function App() {
           <Route path="reports" element={<Reports />} />
           <Route path="analytics" element={<Analytics />} />
           <Route path="banners" element={<Banners />} />
+          <Route path="ai" element={<Ai />} />
           <Route path="settings" element={<Settings />} />
         </Route>
       </Route>

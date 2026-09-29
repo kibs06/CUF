@@ -5,3 +5,27 @@
 body {
   @apply bg-surface text-secondary;
 }
+
+/* The voice orb's bars (components/ai/AiFluidBlob.jsx).
+
+   The two ends of the swing are custom properties set per bar inline, so one
+   keyframe serves every state and every bar height — `thinking` and `orbit` are
+   near-flat (the idle states are dots, not bars) and `speaking` swings widest,
+   and none of that needs a second rule here. */
+@keyframes ai-mic-bar {
+  0%,
+  100% {
+    transform: scaleY(var(--ai-mic-lo, 0.2));
+  }
+  50% {
+    transform: scaleY(var(--ai-mic-hi, 0.45));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Belt as well as braces: the component already declines to attach the
+     animation, and this catches a visitor whose preference changes after mount. */
+  [data-blob-orb='true'] span {
+    animation: none !important;
+  }
+}
