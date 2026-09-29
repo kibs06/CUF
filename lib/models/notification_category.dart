@@ -49,6 +49,6 @@ String notificationCategoryLabel(NotificationCategory cat) {
     case NotificationCategory.reservations:
       return 'Reservation';
     case NotificationCategory.models:
-      return '3D model';
+      return '3D fitting';
   }
 }

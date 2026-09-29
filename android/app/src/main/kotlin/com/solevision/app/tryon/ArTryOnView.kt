@@ -3,16 +3,20 @@ package com.solevision.app.tryon
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.PixelFormat
+import android.graphics.SurfaceTexture
 import android.opengl.Matrix
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.Looper
 import android.util.Log
 import android.view.Choreographer
+import android.view.MotionEvent
 import android.view.PixelCopy
+import android.view.ScaleGestureDetector
 import android.view.Surface
 import android.view.SurfaceHolder
 import android.view.SurfaceView
+import android.view.TextureView
 import android.widget.FrameLayout
 import com.google.android.filament.Camera
 import com.google.android.filament.Engine
@@ -48,6 +52,8 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.abs
 import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
@@ -113,7 +119,29 @@ import kotlin.math.sqrt
 class ArTryOnView(
     context: Context,
     private val listener: Listener,
+    private val mode: Mode = Mode.AR,
 ) : FrameLayout(context), SurfaceHolder.Callback {
+
+    /**
+     * **What this instance is for**, and the reason one renderer class has two surfaces.
+     *
+     * [AR] is everything V3.2 was written for: an ARCore session, a camera pose per frame, plane
+     * hit-tests for placement, an opaque `SurfaceView`.
+     *
+     * [PREVIEW] is the product page's inline box — "view in 3D" ahead of "try on in AR": **no
+     * ARCore session is ever created**, so it runs on phones that cannot install ARCore (a
+     * strictly larger audience than the AR button has), and the camera is one the customer turns
+     * with a finger. Same engine, same asset loader, same lights, same authored-length scale
+     * correction, same per-size grading: at try-on distance the mesh and its materials have to be
+     * the same object, and a second renderer would eventually disagree with this one about one of
+     * them.
+     *
+     * ⚠️ This is a flag rather than a subclass because the frame loop **already tolerated a null
+     * session** before this mode existed — it skips the pose and the light estimate — so the
+     * preview is a *camera and a surface*, not a second render loop. Everything else here is
+     * shared by construction.
+     */
+    enum class Mode { AR, PREVIEW }
 
     /**
      * How the view reports back. The plugin turns these into the EventChannel payloads the Dart
@@ -154,12 +182,75 @@ class ArTryOnView(
         val lastLengthMm: Double?,
     )
 
-    private val surfaceView = SurfaceView(context).apply {
-        holder.addCallback(this@ArTryOnView)
-        // ARCore owns the camera and nothing is drawn behind this surface yet, so opaque is
-        // correct until the feed becomes a Filament draw call (class header, gap 1).
-        holder.setFormat(PixelFormat.OPAQUE)
-        holder.setKeepScreenOn(true)
+    /**
+     * The AR surface. Null in [Mode.PREVIEW].
+     *
+     * ⚠️ A `SurfaceView` is what the AR path has always had, and it stays: it is the cheapest
+     * surface and nothing scrolls under it there.
+     */
+    private val surfaceView: SurfaceView? = if (mode == Mode.AR) {
+        SurfaceView(context).apply {
+            holder.addCallback(this@ArTryOnView)
+            // ARCore owns the camera and nothing is drawn behind this surface yet, so opaque is
+            // correct until the feed becomes a Filament draw call (class header, gap 1).
+            holder.setFormat(PixelFormat.OPAQUE)
+            holder.setKeepScreenOn(true)
+        }
+    } else {
+        null
+    }
+
+    /**
+     * ⚠️ **The preview gets a `TextureView`, and that is not a style choice.**
+     *
+     * Android composites a `SurfaceView` in a **separate window layer** — which is exactly what an
+     * AR screen wants and exactly what an inline box in the middle of a product page cannot have:
+     * it does not clip to its layout box and it does not move with the content, so scrolling the
+     * page slides the rest of the UI over and under a stationary shoe. `TextureView` composes into
+     * the ordinary view hierarchy, so the preview scrolls like everything around it.
+     */
+    private val previewSurfaceListener = object : TextureView.SurfaceTextureListener {
+        override fun onSurfaceTextureAvailable(texture: SurfaceTexture, width: Int, height: Int) {
+            surface = Surface(texture)
+            surfaceWidth = width
+            surfaceHeight = height
+            renderHandler.post {
+                createEngineIfNeeded()
+                createSwapChain()
+                view?.setViewport(Viewport(0, 0, width, height))
+                startFrameLoop()
+            }
+        }
+
+        override fun onSurfaceTextureSizeChanged(texture: SurfaceTexture, width: Int, height: Int) {
+            surfaceWidth = width
+            surfaceHeight = height
+            renderHandler.post {
+                view?.setViewport(Viewport(0, 0, width, height))
+                // A resized `TextureView` hands back a new buffer queue, so the swap chain built
+                // against the old one is stale — same reasoning as the AR path's `surfaceChanged`.
+                createSwapChain()
+            }
+        }
+
+        override fun onSurfaceTextureDestroyed(texture: SurfaceTexture): Boolean {
+            renderHandler.post {
+                destroySwapChain()
+                surface = null
+            }
+            // `true`: this view has no other consumer of the texture, so the texture itself may be
+            // released with it. The `Surface` wrapper above is ours to drop, and it is dropped.
+            return true
+        }
+
+        override fun onSurfaceTextureUpdated(texture: SurfaceTexture) = Unit
+    }
+
+    /** The preview's surface. Null in [Mode.AR]. */
+    private val textureView: TextureView? = if (mode == Mode.PREVIEW) {
+        TextureView(context).apply { surfaceTextureListener = previewSurfaceListener }
+    } else {
+        null
     }
 
     private val renderThread = HandlerThread("solevision-tryon-render").apply { start() }
@@ -181,6 +272,26 @@ class ArTryOnView(
     private var fillLight = 0
 
     private var session: Session? = null
+
+    /**
+     * ⚠️ **Whether this renderer can load a glTF asset at all — measured, not assumed.**
+     *
+     * F14 (`docs/RoadMap/AR_TRY_ON_SPIKE_FINDINGS.md`, measured on the Pixel_4 emulator API 37):
+     * at `FEATURE_LEVEL_1` — i.e. any device whose ceiling is OpenGL ES 3.0, which is the class of
+     * phone this market is most likely to hold — **every** asset load fails on the ubershader
+     * material provider (`No material with the specified requirements exists`). And the failure is
+     * not always catchable: F16 records a material/mesh mismatch as a *process abort*, and the
+     * 2026-09-29 emulator run reproduced exactly that — a **SIGSEGV inside `libfilament-jni.so` on
+     * this very thread, 126 ms after `Engine.create()`**, while loading the first real model.
+     *
+     * So the load is **refused before it is attempted**, and Dart is told
+     * (`renderer_feature_level_unsupported`) instead of the customer's app dying on a product page.
+     * The real fix for this device class is a material provider built on precompiled `.filamat`
+     * files — the pattern SceneView uses for its own rendering, and the mitigation D10 records;
+     * until that exists this flag is the difference between "no 3D here" and "it crashed".
+     */
+    private var modelLoadingSupported = true
+
     private var sessionResumed = false
     private var surface: Surface? = null
     private var surfaceWidth = 0
@@ -204,9 +315,93 @@ class ArTryOnView(
     private var frameWindowStartNanos = 0L
     private var lastLightSampleMs = 0L
     private var frameLoopRunning = false
+    private var lastFrameNanos = 0L
+
+    // ── Preview orbit state ──────────────────────────────────────────────────────────────────
+    //
+    // Written by the UI thread (touch) and read by the render thread (every frame), so the
+    // scalars are `@Volatile` rather than posted: a drag posts a value per motion event, and
+    // queueing those onto the render thread would put a touch backlog between the finger and the
+    // shoe. A torn read of a single float is not a thing, and a frame that uses last frame's yaw
+    // is invisible.
+
+    /** Where the camera looks: the model's own bounding box centre, in world space. */
+    private val previewCentre = FloatArray(3)
+
+    /** Radius of the model's bounding sphere, in metres — the framing input. */
+    private var previewRadiusM = 0.0
+
+    @Volatile private var orbitYawDeg = INITIAL_YAW_DEG
+    @Volatile private var orbitPitchDeg = INITIAL_PITCH_DEG
+    @Volatile private var orbitZoom = 1.0f
+    @Volatile private var interacting = false
+    @Volatile private var lastInteractionMs = 0L
+
+    private var lastTouchX = 0f
+    private var lastTouchY = 0f
+
+    /** Pinch → distance. Divides, so pushing the fingers apart brings the shoe closer. */
+    private val scaleDetector = ScaleGestureDetector(
+        context,
+        object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            override fun onScale(detector: ScaleGestureDetector): Boolean {
+                orbitZoom = (orbitZoom / detector.scaleFactor).coerceIn(MIN_ZOOM, MAX_ZOOM)
+                lastInteractionMs = System.currentTimeMillis()
+                return true
+            }
+        },
+    )
 
     init {
-        addView(surfaceView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        // The `?:` is the whole surface story in one line: AR has a `SurfaceView`, preview has a
+        // `TextureView`, and there is never both.
+        val content = surfaceView ?: textureView
+        if (content != null) {
+            addView(content, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        }
+        // The preview is turned with a finger; the AR view takes its taps through Flutter's
+        // gesture arena (`EagerGestureRecognizer` on the Dart side), which is the same handover.
+        isClickable = mode == Mode.PREVIEW
+    }
+
+    /**
+     * Drag to turn, pinch to zoom, in [Mode.PREVIEW] only.
+     *
+     * Nothing here talks to the render thread directly — it writes the volatile orbit state the
+     * next frame reads — so a fast drag cannot queue up behind a slow frame.
+     */
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (mode != Mode.PREVIEW) return super.onTouchEvent(event)
+        scaleDetector.onTouchEvent(event)
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                lastTouchX = event.x
+                lastTouchY = event.y
+                interacting = true
+                lastInteractionMs = System.currentTimeMillis()
+            }
+            MotionEvent.ACTION_MOVE -> {
+                // A two-finger move belongs to the pinch, not to the orbit: without this the shoe
+                // spins away while the customer is trying to zoom.
+                if (!scaleDetector.isInProgress) {
+                    val dx = event.x - lastTouchX
+                    val dy = event.y - lastTouchY
+                    orbitYawDeg = (orbitYawDeg - dx * DRAG_DEG_PER_PX) % 360f
+                    orbitPitchDeg =
+                        (orbitPitchDeg + dy * DRAG_DEG_PER_PX).coerceIn(MIN_PITCH_DEG, MAX_PITCH_DEG)
+                    lastTouchX = event.x
+                    lastTouchY = event.y
+                }
+            }
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                lastInteractionMs = System.currentTimeMillis()
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                interacting = false
+                lastInteractionMs = System.currentTimeMillis()
+            }
+        }
+        return true
     }
 
     // ════════════════════════════════════════════════════════════════════════════════════════
@@ -315,6 +510,10 @@ class ArTryOnView(
      * input).
      */
     fun placeShoe(x: Double, y: Double) {
+        // Nothing to place: the preview's camera moves and the shoe stays where the contract put
+        // it (grounded at the origin, long axis +Z). A tap there is a drag, handled by
+        // `onTouchEvent`.
+        if (mode == Mode.PREVIEW) return
         renderHandler.post {
             val activeSession = session ?: return@post
             val density = resources.displayMetrics.density.toDouble()
@@ -328,8 +527,17 @@ class ArTryOnView(
 
     /** A PNG of the current frame, or null when there is nothing to copy. */
     fun captureScreenshot(onResult: (ByteArray?) -> Unit) {
-        val width = surfaceView.width
-        val height = surfaceView.height
+        // The share-sheet image belongs to the AR screen (it is also the only place that offers
+        // it). Answering null rather than building a second PixelCopy path over a `TextureView`
+        // keeps this file to one surface contract per mode.
+        val target = surfaceView
+        if (target == null) {
+            Log.i(TAG, "captureScreenshot: preview mode has no screenshot path")
+            onResult(null)
+            return
+        }
+        val width = target.width
+        val height = target.height
         if (width <= 0 || height <= 0) {
             onResult(null)
             return
@@ -339,7 +547,7 @@ class ArTryOnView(
         // day the camera feed is a real layer in this view the screenshot picks it up for free —
         // §2.8's share-sheet image is "what the customer saw", not "what Filament drew".
         PixelCopy.request(
-            surfaceView,
+            target,
             bitmap,
             { result ->
                 if (result != PixelCopy.SUCCESS) {
@@ -378,6 +586,21 @@ class ArTryOnView(
      * need an `Activity` and a main thread; this needs neither.
      */
     fun startSession(onResult: (StartOutcome) -> Unit) {
+        // ⚠️ Answered without touching ARCore, not merely refused later: constructing a `Session`
+        // here would put ARCore's install prompt and camera permission in front of a customer who
+        // only scrolled past a product page.
+        if (mode == Mode.PREVIEW) {
+            postToMain {
+                onResult(
+                    StartOutcome(
+                        started = false,
+                        reason = "preview_mode",
+                        message = "the inline 3D preview runs no AR session",
+                    ),
+                )
+            }
+            return
+        }
         renderHandler.post {
             if (session != null && sessionResumed) {
                 postToMain { onResult(StartOutcome(started = true)) }
@@ -474,6 +697,11 @@ class ArTryOnView(
         Filament.init()
         Gltfio.init()
 
+        // OpenGL, deliberately, and **not** a probe for a better backend: asking Filament for Vulkan
+        // on a device whose Vulkan cannot build an instance aborts the process from its own render
+        // thread (`Fatal signal 6`, measured on the Pixel_4 emulator — see F24). The backend cannot
+        // be chosen by trying; it can only be chosen by refusing, which is what [canLoadModels] is
+        // for.
         val created = Engine.create()
         engine = created
         val createdScene = created.createScene()
@@ -502,9 +730,33 @@ class ArTryOnView(
             "engine ready: backend=${created.backend} supportedFeatureLevel=" +
                 "${created.supportedFeatureLevel} activeFeatureLevel=${created.activeFeatureLevel}",
         )
+
+        // The material path below `FEATURE_LEVEL_2` cannot resolve a glTF's materials and can take
+        // the process down with it — see [modelLoadingSupported]. Read from the *active* level
+        // rather than the supported one: a build that asks for a lower level (a power saving, a QA
+        // switch) is just as unable to load as a device that cannot go higher.
+        modelLoadingSupported = canLoadModels(created)
+        if (!modelLoadingSupported) {
+            Log.w(
+                TAG,
+                "renderer is ${created.activeFeatureLevel}: glTF/ubershader materials cannot load " +
+                    "here (F14) — refusing every model rather than aborting the process (F16)",
+            )
+        }
+
         // F18: the model may have arrived before the engine existed.
         applyPendingModel()
     }
+
+    /**
+     * Whether this engine can load a glTF at all.
+     *
+     * Read from the **active** feature level rather than the supported one: a build that asks for a
+     * lower level (a power saving, a QA switch) is just as unable to load as a device that cannot go
+     * higher.
+     */
+    private fun canLoadModels(candidate: Engine): Boolean =
+        candidate.activeFeatureLevel.ordinal >= Engine.FeatureLevel.FEATURE_LEVEL_2.ordinal
 
     /**
      * Key + fill directional lights.
@@ -515,6 +767,11 @@ class ArTryOnView(
      * on a leather or patent upper is the first thing a customer notices. The intensities are
      * starting values: nobody has looked at a render yet (V0.6), and tuning them is a device-session
      * task, not a desk one.
+     *
+     * The directions here are the *yaw=0* ones. In AR the camera barely moves and ARCore supplies
+     * the ambient term, so a world-fixed rig is right; the preview orbits a full 360°, where a
+     * world-fixed rig would put the unlit side towards the customer for half the turn — the shoe
+     * would visibly go dark as it spun. `applyPreviewLightRig` re-aims the pair at the camera.
      */
     private fun createLights(created: Engine) {
         keyLight = EntityManager.get().create()
@@ -523,14 +780,14 @@ class ArTryOnView(
         LightManager.Builder(LightManager.Type.DIRECTIONAL)
             .color(1.0f, 0.98f, 0.95f)
             .intensity(KEY_LUX)
-            .direction(-0.35f, -1.0f, -0.45f)
+            .direction(PREVIEW_KEY_DIR[0], PREVIEW_KEY_DIR[1], PREVIEW_KEY_DIR[2])
             .castShadows(false)
             .build(created, keyLight)
         fillLight = EntityManager.get().create()
         LightManager.Builder(LightManager.Type.DIRECTIONAL)
             .color(0.85f, 0.9f, 1.0f)
             .intensity(FILL_LUX)
-            .direction(0.5f, -0.35f, 0.55f)
+            .direction(PREVIEW_FILL_DIR[0], PREVIEW_FILL_DIR[1], PREVIEW_FILL_DIR[2])
             .castShadows(false)
             .build(created, fillLight)
         scene?.addEntity(keyLight)
@@ -566,7 +823,94 @@ class ArTryOnView(
     private fun startFrameLoop() {
         if (frameLoopRunning) return
         frameLoopRunning = true
+        // A fresh loop has no previous frame: without this the first delta after a pause is the
+        // whole pause, and the idle spin jumps on resume.
+        lastFrameNanos = 0L
         choreographer.postFrameCallback(frameCallback)
+    }
+
+    /**
+     * The preview camera: the model's own bounding sphere, seen from an orbit the customer drives.
+     *
+     * Filament's `lookAt`/`setProjection` rather than a hand-built matrix, because the AR path's
+     * matrix work exists only because ARCore hands out out-params — there is no reason to repeat it
+     * where we choose the eye ourselves.
+     *
+     * The framing law is "fit the bounding **sphere** vertically": `d = r / sin(fov/2)`. A sphere
+     * rather than a box because the shoe rotates — a box that fits at 0° has a corner out of frame
+     * at 45°, and a preview that clips the toe mid-turn is worse than one with margin. Scale comes
+     * from the same transform the AR path uses ([applyTransform]), so the authored-length
+     * correction and the selected size both apply here for free.
+     */
+    private fun applyPreviewCamera(deltaSeconds: Float) {
+        val activeCamera = camera ?: return
+        if (asset == null || previewRadiusM <= 0.0) return
+        if (surfaceWidth <= 0 || surfaceHeight <= 0) return
+
+        val now = System.currentTimeMillis()
+        if (!interacting && now - lastInteractionMs >= AUTO_ROTATE_DELAY_MS) {
+            orbitYawDeg = (orbitYawDeg + AUTO_ROTATE_DEG_PER_SEC * deltaSeconds) % 360f
+        }
+
+        val aspect = surfaceWidth.toDouble() / surfaceHeight.toDouble()
+        activeCamera.setProjection(
+            PREVIEW_FOV_DEGREES,
+            aspect,
+            NEAR_METERS,
+            FAR_METERS,
+            Camera.Fov.VERTICAL,
+        )
+
+        val yaw = Math.toRadians(orbitYawDeg.toDouble())
+        val pitch = Math.toRadians(orbitPitchDeg.toDouble())
+        val halfFov = Math.toRadians(PREVIEW_FOV_DEGREES * 0.5)
+        val distance = previewRadiusM / sin(halfFov) * PREVIEW_FIT_MARGIN * orbitZoom
+
+        // +Z is the shoe's toe direction (the authoring contract puts the long axis on +Z), so a
+        // yaw of zero looks at the shoe from the toe end — the initial yaw is off to one side on
+        // purpose, because a three-quarter view is what reads as a shoe rather than a shape.
+        val eyeX = previewCentre[0] + distance * cos(pitch) * sin(yaw)
+        val eyeY = previewCentre[1] + distance * sin(pitch)
+        val eyeZ = previewCentre[2] + distance * cos(pitch) * cos(yaw)
+        activeCamera.lookAt(
+            eyeX,
+            eyeY,
+            eyeZ,
+            previewCentre[0].toDouble(),
+            previewCentre[1].toDouble(),
+            previewCentre[2].toDouble(),
+            0.0,
+            1.0,
+            0.0,
+        )
+
+        applyPreviewLightRig(yaw)
+    }
+
+    /**
+     * Keeps the key/fill pair where the customer is looking from, rather than where the world is.
+     *
+     * The orbit moves the camera, so a fixed rig would sweep the shoe through its own shadow: for
+     * half of each revolution the customer would be looking at the side the key light does not
+     * reach. Rotating the two directions by the orbit yaw holds the lit/shaded split steady, which
+     * is also what a studio shot does — the lighting is a property of the frame, not of the room.
+     *
+     * Rotation is about Y only: pitch is clamped to a shallow range, and a rig that tilted with it
+     * would just trade a dark side for a badly-lit top.
+     */
+    private fun applyPreviewLightRig(yawRadians: Double) {
+        val created = engine ?: return
+        val manager = created.lightManager
+        val c = cos(yawRadians).toFloat()
+        val s = sin(yawRadians).toFloat()
+
+        fun aim(entity: Int, base: FloatArray) {
+            // R_y(yaw): (x, y, z) -> (x·cos + z·sin, y, -x·sin + z·cos).
+            manager.setDirection(entity, base[0] * c + base[2] * s, base[1], -base[0] * s + base[2] * c)
+        }
+
+        aim(keyLight, PREVIEW_KEY_DIR)
+        aim(fillLight, PREVIEW_FILL_DIR)
     }
 
     /**
@@ -581,6 +925,14 @@ class ArTryOnView(
         val activeView = view ?: return
         val chain = swapChain ?: return
 
+        // Frame delta, clamped: the frame after a stall would otherwise fling the idle spin.
+        val deltaSeconds =
+            if (lastFrameNanos == 0L) 0f
+            else ((frameTimeNanos - lastFrameNanos) / 1_000_000_000.0)
+                .toFloat()
+                .coerceIn(0f, MAX_FRAME_DELTA_SECONDS)
+        lastFrameNanos = frameTimeNanos
+
         val activeSession = session
         if (activeSession != null && sessionResumed) {
             try {
@@ -591,6 +943,10 @@ class ArTryOnView(
             } catch (t: Throwable) {
                 Log.w(TAG, "session.update threw; keeping the last pose", t)
             }
+        } else if (mode == Mode.PREVIEW) {
+            // No session is the *normal* case here rather than a degraded one: this branch is what
+            // "a preview is a camera" means, and it is the only difference from the AR path.
+            applyPreviewCamera(deltaSeconds)
         }
 
         if (!activeRenderer.beginFrame(chain, frameTimeNanos)) {
@@ -718,6 +1074,21 @@ class ArTryOnView(
      */
     private fun applyPendingModel() {
         val created = engine ?: return
+
+        // ⚠️ Before anything is parsed. `AssetLoader.createAsset` is what aborts the process on a
+        // feature-level-1 renderer, so this is not a "try it and see" — see
+        // [modelLoadingSupported]. The payload is dropped rather than kept: retrying it on this
+        // device can only repeat the crash.
+        if (!modelLoadingSupported) {
+            pendingModel = null
+            listener.onError(
+                REASON_RENDERER_UNSUPPORTED,
+                "glTF loading needs ${Engine.FeatureLevel.FEATURE_LEVEL_2}; this renderer is " +
+                    "${created.activeFeatureLevel}",
+            )
+            return
+        }
+
         val loader = assetLoader ?: return
         val spec = pendingModel ?: return
         pendingModel = null
@@ -810,7 +1181,39 @@ class ArTryOnView(
         Matrix.scaleM(matrix, 0, scale, scale, scale)
         runCatching { created.transformManager.setTransform(modelRoot, matrix) }
             .onFailure { t -> Log.w(TAG, "setTransform failed", t) }
+
+        // What the preview camera frames, derived from the transform just written rather than from
+        // the asset's raw box: the mesh is authored in metres, but a V0-era block-out is authored in
+        // millimetres and the authored-length correction above is what makes either one real. The
+        // camera must orbit what is actually on screen.
+        val box = asset?.boundingBox
+        if (box != null) {
+            val centre = box.center
+            val half = box.halfExtent
+            previewCentre[0] = placement[12] + centre[0] * scale
+            previewCentre[1] = placement[13] + centre[1] * scale
+            previewCentre[2] = placement[14] + centre[2] * scale
+            // The sphere that CONTAINS the box: `hypot` of the half-extents, not the largest of
+            // them. The largest half-extent sits inside the box's own corners (67.5 mm here
+            // against a true 101 mm), so fitting it leaves the toe and the far corner outside the
+            // frustum as soon as the customer turns the shoe — which is the one thing the margin
+            // exists to prevent. With the containing radius, no point can leave the frame at any
+            // orientation, at any margin above 1.
+            previewRadiusM = sqrt(
+                half[0].toDouble() * half[0] +
+                    half[1].toDouble() * half[1] +
+                    half[2].toDouble() * half[2],
+            ) * scale
+            Log.i(TAG, "preview fit: radius ${fmt(previewRadiusM)} m, centre ${fmt(previewCentre[0])}, " +
+                "${fmt(previewCentre[1])}, ${fmt(previewCentre[2])}")
+        }
     }
+
+    /** Three decimals for the log, since the fit input is millimetres and this is the line read
+     * during a device session. */
+    private fun fmt(value: Float): String = String.format(java.util.Locale.US, "%.3f", value)
+
+    private fun fmt(value: Double): String = String.format(java.util.Locale.US, "%.3f", value)
 
     private fun applyPlacement(pose: Pose, yawDeg: Float) {
         Matrix.setIdentityM(placement, 0)
@@ -1031,6 +1434,12 @@ class ArTryOnView(
     private companion object {
         const val TAG = "ArTryOnView"
 
+        /**
+         * The reason Dart degrades the whole 3D surface on, spelled here and in
+         * `shoe_preview_channel.dart` and pinned by `product_detail_shoe_preview_contract_test`.
+         */
+        const val REASON_RENDERER_UNSUPPORTED = "renderer_feature_level_unsupported"
+
         /** The flush-and-retry budget from `GltfioDecodeTest`, for the same measured reason. */
         const val LOAD_ATTEMPTS = 3
 
@@ -1048,5 +1457,58 @@ class ArTryOnView(
         const val PERF_WINDOW_NANOS = 5_000_000_000L
         const val LIGHT_SAMPLE_MS = 1_000L
         const val MAX_PLACEMENT_METERS = 12.0
+
+        /** A stall must not turn into a jump: the idle spin takes at most this much per frame. */
+        const val MAX_FRAME_DELTA_SECONDS = 0.1f
+
+        // ── Preview framing and orbit ────────────────────────────────────────────────────────
+
+        /** A touch narrower than the AR path's 60°, so an inline box is not fisheye. */
+        const val PREVIEW_FOV_DEGREES = 45.0
+
+        /**
+         * Air around the bounding sphere. Any value above 1 leaves a margin by construction (the
+         * sphere does not change size as the model turns), so this is a composition choice, not a
+         * safety one: the shoe fills about `1 / margin` of the box height at worst, and ~65-70%
+         * across the angles the orbit actually reaches. It came down from 1.15 with the radius fix
+         * above, which on its own had shrunk the shoe by a third.
+         */
+        const val PREVIEW_FIT_MARGIN = 1.05
+
+        /**
+         * A three-quarter view of the toe. +Z is the toe by the authoring contract, so yaw 0 looks
+         * down the toe and 180° would be the heel; 60° opens on the front outer side, which is how
+         * a product photo is framed. (The first value here was 145° — the heel, from behind.)
+         */
+        const val INITIAL_YAW_DEG = 60f
+
+        /** Slightly above the shoe's own axis, the usual looking-down product angle. */
+        const val INITIAL_PITCH_DEG = 18f
+
+        /**
+         * Key and fill directions, in the same space as the yaw=0 camera (looking down -Z, at the
+         * shoe from +Z). The preview rotates the pair with the orbit so the lit side always faces
+         * the customer — see [applyPreviewLightRig].
+         */
+        private val PREVIEW_KEY_DIR = floatArrayOf(-0.35f, -1.0f, -0.45f)
+        private val PREVIEW_FILL_DIR = floatArrayOf(0.5f, -0.35f, 0.55f)
+
+        /** Looking from below the ground plane is not a view of a shoe; straight down is not one either. */
+        const val MIN_PITCH_DEG = -10f
+        const val MAX_PITCH_DEG = 75f
+
+        /** 0.75° per logical pixel: a 400 px drag is a full turn and a bit, which feels about right. */
+        const val DRAG_DEG_PER_PX = 0.75f
+
+        const val MIN_ZOOM = 0.6f
+        const val MAX_ZOOM = 2.5f
+
+        /**
+         * Idle spin, after the customer has stopped touching the box. A full turn in 18 s: at 14°/s
+         * the shoe crossed its own silhouette at about 6 px/s in a 240 px box, which reads as
+         * stalled rather than as a turntable.
+         */
+        const val AUTO_ROTATE_DELAY_MS = 2_500L
+        const val AUTO_ROTATE_DEG_PER_SEC = 20f
     }
 }

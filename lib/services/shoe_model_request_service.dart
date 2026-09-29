@@ -24,7 +24,15 @@ class ShoeModelRequestRecord {
   final double? externalLengthMm;
   final double? externalWidthMm;
   final double? heelHeightMm;
+
+  /// The pair's overall height, sole to its highest point (2026-09-29).
+  final double? upperHeightMm;
+
   final double? measuredSizeEu;
+
+  /// Every EU size the shoe is made in, ascending. Empty means the seller did
+  /// not say — which is a complete answer, not a gap to fill in.
+  final List<double> sizesEu;
   final String? note;
   final String? adminNote;
   final String? assignedTo;
@@ -48,7 +56,9 @@ class ShoeModelRequestRecord {
     this.externalLengthMm,
     this.externalWidthMm,
     this.heelHeightMm,
+    this.upperHeightMm,
     this.measuredSizeEu,
+    this.sizesEu = const [],
     this.note,
     this.adminNote,
     this.assignedTo,
@@ -62,6 +72,14 @@ class ShoeModelRequestRecord {
   /// Whether the ask is still occupying the product's single open slot.
   bool get isOpen => status?.isOpen ?? false;
 
+  /// The size run as a sentence — `40–44` — for the surfaces that show it. Built
+  /// from the same rule the form and the sheets use, so the seller's "40–44" and
+  /// the team's are the same string rather than two renderings that agree today.
+  String get sizeRunSentence => ShoeModelRequestMeasurements(
+        externalLengthMm: 0,
+        sizesEu: sizesEu,
+      ).sizeRunSentence;
+
   static ShoeModelRequestRecord fromRow(Map<String, dynamic> row) {
     final product = row['products'];
     final store = row['stores'];
@@ -74,7 +92,9 @@ class ShoeModelRequestRecord {
       externalLengthMm: _double(row['external_length_mm']),
       externalWidthMm: _double(row['external_width_mm']),
       heelHeightMm: _double(row['heel_height_mm']),
+      upperHeightMm: _double(row['upper_height_mm']),
       measuredSizeEu: _double(row['measured_size_eu']),
+      sizesEu: _doubleList(row['sizes_eu']),
       note: row['note']?.toString(),
       adminNote: row['admin_note']?.toString(),
       assignedTo: row['assigned_to']?.toString(),
@@ -93,6 +113,18 @@ class ShoeModelRequestRecord {
   static int? _int(Object? value) => value == null
       ? null
       : (value is num ? value.toInt() : int.tryParse(value.toString()));
+
+  /// A `numeric[]` column, which PostgREST hands back as a JSON array. Anything
+  /// unparseable is dropped rather than turned into a 0 — a size of `0` would
+  /// render as a real size in the queue, where a missing one just reads absent.
+  /// Canonicalised on the way in, so the sentence the two surfaces print has one
+  /// implementation rather than one per screen.
+  static List<double> _doubleList(Object? value) {
+    if (value is! List) return const [];
+    return normaliseSizeRun(
+      value.map(_double).whereType<double>(),
+    );
+  }
 
   static DateTime? _date(Object? value) =>
       value == null ? null : DateTime.tryParse(value.toString());
@@ -267,6 +299,24 @@ class ShoeModelRequestService {
       // caller does not own the store, which is a bug or a stale session rather
       // than something the seller can act on.
       return ShoeModelRequestOutcome(success: false, message: e.message);
+    } on ShoeModelRequestSchemaStale {
+      // ⚠️ Not the connection, and telling the seller it was sent them to the
+      // WiFi settings for a problem no amount of signal can fix (the report of
+      // 2026-09-29). Which sentence is true depends on what was in the payload:
+      // the two newest answers are the only arguments a server that predates
+      // `20260929120000` cannot resolve, so when they were sent, clearing them
+      // is a real fix the seller can carry out in two taps.
+      final sentTheNewOnes = measurements.upperHeightMm != null ||
+          measurements.sizesEu.isNotEmpty;
+      return ShoeModelRequestOutcome(
+        success: false,
+        message: sentTheNewOnes
+            ? 'The shoe height and the sizes you stock are not ready on the '
+                'team\'s side yet. Clear those two and send again — the '
+                'measurements that matter will go through.'
+            : 'The team\'s end is not ready for this request yet. Please try '
+                'again later.',
+      );
     } catch (_) {
       return const ShoeModelRequestOutcome(
         success: false,
@@ -336,6 +386,34 @@ class ShoeModelRequestRejected implements Exception {
   @override
   String toString() => message;
 }
+
+/// Raised when the call named an argument the live database does not have yet —
+/// i.e. **this build is ahead of the schema**. See [isMissingRpcError].
+class ShoeModelRequestSchemaStale implements Exception {
+  const ShoeModelRequestSchemaStale();
+}
+
+/// Whether a PostgREST failure means "that function signature is not here",
+/// rather than a connection that dropped.
+///
+/// ⚠️ **The two must not share one message, and that is the whole reason this is
+/// a function rather than an inline `catch`.** PostgREST resolves an RPC by its
+/// argument NAMES, so a build that sends the newer arguments is refused by a
+/// server that has not had
+/// `20260929120000_add_request_size_run_and_upper_height.sql` applied —
+/// `PGRST202`, "Could not find the function … in the schema cache". The seller
+/// used to read "Check your connection and try again" for that, and retrying a
+/// call that cannot succeed is exactly what they would do (reported 2026-09-29,
+/// the first time anybody filled the two new boxes on the live project).
+///
+/// Two shapes, because PostgREST has spelled this two ways: the code on current
+/// versions, and the sentence on ones that predate it. Matching either is enough,
+/// and matching only the code would miss a server this project has actually
+/// talked to.
+bool isMissingRpcError(Object error) =>
+    error is PostgrestException &&
+    (error.code == 'PGRST202' ||
+        error.message.contains('Could not find the function'));
 
 /// The Supabase implementation. Every call is one the RPCs or the RLS policies
 /// were designed for — nothing here reaches around them.
@@ -415,6 +493,17 @@ class SupabaseShoeModelRequestDataSource implements ShoeModelRequestDataSource {
           'p_heel_height_mm': measurements.heelHeightMm,
         if (measurements.measuredSizeEu != null)
           'p_measured_size_eu': measurements.measuredSizeEu,
+        // ⚠️ The two newest arguments are sent ONLY when they carry something,
+        // and that is a deployment rule rather than tidiness: PostgREST resolves
+        // a function by its argument names, so naming an argument the live
+        // database does not have yet fails the whole call (PGRST202). Omitting an
+        // empty one means a plain request — the shape every seller sends until
+        // they touch the new boxes — keeps working against a server that has not
+        // had `20260929120000_add_request_size_run_and_upper_height.sql` applied,
+        // and the new fields start working the moment it is.
+        if (measurements.upperHeightMm != null)
+          'p_upper_height_mm': measurements.upperHeightMm,
+        if (measurements.sizesEu.isNotEmpty) 'p_sizes_eu': measurements.sizesEu,
         if (note != null && note.trim().isNotEmpty) 'p_note': note.trim(),
       });
       return response;
@@ -427,6 +516,9 @@ class SupabaseShoeModelRequestDataSource implements ShoeModelRequestDataSource {
           'You can only ask for a model on your own products.',
         );
       }
+      // An app ahead of the schema is its own failure with its own fix — see
+      // [isMissingRpcError]. Everything else keeps bubbling up as before.
+      if (isMissingRpcError(e)) throw const ShoeModelRequestSchemaStale();
       rethrow;
     }
   }

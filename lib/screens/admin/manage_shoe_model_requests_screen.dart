@@ -301,7 +301,7 @@ class _ManageShoeModelRequestsScreenState
     return Scaffold(
       backgroundColor: AppConstants.surfaceLight,
       appBar: AppBar(
-        title: Text('3D Model Requests',
+        title: Text('3D Fitting Requests',
             style: AppConstants.headlineStyle(fontSize: 20)),
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -435,9 +435,22 @@ class _ManageShoeModelRequestsScreenState
               'Outside: ${_mm(request.externalLengthMm)} long'
               '${request.externalWidthMm == null ? '' : ' · ${_mm(request.externalWidthMm)} wide'}'
               '${request.heelHeightMm == null ? '' : ' · ${_mm(request.heelHeightMm)} heel'}'
+              '${request.upperHeightMm == null ? '' : ' · ${_mm(request.upperHeightMm)} tall'}'
               '${request.measuredSizeEu == null ? '' : ' · measured at EU ${request.measuredSizeEu!.round()}'}',
               style: AppConstants.bodyStyle(fontSize: 13),
             ),
+            // ⚠️ The run is the seller's catalogue, not a measurement, so it is
+            // its own line rather than another `·` in the sentence above — and
+            // it is what the modeller checks the published model against. Shown
+            // only when stated: "Made in EU —" would read as a hole.
+            if (request.sizesEu.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  'Made in EU ${request.sizeRunSentence}',
+                  style: AppConstants.bodyStyle(fontSize: 13),
+                ),
+              ),
             if (request.note != null && request.note!.isNotEmpty) ...[
               const SizedBox(height: 8),
               Container(

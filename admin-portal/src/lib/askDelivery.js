@@ -32,6 +32,25 @@ import { MODELLING_ENDING } from './modelPublish.js'
 // auth.uid() = user_id`, the store's owner) and no admin policy exists, so
 // "told at 14:02" is a claim no browser here can verify. The honest version is
 // the sentence below, which quotes what the seller reads and says who wrote it.
+//
+// ⚠️ AND A THIRD THING THIS MODULE LEARNED THE HARD WAY: a notice row is not a
+// push. Both rows land in the database, and a seller whose phone is in their
+// pocket learns nothing until they open the app — which is what "I never got a
+// notification" turned out to mean. So the portal now also asks for the OS-level
+// push (`sendAskEndingPush`, in `askPush.js`) after a closing RPC commits.
+//
+// The distinction is the whole reason that is allowed while "the portal must
+// never send a notice itself" still holds:
+//
+//   * the ROW is the fact — it is written inside the transaction that closes
+//     the ask, so "closed" and "told" cannot disagree, and no client can skip it;
+//   * the PUSH is the wake-up — a best-effort copy of that fact onto a lock
+//     screen, sent by whichever client happens to be running, and its absence
+//     makes the bell no less true. It is a courtesy, and it is labelled one.
+//
+// So the push must never be the only thing carrying the news, and the sentences
+// below are shared by both halves: the push says exactly what the bell says,
+// and `askDelivery.contract.test.js` reads the RPC bodies to keep that so.
 
 /** The category the closing RPCs file the notice under, on the per-user channel. */
 export const NOTICE_CATEGORY = 'models'
@@ -67,6 +86,98 @@ export const TEAM_QUOTE = 'From the team: '
 /** How the decline RPC quotes the reason — a different phrase on purpose: an
  *  answer to "why not" is not the same sentence as a note on finished work. */
 export const DECLINE_QUOTE = 'They said: '
+
+// ─── The push that goes with the notice ────────────────────────────
+//
+// ⚠️ Every string in this section is quoted from the two RPCs rather than
+// invented here, because the push and the bell are read by the same person about
+// the same fact: a phone that says one thing and a bell that says another is
+// worse than a phone that stays quiet. `askDelivery.contract.test.js` reads the
+// migration and fails if any of them moves.
+
+/** The Edge Function that fans a push out to FCM (`supabase/functions/`). */
+export const ASK_PUSH_FUNCTION = 'send-notification-push'
+
+/**
+ * Where a tap on the push lands.
+ *
+ * The app's existing key for the seller's own catalogue — the same one the
+ * low-stock push already uses. The app only navigates for a key it knows
+ * (`seller_shell.dart`'s switch, and a contract test here reads it), so an
+ * invented key would swallow the tap. What it opens is the **Products tab**, and
+ * the request row is one long-press away there on the product's actions sheet —
+ * which is where the model and the ask both live. The app does not deep-link
+ * further than that for this key, and this module says so rather than implying a
+ * screen it does not get.
+ */
+export const ASK_PUSH_SCREEN = 'seller_product_detail'
+
+/** The two endings, as the hooks name them. */
+export const ASK_ENDING = {
+  FULFILLED: 'fulfilled',
+  DECLINED: 'declined',
+}
+
+/**
+ * The middle of each body — the half the RPC owns. The opening word is the
+ * product's name (or `'Your product'`, the RPC's own fallback) and the optional
+ * tail is the admin's note or reason.
+ */
+export const ASK_BODY = {
+  FULFILLED: ' — it is live on the product page.',
+  DECLINED: ' — the team could not make a model for it.',
+}
+
+/** What the decline adds after the reason, because its seller's move is another
+ *  ask rather than a wait — the partial unique index is what allows it. */
+export const ASK_AGAIN_TAIL = " You can ask again from the product's actions."
+
+/** The name-less product, spelled exactly as the bell row spells it. */
+export const ASK_NAME_FALLBACK = 'Your product'
+
+/**
+ * The push payload for one ending, or `null` for an ending this module does not
+ * know — the same rule as `sellerWasTold`: a fact about the seller's phone is
+ * never guessed, so an unrecognised ending pushes nothing at all.
+ *
+ * `referenceId` is coerced to a string on purpose. FCM's `data` map is
+ * string-to-string, and the edge function copies this value into it verbatim; a
+ * bigint that arrived as a number would fail the send at FCM rather than here,
+ * where the reason is visible.
+ */
+export function askEndingPush({ kind, productName, note, reason, productId } = {}) {
+  const name = String(productName ?? '').trim() || ASK_NAME_FALLBACK
+  const referenceId = productId === null || productId === undefined ? null : String(productId)
+
+  if (kind === ASK_ENDING.FULFILLED) {
+    const quoted = String(note ?? '').trim()
+    return {
+      title: CLOSING_NOTICE.FULFILLED,
+      body:
+        `${name}${ASK_BODY.FULFILLED}` +
+        (quoted === '' ? '' : ` ${TEAM_QUOTE}${quoted}`),
+      type: SELLER_NOTICE_TYPE,
+      referenceId,
+      screen: ASK_PUSH_SCREEN,
+    }
+  }
+
+  if (kind === ASK_ENDING.DECLINED) {
+    const quoted = String(reason ?? '').trim()
+    return {
+      title: CLOSING_NOTICE.DECLINED,
+      body:
+        `${name}${ASK_BODY.DECLINED}` +
+        (quoted === '' ? '' : ` ${DECLINE_QUOTE}${quoted}`) +
+        ASK_AGAIN_TAIL,
+      type: SELLER_NOTICE_TYPE,
+      referenceId,
+      screen: ASK_PUSH_SCREEN,
+    }
+  }
+
+  return null
+}
 
 /**
  * Did the ending tell the seller?

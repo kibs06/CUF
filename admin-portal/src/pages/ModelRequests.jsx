@@ -171,7 +171,7 @@ export default function ModelRequests() {
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="font-display text-2xl font-bold text-[#3B2314]">3D Model Requests</h1>
+          <h1 className="font-display text-2xl font-bold text-[#3B2314]">3D Fitting Requests</h1>
           <p className="mt-1 max-w-2xl text-sm text-[#6B5C4E]">
             Sellers who cannot produce a compliant <code>.glb</code> measure the pair with a ruler
             instead, and the team models it. <strong className="text-[#3B2314]">Closing one as

@@ -42,6 +42,7 @@ Web-only admin dashboard for the SoleVision e-commerce platform. It shares the s
 | Icons | lucide-react |
 | Charts | recharts |
 | Animation | motion (Motion/Framer Motion successor) |
+| Shaders | Hand-written WebGL 1 (GLSL ES 1.00), no dependency |
 | Error handling | Custom class-based `ErrorBoundary` |
 
 ## Project Structure
@@ -70,7 +71,9 @@ admin-portal/
     │   ├── modelPublish.contract.test.js # Reads the numbers back out of the migration that owns them
     │   ├── askDelivery.js      # Whether a closing action told the seller, and in what words (see “The other end of the loop”)
     │   ├── askDelivery.test.js          # Tests for those claims
-    │   └── askDelivery.contract.test.js # Reads the SQL — and this portal's own source — to keep the claim true
+    │   ├── askDelivery.contract.test.js # Reads the SQL — and this portal's own source — to keep the claim true
+    │   ├── aiBlob.js           # The AI blob's props, palettes and motion profiles (see “The AI page”)
+    │   └── aiBlob.test.js      # Tests for those rules — no GL context needed
     ├── hooks/                  # Data-access layer (React Query)
     │   ├── useAuth.jsx         # Auth context provider + hook
     │   ├── useDashboard.js     # Stats, recent lists, sparkline, approve/reject
@@ -94,6 +97,7 @@ admin-portal/
     │   ├── Reports.jsx
     │   ├── Analytics.jsx
     │   ├── Settings.jsx
+    │   ├── Ai.jsx              # Ai Fluid Blob: live demo, the five states, usage, props (reads no data)
     │   └── ModelRequests.jsx   # 3D model queue: claim / close against a live model / decline
     └── components/
         ├── ErrorBoundary.jsx
@@ -109,7 +113,9 @@ admin-portal/
         │   ├── UserSection, UserRow, UserDetailModal
         │   └── StoreGroup, ProductCard, ProductListRow,
         │       ProductDetailModal, AddProductModal
-        └── model-requests/     # UploadModelModal — the P2 publish-then-close dialog
+        ├── model-requests/     # UploadModelModal — the P2 publish-then-close dialog
+        └── ai/                 # AiFluidBlob.jsx (canvas + loop) and its blobShader.js
+                                # (the GLSL), with blobShader.test.js pinning the uniform names
 ```
 
 ## Data Flow (Layer Model)
@@ -218,6 +224,7 @@ Defined in `App.jsx`:
 | `/transactions` | Transactions | Read-only GCash/PayMongo payments: summary cards, filters, detail modal w/ webhook event timeline, CSV export |
 | `/reports` | Reports | Report moderation (priority badge in sidebar) |
 | `/analytics` | Analytics | Charts: orders/revenue/users over time, status, top products, seller trend |
+| `/ai` | Ai | Ai Fluid Blob: the AI voice-assistant visual — live prop controls, the five states side by side, usage and the props table. **Touches no data at all** |
 | `/settings` | Settings | Admin profile & password |
 | `*` | — | Redirect to `/` |
 
@@ -249,6 +256,55 @@ Read-only visibility into `payment_intents` + `payment_webhook_events` (admin SE
 - **Delete is soft**: `useDeleteProduct` sets `is_published: false` rather than deleting rows.
 - **User suspension & role management**: `useUsers.js` exposes `useUpdateUserStatus` (suspend with reason / reactivate) and `useUpdateUserRole` (customer/seller/admin). `UserDetailModal` shows Account / Orders (customers) / Business (sellers) tabs plus the Admin Actions. The DB refuses to demote/suspend your own account or the last active admin (guard triggers in `20260813000000_admin_suspension_enforcement.sql`) — those errors surface in the modal as expected behavior.
 - **Analytics**: `useAnalytics(days)` fetches raw rows for a date range and builds day buckets, status distributions, top products, and monthly seller-application trends entirely in JS.
+
+## The AI page (a surface with no data)
+
+`/ai` is the only route in this portal that reads nothing: no query, no realtime channel, no rows. It documents and demonstrates **Ai Fluid Blob**, the AI voice-assistant visual — a multi-strand chromatic liquid wave seen through a glass refraction lens — and it is deliberately a *component* page rather than a feature page, so the layer model is satisfied trivially: UI state in the page, drawing in the component, rules in `lib/`.
+
+| File | Owns |
+|---|---|
+| `pages/Ai.jsx` | which props are on screen: state, the controls, the snippet, the docs prose |
+| `components/ai/AiFluidBlob.jsx` | one WebGL context, one program, one quad, and the render loop |
+| `components/ai/blobShader.js` | the two GLSL sources — the entire drawing |
+| `lib/aiBlob.js` | props, clamping, palettes, the five motion profiles, the snippet — pure, and tested |
+
+### What the picture is made of
+
+Two layers, and both are math on one quad.
+
+**The liquid.** `count` chromatic bands. Each is an almond — wide and bright on the axis and pinched to a point at both ends, because that is what a ring around a sphere looks like from just above its equator — and odd and even bands lean opposite ways, so neighbouring bands cross in the middle rather than nesting. The palette is read off the *position* rather than off whichever band is strongest, because a hue taken from the strongest band makes every crossing a seam and turns the sphere into a collage of flat patches. That is not a theory; it is the first thing this shader did.
+
+**The glass.** The sphere samples that liquid through itself, once per colour channel, pulling the sample toward its own axis harder the further the surface has turned away — dispersion and the magnified, wrapped image at once. On top of that: a saturated rim, one tight sheen, and the bright crescent a glass ball focuses underneath itself.
+
+⚠️ The canvas is **transparent**, and the shader writes straight alpha whose alpha *is* its brightness: a dim tail is a faint tail rather than a dark smudge. An earlier version of this file painted its own near-black stage, which is why it could only ever sit on a dark panel and why it looked nothing like the component it implements. The consequence worth knowing: it composites over anything, and the bright band cores are *saturation*, not added light — adding the liquid's light on top of a pale body drives every channel past 1.0 and clips the band to white.
+
+**The voice orb** at the centre is part of the component, not something the page adds: three DOM bars in a frosted disc, animated by a single CSS keyframe whose two ends are custom properties set per bar. Its sizes and its motion profiles live in `aiBlob.js` with everything else that can be decided without a GPU, which is also what makes `thinking` and `orbit` draw dots rather than bars testable — the idle states are the ones where nothing is being heard.
+
+### The seam that has no compiler
+
+Props become **uniforms by name**, and `gl.getUniformLocation` answers `null` for a name the shader does not declare — after which `gl.uniform1f(null, 0.4)` is a silent no-op. The page renders, nothing logs, and one prop quietly does nothing. That is the one seam in this portal that neither TypeScript, a linter, nor `node --test` could see unaided, so `blobShader.test.js` pins both directions: every uniform the component uploads must be declared, every declared uniform must be uploaded, and the array width must equal the `MAX_STRANDS` the prop clamp enforces.
+
+The same file refuses a backtick in either shader. Both sources are template literals, and this component has shipped the same mistake three times: a comment written with markdown backticks around a prop name, which either fails to parse or — the unlucky case — leaves a balanced pair that parses cleanly and hands the driver a shader with JavaScript spliced through it.
+
+### Why hand-written WebGL, and why ES 1.00
+
+The portal's only graphics dependencies are Tailwind and `recharts`. Adding `ogl` would put a 3D engine in the bundle to draw a shader on a quad, so the drawing is ~200 lines of GLSL instead. It targets **WebGL1** (GLSL ES 1.00), which the component's own first render made worth writing down: ES 1.00 has no integer `max`, so `max(uCount, 1)` fails to compile — and because a compile failure takes the same graceful path as a refused context, the only symptom was a fallback gradient that looked plausible. It was found by reading the DOM (`data-blob-fallback` was present on all six instances), not by looking at the screenshot. The same file also cannot be indexed by expression, which is why the palette lookup is written as a bounded search over the uniform array.
+
+### The loop stops, and reduced motion is one frame
+
+Frames are scheduled only while the canvas is on screen and the document is visible (`IntersectionObserver` plus `visibilitychange`), because a dashboard left open behind another tab should not be a space heater. `prefers-reduced-motion` is treated as *no movement*, not as *no component*: the field is drawn once at a fixed, composed phase (12.5 s, chosen because phase zero is the instant every sinusoid aligns and the strands collapse into a single ring). The rule lives in `aiBlob.js` and is unit-tested; the frozen-but-drawn behaviour was confirmed in a browser with the media query forced.
+
+### Failure is a fallback, not a blank box
+
+A refused context, a lost context and a shader that will not compile are the same visitor experience, so they take the same path: stacked radial gradients in the caller's palette, marked `data-blob-fallback`, with the reason logged. The marker exists so the difference is visible in the DOM rather than only in the pixels — which is exactly how the ES 1.00 defect above was caught.
+
+### ⚠️ Provenance
+
+The published documentation for this component belongs to a Lightswind **Pro** one and ships `// 🔒 Upgrade to Lightswind Pro to unlock full source code & CLI access` where the source would be. What is in this repository is an **independent implementation of the same documented API** — the five props and their defaults are the documented ones, the pixels are ours — and the page states that where an admin reads it, keeping the original install steps labelled as reference rather than rewriting them.
+
+### What proves it works
+
+`npm test` covers the rules and the uniform seam; **nothing automated can cover the pixels**, so the drawing was verified in a real browser: five variants, `count` 4 and 12 (the uniform array width and the palette cycling), `glass` on and off (both shader branches), two sizes with `devicePixelRatio` scaling, and the forced reduced-motion frame. Six contexts mount at once on the page (the demo plus five states), which is also what makes the context budget — and so the decision not to release contexts on unmount — something to keep an eye on if this page ever grows more instances.
 
 ## Styling
 

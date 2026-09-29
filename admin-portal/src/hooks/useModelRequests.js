@@ -2,6 +2,8 @@ import { useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { toPortalError } from '../lib/errors.js'
+import { ASK_ENDING } from '../lib/askDelivery.js'
+import { sendAskEndingPush } from '../lib/askPush.js'
 
 // ─── The queue ─────────────────────────────────────────────────────
 //
@@ -153,7 +155,22 @@ export function useFulfilModelRequest() {
         p_model_id: modelId,
         ...(note?.trim() ? { p_admin_note: note.trim() } : {}),
       })
-      return readOutcome(data, error, 'That request could not be closed.')
+      const outcome = readOutcome(data, error, 'That request could not be closed.')
+
+      // The RPC just wrote the seller's notice inside its own transaction —
+      // that is the delivery, and nothing below can change it. This is the
+      // wake-up on top of it, and it is deliberately not awaited into the
+      // outcome: the ask is closed whatever the push does, so a push that failed
+      // must not be reported as a close that failed (`askPush.js` argues it at
+      // length, including why the portal is the sender).
+      void sendAskEndingPush({
+        client: supabase,
+        requestId,
+        kind: ASK_ENDING.FULFILLED,
+        note,
+      })
+
+      return outcome
     },
     onSuccess: () => invalidateQueue(qc),
   })
@@ -170,7 +187,19 @@ export function useDeclineModelRequest() {
         p_request_id: requestId,
         ...(reason?.trim() ? { p_reason: reason.trim() } : {}),
       })
-      return readOutcome(data, error, 'That request could not be declined.')
+      const outcome = readOutcome(data, error, 'That request could not be declined.')
+
+      // The other ending gets the same wake-up — "the team could not make one"
+      // is the news a seller most needs early, and it was the larger of the two
+      // silences when only the bell carried it.
+      void sendAskEndingPush({
+        client: supabase,
+        requestId,
+        kind: ASK_ENDING.DECLINED,
+        reason,
+      })
+
+      return outcome
     },
     onSuccess: () => invalidateQueue(qc),
   })

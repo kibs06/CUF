@@ -215,7 +215,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     if (AppConstants.shoeModelRequestEnabled)
                       _toolTile(
                         icon: Icons.view_in_ar_outlined,
-                        label: '3D Model Requests',
+                        label: '3D Fitting Requests',
                         color: AppConstants.primary,
                         onTap: () => Navigator.of(context).push(
                           MaterialPageRoute(builder: (_) => const ManageShoeModelRequestsScreen()),

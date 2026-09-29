@@ -238,8 +238,9 @@ switches, and their shipped defaults:
 | Switch | Default | What it gates |
 |--------|---------|---------------|
 | `SHOE_MODEL_UPLOAD` | **on** | the seller's 3D-model upload section in the product form |
-| `SHOE_MODEL_REQUEST` | off | the **3D model** row in the seller's product action sheet (ask the CUFMAI team to model the pair) and the admin queue that answers it |
-| `ADMIN_MODEL_UPLOAD` | off | the admin's “Upload a 3D model” action in that queue |
+| `SHOE_MODEL_REQUEST` | **on** | the **3D fitting request** row in the seller's product action sheet (ask the CUFMAI team to model the pair) and the admin queue that answers it |
+| `ADMIN_MODEL_UPLOAD` | **on** | the admin's “Upload a 3D model” action in that queue |
+| `SHOE_PREVIEW` | **off** | the customer's **View in 3D** box on the product page, with “Try On in AR” underneath it. Off means the pinned AR pill, exactly as before — the two are alternatives, because a product with a verified local model shows the box *and* the button inside its section, and a product with no model shows **neither**. Needs no ARCore and no camera permission (no session is created), but it does need the model verified on disk, so it rides on `TRY_ON_PREFETCH`. ⚠️ It ships off because nobody has seen a render on hardware yet |
 
 A switch that is never passed is **not** the same as a switch passed as `false`
 — both mean "off", but only the first is invisible in a release log. That is
@@ -258,17 +259,23 @@ release notes announce it.
   `dart_defines.json.example` lists every switch at its shipped default, so
   copying it changes nothing.
 
-Turning the **seller 3D-model request** on is two steps, in this order, and the
-first one is not optional — the row it adds writes through an RPC that the live
-project does not have yet (`supabase/MIGRATIONS_LIVE_STATUS.md`):
+Both 3D-model switches are **on** by default since 2026-09-29, which is the end
+of a two-step job that took longer than the code did:
 
-1. Apply `supabase/manual/20260928140000_add_shoe_model_requests.apply.sql` in
-   the SQL Editor and confirm it with the bundle's PART 2 query.
-2. Set `RELEASE_DART_DEFINES=SHOE_MODEL_REQUEST=true` (and, for the admin's
-   publish action, `ADMIN_MODEL_UPLOAD=true`) and cut a release.
+1. `supabase/manual/20260928140000_add_shoe_model_requests.apply.sql` was applied
+   in the SQL Editor and confirmed with the bundle's own PART 2 query — **twelve
+   true, `ALL CHECKS: true`** (`supabase/MIGRATIONS_LIVE_STATUS.md`).
+2. `RELEASE_DART_DEFINES=SHOE_MODEL_REQUEST=true ADMIN_MODEL_UPLOAD=true` was
+   set, and v1.0.33 shipped carrying both.
 
-v1.0.32 shipped **before** step 1, which is why its release notes say the flow
-"ships ready and dark".
+While the defaults were `false` they did one useful thing and one harmful one.
+Useful: the row writes through an RPC, so on a database without that migration a
+tap answers "function does not exist", and shipping it hidden is the V2.2 lesson.
+Harmful: with the migration live, `false` no longer protected anybody — it hid
+the row from **every build that passes no dart-defines** (an IDE's Android App run
+configuration, a bare `flutter run`) while the tagged release of the same commit
+had it, which is how a shipped feature gets reported as missing. A deliberate
+`--dart-define=SHOE_MODEL_REQUEST=false` still turns it off.
 
 ### One-command release script (local alternative)
 

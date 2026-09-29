@@ -2,6 +2,12 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
+  ASK_AGAIN_TAIL,
+  ASK_BODY,
+  ASK_ENDING,
+  ASK_NAME_FALLBACK,
+  ASK_PUSH_FUNCTION,
+  ASK_PUSH_SCREEN,
   CLOSING_NOTICE,
   DECLINE_QUOTE,
   NOTHING_TO_DECLINE_SENTENCE,
@@ -10,6 +16,7 @@ import {
   NOTICE_NOT_READABLE_SENTENCE,
   SELLER_NOTICE_TYPE,
   TEAM_QUOTE,
+  askEndingPush,
   declineDeliverySentence,
   deliveryHeadline,
   deliverySentence,
@@ -122,4 +129,82 @@ test('the portal says what it cannot show rather than showing a blank', () => {
   assert.match(NOTICE_NOT_READABLE_SENTENCE, /grant SELECT to the recipient/)
   assert.match(NOTICE_NOT_READABLE_SENTENCE, /no admin policy exists/)
   assert.match(NOTICE_NOT_READABLE_SENTENCE, /no timestamp it cannot read/)
+})
+
+// ─── The push: the same words, onto a lock screen ──────────────────
+
+test('the fulfilled push says what the bell says, and the note is the argument', () => {
+  const plain = askEndingPush({
+    kind: ASK_ENDING.FULFILLED,
+    productName: 'JBC Crown Leather Sandals',
+    productId: 'e3b0c442-0000-0000-0000-000000000000',
+  })
+
+  assert.equal(plain.title, CLOSING_NOTICE.FULFILLED)
+  assert.equal(plain.body, 'JBC Crown Leather Sandals — it is live on the product page.')
+  // The tap has to land somewhere the app can open, and the key is the one the
+  // app already navigates for — an invented screen key swallows the tap.
+  assert.equal(plain.screen, ASK_PUSH_SCREEN)
+  assert.equal(plain.type, SELLER_NOTICE_TYPE)
+  assert.equal(plain.referenceId, 'e3b0c442-0000-0000-0000-000000000000')
+
+  const withNote = askEndingPush({
+    kind: ASK_ENDING.FULFILLED,
+    productName: 'JBC Crown Leather Sandals',
+    note: '  Signed by the artisan.  ',
+  })
+  // Verbatim, trimmed, under the same prefix the RPC uses — a note the admin
+  // typed is the seller's only written explanation.
+  assert.equal(
+    withNote.body,
+    'JBC Crown Leather Sandals — it is live on the product page. ' +
+      'From the team: Signed by the artisan.',
+  )
+  // A blank note adds nothing: no dangling prefix, no double space.
+  const blank = askEndingPush({ kind: ASK_ENDING.FULFILLED, productName: 'X', note: '   ' })
+  assert.equal(blank.body, 'X — it is live on the product page.')
+})
+
+test('the declined push carries the reason and the way back', () => {
+  const push = askEndingPush({
+    kind: ASK_ENDING.DECLINED,
+    productName: 'JBC Crown Leather Sandals',
+    reason: 'No usable capture of the straps.',
+  })
+
+  assert.equal(push.title, CLOSING_NOTICE.DECLINED)
+  assert.equal(
+    push.body,
+    'JBC Crown Leather Sandals' +
+      ASK_BODY.DECLINED +
+      ' They said: No usable capture of the straps.' +
+      ASK_AGAIN_TAIL,
+  )
+
+  // The degradation for a client that sends no reason (older app, direct RPC
+  // call): the sentence stands on its own rather than ending in a colon.
+  const bare = askEndingPush({ kind: ASK_ENDING.DECLINED, productName: 'X' })
+  assert.equal(bare.body, `X${ASK_BODY.DECLINED}${ASK_AGAIN_TAIL}`)
+  assert.ok(!bare.body.includes('They said:'))
+})
+
+test('an ending this module does not know pushes nothing, and a nameless product reads as the RPC writes it', () => {
+  // Same rule as `sellerWasTold`: the claim is about somebody's phone, so the
+  // safe default is silence rather than a guess.
+  assert.equal(askEndingPush({ kind: 'something_new' }), null)
+  assert.equal(askEndingPush(), null)
+
+  const nameless = askEndingPush({ kind: ASK_ENDING.FULFILLED })
+  assert.equal(nameless.body, `${ASK_NAME_FALLBACK}${ASK_BODY.FULFILLED}`)
+  assert.equal(nameless.referenceId, null)
+
+  // ⚠️ A string, always. FCM's data map is string-to-string and the edge
+  // function copies this value into it verbatim — a bigint arriving as a number
+  // would fail the send at FCM instead of here, where the reason is legible.
+  const numeric = askEndingPush({ kind: ASK_ENDING.FULFILLED, productName: 'X', productId: 42 })
+  assert.equal(numeric.referenceId, '42')
+  assert.equal(typeof numeric.referenceId, 'string')
+
+  // The function name is the app's, not an invention of this module's.
+  assert.equal(ASK_PUSH_FUNCTION, 'send-notification-push')
 })

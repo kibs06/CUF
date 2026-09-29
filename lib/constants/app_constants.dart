@@ -703,12 +703,22 @@ class AppConstants {
   /// the product action sheet, and the admin queue that answers it (roadmap
   /// V2.10, `supabase/migrations/20260928140000_add_shoe_model_requests.sql`).
   ///
-  /// **OFF by default, and this one waits on an apply rather than on a
-  /// partner.** That migration is **written and NOT applied** (see
-  /// `supabase/MIGRATIONS_LIVE_STATUS.md`), and the row it adds writes through
-  /// an RPC — so on today's database the seller would tap it and be told the
-  /// function does not exist. That is the failure V2.2 already learned to avoid
-  /// by shipping its upload section hidden until the table was verified.
+  /// **ON by default since 2026-09-29, because the apply it was waiting on
+  /// landed.** The paragraph this replaces said the opposite for a good reason:
+  /// the row writes through an RPC, so on a database without that migration the
+  /// seller would tap it and be told the function does not exist — the failure
+  /// V2.2 already learned to avoid by shipping its upload section hidden until
+  /// the table was verified.
+  ///
+  /// That migration is now applied to the live project **and verified by
+  /// object** (twelve checks true, zero rows — `MIGRATIONS_LIVE_STATUS.md`), and
+  /// the release build has carried this switch on since v1.0.33 through
+  /// `RELEASE_DART_DEFINES`. So `false` stopped protecting anybody and started
+  /// hiding the row from *every build that passes no dart-defines* — an IDE's
+  /// **Android App** run configuration, a bare `flutter run` — while the release
+  /// of the same commit had it. A build that disagrees with its own release
+  /// about whether a feature exists is the worse of the two failures, and it is
+  /// the one this default was causing.
   ///
   /// **Why the feature exists at all:** the upload section next door assumes a
   /// seller who can produce a contract-compliant `.glb`. That is not this
@@ -717,28 +727,31 @@ class AppConstants {
   /// door: the seller measures the pair with a ruler, the team does the
   /// modelling.
   ///
-  /// **How it is turned on:** `--dart-define=SHOE_MODEL_REQUEST=true`, *after*
-  /// the migration is applied **and verified by object**. The rule this project
-  /// keeps re-learning (V1.3, V2.1, and the docs that denied an apply that had
-  /// already happened) is that the apply is finished when a `--linked` query
-  /// says so, not when the SQL Editor says "Success".
+  /// **How it is turned off:** `--dart-define=SHOE_MODEL_REQUEST=false`. The
+  /// rule this project keeps re-learning (V1.3, V2.1, and the docs that denied
+  /// an apply that had already happened) still holds where it came from: an
+  /// apply is finished when a `--linked` query says so, not when the SQL Editor
+  /// says "Success" — which is exactly what this default was waiting for and
+  /// what it now records as done.
   ///
   /// Off means **nothing happens**: no row in the sheet, no admin queue entry
   /// in the dashboard, and `ShoeModelRequestService` is never constructed.
   static const bool shoeModelRequestEnabled =
-      bool.fromEnvironment('SHOE_MODEL_REQUEST');
+      bool.fromEnvironment('SHOE_MODEL_REQUEST', defaultValue: true);
 
   /// Gates the **admin's model upload** — "Upload a 3D model" on a request in
   /// the queue, which fetches a `.glb`, publishes it against the requested
   /// product and closes the ask in one step (roadmap V2.11, the second half of
   /// the V2.10 flow).
   ///
-  /// **OFF by default, and it is the first surface where an *admin* writes a
-  /// model row.** It follows the oldest rule in this file: a new visible surface
-  /// ships dark, behind its own switch, so turning it off restores today's
-  /// behaviour exactly. Today that means the queue can still claim, decline and
-  /// close-as-done — it just cannot *make* the model, and the close-as-done
-  /// dialog says so instead of offering a button that could not work.
+  /// **ON by default since 2026-09-29, with the seller's switch and for the same
+  /// reason** (see [shoeModelRequestEnabled]): the apply it was waiting on is
+  /// done and verified, and v1.0.33 already shipped it on. It is still the first
+  /// surface where an *admin* writes a model row, so the switch keeps its whole
+  /// purpose — `--dart-define=ADMIN_MODEL_UPLOAD=false` restores today's
+  /// behaviour exactly: the queue can still claim, decline and close-as-done, it
+  /// just cannot *make* the model, and the close-as-done dialog says so instead
+  /// of offering a button that could not work.
   ///
   /// **[adminModelUploadAllowed] is the constant to read, not this one.** The
   /// action also needs [shoeModelUploadEnabled] — the pipeline's own "this build
@@ -746,11 +759,10 @@ class AppConstants {
   /// upload does not keep writing models through the admin's door. Both on is
   /// the only combination that shows it.
   ///
-  /// **How it is turned on:** `--dart-define=ADMIN_MODEL_UPLOAD=true`, with
-  /// `SHOE_MODEL_REQUEST=true` as well (the action lives inside the queue) and
-  /// `--dart-define=SHOE_MODEL_UPLOAD=false` clearing it again — after
-  /// `20260928140000_add_shoe_model_requests.sql` is applied, since the close
-  /// half is that file's RPC.
+  /// **How it is turned off:** `--dart-define=ADMIN_MODEL_UPLOAD=false`, or
+  /// `--dart-define=SHOE_MODEL_UPLOAD=false`, which clears it too — the
+  /// conjunction in [adminModelUploadAllowed] is what makes the pipeline's own
+  /// write switch decisive.
   ///
   /// **No migration of its own, and that is a design fact rather than a
   /// coincidence.** An admin may already insert a `product_models` row and
@@ -762,7 +774,7 @@ class AppConstants {
   /// Off means **nothing happens**: no action on the card, no sheet, and no
   /// write to either the bucket or the table.
   static const bool adminModelUploadEnabled =
-      bool.fromEnvironment('ADMIN_MODEL_UPLOAD');
+      bool.fromEnvironment('ADMIN_MODEL_UPLOAD', defaultValue: true);
 
   /// Whether the admin's model upload may be shown at all: **both** this
   /// surface's switch and the pipeline's own write switch.
@@ -857,6 +869,44 @@ class AppConstants {
   /// whose declared length is an assumption, not a measurement.
   static const bool tryOnPlaceholderModelEnabled =
       bool.fromEnvironment('TRY_ON_PLACEHOLDER_MODEL');
+
+  /// Gates the **inline 3D box on the product page** — "view in 3D", with a
+  /// "Try On in AR" button underneath it (`lib/widgets/shoe_preview_3d.dart`;
+  /// native side `ArTryOnView.Mode.PREVIEW`).
+  ///
+  /// **OFF by default, and off is the whole rollback.** With it off the product
+  /// page renders exactly what it renders today: the pinned AR pill, no 3D box,
+  /// no native preview view, no channel traffic. With it on, the two swap
+  /// places — a product with a verified local model gets the box with the AR
+  /// button under it, and a product with **no model gets neither**, because the
+  /// button lives inside the section rather than beside it
+  /// (`resolveShoePreview`, `lib/utils/shoe_preview_visibility.dart`).
+  ///
+  /// **What it does not need.** Not ARCore, not a camera permission, not an AR
+  /// session: the preview is the same Filament renderer with no session created
+  /// at all, so it draws on phones that could never install ARCore — a strictly
+  /// larger audience than the AR button has had. What it does need is a model
+  /// that is **verified and on disk**, which the V2.6 prefetch already provides
+  /// (`tryOnPrefetchEnabled`, on by default): the native side is handed a local
+  /// path and never does HTTP.
+  ///
+  /// ⚠️ **What has not happened yet, stated so nobody reads this as a shipped
+  /// surface:** nobody has seen it render on real hardware. The framing, the idle
+  /// spin, the light levels and the two-surface split (`TextureView` for the
+  /// preview, `SurfaceView` for AR) are all desk decisions. Turning this on *is*
+  /// the device session that judges them, which is why the default is off.
+  ///
+  /// **What the emulator run on 2026-09-29 did settle.** The box mounts, the
+  /// handover works, and on a renderer below Filament's `FEATURE_LEVEL_2` the
+  /// native side *refuses* the load and reports `renderer_feature_level_unsupported`
+  /// — the section then removes itself, so the page shows neither the box nor the
+  /// AR button. Without that refusal the same path was a **process abort**
+  /// (`SIGSEGV` in `libfilament-jni.so`, finding F22). The unresolved half is
+  /// commercial: phones capped at OpenGL ES 3.0 can render no 3D shoe at all
+  /// until the material path moves to precompiled `.filamat` files (finding D10).
+  ///
+  /// **How it is turned on:** `--dart-define=SHOE_PREVIEW=true`.
+  static const bool shoePreviewEnabled = bool.fromEnvironment('SHOE_PREVIEW');
 
   // --- VIRTUAL FITTING: V0 RENDERER SPIKE (dev-only, delete on retirement) ---
   /// Gates the V0 virtual-fitting renderer spike — a dev-only screen that

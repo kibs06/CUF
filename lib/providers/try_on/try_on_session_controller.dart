@@ -211,15 +211,10 @@ class TryOnSessionController extends ChangeNotifier {
     // MissingPluginException from both calls, and the video-less verdict belongs
     // to the session start).
     try {
-      await _channel.setModel(
-        TryOnModelSpec(
-          path: file.path,
-          modelId: spec.id,
-          sha256: spec.sha256,
-          authoredLengthMm: spec.authoredLengthMm,
-          alignmentJson: spec.alignmentJson,
-        ),
-      );
+      // The shared factory, so the payload the AR session sends and the one the
+      // product page's inline 3D box sends cannot drift apart — they feed the
+      // same renderer.
+      await _channel.setModel(TryOnModelSpec.fromModel(spec, path: file.path));
     } catch (e) {
       debugPrint('[TryOn] setModel handover failed: $e');
     }

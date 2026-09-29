@@ -28,6 +28,24 @@ const val AR_TRY_ON_EVENT_CHANNEL = "com.solevision/ar_try_on/events"
 const val AR_TRY_ON_VIEW_TYPE = "com.solevision/ar_try_on/view"
 
 /**
+ * **The inline 3D preview's own three names** ("view in 3D" on the product page, ahead of
+ * "try on in AR"). Dart's twins are in `lib/services/shoe_preview_channel.dart`.
+ *
+ * ⚠️ They are separate channels and a separate view type rather than more methods on the AR
+ * channel, and the reason is a real ordering case rather than tidiness: pushing the AR screen keeps
+ * the product page — and therefore its preview view — alive underneath. On one channel the plugin
+ * would hold two live views for one slot, and whichever was created last would silently receive the
+ * other's model and size. Two slots cannot get each other's messages.
+ */
+const val SHOE_PREVIEW_METHOD_CHANNEL = "com.solevision/shoe_preview"
+
+/** Event channel for the preview; its events never reach the AR screen's stream. */
+const val SHOE_PREVIEW_EVENT_CHANNEL = "com.solevision/shoe_preview/events"
+
+/** Platform-view type for the inline preview (`Mode.PREVIEW` on `ArTryOnView`). */
+const val SHOE_PREVIEW_VIEW_TYPE = "com.solevision/shoe_preview/view"
+
+/**
  * **V3.1 — the native half of the production try-on contract.**
  *
  * It is thin on purpose. The Dart controller
@@ -68,6 +86,15 @@ class ArTryOnPlugin(private val activity: Activity) : MethodChannel.MethodCallHa
     private val mainHandler = Handler(Looper.getMainLooper())
 
     private var view: ArTryOnView? = null
+
+    // ── The inline preview's slot, kept apart from the AR view's on purpose ────────────────────
+    private var previewMethodChannel: MethodChannel? = null
+    private var previewEventChannel: EventChannel? = null
+    private var previewEventSink: EventChannel.EventSink? = null
+    private var previewView: ArTryOnView? = null
+    private var parkedPreviewModel: ArTryOnView.ModelSpec? = null
+    private var parkedPreviewSize: ArTryOnView.SizeSpec? = null
+    private var parkedPreviewColor: Map<String, Any?>? = null
 
     /** Payloads that arrived before the platform view did (F18). */
     private var parkedModel: ArTryOnView.ModelSpec? = null
@@ -112,6 +139,35 @@ class ArTryOnPlugin(private val activity: Activity) : MethodChannel.MethodCallHa
             },
         )
 
+        // ── The inline preview: same wiring, its own slot and its own listener ──────────────────
+        registry.registerViewFactory(
+            SHOE_PREVIEW_VIEW_TYPE,
+            object : PlatformViewFactory(StandardMessageCodec.INSTANCE) {
+                override fun create(context: Context, viewId: Int, args: Any?): PlatformView {
+                    val created = ArTryOnView(context, previewListener, ArTryOnView.Mode.PREVIEW)
+                    previewView = created
+                    onPreviewViewAvailable(created)
+                    return object : PlatformView {
+                        override fun getView(): View = created
+
+                        override fun dispose() {
+                            if (this@ArTryOnPlugin.previewView === created) {
+                                this@ArTryOnPlugin.previewView = null
+                            }
+                            created.dispose()
+                        }
+                    }
+                }
+            },
+        )
+
+        previewMethodChannel = MethodChannel(messenger, SHOE_PREVIEW_METHOD_CHANNEL).apply {
+            setMethodCallHandler(previewCallHandler)
+        }
+        previewEventChannel = EventChannel(messenger, SHOE_PREVIEW_EVENT_CHANNEL).apply {
+            setStreamHandler(previewStreamHandler)
+        }
+
         methodChannel = MethodChannel(messenger, AR_TRY_ON_METHOD_CHANNEL).apply {
             setMethodCallHandler(this@ArTryOnPlugin)
         }
@@ -126,6 +182,11 @@ class ArTryOnPlugin(private val activity: Activity) : MethodChannel.MethodCallHa
         methodChannel = null
         eventChannel = null
         eventSink = null
+        previewMethodChannel?.setMethodCallHandler(null)
+        previewEventChannel?.setStreamHandler(null)
+        previewMethodChannel = null
+        previewEventChannel = null
+        previewEventSink = null
         mainHandler.removeCallbacks(retryRunnable)
         for (pending in pendingStarts) {
             replyStart(pending.result, ArTryOnView.StartOutcome(false, "error", "plugin detached"))
@@ -133,6 +194,8 @@ class ArTryOnPlugin(private val activity: Activity) : MethodChannel.MethodCallHa
         pendingStarts.clear()
         view?.dispose()
         view = null
+        previewView?.dispose()
+        previewView = null
     }
 
     // ════════════════════════════════════════════════════════════════════════════════════════
@@ -155,6 +218,88 @@ class ArTryOnPlugin(private val activity: Activity) : MethodChannel.MethodCallHa
                     ),
                 )
             }
+        }
+    }
+
+    /**
+     * The preview's own listener: it reports to the preview's event sink only.
+     *
+     * Mixing the two would be the same mistake as sharing the slot — the AR screen's controller
+     * parses `modelLoaded` and `error` as facts about *its* session, and a preview underneath it
+     * would be feeding it both.
+     */
+    private val previewListener = object : ArTryOnView.Listener {
+        override fun onEvent(type: String, data: Map<String, Any?>) {
+            mainHandler.post { previewEventSink?.success(mapOf("type" to type, "data" to data)) }
+        }
+
+        override fun onError(reason: String, message: String?) {
+            mainHandler.post {
+                previewEventSink?.success(
+                    mapOf(
+                        "type" to "error",
+                        "data" to mapOf("reason" to reason, "message" to message),
+                    ),
+                )
+            }
+        }
+    }
+
+    /**
+     * The preview on the same F18 parking contract as the AR view: Dart hands the model over the
+     * moment the box is built, and the view may not exist yet (it is created by the framework on
+     * the next frame), so the payload waits here and is replayed on creation.
+     */
+    private fun onPreviewViewAvailable(created: ArTryOnView) {
+        parkedPreviewModel?.let(created::setModel)
+        parkedPreviewSize?.let(created::setSize)
+        parkedPreviewColor?.let(created::setColor)
+        parkedPreviewModel = null
+        parkedPreviewSize = null
+        parkedPreviewColor = null
+    }
+
+    /** `setPreviewModel` / `setPreviewSize` / `setPreviewColor`, and nothing else. */
+    private val previewCallHandler = MethodChannel.MethodCallHandler { call, result ->
+        when (call.method) {
+            "setPreviewModel" -> {
+                val spec = parseModelSpec(call)
+                if (spec == null) {
+                    Log.w(TAG, "setPreviewModel: unusable payload ${call.arguments}")
+                } else if (previewView == null) {
+                    parkedPreviewModel = spec
+                } else {
+                    previewView?.setModel(spec)
+                }
+                result.success(null)
+            }
+
+            "setPreviewSize" -> {
+                val spec = parseSizeSpec(call.arguments)
+                if (previewView == null) parkedPreviewSize = spec else previewView?.setSize(spec)
+                result.success(null)
+            }
+
+            "setPreviewColor" -> {
+                val overrides = (call.arguments as? Map<*, *>)?.get("materialOverrides")
+                val map = (overrides as? Map<*, *>)?.entries
+                    ?.associate { (key, value) -> key.toString() to value }
+                    ?: emptyMap()
+                if (previewView == null) parkedPreviewColor = map else previewView?.setColor(map)
+                result.success(null)
+            }
+
+            else -> result.notImplemented()
+        }
+    }
+
+    private val previewStreamHandler = object : EventChannel.StreamHandler {
+        override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+            previewEventSink = events
+        }
+
+        override fun onCancel(arguments: Any?) {
+            previewEventSink = null
         }
     }
 

@@ -274,7 +274,7 @@ export function declaredLengthAgreement({ measuredMm, declaredMm }) {
 /** How "publish this model, then close the ask" ended. */
 export const MODELLING_ENDING = {
   /** Live **and** fulfilled — the only ending where the seller's row turns into
-   *  "3D model ready". */
+   *  "3D fitting ready". */
   CLOSED: 'closed',
   /** Nothing went live, so the ask is untouched and still waiting. */
   NOT_LIVE: 'not_live',
@@ -318,7 +318,7 @@ export function modellingResult({ modelIsLive, fulfilled, modelId = null, refusa
   return {
     ending: MODELLING_ENDING.CLOSED,
     modelId,
-    message: 'Published and closed — the seller now sees "3D model ready".',
+    message: 'Published and closed — the seller now sees "3D fitting ready".',
   }
 }
 

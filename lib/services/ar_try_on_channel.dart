@@ -36,6 +36,8 @@ import 'dart:async';
 // `Uint8List` comes from services.dart's export of dart:typed_data.
 import 'package:flutter/services.dart';
 
+import '../utils/shoe_model_resolver.dart';
+
 /// `MethodChannel` name, beside the scan's `com.solevision/ar_foot_sizing`.
 const String kArTryOnMethodChannel = 'com.solevision/ar_try_on';
 
@@ -138,6 +140,22 @@ class TryOnModelSpec {
     this.authoredLengthMm,
     this.alignmentJson,
   });
+
+  /// The handover for a model the resolver has already made local.
+  ///
+  /// **One factory rather than a constructor call at each site**, because there
+  /// are two sites now and they feed the *same* renderer: the AR session and the
+  /// product page's inline 3D box. A field one of them forgets is a shoe that
+  /// renders correctly in one place and wrongly in the other — subtly, and only
+  /// on the models that carry that field.
+  factory TryOnModelSpec.fromModel(ShoeModelSpec spec, {required String path}) =>
+      TryOnModelSpec(
+        path: path,
+        modelId: spec.id,
+        sha256: spec.sha256,
+        authoredLengthMm: spec.authoredLengthMm,
+        alignmentJson: spec.alignmentJson,
+      );
 
   Map<String, Object?> toMap() => <String, Object?>{
         'path': path,

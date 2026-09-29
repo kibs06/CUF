@@ -448,6 +448,129 @@ substitute for the sample.
 
 ---
 
+### F22 — The production loader met F14 as a **process abort**, and now refuses instead of trying
+
+Measured 2026-09-29 on the Pixel_4 emulator (API 37), running **the app itself** rather than the
+harness: the first time `ArTryOnView` ever loaded a real model from a real product page.
+
+```
+I Filament: Feature level: 1
+I ArTryOnView: engine ready: backend=OPENGL supportedFeatureLevel=FEATURE_LEVEL_1 activeFeatureLevel=FEATURE_LEVEL_1
+F libc: Fatal signal 11 (SIGSEGV), code 1 (SEGV_MAPERR) in tid (solevision-tryo)   ← 126 ms later
+```
+
+F14 recorded the *harness* failing to load at feature level 1 with a logged material error, and F16
+recorded that a material/mesh mismatch **aborts** rather than throwing. Together on the production
+path: `AssetLoader.createAsset` on a `FEATURE_LEVEL_1` renderer takes the process down, and it is
+not catchable — the app died on a customer's product page, which is the worst possible failure for a
+surface whose entire promise is "the shoe appears".
+
+**The renderer now refuses rather than tries.** It reads `Engine.getActiveFeatureLevel()` once after
+`Engine.create()` and never calls the loader below `FEATURE_LEVEL_2`; it logs which level it is, and
+reports `renderer_feature_level_unsupported` to Dart, where the product page's 3D section removes
+itself — **box and AR button both**, because on such a phone the AR path cannot draw the shoe
+either. Re-measured on the same emulator after the change: same page, same model, **no crash**, and
+the section gone. That is the difference between "no 3D here" and "the app died".
+
+**What this does not fix**, and it is the commercial half of D10: every phone limited to OpenGL ES
+3.0 cannot render a 3D shoe through the ubershader path at all. That is exactly the class of device a
+Carcar City customer is most likely to hold. The repair is a material provider built on
+**precompiled `.filamat` files** — the pattern SceneView uses for its own rendering — at the cost of
+"the ubershader's automatic variants". Until that exists, the honest statement is that 3D is a feature
+of phones **above** ES 3.0, and the emulator is not the device that decides it: its GLES is a
+translator, so a real ES-3.0 phone may report a different level (D10's "unverified on real hardware"
+stands).
+
+---
+
+### F23 — The preview fitted a sphere that does not contain the shoe, and the box clipped as the customer turned it
+
+Found by measuring the framing rather than looking at it — `build/preview_framing.py` projects the
+model's eight bounding-box corners through the same camera law the view uses, across the whole orbit
+and the whole pitch clamp. 2026-09-29, against the QA asset (111.7 × 100.7 × 270.0 mm).
+
+The preview law is "fit the bounding **sphere**": `d = r / sin(fov/2) × margin`, chosen because a
+sphere does not change size as the model turns, so spinning can never pump the zoom. But
+`previewRadiusM` was filled with `max(half[0], half[1], half[2])` — the largest **half-extent**,
+67.5 mm here — while the sphere that actually contains the box is its half-diagonal,
+`sqrt(hx² + hy² + hz²)` = **101.0 mm, 50% larger**. The margin's promise ("a silhouette needs air")
+was being paid to a sphere *inside* the model, and everything outside it — the toe, the far corner —
+was free to leave the frame.
+
+| | shipped (r = largest half-extent) | fixed (r = half-diagonal) |
+| --- | --- | --- |
+| fill at the opening view | **96%** of the box height | 61% |
+| worst fill over the yaw sweep | 78% | 62% |
+| worst fill over the pitch clamp (−10°…75°) | **124%**, clipped at every pitch ≥ 0° | 77%, never clipped |
+
+The pitch row is the user-visible half: the box could not be dragged to a looking-down angle without
+the shoe leaving it. With the containing radius the guarantee is true again — no point can clip at
+any orientation, at any margin above 1 — and the margin came down from 1.15 to **1.05** to recover
+the size the radius fix took away, since a margin is air and the sphere is a loose bound for a long,
+thin object.
+
+**Three composition defects came out of the same pass.** The initial yaw was 145°, which by the
+authoring contract (+Z is the toe) opens on the **heel, from behind** — the box greeted the customer
+with the back of the shoe; now 60°, the front outer three-quarter a product shot uses. The idle spin
+was 14°/s ≈ 6 px/s across a 240 px box, which reads as stalled rather than as a turntable; now
+20°/s, a turn in 18 s. And the light rig was **world**-fixed while the camera orbits a full 360°, so
+half of every revolution showed the customer the side the key light does not reach;
+`applyPreviewLightRig` now rotates the key/fill pair with the orbit, which is where a studio keeps
+the lit/shaded split.
+
+**Unverified — which is why the last three are desk decisions:** nobody has looked at a render.
+Filament needs a device (F14, F22; the emulator here is feature level 1), so framing, spin and
+lighting are geometry and taste until someone runs it on a phone. `ArTryOnView` now logs
+`preview fit: radius …, centre …` on every model load, so these numbers can be checked against the
+log line on the device.
+
+---
+
+### F24 — Vulkan is advertised on this emulator and Filament **aborts** on it, so a backend cannot be chosen by trying
+
+Measured 2026-09-29 on the Pixel_4 emulator (API 37). The 3D box needs a renderer that can load a
+glTF; Filament picks OpenGL, and this emulator's OpenGL is an ES 3.0 translator
+(`ANDROID_EMU_gles_max_version_3_0`) reporting `FEATURE_LEVEL_1` — the F22 refusal. The obvious repair
+is Vulkan, which the *same* emulator advertises (`pm list features` reports
+`android.hardware.vulkan.version`, and the driver is present at
+`/vendor/lib64/hw/vulkan.ranchu.so`), and on which Filament reports a far higher level.
+
+It does not work, and the failure is not catchable:
+
+```
+I ArTryOnView: OpenGL engine is FEATURE_LEVEL_1 — trying Vulkan before refusing every model
+I Filament: FEngine resolved backend: Vulkan
+E libc++abi: reason: Unable to create Vulkan instance. error=-3
+F libc: Fatal signal 6 (SIGABRT), code -1 (SI_QUEUE) in tid (FEngine::loop)   ← the process dies
+```
+
+`Engine.create(Engine.Backend.VULKAN)` on a device whose Vulkan cannot build an instance **aborts**, on
+Filament's own render thread — the F16 class again (backend/material failures abort rather than throw),
+which `runCatching` cannot see and no Java layer can catch. An advertised feature is therefore **not**
+evidence that a backend will work.
+
+**Consequence: the probe was written, measured, and reverted.** The engine stays `Engine.create()`
+(OpenGL) and an engine that cannot load is refused (F22). A fallback that *probes* a backend cannot be
+made safe from inside the process — the wrong probe is a crash on a customer's product page, which is
+strictly worse than no 3D — so doing this properly means either precompiled `.filamat` materials for the
+OpenGL path (D10's existing mitigation) or a capability check outside the process.
+
+**What the same run did settle.** With everything live, opening the JBC sandal on the emulator logs:
+
+```
+I flutter : [shoe-preview] hidden: noModel — JBC Crown Leather Sandals   ← ~2 s, prefetch in flight
+I flutter : [shoe-preview] shown: none   — JBC Crown Leather Sandals     ← the gate opens
+I ArTryOnView: renderer is FEATURE_LEVEL_1 … refusing every model         ← F22, and the app survives
+```
+
+So the switch, the model resolution, the download and the sha verification all work end to end against
+the hosted database, and the refusal is survivable. The emulator validates **the Dart half and the
+refusal**; it cannot validate a render, and it is not the device that decides the GLES question (its
+GLES is a translator). A draw needs a device at GLES 3.1+ or with a working Vulkan — which is V0.6's
+device session, and the reason a real phone is the next step rather than more emulator work.
+
+---
+
 ## 4. Verification evidence (this machine, 2026-09-27)
 
 | Check | Command | Result |
@@ -834,6 +957,8 @@ load, no iOS, and no multi-model scene. All of it is V3+ work and none of it is 
 
 | Version | Date | Change |
 | --- | --- | --- |
+| 1.4.4 | 2026-09-29 | **F24: the emulator advertises Vulkan and Filament aborts on it, so the backend is not choosable by trying.** A probe was written (`Engine.create(Engine.Backend.VULKAN)` when OpenGL reports `FEATURE_LEVEL_1`), measured, and **reverted**: on the Pixel_4 the backend resolves to Vulkan and then `Unable to create Vulkan instance. error=-3` → `Fatal signal 6 (SIGABRT)` from `FEngine::loop`, an abort of the F16 class that no Java layer can catch. An advertised `android.hardware.vulkan.*` feature is not evidence that a backend works, and a probe that guesses wrong is a crash on a customer's product page rather than a missing box. The same run settled the other half: the switch, the pre-fetch download and the sha verification work end to end against the hosted database, and the F22 refusal leaves the app alive — so the emulator validates the Dart path and the refusal, and only a real device can validate a render |
+| 1.4.3 | 2026-09-29 | **F22 + F23: the first runs against a real product page, and the preview's framing measured instead of guessed.** F22: the production loader met F14 as a **process abort** — `AssetLoader.createAsset` at `FEATURE_LEVEL_1` takes the process down uncatchably — so the renderer now reads the active feature level after `Engine.create()`, refuses to load below `FEATURE_LEVEL_2`, and reports `renderer_feature_level_unsupported`, where the product page's section removes itself (box **and** AR button). F23: the fit radius was the largest half-extent rather than the containing sphere (67.5 mm against a true 101.0 mm), so the shipped box filled **96%** of its height at the opening view and **124%, clipped at every pitch ≥ 0°** once dragged; with the true radius no orientation can clip, and the margin dropped 1.15 → 1.05 to recover the size. Composition, from the same pass: initial yaw 145° (the heel, from behind) → 60° (front three-quarter), idle spin 14°/s → 20°/s, and a preview light rig that now rotates with the orbit instead of leaving the shoe unlit for half of every turn. No render has been looked at — the emulator is feature level 1 — so framing, spin and lighting remain desk decisions; the view logs its fitted radius and centre for the device session |
 | 1.4.2 | 2026-09-28 | **F21: the first real partner asset, and its seven red rows were arithmetic.** A marketplace/AI-generated `.glb` — 31.48 MiB, 49,954 triangles, three 4096² PBR maps, one `Material.001`, 1160.8 × 480.3 × 433.1 mm, **578 surface islands with 11,408 open edges**, and Blender's Z-up→Y-up rotation left **on the node** — failed `file size`, `materials`, `textures`, `units`, `orientation`, `origin` and `scale`, none of them a modelling defect. The instructive one is `orientation`: a validator reading accessor bounds and a renderer obeying the node tree disagree about which way is up, and this file was *failing the contract* and *rendering correctly* at the same time. `tool/prepare_shoe_model.dart` + `lib/utils/glb_normalizer.dart` (roadmap V2.7) exist because of it: bake the transform, re-axis onto +Z, rescale to the declared length, ground/centre, re-bake textures to 1024², rename parts (optional geometric `sole` band) — **31.48 MiB → 1.66 MiB, 270.0 × 111.7 × 100.7 mm, 11/11 PASS** — while refusing the two things that cannot be undone offline (Draco/meshopt, KTX2). What it cannot fix is the point for V2.8/V2.9: a bought shell is a lookalike, so the capture sessions stay the critical path |
 | 1.4.1 | 2026-09-28 | **The chosen route has a renderer: `ArTryOnView` drives Filament directly, and the route's price is now itemised (§5.6, F20).** `com.solevision.app.tryon.ArTryOnView` + `ArTryOnPlugin` (new package, deliberately *not* the spike's `artryon`) implement the native half of the contract `ar_try_on_channel.dart` pinned: one render thread owning `Filament.init()`/`Gltfio.init()`, engine, renderer, swapchain, scene, view and camera; ARCore's `Pose.toMatrix` + `getProjectionMatrix` drive the Filament camera, so the model is world-anchored before any camera feed exists; key+fill directional lights with the key's intensity and colour from ARCore's ambient estimate; model load with destroy-then-create swap and the measured flush-and-retry; uniform scale from `authored_length_mm`; `baseColorFactor` overrides; ARCore hit-test floor placement with an analytic floor ray for the second before a plane is detected; perf probe; PixelCopy screenshot; render-thread teardown. **F20 is the new finding and the honest limit:** the Filament artifacts ship **zero assets** (measured), so the camera-feed material (42,544 B), the plane material (40,976 B) and an IBL (~2.1 MB) are ours to supply — the shoe renders, the room does not. **Nothing has run on a device**: this compiles (Kotlin compile clean, the only claim being made), and fps/load/tracking remain V0.6's. Third compile-relevant discovery: ARCore 1.54's `getProjectionMatrix`/`toMatrix`/`getColorCorrection` are out-param only, and Filament's Java API differs from its C++ docs in four places (`views`/`Viewport`, `double[] clearColor`, nested `LightManager.Builder`, no `FilamentAsset.getMaterialInstances`) — all verified with `javap` against the AARs |
 | 1.4.0 | 2026-09-28 | **The Filament-only route is measured, and D3/D4 are decided (§5.5).** Same commit built twice — as shipped (SceneView 4.34.0 + Compose) and with the SceneView/Compose set replaced by `filament-android` + `gltfio-android` 1.72.1 — **225,325,390 → 214,744,457 B: the SceneView route costs 10,580,933 B (10.09 MiB) more all-ABI**, decomposed as its packaged `.filamat`/`.ktx` assets (3,305,732 stored / 11,772,582 raw, 27 files), Compose's dex (5,497,613 stored / 15,561,464 raw) and `libfilament-utils-jni.so` (1,547,328 across 3 ABIs); `libapp.so` + `libflutter.so` are byte-identical on both sides, and rebuilding A from the restored sources reproduced **225,325,390 B to the byte**. Per arm64 device the Filament route is ≈5.87 MiB of native libraries + ~0.5 MB of classes + zero assets ≈ **+6.4 MB — inside the ≤8 MB budget**, against the SceneView route's ≈+15.7 MB. **Consequence: drive Filament/gltfio directly (D3), and keep the budget (D4)** — the size objection was SceneView's, not Filament's. **Not settled by it:** C carries no `ArTryOnView` (the plugin and view moved out for the measurement), so this is a *packaging* prototype; fps, load time and the compression verdict still need a physical ARCore phone (§8). §5.4 item 2 marked done; R8 and split-per-ABI remain |

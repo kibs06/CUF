@@ -2,9 +2,16 @@
 -- 3D model requests (roadmap V2.10) — pgTAP
 -- Run by CI via `supabase test db` (supabase-migrations.yml)
 --
--- Covers `20260928140000_add_shoe_model_requests.sql`. The assertions that
+-- Covers `20260928140000_add_shoe_model_requests.sql` and
+-- `20260929120000_add_request_size_run_and_upper_height.sql`. The assertions that
 -- matter most are marked ⚠️ — each is a way the feature could look right
 -- and be wrong:
+--
+--   ⚠️ The size run is CANONICALISED, not stored as sent (section 10): a
+--      hand-written call cannot put a `0` in a column the admin queue renders as
+--      fact, and the element-wise band is enforced by the column's own CHECK as
+--      well as by the RPC — which is why the constraint's element-wise half is
+--      an IMMUTABLE function (a CHECK cannot contain a subquery: 0A000).
 --
 --   ⚠️ "fulfilled" cannot be a note somebody typed. The status is only
 --      reachable through an RPC that requires the model to belong to THIS
@@ -65,7 +72,7 @@
 -- ══════════════════════════════════════════════════════════════════
 
 begin;
-select plan(60);
+select plan(76);
 
 -- ── helpers ────────────────────────────────────────────────────────
 create or replace function public.tmp_req_claims(p_user uuid)
@@ -147,9 +154,14 @@ values
 
 -- ══ 1. Structure ═══════════════════════════════════════════════════
 select has_table('public','shoe_model_requests','1: the table exists');
+-- ⚠️ EIGHT arguments since 2026-09-29, and the count is the assertion: adding
+-- the height and the run meant DROP + CREATE (a replaced function cannot change
+-- its argument list), so the six-argument signature must be GONE. A leftover
+-- one beside it would make the app's named-argument call ambiguous — the reason
+-- `20260929120000` drops before it creates.
 select has_function('public','request_shoe_model',
-                    array['uuid','numeric','numeric','numeric','numeric','text'],
-                    '2: the seller''s request RPC exists (6-arg)');
+                    array['uuid','numeric','numeric','numeric','numeric','text','numeric','numeric[]'],
+                    '2: the seller''s request RPC exists (8-arg, height and run included)');
 select has_function('public','cancel_shoe_model_request', array['uuid'],
                     '3: the seller can withdraw an ask');
 select has_function('public','claim_shoe_model_request', array['uuid'],
@@ -164,8 +176,8 @@ select has_index('public','shoe_model_requests','uq_shoe_model_requests_open',
 select is(
   (select count(*)::int from pg_constraint
     where conrelid = 'public.shoe_model_requests'::regclass and contype = 'c'),
-  6,
-  '8: all six CHECK constraints are present (status, four bounds, fulfilled-needs-model)'
+  8,
+  '8: all eight CHECK constraints are present (status, five bounds, the run, fulfilled-needs-model)'
 );
 
 -- ⚠️ The device gate: gated, and not exempt.
@@ -655,6 +667,136 @@ select is(
   2::bigint,
   '60: …and the refused decline left both bells alone — two real endings, two rows'
 );
+
+-- ══ 10. The run and the shoe height (2026-09-29) ═══════════════════
+-- The two questions the sheet gained after the first one shipped
+-- (`20260929120000`). Both optional, both about the seller's catalogue rather
+-- than the pair on the bench, and neither scales anything: one model serves
+-- every size. What is worth proving here is the pair of failures a hand-written
+-- call could reach and a seller could not — a stray value in the run and a
+-- height outside the band — and the fact that the run is CANONICALISED rather
+-- than stored as sent.
+--
+-- ⚠️ On their own products: section 2's product 21 carries the open ask the
+-- whole file runs on, and a second ask for it is refused on purpose (18).
+insert into public.products (id, store_id, seller_id, name, price, is_active)
+values
+  ('f1000000-0000-0000-0000-000000000024','f1000000-0000-0000-0000-000000000011','f1000000-0000-0000-0000-000000000001','Rq Shoe Run', 1500, true),
+  ('f1000000-0000-0000-0000-000000000025','f1000000-0000-0000-0000-000000000011','f1000000-0000-0000-0000-000000000001','Rq Shoe Height', 1500, true),
+  ('f1000000-0000-0000-0000-000000000026','f1000000-0000-0000-0000-000000000011','f1000000-0000-0000-0000-000000000001','Rq Shoe Empty', 1500, true),
+  ('f1000000-0000-0000-0000-000000000027','f1000000-0000-0000-0000-000000000011','f1000000-0000-0000-0000-000000000001','Rq Shoe Wide', 1500, true);
+
+select has_column('public','shoe_model_requests','upper_height_mm',
+                  '61: the request carries the shoe''s overall height');
+select has_column('public','shoe_model_requests','sizes_eu',
+                  '62: …and the run of EU sizes the shoe is made in');
+
+select set_config('request.jwt.claims',
+  public.tmp_req_claims('f1000000-0000-0000-0000-000000000001'), true);
+
+-- The run arrives as a hand-written caller would send it: out of order, with a
+-- duplicate and a value outside the band. The seller's chips cannot produce that
+-- shape, which is exactly why the RPC has to.
+insert into tmp_req_results (k, v)
+select 'run', public.request_shoe_model(
+  'f1000000-0000-0000-0000-000000000024'::uuid, 270.0, null, null, null, null,
+  40.0, array[42.0, 40.0, 42.0, 0.0, 43.0]::numeric[]);
+
+select is((select tmp_req_ok(v) from tmp_req_results where k='run'), true,
+          '63: an ask carrying the height and a run is accepted');
+select is(
+  (select cardinality(sizes_eu) from public.shoe_model_requests
+    where product_id = 'f1000000-0000-0000-0000-000000000024'),
+  3,
+  '64: …and the run is stored deduplicated — five values sent, three stored'
+);
+-- Ascending and in band, which is what "canonicalised" means here: element 1 is
+-- the smallest, so the stray 0 is provably gone rather than merely not last.
+select is(
+  (select sizes_eu[1] from public.shoe_model_requests
+    where product_id = 'f1000000-0000-0000-0000-000000000024'),
+  40::numeric,
+  '65: …ascending, with the out-of-band value trimmed'
+);
+select is(
+  (select sizes_eu[3] from public.shoe_model_requests
+    where product_id = 'f1000000-0000-0000-0000-000000000024'),
+  43::numeric,
+  '66: …and the largest last'
+);
+select is(
+  (select upper_height_mm from public.shoe_model_requests
+    where product_id = 'f1000000-0000-0000-0000-000000000024'),
+  40::numeric,
+  '67: …and the height is stored, the one dimension no other column carries'
+);
+
+-- A 900 mm shoe is a slip, not a very tall sandal, and the band is the column's.
+insert into tmp_req_results (k, v)
+select 'tall', public.request_shoe_model(
+  'f1000000-0000-0000-0000-000000000025'::uuid, 270.0, null, null, null, null, 900.0);
+select is((select tmp_req_ok(v) from tmp_req_results where k='tall'), false,
+          '68: a shoe height outside the band is refused');
+select ok(
+  position('10 and 400' in (select tmp_req_msg(v) from tmp_req_results where k='tall')) > 0,
+  '69: …in the same sentence the sheet would give, so the fix is obvious'
+);
+
+-- ⚠️ A run that said nothing usable is NOT an error: the seller answered a
+-- question they were not required to answer, and refusing the whole ask over it
+-- would throw away the measurement the request exists for.
+insert into tmp_req_results (k, v)
+select 'junk', public.request_shoe_model(
+  'f1000000-0000-0000-0000-000000000025'::uuid, 270.0, null, null, null, null,
+  null, array[0.0, 999.0]::numeric[]);
+select is((select tmp_req_ok(v) from tmp_req_results where k='junk'), true,
+          '70: a run with nothing usable in it still files the request');
+select ok(
+  (select sizes_eu is null from public.shoe_model_requests
+    where product_id = 'f1000000-0000-0000-0000-000000000025'),
+  '71: …stored as not stated, which is what NULL means here'
+);
+
+-- ⚠️ The column's own CHECK, past the RPC — the two shapes the RPC can never
+-- produce. This is where the element-wise test had to become an IMMUTABLE
+-- FUNCTION: the obvious writing of it returns
+-- `0A000: cannot use subquery in check constraint`, and `array_length` cannot
+-- see an empty array at all (`array_length('{}',1)` is NULL, and a CHECK is
+-- satisfied by NULL).
+--
+-- Two products rather than one, so a future edit that lets the first INSERT
+-- through reports the second as its own failure instead of as a 23505 from the
+-- unique open-ask index.
+select throws_ok(
+  $$insert into public.shoe_model_requests
+      (product_id, store_id, requested_by, external_length_mm, sizes_eu)
+    values ('f1000000-0000-0000-0000-000000000026'::uuid,
+            'f1000000-0000-0000-0000-000000000011'::uuid,
+            'f1000000-0000-0000-0000-000000000001'::uuid, 270.0, '{}')$$,
+  '23514',
+  null,
+  '72: an EMPTY run is refused — `{}` claims the shoe is made in no sizes'
+);
+select throws_ok(
+  $$insert into public.shoe_model_requests
+      (product_id, store_id, requested_by, external_length_mm, sizes_eu)
+    values ('f1000000-0000-0000-0000-000000000027'::uuid,
+            'f1000000-0000-0000-0000-000000000011'::uuid,
+            'f1000000-0000-0000-0000-000000000001'::uuid, 270.0, array[40.0, 999.0])$$,
+  '23514',
+  null,
+  '73: …and so is a run holding a size no shoe is made in'
+);
+
+-- The helper's own edges, called directly. A CHECK is satisfied by NULL, so the
+-- one answer this function must never give is NULL — not for an empty array, and
+-- not for one holding a null element.
+select is(public.numeric_array_within_band(array[40.0, 42.5]::numeric[], 22, 48), true,
+          '74: the element-wise helper accepts a run inside the band');
+select is(public.numeric_array_within_band(array[]::numeric[], 22, 48), false,
+          '75: …answers false (never NULL) for an empty array');
+select is(public.numeric_array_within_band(array[null, 42.0]::numeric[], 22, 48), false,
+          '76: …and for a run carrying a null element');
 
 select * from finish();
 rollback;

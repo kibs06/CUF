@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 200" width="340" height="200">
+  <!--
+    The measuring guide the 3D-fitting request sheet shows (roadmap V2.10's form,
+    "make it friendlier"). Schematic on purpose: it teaches *which* dimension each
+    box wants and *where* on the shoe it runs, not a millimetre-accurate drawing.
+
+    ⚠️ NO TEXT IN THIS FILE, and that is a hard constraint rather than a style
+    choice: flutter_svg does not render <text>, so a numeral placed here would
+    simply vanish on the device while looking correct in a browser. The labels
+    live in the sheet as Flutter Text, matched to the arrows below by COLOUR —
+    which is why each dimension has its own and why the legend is built from the
+    same constants (kMeasureGuide* in shoe_model_request_tile.dart). Change a
+    colour here and you must change it there; the widget test pins the pairing.
+
+    Coordinates: the top view is the left half (a footbed seen from above, heel
+    left, toe right) and the side view is the right half (heel left, ground at
+    y=150). Every arrow is a dimension line with explicit arrowheads rather than
+    an SVG marker, because markers are the kind of feature that silently does
+    nothing in a partial renderer.
+  -->
+  <g fill="#FBF8F5" stroke="#6B5C4E" stroke-width="1.6" stroke-linejoin="round">
+    <!-- Top view: heel at the left, ball widest at the right, toe rounded off. -->
+    <path d="M24,70 C24,55 34,47 50,45 C74,42 104,38 130,38 C152,38 172,47 172,62 C172,79 154,90 130,90 C104,90 74,94 50,95 C34,96 24,85 24,70 Z"/>
+    <!-- Side view: sole wedge under an upper that rises at the heel. -->
+    <path d="M206,150 L206,134 L326,134 L326,150 Z"/>
+    <path d="M206,134 C206,106 212,96 228,96 L246,96 C262,96 276,106 290,117 L314,131 C320,134 324,134 326,134 L206,134 Z"/>
+  </g>
+
+  <!-- (1) Outside length — heel to toe, along the middle. #8B5A2B -->
+  <g stroke="#8B5A2B" stroke-width="1.8" stroke-dasharray="5 4">
+    <line x1="28" y1="67" x2="168" y2="67"/>
+  </g>
+  <g fill="#8B5A2B">
+    <path d="M28,67 L38,62 L38,72 Z"/>
+    <path d="M168,67 L158,62 L158,72 Z"/>
+  </g>
+
+  <!-- (2) Outside width — across the widest part (the ball). #4ECDC4 -->
+  <g stroke="#4ECDC4" stroke-width="1.8" stroke-dasharray="5 4">
+    <line x1="132" y1="42" x2="132" y2="88"/>
+  </g>
+  <g fill="#4ECDC4">
+    <path d="M132,42 L127,52 L137,52 Z"/>
+    <path d="M132,88 L127,78 L137,78 Z"/>
+  </g>
+
+  <!-- (3) Heel height — the stack under the heel only. #E8A020 -->
+  <g stroke="#E8A020" stroke-width="1.8">
+    <line x1="212" y1="150" x2="212" y2="134"/>
+  </g>
+  <g fill="#E8A020">
+    <path d="M212,150 L208,142 L216,142 Z"/>
+    <path d="M212,134 L208,142 L216,142 Z"/>
+  </g>
+
+  <!-- (4) Height of the shoe — the ground to the highest point of the upper. #7E57C2 -->
+  <g stroke="#7E57C2" stroke-width="1.8" stroke-dasharray="5 4">
+    <line x1="240" y1="150" x2="240" y2="99"/>
+  </g>
+  <g fill="#7E57C2">
+    <path d="M240,150 L235,140 L245,140 Z"/>
+    <path d="M240,99 L235,109 L245,109 Z"/>
+  </g>
+
+  <!-- The ground the side view stands on. -->
+  <line x1="200" y1="150" x2="332" y2="150" stroke="#6B5C4E" stroke-width="1.2" opacity="0.5"/>
+</svg>

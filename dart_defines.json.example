@@ -5,6 +5,8 @@
   "SENTRY_DSN": "https://YOUR_DSN@sentry.io/PROJECT_ID",
 
   "SHOE_MODEL_UPLOAD": true,
-  "SHOE_MODEL_REQUEST": false,
-  "ADMIN_MODEL_UPLOAD": false
+  "SHOE_MODEL_REQUEST": true,
+  "ADMIN_MODEL_UPLOAD": true,
+
+  "SHOE_PREVIEW": false
 }

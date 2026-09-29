@@ -1,6 +1,7 @@
 import 'package:app/services/shoe_model_request_service.dart';
 import 'package:app/utils/shoe_model_request.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// The request service, exercised without a socket (roadmap V2.10).
 ///
@@ -95,6 +96,92 @@ void main() {
       expect(outcome.success, isFalse);
       expect(outcome.message, contains('your own products'));
     });
+
+    test('an app ahead of the schema does NOT blame the connection', () async {
+      // ⚠️ The 2026-09-29 report. Filling "Height of the shoe" or "Sizes you
+      // make this shoe in" sends arguments the live database does not have
+      // until `20260929120000` is applied, and PostgREST refuses the whole call
+      // with PGRST202. The old copy sent the seller to check their signal for
+      // something no amount of signal could fix, so the sentence names the two
+      // boxes and the one fix that works.
+      final data = _FakeData()..staleSchemaOnRequest = true;
+      final service = ShoeModelRequestService(data);
+
+      final outcome = await service.request(
+        productId: 'p1',
+        measurements: const ShoeModelRequestMeasurements(
+          externalLengthMm: 272,
+          upperHeightMm: 40,
+        ),
+      );
+
+      expect(outcome.success, isFalse);
+      expect(outcome.message, isNot(contains('connection')));
+      expect(outcome.message, contains('shoe height'));
+      expect(outcome.message, contains('sizes you stock'));
+      expect(outcome.message, contains('Clear those two'));
+    });
+
+    test('a stale schema with no new fields does not send them hunting', () async {
+      // Same failure, different payload: nothing the seller typed is at fault,
+      // so the copy must not tell them to clear a box they never filled.
+      final data = _FakeData()..staleSchemaOnRequest = true;
+      final service = ShoeModelRequestService(data);
+
+      final outcome = await service.request(
+        productId: 'p1',
+        measurements: const ShoeModelRequestMeasurements(externalLengthMm: 272),
+      );
+
+      expect(outcome.success, isFalse);
+      expect(outcome.message, isNot(contains('connection')));
+      expect(outcome.message, isNot(contains('Clear those two')));
+      expect(outcome.message, contains('try again later'));
+    });
+  });
+
+  group('telling a missing function apart from a dropped socket', () {
+    test('the current shape (the code) counts', () {
+      expect(
+        isMissingRpcError(
+          PostgrestException(
+            message: 'Could not find the function public.request_shoe_model',
+            code: 'PGRST202',
+          ),
+        ),
+        isTrue,
+      );
+    });
+
+    test('the older shape (only the sentence) counts too', () {
+      expect(
+        isMissingRpcError(
+          PostgrestException(
+            message:
+                'Could not find the function public.request_shoe_model(p_upper_height_mm) in the schema cache',
+          ),
+        ),
+        isTrue,
+      );
+    });
+
+    test('a real network failure does not', () {
+      expect(isMissingRpcError(Exception('SocketException')), isFalse);
+      expect(
+        isMissingRpcError(
+          PostgrestException(message: 'FetchError: connection closed'),
+        ),
+        isFalse,
+      );
+      // And a refusal that IS about the schema (400 from the RPC's own bands)
+      // stays a sentence from the database rather than becoming this one.
+      expect(
+        isMissingRpcError(
+          PostgrestException(message: 'value too long', code: '22001'),
+        ),
+        isFalse,
+      );
+    });
   });
 
   group('what the sheet needs to know about a product', () {
@@ -108,7 +195,7 @@ void main() {
 
       expect(availability.request!.status, ShoeModelRequestStatus.inProgress);
       expect(availability.hasLiveModel, isFalse);
-      expect(availability.row.label, '3D model requested');
+      expect(availability.row.label, '3D fitting requested');
       expect(service.readCount, 1);
     });
 
@@ -120,7 +207,7 @@ void main() {
 
       final availability = await service.availability('p1');
 
-      expect(availability.row.label, '3D model ready');
+      expect(availability.row.label, '3D fitting ready');
     });
 
     test('a failed read shows the un-asked row rather than an error', () async {
@@ -263,6 +350,7 @@ class _FakeData implements ShoeModelRequestDataSource {
   Object? nextResult;
   bool throwOnRequest = false;
   bool rejectOnRequest = false;
+  bool staleSchemaOnRequest = false;
   bool throwOnRead = false;
 
   ShoeModelRequestRecord? latest;
@@ -318,6 +406,7 @@ class _FakeData implements ShoeModelRequestDataSource {
       throw const ShoeModelRequestRejected(
           'You can only ask for a model on your own products.');
     }
+    if (staleSchemaOnRequest) throw const ShoeModelRequestSchemaStale();
     if (throwOnRequest) throw Exception('offline');
     return nextResult;
   }

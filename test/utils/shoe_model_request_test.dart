@@ -69,8 +69,15 @@ void main() {
       expect(result.error, contains('write 270, not 27'));
     });
 
-    test('the suffix is caught too', () {
-      expect(_read(length: '27cm').error, contains('not centimetres'));
+    test('⚠️ a cm suffix is honoured now, not scolded', () {
+      // This changed on 2026-09-29 with the unit toggle, and it is worth
+      // knowing which way it moved: the suffix used to be refused as a mistake,
+      // and it is now the *more recent* statement of the unit, so `27cm` is
+      // 270 mm. The refusal is kept for a bare number in the mm box — the test
+      // above — because that one really is the app guessing at a missing unit.
+      final result = _read(length: '27cm');
+      expect(result.isError, isFalse);
+      expect(result.measurements!.externalLengthMm, 270);
     });
 
     test('a millimetre suffix is accepted and stripped', () {
@@ -151,7 +158,7 @@ void main() {
       for (final status in ShoeModelRequestStatus.values) {
         final row = shoeModelRequestRow(status: status, productHasModel: true);
         expect(row.action, ShoeModelRequestAction.ready);
-        expect(row.label, '3D model ready');
+        expect(row.label, '3D fitting ready');
       }
     });
 
@@ -160,7 +167,7 @@ void main() {
         status: ShoeModelRequestStatus.requested,
         productHasModel: false,
       );
-      expect(row.label, '3D model requested');
+      expect(row.label, '3D fitting requested');
       expect(row.action, ShoeModelRequestAction.progress);
       expect(row.subtitle, ShoeModelRequestStatus.requested.sellerSentence);
     });
@@ -171,7 +178,7 @@ void main() {
         productHasModel: false,
       );
       expect(row.action, ShoeModelRequestAction.progress);
-      expect(row.label, '3D model requested');
+      expect(row.label, '3D fitting requested');
     });
 
     test('a declined request offers the reason and a retry', () {
@@ -179,14 +186,14 @@ void main() {
         status: ShoeModelRequestStatus.declined,
         productHasModel: false,
       );
-      expect(row.label, '3D model request declined');
+      expect(row.label, '3D fitting request declined');
       expect(row.action, ShoeModelRequestAction.declined);
       expect(row.subtitle, contains('ask again'));
     });
 
     test('no request at all is the plain ask', () {
       final row = shoeModelRequestRow(status: null, productHasModel: false);
-      expect(row.label, 'Request a 3D model');
+      expect(row.label, 'Request a 3D fitting');
       expect(row.action, ShoeModelRequestAction.ask);
       expect(row.subtitle, isNull);
     });
@@ -369,7 +376,7 @@ void main() {
       expect(result.requestStaysOpen, isFalse);
       expect(result.modelIsLive, isTrue);
       expect(result.modelId, 9);
-      expect(result.message, contains('3D model ready'));
+      expect(result.message, contains('3D fitting ready'));
     });
 
     test('⚠️ a live model that did not close the ask is its own ending', () {
@@ -415,6 +422,139 @@ void main() {
       expect(result.message, contains('stays hidden'));
     });
   });
+
+  // ── 2026-09-29: the sheet gets friendlier, and the rules move with it ──────
+  group('the unit toggle', () {
+    test('centimetres are converted, not refused', () {
+      // The whole point of the toggle: `27` stops being a mistake to catch and
+      // becomes 270 mm, which is what the column and the renderer want.
+      final result = _read(length: '27', unit: ShoeModelRequestUnit.cm);
+      expect(result.isError, isFalse);
+      expect(result.measurements!.externalLengthMm, 270);
+    });
+
+    test('a written unit outranks the toggle, both ways', () {
+      // The toggle says what the seller is ABOUT to type; the suffix is what
+      // they just typed, and the more recent statement wins.
+      expect(
+        _read(length: '27cm').measurements!.externalLengthMm,
+        270,
+        reason: 'an explicit cm suffix, while the toggle says mm',
+      );
+      expect(
+        _read(length: '270mm', unit: ShoeModelRequestUnit.cm)
+            .measurements!
+            .externalLengthMm,
+        270,
+        reason: 'an explicit mm suffix, while the toggle says cm',
+      );
+    });
+
+    test('a centimetre figure is not scolded once cm is chosen', () {
+      // The old advice line exists because a bare 27 in the mm box is a units
+      // mistake. In the cm box it is simply the answer.
+      final result = _read(length: '27', unit: ShoeModelRequestUnit.cm);
+      expect(result.error, isNull);
+    });
+
+    test('a bare 27 in mm is still the centimetres message', () {
+      final result = _read(length: '27');
+      expect(result.errorField, ShoeModelRequestField.externalLengthMm);
+      expect(result.error, contains('millimetres, not centimetres'));
+    });
+
+    test('the band is reported in the unit the seller is typing', () {
+      // A cm band stated in mm would send them hunting for the wrong number:
+      // "between 100 and 400 mm" beside a box labelled cm is a contradiction.
+      final result = _read(length: '2.7', unit: ShoeModelRequestUnit.cm);
+      expect(result.error, contains('cm'));
+      expect(result.error, contains('10'));
+      expect(result.error, contains('40'));
+    });
+  });
+
+  group('the height of the shoe', () {
+    test('is optional', () {
+      final result = _read(length: '270');
+      expect(result.isError, isFalse);
+      expect(result.measurements!.upperHeightMm, isNull);
+    });
+
+    test('rides along with the other numbers when given', () {
+      final result = _read(length: '270', upper: '40');
+      expect(result.measurements!.upperHeightMm, 40);
+    });
+
+    test('is checked against its own band, on its own field', () {
+      final result = _read(length: '270', upper: '5');
+      expect(result.errorField, ShoeModelRequestField.upperHeightMm);
+      expect(result.isError, isTrue);
+    });
+  });
+
+  group('the size run', () {
+    test('is canonicalised: in band, deduplicated, ascending', () {
+      expect(normaliseSizeRun([42, 40, 42, 999, 0, 41]), [40, 41, 42]);
+    });
+
+    test('reads as a range when it has no gaps', () {
+      const run = ShoeModelRequestMeasurements(
+        externalLengthMm: 270,
+        sizesEu: [40, 41, 42, 43, 44],
+      );
+      expect(run.sizeRunSentence, '40–44');
+    });
+
+    test('and as a list when it does', () {
+      const run = ShoeModelRequestMeasurements(
+        externalLengthMm: 270,
+        sizesEu: [38, 39, 44],
+      );
+      expect(run.sizeRunSentence, '38–39, 44');
+    });
+
+    test('an empty run is "not stated", never a blank', () {
+      const run = ShoeModelRequestMeasurements(externalLengthMm: 270);
+      expect(run.sizeRunSentence, 'Not stated');
+    });
+
+    test('⚠️ a run with no length is a missing length, not "nothing to send"',
+        () {
+      // The distinction matters: "empty" sends nothing and shows no error, so a
+      // seller who picked a run and stopped would get silence about the one
+      // number the request cannot be made without.
+      final result = _read(sizes: {42});
+      expect(result.isEmpty, isFalse);
+      expect(result.errorField, ShoeModelRequestField.externalLengthMm);
+    });
+
+    test('travels with the measurements when the form is complete', () {
+      final result = _read(length: '270', sizes: {44, 42});
+      expect(result.measurements!.sizesEu, [42, 44]);
+    });
+  });
+
+  group('the sample hints', () {
+    test('every box has one, and none is empty', () {
+      for (final field in ShoeModelRequestField.values) {
+        expect(
+          shoeModelRequestSampleHint(field).trim(),
+          isNotEmpty,
+          reason: '$field has no sample hint',
+        );
+      }
+    });
+
+    test('the length hint names the size it is about', () {
+      // "about 270 mm" is a statement about a size-42 sandal, and a size 38 is
+      // 27 mm shorter — so the sentence has to say which shoe it means.
+      final hint = shoeModelRequestSampleHint(
+        ShoeModelRequestField.externalLengthMm,
+      );
+      expect(hint, contains('42'));
+      expect(hint, contains('270'));
+    });
+  });
 }
 
 /// One read of the form, with everything blank unless a test fills it in.
@@ -422,11 +562,17 @@ ShoeModelRequestFormResult _read({
   String length = '',
   String width = '',
   String heel = '',
+  String upper = '',
   String size = '',
+  ShoeModelRequestUnit unit = ShoeModelRequestUnit.mm,
+  Set<double> sizes = const {},
 }) =>
     ShoeModelRequestFormResult.fromFields(
       externalLengthMm: length,
       externalWidthMm: width,
       heelHeightMm: heel,
+      upperHeightMm: upper,
       measuredSizeEu: size,
+      unit: unit,
+      sizesEu: sizes.toList(),
     );

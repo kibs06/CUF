@@ -8,7 +8,7 @@ const TITLES = {
   '/users': 'Users',
   '/seller-applications': 'Seller Applications',
   '/products': 'Products',
-  '/model-requests': '3D Model Requests',
+  '/model-requests': '3D Fitting Requests',
   '/orders': 'Orders',
   '/transactions': 'Transactions',
   '/analytics': 'Analytics',

@@ -3,7 +3,18 @@ import assert from 'node:assert/strict'
 import { readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
-import { CLOSING_NOTICE, NOTICE_CHANNELS, SELLER_NOTICE_TYPE } from './askDelivery.js'
+import {
+  ASK_AGAIN_TAIL,
+  ASK_BODY,
+  ASK_NAME_FALLBACK,
+  ASK_PUSH_FUNCTION,
+  ASK_PUSH_SCREEN,
+  CLOSING_NOTICE,
+  DECLINE_QUOTE,
+  NOTICE_CHANNELS,
+  SELLER_NOTICE_TYPE,
+  TEAM_QUOTE,
+} from './askDelivery.js'
 
 // ─── The claim this portal makes about SQL it does not own ─────────
 //
@@ -207,4 +218,99 @@ test('every request RPC the portal calls exists in the migration that owns it', 
   // above — so a rename that lost the insert cannot pass by being found once.
   assert.ok(requestRpcs.includes('fulfil_shoe_model_request'))
   assert.ok(requestRpcs.includes('decline_shoe_model_request'))
+})
+
+// ─── 4. The push says what the bell says ───────────────────────────
+//
+// A notice row is not a push. Both rows can land, correctly, in the same
+// transaction as the close, and the seller's phone can still stay silent — which
+// is the report that made `askPush.js` exist. So the portal now asks for the
+// OS-level copy too, and this section is what keeps it from becoming a second,
+// drifting version of the news: the words are the RPC's, and the two guards
+// below are that claim in the only form a browser can test.
+
+test('the push quotes the RPC bodies rather than paraphrasing them', () => {
+  const fulfil = functionBody('fulfil_shoe_model_request')
+  const decline = functionBody('decline_shoe_model_request')
+
+  // The middle of each sentence, the name fallback, and the way each ending
+  // appends the admin's words — all lifted from the SQL above, so a copy change
+  // on either side fails here instead of on a seller's lock screen.
+  assert.ok(
+    fulfil.includes(ASK_BODY.FULFILLED),
+    `the fulfil notice no longer says "${ASK_BODY.FULFILLED}" — repoint askDelivery.js`,
+  )
+  assert.ok(decline.includes(ASK_BODY.DECLINED))
+  // ⚠️ Compared in the SQL's own spelling: plpgsql escapes the apostrophe in
+  // "product's" by doubling it, so the literal in the migration is
+  // `product''s` — the sentence is the same one, and this says so rather than
+  // leaving a one-character difference to be discovered by a failing seller.
+  assert.ok(
+    decline.includes(ASK_AGAIN_TAIL.replace(/'/g, "''")),
+    'the ask-again sentence moved — repoint askDelivery.js',
+  )
+  assert.ok(fulfil.includes(TEAM_QUOTE))
+  assert.ok(decline.includes(DECLINE_QUOTE))
+
+  // `COALESCE(…, 'Your product')`: the fallback is the bell's own, not a second
+  // invented one, because the push and the bell are read by the same person.
+  assert.ok(fulfil.includes(`'${ASK_NAME_FALLBACK}'`))
+  assert.ok(decline.includes(`'${ASK_NAME_FALLBACK}'`))
+})
+
+test("the push's screen key is one the app actually navigates for", () => {
+  // The portal cannot click a phone, so the key is checked against the app's own
+  // switch: `seller_shell.dart` handles a push's `screen` and silently ignores
+  // anything it does not recognise, so a key invented here would swallow the tap.
+  const shell = readFileSync(
+    new URL('../../../lib/screens/seller/seller_shell.dart', import.meta.url),
+    'utf8',
+  )
+  assert.match(
+    shell,
+    new RegExp(`case '${ASK_PUSH_SCREEN}':`),
+    `${ASK_PUSH_SCREEN} is pushed but the app has no case for it — the tap would land nowhere`,
+  )
+})
+
+test('both closing RPCs are followed by a push request, in the hook that calls them', () => {
+  // Without this the whole feature can be deleted and every other test still
+  // passes: the notice rows are the RPC's (guarded above), the copy is tested,
+  // and the sender is tested — but nothing would call it.
+  const hook = sources.find(({ path }) => path.endsWith('useModelRequests.js'))
+  assert.ok(hook, 'the closing hooks moved — repoint this guard')
+
+  for (const [rpc, kind] of [
+    ['fulfil_shoe_model_request', 'FULFILLED'],
+    ['decline_shoe_model_request', 'DECLINED'],
+  ]) {
+    const at = hook.text.indexOf(`'${rpc}'`)
+    assert.ok(at > -1, `${rpc} is no longer called from ${hook.path}`)
+
+    // Bounded to the same statement region rather than the whole file, so a call
+    // that moved to an unrelated mutation cannot satisfy this by accident.
+    const window = hook.text.slice(at, at + 900)
+    assert.ok(
+      window.includes('sendAskEndingPush'),
+      `${rpc} closes an ask and asks for no push — the seller's phone stays quiet`,
+    )
+    assert.ok(window.includes(`ASK_ENDING.${kind}`), `${rpc} must push the ending it closed as`)
+  }
+
+  // And it is fire-and-forget: awaited into the outcome, a failed push would
+  // report as a failed close (the ask is already closed by then).
+  assert.ok(!/await\s+sendAskEndingPush/.test(hook.text))
+  assert.match(hook.text, /void\s+sendAskEndingPush/)
+})
+
+test('the push service name is the deployed Edge Function, spelled once', () => {
+  assert.equal(ASK_PUSH_FUNCTION, 'send-notification-push')
+
+  const sender = sources.find(({ path }) => path.endsWith('askPush.js'))
+  assert.ok(sender, 'askPush.js moved — repoint this guard')
+
+  // The name is imported, never re-typed at the call site: a second spelling is
+  // how a push starts 404-ing quietly (the invoke's error is swallowed by design).
+  assert.ok(sender.text.includes(`invoke(ASK_PUSH_FUNCTION`))
+  assert.ok(!sender.text.includes(`'send-notification-push'`))
 })

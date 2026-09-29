@@ -137,6 +137,9 @@ flutter:
     - assets/images/default_hero_banner.png
     - assets/images/default_hero_banner_2.png
     - assets/images/default_hero_banner_3.png
+    # The 3D-fitting request sheet's measuring guide: which dimension each box
+    # wants, drawn rather than described (lib/widgets/shoe_model_request_tile.dart).
+    - assets/images/measure_shoe.svg
     - video/locals.mp4
 
   # An image asset can refer to one or more resolution-specific "variants", see

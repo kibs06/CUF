@@ -705,12 +705,32 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
+      // Free to grow past Material's 9/16 cap, so a long action list scrolls
+      // rather than overflowing — see the ListView below.
+      isScrollControlled: true,
       builder: (ctx) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+          // ⚠️ A ListView, not a Column, and that is this sheet's whole fix
+          // for the 6.6 px bottom overflow it shipped on 2026-09-29: the 3D
+          // fitting row (V2.10) added a two-line entry to a sheet that was
+          // already at Material's default 9/16 height cap, and a Column that
+          // exceeds its constraints draws the yellow-and-black stripe over the
+          // last row instead of scrolling. A sheet whose row count is decided
+          // by features elsewhere has to be able to scroll.
+          //
+          // `shrinkWrap` + `isScrollControlled` is the pair that keeps the
+          // old look: the sheet still sizes to its content and only scrolls
+          // once the content genuinely cannot fit the screen. `primary: false`
+          // and an explicit zero padding are not decoration — a vertical
+          // ListView on Android otherwise adopts the app's
+          // PrimaryScrollController and inherits MediaQuery's bottom inset as
+          // scroll padding, which would double the space `SafeArea` below
+          // already accounts for.
+          child: ListView(
+            shrinkWrap: true,
+            primary: false,
+            padding: EdgeInsets.zero,
             children: [
               // ── Drag handle (same treatment as the Adjust Stock sheet) ──
               Center(
