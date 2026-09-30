@@ -238,13 +238,28 @@ void main() {
       expect(
         section,
         contains('SoleARPill(onPressed: widget.onTryOnInAr)'),
-        reason: 'the button belongs to the section, so it leaves with the box',
+        reason: 'the button belongs to the section — including in the '
+            'unsupported-renderer state, where it is the one entry that survives',
       );
+      // The normal composition: the customer looks at the shoe first; the camera
+      // is the escalation. (The unsupported fallback's pill sits earlier in the
+      // source than the box — that is the branch where there IS no box — so the
+      // order is pinned against the last occurrences, which are the normal path.)
       expect(
-        section.indexOf('ShoePreview3D('),
-        lessThan(section.indexOf('SoleARPill(')),
+        section.lastIndexOf('ShoePreview3D('),
+        lessThan(section.lastIndexOf('SoleARPill(')),
         reason: 'the customer looks at the shoe first; the camera is the escalation',
       );
+      // And the unsupported state keeps the pill — the owner's decision after a
+      // real phone showed the whole section (button included) vanishing on
+      // return from AR, leaving no AR entry anywhere. The AR screen degrades to
+      // its simulated mode on such a phone, so the entry stays honestly usable.
+      final unsupported = between(section, 'if (_unsupported)', 'return Column');
+      expect(
+        unsupported,
+        contains("'3D preview isn\\'t supported on this phone.'"),
+      );
+      expect(unsupported, contains('SoleARPill('));
     });
 
     test('and the page mounts it only when the box is not there', () {

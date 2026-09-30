@@ -255,13 +255,15 @@ class ShoePreviewHint extends StatelessWidget {
 /// (`resolveShoePreview`), and splitting them is how the button ends up on a
 /// page whose box is missing.
 ///
-/// ⚠️ **And it is the widget that can take itself off the page.** The native
-/// renderer refuses to load an asset below `FEATURE_LEVEL_2`
+/// ⚠️ **And it is the widget that can lose its box and keep its button.** The
+/// native renderer refuses to load an asset below `FEATURE_LEVEL_2`
 /// (`kRendererUnsupportedReason`) rather than abort the process on it, and when
-/// that report arrives this section removes **both** halves: on such a phone the
-/// AR path cannot draw the shoe either, so offering a camera would be a promise
-/// we cannot keep. See `kRendererUnsupportedReason` for the crash that made this
-/// necessary.
+/// that report arrives this section swaps the box for the not-supported line
+/// while **keeping the AR pill**: the AR screen degrades to its simulated mode
+/// on such a phone, so the entry stays honestly usable. (Originally the whole
+/// section removed itself — until a real phone showed the customer the pill
+/// vanishing mid-visit.) See `kRendererUnsupportedReason` for the crash that
+/// made the refusal necessary.
 class ShoePreviewSection extends StatefulWidget {
   const ShoePreviewSection({
     super.key,
@@ -329,16 +331,28 @@ class _ShoePreviewSectionState extends State<ShoePreviewSection> {
   @override
   Widget build(BuildContext context) {
     // The whole section, or nothing at all — and unmounting the box is what
-    // disposes the native view and its engine. What stays is one line of text:
-    // on a phone the renderer cannot draw on, the AR path is dead too (that is
-    // why the button goes with the box), and a page that merely loses a section
-    // looks identical to a product that has no model. The hint offers nothing —
-    // no button, no camera — because there is nothing this phone can do.
+    // disposes the native view and its engine. What stays is one line of text
+    // plus the AR pill: on a phone the renderer cannot draw on, the 3D box is
+    // dead, but the AR entry is *not* — the AR screen degrades to its simulated
+    // mode with its own notice (the owner's decision, 2026-09-30, after the
+    // first device report showed the original all-or-nothing rule eating the
+    // pill mid-visit: the customer opens AR, comes back, and both entries are
+    // gone because the gate now says "shown" while the section says "gone").
     if (_unsupported) {
-      return const Padding(
-        padding: EdgeInsets.only(bottom: 12),
-        child: ShoePreviewHint(
-          message: '3D preview isn\'t supported on this phone.',
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const ShoePreviewHint(
+              message: '3D preview isn\'t supported on this phone.',
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: SoleARPill(onPressed: widget.onTryOnInAr),
+            ),
+          ],
         ),
       );
     }

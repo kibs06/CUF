@@ -120,6 +120,17 @@ void main() {
           TryOnDegradeReason.arFailed);
     });
 
+    test('the renderer refusal below FEATURE_LEVEL_2 gets its own reason', () {
+      // Measured on a real P30 Pro, 2026-09-30: the phone is GLES 3.2 on paper,
+      // yet Filament's context lands below the floor — and the sentence the
+      // simulated screen needs for that is not "AR failed" but "this phone
+      // cannot render the shoe at all". The literal is pinned to
+      // `kRendererUnsupportedReason` by the shoe-preview contract test, which
+      // reads both files.
+      expect(tryOnDegradeReasonForArFailure('renderer_feature_level_unsupported'),
+          TryOnDegradeReason.rendererUnsupported);
+    });
+
     test('a code from a future native build is a fallback, not a crash', () {
       for (final Object? code in <Object?>[
         null,

@@ -79,6 +79,15 @@ enum TryOnDegradeReason {
   /// The product has no usable model (no rows, or rows the resolver dropped).
   modelMissing,
 
+  /// **The renderer came up below the level a glTF can load at** (F14's
+  /// `FEATURE_LEVEL_1`, the native side reporting
+  /// `renderer_feature_level_unsupported`). Distinct from [arFailed] because
+  /// the sentence differs: this phone will not render the shoe in AR *or* in
+  /// the 3D box, and no retry changes that. Measured on a real P30 Pro,
+  /// 2026-09-30 — a GLES-3.2-on-paper device whose Filament context lands
+  /// below the floor.
+  rendererUnsupported,
+
   /// A model exists but could not be made local — a download failure, an
   /// integrity mismatch, an unwritable cache.
   modelUnavailable,
@@ -173,6 +182,12 @@ TryOnDegradeReason tryOnDegradeReasonForArFailure(String? code) {
       return TryOnDegradeReason.arNeedsInstall;
     case 'user_opted_out':
       return TryOnDegradeReason.arOptedOut;
+    case 'renderer_feature_level_unsupported':
+      // The native refusal below FEATURE_LEVEL_2 (F14/F22). Spelled as a
+      // literal like its siblings above — this file stays import-free — and
+      // pinned to `kRendererUnsupportedReason` by the shoe-preview contract
+      // test, which reads both files and fails if they drift.
+      return TryOnDegradeReason.rendererUnsupported;
     default:
       return TryOnDegradeReason.arFailed;
   }

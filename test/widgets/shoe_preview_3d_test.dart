@@ -188,26 +188,27 @@ void main() {
       // native view, and with it the engine.
       expect(find.byKey(const Key('fake-3d')), findsNothing);
       expect(find.text('View in 3D'), findsNothing);
-      expect(
-        find.text('Try On in AR'),
-        findsNothing,
-        reason: 'on this device the AR path cannot draw the shoe either, so offering '
-            'a camera would be a promise we cannot keep',
-      );
 
-      // What stays is one line of words — the difference between "this product
+      // What stays is the honest line — the difference between "this product
       // has no model" (most of the catalogue) and "your phone cannot draw one"
       // (a bug report we can otherwise never answer; the phones this market
       // holds have no logcat).
       expect(find.text('3D preview isn\'t supported on this phone.'), findsOneWidget);
+      expect(find.byType(ShoePreviewHint), findsOneWidget);
+
+      // ⚠️ And the AR pill STAYS — the owner's decision after a real phone
+      // showed the original all-or-nothing rule eating it mid-visit (open AR,
+      // come back, no AR entry anywhere: the gate now said "shown" while the
+      // section said "gone"). The AR screen degrades to its simulated mode with
+      // its own notice on such a phone, so the entry stays honestly usable.
+      // Originally the test pinned the opposite — "offering a camera would be a
+      // promise we cannot keep" — which was true only while the simulated
+      // fallback was the placeholder feed and not a stated degradation.
       expect(
-        find.byType(ShoePreviewHint),
+        find.text('Try On in AR'),
         findsOneWidget,
-      );
-      expect(
-        find.byType(TextButton),
-        findsNothing,
-        reason: 'there is genuinely nothing this phone can do — no camera, no retry',
+        reason: 'the AR entry must survive the renderer refusal — the customer who '
+            'just came back from AR is exactly the one still looking for it',
       );
     });
 
