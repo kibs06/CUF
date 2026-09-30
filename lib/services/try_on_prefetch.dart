@@ -123,9 +123,16 @@ class TryOnPrefetch {
   /// **Never throws** — that is the contract this class exists for, and it is
   /// tested for every failure mode it can be given. The returned future
   /// completes normally in all cases.
+  ///
+  /// [anyVariant] asks a different question of the same rows: "does this product
+  /// have a model at all?" rather than "which shoe does this customer see?". The
+  /// seller's 3D viewer is that caller — a product whose models are all
+  /// colour-scoped answers "no model" to the second question and must not to the
+  /// first. See `ShoeModelService.resolveForProduct`.
   Future<TryOnPrefetchResult> prefetch({
     required String productId,
     String? variantId,
+    bool anyVariant = false,
   }) {
     if (!enabled) {
       return Future.value(
@@ -133,11 +140,18 @@ class TryOnPrefetch {
       );
     }
 
-    final key = '$productId::${variantId ?? ''}';
+    // `anyVariant` is part of the key: the two questions have different answers
+    // for a product whose only rows are colour-scoped, so one must never be
+    // served the other's future.
+    final key = '$productId::${variantId ?? ''}::${anyVariant ? 'any' : 'scoped'}';
     final existing = _inFlight[key];
     if (existing != null) return existing;
 
-    final future = _prefetch(productId: productId, variantId: variantId);
+    final future = _prefetch(
+      productId: productId,
+      variantId: variantId,
+      anyVariant: anyVariant,
+    );
     _inFlight[key] = future;
     future
         .whenComplete(() {
@@ -150,10 +164,15 @@ class TryOnPrefetch {
   Future<TryOnPrefetchResult> _prefetch({
     required String productId,
     String? variantId,
+    bool anyVariant = false,
   }) async {
     ShoeModelSpec? spec;
     try {
-      spec = await models.resolveForProduct(productId, variantId: variantId);
+      spec = await models.resolveForProduct(
+        productId,
+        variantId: variantId,
+        anyVariant: anyVariant,
+      );
     } catch (e) {
       // A missing table (the migration is not applied), a dropped connection,
       // an RLS refusal — all the same to the page: no model, no problem.

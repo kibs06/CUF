@@ -104,6 +104,35 @@ void main() {
       expect(second.summary, contains('already cached'));
     });
 
+    test('a colour-scoped-only product answers the seller\'s question', () async {
+      // ⚠️ The two questions the same rows answer differently. A shopper with no
+      // colour in hand gets "no model" (rule 3 — never another colour's asset),
+      // while the seller checking their own "3D fitting ready" row gets the one
+      // model the product actually has. Without the flag the seller's viewer
+      // would report a missing model about a product that visibly has one.
+      final bytes = bytesOf(64);
+      final source = _FakeModelSource()
+        ..rows = [rowFor(bytes)..['variant_id'] = 'v-7']
+        ..files = {'store-1/product-1/model.glb': bytes};
+      final prefetch = prefetchWith(source);
+
+      final shopper = await prefetch.prefetch(productId: 'product-1');
+      expect(shopper.outcome, TryOnPrefetchOutcome.noModel);
+
+      final seller = await prefetch.prefetch(
+        productId: 'product-1',
+        anyVariant: true,
+      );
+      expect(seller.outcome, TryOnPrefetchOutcome.downloaded);
+      expect(seller.spec?.variantId, 'v-7');
+      expect(
+        source.rowsCalls,
+        2,
+        reason: 'the two questions must not share one in-flight future — their '
+            'answers differ for exactly this product',
+      );
+    });
+
     test('concurrent prefetches for one selection share one read', () async {
       final bytes = bytesOf(64);
       final source = _FakeModelSource()

@@ -166,12 +166,21 @@ class ShoeModelService {
 
   /// The one model to render for [variantId] — per-colour override, then
   /// the product default, then null. See `shoe_model_resolver.dart`.
+  ///
+  /// [anyVariant] is the "is there *a* model on this product?" question rather
+  /// than "which shoe does this customer see?" — the seller's viewer asks it, so
+  /// a product whose models are all colour-scoped does not answer "no model".
   Future<ShoeModelSpec?> resolveForProduct(
     String productId, {
     String? variantId,
+    bool anyVariant = false,
   }) async {
     final models = await activeModelsFor(productId);
-    return resolveShoeModel(models: models, variantId: variantId);
+    return resolveShoeModel(
+      models: models,
+      variantId: variantId,
+      anyVariant: anyVariant,
+    );
   }
 
   /// The cache folder. Created on demand by [ensureLocal], never here, so

@@ -1,29 +1,33 @@
-/// Whether the product page shows the inline **3D box** — and with it the
-/// "Try On in AR" button that sits underneath.
+/// Whether the product page shows the **3D icon on the product photograph** —
+/// and with it the viewer behind it, whose own section carries the
+/// "Try On in AR" button.
 ///
 /// A pure file with no Flutter and no Supabase import, the same shape as
 /// `try_on_mode.dart` and `fit_verdict_state.dart`, for the same reason: the
 /// answer is a table, and a page that shows a 3D box for a product with nothing
 /// to render is a bug nobody can see from the code that decides it.
 ///
-/// **The rule is deliberately all-or-nothing.** The box and the AR button come
-/// and go together, because the button is *part of* the box's section rather than
-/// a separate entry: a product with no model shows neither. That is a product
-/// decision with a cost — the AR entry point used to be on every product page —
-/// and it is the reason `AppConstants.shoePreviewEnabled` exists as a switch
-/// rather than as a rewrite: with it off, the page keeps exactly the pinned
-/// pill it has today.
+/// **The rule is deliberately all-or-nothing.** The icon and the AR button come
+/// and go together, because the button is *part of* the section the icon opens
+/// rather than a separate entry: a product with no model shows neither. That is a
+/// product decision with a cost — the AR entry point used to be on every product
+/// page, and until 2026-10-01 it was a pinned pill that showed on every product
+/// regardless — and it is the reason `AppConstants.shoePreviewEnabled` exists as
+/// a switch rather than as a rewrite: with it off, the page has no 3D entry at
+/// all.
 ///
 /// **The four questions, in the order they are asked.** Each one is a different
 /// kind of fact, and the first that fails is the honest reason to report:
 ///
-///   1. `enabled` — the build switch. Nothing is read, and the page renders the
-///      old pill, when it is off.
+///   1. `enabled` — the build switch. Nothing is read, and the page shows no 3D
+///      icon at all, when it is off.
 ///   2. `isAndroid` — there is no iOS renderer at all (`ios/` carries no
 ///      ARCore/try-on code), so on iOS the section must not exist rather than
 ///      exist and stay blank.
 ///   3. `hasModel` — the product has a **live** (`active`) model row. A draft
 ///      that failed the authoring contract is not a model anyone may render.
+///      (The page adds one more fact of its own before it draws the icon: those
+///      bytes verified on disk — `_showPreviewIcon`.)
 ///   4. `hasLocalModel` — those bytes are verified and on disk. The native side
 ///      is handed a local path and never does HTTP (§2.8), so "there is a row"
 ///      and "there is something to draw" are different questions, and only the
@@ -39,7 +43,7 @@ enum ShoePreviewReason {
   /// Nothing stopped it: the box is shown.
   none,
 
-  /// `SHOE_PREVIEW` is off for this build — the page keeps the pinned AR pill.
+  /// `SHOE_PREVIEW` is off for this build — the page has no 3D icon.
   featureOff,
 
   /// iOS (or desktop): there is no renderer to mount.

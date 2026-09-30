@@ -24,11 +24,10 @@ import '../../utils/sale_price.dart';
 import '../../utils/shoe_preview_visibility.dart';
 import '../../utils/variant_swatch_color.dart';
 import '../../widgets/sole_badge.dart';
-import '../../widgets/sole_ar_pill.dart';
 import '../../widgets/sole_review_card.dart';
 import '../../widgets/sole_star_rating.dart';
-import 'ar_fitting_screen.dart';
 import 'checkout_screen.dart';
+import '../shared/shoe_preview_screen.dart';
 import 'tag_products_screen.dart';
 import 'write_review_screen.dart';
 import '../../widgets/cart_icon_button.dart';
@@ -806,13 +805,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
     });
   }
 
-  /// True while the AR screen is pushed on top of this page.
-  ///
-  /// The inline 3D box stops rendering while it is — see `_openArTryOn`. The
-  /// page owns this flag because it is the thing that pushes the route, and
-  /// because a push does not rebuild the page underneath it.
-  bool _arTryOnOpen = false;
-
   /// What the V2.6 prefetch found, kept because the try-on entry needs the
   /// answer (V3.9) and a fire-and-forget future has nowhere else to leave it.
   /// Declared beside its only reader and writer on purpose.
@@ -985,43 +977,33 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
     return TryOnModelSpec.fromModel(spec, path: path);
   }
 
-  /// Open the AR try-on, and **stop the inline 3D box while it is on top**.
+  /// Whether the hero shows the 3D icon — the page's only way into the viewer.
   ///
-  /// ⚠️ The pause is not tidiness. The product page stays mounted under the
-  /// pushed route (`maintainState` is true by default, and Flutter does not
-  /// rebuild the route underneath a push at all), so without this the box's
-  /// platform view — and its whole Filament engine — keeps rendering behind an
-  /// AR session that needs the same GPU. Two engines for one customer is a
-  /// frame-rate argument nobody wins, and the box is worth nothing while they are
-  /// in AR.
-  ///
-  /// It is a flag the page owns rather than a `ModalRoute.isCurrent` check inside
-  /// the widget because a push does not rebuild the covered route — so the route
-  /// check would silently never fire. This page is what pushes the screen, so it
-  /// is the thing that knows when it is there and when it comes back.
-  Future<void> _openArTryOn() async {
-    setState(() => _arTryOnOpen = true);
-    try {
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => ARVirtualFitScreen(
-            preselectedProduct: widget.product,
-            modelAvailable: _tryOnModelAvailable,
-          ),
+  /// Two facts, and both are needed: `shown` is the build switch, the platform
+  /// and the catalogue's honesty about having a model at all, and the model is
+  /// **these bytes, verified on disk** (the native side is handed a local path
+  /// and never does HTTP). An icon on a product with no model would open a
+  /// viewer whose entire content is an apology.
+  bool get _showPreviewIcon => _shoePreview.shown && _shoePreviewModel != null;
+
+  /// Open the full-screen 3D viewer. No pause flag is needed here the way the
+  /// old inline box needed one: the box belongs to the pushed route, so the
+  /// page underneath holds no engine to stop (`ShoePreviewScreen` owns the flag
+  /// for its own push into AR).
+  Future<void> _openShoePreview() async {
+    final model = _shoePreviewModel;
+    if (model == null) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => ShoePreviewScreen(
+          model: model,
+          product: widget.product,
+          modelAvailable: _tryOnModelAvailable,
         ),
-      );
-    } finally {
-      if (mounted) setState(() => _arTryOnOpen = false);
-    }
+      ),
+    );
   }
 
-  /// **The inline 3D section, or nothing at all.**
-  ///
-  /// Renders nothing — and leaves no gap, the same rule `FitVerdictCard`
-  /// follows — when `_shoePreview` says no, which is every product without a
-  /// verified local model. The condition and the model are read once here rather
-  /// than twice in the tree, so the section cannot be gated by one answer and
-  /// built from another.
   /// The reason last written to the log, so a rebuild storm does not become a log
   /// storm: the answer changes at most a handful of times per page.
   ShoePreviewReason? _loggedPreviewReason;
@@ -1042,7 +1024,20 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
     );
   }
 
-  Widget _shoePreviewSection() {
+  /// **The 3D notice — words for the one hidden state the icon cannot explain,
+  /// or nothing at all.**
+  ///
+  /// The icon on the photograph is silent by construction: it is there when
+  /// there is a model to turn and gone when there is not, which is the honest
+  /// answer for a catalogue with no model on this product and the wrong one for
+  /// a fault the customer can fix with one tap. So the recoverable states keep
+  /// the sentence and the Retry they have always had, in the flow under the size
+  /// grid where the box used to sit. Everything else renders nothing — and
+  /// leaves no gap, the same rule `FitVerdictCard` follows.
+  ///
+  /// The condition and the model are read once here rather than twice in the
+  /// tree, so the notice cannot be gated by one answer and built from another.
+  Widget _shoePreviewNotice() {
     final model = _shoePreviewModel;
     final decision = _shoePreview;
     _logPreviewReason(decision.reason);
@@ -1071,14 +1066,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
       }
       return const SizedBox.shrink();
     }
-    return Padding(
-      padding: const EdgeInsets.only(top: 4, bottom: 12),
-      child: ShoePreviewSection(
-        model: model,
-        onTryOnInAr: _openArTryOn,
-        paused: _arTryOnOpen,
-      ),
-    );
+    // Shown, with a model in hand: the icon on the photo is the whole surface,
+    // and this helper has nothing left to say.
+    return const SizedBox.shrink();
   }
 
   /// Fetch inventory and variant data if the parent screen didn't include it.
@@ -1497,6 +1487,20 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                 );
               }),
             ),
+          ),
+
+        // The 3D icon — the page's whole entry into the 3D viewer since the
+        // pinned "Try On in AR" pill came off it (2026-10-01). It rides on the
+        // photograph, above the dot indicators and the sale band, and only on a
+        // product whose model is verified on disk: a product with nothing to
+        // turn shows no icon rather than a viewer that can only apologise
+        // (`_showPreviewIcon`). A tap is a *look*, and the camera behind it stays
+        // one tap deeper — the AR pill lives inside the viewer's section.
+        if (_showPreviewIcon)
+          Positioned(
+            right: 12,
+            bottom: 50,
+            child: Sole3DIconButton(onPressed: _openShoePreview),
           ),
       ],
       ),
@@ -2116,16 +2120,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                           product: widget.product,
                           selectedSize: _selectedSize,
                         ),
-                        // ── View in 3D (V3.10 of the fitting roadmap) ──
-                        // The shoe itself, turnable, with the AR entry point
-                        // underneath it. It sits here — under the size grid it
-                        // describes and above the buy controls — because it is
-                        // the same question the size buttons just asked, asked
-                        // with the product instead of a table. Shown only for a
-                        // product whose model is verified on disk; with
-                        // `SHOE_PREVIEW` off this renders nothing and the page
-                        // keeps the pinned AR pill it has always had.
-                        _shoePreviewSection(),
+                        // ── 3D preview notice (V3.10 of the fitting roadmap) ──
+                        // The shoe itself is no longer a row here: the 3D icon
+                        // on the product photograph opens the full-screen viewer
+                        // (`_openShoePreview`). What is left in the flow is the
+                        // one state the icon cannot explain — a prefetch that
+                        // failed or never finished on a product that has a model
+                        // — and it keeps its sentence and its Retry. Renders
+                        // nothing, and leaves no gap, in every other case.
+                        _shoePreviewNotice(),
                         _buildQuantityStepper(),
                         // Pickup hold — FREE, 1-2 pairs of one size, held 24h.
                         // A different flow from the bulk (reseller) hold
@@ -2327,22 +2330,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
               )
             ],
           ),
-
-          // Pinned AR Floating Try-On Pill (stands out, accent teal)
-          //
-          // ⚠️ Hidden while the inline 3D section is on the page. The pill and
-          // that section's button are the **same action**, and two live
-          // "Try On in AR" buttons on one screen is a bug rather than a choice
-          // — so exactly one of them is mounted, decided by `_shoePreview`. With
-          // `SHOE_PREVIEW` off (the default) this is the entry the page has
-          // always had, unchanged.
-          if (_shoePreview.hidden)
-            Positioned(
-              left: 20,
-              right: 20,
-              bottom: 84, // position above buy now buttons
-              child: SoleARPill(onPressed: _openArTryOn),
-            ),
 
           // Outlined Add to Cart / Solid Buy Now bar at bottom
           Positioned(

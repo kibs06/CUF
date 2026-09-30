@@ -30,6 +30,7 @@ library;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import '../constants/app_constants.dart';
 import 'ar_try_on_channel.dart';
 
 /// Method channel name, beside the AR channel's `com.solevision/ar_try_on`.
@@ -79,8 +80,26 @@ class ShoePreviewChannel {
   final MethodChannel _method;
 
   /// Hand the verified local `.glb` over. Safe before the view exists.
+  ///
+  /// ⚠️ **Both QA switches ride on this payload, and on this one only.**
+  /// `AppConstants.shoePreviewAllowLevel1` is sent as a bare `false` in every
+  /// customer build, and the native side additionally refuses to honour a `true`
+  /// outside a debuggable build; the request is deliberately *not* a field of
+  /// [`TryOnModelSpec`], because the AR session hands over the same shape and
+  /// must not be able to ask a crashing load into existence. See `ArTryOnView
+  /// .allowsUnsupportedRenderer` for the guard it relaxes.
+  ///
+  /// `AppConstants.shoePreviewLowerEngineToLevel1` travels the same way for the
+  /// other half of the same question — it asks the renderer to come up at
+  /// `FEATURE_LEVEL_1` rather than only to tolerate it — and carries the same two
+  /// locks (`ArTryOnView.shouldLowerEngineToLevel1`), because an engine lowered on
+  /// a customer's phone would be a product decision rather than a measurement.
   Future<void> setModel(TryOnModelSpec spec) =>
-      _invoke('setPreviewModel', spec.toMap());
+      _invoke('setPreviewModel', <String, Object?>{
+        ...spec.toMap(),
+        'allowUnsupportedRenderer': AppConstants.shoePreviewAllowLevel1,
+        'lowerEngineToLevel1': AppConstants.shoePreviewLowerEngineToLevel1,
+      });
 
   /// Grade the mesh to a selected EU size — the same 6.67 mm step the AR path
   /// uses, because the box shows the size the customer just tapped.

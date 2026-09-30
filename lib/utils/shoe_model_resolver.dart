@@ -17,6 +17,13 @@
 ///   2. otherwise the product-level default (`variant_id == null`);
 ///   3. otherwise there is no model — never a different colour's asset.
 ///
+/// ⚠️ **Rule 3 is about a shopper choosing a colour, and [anyVariant] is the one
+/// caller it does not fit.** A seller asking "does this product have a model?"
+/// has no colour in hand and no customer to show it to, so a product whose only
+/// rows are colour-scoped would answer "no model" — the seller's own "3D fitting
+/// ready" row calling itself a liar. That caller opts in explicitly, and the
+/// default stays rung by rung as written above.
+///
 /// Within the winning group the newest `version` wins, ties broken by
 /// the higher `id`. That makes the choice deterministic: two rows with
 /// the same version can never make the renderer pick at random.
@@ -164,10 +171,11 @@ List<ShoeModelSpec> parseShoeModelRows(List<Map<String, dynamic>> rows) {
 ShoeModelSpec? resolveShoeModel({
   required List<ShoeModelSpec> models,
   String? variantId,
+  bool anyVariant = false,
 }) {
   if (models.isEmpty) return null;
 
-  final List<ShoeModelSpec> pool;
+  List<ShoeModelSpec> pool;
   if (variantId != null) {
     final overrides =
         models.where((m) => m.variantId == variantId).toList(growable: false);
@@ -179,6 +187,13 @@ ShoeModelSpec? resolveShoeModel({
   } else {
     pool = models.where((m) => m.variantId == null).toList(growable: false);
   }
+
+  // See [anyVariant]: the caller wants *a* model rather than *this customer's*
+  // model, so the colour-scoped rows are a valid answer when nothing else is on
+  // the product. It is the last resort rather than a preference — the default
+  // still wins when both exist, so a seller sees the same shoe the shop opens
+  // on.
+  if (pool.isEmpty && anyVariant) pool = models;
 
   if (pool.isEmpty) return null;
 

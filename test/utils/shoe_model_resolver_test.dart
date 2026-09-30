@@ -215,6 +215,65 @@ void main() {
       );
       expect(chosen?.id, 9);
     });
+
+    group('anyVariant — "is there a model on this product at all?"', () {
+      // ⚠️ The seller's question, and the one caller rule 3 does not fit. A
+      // seller checking their own "3D fitting ready" row has no colour selected
+      // and nobody to show the shoe to; answering "no model" about a product
+      // that visibly has one is the row contradicting itself.
+      test('takes a colour-scoped model when there is no default', () {
+        final chosen = resolveShoeModel(
+          models: [spec(2, variantId: 'v-7')],
+          variantId: null,
+          anyVariant: true,
+        );
+        expect(chosen?.id, 2);
+      });
+
+      test('still prefers the product default when both exist', () {
+        final chosen = resolveShoeModel(
+          models: [spec(1), spec(2, variantId: 'v-7')],
+          variantId: null,
+          anyVariant: true,
+        );
+        expect(
+          chosen?.id,
+          1,
+          reason: 'the seller should see the same shoe the shop opens on',
+        );
+      });
+
+      test('a colour with no override falls through to the newest model left',
+          () {
+        final chosen = resolveShoeModel(
+          models: [
+            spec(2, variantId: 'v-7', version: 1),
+            spec(3, variantId: 'v-8', version: 4),
+          ],
+          variantId: 'v-9',
+          anyVariant: true,
+        );
+        expect(chosen?.id, 3, reason: 'having given up on the colour, the same '
+            'newest-version-wins rule still picks the row');
+      });
+
+      test('off is still the shipped answer, so nothing else moves', () {
+        // The flag defaults to false and every shopper call site leaves it
+        // there: a colour without its own override still resolves to nothing.
+        final chosen = resolveShoeModel(
+          models: [spec(2, variantId: 'v-7')],
+          variantId: 'v-8',
+        );
+        expect(chosen, isNull);
+      });
+
+      test('an empty product is still empty', () {
+        expect(
+          resolveShoeModel(models: const [], variantId: null, anyVariant: true),
+          isNull,
+        );
+      });
+    });
   });
 
   group('parseShoeModelRows', () {

@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:app/constants/app_constants.dart';
+import 'package:app/screens/shared/shoe_preview_screen.dart';
 import 'package:app/services/shoe_model_request_service.dart';
 import 'package:app/utils/shoe_model_request.dart';
 import 'package:app/widgets/shoe_model_request_tile.dart';
@@ -100,10 +101,27 @@ void main() {
 
     expect(find.text('3D fitting ready'), findsOneWidget);
     expect(find.text('Customers can try this pair on'), findsOneWidget);
+  });
+
+  testWidgets('and tapping it opens the model itself, not a sentence about one',
+      (tester) async {
+    // ⚠️ The row is backed by a `product_models` record, and a record is not a
+    // shoe — this used to open a sheet that *said* a model exists, which is the
+    // row's own claim repeated back to the seller. The tap now opens the viewer,
+    // which resolves the model on this device and either draws it or says there
+    // is nothing to draw.
+    await _pump(tester, hasLiveModel: true);
 
     await tester.tap(find.text('3D fitting ready'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('This product has a model'), findsOneWidget);
+
+    expect(find.byType(ShoePreviewScreen), findsOneWidget);
+    // The seller's door, not the customer's: nobody here can try the pair on.
+    expect(find.text('Try On in AR'), findsNothing);
+    // ⚠️ And the sheet that described the model is gone. It said the product
+    // "has a model", which is the row's own claim said back to the seller — the
+    // sentence that replaced it is the one about what is actually on screen.
+    expect(find.textContaining('This product has a model'), findsNothing);
   });
 
   testWidgets('the form refuses centimetres before it sends anything',

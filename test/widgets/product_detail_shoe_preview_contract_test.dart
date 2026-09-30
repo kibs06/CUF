@@ -4,7 +4,7 @@ import 'package:app/services/shoe_preview_channel.dart';
 import 'package:app/utils/shoe_preview_visibility.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// The product page's **inline 3D box**, pinned at the call site.
+/// The product page's **3D entry**, pinned at the call site.
 ///
 /// The gate's *rule* is unit-tested in `test/utils/shoe_preview_visibility_test.dart`
 /// and the box itself in `test/widgets/shoe_preview_3d_test.dart`. What neither
@@ -14,6 +14,15 @@ import 'package:flutter_test/flutter_test.dart';
 /// uses for the AR entry — these read the call site as source. A gate nobody
 /// calls is the most common way a feature ends up "done" while the page still
 /// shows the old thing.
+///
+/// ⚠️ **Repointed on 2026-10-01, when the entry moved onto the photograph.** The
+/// pinned "Try On in AR" pill came off the page and the inline box left the
+/// scroll: the page's only 3D entry is now the icon in the hero's lower-right
+/// corner (`Sole3DIconButton`), which opens the full-screen viewer
+/// (`lib/screens/shared/shoe_preview_screen.dart`). The box, the refusal
+/// handling and the AR escalation are all still `ShoePreviewSection` — which is
+/// why the sections below that assert *its* internals are unchanged, while the
+/// ones that assert where it is mounted moved to the viewer's file.
 void main() {
   final productScreen =
       File('lib/screens/customer/product_detail_screen.dart').readAsStringSync();
@@ -21,6 +30,10 @@ void main() {
   final previewWidget = File('lib/widgets/shoe_preview_3d.dart').readAsStringSync();
   final previewChannel =
       File('lib/services/shoe_preview_channel.dart').readAsStringSync();
+  // The viewer lives in `screens/shared/` since 2026-10-01: the product photo's
+  // icon opens it, and so does the seller's "3D fitting ready" row.
+  final previewScreen =
+      File('lib/screens/shared/shoe_preview_screen.dart').readAsStringSync();
 
   /// Source with whole-line comments removed.
   ///
@@ -59,14 +72,17 @@ void main() {
       );
     });
 
-    test('off means the page keeps the entry it has always had', () {
-      // With the switch off the box is not mounted and the pinned pill is — the
-      // two are alternatives, not layers.
-      expect(productScreen, contains('if (_shoePreview.hidden)'));
+    test('off means the page shows no 3D icon at all', () {
+      // With the switch off the gate says hidden, so the icon on the photograph
+      // is not built — and the page has no AR pill of its own any more (it came
+      // off on 2026-10-01), so there is no second entry left to fall back on.
+      expect(productScreen, contains('if (_showPreviewIcon)'));
       expect(
         productScreen,
-        contains('SoleARPill(onPressed: _openArTryOn)'),
-        reason: 'the pinned pill is the switch-off path and must keep working',
+        contains('Sole3DIconButton(onPressed: _openShoePreview)'),
+        reason: 'the icon is the entry the switch gates; without it the page has '
+            'no 3D surface at all, which is the honest answer for a build where '
+            'nobody has seen a render on hardware',
       );
     });
   });
@@ -103,15 +119,61 @@ void main() {
       );
     });
 
-    test('the section is mounted on the page, and renders nothing when the rule says so',
-        () {
+    test('the icon is gated on the model as well as the rule', () {
+      final icon = between(productScreen, 'bool get _showPreviewIcon', ';');
+
+      expect(icon, contains('_shoePreview.shown'));
+      expect(
+        icon,
+        contains('_shoePreviewModel != null'),
+        reason: 'the rule answers the build switch, the platform and the '
+            'catalogue — but the icon opens a viewer, and a viewer with no bytes '
+            'on disk can only apologise',
+      );
+    });
+
+    test('the icon opens the viewer, with the model and the page\'s own row', () {
+      final open = between(productScreen, 'Future<void> _openShoePreview()', '\n  }');
+
+      expect(open, contains('ShoePreviewScreen('));
+      expect(open, contains('model: model'));
+      expect(
+        open,
+        contains('product: widget.product'),
+        reason: 'the AR escalation inside the viewer needs the whole row, the same '
+            'way the page used to hand it over',
+      );
+      expect(open, contains('modelAvailable: _tryOnModelAvailable'));
+      expect(
+        open,
+        contains('if (model == null) return;'),
+        reason: 'the viewer cannot be opened without bytes to draw',
+      );
+    });
+
+    test('the viewer is the thing that mounts the section', () {
       expect(
         productScreen,
-        contains('_shoePreviewSection(),'),
-        reason: 'a gate nobody calls is a feature that is not built',
+        contains('_shoePreviewNotice(),'),
+        reason: 'a gate nobody calls is a feature that is not built — the notice '
+            'is what is left on the page',
       );
+      expect(previewScreen, contains('ShoePreviewSection('));
+      expect(previewScreen, contains('height: boxHeight'));
+      // The customer door hands the resolved model over. The *other* door
+      // (`forProduct`) is the seller's, and it is the one that resolves.
+      expect(previewScreen, contains('ShoePreviewScreen.forProduct({'));
+      expect(
+        productScreen,
+        isNot(contains('ShoePreviewScreen.forProduct(')),
+        reason: 'the page always has the model in hand — its own prefetch ran '
+            'while the customer was reading, and a viewer that re-resolved would '
+            'be a second read for an answer already on screen',
+      );
+    });
 
-      final helper = between(productScreen, 'Widget _shoePreviewSection()', '\n  /// Fetch inventory');
+    test('the notice renders nothing when the rule says so', () {
+      final helper = between(productScreen, 'Widget _shoePreviewNotice()', '\n  /// Fetch inventory');
       expect(
         helper,
         contains('final decision = _shoePreview;'),
@@ -124,7 +186,12 @@ void main() {
         reason: 'a product with no model gets no box **and** no AR button, and '
             'no gap where they would have been',
       );
-      expect(helper, contains('paused: _arTryOnOpen'));
+      expect(
+        previewScreen,
+        contains('paused: _arTryOnOpen'),
+        reason: 'the box belongs to the viewer now, so the viewer is what stops '
+            'it while AR is on top',
+      );
       expect(
         helper,
         contains('_logPreviewReason(decision.reason)'),
@@ -149,7 +216,7 @@ void main() {
       // fact (`_productHasLiveModelRow`, asked from the table directly) rather
       // than on the prefetch's own outcome: with a live row, every hidden state
       // either has words or had a failure.
-      final helper = between(productScreen, 'Widget _shoePreviewSection()', '\n  /// Fetch inventory');
+      final helper = between(productScreen, 'Widget _shoePreviewNotice()', '\n  /// Fetch inventory');
       expect(helper, contains('TryOnPrefetchOutcome.failed'));
       expect(helper, contains('ShoePreviewHint('));
       expect(helper, contains("'Retry'"));
@@ -254,7 +321,14 @@ void main() {
       // real phone showed the whole section (button included) vanishing on
       // return from AR, leaving no AR entry anywhere. The AR screen degrades to
       // its simulated mode on such a phone, so the entry stays honestly usable.
-      final unsupported = between(section, 'if (_unsupported)', 'return Column');
+      //
+      // The branch grew a second condition on 2026-09-30 — it also answers the QA
+      // build's non-refusal failure (`_diagnosticDetail`, behind
+      // `SHOE_PREVIEW_DIAGNOSTICS`) — so this window is repointed to the whole
+      // branch. Both states keep the pill; what a customer build sees is still the
+      // one honest sentence, which the assertion below is about.
+      final unsupported =
+          between(section, 'if (_unsupported || _diagnosticDetail != null)', 'return Column');
       expect(
         unsupported,
         contains("'3D preview isn\\'t supported on this phone.'"),
@@ -262,27 +336,32 @@ void main() {
       expect(unsupported, contains('SoleARPill('));
     });
 
-    test('and the page mounts it only when the box is not there', () {
-      // Two live "Try On in AR" buttons on one screen is a bug rather than a
-      // choice, so the pill is inside the complement of the box's condition.
-      final pill = between(productScreen, 'if (_shoePreview.hidden)', 'SoleARPill(');
+    test('the page itself mounts none of them — the icon is the only entry', () {
+      // The pinned pill came off the page on 2026-10-01. AR is now one tap
+      // deeper, inside the viewer, which is the escalation the section has
+      // always carried rather than a second, competing button on the page.
       expect(
-        pill,
-        isNot(contains('_shoePreviewSection')),
-        reason: 'the pill must be gated on the box being absent, not on the flag',
+        productScreen,
+        isNot(contains('SoleARPill(')),
+        reason: 'the page is the 3D icon plus the recovery notice, nothing else',
       );
-
       expect(
-        'SoleARPill('.allMatches(productScreen).length,
+        'Sole3DIconButton('.allMatches(productScreen).length,
         1,
-        reason: 'a second pill would be a second, ungated AR entry',
+        reason: 'two icon buttons would be two entries into the same viewer',
       );
+      // And the viewer gets exactly one, from the section rather than of its own.
+      expect(previewScreen, isNot(contains('SoleARPill(')));
+      expect(previewScreen, contains('onTryOnInAr: _openArTryOn'));
     });
   });
 
   group('the box stops while the AR screen is on top', () {
-    test('the page pauses it around the push, not from inside the widget', () {
-      final open = between(productScreen, 'Future<void> _openArTryOn()', '\n  }');
+    test('the viewer pauses it around the push, not from inside the widget', () {
+      // The push moved from the page to the viewer with the button: the box is
+      // mounted by the pushed route now, so the route that owns both the box and
+      // the AR push is the viewer.
+      final open = between(previewScreen, 'Future<void> _openArTryOn()', '\n  }');
 
       final paused = open.indexOf('_arTryOnOpen = true');
       final pushed = open.indexOf('Navigator.of(context).push');
@@ -383,6 +462,189 @@ void main() {
         contains('on MissingPluginException'),
         reason: 'a build with no plugin is the expected answer, not a page error',
       );
+    });
+  });
+
+  group('the QA seams are opt-in, and the risky one is locked twice', () {
+    // `SHOE_PREVIEW_DIAGNOSTICS` and `SHOE_PREVIEW_ALLOW_LEVEL1` exist for one
+    // question: whether the renderer refusal can be avoided on a real phone. One
+    // prints the measured facts on the page (the P30 Pro's developer options are
+    // locked, so no logcat will ever be read from it); the other lets the load the
+    // guard forbids actually happen — which is why it carries two locks.
+    final view = File(
+      'android/app/src/main/kotlin/com/solevision/app/tryon/ArTryOnView.kt',
+    ).readAsStringSync();
+
+    test('all three are environment switches, and none defaults on', () {
+      for (final name in <String>[
+        'SHOE_PREVIEW_DIAGNOSTICS',
+        'SHOE_PREVIEW_ALLOW_LEVEL1',
+        'SHOE_PREVIEW_LOWER_ENGINE_TO_LEVEL1',
+      ]) {
+        expect(constants, contains("bool.fromEnvironment('$name')"));
+        expect(
+          constants,
+          isNot(contains("bool.fromEnvironment('$name', defaultValue: true)")),
+          reason: '$name must ship off: one is not customer copy, one is a load '
+              'that can abort the process, and one lowers the renderer on purpose',
+        );
+      }
+    });
+
+    test('the definition file every release copies lists all three off', () {
+      final defines = File('dart_defines.json.example').readAsStringSync();
+      expect(defines, contains('"SHOE_PREVIEW_DIAGNOSTICS": false'));
+      expect(defines, contains('"SHOE_PREVIEW_ALLOW_LEVEL1": false'));
+      expect(defines, contains('"SHOE_PREVIEW_LOWER_ENGINE_TO_LEVEL1": false'));
+    });
+
+    test('the override rides on the preview handover, and only there', () {
+      final handover = between(
+        previewChannel,
+        'Future<void> setModel(TryOnModelSpec spec)',
+        ';',
+      );
+      expect(handover, contains("'setPreviewModel'"));
+      expect(
+        handover,
+        contains("'allowUnsupportedRenderer': AppConstants.shoePreviewAllowLevel1"),
+        reason: 'the switch has to reach the native side on the handover, or the '
+            'guard it relaxes never hears about it',
+      );
+      expect(
+        handover,
+        contains("'lowerEngineToLevel1': AppConstants.shoePreviewLowerEngineToLevel1"),
+        reason: 'the engine-level switch travels on the same handover — the '
+            'renderer has to be told before it is built, and the handover is the '
+            'only thing that arrives before it',
+      );
+      expect(
+        File('lib/services/ar_try_on_channel.dart').readAsStringSync(),
+        isNot(contains('allowUnsupportedRenderer')),
+        reason: 'the AR session sends the same payload shape and must not be able '
+            'to ask a crashing load into existence',
+      );
+      expect(
+        File('lib/services/ar_try_on_channel.dart').readAsStringSync(),
+        isNot(contains('lowerEngineToLevel1')),
+        reason: 'and it must not be able to ask for a permanently worse renderer '
+            'either',
+      );
+      expect(
+        previewWidget,
+        contains('showDiagnostics = AppConstants.shoePreviewDiagnosticsEnabled'),
+        reason: 'the readout is gated by the switch rather than by the mere fact '
+            'that something failed',
+      );
+    });
+
+    test('the native refusal keeps its guard, and the override is debuggable-only',
+        () {
+      // The guard *and* the override on one condition: the crash F22 measured is
+      // skipped by asking, never by accident.
+      // The first `if (!modelLoadingSupported)` in the file is the log-only block
+      // in `createEngineIfNeeded`; the *guard* is the line that also consults the
+      // override, so it is found by the override rather than by the guard.
+      // Found by the *call site's* argument — `pendingModel`, because the guard runs
+      // before the payload is parsed out of the park — rather than by the function
+      // name, which the declaration line would match first.
+      final guardLine = codeOf(view)
+          .split('\n')
+          .firstWhere((line) => line.contains('allowsUnsupportedRenderer(pendingModel)'));
+      expect(guardLine, contains('if (!modelLoadingSupported &&'));
+
+      // The window starts at the function, so the KDoc above it (which names these
+      // very expressions) cannot satisfy the assertion.
+      final override = between(
+        codeOf(view),
+        'private fun allowsUnsupportedRenderer(',
+        '/**',
+      );
+      expect(override, contains('spec?.allowUnsupportedRenderer != true'));
+      expect(
+        override,
+        contains('debuggableBuild()'),
+        reason: 'lock 2: a published release APK is not debuggable, so a customer '
+            'build ignores the request even if the define leaks into one. The '
+            'check itself is spelled once and asserted in the engine-level test '
+            'below, so the two switches cannot drift apart',
+      );
+
+      // And the refusal carries the numbers, which is the half the phone can show.
+      final refusal = between(
+        codeOf(view),
+        'REASON_RENDERER_UNSUPPORTED',
+        'return',
+      );
+      expect(
+        refusal,
+        contains('\$rendererDiagnostic'),
+        reason: 'a refusal with no measured facts is a bug report the page cannot '
+            'answer',
+      );
+      expect(codeOf(view), contains('describeRenderer(created)'));
+    });
+
+    test('the engine-level switch is locked twice, and it only ever lowers', () {
+      // Lock 1 — the caller asks, and only the preview's handover can.
+      final lock = between(
+        codeOf(view),
+        'private fun shouldLowerEngineToLevel1(',
+        '/**',
+      );
+      expect(lock, contains('spec?.lowerEngineToLevel1 != true'));
+      expect(
+        lock,
+        contains('debuggableBuild()'),
+        reason: 'lock 2: the same check the load override uses — a lowered '
+            'renderer on a shopper\'s phone is not a crash, it is a worse product',
+      );
+
+      // ...and the check itself is written once, so the two locks cannot drift
+      // apart. (The override test above asserts its own lock 1; this asserts the
+      // half both switches share.)
+      final debuggable = between(codeOf(view), 'private fun debuggableBuild(', '/**');
+      expect(debuggable, contains('ApplicationInfo.FLAG_DEBUGGABLE'));
+
+      // Both application points, because the engine may or may not exist when the
+      // handover arrives: the model usually precedes the surface, and so the
+      // engine — but not always, and a switch that silently does nothing half the
+      // time would read as a failed experiment rather than as a race.
+      expect(
+        codeOf(view),
+        contains('engineBuilder.featureLevel(Engine.FeatureLevel.FEATURE_LEVEL_1)'),
+        reason: 'the builder is the only route that exists before the first frame',
+      );
+      final runtime = between(
+        codeOf(view),
+        'private fun applyEngineLevelRequest(',
+        '/**',
+      );
+      expect(
+        runtime,
+        contains('setActiveFeatureLevel(Engine.FeatureLevel.FEATURE_LEVEL_1)'),
+      );
+      expect(
+        runtime,
+        contains('rendererDiagnostic = describeRenderer(created)'),
+        reason: 'a lowered engine that still reports the level it started at is a '
+            'screenshot nobody can trust',
+      );
+
+      // Applied *before* the load the guard would refuse, or the run would measure
+      // a level-2 engine and look like the experiment had failed.
+      final handover = between(codeOf(view), 'fun setModel(spec: ModelSpec)', '}');
+      expect(
+        handover.indexOf('applyEngineLevelRequest(spec)'),
+        lessThan(handover.indexOf('applyPendingModel()')),
+      );
+
+      // And the page says which build produced it: either switch draws the banner,
+      // and the engine one names itself in the readout as well.
+      final qaBuild = between(previewWidget, 'bool get _qaBuild', ';');
+      expect(qaBuild, contains('AppConstants.shoePreviewAllowLevel1'));
+      expect(qaBuild, contains('AppConstants.shoePreviewLowerEngineToLevel1'));
+      expect(previewWidget, contains("'QA · engine pinned to level 1'"));
     });
   });
 

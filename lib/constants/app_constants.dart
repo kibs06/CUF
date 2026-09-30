@@ -870,17 +870,26 @@ class AppConstants {
   static const bool tryOnPlaceholderModelEnabled =
       bool.fromEnvironment('TRY_ON_PLACEHOLDER_MODEL');
 
-  /// Gates the **inline 3D box on the product page** — "view in 3D", with a
-  /// "Try On in AR" button underneath it (`lib/widgets/shoe_preview_3d.dart`;
-  /// native side `ArTryOnView.Mode.PREVIEW`).
+  /// Gates the **3D icon on the product photograph**, and behind it the
+  /// full-screen 3D viewer whose section carries the "Try On in AR" button
+  /// (`lib/widgets/shoe_preview_3d.dart`,
+  /// `lib/screens/customer/shoe_preview_screen.dart`; native side
+  /// `ArTryOnView.Mode.PREVIEW`).
   ///
   /// **OFF by default, and off is the whole rollback.** With it off the product
-  /// page renders exactly what it renders today: the pinned AR pill, no 3D box,
-  /// no native preview view, no channel traffic. With it on, the two swap
-  /// places — a product with a verified local model gets the box with the AR
-  /// button under it, and a product with **no model gets neither**, because the
-  /// button lives inside the section rather than beside it
+  /// page shows no 3D icon at all: no box, no native preview view, no channel
+  /// traffic. With it on, a product with a verified local model gets the icon in
+  /// the photo's lower-right corner and a tap opens the viewer; a product with
+  /// **no model gets neither**, because the AR button lives inside the section
+  /// the viewer mounts rather than on the page itself
   /// (`resolveShoePreview`, `lib/utils/shoe_preview_visibility.dart`).
+  ///
+  /// ⚠️ **Two things moved on 2026-10-01.** The pinned "Try On in AR" pill came
+  /// off the page (the icon replaced it: a full-width bar that asked for a
+  /// decision before it offered a look), and the box left the page's scroll for
+  /// the full-screen viewer. So with this switch off a product page has **no 3D
+  /// entry at all** — the pill used to be the switch-off path, and AR is now
+  /// reachable only through the viewer.
   ///
   /// **What it does not need.** Not ARCore, not a camera permission, not an AR
   /// session: the preview is the same Filament renderer with no session created
@@ -907,6 +916,101 @@ class AppConstants {
   ///
   /// **How it is turned on:** `--dart-define=SHOE_PREVIEW=true`.
   static const bool shoePreviewEnabled = bool.fromEnvironment('SHOE_PREVIEW');
+
+  /// Whether the 3D box's refusal line also prints **the measured renderer
+  /// facts** underneath the honest sentence.
+  ///
+  /// **OFF by default, and it is not customer copy.** The sentence a shopper
+  /// needs is "3D preview isn't supported on this phone."; this adds a second,
+  /// dimmer line with the renderer the device advertises, whether it advertises
+  /// cube-map arrays, the backend and Filament's supported/active feature level
+  /// — the four facts that decide whether `FEATURE_LEVEL_2` is reachable at all
+  /// (`OpenGLContext::resolveFeatureLevel`).
+  ///
+  /// **Why it has to be on the page rather than in a log.** The phone this was
+  /// written for is a Huawei P30 Pro whose developer options are locked behind a
+  /// password its previous owner set: no `adb logcat` will ever be read from it,
+  /// so `[shoe-preview]` and Filament's own `Feature level:` lines are
+  /// unreachable there. The app has to explain itself on screen — the same
+  /// conclusion v1.0.35 reached for the prefetch.
+  ///
+  /// **How it is turned on:** `--dart-define=SHOE_PREVIEW_DIAGNOSTICS=true`.
+  static const bool shoePreviewDiagnosticsEnabled =
+      bool.fromEnvironment('SHOE_PREVIEW_DIAGNOSTICS');
+
+  /// ⚠️ **QA-only: let the native renderer attempt a glTF load below Filament's
+  /// `FEATURE_LEVEL_2` instead of refusing.**
+  ///
+  /// **OFF by default, and this is the most dangerous switch in this file.** The
+  /// refusal it relaxes exists because loading at `FEATURE_LEVEL_1` took the
+  /// process down — a `SIGSEGV` inside `libfilament-jni.so`, 126 ms after
+  /// `Engine.create()`, on a customer's product page (finding F22) — and it is
+  /// not catchable. On a phone this flag was written for, a load may therefore
+  /// **kill the app**.
+  ///
+  /// **What it is for, stated so nobody mistakes it for a feature.** The
+  /// level-1 story has never been measured on real hardware: F14's
+  /// "nothing loads at level 1" came from one emulator whose GLES is a
+  /// translator (F24), and D10 still reads "unverified on real hardware".
+  /// Meanwhile nothing in Filament's own ubershader materials marks them
+  /// level-2-only (they are built with `matc -a opengl -a vulkan -p mobile` from
+  /// `libs/gltfio/materials/*.mat.in`, which declare no feature level). So the
+  /// only way to learn whether the cheapest phones in this market can draw a
+  /// shoe is to let one try — on a device that is allowed to die, which is what
+  /// this flag is for. It is a measurement, not a shipped surface.
+  ///
+  /// **Two locks.** This define (nothing in the release define file turns it
+  /// on), and the native side, which honours the request only in a debuggable
+  /// build — a published release APK is not `FLAG_DEBUGGABLE`, so a customer
+  /// build ignores it even if the define leaks into one. The build also
+  /// announces itself on the product page (`ShoePreviewQaBanner`), so a
+  /// screenshot from a QA phone can never be mistaken for a customer's.
+  ///
+  /// **How it is turned on:** `--dart-define=SHOE_PREVIEW_ALLOW_LEVEL1=true`.
+  static const bool shoePreviewAllowLevel1 =
+      bool.fromEnvironment('SHOE_PREVIEW_ALLOW_LEVEL1');
+
+  /// ⚠️ **QA-only: bring the engine itself down to `FEATURE_LEVEL_1`** —
+  /// `Engine.Builder.featureLevel(FEATURE_LEVEL_1)` when the engine does not
+  /// exist yet, `Engine.setActiveFeatureLevel(FEATURE_LEVEL_1)` when it does.
+  ///
+  /// **It lowers, it never raises.** Filament's builder asserts
+  /// `featureLevel <= getSupportedFeatureLevel()`: the ceiling is whatever
+  /// `OpenGLContext::resolveFeatureLevel` read off the driver (ES 3.1+ *and* a
+  /// cube-map-array extension for level 2), and this flag only takes the engine
+  /// *down* to the level a level-2 phone would otherwise never have. On a device
+  /// already at level 1 or 0 it is a no-op.
+  ///
+  /// **Why it exists.** [shoePreviewAllowLevel1] only lifts the refusal — on a
+  /// modern phone the guard was never going to fire, so that flag by itself
+  /// measures nothing (the box simply draws). This is the other half: it
+  /// *manufactures* the phone class the guard was written for, so the level-1
+  /// path can be exercised on hardware that is sitting right here instead of on
+  /// the one device that cannot be read (D10: "unverified on real hardware").
+  /// The two are meant to be used together when the question is "can a level-1
+  /// renderer draw a shoe?", and alone when it is "what does a level-1 renderer
+  /// tell a customer?" — on its own this one produces the refusal, because a
+  /// level-1 engine fails the same `canLoadModels()` the owner's phone failed.
+  ///
+  /// **The pair is the point, and it is why the readout prints both.** With
+  /// `SHOE_PREVIEW_DIAGNOSTICS` on, the refusal line reads
+  /// `… supported=FEATURE_LEVEL_2 active=FEATURE_LEVEL_1`, which is the same
+  /// shape as the P30 Pro's `supported=FEATURE_LEVEL_1` — a *lowered* engine and
+  /// a *capped* one have to be distinguishable in a screenshot, and only the
+  /// `supported=` half can do that.
+  ///
+  /// **Two locks**, the same two as the load override: this define (never on in
+  /// the release define file), and the native side, which honours the request
+  /// only in a debuggable build. A published release APK is not
+  /// `FLAG_DEBUGGABLE`, so a customer build ignores it even if the define leaks
+  /// into one. ⚠️ **Not to be confused with [shoePreviewAllowLevel1]:** that one
+  /// lets a load happen, this one changes the renderer; neither is a customer
+  /// surface, and the build announces both on the page
+  /// (`ShoePreviewQaBanner`).
+  ///
+  /// **How it is turned on:** `--dart-define=SHOE_PREVIEW_LOWER_ENGINE_TO_LEVEL1=true`.
+  static const bool shoePreviewLowerEngineToLevel1 =
+      bool.fromEnvironment('SHOE_PREVIEW_LOWER_ENGINE_TO_LEVEL1');
 
   // --- VIRTUAL FITTING: V0 RENDERER SPIKE (dev-only, delete on retirement) ---
   /// Gates the V0 virtual-fitting renderer spike — a dev-only screen that

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../constants/app_constants.dart';
+import '../screens/shared/shoe_preview_screen.dart';
 import '../services/shoe_model_request_service.dart';
 import '../utils/shoe_model_request.dart';
 import '../utils/size_key.dart';
@@ -24,6 +25,12 @@ import '../utils/size_key.dart';
 /// The switch is [AppConstants.shoeModelRequestEnabled], **on** since the
 /// migration behind it was applied and verified, and off — which now takes a
 /// deliberate `--dart-define` — means the row is not there at all.
+///
+/// ⚠️ **The ready row shows the model (2026-10-01).** It used to open a sheet
+/// that *described* the model, which put the seller's only evidence that their
+/// pair was modelled on the word of the row itself. It now opens the 3D viewer
+/// (`ShoePreviewScreen.forProduct`), which resolves the product's model on the
+/// seller's device and draws it — or says plainly that there is nothing to draw.
 class ShoeModelRequestTile extends StatefulWidget {
   const ShoeModelRequestTile({
     super.key,
@@ -172,14 +179,24 @@ class _ShoeModelRequestTileState extends State<ShoeModelRequestTile> {
         await _load();
         widget.onChanged?.call();
       case ShoeModelRequestAction.ready:
-        await showModalBottomSheet<void>(
-          context: context,
-          backgroundColor: AppConstants.surfaceLight,
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        // ⚠️ **A look, not a sentence about one.** This used to open a sheet that
+        // *said* the product has a model. A seller reads "3D fitting ready" off a
+        // row backed by a `product_models` record, and a record is not a shoe:
+        // the model may be unrenderable, or those bytes may not be on any device
+        // at all. Tapping now opens the model itself, which is the only thing
+        // that answers the question the row just raised — and the viewer says so
+        // honestly when there turns out to be nothing to draw.
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => ShoePreviewScreen.forProduct(
+              productId: widget.productId,
+              product: widget.product ?? const <String, dynamic>{},
+              note: 'Change it any time from the product form.',
+            ),
           ),
-          builder: (_) => const _RequestReadySheet(),
         );
+        await _load();
+        widget.onChanged?.call();
     }
   }
 }
@@ -1014,46 +1031,3 @@ class _RequestProgressSheet extends StatelessWidget {
       );
 }
 
-class _RequestReadySheet extends StatelessWidget {
-  const _RequestReadySheet();
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 3,
-                decoration: BoxDecoration(
-                  color: AppConstants.primary,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Icon(Icons.check_circle_outline, color: AppConstants.success),
-                const SizedBox(width: 8),
-                Text('3D fitting ready',
-                    style: AppConstants.headlineStyle(fontSize: 18)),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'This product has a model, so customers can try it on. Change it '
-              'any time from the product form.',
-              style: AppConstants.bodyStyle(fontSize: 13),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}

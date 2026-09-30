@@ -1,6 +1,8 @@
 package com.solevision.app.tryon
 
+import android.app.ActivityManager
 import android.content.Context
+import android.content.pm.ApplicationInfo
 import android.graphics.Bitmap
 import android.graphics.PixelFormat
 import android.graphics.SurfaceTexture
@@ -173,6 +175,35 @@ class ArTryOnView(
         val sha256: String,
         val authoredLengthMm: Double?,
         val yawOffsetDeg: Double?,
+        /**
+         * **The first of the two QA overrides on the model handover**: attempt the load even when
+         * the renderer is below [Engine.FeatureLevel.FEATURE_LEVEL_2].
+         *
+         * Sent by the preview channel alone, from `AppConstants.shoePreviewAllowLevel1` — the AR
+         * session hands over the same payload shape and must not be able to ask a crashing load
+         * into existence. Default `false`, and a `true` is only honoured in a debuggable build:
+         * see [allowsUnsupportedRenderer].
+         */
+        val allowUnsupportedRenderer: Boolean = false,
+
+        /**
+         * **The other QA override: bring the engine itself down to
+         * [Engine.FeatureLevel.FEATURE_LEVEL_1]** — the phone class this feature's guard was
+         * written for (D10), manufactured on whatever hardware is at hand instead.
+         *
+         * It *lowers* and can never raise: the ceiling is what `OpenGLContext` resolved from the
+         * driver, so on a device already at level 1 or 0 this does nothing at all. The engine may
+         * not exist yet when it arrives — the model is handed over the moment the page builds the
+         * box, which is usually before the surface is ready — so it is applied in one of two
+         * places: on the builder in [createEngineIfNeeded], or, if the renderer is already
+         * running, through [Engine.setActiveFeatureLevel] in [applyEngineLevelRequest]. Both are
+         * double-locked: see [shouldLowerEngineToLevel1].
+         *
+         * ⚠️ **On its own this produces the refusal rather than lifting it**: a level-1 engine
+         * fails the same [canLoadModels] the owner's phone failed. Paired with
+         * [allowUnsupportedRenderer] it is the experiment — can a level-1 renderer draw a shoe?
+         */
+        val lowerEngineToLevel1: Boolean = false,
     )
 
     /** `setSize` input, mirroring `lastLengthMm(size)` in `lib/utils/fit_engine.dart`. */
@@ -291,6 +322,24 @@ class ArTryOnView(
      * until that exists this flag is the difference between "no 3D here" and "it crashed".
      */
     private var modelLoadingSupported = true
+
+    /**
+     * **The measured facts behind a refusal, in one line, for the page rather than for logcat.**
+     *
+     * Two sources, because they answer different halves of one question. The device's advertised
+     * GLES version and whether it advertises cube-map arrays come from `ActivityManager` (no EGL
+     * context of our own is needed); the backend and Filament's two feature levels come from the
+     * engine we just created. Together they decide whether `FEATURE_LEVEL_2` was reachable at all:
+     * on GLES, Filament asks for an **ES2 context** and takes whatever the driver hands back, and
+     * `resolveFeatureLevel` only promotes to level 2 for ES ≥ 3.1 *with* `GL_EXT_/OES_texture_cube_
+     * map_array` — so "device says 3.2 but the engine says level 1" is itself the answer.
+     *
+     * ⚠️ It is carried in the **error messages** rather than only logged, and that is the whole
+     * point: the phone this was written for (Huawei P30 Pro) has locked developer options, so no
+     * `adb logcat` will ever be read from it. `SHOE_PREVIEW_DIAGNOSTICS` puts this line on the
+     * product page.
+     */
+    private var rendererDiagnostic = "renderer not probed"
 
     private var sessionResumed = false
     private var surface: Surface? = null
@@ -419,6 +468,11 @@ class ArTryOnView(
     fun setModel(spec: ModelSpec) {
         renderHandler.post {
             pendingModel = spec
+            // Before the load, and before the engine exists if it does not yet: the QA request to
+            // come up at level 1 is a property of the *renderer*, so it has to be in place by the
+            // time the guard in [applyPendingModel] reads the level — otherwise the same run would
+            // measure a level-2 engine and look like a failed experiment.
+            applyEngineLevelRequest(spec)
             if (engine != null) applyPendingModel()
         }
     }
@@ -702,7 +756,20 @@ class ArTryOnView(
         // thread (`Fatal signal 6`, measured on the Pixel_4 emulator — see F24). The backend cannot
         // be chosen by trying; it can only be chosen by refusing, which is what [canLoadModels] is
         // for.
-        val created = Engine.create()
+        //
+        // The QA level request belongs **here** when it can be honoured here, rather than always
+        // after the fact: a renderer that is never allowed to reach level 2 does not have to be
+        // talked down from it, and the builder is the only place that exists before a single frame
+        // is drawn. See [shouldLowerEngineToLevel1].
+        val engineBuilder = Engine.Builder()
+        if (shouldLowerEngineToLevel1(pendingModel)) {
+            engineBuilder.featureLevel(Engine.FeatureLevel.FEATURE_LEVEL_1)
+            Log.w(
+                TAG,
+                "QA: building the engine at FEATURE_LEVEL_1 (SHOE_PREVIEW_LOWER_ENGINE_TO_LEVEL1)",
+            )
+        }
+        val created = engineBuilder.build()
         engine = created
         val createdScene = created.createScene()
         scene = createdScene
@@ -743,6 +810,10 @@ class ArTryOnView(
                     "here (F14) — refusing every model rather than aborting the process (F16)",
             )
         }
+        // Read once, after the engine is up, whatever the answer: the refusal's message and a
+        // failed load both carry it, and the page is where it is read.
+        rendererDiagnostic = describeRenderer(created)
+        Log.i(TAG, "renderer facts: $rendererDiagnostic")
 
         // F18: the model may have arrived before the engine existed.
         applyPendingModel()
@@ -757,6 +828,157 @@ class ArTryOnView(
      */
     private fun canLoadModels(candidate: Engine): Boolean =
         candidate.activeFeatureLevel.ordinal >= Engine.FeatureLevel.FEATURE_LEVEL_2.ordinal
+
+    /**
+     * **The engine's half of [rendererDiagnostic]**: what Filament came up on, at which levels, on
+     * what the device says it can do.
+     *
+     * ⚠️ **The pair is the point, and it is why both halves are printed.**
+     * `ConfigurationInfo.getGlEsVersion()` is the *device's* ceiling ("3.2") — a different
+     * question from the context Filament was handed — and `getSupportedFeatureLevel()` is what the
+     * context it actually got was worth. So:
+     *
+     *  • **device 3.2 + supported 1** — the context came back below what the phone can do.
+     *    Filament requests an **ES2 context** and takes what the driver returns
+     *    (`PlatformEGL.createDriver`), so this is the shape of "the driver honoured the request".
+     *  • **device 3.0** — D10's phone class, where level 2 is out of reach under *any*
+     *    configuration and only a level-1-compatible material path could draw.
+     *
+     * What this line deliberately does **not** claim is which of the two level-2 preconditions
+     * failed when it reads `supported 1` on a 3.2 device: the other one is
+     * `GL_EXT_/OES_texture_cube_map_array`, whose extension string lives on
+     * `ActivityManager.DeviceConfigurationInfo` — **not in the public SDK**, so a probe would mean
+     * a second EGL context purely for a diagnostic. The QA override answers that question the
+     * honest way instead: by trying the load.
+     *
+     * Wrapped because a diagnostic must never be the reason a product page fails: a context with no
+     * `ActivityManager` (a test harness, a detached view) answers "?" rather than throwing inside
+     * engine creation.
+     */
+    private fun describeRenderer(created: Engine): String {
+        val device = runCatching {
+            val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+            manager?.deviceConfigurationInfo?.glEsVersion
+                ?.let { "device GLES $it" }
+                ?: "device GLES ?"
+        }.getOrElse { "device GLES ?" }
+        return "${created.backend} supported=${created.supportedFeatureLevel} " +
+            "active=${created.activeFeatureLevel} · $device"
+    }
+
+    /**
+     * **Whether a load below `FEATURE_LEVEL_2` may proceed, and the two locks on it.**
+     *
+     * The refusal this relaxes is a crash guard rather than a policy: on a `FEATURE_LEVEL_1`
+     * renderer the production loader took the process down with a `SIGSEGV` 126 ms after
+     * `Engine.create()` (F22), and the attempt is not catchable. The other half of the same finding
+     * is that level 1 has **never been tried on real hardware** — F14's "nothing loads" was one
+     * emulator, whose GLES is a translator (F24), and D10 still reads "unverified on real
+     * hardware". Nothing in the ubershader materials marks them level-2-only: they are
+     * built with `matc -a opengl -a vulkan -p mobile` from the `mat.in` templates under
+     * `libs/gltfio/materials`, none of which declares a feature level, so they carry filamat's
+     * default — `FeatureLevel::FEATURE_LEVEL_1`, the exact level this override asks the engine to
+     * accept. What is *known* to be out of reach is a feature-level-0 engine: matc emits the ESSL1
+     * permutation only for materials that declare level 0, and a level-1 package fails
+     * `hasFeatureLevel()` on a level-0 engine. So the question "can the cheapest phones in this
+     * market draw a shoe?" can only be answered by letting one try, somewhere it is allowed to die.
+     *
+     *  • **Lock 1 — the caller asks.** [ModelSpec.allowUnsupportedRenderer], which only the preview
+     *    channel sets, from `SHOE_PREVIEW_ALLOW_LEVEL1`.
+     *  • **Lock 2 — the build cannot ship.** A published release APK is not `FLAG_DEBUGGABLE`, so a
+     *    customer build ignores the request even if the define leaks into it. (`BuildConfig.DEBUG`
+     *    is the obvious spelling; `ApplicationInfo` is used instead because AGP 8 does not generate
+     *    `BuildConfig` unless a module opts in, and this file must not depend on a Gradle switch.)
+     */
+    private fun allowsUnsupportedRenderer(spec: ModelSpec?): Boolean {
+        if (spec?.allowUnsupportedRenderer != true) return false
+        if (!debuggableBuild()) {
+            Log.w(TAG, "level-1 override requested in a non-debuggable build — ignored")
+            return false
+        }
+        Log.w(
+            TAG,
+            "QA level-1 override ACTIVE: attempting the glTF load below FEATURE_LEVEL_2 — this may " +
+                "kill the process (F22); $rendererDiagnostic",
+        )
+        return true
+    }
+
+    /**
+     * **Whether the engine may be brought down to `FEATURE_LEVEL_1`, and the two locks on it.**
+     *
+     * This is the other half of the question [allowsUnsupportedRenderer] answers: that one lets a
+     * load happen on an engine that is *already* low, which measures nothing at all on a phone whose
+     * renderer is level 2 — the guard was never going to fire there and the box simply draws. This
+     * one manufactures the phone class instead, so the level-1 path can be exercised on hardware
+     * that is sitting in the room, rather than on the one device that cannot be read (D10 still
+     * reads "unverified on real hardware").
+     *
+     *  • **Lock 1 — the caller asks.** [ModelSpec.lowerEngineToLevel1], which only the preview
+     *    channel sets, from `SHOE_PREVIEW_LOWER_ENGINE_TO_LEVEL1`.
+     *  • **Lock 2 — the build cannot ship.** The same [debuggableBuild] check as the load override,
+     *    for a stronger reason than that one had: lowering the renderer on purpose is not a crash
+     *    that a customer might hit, it is a permanently worse product on their phone.
+     *
+     * It cannot raise anything, and Filament would not let it: `Engine.Builder.featureLevel` asserts
+     * `featureLevel <= getSupportedFeatureLevel()`, so a device already at level 1 or 0 is
+     * unaffected by its own ceiling being asked for.
+     */
+    private fun shouldLowerEngineToLevel1(spec: ModelSpec?): Boolean {
+        if (spec?.lowerEngineToLevel1 != true) return false
+        if (!debuggableBuild()) {
+            Log.w(TAG, "level-1 engine request in a non-debuggable build — ignored")
+            return false
+        }
+        return true
+    }
+
+    /**
+     * Whether this APK is a debug build, which is **lock 2** on both QA switches.
+     *
+     * `BuildConfig.DEBUG` is the obvious spelling; `ApplicationInfo` is used instead because AGP 8
+     * does not generate `BuildConfig` unless a module opts in, and this file must not depend on a
+     * Gradle switch. A published release APK is not `FLAG_DEBUGGABLE`, so a customer build ignores
+     * either request even if a define leaks into one.
+     */
+    private fun debuggableBuild(): Boolean =
+        (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+
+    /**
+     * **Applies [ModelSpec.lowerEngineToLevel1] to an engine that is already running.**
+     *
+     * The builder path in [createEngineIfNeeded] covers the usual order — the model is handed over
+     * the moment the box is built, which is normally before the surface, and so before the engine.
+     * This covers the other one, because a QA switch that silently does nothing when the surface
+     * happens to win the race would be worse than no switch at all: the run would look like the
+     * experiment had failed.
+     *
+     * [Engine.setActiveFeatureLevel] is the only route here, and it can only lower — the builder owns
+     * the ceiling. Deliberately, both `modelLoadingSupported` and [rendererDiagnostic] are re-read
+     * afterwards: the refusal message and the page's readout must never claim the level the engine
+     * used to have, or a screenshot of a lowered run would be indistinguishable from a capped one.
+     */
+    private fun applyEngineLevelRequest(spec: ModelSpec) {
+        if (!shouldLowerEngineToLevel1(spec)) return
+        val created = engine
+        if (created == null) {
+            // Not a miss: [createEngineIfNeeded] reads `pendingModel` and builds at level 1.
+            Log.i(TAG, "QA: level-1 engine request parked until the engine is built")
+            return
+        }
+        if (created.activeFeatureLevel.ordinal <= Engine.FeatureLevel.FEATURE_LEVEL_1.ordinal) {
+            Log.i(TAG, "QA: engine is already ${created.activeFeatureLevel} — nothing to lower")
+            return
+        }
+        val applied = created.setActiveFeatureLevel(Engine.FeatureLevel.FEATURE_LEVEL_1)
+        modelLoadingSupported = canLoadModels(created)
+        rendererDiagnostic = describeRenderer(created)
+        Log.w(
+            TAG,
+            "QA: engine lowered to $applied — glTF loading is now refused unless the load override " +
+                "is on too; $rendererDiagnostic",
+        )
+    }
 
     /**
      * Key + fill directional lights.
@@ -1078,13 +1300,17 @@ class ArTryOnView(
         // ⚠️ Before anything is parsed. `AssetLoader.createAsset` is what aborts the process on a
         // feature-level-1 renderer, so this is not a "try it and see" — see
         // [modelLoadingSupported]. The payload is dropped rather than kept: retrying it on this
-        // device can only repeat the crash.
-        if (!modelLoadingSupported) {
+        // device can only repeat the crash. The one way past this is the double-locked QA override
+        // ([allowsUnsupportedRenderer]), which exists to measure level 1 on hardware that is
+        // allowed to die.
+        // `pendingModel`, not the parsed `spec`: the guard runs before the payload is read out of
+        // the park on purpose (it has to precede the parse), so this is the only copy in scope.
+        if (!modelLoadingSupported && !allowsUnsupportedRenderer(pendingModel)) {
             pendingModel = null
             listener.onError(
                 REASON_RENDERER_UNSUPPORTED,
                 "glTF loading needs ${Engine.FeatureLevel.FEATURE_LEVEL_2}; this renderer is " +
-                    "${created.activeFeatureLevel}",
+                    "${created.activeFeatureLevel} ($rendererDiagnostic)",
             )
             return
         }
@@ -1125,7 +1351,10 @@ class ArTryOnView(
         val createdAsset = loaded
         if (createdAsset == null) {
             Log.w(TAG, "createAsset failed after $LOAD_ATTEMPTS attempts: $lastFailure")
-            listener.onError("model_parse_failed", lastFailure)
+            // The facts travel with the failure too: on a QA build running the level-1 override,
+            // this line is the measurement — the load that used to be refused instead failed
+            // gracefully here rather than aborting.
+            listener.onError("model_parse_failed", "$lastFailure · $rendererDiagnostic")
             return
         }
         asset = createdAsset

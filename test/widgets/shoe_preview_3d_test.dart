@@ -42,12 +42,29 @@ void main() {
     authoredLengthMm: 270,
   );
 
+  /// The refusal exactly as a level-1 renderer sends it, including the facts
+  /// `ArTryOnView.describeRenderer` appends — a device that advertises GLES 3.2
+  /// whose *context* Filament still received as level 1 is the case that decides
+  /// whether the level can be raised at all (Filament asks for an ES2 context and
+  /// takes what the driver returns).
+  const refusalEvent = <String, dynamic>{
+    'type': 'error',
+    'data': <String, dynamic>{
+      'reason': kRendererUnsupportedReason,
+      'message': 'glTF loading needs FEATURE_LEVEL_2; this renderer is '
+          'FEATURE_LEVEL_1 (OPENGL supported=FEATURE_LEVEL_1 '
+          'active=FEATURE_LEVEL_1 · device GLES 3.2)',
+    },
+  };
+
   Widget harness({
     TryOnModelSpec spec = model,
     Widget Function()? viewBuilder,
     VoidCallback? onTryOnInAr,
     Stream<Map<String, dynamic>>? events,
     Widget? child,
+    bool showDiagnostics = false,
+    bool showTryOn = true,
   }) {
     return MaterialApp(
       home: Scaffold(
@@ -58,6 +75,8 @@ void main() {
                   model: spec,
                   onTryOnInAr: onTryOnInAr ?? () {},
                   events: events,
+                  showDiagnostics: showDiagnostics,
+                  showTryOn: showTryOn,
                   viewBuilder: viewBuilder ??
                       () => const SizedBox(key: Key('fake-3d'), height: 240),
                 ),
@@ -111,10 +130,11 @@ void main() {
     testWidgets('unmounts the native view while it is paused, without moving',
         (tester) async {
       // ⚠️ The property that keeps two Filament engines from running at once.
-      // The page sets `paused` while the AR screen is on top (`_openArTryOn`) —
-      // a route check inside this widget would *not* have worked, because a push
-      // does not rebuild the route underneath it, and the product-page contract
-      // test pins that reasoning at the call site.
+      // The viewer that mounts this section sets `paused` while the AR screen is
+      // on top (`ShoePreviewScreen._openArTryOn`) — a route check inside this
+      // widget would *not* have worked, because a push does not rebuild the route
+      // underneath it, and the product-page contract test pins that reasoning at
+      // the call site.
       var built = 0;
       Widget box({required bool paused}) => MaterialApp(
             home: Scaffold(
@@ -237,6 +257,76 @@ void main() {
       expect(find.byType(ShoePreviewHint), findsNothing);
     });
 
+    testWidgets('a customer build prints the sentence and none of the numbers',
+        (tester) async {
+      // The measured facts are a diagnosis, not copy: a shopper is owed the honest
+      // sentence, and the GL strings belong on a QA phone's screen (see
+      // `SHOE_PREVIEW_DIAGNOSTICS` and `ShoePreviewHint.detail`).
+      final events = StreamController<Map<String, dynamic>>.broadcast();
+      addTearDown(events.close);
+
+      await tester.pumpWidget(harness(events: events.stream));
+      events.add(refusalEvent);
+      await tester.pump();
+
+      expect(find.text('3D preview isn\'t supported on this phone.'), findsOneWidget);
+      expect(find.textContaining('device GLES'), findsNothing);
+      expect(find.textContaining('QA'), findsNothing);
+    });
+
+    testWidgets('the QA readout puts the measured facts under that sentence',
+        (tester) async {
+      // ⚠️ The reason this exists at all: the phone this investigation runs on
+      // (Huawei P30 Pro) has developer options locked behind a forgotten
+      // password, so no `adb logcat` will ever be read from it. The message the
+      // native side already carries — which renderer, at which feature level,
+      // with or without cube-map arrays — is the readout, and the page is the
+      // only channel that reaches it.
+      final events = StreamController<Map<String, dynamic>>.broadcast();
+      addTearDown(events.close);
+
+      await tester.pumpWidget(harness(events: events.stream, showDiagnostics: true));
+      events.add(refusalEvent);
+      await tester.pump();
+
+      expect(find.text('3D preview isn\'t supported on this phone.'), findsOneWidget);
+      expect(
+        find.textContaining('device GLES 3.2'),
+        findsOneWidget,
+        reason: 'the device half of the readout — "device 3.2, supported 1" is what '
+            'says the context came back below what the phone can do',
+      );
+      expect(find.textContaining('supported=FEATURE_LEVEL_1'), findsOneWidget);
+      expect(find.textContaining('renderer_feature_level_unsupported'), findsOneWidget);
+      expect(find.text('Try On in AR'), findsOneWidget);
+    });
+
+    testWidgets('a QA build also prints the failure that is not the refusal',
+        (tester) async {
+      // The level-1 override's whole question is what happens *after* the refusal
+      // stops refusing. A load that fails to parse is the measurement on that
+      // build, and a customer build stays silent about it (the test above).
+      final events = StreamController<Map<String, dynamic>>.broadcast();
+      addTearDown(events.close);
+
+      await tester.pumpWidget(harness(events: events.stream, showDiagnostics: true));
+      events.add(<String, dynamic>{
+        'type': 'error',
+        'data': <String, dynamic>{
+          'reason': 'model_parse_failed',
+          'message': 'loader returned null · OPENGL supported=FEATURE_LEVEL_1 '
+              'active=FEATURE_LEVEL_1 · device GLES 3.0',
+        },
+      });
+      await tester.pump();
+
+      expect(find.text('3D preview failed on this build.'), findsOneWidget);
+      expect(find.textContaining('model_parse_failed'), findsOneWidget);
+      // No box over a model that did not load, and the AR entry still there.
+      expect(find.byKey(const Key('fake-3d')), findsNothing);
+      expect(find.text('Try On in AR'), findsOneWidget);
+    });
+
     testWidgets('the hint is a pure widget: message plus optional action',
         (tester) async {
       // Mounted directly — it has no channel, no gate and no state of its own;
@@ -267,6 +357,57 @@ void main() {
     });
   });
 
+  group('the QA banner says which switch is on', () {
+    // The banner is the only evidence a *photo* of a QA run carries, and the two
+    // switches mean different things: a lowered engine that then drew a shoe is
+    // the experiment working, while the load override alone on a modern phone
+    // measures nothing at all (the guard never fires there). So the sentence is
+    // composed rather than fixed, and it is asserted here rather than eyeballed.
+    Future<void> pumpBanner(
+      WidgetTester tester, {
+      required bool loadOverride,
+      required bool engineLowered,
+    }) =>
+        tester.pumpWidget(MaterialApp(
+          home: Scaffold(
+            body: ShoePreviewQaBanner(
+              loadOverride: loadOverride,
+              engineLowered: engineLowered,
+            ),
+          ),
+        ));
+
+    testWidgets('the load override is named as the one that can abort',
+        (tester) async {
+      await pumpBanner(tester, loadOverride: true, engineLowered: false);
+      expect(
+        find.text('QA build · level-1 load override on — may abort the process'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('a lowered engine is a separate claim, and says so', (tester) async {
+      await pumpBanner(tester, loadOverride: false, engineLowered: true);
+      expect(
+        find.text('QA build · engine pinned to level 1'),
+        findsOneWidget,
+        reason: 'a lowered engine must not read like a crashing load: one is a '
+            'worse renderer on a QA phone, the other can kill the process',
+      );
+    });
+
+    testWidgets('both switches read as both', (tester) async {
+      await pumpBanner(tester, loadOverride: true, engineLowered: true);
+      expect(
+        find.text('QA build · engine pinned to level 1 · level-1 load override on '
+            '— may abort the process'),
+        findsOneWidget,
+        reason: 'this is the pair that is meant to be run together: lower the '
+            'renderer, then let the load it forbids happen',
+      );
+    });
+  });
+
   group('the AR button under it', () {
     testWidgets('is the only AR entry the section offers, and it is below the box',
         (tester) async {
@@ -283,6 +424,87 @@ void main() {
 
       await tester.tap(find.text('Try On in AR'));
       expect(taps, 1);
+    });
+  });
+
+  group('the seller\'s view of the same box', () {
+    // The seller's door to this section (`ShoePreviewScreen.forProduct`) is a
+    // seller checking what the shop is selling. Nobody there can try the pair
+    // on, so the escalation is dropped — including in the refusal state, which
+    // is the branch built around "the AR entry survives".
+    testWidgets('draws the box and no AR pill', (tester) async {
+      await tester.pumpWidget(harness(showTryOn: false));
+
+      expect(find.byKey(const Key('fake-3d')), findsOneWidget);
+      expect(find.text('View in 3D'), findsOneWidget);
+      expect(find.text('Try On in AR'), findsNothing);
+    });
+
+    testWidgets('keeps the honest refusal line, and still no pill',
+        (tester) async {
+      final events = StreamController<Map<String, dynamic>>.broadcast();
+      addTearDown(events.close);
+
+      await tester.pumpWidget(harness(events: events.stream, showTryOn: false));
+      events.add(refusalEvent);
+      await tester.pump();
+
+      expect(find.text('3D preview isn\'t supported on this phone.'), findsOneWidget);
+      expect(find.byType(ShoePreviewHint), findsOneWidget);
+      expect(
+        find.text('Try On in AR'),
+        findsNothing,
+        reason: 'the branch that exists to keep the AR entry must not put it on '
+            'a screen where the AR flow has no meaning',
+      );
+    });
+  });
+
+  group('the 3D icon on the photograph', () {
+    // The product page's whole entry into the 3D viewer since 2026-10-01: the
+    // icon rides on the hero image and the viewer is one tap away.
+    testWidgets('is an icon-only control with a name and a 44 px target',
+        (tester) async {
+      var taps = 0;
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: Center(child: Sole3DIconButton(onPressed: () => taps++)),
+        ),
+      ));
+
+      expect(find.byIcon(Icons.threed_rotation), findsOneWidget);
+      expect(
+        find.byTooltip('View in 3D'),
+        findsOneWidget,
+        reason: 'an icon with no words is invisible to a screen reader, and this '
+            'control has no label beside it on the photo',
+      );
+      expect(
+        tester.getSize(find.byType(Sole3DIconButton)),
+        greaterThanOrEqualTo(const Size(44, 44)),
+        reason: 'the minimum touch target — it sits over a photograph, where a '
+            'near miss pans the image instead',
+      );
+
+      await tester.tap(find.byType(Sole3DIconButton));
+      expect(taps, 1);
+    });
+
+    testWidgets('carries the label as a real accessibility name', (tester) async {
+      final handle = tester.ensureSemantics();
+
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(body: Center(child: Sole3DIconButton(onPressed: () {}))),
+      ));
+
+      expect(
+        find.bySemanticsLabel('View in 3D'),
+        findsOneWidget,
+        reason: 'the tooltip is a sighted-thumb aid; the accessible name is the '
+            'explicit label, and it is the only description this control has',
+      );
+
+      handle.dispose();
     });
   });
 }

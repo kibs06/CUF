@@ -9,9 +9,17 @@ import '../services/ar_try_on_channel.dart';
 import '../services/shoe_preview_channel.dart';
 import 'sole_ar_pill.dart';
 
-/// The product page's **inline 3D box** — the customer turns the shoe with a
-/// finger, and the "Try On in AR" button sits underneath it
-/// ([ShoePreviewSection]).
+/// The **3D box** — the customer turns the shoe with a finger, and the
+/// "Try On in AR" button sits underneath it ([ShoePreviewSection]).
+///
+/// ⚠️ **Where it is mounted changed on 2026-10-01, and the widget did not.** It
+/// used to be a row on the product page, 240 px tall, under the size grid. It is
+/// now the body of the full-screen viewer the product photo's 3D icon opens
+/// (`ShoePreviewScreen`, `Sole3DIconButton`) — same renderer, same payload, same
+/// section, at the size of a screen instead of the size of a paragraph. The page
+/// keeps only the recovery notice (`_shoePreviewNotice`) and the pinned
+/// "Try On in AR" pill is gone from it, so the AR escalation this section carries
+/// is now the only way into AR from a product.
 ///
 /// **Why a box before a button.** "Try On in AR" was the only entry on the page
 /// and it asked for three things before it showed anything: an ARCore-capable
@@ -197,6 +205,80 @@ class ShoePreviewIdle extends StatelessWidget {
   }
 }
 
+/// **The 3D icon sitting in the product photo's lower-right corner** — the
+/// product page's whole 3D entry point (`ShoePreviewScreen`).
+///
+/// It replaced the pinned "Try On in AR" pill on 2026-10-01: the pill was a
+/// full-width bar that took the bottom of every product page and asked for a
+/// decision before it offered a look, while a shoe is a thing a shopper wants to
+/// *turn*. The icon rides on the photograph the customer is already looking at,
+/// only on a product whose model is verified on disk, and the camera behind it
+/// stays one tap deeper (inside the viewer).
+///
+/// The chip is dark glass rather than an accent fill for one reason: it sits on
+/// an unknown photograph, and the hero's own back/share buttons are already
+/// black-at-30% circles — a third control on the same photo should read as a
+/// sibling of those rather than as a new colour. Pinned light ink, pinned black
+/// fill, so it is legible on a white studio shot and on a dark one.
+class Sole3DIconButton extends StatelessWidget {
+  const Sole3DIconButton({
+    super.key,
+    required this.onPressed,
+    this.icon = Icons.threed_rotation,
+    this.tooltip = 'View in 3D',
+  });
+
+  final VoidCallback onPressed;
+
+  /// The glyph. `threed_rotation` is the same one the box's own header uses, so
+  /// the icon the customer taps and the surface it opens share a symbol.
+  final IconData icon;
+
+  /// For the long-press tooltip and the accessibility label — an icon with no
+  /// words is invisible to a screen reader, and this is the only way into the
+  /// 3D viewer.
+  final String tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      // The long-press aid is for a sighted thumb; the accessible name comes from
+      // the explicit `Semantics` below, and letting the tooltip add its own would
+      // have a screen reader say "View in 3D" twice.
+      excludeFromSemantics: true,
+      child: Semantics(
+        button: true,
+        label: tooltip,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onPressed,
+            borderRadius: BorderRadius.circular(14),
+            child: Ink(
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.45),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.35),
+                  width: 1,
+                ),
+              ),
+              child: SizedBox(
+                width: 44,
+                height: 44,
+                child: Center(
+                  child: Icon(icon, color: Colors.white, size: 22),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// The one visible word for the states that would otherwise be silence: a
 /// prefetch that failed and can be retried, a renderer that cannot draw.
 ///
@@ -209,11 +291,21 @@ class ShoePreviewHint extends StatelessWidget {
   const ShoePreviewHint({
     super.key,
     required this.message,
+    this.detail,
     this.actionLabel,
     this.onAction,
   });
 
   final String message;
+
+  /// A second, dimmer line under [message] — **the measured renderer facts, and
+  /// it has exactly one intended reader: a QA build on the owner's phone.**
+  ///
+  /// It is a separate field rather than a longer [message] on purpose: the
+  /// honest sentence is a fact the customer is owed and the numbers are a
+  /// diagnosis, and keeping them apart is what lets one be shown without the
+  /// other (`ShoePreviewSection.showDiagnostics`).
+  final String? detail;
 
   /// The one action the state allows — `Retry` after a failed prefetch. Absent
   /// where there is genuinely nothing to do (an unsupported renderer).
@@ -232,17 +324,98 @@ class ShoePreviewHint extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: Text(
-              message,
-              style: AppConstants.bodyStyle(
-                fontSize: 13,
-                color: AppConstants.secondary.withValues(alpha: 0.8),
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  message,
+                  style: AppConstants.bodyStyle(
+                    fontSize: 13,
+                    color: AppConstants.secondary.withValues(alpha: 0.8),
+                  ),
+                ),
+                if (detail != null && detail!.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      detail!,
+                      style: AppConstants.bodyStyle(
+                        fontSize: 11,
+                        color: AppConstants.secondary.withValues(alpha: 0.55),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
           if (actionLabel != null && onAction != null)
             TextButton(onPressed: onAction, child: Text(actionLabel!)),
         ],
+      ),
+    );
+  }
+}
+
+/// **A QA build says so, on the page — and says which switches are on.**
+///
+/// It exists because of the one screenshot that matters in this investigation:
+/// `SHOE_PREVIEW_ALLOW_LEVEL1` lets the renderer attempt a load that may abort
+/// the process (F22), and `SHOE_PREVIEW_LOWER_ENGINE_TO_LEVEL1` asks the renderer
+/// itself to come up at `FEATURE_LEVEL_1`, so it must never be possible to
+/// confuse a build that has either with a customer's. A line above the box is
+/// unmistakable in a photo, where a log line is not — and this phone has no
+/// logcat at all.
+///
+/// ⚠️ **The text is composed rather than fixed, because the two switches mean
+/// different things** and a photo has to say which one produced it: a *lowered*
+/// engine that then loaded a shoe is the experiment succeeding, while the load
+/// override alone on a modern phone measures nothing at all.
+class ShoePreviewQaBanner extends StatelessWidget {
+  const ShoePreviewQaBanner({
+    super.key,
+    this.loadOverride = AppConstants.shoePreviewAllowLevel1,
+    this.engineLowered = AppConstants.shoePreviewLowerEngineToLevel1,
+  });
+
+  /// Whether the load the guard forbids is permitted on this build.
+  final bool loadOverride;
+
+  /// Whether this build asked the renderer itself to come up at level 1.
+  final bool engineLowered;
+
+  /// The sentence, from whichever switches are on.
+  ///
+  /// A constructor parameter as well as a switch, the same shape
+  /// `ShoePreviewSection.showDiagnostics` uses and for the same reason: the
+  /// wording is the evidence a screenshot carries, so it is asserted rather than
+  /// eyeballed.
+  static String textFor({
+    required bool loadOverride,
+    required bool engineLowered,
+  }) =>
+      <String>[
+        'QA build',
+        if (engineLowered) 'engine pinned to level 1',
+        if (loadOverride) 'level-1 load override on — may abort the process',
+      ].join(' · ');
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppConstants.secondary.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        textFor(loadOverride: loadOverride, engineLowered: engineLowered),
+        style: AppConstants.bodyStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: AppConstants.secondary.withValues(alpha: 0.75),
+        ),
       ),
     );
   }
@@ -264,16 +437,24 @@ class ShoePreviewHint extends StatelessWidget {
 /// section removed itself — until a real phone showed the customer the pill
 /// vanishing mid-visit.) See `kRendererUnsupportedReason` for the crash that
 /// made the refusal necessary.
+///
+/// **The escalation is the customer's, and only the customer's**
+/// ([showTryOn]). The seller's door to this section (`ShoePreviewScreen
+/// .forProduct`) is a seller checking what the shop is selling; the person who
+/// tries the pair on is the customer, and a camera button on the seller's screen
+/// launches a fitting flow on the wrong side of the shop.
 class ShoePreviewSection extends StatefulWidget {
   const ShoePreviewSection({
     super.key,
     required this.model,
     required this.onTryOnInAr,
+    this.showTryOn = true,
     this.channel,
     this.viewBuilder,
     this.height = 240,
     this.paused = false,
     this.events,
+    this.showDiagnostics = AppConstants.shoePreviewDiagnosticsEnabled,
   });
 
   final TryOnModelSpec model;
@@ -281,6 +462,11 @@ class ShoePreviewSection extends StatefulWidget {
   /// Pushes the AR screen. The page owns this because the AR screen needs the
   /// whole product row, which is the page's state rather than this section's.
   final VoidCallback onTryOnInAr;
+
+  /// Whether the "Try On in AR" pill is drawn at all. True everywhere a customer
+  /// is looking at the shoe; false on the seller's viewer, which has nobody to
+  /// try the pair on. See the class header.
+  final bool showTryOn;
 
   final ShoePreviewChannel? channel;
   final Widget Function()? viewBuilder;
@@ -292,6 +478,14 @@ class ShoePreviewSection extends StatefulWidget {
 
   /// Test seam: the preview's native event stream, instead of the channel's own.
   final Stream<Map<String, dynamic>>? events;
+
+  /// Whether a failure's **measured facts** are shown under the honest sentence.
+  ///
+  /// Defaults to `AppConstants.shoePreviewDiagnosticsEnabled` — off for every
+  /// customer build, and a constructor parameter as well as a switch so the two
+  /// behaviours can both be asserted without a rebuild. See
+  /// `_diagnosticDetail` for what the line carries and why it exists.
+  final bool showDiagnostics;
 
   @override
   State<ShoePreviewSection> createState() => _ShoePreviewSectionState();
@@ -307,6 +501,14 @@ class _ShoePreviewSectionState extends State<ShoePreviewSection> {
   /// feature level of a running device does not change.
   bool _unsupported = false;
 
+  /// The native `reason` and `message` of the last failure, kept **only** for the
+  /// QA readout ([ShoePreviewSection.showDiagnostics]). A customer build acts on
+  /// the one reason that takes the box off the page and forgets the rest; a QA
+  /// build has to carry the numbers on screen, because the phone this was written
+  /// for (a P30 Pro with locked developer options) has no reachable logcat.
+  String? _errorReason;
+  String? _errorMessage;
+
   @override
   void initState() {
     super.initState();
@@ -317,10 +519,49 @@ class _ShoePreviewSectionState extends State<ShoePreviewSection> {
     if (event['type']?.toString() != 'error') return;
     final data = event['data'];
     final reason = data is Map ? data['reason']?.toString() : null;
-    if (reason != kRendererUnsupportedReason) return;
+    if (reason == null) return;
+    // ⚠️ A non-refusal error is *silence* in a customer build: a preview that
+    // failed to load a model it could have drawn is not a reason to take a working
+    // surface off a product page. In a QA build it is the measurement — the
+    // level-1 override's whole question is what happens after the refusal stops
+    // refusing — so there it becomes a line of text like everything else.
+    if (reason != kRendererUnsupportedReason && !widget.showDiagnostics) return;
     if (!mounted) return;
-    setState(() => _unsupported = true);
+    setState(() {
+      _unsupported = reason == kRendererUnsupportedReason;
+      _errorReason = reason;
+      _errorMessage = data is Map ? data['message']?.toString() : null;
+    });
   }
+
+  /// The measured facts to print under a failure, or null when there is nothing
+  /// to print — a customer build, or no failure yet.
+  ///
+  /// One string rather than three widgets because it is one idea: which renderer
+  /// this phone turned out to have. `SHOE_PREVIEW_ALLOW_LEVEL1` also announces
+  /// itself here, so a screenshot from a QA run says which build produced it —
+  /// and `SHOE_PREVIEW_LOWER_ENGINE_TO_LEVEL1` announces itself separately,
+  /// because "level-1 override on" and "the engine *is* level 1" are different
+  /// claims about the same run and the `supported=` half of the line is the only
+  /// thing that can tell a lowered engine from a capped one.
+  String? get _diagnosticDetail {
+    if (!widget.showDiagnostics || _errorReason == null) return null;
+    return <String>[
+      if (AppConstants.shoePreviewAllowLevel1) 'QA · level-1 override on',
+      if (AppConstants.shoePreviewLowerEngineToLevel1) 'QA · engine pinned to level 1',
+      _errorReason!,
+      if (_errorMessage != null && _errorMessage!.isNotEmpty) _errorMessage!,
+    ].join(' · ');
+  }
+
+  /// Whether this build is a QA build: on when **either** QA switch is.
+  ///
+  /// A getter rather than the constant repeated at each call site, because the
+  /// banner has to appear for both switches while the *sentence* above the box
+  /// still depends on the refusal alone.
+  bool get _qaBuild =>
+      AppConstants.shoePreviewAllowLevel1 ||
+      AppConstants.shoePreviewLowerEngineToLevel1;
 
   @override
   void dispose() {
@@ -338,20 +579,32 @@ class _ShoePreviewSectionState extends State<ShoePreviewSection> {
     // first device report showed the original all-or-nothing rule eating the
     // pill mid-visit: the customer opens AR, comes back, and both entries are
     // gone because the gate now says "shown" while the section says "gone").
-    if (_unsupported) {
+    if (_unsupported || _diagnosticDetail != null) {
       return Padding(
         padding: const EdgeInsets.only(bottom: 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const ShoePreviewHint(
-              message: '3D preview isn\'t supported on this phone.',
+            if (_qaBuild) ...<Widget>[
+              const ShoePreviewQaBanner(),
+              const SizedBox(height: 8),
+            ],
+            // The refusal keeps the honest sentence it has always shown, with the
+            // QA readout (if any) underneath it rather than folded into it: the
+            // sentence is what a customer is owed, the numbers are a diagnosis.
+            ShoePreviewHint(
+              message: _unsupported
+                  ? '3D preview isn\'t supported on this phone.'
+                  : '3D preview failed on this build.',
+              detail: _diagnosticDetail,
             ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: SoleARPill(onPressed: widget.onTryOnInAr),
-            ),
+            if (widget.showTryOn) ...<Widget>[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: SoleARPill(onPressed: widget.onTryOnInAr),
+              ),
+            ],
           ],
         ),
       );
@@ -360,6 +613,10 @@ class _ShoePreviewSectionState extends State<ShoePreviewSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (_qaBuild) ...<Widget>[
+          const ShoePreviewQaBanner(),
+          const SizedBox(height: 8),
+        ],
         ShoePreview3D(
           model: widget.model,
           channel: widget.channel,
@@ -367,14 +624,16 @@ class _ShoePreviewSectionState extends State<ShoePreviewSection> {
           height: widget.height,
           paused: widget.paused,
         ),
-        const SizedBox(height: 12),
-        // The same pill the page used to pin above the buy bar, full width and
-        // in the flow instead: it is the second thing this section offers, not
-        // a floating shortcut past it.
-        SizedBox(
-          width: double.infinity,
-          child: SoleARPill(onPressed: widget.onTryOnInAr),
-        ),
+        if (widget.showTryOn) ...<Widget>[
+          const SizedBox(height: 12),
+          // The same pill the page used to pin above the buy bar, full width and
+          // in the flow instead: it is the second thing this section offers, not
+          // a floating shortcut past it.
+          SizedBox(
+            width: double.infinity,
+            child: SoleARPill(onPressed: widget.onTryOnInAr),
+          ),
+        ],
       ],
     );
   }

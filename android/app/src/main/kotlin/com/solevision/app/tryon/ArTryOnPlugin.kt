@@ -515,6 +515,16 @@ class ArTryOnPlugin(private val activity: Activity) : MethodChannel.MethodCallHa
             sha256 = call.argument<String>("sha256") ?: "",
             authoredLengthMm = call.argument<Number>("authoredLengthMm")?.toDouble(),
             yawOffsetDeg = (alignment?.get("yawOffsetDeg") as? Number)?.toDouble(),
+            // ⚠️ Only the preview's `setPreviewModel` ever sends this (`SHOE_PREVIEW_ALLOW_LEVEL1`),
+            // and the view honours it only in a debuggable build — see
+            // `ArTryOnView.allowsUnsupportedRenderer`. Absent or non-true means "refuse as usual".
+            allowUnsupportedRenderer =
+                call.argument<Boolean>("allowUnsupportedRenderer") == true,
+            // The other half of the same QA question, with the same two locks: build/lower the
+            // engine at `FEATURE_LEVEL_1` instead of only tolerating it. See
+            // `ArTryOnView.shouldLowerEngineToLevel1`.
+            lowerEngineToLevel1 =
+                call.argument<Boolean>("lowerEngineToLevel1") == true,
         )
     }
 
