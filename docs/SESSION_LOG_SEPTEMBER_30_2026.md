@@ -1,7 +1,7 @@
 # Session Log — September 30, 2026
 
 **Date:** September 30, 2026
-**Focus:** v1.0.34 shipped with the 3D box on for customers · a customer-device failure report (P30 Pro, pill-only) · the shipped APK proven byte-correct · the on-screen diagnostic built and shipped as v1.0.35 · a real prefetch bug found by re-reading the gate · the release-notes clobber hit again and was repaired again
+**Focus:** v1.0.34 shipped with the 3D box on for customers · a customer-device failure report (P30 Pro, pill-only) · the shipped APK proven byte-correct · the on-screen diagnostic built and shipped as v1.0.35 · a real prefetch bug found by re-reading the gate · v1.0.36's catalogue-fact silence rule · **the P30 Pro's screenshot confirming F22 on real hardware, and v1.0.37's AR-entry fix** · the release-notes clobber repaired four times
 
 > **How to read this.** Written from the work itself, in the repo's session-log shape: no
 > wall-clock timestamps, and every claim labelled as *proven* (a command ran and said so),
@@ -13,7 +13,7 @@
 
 ## Executive Summary
 
-The session in six steps, in the order they happened:
+The session in eight steps, in the order they happened:
 
 1. **v1.0.34 was published with `SHOE_PREVIEW=true` baked in** — the 3D box on for every
    customer, per the owner's explicit decision. Release path: commit the session's work in
@@ -48,6 +48,22 @@ The session in six steps, in the order they happened:
 6. **The release-notes clobber is now a confirmed pattern, not a one-off:** the tag-triggered
    `Release APK` workflow rewrote `version.json`/`changelog.json` with its default note again,
    and the notes were restored again (`081d1c5`).
+
+7. **v1.0.36: the owner tested v1.0.35 — still pill-only, with no words.** On a build where
+   every intended-hidden state has words, that meant the page sat in a state the rule did not
+   cover: a resolve-phase failure computes reason `noModel` and was excluded by design, and a
+   never-completed prefetch left the result null behind a "transient" `modelNotReady`. The
+   fix keys the silence rule on a **measured catalogue fact** (`_productHasLiveModelRow`)
+   rather than on prefetch luck, and gives a still-null prefetch words after a 12-second
+   grace period. Published, notes repaired (third clobber).
+
+8. **v1.0.37: the owner's screenshot showed the JBC page saying *"3D preview isn't supported
+   on this phone."*** — F22's renderer refusal confirmed on real hardware, the root cause
+   after three releases of silence. The same report caught the all-or-nothing rule eating the
+   AR pill mid-visit (tap pill → AR → back → both entries gone). The section now loses its
+   box and **keeps its button** (the owner's decision; the AR screen degrades to its
+   simulated mode with an honest notice), and the refusal maps to its own degrade reason,
+   `rendererUnsupported`. Published, notes repaired (fourth clobber).
 
 ---
 
@@ -175,22 +191,100 @@ public (not a draft).
 
 ---
 
+### 7. v1.0.36 — the report came back unchanged, and that was the finding
+
+The owner tested v1.0.35 on the P30 Pro (Wi-Fi, the JBC sandal, after waiting): **still
+pill-only, with no words.** On a build where every intended-hidden state has words, silent
+pill-only means the page sat in a state the v1.0.35 rule did not cover. Before asking anything,
+the artifact was re-proven: the GitHub asset hashes identical to the local build
+(`6991aa6f…a7fc28`), the phone's Settings says 1.0.35, the JBC page is the one product with a
+live model. One scare dissolved on inspection: `"Checking for 3D" => MISSING` in the AOT
+snapshot was a **string-encoding artifact** — that message ends in `…` (U+2026), forcing the
+whole string into UTF-16, invisible to an ASCII grep. Trusting the byte check would have sent
+the hunt the wrong way.
+
+Re-reading the rule just written found the two states it still silenced:
+
+1. **A resolve-phase failure** (network hiccup, timeout) returns outcome `failed` with no
+   spec — so the gate computes reason `noModel`, which the v1.0.35 hint **excluded by design**
+   (no-model products must stay quiet). A resolve failure hid behind the catalogue's honesty.
+2. **A prefetch that never completed** leaves the result null (`modelNotReady`), silent
+   because it was presumed transient — but if inventory never loaded a size, "open the page
+   again" never helps.
+
+The fix is a **different question, not a looser rule**: the page now measures the catalogue
+fact directly (`_productHasLiveModelRow`, one indexed read of `product_models`, independent
+of the prefetch whose failure it diagnoses; a failed read leaves null and the page silent —
+never a wolf). With a live row, **every hidden state gets words**: a failed prefetch
+immediately, a still-null one after a **12-second grace period** (`_previewWaitTimer`,
+cancelled in `dispose`). A product with genuinely no model row stays silent. The contract
+test's hint guard was rewritten to pin the new shape, plus a guard for the timer.
+
+One build-hygiene lesson worth keeping: the first commit of this fix churned **2,593
+insertions** — the working file had been silently converted to CRLF while the parent blob was
+LF, and my first repair attempt (forcing CRLF) made it worse before inspection of the actual
+blobs (`git cat-file -p | od -c`) settled it. Normalized to LF, amended, and the diff came
+down to **100 insertions, 10 deletions**. Check what the parent blob stores before guessing
+at line endings under `core.autocrlf=true`.
+
+Published as **v1.0.36** (`versionCode 41`), notes repaired after the CI clobber (third
+occurrence).
+
+### 8. v1.0.37 — the screenshot that closed the case
+
+The owner's report arrived **as a screenshot of the JBC page showing the exact line
+*"3D preview isn't supported on this phone."*** — the `renderer_feature_level_unsupported`
+state, F22's guard working on real hardware. **Root cause confirmed:** the P30 Pro's Filament
+context lands below the glTF floor despite GLES 3.2 on paper. The prefetch was never the
+fault; it was the renderer all along, masked by three releases of silence — and it could only
+be *reported* because the page had learned to speak. The catalogue fact and grace period of
+v1.0.36 did their job getting the diagnosis here; none of them fired because the fault was
+not theirs.
+
+The screenshot also caught a **design decision that was wrong, with the perfect repro**: the
+owner tapped the pinned "Try On in AR" pill while the model was still downloading, went to
+AR, came back — and the pill was gone. Sequence: download finishes mid-visit → gate flips to
+*shown* → the section mounts → the renderer refuses → the section removed **itself, taking
+the AR button inside it** — and the page's fallback pill only renders while the gate says
+*hidden*. Both AR entries gone, mid-visit. The all-or-nothing rule was written when the
+simulated AR screen was a bare placeholder; with a stated degradation available, the owner
+decided the AR entry **stays**.
+
+So v1.0.37 changed two things:
+
+- **The section loses its box and keeps its button.** The unsupported state renders the
+  not-supported line *plus* the AR pill. The contract test's order guard was updated (the
+  customer sees the shoe before the camera — in the normal composition; the unsupported
+  branch's pill precedes the box reference because there is no box), and the widget test now
+  pins the pill's survival with the full history of why the old assertion ("offering a
+  camera would be a promise we cannot keep") was wrong.
+- **The AR session names the real reason.** The renderer-refusal event mapped to generic
+  `arFailed` inside a session; it now has its own degrade reason, `rendererUnsupported`
+  (`try_on_mode.dart` — the literal spelled like its siblings, import-free, pinned to
+  `kRendererUnsupportedReason` by the contract test), so the simulated screen can say "this
+  phone can't render 3D" rather than "AR failed". The owner also reported the AR screen
+  itself looked **broken/empty** on the phone — whether the simulated mode now renders
+  sensibly on it is still awaiting one more look.
+
+Full suite **2,211 pass / 7 skipped**; analyze clean. Published as **v1.0.37**
+(`versionCode 43`), notes repaired after the CI clobber (**fourth** occurrence).
+
+---
+
 ## What is still open
 
-1. **The P30 Pro verdict.** Update to 1.0.35 via the in-app updater, open the JBC sandal, and
-   one of three things appears: the **box** (prefetch bug confirmed as the cause), the
-   **Retry hint** (a real runtime failure, now visible and actionable), or the
-   **"not supported" line** (that specific unit caps below the renderer's floor — unusual
-   for a P30 Pro, would warrant a check in phone info). Until one of these is reported back,
-   the root cause is unconfirmed.
+1. **The simulated AR screen on the refused phone.** v1.0.37 keeps the pill and names the
+   reason — but whether the simulated mode actually *renders* something usable on the P30 Pro
+   is unverified; the owner's last AR run was "broken/empty". One visit answers it.
 2. **Migration `20260929120000` is still not applied to the hosted project**, and the live
    bundle generator refuses to build for it (its markers are hardcoded to the earlier
    migration). Until either lands, a seller filling the new request-sheet fields errors.
 3. **The release-notes clobber** (`Release APK` overwrites `version.json`/`changelog.json`
-   notes on every tag) — twice now. Fix in the workflow, not by hand a third time.
-4. **The commercial F22 gap** is unchanged: phones capped at OpenGL ES 3.0 render no 3D shoe
-   at all until the material path uses precompiled `.filamat` files. They now at least *say
-   so* on screen.
-5. **Nothing committed for it yet:** the framing/spin/lighting tuning from the prior session
-   (F23) still awaits a real device render for judgement; framing math is verified, aesthetics
-   are not.
+   notes on every tag) — **four times now** (v1.0.34 through v1.0.37). Fix in the workflow,
+   not by hand a fifth time.
+4. **The commercial F22 gap, now measured on a real phone:** a flagship-class P30 Pro cannot
+   render the 3D shoe — this is not only a low-end-device problem. Until the material path
+   uses precompiled `.filamat` files, 3D preview is a feature of the phones Filament happens
+   to come up at level 2+ on, and the page says so where it does not.
+5. **The framing/spin/lighting tuning** (F23) still awaits a render on a phone that *can*
+   draw it; framing math is verified, aesthetics are not.
