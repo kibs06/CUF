@@ -3,8 +3,6 @@
   "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.37/app-release-1.0.37.apk",
   "released_at": "2026-09-30",
   "notes": [
-    "Confirmed: 3D preview needs a phone above OpenGL ES 3.0 - now says so on the page",
-    "Try On in AR stays available on phones without 3D preview, with an honest notice",
-    "AR fallback now explains itself correctly on unsupported phones"
+    "Release v1.0.37"
   ]
 }
