@@ -111,7 +111,7 @@ void main() {
         reason: 'a gate nobody calls is a feature that is not built',
       );
 
-      final helper = between(productScreen, 'Widget _shoePreviewSection()', '\n  }');
+      final helper = between(productScreen, 'Widget _shoePreviewSection()', '\n  /// Fetch inventory');
       expect(
         helper,
         contains('final decision = _shoePreview;'),
@@ -120,7 +120,7 @@ void main() {
       );
       expect(
         helper,
-        contains('if (!decision.shown || model == null) return const SizedBox.shrink();'),
+        contains('if (!decision.shown || model == null) {'),
         reason: 'a product with no model gets no box **and** no AR button, and '
             'no gap where they would have been',
       );
@@ -130,6 +130,40 @@ void main() {
         contains('_logPreviewReason(decision.reason)'),
         reason: 'the helper is the one place that knows the answer, so it is the '
             'only place that can report it',
+      );
+    });
+
+    test('a failed prefetch is the one hidden state that gets words on the page', () {
+      // ⚠️ Written after the first customer device report: a P30 Pro, GLES 3.2 —
+      // well inside the renderer's floor — still showed pill-only. The gate's
+      // hidden states were all silent, and a prefetch that failed on a phone
+      // (mobile data, a cache miss, anything) was indistinguishable from a
+      // product with no model. The page can show no logcat to anyone, so the
+      // one recoverable hidden state says so, with a Retry.
+      final helper = between(productScreen, 'Widget _shoePreviewSection()', '\n  /// Fetch inventory');
+      expect(helper, contains('TryOnPrefetchOutcome.failed'));
+      expect(helper, contains('ShoePreviewHint('));
+      expect(helper, contains("'Retry'"));
+      expect(helper, contains('_retryShoePreview'));
+      expect(
+        helper,
+        contains("decision.reason != ShoePreviewReason.noModel"),
+        reason: 'a product with no model is the catalogue being honest — a hint '
+            'on every page without 3D would be noise, not diagnosis',
+      );
+    });
+
+    test('the prefetch survives a late inventory load', () {
+      // The structural bug behind the same report: _prefetchTryOnModel returns
+      // while no size is selected, and a payload without inventory only gets a
+      // size after _fetchInventory — so the model was never fetched at all and
+      // the box never appeared. The fetch must re-enter the prefetch.
+      final fetch = between(productScreen, 'Future<void> _fetchInventory()', '\n  /// Fetch full variant rows');
+      expect(
+        fetch,
+        contains('if (_selectedSize != null) _prefetchTryOnModel();'),
+        reason: 'without the re-entry the prefetch is a silent no-op on any page '
+            'whose sizes arrive over the network',
       );
     });
 

@@ -815,6 +815,17 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
   /// tap would download a model per tap, and whether the rendered model even
   /// depends on the selection is a question only V3 can answer — it is per
   /// variant in the schema (D-2) and product-level in practice today.
+  ///
+  /// ⚠️ **And it can be a no-op on a cold page — the bug the Retry hint and
+  /// `_fetchInventory` both feed.** The `size == null` return below is correct
+  /// in itself (there is no variant to resolve yet), but a product payload that
+  /// arrives without inventory takes the `_fetchInventory()` path above, and the
+  /// size only exists *after* that fetch selects one. Nothing used to re-run
+  /// this — so the model was never fetched at all, the box never appeared, and
+  /// the page looked exactly like a product with no model. On fast Wi-Fi with a
+  /// payload that already carries inventory it never fired; on mobile data it
+  /// is the bug. `_fetchInventory` now calls back in, and the Retry hint uses
+  /// the same method so a customer can also recover from a plain network miss.
   void _prefetchTryOnModel() {
     if (!AppConstants.tryOnPrefetchEnabled && widget.tryOnPrefetch == null) {
       return; // nothing is mounted, so nothing is read
@@ -824,7 +835,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
     if (productId.isEmpty) return;
 
     final size = _selectedSize;
-    if (size == null) return;
+    if (size == null) return; // _fetchInventory re-enters here once one is picked
 
     final variants = widget.product['product_variants'] as List<dynamic>? ?? [];
     final variantId = resolveVariant(
@@ -833,12 +844,27 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
       color: _effectiveColor,
     ).variantId;
 
-    final prefetch = widget.tryOnPrefetch ??
+    final prefetch = _shoePrefetch ??= widget.tryOnPrefetch ??
         TryOnPrefetch(enabled: AppConstants.tryOnPrefetchEnabled);
     prefetch
         .prefetch(productId: productId, variantId: variantId)
         .then(_recordTryOnAvailability)
         .ignore();
+  }
+
+  /// The Retry action on the hint: one fresh attempt, visible while it runs.
+  ///
+  /// It re-enters [_prefetchTryOnModel] rather than duplicating it — the dedupe
+  /// in `TryOnPrefetch._inFlight` makes a concurrent double-call harmless, and
+  /// the flag exists only so the hint cannot read as if nothing happened.
+  Future<void> _retryShoePreview() async {
+    if (_retryingPrefetch) return;
+    setState(() => _retryingPrefetch = true);
+    _prefetchTryOnModel();
+    // Give the attempt a beat to fail or land before the hint comes back; the
+    // result itself lands through `_recordTryOnAvailability` either way.
+    await Future<void>.delayed(const Duration(milliseconds: 1500));
+    if (mounted) setState(() => _retryingPrefetch = false);
   }
 
   /// Records the prefetch's answer.
@@ -877,6 +903,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
         hasLocalModel: _tryOnPrefetchResult?.hasLocalModel ?? false,
       );
 
+  /// The prefetch, rebuilt when the page calls for it again. A late inventory
+  /// load (see the `size == null` guard below) and the Retry hint both come
+  /// through the same door.
+  TryOnPrefetch? _shoePrefetch;
+
+  /// True while a retry the customer asked for is in flight, so the hint can say
+  /// "trying…" instead of offering a second concurrent attempt.
+  bool _retryingPrefetch = false;
+
   /// **The inline 3D box's gate** — whether the product page shows the box, and
   /// with it the "Try On in AR" button that lives inside its section.
   ///
@@ -887,7 +922,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
   /// never does HTTP). A box needs both — a row with no bytes draws nothing, and
   /// a box that appears once the download finishes is a beat of no box, which is
   /// the honest answer rather than a spinner over an empty rectangle.
-  ShoePreviewDecision get _shoePreview => resolveShoePreview(
+  ShoePreviewDecision get _shoePreview =>
+      resolveShoePreview(
         enabled: AppConstants.shoePreviewEnabled,
         isAndroid: defaultTargetPlatform == TargetPlatform.android,
         hasModel: _tryOnPrefetchResult?.spec != null,
@@ -965,7 +1001,27 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
     final model = _shoePreviewModel;
     final decision = _shoePreview;
     _logPreviewReason(decision.reason);
-    if (!decision.shown || model == null) return const SizedBox.shrink();
+    if (!decision.shown || model == null) {
+      // The two states a customer can act on get words; the rest stay silent.
+      // featureOff / notAndroid are build or platform facts, and noModel is the
+      // whole catalogue — words there would be noise on every page.
+      final failed = _tryOnPrefetchResult?.outcome == TryOnPrefetchOutcome.failed;
+      if (AppConstants.shoePreviewEnabled &&
+          failed &&
+          decision.reason != ShoePreviewReason.noModel) {
+        return Padding(
+          padding: const EdgeInsets.only(top: 4, bottom: 12),
+          child: ShoePreviewHint(
+            message: _retryingPrefetch
+                ? 'Checking for 3D preview…'
+                : '3D preview couldn\'t load just now.',
+            actionLabel: _retryingPrefetch ? null : 'Retry',
+            onAction: _retryShoePreview,
+          ),
+        );
+      }
+      return const SizedBox.shrink();
+    }
     return Padding(
       padding: const EdgeInsets.only(top: 4, bottom: 12),
       child: ShoePreviewSection(
@@ -1005,6 +1061,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
           break;
         }
       }
+      // A size now exists, so the prefetch's `size == null` guard no longer
+      // bounces — re-enter it. Without this, a page whose inventory arrives
+      // over the network never fetches a model at all: the guard ran in
+      // initState before any size existed, and nothing called it again.
+      if (_selectedSize != null) _prefetchTryOnModel();
     } catch (_) {
       if (mounted) setState(() => _isLoadingSizes = false);
     }

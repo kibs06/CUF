@@ -194,6 +194,21 @@ void main() {
         reason: 'on this device the AR path cannot draw the shoe either, so offering '
             'a camera would be a promise we cannot keep',
       );
+
+      // What stays is one line of words — the difference between "this product
+      // has no model" (most of the catalogue) and "your phone cannot draw one"
+      // (a bug report we can otherwise never answer; the phones this market
+      // holds have no logcat).
+      expect(find.text('3D preview isn\'t supported on this phone.'), findsOneWidget);
+      expect(
+        find.byType(ShoePreviewHint),
+        findsOneWidget,
+      );
+      expect(
+        find.byType(TextButton),
+        findsNothing,
+        reason: 'there is genuinely nothing this phone can do — no camera, no retry',
+      );
     });
 
     testWidgets('any other preview error leaves the section alone', (tester) async {
@@ -218,6 +233,36 @@ void main() {
 
       expect(find.byKey(const Key('fake-3d')), findsOneWidget);
       expect(find.text('Try On in AR'), findsOneWidget);
+      expect(find.byType(ShoePreviewHint), findsNothing);
+    });
+
+    testWidgets('the hint is a pure widget: message plus optional action',
+        (tester) async {
+      // Mounted directly — it has no channel, no gate and no state of its own;
+      // the page decides when it exists.
+      var taps = 0;
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: ShoePreviewHint(
+            message: '3D preview couldn\'t load just now.',
+            actionLabel: 'Retry',
+            onAction: () => taps++,
+          ),
+        ),
+      ));
+
+      expect(find.text('3D preview couldn\'t load just now.'), findsOneWidget);
+      expect(find.text('Retry'), findsOneWidget);
+      await tester.tap(find.text('Retry'));
+      expect(taps, 1);
+
+      // No action = no button (the unsupported-renderer state).
+      await tester.pumpWidget(const MaterialApp(
+        home: Scaffold(
+          body: ShoePreviewHint(message: '3D preview isn\'t supported on this phone.'),
+        ),
+      ));
+      expect(find.byType(TextButton), findsNothing);
     });
   });
 

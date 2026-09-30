@@ -197,6 +197,57 @@ class ShoePreviewIdle extends StatelessWidget {
   }
 }
 
+/// The one visible word for the states that would otherwise be silence: a
+/// prefetch that failed and can be retried, a renderer that cannot draw.
+///
+/// It is deliberately a line of text, not a card or an error dialog — the page
+/// is a shop, and most products have no model at all and *no* hint. This exists
+/// only where the page could have shown a box and provably cannot: a customer
+/// staring at pill-only with no way to know why is a bug report we cannot
+/// answer (there is no logcat on the phones this market holds).
+class ShoePreviewHint extends StatelessWidget {
+  const ShoePreviewHint({
+    super.key,
+    required this.message,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  final String message;
+
+  /// The one action the state allows — `Retry` after a failed prefetch. Absent
+  /// where there is genuinely nothing to do (an unsupported renderer).
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppConstants.secondary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              message,
+              style: AppConstants.bodyStyle(
+                fontSize: 13,
+                color: AppConstants.secondary.withValues(alpha: 0.8),
+              ),
+            ),
+          ),
+          if (actionLabel != null && onAction != null)
+            TextButton(onPressed: onAction, child: Text(actionLabel!)),
+        ],
+      ),
+    );
+  }
+}
+
 /// **The section: the 3D box, and "Try On in AR" underneath it.**
 ///
 /// One widget rather than two mounts on the page, because they are one decision:
@@ -278,8 +329,19 @@ class _ShoePreviewSectionState extends State<ShoePreviewSection> {
   @override
   Widget build(BuildContext context) {
     // The whole section, or nothing at all — and unmounting the box is what
-    // disposes the native view and its engine.
-    if (_unsupported) return const SizedBox.shrink();
+    // disposes the native view and its engine. What stays is one line of text:
+    // on a phone the renderer cannot draw on, the AR path is dead too (that is
+    // why the button goes with the box), and a page that merely loses a section
+    // looks identical to a product that has no model. The hint offers nothing —
+    // no button, no camera — because there is nothing this phone can do.
+    if (_unsupported) {
+      return const Padding(
+        padding: EdgeInsets.only(bottom: 12),
+        child: ShoePreviewHint(
+          message: '3D preview isn\'t supported on this phone.',
+        ),
+      );
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
