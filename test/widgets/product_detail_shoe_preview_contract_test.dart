@@ -140,6 +140,15 @@ void main() {
       // (mobile data, a cache miss, anything) was indistinguishable from a
       // product with no model. The page can show no logcat to anyone, so the
       // one recoverable hidden state says so, with a Retry.
+      //
+      // ⚠️ Tightened again after the SAME report came back on the hint build
+      // itself: the v1.0.35 rule excluded reason `noModel` — but a prefetch that
+      // fails during *resolution* computes exactly that reason, and a prefetch
+      // that never completed left result null (`modelNotReady`, presumed
+      // transient). Both hid a fault. The rule now keys on a measured catalogue
+      // fact (`_productHasLiveModelRow`, asked from the table directly) rather
+      // than on the prefetch's own outcome: with a live row, every hidden state
+      // either has words or had a failure.
       final helper = between(productScreen, 'Widget _shoePreviewSection()', '\n  /// Fetch inventory');
       expect(helper, contains('TryOnPrefetchOutcome.failed'));
       expect(helper, contains('ShoePreviewHint('));
@@ -147,10 +156,34 @@ void main() {
       expect(helper, contains('_retryShoePreview'));
       expect(
         helper,
-        contains("decision.reason != ShoePreviewReason.noModel"),
-        reason: 'a product with no model is the catalogue being honest — a hint '
-            'on every page without 3D would be noise, not diagnosis',
+        contains('_productHasLiveModelRow == true'),
+        reason: 'the silence rule must key on the catalogue, not on prefetch luck — '
+            'a resolve failure computes reason noModel and used to hide behind it',
       );
+      expect(
+        helper,
+        contains('_previewWaitedTooLong'),
+        reason: 'a prefetch that never completed (result still null) gets words too, '
+            'after the grace period — modelNotReady was presumed transient and hid '
+            'the never-ran case',
+      );
+    });
+
+    test('the catalogue fact is asked, not inferred from the prefetch', () {
+      // _productHasLiveModelRow reads the table directly (one indexed read), so
+      // "this product has a model" cannot be corrupted by the very prefetch the
+      // hint diagnoses. And a failed read leaves null — silence, never a wolf.
+      final fact = between(productScreen, 'bool? _productHasLiveModelRow;', 'Future<void> _checkLiveModelRow');
+      expect(fact, contains('bool? _productHasLiveModelRow;'));
+      final check = between(productScreen, 'Future<void> _checkLiveModelRow()', '/// The prefetch, rebuilt');
+      expect(check, contains(".eq('status', 'active')"));
+      expect(check, contains('catch (_)'));
+    });
+
+    test('the grace-period timer exists, and is cancelled in dispose', () {
+      expect(productScreen, contains('_previewWaitTimer = Timer(const Duration(seconds: 12)'));
+      final dispose = between(productScreen, 'void dispose()', 'void _openFullScreenViewer');
+      expect(dispose, contains('_previewWaitTimer?.cancel();'));
     });
 
     test('the prefetch survives a late inventory load', () {

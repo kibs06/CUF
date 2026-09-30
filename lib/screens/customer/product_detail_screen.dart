@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -788,6 +790,20 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
     }
 
     _prefetchTryOnModel();
+    unawaited(_checkLiveModelRow());
+
+    // The v1.0.35 report was pill-only with no words on a phone that verifiably
+    // ran the hint build — a state the release still left silent. The suspects
+    // were: a resolve-phase failure (reason `noModel`, excluded from the hint by
+    // design), and a prefetch that never completed (result null, `modelNotReady`,
+    // silent because "open the page again"). Neither can be told apart from the
+    // catalogue being honest from the *outside* — so the page stops trying to
+    // guess from the outcome alone. After this grace period a still-absent model
+    // on a product that HAS one gets words no matter which shape the silence
+    // took. One-shot; cancelled in dispose.
+    _previewWaitTimer = Timer(const Duration(seconds: 12), () {
+      if (mounted) setState(() => _previewWaitedTooLong = true);
+    });
   }
 
   /// True while the AR screen is pushed on top of this page.
@@ -903,6 +919,29 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
         hasLocalModel: _tryOnPrefetchResult?.hasLocalModel ?? false,
       );
 
+  /// Whether this product has a **live model row** — a catalogue fact, asked
+  /// directly from the table the way the catalogue itself would answer, and so
+  /// independent of the prefetch's own luck (its failure to resolve is one of
+  /// the things this fact exists to distinguish). Cheap: one indexed read, once.
+  /// Never blocks anything — if it errors, the page stays silent rather than
+  /// crying wolf on every model-less product.
+  bool? _productHasLiveModelRow;
+
+  Future<void> _checkLiveModelRow() async {
+    try {
+      final rows = await Supabase.instance.client
+          .from('product_models')
+          .select('id')
+          .eq('product_id', widget.product['id'].toString())
+          .eq('status', 'active')
+          .limit(1);
+      if (!mounted) return;
+      setState(() => _productHasLiveModelRow = (rows as List).isNotEmpty);
+    } catch (_) {
+      // No answer is a valid answer: leave null, the page stays silent.
+    }
+  }
+
   /// The prefetch, rebuilt when the page calls for it again. A late inventory
   /// load (see the `size == null` guard below) and the Retry hint both come
   /// through the same door.
@@ -911,6 +950,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
   /// True while a retry the customer asked for is in flight, so the hint can say
   /// "trying…" instead of offering a second concurrent attempt.
   bool _retryingPrefetch = false;
+
+  /// True once the page has been open long enough that a still-null prefetch
+  /// result is no longer "in flight" but "never finished" — the state v1.0.35
+  /// left silent. The one-shot timer starts in [initState].
+  bool _previewWaitedTooLong = false;
+  Timer? _previewWaitTimer;
 
   /// **The inline 3D box's gate** — whether the product page shows the box, and
   /// with it the "Try On in AR" button that lives inside its section.
@@ -1002,13 +1047,17 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
     final decision = _shoePreview;
     _logPreviewReason(decision.reason);
     if (!decision.shown || model == null) {
-      // The two states a customer can act on get words; the rest stay silent.
-      // featureOff / notAndroid are build or platform facts, and noModel is the
-      // whole catalogue — words there would be noise on every page.
+      // Words for every hidden state on a product that HAS a live model — the      // v1.0.35 rule was too tight twice over: a resolve-phase failure computed      // reason `noModel` and was excluded by the no-model-should-be-quiet rule;      // a prefetch that never completed (result null) was silent because      // "modelNotReady" was presumed transient. Both hid a fault the customer      // could have recovered from with one tap.
+      //
+      // The one state that must stay silent is a product with genuinely no      // model AND no prefetch failure — the catalogue being honest. Everything      // else on such a product is a fault with words: a resolve or download      // failure gets Retry immediately, and a still-null result (prefetch never      // ran — no size yet, or it is hung) gets Retry after the grace period.
+      final hasLiveModel = _tryOnPrefetchResult?.spec != null;
       final failed = _tryOnPrefetchResult?.outcome == TryOnPrefetchOutcome.failed;
-      if (AppConstants.shoePreviewEnabled &&
-          failed &&
-          decision.reason != ShoePreviewReason.noModel) {
+      final stuck = AppConstants.shoePreviewEnabled &&
+          !hasLiveModel &&
+          !failed &&
+          _previewWaitedTooLong &&
+          _productHasLiveModelRow == true; // catalog fact, not prefetch luck
+      if (AppConstants.shoePreviewEnabled && (failed || stuck)) {
         return Padding(
           padding: const EdgeInsets.only(top: 4, bottom: 12),
           child: ShoePreviewHint(
@@ -1290,6 +1339,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
 
   @override
   void dispose() {
+    _previewWaitTimer?.cancel();
     _buttonPressController.dispose();
     _imagePageController.dispose();
     super.dispose();
