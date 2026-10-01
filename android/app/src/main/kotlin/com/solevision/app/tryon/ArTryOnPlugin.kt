@@ -96,6 +96,12 @@ class ArTryOnPlugin(private val activity: Activity) : MethodChannel.MethodCallHa
     private var parkedPreviewSize: ArTryOnView.SizeSpec? = null
     private var parkedPreviewColor: Map<String, Any?>? = null
 
+    /**
+     * The QA readout request, parked for the same reason the model is: Dart asks the moment the box
+     * is built, and the platform view does not exist until the framework creates it a frame later.
+     */
+    private var parkedPreviewDiagnostics: Boolean? = null
+
     /** Payloads that arrived before the platform view did (F18). */
     private var parkedModel: ArTryOnView.ModelSpec? = null
     private var parkedSize: ArTryOnView.SizeSpec? = null
@@ -254,12 +260,14 @@ class ArTryOnPlugin(private val activity: Activity) : MethodChannel.MethodCallHa
         parkedPreviewModel?.let(created::setModel)
         parkedPreviewSize?.let(created::setSize)
         parkedPreviewColor?.let(created::setColor)
+        parkedPreviewDiagnostics?.let(created::setDiagnostics)
         parkedPreviewModel = null
         parkedPreviewSize = null
         parkedPreviewColor = null
+        parkedPreviewDiagnostics = null
     }
 
-    /** `setPreviewModel` / `setPreviewSize` / `setPreviewColor`, and nothing else. */
+    /** `setPreviewModel` / `setPreviewSize` / `setPreviewColor` / `setPreviewDiagnostics`. */
     private val previewCallHandler = MethodChannel.MethodCallHandler { call, result ->
         when (call.method) {
             "setPreviewModel" -> {
@@ -286,6 +294,16 @@ class ArTryOnPlugin(private val activity: Activity) : MethodChannel.MethodCallHa
                     ?.associate { (key, value) -> key.toString() to value }
                     ?: emptyMap()
                 if (previewView == null) parkedPreviewColor = map else previewView?.setColor(map)
+                result.success(null)
+            }
+
+            "setPreviewDiagnostics" -> {
+                val enabled = (call.arguments as? Map<*, *>)?.get("enabled") == true
+                if (previewView == null) {
+                    parkedPreviewDiagnostics = enabled
+                } else {
+                    previewView?.setDiagnostics(enabled)
+                }
                 result.success(null)
             }
 

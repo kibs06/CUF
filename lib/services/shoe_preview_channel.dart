@@ -66,7 +66,7 @@ const String kShoePreviewViewType = 'com.solevision/shoe_preview/view';
 /// Dart side does not know is a section that stays on screen over a crash.
 const String kRendererUnsupportedReason = 'renderer_feature_level_unsupported';
 
-/// The three calls the preview answers, and nothing else.
+/// The four calls the preview answers, and nothing else.
 ///
 /// No `startSession` (there is no session), no `placeShoe` (the shoe is not
 /// placed, it is framed), no `captureScreenshot` (the preview has no share
@@ -121,7 +121,24 @@ class ShoePreviewChannel {
         'materialOverrides': materialOverrides,
       });
 
-  /// Native → Dart reports for the preview (`modelLoaded`, `perf`, `error`).
+  /// Ask the renderer to describe itself, once a second, as `status` events.
+  ///
+  /// ⚠️ **QA only, and it is the seam `SHOE_PREVIEW_DIAGNOSTICS` travels over.** The native side
+  /// cannot read a Dart define, so this call *is* the switch's other half. It is a method rather
+  /// than a field on the handover payload because the readout has to work on a product whose model
+  /// never arrives, on a view whose engine never came up, and on the box the first real device
+  /// report described as *"it moves for a second then it stops"* — all states the handover cannot
+  /// cover, because in them it either never happened or stopped mattering.
+  ///
+  /// What comes back is one line (the frame loop's flag, the presents in the last second, the swap
+  /// chain and how many times it was built, the surfaces, the engine count, the touches this view
+  /// received) plus the last frame/chain error and — on the first heartbeat of a run only — the
+  /// previous run's last line, which is what lets a readout survive the crash it was describing.
+  /// See `ArTryOnView.emitStatus`.
+  Future<void> setDiagnostics(bool enabled) =>
+      _invoke('setPreviewDiagnostics', <String, Object?>{'enabled': enabled});
+
+  /// Native → Dart reports for the preview (`modelLoaded`, `perf`, `error`, `status`).
   ///
   /// Nothing is *driven* by these except [kRendererUnsupportedReason]: the box has
   /// no phases, and a model that never appears is indistinguishable from one that

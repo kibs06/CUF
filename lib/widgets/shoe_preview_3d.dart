@@ -67,6 +67,7 @@ class ShoePreview3D extends StatefulWidget {
     this.viewBuilder,
     this.height = 240,
     this.paused = false,
+    this.diagnostics = AppConstants.shoePreviewDiagnosticsEnabled,
   });
 
   /// The verified local model, in the same payload the AR path hands over.
@@ -92,6 +93,14 @@ class ShoePreview3D extends StatefulWidget {
   /// what stops a second Filament engine from rendering under an AR session.
   final bool paused;
 
+  /// Whether this build asked the renderer to describe itself (`status` events).
+  ///
+  /// A parameter as well as the switch it defaults to, the same shape
+  /// [ShoePreviewSection.showDiagnostics] uses and for the same reason: the
+  /// readout is the evidence a device screenshot carries, so a test has to be able
+  /// to turn it on without a `--dart-define` on the test run.
+  final bool diagnostics;
+
   @override
   State<ShoePreview3D> createState() => _ShoePreview3DState();
 }
@@ -103,6 +112,11 @@ class _ShoePreview3DState extends State<ShoePreview3D> {
   @override
   void initState() {
     super.initState();
+    // Before the handover, and before the view exists (the plugin parks it): the readout has to be
+    // on for a view whose model never arrives, which is the state a failed load leaves behind.
+    if (widget.diagnostics) {
+      unawaited(_channel.setDiagnostics(true));
+    }
     _handOver();
   }
 
@@ -357,6 +371,44 @@ class ShoePreviewHint extends StatelessWidget {
   }
 }
 
+/// **The renderer's own heartbeat, as one dim line under the box.**
+///
+/// It is the QA half of a fault that could not be diagnosed any other way. The
+/// phone it was written for has locked developer options, so there is no logcat;
+/// and the two symptoms being chased — a box that stops presenting while its loop
+/// keeps running, and an app that dies on the *second* open of the same box —
+/// destroy their own evidence as they happen. So the renderer prints the facts a
+/// screenshot can carry (loop, presents per second, swap chain and how often it
+/// was rebuilt, surfaces, engine count, touches received), and its very first line
+/// after a crash is the previous process's last words.
+///
+/// Never customer copy: it exists only when [ShoePreview3D.diagnostics] does, and
+/// the native side is never even asked for it in a build that does not turn it on.
+class _QaStatusLine extends StatelessWidget {
+  const _QaStatusLine({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppConstants.secondary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        text,
+        style: AppConstants.bodyStyle(
+          fontSize: 10,
+          color: AppConstants.secondary.withValues(alpha: 0.6),
+        ),
+      ),
+    );
+  }
+}
+
 /// **A QA build says so, on the page — and says which switches are on.**
 ///
 /// It exists because of the one screenshot that matters in this investigation:
@@ -516,7 +568,12 @@ class _ShoePreviewSectionState extends State<ShoePreviewSection> {
   }
 
   void _onEvent(Map<String, dynamic> event) {
-    if (event['type']?.toString() != 'error') return;
+    final type = event['type']?.toString();
+    if (type == 'status') {
+      _recordStatus(event['data']);
+      return;
+    }
+    if (type != 'error') return;
     final data = event['data'];
     final reason = data is Map ? data['reason']?.toString() : null;
     if (reason == null) return;
@@ -532,6 +589,36 @@ class _ShoePreviewSectionState extends State<ShoePreviewSection> {
       _errorReason = reason;
       _errorMessage = data is Map ? data['message']?.toString() : null;
     });
+  }
+
+  /// The renderer's own heartbeat (`status`), kept only when this build asked for
+  /// it.
+  ///
+  /// It exists because two real-device faults are invisible to Dart: a box that
+  /// **stops presenting while its loop keeps running** (the customer sees a still
+  /// picture that no finger can move, and the *only* thing that distinguishes that
+  /// from "touch never arrived" is a counter), and a crash on the *second* open
+  /// of the same box, which takes the readout that would explain it down with the
+  /// process — hence the `prev:` line, the last heartbeat of the previous run.
+  /// Nothing is *driven* by it: it is a line of text in a QA build and never
+  /// exists in a customer one (the native side is never asked).
+  String? _statusLine;
+
+  void _recordStatus(Object? data) {
+    if (!widget.showDiagnostics || data is! Map) return;
+    final line = data['line']?.toString();
+    if (line == null || line.isEmpty) return;
+    final previous = data['fromLastRun']?.toString();
+    final frameError = data['lastFrameError']?.toString();
+    final chainError = data['lastSwapChainError']?.toString();
+    final composed = <String>[
+      line,
+      if (previous != null && previous.isNotEmpty) 'prev: $previous',
+      if (frameError != null && frameError.isNotEmpty) 'frame: $frameError',
+      if (chainError != null && chainError.isNotEmpty) 'chain: $chainError',
+    ].join('\n');
+    if (!mounted || composed == _statusLine) return;
+    setState(() => _statusLine = composed);
   }
 
   /// The measured facts to print under a failure, or null when there is nothing
@@ -551,6 +638,10 @@ class _ShoePreviewSectionState extends State<ShoePreviewSection> {
       if (AppConstants.shoePreviewLowerEngineToLevel1) 'QA · engine pinned to level 1',
       _errorReason!,
       if (_errorMessage != null && _errorMessage!.isNotEmpty) _errorMessage!,
+      // The heartbeat goes here rather than becoming its own widget on this path:
+      // the box is gone, so the native view is gone, and the last line it sent is
+      // the most recent fact this screen has about the renderer.
+      ?_statusLine,
     ].join(' · ');
   }
 
@@ -623,7 +714,13 @@ class _ShoePreviewSectionState extends State<ShoePreviewSection> {
           viewBuilder: widget.viewBuilder,
           height: widget.height,
           paused: widget.paused,
+          // The section's own QA flag is the only one: one switch, not two that can disagree.
+          diagnostics: widget.showDiagnostics,
         ),
+        if (widget.showDiagnostics && _statusLine != null) ...<Widget>[
+          const SizedBox(height: 6),
+          _QaStatusLine(text: _statusLine!),
+        ],
         if (widget.showTryOn) ...<Widget>[
           const SizedBox(height: 12),
           // The same pill the page used to pin above the buy bar, full width and

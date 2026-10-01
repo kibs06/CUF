@@ -52,9 +52,12 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
 
@@ -366,6 +369,71 @@ class ArTryOnView(
     private var frameLoopRunning = false
     private var lastFrameNanos = 0L
 
+    // ── QA self-report (`SHOE_PREVIEW_DIAGNOSTICS`) ──────────────────────────────────────────
+    //
+    // Added 2026-10-01, after the first real-device render: the box drew the sandal at
+    // `FEATURE_LEVEL_1` — which falsifies F14/D10's "nothing loads at level 1" on real hardware —
+    // then **froze after about a second** (the loop runs: the idle spin starts, so the shoe turns,
+    // and then presents stop) and the app **died when the same box was opened a second time**
+    // (leave the viewer, open it again, crash).
+    //
+    // Neither is diagnosable from the phone normally: it has no reachable logcat (its developer
+    // options are locked behind a password its previous owner set), and every fact that would
+    // distinguish "the loop stopped" from "the loop runs and nothing presents" was written to
+    // `Log` alone. So the renderer describes itself on the page instead, once a second:
+    //
+    //  • `loop=` is the frame loop's own flag — the difference between a dead loop and a live one
+    //    that is being asked for frames it cannot present;
+    //  • `frames=` counts the presents in the last second, so "running but presenting nothing"
+    //    has a number rather than an argument;
+    //  • `chain=`/`creates=`/`lastSwapChainError` cover the leading hypothesis for the freeze:
+    //    a `TextureView` size change recreates the swap chain, and a recreation that fails leaves
+    //    `swapChain` null, at which point `renderFrame` returns early on every frame forever;
+    //  • `engine=`/`touch=` answer the other two questions a finger cannot: whether the second
+    //    open really is a *second* engine, and whether a touch ever reached this view at all.
+    //
+    // The last line is also **written to a file**, because the failure being chased kills the
+    // process: a readout that dies with the app explains nothing, while the previous run's last
+    // line survives to be read at the next launch (hence `fromLastRun`).
+
+    /** On when Dart asked for the readout ([setDiagnostics]); never on in a customer build. */
+    @Volatile private var diagnosticsEnabled = false
+
+    /** Loop iterations since the last heartbeat — **not** the same as `presentedFrames`. */
+    private var loopFrames = 0
+
+    /** Frames that actually began and were presented since the last heartbeat. */
+    private var presentedFrames = 0
+
+    private var beginFrameFails = 0
+    private var beginFrameFailStreak = 0
+    private var swapChainRebuilds = 0
+    private var lastStatusNanos = 0L
+    private var statusSentOnce = false
+    private var previousStatus: String? = null
+
+    private var engineCreates = 0
+    private var engineDestroys = 0
+    private var swapChainCreates = 0
+    private var swapChainRetryCount = 0
+    private var lastSwapChainError: String? = null
+    private var lastFrameError: String? = null
+
+    /**
+     * Touch events this view has received, split by action.
+     *
+     * `down` alone proves Flutter handed the arena over; `move` is the one that matters for
+     * turning the shoe, because the orbit is advanced from `ACTION_MOVE` deltas — and a run whose
+     * `down` climbs while `move` stays at zero is an input fault, not a renderer one.
+     */
+    @Volatile private var touchDowns = 0
+    @Volatile private var touchMoves = 0
+    @Volatile private var touchUps = 0
+
+    /** Where the QA heartbeat is parked so a crash still leaves the last one readable. */
+    private val statusFile: File? =
+        runCatching { File(context.filesDir, STATUS_FILE_NAME) }.getOrNull()
+
     // ── Preview orbit state ──────────────────────────────────────────────────────────────────
     //
     // Written by the UI thread (touch) and read by the render thread (every frame), so the
@@ -424,12 +492,14 @@ class ArTryOnView(
         scaleDetector.onTouchEvent(event)
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                touchDowns++
                 lastTouchX = event.x
                 lastTouchY = event.y
                 interacting = true
                 lastInteractionMs = System.currentTimeMillis()
             }
             MotionEvent.ACTION_MOVE -> {
+                touchMoves++
                 // A two-finger move belongs to the pinch, not to the orbit: without this the shoe
                 // spins away while the customer is trying to zoom.
                 if (!scaleDetector.isInProgress) {
@@ -446,6 +516,7 @@ class ArTryOnView(
                 lastInteractionMs = System.currentTimeMillis()
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                touchUps++
                 interacting = false
                 lastInteractionMs = System.currentTimeMillis()
             }
@@ -465,6 +536,26 @@ class ArTryOnView(
      * *dropped* a parked model, which is why the parking is explicit here and replayed on engine
      * creation.
      */
+    /**
+     * Turns the QA self-report on for this view.
+     *
+     * `SHOE_PREVIEW_DIAGNOSTICS` is a Dart define, so the native side cannot read it — this is the
+     * seam that carries it across. It is a *method* rather than a field on the model payload on
+     * purpose: the readout has to work on a product whose model never arrives, and on a view whose
+     * engine never came up, which is exactly the state a failed load or a refused renderer leaves
+     * behind (and the state the second-open crash leaves behind is "no view at all").
+     */
+    fun setDiagnostics(enabled: Boolean) {
+        diagnosticsEnabled = enabled
+        if (!enabled) return
+        // The previous run's last heartbeat, if there is one: the only way a status line survives
+        // the crash it was describing. Read once, so it cannot be shown as if it were this run's.
+        previousStatus = runCatching {
+            statusFile?.takeIf { it.exists() }?.readText()?.trim()?.takeIf { it.isNotEmpty() }
+        }.getOrNull()
+        emitStatus(lastFrameNanos, force = true)
+    }
+
     fun setModel(spec: ModelSpec) {
         renderHandler.post {
             pendingModel = spec
@@ -697,9 +788,19 @@ class ArTryOnView(
      * `surfaceDestroyed` and the plugin's `dispose` can arrive, in either order.
      */
     fun dispose() {
+        // The latch is how the *next* view knows this teardown finished: see
+        // `createEngineIfNeeded` and the second-open crash it answers. Counted down in a `finally`
+        // so a throwing teardown cannot leave the next engine creation waiting for it.
+        val finished = CountDownLatch(1)
+        pendingTeardown = finished
         renderHandler.post {
-            teardown()
-            renderThread.quitSafely()
+            try {
+                teardown()
+            } finally {
+                renderThread.quitSafely()
+                finished.countDown()
+                if (pendingTeardown === finished) pendingTeardown = null
+            }
         }
     }
 
@@ -746,6 +847,12 @@ class ArTryOnView(
 
     private fun createEngineIfNeeded() {
         if (engine != null) return
+        // ⚠️ One engine at a time, and the reason is a real-device crash (2026-10-01): opening the
+        // viewer, leaving it and opening it again kills the app. `dispose()` tears the previous
+        // view down *asynchronously on its own render thread*, so a second open used to build a
+        // new engine while the old one was still being destroyed underneath it. The wait is
+        // bounded: a wedged teardown must not become a hang on a customer's phone.
+        runCatching { pendingTeardown?.await(TEARDOWN_WAIT_SECONDS, TimeUnit.SECONDS) }
         // Findings: these two are not optional and nothing else calls them. Without them the first
         // Engine.create() dies with UnsatisfiedLinkError (GltfioDecodeTest, finding 1).
         Filament.init()
@@ -771,6 +878,7 @@ class ArTryOnView(
         }
         val created = engineBuilder.build()
         engine = created
+        engineCreates++
         val createdScene = created.createScene()
         scene = createdScene
         renderer = created.createRenderer()
@@ -1020,9 +1128,35 @@ class ArTryOnView(
         val created = engine ?: return
         val target = surface ?: return
         destroySwapChain()
+        swapChainCreates++
+        lastSwapChainError = null
         swapChain = runCatching { created.createSwapChain(target) }
-            .onFailure { Log.w(TAG, "createSwapChain failed", it) }
+            .onFailure {
+                lastSwapChainError = "${it::class.java.simpleName}: ${it.message}"
+                Log.w(TAG, "createSwapChain failed", it)
+            }
             .getOrNull()
+        if (swapChain == null) {
+            scheduleSwapChainRetry()
+        } else {
+            swapChainRetryCount = 0
+        }
+    }
+
+    /**
+     * **A retry, because the alternative is a box that never presents again.**
+     *
+     * A null swap chain is exactly the shape of the first device report's freeze — "it moves for a
+     * second then it stops": `renderFrame` returns early while the loop keeps running, so the
+     * customer gets a still picture that no finger can move, and nothing on the page says so. The
+     * likeliest trigger is the preview's `TextureView` reporting a size change (which destroys and
+     * rebuilds the chain) landing at a moment the surface is not ready for a new one. Bounded, so
+     * a chain that cannot be built at all reports rather than spins.
+     */
+    private fun scheduleSwapChainRetry() {
+        if (swapChainRetryCount >= MAX_SWAP_CHAIN_RETRIES) return
+        swapChainRetryCount++
+        renderHandler.postDelayed({ createSwapChain() }, SWAP_CHAIN_RETRY_MS)
     }
 
     private fun destroySwapChain() {
@@ -1037,9 +1171,80 @@ class ArTryOnView(
     private val frameCallback = object : Choreographer.FrameCallback {
         override fun doFrame(frameTimeNanos: Long) {
             if (!frameLoopRunning) return
-            renderFrame(frameTimeNanos)
-            choreographer.postFrameCallback(this)
+            try {
+                renderFrame(frameTimeNanos)
+            } catch (t: Throwable) {
+                // ⚠️ An exception escaping a `Choreographer` callback on this thread takes the whole
+                // process down (Android's default uncaught-exception handler is process-wide), so a
+                // failure here used to be a crash with no report anywhere. It becomes one line, a
+                // stopped loop and a frozen box instead: a frozen box is a bug report, a dead app is
+                // a lost customer.
+                lastFrameError = "${t::class.java.simpleName}: ${t.message}"
+                Log.w(TAG, "renderFrame threw; stopping the loop", t)
+                frameLoopRunning = false
+                listener.onError("preview_frame_failed", lastFrameError)
+                emitStatus(frameTimeNanos, force = true)
+                return
+            }
+            if (frameLoopRunning) choreographer.postFrameCallback(this)
+            loopFrames++
+            emitStatus(frameTimeNanos, force = false)
         }
+    }
+
+    /**
+     * The QA heartbeat: at most once a second, and only when Dart asked for it.
+     *
+     * One string rather than a dozen named fields, because the consumer is a screenshot on a phone
+     * with no logcat: whoever reads it needs the whole state in one line, not a payload to parse.
+     * `STATUS_FILE_NAME` also gets the same line, which is what makes the readout survive the crash
+     * it is describing.
+     */
+    private fun emitStatus(frameTimeNanos: Long, force: Boolean) {
+        if (!diagnosticsEnabled) return
+        if (!force && lastStatusNanos != 0L &&
+            frameTimeNanos - lastStatusNanos < STATUS_PERIOD_NANOS
+        ) {
+            return
+        }
+        val shownLoop = loopFrames
+        val shownPresented = presentedFrames
+        loopFrames = 0
+        presentedFrames = 0
+        lastStatusNanos = frameTimeNanos
+        val line = buildString {
+            append("loop=").append(if (frameLoopRunning) "on" else "STOPPED")
+            // ⚠️ `loop=` and `present=` are different numbers on purpose. The first readout from a
+            // real device showed `loop=on frames=61` on a box whose picture had not changed since
+            // it opened: 61 was *loop iterations*, and the original counter hid the fact that
+            // `beginFrame` was refusing every one of them.
+            append(" iter=").append(shownLoop)
+            append(" present=").append(shownPresented)
+            append(" beginFail=").append(beginFrameFails)
+            append(" rebuild=").append(swapChainRebuilds)
+            append(" engine=").append(engineCreates).append('/').append(engineDestroys)
+            append(" chain=").append(if (swapChain != null) "ok" else "NULL")
+            append(" creates=").append(swapChainCreates)
+            append(" surface=").append(if (surface != null) "ok" else "NULL")
+            append(" asset=").append(if (asset != null) "ok" else "NULL")
+            append(" r=").append((previewRadiusM * 1000.0).roundToInt()).append("mm")
+            append(" yaw=").append(orbitYawDeg.roundToInt())
+            append(" touch=").append(touchDowns).append('/').append(touchMoves)
+                .append('/').append(touchUps)
+            append(" interacting=").append(if (interacting) "1" else "0")
+            append(" size=").append(surfaceWidth).append('x').append(surfaceHeight)
+        }
+        runCatching { statusFile?.writeText(line) }
+        val payload = mutableMapOf<String, Any?>("line" to line, "loopRunning" to frameLoopRunning)
+        lastFrameError?.let { payload["lastFrameError"] = it }
+        lastSwapChainError?.let { payload["lastSwapChainError"] = it }
+        if (!statusSentOnce) {
+            statusSentOnce = true
+            // Only the first heartbeat of a run carries it, so a line from a process that has since
+            // died can never be mistaken for a live one.
+            previousStatus?.let { payload["fromLastRun"] = it }
+        }
+        listener.onEvent("status", payload)
     }
 
     private fun startFrameLoop() {
@@ -1172,13 +1377,36 @@ class ArTryOnView(
         }
 
         if (!activeRenderer.beginFrame(chain, frameTimeNanos)) {
-            // Nothing presented (swapchain not ready). Sleeping a millisecond beats spinning a
-            // core at vsync when this repeats.
+            // ⚠️ **The frozen box, as measured on a real P30 Pro (2026-10-01).** The QA readout
+            // from that run is the whole diagnosis: `loop=on`, 61 iterations a second, `chain=ok`
+            // (non-null, built once), `surface=ok`, `asset=ok`, touches arriving, the orbit state
+            // moving — and a picture that never changes. That is this branch: `beginFrame` is
+            // refused on every iteration, so the loop spins and reports while the screen keeps
+            // showing the last frame that presented. It is also the original report, "it moves for
+            // a second then it stops": the first second presents, then the chain stops being able
+            // to begin a frame and nothing ever rebuilds it.
+            //
+            // So a streak of refusals rebuilds the chain — the same repair a `TextureView` size
+            // change gets — because a swap chain that exists but cannot present is a state nothing
+            // else in this file recovers from (`createSwapChain`'s retry only fires when the build
+            // *returns null*). Bounded: a surface that truly cannot present must report, not spin.
+            beginFrameFails++
+            beginFrameFailStreak++
+            if (beginFrameFailStreak >= MAX_BEGIN_FRAME_FAILURES &&
+                swapChainRebuilds < MAX_SWAP_CHAIN_REBUILDS
+            ) {
+                beginFrameFailStreak = 0
+                swapChainRebuilds++
+                runCatching { createSwapChain() }
+            }
+            // Sleeping a millisecond beats spinning a core at vsync when this repeats.
             Thread.sleep(1L)
             return
         }
+        beginFrameFailStreak = 0
         activeRenderer.render(activeView)
         activeRenderer.endFrame()
+        presentedFrames++
         countFrame(frameTimeNanos)
         // Bound so the unused-variable warning cannot bite if the flow above changes.
         created.hashCode()
@@ -1615,6 +1843,7 @@ class ArTryOnView(
 
     private fun teardown() {
         frameLoopRunning = false
+        engineDestroys++
         asset?.let { loaded -> assetLoader?.let { runCatching { it.destroyAsset(loaded) } } }
         asset = null
         pendingModel = null
@@ -1689,6 +1918,37 @@ class ArTryOnView(
 
         /** A stall must not turn into a jump: the idle spin takes at most this much per frame. */
         const val MAX_FRAME_DELTA_SECONDS = 0.1f
+
+        // ── QA self-report ──────────────────────────────────────────────────────────────────
+
+        /** How often the heartbeat speaks, and the file its last line is parked in. */
+        const val STATUS_PERIOD_NANOS = 1_000_000_000L
+        const val STATUS_FILE_NAME = "qa_preview_status.txt"
+
+        /** The swap-chain retry's budget: enough to survive a settle, not enough to spin. */
+        const val SWAP_CHAIN_RETRY_MS = 120L
+        const val MAX_SWAP_CHAIN_RETRIES = 3
+
+        /**
+         * How many refused `beginFrame` calls in a row mean the chain is alive but dead, and how
+         * many times that may be repaired. Measured on a real phone: this is the state whose
+         * picture freezes while the loop keeps running at ~60 a second.
+         */
+        const val MAX_BEGIN_FRAME_FAILURES = 3
+        const val MAX_SWAP_CHAIN_REBUILDS = 5
+
+        /** How long a new engine waits for the previous view's teardown (see its call site). */
+        const val TEARDOWN_WAIT_SECONDS = 2L
+
+        /**
+         * The previous view's teardown, while it is still running — the second-open crash.
+         *
+         * Process-wide rather than per-view because the race it closes is *between* two views:
+         * `Engine.create()` on the new one against `engine.destroy()` on the old one. Filament's
+         * driver, its EGL context and `Filament.init()`'s globals are process-wide too, so the
+         * ordering has to be as well.
+         */
+        @Volatile var pendingTeardown: CountDownLatch? = null
 
         // ── Preview framing and orbit ────────────────────────────────────────────────────────
 

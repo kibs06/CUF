@@ -327,6 +327,57 @@ void main() {
       expect(find.text('Try On in AR'), findsOneWidget);
     });
 
+    testWidgets('the renderer\'s own heartbeat lands on the QA line',
+        (tester) async {
+      // ⚠️ Added 2026-10-01, from the first render anyone has seen on hardware: the
+      // sandal *did* draw at `FEATURE_LEVEL_1` (so F14/D10's "nothing loads at level
+      // 1" is an emulator answer rather than a device one), and then two faults
+      // appeared that a screenshot of the render cannot explain — the box froze
+      // after about a second, and the app died when the same box was opened a
+      // second time. The phone has no logcat, so the renderer reports itself into
+      // this line: "running and presenting nothing" has to have a number.
+      final events = StreamController<Map<String, dynamic>>.broadcast();
+      addTearDown(events.close);
+
+      await tester.pumpWidget(harness(events: events.stream, showDiagnostics: true));
+      events.add(<String, dynamic>{
+        'type': 'status',
+        'data': <String, dynamic>{
+          'line': 'loop=on frames=0 engine=1/0 chain=NULL creates=2 touch=3 ',
+          'loopRunning': true,
+          'fromLastRun': 'loop=on frames=58 engine=2/1 chain=ok creates=1 touch=0',
+          'lastSwapChainError': 'IllegalStateException: surface abandoned',
+        },
+      });
+      await tester.pump();
+
+      // The live heartbeat, the failure it recorded, and the *previous* process's
+      // last words — the last one is the only evidence that survives the crash it
+      // was describing, which is why it is printed first.
+      expect(find.textContaining('loop=on frames=0'), findsOneWidget);
+      expect(find.textContaining('chain=NULL'), findsOneWidget);
+      expect(find.textContaining('prev: loop=on frames=58'), findsOneWidget);
+      expect(find.textContaining('surface abandoned'), findsOneWidget);
+      // The box is still there: a heartbeat is information, not a fault.
+      expect(find.byKey(const Key('fake-3d')), findsOneWidget);
+      expect(find.byType(ShoePreviewHint), findsNothing);
+    });
+
+    testWidgets('a customer build prints no heartbeat at all', (tester) async {
+      final events = StreamController<Map<String, dynamic>>.broadcast();
+      addTearDown(events.close);
+
+      await tester.pumpWidget(harness(events: events.stream));
+      events.add(<String, dynamic>{
+        'type': 'status',
+        'data': <String, dynamic>{'line': 'loop=on frames=60 engine=1/0 chain=ok'},
+      });
+      await tester.pump();
+
+      expect(find.textContaining('loop=on'), findsNothing);
+      expect(find.textContaining('frames='), findsNothing);
+    });
+
     testWidgets('the hint is a pure widget: message plus optional action',
         (tester) async {
       // Mounted directly — it has no channel, no gate and no state of its own;

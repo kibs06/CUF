@@ -413,6 +413,62 @@ void main() {
         contains('setPreviewModel'),
         reason: 'the handover method the Dart side calls',
       );
+      expect(
+        plugin,
+        contains('"setPreviewDiagnostics"'),
+        reason: 'the QA readout seam the Dart side calls — SHOE_PREVIEW_DIAGNOSTICS '
+            'is a Dart define, so the native side cannot read it and this call is '
+            'the switch\'s other half',
+      );
+      expect(
+        previewChannel,
+        contains("'setPreviewDiagnostics'"),
+        reason: 'the Dart half of the same call',
+      );
+    });
+
+    test('the QA self-report reaches the page, not a log nobody can read', () {
+      // ⚠️ Written on the day the first real-device render arrived (2026-10-01). That
+      // phone has locked developer options, so `adb logcat` will never be read from
+      // it — and the two faults the run produced (a box that stops presenting while
+      // its frame loop keeps running, and a crash on the *second* open of the same
+      // box) both destroy their own evidence. Hence four guards, each one a fact the
+      // screenshot has to be able to carry: the heartbeat exists, Dart parses it, the
+      // last line survives a crash, and a failing frame reports instead of killing
+      // the process.
+      final view = File(
+        'android/app/src/main/kotlin/com/solevision/app/tryon/ArTryOnView.kt',
+      ).readAsStringSync();
+
+      expect(
+        view,
+        contains('listener.onEvent("status"'),
+        reason: 'the heartbeat type, spelled natively the way Dart parses it',
+      );
+      expect(
+        codeOf(previewWidget),
+        contains("type == 'status'"),
+        reason: 'and the Dart side has to actually handle it — an event nobody '
+            'reads is the same silent log this seam exists to replace',
+      );
+      expect(
+        view,
+        contains('STATUS_FILE_NAME'),
+        reason: 'the heartbeat goes to a file too, or it dies with the process it '
+            'was describing and explains nothing',
+      );
+      expect(
+        view,
+        contains('preview_frame_failed'),
+        reason: 'an exception in the frame callback is process death on Android: it '
+            'has to be caught and reported',
+      );
+      expect(
+        view,
+        contains('pendingTeardown'),
+        reason: 'the second-open crash is a teardown racing the next create, and the '
+            'fix is the ordering this latch holds',
+      );
     });
 
     test('the reason a renderer cannot draw is spelled the same on both sides', () {
