@@ -24,6 +24,23 @@ name: QA APK (not a release)
 # signer, same versionCode, login preserved. A debug APK is signed with a throwaway
 # runner key, which the installer refuses to put over any previous build. Without
 # the secrets the run still succeeds, warns, and the APK needs an uninstall first.
+#
+# ABI. `arm64` is a phone and is the default; `x86_64` is an emulator, and the input
+# decides one thing only, but a decisive one: **which `libflutter.so` the APK can
+# run**. A debug APK is not ABI-filtered — Filament's AAR and the plugins each ship
+# every ABI (13–14 `.so`s per folder), so the artifact stays ~250 MB either way and
+# installs anywhere; what it cannot do without this is *start*. An `arm64`-built QA
+# APK installs on an x86_64 emulator and then dies loading the engine, which is the
+# state that made this input necessary.
+#
+# The emulator is offered on purpose even though it **cannot draw this model**: its
+# GLES is a translator, so Filament resolves FEATURE_LEVEL_1 and the material load
+# fails there (F14), and the advertised Vulkan backend aborts the process (F24). What
+# it *can* check is everything Dart-side — model resolution, the channel handover, the
+# refusal reaching the page, the heartbeat plumbing — so the switch is a statement
+# about which class of question a run answers, not a claim that it renders. It also
+# pairs with `qa-logcat.yml`: an emulator is the one place `adb logcat` works, because
+# the phone this feature is measured on has locked developer options.
 
 on:
   workflow_dispatch:
@@ -40,6 +57,14 @@ on:
         description: 'SHOE_PREVIEW_ALLOW_LEVEL1 — let the load happen (may abort the process)'
         type: boolean
         default: true
+      abi:
+        description: 'Which engine to ship: arm64 = phone, x86_64 = emulator (Dart-side checks; cannot render), both = either.'
+        type: choice
+        options:
+          - arm64
+          - x86_64
+          - both
+        default: arm64
 
 # Read-only: nothing here writes to the repository, which is the difference between
 # this workflow and the release one.
@@ -103,15 +128,30 @@ jobs:
       # The instrumented QA build. Every switch is echoed the way the release job
       # echoes its defines, so "does this artifact have the readout?" is answerable
       # from the run log instead of from another build.
-      - name: Build QA APK (debug, arm64)
+      - name: Build QA APK (debug)
+        id: build
         shell: bash
         env:
           DIAGNOSTICS: ${{ inputs.diagnostics }}
           LOWER_ENGINE: ${{ inputs.lower_engine }}
           ALLOW_LEVEL1: ${{ inputs.allow_level1 }}
+          ABI: ${{ inputs.abi }}
         run: |
           set -euo pipefail
-          ARGS=(--debug --target-platform android-arm64)
+          # Flutter's names, not the marketing ones: the arm64 phone is `android-arm64`
+          # and the x86_64 emulator is `android-x64` (there is no `android-x86_64`).
+          # This selects the Flutter engine's own libs; plugin AARs bring every ABI
+          # regardless, so `both` is a convenience rather than a necessity.
+          case "$ABI" in
+            arm64)  PLATFORM=android-arm64                 ; ABI_SLUG=arm64 ;;
+            x86_64) PLATFORM=android-x64                   ; ABI_SLUG=x86_64 ;;
+            both)   PLATFORM=android-arm64,android-x64     ; ABI_SLUG=arm64-x86_64 ;;
+            *) echo "::error::unknown abi '$ABI'"; exit 1 ;;
+          esac
+          if [[ "$ABI" != "arm64" ]]; then
+            echo "::notice::Building for $ABI — an emulator can check the Dart path, the refusal and the heartbeat, but not a render (F14/F24)."
+          fi
+          ARGS=(--debug --target-platform "$PLATFORM")
           [[ "$DIAGNOSTICS" == "true" ]] && ARGS+=(--dart-define=SHOE_PREVIEW_DIAGNOSTICS=true)
           [[ "$LOWER_ENGINE" == "true" ]] && ARGS+=(--dart-define=SHOE_PREVIEW_LOWER_ENGINE_TO_LEVEL1=true)
           [[ "$ALLOW_LEVEL1" == "true" ]] && ARGS+=(--dart-define=SHOE_PREVIEW_ALLOW_LEVEL1=true)
@@ -119,6 +159,20 @@ jobs:
           ARGS+=(--dart-define=SHOE_PREVIEW=true)
           echo "→ flutter build apk ${ARGS[*]}"
           flutter build apk "${ARGS[@]}"
+          # The default (arm64) keeps the names it has always had, so the documented
+          # `solevision-qa-instrumented-apk` artifact is unchanged; an emulator build
+          # arrives beside it rather than replacing it.
+          APK_NAME="solevision-qa-instrumented-$ABI_SLUG.apk"
+          ARTIFACT="solevision-qa-instrumented-apk-$ABI_SLUG"
+          if [[ "$ABI_SLUG" == "arm64" ]]; then
+            APK_NAME="solevision-qa-instrumented.apk"
+            ARTIFACT="solevision-qa-instrumented-apk"
+          fi
+          {
+            echo "abi_slug=$ABI_SLUG"
+            echo "apk_name=$APK_NAME"
+            echo "artifact_name=$ARTIFACT"
+          } >> "$GITHUB_OUTPUT"
 
       # A debug APK carries the runner's throwaway debug key. Re-signing it with the
       # project key is what lets it be installed **over** the shipped build instead
@@ -133,7 +187,7 @@ jobs:
         run: |
           set -euo pipefail
           RAW="build/app/outputs/flutter-apk/app-debug.apk"
-          OUT="build/app/outputs/flutter-apk/solevision-qa-instrumented.apk"
+          OUT="build/app/outputs/flutter-apk/${{ steps.build.outputs.apk_name }}"
           if [[ ! -f android/key.properties ]]; then
             echo "::warning::No keystore — uploading the debug-signed APK as built."
             cp "$RAW" "$OUT"
@@ -161,7 +215,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          APK="build/app/outputs/flutter-apk/solevision-qa-instrumented.apk"
+          APK="build/app/outputs/flutter-apk/${{ steps.build.outputs.apk_name }}"
           SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
           AAPT2="$(find "$SDK/build-tools" -maxdepth 2 -type f -name aapt2 | sort -V | tail -1)"
           {
@@ -169,7 +223,8 @@ jobs:
             echo
             echo "| | |"
             echo "|---|---|"
-            echo "| file | \`solevision-qa-instrumented.apk\` |"
+            echo "| file | \`${{ steps.build.outputs.apk_name }}\` |"
+            echo "| abi | \`${{ inputs.abi }}\`${{ inputs.abi != 'arm64' && ' — emulator build: measures the Dart path, the refusal and the heartbeat, never a render (F14/F24)' || '' }} |"
             echo "| size | $(du -h "$APK" | cut -f1) |"
             echo "| sha256 | \`$(sha256sum "$APK" | cut -d' ' -f1)\` |"
             echo "| commit | \`$GITHUB_SHA\` |"
@@ -187,8 +242,8 @@ jobs:
       - name: Upload the APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: solevision-qa-instrumented-apk
-          path: build/app/outputs/flutter-apk/solevision-qa-instrumented.apk
+          name: ${{ steps.build.outputs.artifact_name }}
+          path: build/app/outputs/flutter-apk/${{ steps.build.outputs.apk_name }}
           retention-days: 30
           # An APK is already compressed; re-deflating 244 MB buys nothing.
           compression-level: 0

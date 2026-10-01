@@ -240,10 +240,10 @@ switches, and their shipped defaults:
 | `SHOE_MODEL_UPLOAD` | **on** | the seller's 3D-model upload section in the product form |
 | `SHOE_MODEL_REQUEST` | **on** | the **3D fitting request** row in the seller's product action sheet (ask the CUFMAI team to model the pair) and the admin queue that answers it. Its “3D fitting ready” state opens the model itself — the seller’s viewer resolves the product’s model on their own device and draws it, or says plainly that there is nothing to draw |
 | `ADMIN_MODEL_UPLOAD` | **on** | the admin's “Upload a 3D model” action in that queue |
-| `SHOE_PREVIEW` | **off** | the **3D icon in the lower-right corner of the product photograph**, which opens the full-screen 3D viewer (`ShoePreviewScreen`); “Try On in AR” is the escalation inside that viewer. Off means no 3D entry on the page at all — the pinned AR pill it used to fall back to came off on 2026-10-01. A product whose model is verified on disk shows the icon *and*, inside the viewer, the AR button; a product with no model shows **neither**. Needs no ARCore and no camera permission (no session is created), but it does need the model verified on disk, so it rides on `TRY_ON_PREFETCH`. ⚠️ It ships off because nobody has seen a render on hardware yet |
+| `SHOE_PREVIEW` | **off** | the **3D icon in the lower-right corner of the product photograph**, which opens the full-screen 3D viewer (`ShoePreviewScreen`); “Try On in AR” is the escalation inside that viewer. Off means no 3D entry on the page at all — the pinned AR pill it used to fall back to came off on 2026-10-01. A product whose model is verified on disk shows the icon *and*, inside the viewer, the AR button; a product with no model shows **neither**. Needs no ARCore and no camera permission (no session is created), but it does need the model verified on disk, so it rides on `TRY_ON_PREFETCH`. ⚠️ Still **off** in the shipped defaults, and the reason has changed: a render was finally seen on hardware on 2026-10-01 (a GLES 3.2 phone, and the missing piece was that nothing ever *asked* the engine for `FEATURE_LEVEL_2` — see the newest CHANGELOG entry), so opening it to customers is now a product call rather than a missing measurement |
 | `SHOE_PREVIEW_DIAGNOSTICS` | **off** | a QA second line under the box's refusal sentence, carrying the **measured renderer facts** — the native reason, the backend, Filament's supported/active feature level and the device's advertised GLES version. It exists because the phone this was written for (a P30 Pro with locked developer options) has no reachable logcat, so the diagnosis has to be on the page. The line deliberately does **not** claim cube-map-array support: that extension string is on `ActivityManager.DeviceConfigurationInfo.glExtensions`, which is not in the public SDK, so `supported=` is the proxy for it. Never customer copy |
-| `SHOE_PREVIEW_ALLOW_LEVEL1` | **off** | ⚠️ **QA only, and the one switch here that can kill the app.** It asks the renderer to attempt a glTF load below Filament's `FEATURE_LEVEL_2`, where it has always refused, because that load was a `SIGSEGV` on an emulator (F22) and level 1 has never been tried on real hardware (F14, D10). It is a measurement, not a surface. Two locks: this define, and the native side, which honours a `true` only in a **debuggable** build (a shipped release APK is not) and announces the build on the product page |
-| `SHOE_PREVIEW_LOWER_ENGINE_TO_LEVEL1` | **off** | ⚠️ **QA only: builds (or lowers) the Filament engine at `FEATURE_LEVEL_1`** — `Engine.Builder.featureLevel` when the engine does not exist yet, `Engine.setActiveFeatureLevel` when it does. It is the *other half* of the switch above: on a level-2 phone the refusal never fires, so the override alone proves nothing, and a level-1 engine cannot be obtained from the owner's phone on demand. Used **alone** it reproduces the P30 Pro's condition (the box shows the refusal line with `supported=FEATURE_LEVEL_2 active=FEATURE_LEVEL_1`); used **with** `SHOE_PREVIEW_ALLOW_LEVEL1` it is the experiment — whether a level-1 renderer can draw a shoe at all. It only ever *lowers* (the ceiling is what the driver resolved), so a level-1 or level-0 device is unaffected. Two locks, the same two: this define, and a **debuggable** build |
+| `SHOE_PREVIEW_ALLOW_LEVEL1` | **off** | ⚠️ **QA only, and the one switch here that can kill the app.** It asks the renderer to attempt a glTF load below Filament's `FEATURE_LEVEL_2`, where it has always refused, because that load was a `SIGSEGV` on an emulator (F22). Level 1 has since been tried on real hardware (2026-10-01), and both devices agree with the guard: on a GLES 3.2 phone it **aborted the process** in `createEngineIfNeeded → applyPendingModel → applyTransform`, and on the P30 Pro it drew a shoe that then froze (F14, D10). It is a measurement, not a surface. Two locks: this define, and the native side, which honours a `true` only in a **debuggable** build (a shipped release APK is not) and announces the build on the product page |
+| `SHOE_PREVIEW_LOWER_ENGINE_TO_LEVEL1` | **off** | ⚠️ **QA only: builds (or lowers) the Filament engine at `FEATURE_LEVEL_1`** — `Engine.Builder.featureLevel` when the engine does not exist yet, `Engine.setActiveFeatureLevel` when it does. It is the *other half* of the switch above: **every** phone used to come up at level 1 (Filament's builder default, since corrected — the load path asks for `FEATURE_LEVEL_2` now), so the refusal no longer fires on a capable device, and a level-1 engine cannot be obtained from the owner's phone on demand. Used **alone** it reproduces the P30 Pro's condition (the box shows the refusal line with `supported=FEATURE_LEVEL_2 active=FEATURE_LEVEL_1`); used **with** `SHOE_PREVIEW_ALLOW_LEVEL1` it is the experiment — whether a level-1 renderer can draw a shoe at all. It only ever *lowers* (the ceiling is what the driver resolved), so a level-1 or level-0 device is unaffected. Two locks, the same two: this define, and a **debuggable** build |
 
 A switch that is never passed is **not** the same as a switch passed as `false`
 — both mean "off", but only the first is invisible in a release log. That is
@@ -330,6 +330,24 @@ a terminal:
 gh workflow run qa-apk.yml -f diagnostics=true -f lower_engine=true -f allow_level1=true
 ```
 
+**ABI.** `abi=arm64` (the default) is the phone; `abi=x86_64` is an emulator. It
+decides exactly one thing, and a decisive one: **which `libflutter.so` the APK can
+run**. A debug APK is not ABI-filtered — Filament's AAR and the plugins ship every
+ABI between them, so the artifact is ~250 MB either way and *installs* anywhere;
+an `arm64`-built QA APK will install on an x86_64 emulator and then die loading the
+engine. `abi=both` ships both engines in one APK.
+
+An emulator can answer a different *class* of question than a phone can: its GLES
+is a translator, so Filament resolves `FEATURE_LEVEL_1` and the material load fails
+there (F14) while the advertised Vulkan backend aborts the process (F24). What it
+can check is everything Dart-side — model resolution, the channel handover, the
+refusal reaching the page, the heartbeat plumbing — and its log is the one an
+emulator *can* hand over, because `adb` works there.
+
+```bash
+gh workflow run qa-apk.yml -f abi=x86_64 -f diagnostics=true -f lower_engine=true -f allow_level1=true
+```
+
 **Why it is not a release.** The three `SHOE_PREVIEW_*` QA switches are honoured
 only in a **debuggable** APK (a published release is not `FLAG_DEBUGGABLE`, so it
 ignores them — see the switch table above), and they measure the renderer rather
@@ -348,3 +366,40 @@ the only diagnostic channel for the phones this was written for: the test device
 has developer options locked behind a password its previous owner set, so
 `adb logcat` will never be read from it. Local builds of the same thing live in
 `build/qa/` (git-ignored).
+
+### Getting the log off a phone that has no adb
+
+**The phone exports its own log.** Try-on events are relayed into `nav_diag.log`
+— the same in-app diagnostics file the foot-sizing work has been writing since
+Phase 1b — under a `[preview]` tag, carrying the engine's feature level, the
+refusal, the load result, every swap-chain build/rebuild/retry, the refused-frame
+streaks, and the teardown. It is written with an `fsync` per line, so a process
+death still leaves the lines that led to it. To get it out: **Foot Sizing → the bug
+icon in the app bar → the share sheet**, then send it wherever you can read it. No
+cable, no developer options, no adb.
+
+```bash
+# Once you have a URL for it (a gist, a paste service, a signed Supabase link):
+gh workflow run qa-logcat.yml -f log_url=<url>
+```
+
+That publishes it as a `solevision-qa-logcat-shared` artifact next to the APK one,
+with a digest in the run summary.
+
+### Where adb *does* work
+
+An emulator, another phone, or any machine with one attached — including a
+self-hosted runner. One command:
+
+```bash
+bash tool/qa_capture.sh --seconds 60        # → build/qa/capture-<timestamp>/
+```
+
+It clears the log buffer, starts the app, prints the repro to follow, samples the
+heartbeat file every 5 s with `run-as` (possible because a QA APK is debuggable),
+then writes the full log, the filtered log, the heartbeat history, the device
+facts and a `digest.txt` — read that first: it carries `present_max`, `beginFail_max`,
+`rebuild_max`, `loop_stopped`, `crash_signatures`, and how many heartbeat samples
+were identical to the one before them, which is the freeze stated as a number.
+`--check` reports whether a device is there without capturing anything, which is
+how `.github/workflows/qa-logcat.yml` decides whether it has anything to publish.

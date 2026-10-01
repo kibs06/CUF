@@ -1,0 +1,5 @@
+# Shell scripts must keep LF endings. `core.autocrlf=true` is normal on the Windows
+# machines this project is built on, and a CRLF shebang makes Git Bash refuse to run
+# a script at all ("bad interpreter") — for the ones run by hand (`tool/*.sh`) and
+# for the ones CI runs (`.github/workflows/qa-*.yml` call `tool/qa_capture.sh`).
+*.sh text eol=lf

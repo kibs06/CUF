@@ -1,0 +1,180 @@
+name: QA logcat (not a release)
+
+# Publishes a device run's log as a **workflow artifact**, so a QA session comes
+# back with a file instead of a photograph of a screen.
+#
+# ⚠️ **A runner has no phone.** This is the constraint the whole workflow is shaped
+# by, and there are exactly two ways to satisfy it:
+#
+#   * `device` — a runner with the phone (or emulator) **attached by USB** runs
+#     `tool/qa_capture.sh` itself: `adb logcat`, the renderer's heartbeat file pulled
+#     with `run-as`, and a digest. That is what a `self-hosted` runner is for; the
+#     default GitHub runner will simply report that nothing is attached and stop.
+#   * `shared` — a capture made *elsewhere* and handed to this job through `log_url`
+#     (any URL `curl` can fetch anonymously: a raw gist, a paste service, a signed
+#     Supabase URL). This is the door for the P30 Pro, whose developer options are
+#     locked behind a password its previous owner set: **no adb will ever reach it**,
+#     so its log leaves through the app's own share-sheet export and comes back here
+#     as a link. See the README's "QA builds" section.
+#
+# `log_url` wins when both are given, so a run that was dispatched for a shared log
+# never touches a device.
+#
+# Usage:
+#   gh workflow run qa-logcat.yml -f log_url=https://gist.githubusercontent.com/…/raw/nav_diag.log
+#   gh workflow run qa-logcat.yml -f runner=self-hosted -f seconds=90
+#
+# One typo to avoid: `-f log_url=…` with an empty value (`-f log_url=`) is how you ask
+# for the device door. The job fails *loudly* when neither door is available rather
+# than uploading an empty artifact.
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: 'Where to capture. `self-hosted` means the machine the phone is plugged into.'
+        type: choice
+        options:
+          - ubuntu-latest
+          - windows-latest
+          - self-hosted
+        default: ubuntu-latest
+      seconds:
+        description: 'How long the log window stays open (device door only)'
+        type: string
+        default: '60'
+      serial:
+        description: 'adb serial to capture from, when several are attached (device door only)'
+        type: string
+        default: ''
+      log_url:
+        description: 'A URL to a capture made elsewhere — the phone with no adb uses this'
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qa-logcat
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    name: Capture
+    runs-on: ${{ inputs.runner }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Which door. Asking the capture tool itself (`--check`) keeps one definition of
+      # "a device is attached" instead of two that can drift.
+      - name: Work out where the capture comes from
+        id: mode
+        shell: bash
+        env:
+          LOG_URL: ${{ inputs.log_url }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$LOG_URL" ]]; then
+            echo "source=shared" >> "$GITHUB_OUTPUT"
+            echo "→ a log_url was given: publishing that capture, not touching a device."
+            exit 0
+          fi
+          if bash tool/qa_capture.sh --check; then
+            echo "source=device" >> "$GITHUB_OUTPUT"
+          else
+            code=$?
+            echo "source=none" >> "$GITHUB_OUTPUT"
+            if [[ "$code" == "3" ]]; then
+              echo "reason=adb is not installed on this runner" >> "$GITHUB_OUTPUT"
+            else
+              echo "reason=no adb device is attached to this runner" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+      - name: Nothing to capture — say so instead of uploading an empty artifact
+        if: steps.mode.outputs.source == 'none'
+        shell: bash
+        run: |
+          {
+            echo "### QA logcat — nothing was captured"
+            echo
+            echo "${{ steps.mode.outputs.reason }}."
+            echo
+            echo "Two ways to give this job something to publish:"
+            echo
+            echo "1. **A device and a self-hosted runner.** Dispatch again with"
+            echo "   \`runner=self-hosted\`, from the machine the phone is plugged into."
+            echo "2. **A link.** Export the log from inside the app (Foot Sizing → the bug"
+            echo "   icon → the share sheet), put it somewhere fetchable, and dispatch with"
+            echo "   \`log_url=\`. The P30 Pro can *only* use this one: its developer options"
+            echo "   are locked, so adb will never reach it."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::warning::Nothing to capture: ${{ steps.mode.outputs.reason }}."
+
+      - name: Fetch a capture made elsewhere
+        if: steps.mode.outputs.source == 'shared'
+        shell: bash
+        env:
+          LOG_URL: ${{ inputs.log_url }}
+        run: |
+          set -euo pipefail
+          OUT="build/qa/capture-shared"
+          mkdir -p "$OUT"
+          URL="$LOG_URL"
+          # A gist *page* URL is what the share sheet or the browser gives you; the raw
+          # text is one segment further along.
+          if [[ "$URL" == *"gist.github.com"* && "$URL" != *"/raw"* ]]; then
+            URL="${URL%/}/raw"
+          fi
+          echo "→ fetching $URL"
+          curl -fsSL --retry 3 "$URL" -o "$OUT/shared-log.txt"
+          echo "→ $(wc -l < "$OUT/shared-log.txt" | tr -d ' ') lines, $(wc -c < "$OUT/shared-log.txt" | tr -d ' ') bytes"
+          {
+            echo "source=$LOG_URL"
+            echo "fetched_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "lines=$(wc -l < "$OUT/shared-log.txt" | tr -d ' ')"
+            echo "bytes=$(wc -c < "$OUT/shared-log.txt" | tr -d ' ')"
+            echo "heartbeat_lines=$(grep -ac 'loop=' "$OUT/shared-log.txt" || true)"
+            echo "crash_signatures=$(grep -acE 'SIGSEGV|Fatal signal|tombstone' "$OUT/shared-log.txt" || true)"
+          } > "$OUT/digest.txt"
+
+      - name: Capture from the attached device
+        if: steps.mode.outputs.source == 'device'
+        shell: bash
+        env:
+          SECONDS_WINDOW: ${{ inputs.seconds }}
+          SERIAL: ${{ inputs.serial }}
+        run: |
+          set -euo pipefail
+          ARGS=(--seconds "$SECONDS_WINDOW")
+          [[ -n "$SERIAL" ]] && ARGS+=(--serial "$SERIAL")
+          bash tool/qa_capture.sh "${ARGS[@]}"
+
+      - name: Put the digest in the summary
+        if: steps.mode.outputs.source != 'none'
+        shell: bash
+        run: |
+          {
+            echo "### QA logcat — ${{ steps.mode.outputs.source }}"
+            echo
+            echo '```'
+            cat build/qa/capture-*/digest.txt
+            echo '```'
+            echo
+            echo "The capture itself is in the artifact below, and expands to plain text —"
+            echo "no tooling needed to read it."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # A log is text: it compresses hard, so the artifact stays small even at 9.
+      - name: Upload the capture
+        if: steps.mode.outputs.source != 'none'
+        uses: actions/upload-artifact@v4
+        with:
+          name: solevision-qa-logcat-${{ steps.mode.outputs.source }}
+          path: build/qa/capture-*/
+          retention-days: 30
+          compression-level: 9
+          if-no-files-found: error
