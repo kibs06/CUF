@@ -1,11 +1,10 @@
 {
-  "latest_version": "1.0.38",
-  "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.38/app-release-1.0.38.apk",
-  "released_at": "2026-09-30",
+  "latest_version": "1.0.39",
+  "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.39/app-release-1.0.39.apk",
+  "released_at": "2026-10-01",
   "notes": [
-    "The shoe is on the photo now: a 3D icon in the corner of a product photo opens it full screen — turn it, and Try On in AR is one tap inside",
-    "The pinned \"Try On in AR\" bar is gone from the product page — the camera is the step after a look, not the price of one",
-    "Sellers can finally see the model: \"3D fitting ready\" opens it, instead of a note saying it exists",
-    "Phones that cannot draw 3D say so where the shoe would have been, instead of quietly showing nothing"
+    "The 3D preview of a shoe finally draws: the app was asking the graphics driver for a lower feature level than your phone provides, which is why it said the phone could not show the shoe",
+    "Fixed the crash that could close the app when you left the 3D preview",
+    "Loading a model no longer builds spare copies of it that are never freed"
   ]
 }
