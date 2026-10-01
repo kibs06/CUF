@@ -68,6 +68,14 @@ void main() {
       // same silence — and a crash's last line is the whole diagnosis on a phone with no adb.
       expect(view, contains('engine creation BEGIN: requested='));
       expect(view, contains('engine built: backend='));
+      // ⚠️ The load window, where the P30 Pro's 1.0.40 log stops: `renderer facts` is its last
+      // line, and neither the swap chain nor the loaded line follows. A driver abort cannot be
+      // caught, so the only trace left is one line per native call — the call with no successor is
+      // the one that died. Losing these lines turns the next crash report back into a guess.
+      expect(view, contains('load attempt '));
+      expect(view, contains('load: asset built — ResourceLoader.loadResources'));
+      expect(view, contains('load: entities added — applying the transform'));
+      expect(view, contains('flushAndWait threw'));
       expect(view, contains('REFUSED the load'));
       expect(view, contains('beginFrame refused'));
       expect(view, contains('rebuilding the ')); // the chain repair

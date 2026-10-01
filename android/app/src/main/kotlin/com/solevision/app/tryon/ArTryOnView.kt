@@ -1763,6 +1763,18 @@ class ArTryOnView(
             listener.onError("model_parse_failed", "local model missing at ${spec.path}")
             return
         }
+        // ⚠️ **The load window is where the P30 Pro dies, and these lines are how a driver abort gets
+        // a name.** Measured on 1.0.40 (2026-10-01): its log reaches the renderer facts and stops —
+        // with neither the swap-chain line nor the loaded line after it — so the process dies inside
+        // this function, and *which* native call did it cannot be caught: an abort in a driver is not
+        // an exception. Each call below is therefore announced before it runs and confirmed after it
+        // returns, and the last line with no successor is the call to look at. The Java-level
+        // failures are wrapped where they were not, because an uncaught throwable on the render
+        // thread kills the process exactly like an abort does — a wrapped one leaves a line instead.
+        relay(
+            "load: model ${spec.modelId} — ${file.length()} bytes, renderer " +
+                "${created.activeFeatureLevel}",
+        )
         val startedAt = System.currentTimeMillis()
         asset?.let { previous -> runCatching { loader.destroyAsset(previous) } }
         asset = null
@@ -1782,11 +1794,16 @@ class ArTryOnView(
         // That was the crash on **leaving** the viewer, on a phone whose render was fine. The fix is
         // to stop loading once something loaded.
         for (attempt in 0 until LOAD_ATTEMPTS) {
-            created.flushAndWait()
+            relay("load attempt ${attempt + 1}/$LOAD_ATTEMPTS: flushAndWait")
+            runCatching { created.flushAndWait() }.onFailure { t ->
+                relay("load attempt ${attempt + 1}: flushAndWait threw — ${t.message}")
+            }
             val bytes = runCatching { file.readBytes() }.getOrElse { t ->
+                relay("load attempt ${attempt + 1}: reading the file failed — ${t.message}")
                 listener.onError("model_parse_failed", "cannot read ${spec.path}: ${t.message}")
                 return
             }
+            relay("load attempt ${attempt + 1}: ${bytes.size} bytes — createAsset")
             loaded = runCatching { loader.createAsset(directBuffer(bytes)) }.getOrElse { t ->
                 // An undecodable required extension surfaces here. Finding 3's PreconditionPanic
                 // (material/mesh mismatch) is a process abort and is *not* catchable — which is
@@ -1794,6 +1811,10 @@ class ArTryOnView(
                 lastFailure = t.message
                 null
             }
+            relay(
+                "load attempt ${attempt + 1}: createAsset " +
+                    (if (loaded != null) "returned an asset" else "returned null — $lastFailure"),
+            )
             if (loaded != null) break
             lastFailure = lastFailure ?: "loader returned null (unsupported required extension?)"
             Thread.sleep(200L * (attempt + 1))
@@ -1814,14 +1835,22 @@ class ArTryOnView(
         // `AssetLoader`'s own javadoc shows (`loadResources` … `resourceLoader.destroy()`): the
         // object was previously created inline and dropped, leaving its native staging buffers
         // behind on every open of the box.
+        relay("load: asset built — ResourceLoader.loadResources")
         val resources = ResourceLoader(created)
         runCatching { resources.loadResources(createdAsset) }
-            .onFailure { t -> Log.w(TAG, "loadResources failed", t) }
+            .onFailure { t ->
+                Log.w(TAG, "loadResources failed", t)
+                relay("load: loadResources threw — ${t.message}")
+            }
+        relay("load: resources loaded — freeing the staging loader")
         runCatching { resources.destroy() }
             .onFailure { t -> Log.w(TAG, "ResourceLoader.destroy failed", t) }
-        scene?.addEntities(createdAsset.renderableEntities)
+        relay("load: staging loader freed — adding the entities")
+        runCatching { scene?.addEntities(createdAsset.renderableEntities) }
+            .onFailure { t -> relay("load: addEntities threw — ${t.message}") }
         modelRoot = createdAsset.root
         runCatching { created.transformManager.create(modelRoot) }
+        relay("load: entities added — applying the transform")
 
         pendingAuthoredLengthMm = spec.authoredLengthMm
         yawOffsetDeg = spec.yawOffsetDeg ?: 0.0
