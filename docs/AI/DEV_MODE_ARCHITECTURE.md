@@ -111,7 +111,16 @@ screen, or the "DEV MODE" chip is tapped in any flow.
 9. **Revert** `lib/screens/auth/pending_approval_screen.dart`: remove the
    `dev_mode` import, the `devPreview` flag + its checked-by-default rows,
    and the "DEV PREVIEW" banner.
-10. **Clear the task-board entry** in `obsidian/Tasks.md` and the one-line
+10. **Revert** `lib/screens/shared/settings_screen.dart`: remove the `dev_mode`
+    import, the `app_logs_screen` import, and the whole `ValueListenableBuilder`
+    **Developer** section — the **App logs** row lives there and exists only for a
+    phone with no adb (README → “Getting the log off a phone that has no adb”).
+    ⚠️ Decide the screen's fate in the same pass: with dev mode gone, nothing else
+    opens `lib/screens/shared/app_logs_screen.dart` — the Foot Sizing bug icon only
+    *sends* the file — so either re-home it (a deliberate, visible entry) or delete
+    it with this list. Leaving it is the one outcome that is wrong either way: an
+    unreachable screen kept alive by a checklist nobody re-reads.
+11. **Clear the task-board entry** in `obsidian/Tasks.md` and the one-line
    note in `obsidian/MOCs/00 - Auth & Accounts.md` / `docs/AI/SIGNUP_ARCHITECTURE.md`.
 
 A grep to confirm zero references afterwards:

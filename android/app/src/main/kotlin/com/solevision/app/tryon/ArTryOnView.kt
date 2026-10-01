@@ -7,6 +7,7 @@ import android.graphics.Bitmap
 import android.graphics.PixelFormat
 import android.graphics.SurfaceTexture
 import android.opengl.Matrix
+import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.Looper
@@ -945,6 +946,20 @@ class ArTryOnView(
         // when the phone was never the problem. Asking for level 2 is the honest request — it is
         // what the glTF material path needs — and a device whose ceiling is level 1 or 0 is
         // unaffected, because the answer is the driver's clamp, not ours.
+        // ⚠️ The pair of lines a crash is read from, and the reason they are relays rather than
+        // Log calls: on the phone with no adb this file is the only record of a fault, and the new
+        // P30 Pro crash (opening the viewer, 2026-10-01) arrives without a stack. Between the
+        // platform view's creation and the engine-ready line further down sits the whole native
+        // setup, so without a line at each end of the builder an exported log cannot say whether
+        // the process died inside `Engine.Builder.build()` or in the scene/renderer/view/loader
+        // construction after it. The device's own claim travels on the first line, so a run that
+        // never reaches the post-engine facts still says what the phone said it could do.
+        val requestedLevel = if (shouldLowerEngineToLevel1(pendingModel)) {
+            "FEATURE_LEVEL_1 (QA)"
+        } else {
+            "FEATURE_LEVEL_2"
+        }
+        relay("engine creation BEGIN: requested=$requestedLevel · ${deviceFacts()}")
         val engineBuilder = Engine.Builder()
         if (shouldLowerEngineToLevel1(pendingModel)) {
             engineBuilder.featureLevel(Engine.FeatureLevel.FEATURE_LEVEL_1)
@@ -958,6 +973,10 @@ class ArTryOnView(
         val created = engineBuilder.build()
         engine = created
         engineCreates++
+        relay(
+            "engine built: backend=${created.backend} supported=${created.supportedFeatureLevel} " +
+                "active=${created.activeFeatureLevel} · scene/renderer/view/loader next",
+        )
         val createdScene = created.createScene()
         scene = createdScene
         renderer = created.createRenderer()
@@ -1052,15 +1071,32 @@ class ArTryOnView(
      * engine creation.
      */
     private fun describeRenderer(created: Engine): String {
-        val device = runCatching {
-            val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
-            manager?.deviceConfigurationInfo?.glEsVersion
-                ?.let { "device GLES $it" }
-                ?: "device GLES ?"
-        }.getOrElse { "device GLES ?" }
+        val device = deviceGlesClaim()
         return "${created.backend} supported=${created.supportedFeatureLevel} " +
             "active=${created.activeFeatureLevel} · $device"
     }
+
+    /**
+     * **What the device claims, read before any engine exists** — its model, API level and the GLES
+     * version `ActivityManager` advertises.
+     *
+     * It rides on [createEngineIfNeeded]'s opening relay so a run that dies inside
+     * `Engine.Builder.build()` still says which phone died and what that phone promised. Set beside
+     * [describeRenderer]'s post-engine facts it is the pair that reads honestly: a GLES 3.2 claim
+     * next to a level-1 context is the miss no amount of trying can fix, and that comparison only
+     * exists if both halves were written down.
+     *
+     * Wrapped for the same reason [describeRenderer] is: a diagnostic must never be the reason a
+     * viewer fails, and a detached view has no `ActivityManager` to ask.
+     */
+    private fun deviceFacts(): String =
+        "device ${Build.MODEL} · SDK ${Build.VERSION.SDK_INT} · ${deviceGlesClaim()}"
+
+    /** The device's advertised GLES version, or the `?` a context-less harness gets. */
+    private fun deviceGlesClaim(): String = runCatching {
+        val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+        manager?.deviceConfigurationInfo?.glEsVersion?.let { "device GLES $it" } ?: "device GLES ?"
+    }.getOrElse { "device GLES ?" }
 
     /**
      * **Whether a load below `FEATURE_LEVEL_2` may proceed, and the two locks on it.**

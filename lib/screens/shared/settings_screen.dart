@@ -7,12 +7,14 @@ import '../../providers/theme_provider.dart';
 import '../../providers/update_provider.dart';
 import '../../services/supabase_service.dart';
 import '../../utils/customer_profile_fields.dart';
+import '../../utils/dev_mode.dart';
 import '../../widgets/auth/dismiss_on_signin.dart';
 import '../auth/account_entry_screen.dart';
 import '../customer/address_book_screen.dart';
 import '../customer/size_your_foot_screen.dart';
 import 'account_security_screen.dart';
 import 'account_switcher_screen.dart';
+import 'app_logs_screen.dart';
 import 'help_menu_screen.dart';
 import 'terms_privacy_screen.dart';
 import 'whats_new_screen.dart';
@@ -216,7 +218,50 @@ class SettingsScreen extends StatelessWidget {
                 onTap: () => _confirmAccountDeletion(context, auth),
               ),
             ]),
-            const SizedBox(height: 32),
+            const SizedBox(height: 16),
+
+            // ── Developer Section (dev mode only) ────────────────
+            // ⚠️ **This row must not exist for a customer.** `DevMode` is the
+            // app's UI-only developer scaffolding — unlocked by the swipe code on
+            // the "Create your account" screen — and it is already marked for
+            // removal before release (`docs/AI/DEV_MODE_ARCHITECTURE.md`, which
+            // carries this row on its checklist). The screen behind it shows the
+            // app's own `nav_diag.log`: operational words, not customer copy.
+            //
+            // It is here because the phone this was written for (the owner's P30
+            // Pro) will never have adb: a fault has to be readable and handable
+            // over from inside the app, and the previous route — a bug icon inside
+            // Foot Sizing, with nothing to read it with — was reachable only by
+            // someone who already knew it was there.
+            ValueListenableBuilder<bool>(
+              valueListenable: DevMode.instance.enabledListenable,
+              builder: (context, devModeOn, _) {
+                if (!devModeOn) return const SizedBox.shrink();
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _sectionHeader('Developer'),
+                    _buildSection([
+                      _settingsRow(
+                        context: context,
+                        icon: Icons.receipt_long_outlined,
+                        title: 'App logs',
+                        subtitle: 'What this app recorded — read it, or send it',
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const AppLogsScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                    ]),
+                    const SizedBox(height: 16),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 16),
 
             // ── Logout Button ────────────────────────────────────
             Padding(

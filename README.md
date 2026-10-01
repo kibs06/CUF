@@ -374,9 +374,18 @@ has developer options locked behind a password its previous owner set, so
 Phase 1b — under a `[preview]` tag, carrying the engine's feature level, the
 refusal, the load result, every swap-chain build/rebuild/retry, the refused-frame
 streaks, and the teardown. It is written with an `fsync` per line, so a process
-death still leaves the lines that led to it. To get it out: **Foot Sizing → the bug
-icon in the app bar → the share sheet**, then send it wherever you can read it. No
-cable, no developer options, no adb.
+death still leaves the lines that led to it. There are two ways out, and the
+second one can *read* it before sending:
+
+  * **Foot Sizing → the bug icon in the app bar → the share sheet** — the original
+    route, one tap to the share sheet;
+  * **Settings → Developer → App logs** (dev mode on: swipe *2 up, 2 down,
+    2 right, 2 left* on the "Create your account" screen) — the file with its tail
+    on screen, its size and line count, **Copy every line** for pasting into a
+    report, and **Send the whole file** for the share sheet. The row only exists
+    while dev mode is on, so no customer build shows it.
+
+Either way: no cable, no developer options, no adb.
 
 ```bash
 # Once you have a URL for it (a gist, a paste service, a signed Supabase link):

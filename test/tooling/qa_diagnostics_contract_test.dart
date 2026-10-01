@@ -62,6 +62,12 @@ void main() {
       // line a reader greps for in an exported log, so losing one fails here
       // rather than as a silence in a file nobody can compare against.
       expect(view, contains('renderer facts: '));
+      // The window the owner's phone dies in. Between the platform view's creation and the
+      // engine-ready line sits the whole native setup; without a line at each end of the builder,
+      // a death inside the builder and a death in the scene/renderer/loader setup after it are the
+      // same silence — and a crash's last line is the whole diagnosis on a phone with no adb.
+      expect(view, contains('engine creation BEGIN: requested='));
+      expect(view, contains('engine built: backend='));
       expect(view, contains('REFUSED the load'));
       expect(view, contains('beginFrame refused'));
       expect(view, contains('rebuilding the ')); // the chain repair
