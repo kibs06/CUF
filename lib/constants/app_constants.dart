@@ -899,11 +899,22 @@ class AppConstants {
   /// (`tryOnPrefetchEnabled`, on by default): the native side is handed a local
   /// path and never does HTTP.
   ///
-  /// ⚠️ **What has not happened yet, stated so nobody reads this as a shipped
-  /// surface:** nobody has seen it render on real hardware. The framing, the idle
-  /// spin, the light levels and the two-surface split (`TextureView` for the
-  /// preview, `SurfaceView` for AR) are all desk decisions. Turning this on *is*
-  /// the device session that judges them, which is why the default is off.
+  /// ⚠️ **It has now been seen to render, on 2026-10-01, and the missing piece was
+  /// never this switch.** A GLES 3.2 phone (Redmi 24094RAD4G) drew the sandal at
+  /// `FEATURE_LEVEL_2` — the level the engine had never been *asked* for, because
+  /// Filament's builder defaults to level 1 and clamps `min(requested, driver)`;
+  /// see the newest CHANGELOG entry and `ArTryOnView.createEngineIfNeeded`. So the
+  /// framing, the idle spin and the light rig have a device behind them. What still
+  /// does **not** is the frame-refusal burst Filament reported on the same run
+  /// (`beginFail` in the heartbeat): presenting stalls and recovers, and the owner's
+  /// phone has not been re-run since the level fix.
+  ///
+  /// **The compile-time default stays `off`, and that is about *this* build rather
+  /// than about customers.** The release channel passes `SHOE_PREVIEW=true` in
+  /// `RELEASE_DART_DEFINES` (measured 2026-10-01 with `gh variable list`), which is
+  /// why the owner's shipped 1.0.38 already had the icon and the refusal sentence on
+  /// the sandal. Keeping the default off leaves one define — or, for a release, one
+  /// variable — as the whole rollback.
   ///
   /// **What the emulator run on 2026-09-29 did settle.** The box mounts, the
   /// handover works, and on a renderer below Filament's `FEATURE_LEVEL_2` the
@@ -914,7 +925,9 @@ class AppConstants {
   /// commercial: phones capped at OpenGL ES 3.0 can render no 3D shoe at all
   /// until the material path moves to precompiled `.filamat` files (finding D10).
   ///
-  /// **How it is turned on:** `--dart-define=SHOE_PREVIEW=true`.
+  /// **How it is turned off:** `--dart-define=SHOE_PREVIEW=false`, or by clearing
+  /// the define from `RELEASE_DART_DEFINES`. A build that passes nothing gets the
+  /// default above (off in the code, on in a release).
   static const bool shoePreviewEnabled = bool.fromEnvironment('SHOE_PREVIEW');
 
   /// Whether the 3D box's refusal line also prints **the measured renderer

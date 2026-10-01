@@ -82,7 +82,7 @@ turn them on later; one compiled *with* them cannot turn them off.
 
 | switch | line | what it does | locks |
 |---|---|---|---|
-| `SHOE_PREVIEW` | `:918` | the whole surface: icon, viewer, box. Off ⇒ `featureOff`, nothing else is even asked | — |
+| `SHOE_PREVIEW` | `:931` | the whole surface: icon, viewer, box. Off ⇒ `featureOff`, nothing else is even asked (a release build passes it on: `RELEASE_DART_DEFINES`) | — |
 | `SHOE_PREVIEW_DIAGNOSTICS` | `:938` | the QA banner + the heartbeat + the measured-facts line under a failure | — |
 | `SHOE_PREVIEW_ALLOW_LEVEL1` | `:970` | ⚠️ lets the glTF load proceed below `FEATURE_LEVEL_2` where it has always refused — the load that was a `SIGSEGV` on an emulator (F22) | the define **and** a debuggable APK |
 | `SHOE_PREVIEW_LOWER_ENGINE_TO_LEVEL1` | `:1012` | ⚠️ brings the engine up at `FEATURE_LEVEL_1` (or lowers a live one), to manufacture the cheap-phone case on hardware that is allowed to die | the define **and** a debuggable APK |
