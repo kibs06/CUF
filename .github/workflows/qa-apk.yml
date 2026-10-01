@@ -1,0 +1,194 @@
+name: QA APK (not a release)
+
+# Builds the QA APK **on demand** and hands it back as a *workflow artifact* — never
+# a tag and never a release.
+#
+# Why this workflow exists at all. The QA APK is ~244 MB and the file it is built
+# from has to carry three switches nobody wants in a release (`SHOE_PREVIEW_*`),
+# so it cannot ride on the release pipeline; and GitHub refuses a file over 100 MB
+# in an ordinary git push, so it cannot live in the tree either. A workflow artifact
+# is the one place GitHub will hold a file that size and give it back.
+#
+# Why `--debug` rather than `--release`. The two switches that matter are locked to
+# a **debuggable** build on the native side (`ArTryOnView.allowsUnsupportedRenderer`,
+# `shouldLowerEngineToLevel1`): a published release APK is not `FLAG_DEBUGGABLE`, so
+# a release build would ignore them and measure nothing. Debuggable is the whole
+# point of the artifact.
+#
+# Usage: Actions → "QA APK (not a release)" → *Run workflow*. The run page's
+# **Artifacts** box then holds `solevision-qa-instrumented-apk.zip`.
+#
+# Signing (optional). With the release keystore secrets present — the same four the
+# release job uses — the debug APK is re-signed with the project key, and then it
+# **installs as an ordinary update** over the shipped 1.0.38: same package, same
+# signer, same versionCode, login preserved. A debug APK is signed with a throwaway
+# runner key, which the installer refuses to put over any previous build. Without
+# the secrets the run still succeeds, warns, and the APK needs an uninstall first.
+
+on:
+  workflow_dispatch:
+    inputs:
+      diagnostics:
+        description: 'SHOE_PREVIEW_DIAGNOSTICS — print the renderer''s self-report on the page'
+        type: boolean
+        default: true
+      lower_engine:
+        description: 'SHOE_PREVIEW_LOWER_ENGINE_TO_LEVEL1 — bring the engine up at FEATURE_LEVEL_1'
+        type: boolean
+        default: true
+      allow_level1:
+        description: 'SHOE_PREVIEW_ALLOW_LEVEL1 — let the load happen (may abort the process)'
+        type: boolean
+        default: true
+
+# Read-only: nothing here writes to the repository, which is the difference between
+# this workflow and the release one.
+permissions:
+  contents: read
+
+concurrency:
+  group: qa-apk
+  cancel-in-progress: false
+
+jobs:
+  qa-apk:
+    name: QA APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      # Same four secrets as the release job, and the same decode. Non-fatal here
+      # (unlike a release, an unsigned QA APK is still useful) — the re-sign step
+      # below checks whether the keystore actually arrived.
+      - name: Configure release signing
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${ANDROID_KEYSTORE_BASE64:-}" || -z "${ANDROID_KEYSTORE_PASSWORD:-}" || -z "${ANDROID_KEY_ALIAS:-}" ]]; then
+            echo "::warning::Release keystore secrets are absent — the APK will keep its throwaway debug signature and will need an uninstall before it installs."
+            exit 0
+          fi
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/cufmai-release.jks
+          {
+            echo "storePassword=$ANDROID_KEYSTORE_PASSWORD"
+            echo "keyPassword=${ANDROID_KEY_PASSWORD:-$ANDROID_KEYSTORE_PASSWORD}"
+            echo "keyAlias=$ANDROID_KEY_ALIAS"
+            echo "storeFile=cufmai-release.jks"
+          } > android/key.properties
+          keytool -list -keystore android/app/cufmai-release.jks \
+            -alias "$ANDROID_KEY_ALIAS" -storepass "$ANDROID_KEYSTORE_PASSWORD" >/dev/null
+          echo "✔ Signing key loaded for alias '$ANDROID_KEY_ALIAS'"
+
+      # The instrumented QA build. Every switch is echoed the way the release job
+      # echoes its defines, so "does this artifact have the readout?" is answerable
+      # from the run log instead of from another build.
+      - name: Build QA APK (debug, arm64)
+        shell: bash
+        env:
+          DIAGNOSTICS: ${{ inputs.diagnostics }}
+          LOWER_ENGINE: ${{ inputs.lower_engine }}
+          ALLOW_LEVEL1: ${{ inputs.allow_level1 }}
+        run: |
+          set -euo pipefail
+          ARGS=(--debug --target-platform android-arm64)
+          [[ "$DIAGNOSTICS" == "true" ]] && ARGS+=(--dart-define=SHOE_PREVIEW_DIAGNOSTICS=true)
+          [[ "$LOWER_ENGINE" == "true" ]] && ARGS+=(--dart-define=SHOE_PREVIEW_LOWER_ENGINE_TO_LEVEL1=true)
+          [[ "$ALLOW_LEVEL1" == "true" ]] && ARGS+=(--dart-define=SHOE_PREVIEW_ALLOW_LEVEL1=true)
+          # The surface itself has to be on or there is no box to look at.
+          ARGS+=(--dart-define=SHOE_PREVIEW=true)
+          echo "→ flutter build apk ${ARGS[*]}"
+          flutter build apk "${ARGS[@]}"
+
+      # A debug APK carries the runner's throwaway debug key. Re-signing it with the
+      # project key is what lets it be installed **over** the shipped build instead
+      # of after an uninstall — the same files, one signature swap. `debuggable`
+      # survives, because only the signature block changes.
+      - name: Re-sign with the project release key
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          RAW="build/app/outputs/flutter-apk/app-debug.apk"
+          OUT="build/app/outputs/flutter-apk/solevision-qa-instrumented.apk"
+          if [[ ! -f android/key.properties ]]; then
+            echo "::warning::No keystore — uploading the debug-signed APK as built."
+            cp "$RAW" "$OUT"
+            exit 0
+          fi
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          ZIPALIGN="$(find "$SDK/build-tools" -maxdepth 2 -type f -name zipalign | sort -V | tail -1)"
+          APKSIGNER="$(find "$SDK/build-tools" -maxdepth 2 -type f -name apksigner | sort -V | tail -1)"
+          if [[ -z "$ZIPALIGN" || -z "$APKSIGNER" ]]; then
+            echo "::warning::zipalign/apksigner not found — uploading the debug-signed APK as built."
+            cp "$RAW" "$OUT"
+            exit 0
+          fi
+          "$ZIPALIGN" -p -f 4 "$RAW" build/app/outputs/flutter-apk/qa-aligned.apk
+          "$APKSIGNER" sign \
+            --ks android/app/cufmai-release.jks \
+            --ks-key-alias "$ANDROID_KEY_ALIAS" \
+            --ks-pass "pass:$ANDROID_KEYSTORE_PASSWORD" \
+            --key-pass "pass:${ANDROID_KEY_PASSWORD:-$ANDROID_KEYSTORE_PASSWORD}" \
+            --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true \
+            --out "$OUT" build/app/outputs/flutter-apk/qa-aligned.apk
+          "$APKSIGNER" verify --print-certs "$OUT" | head -4
+
+      - name: Report the artifact (name, size, sha256, debuggable)
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="build/app/outputs/flutter-apk/solevision-qa-instrumented.apk"
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          AAPT2="$(find "$SDK/build-tools" -maxdepth 2 -type f -name aapt2 | sort -V | tail -1)"
+          {
+            echo "### QA APK artifact"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| file | \`solevision-qa-instrumented.apk\` |"
+            echo "| size | $(du -h "$APK" | cut -f1) |"
+            echo "| sha256 | \`$(sha256sum "$APK" | cut -d' ' -f1)\` |"
+            echo "| commit | \`$GITHUB_SHA\` |"
+            echo "| switches | diagnostics=${{ inputs.diagnostics }} · lower-engine=${{ inputs.lower_engine }} · allow-level1=${{ inputs.allow_level1 }} |"
+            echo
+            echo "Not a release, deliberately: this is a measurement build (debuggable, QA switches on)."
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [[ -n "$AAPT2" ]]; then
+            # `application-debuggable` is the reason this build exists: the native QA
+            # locks honour the switches only in a debuggable APK.
+            "$AAPT2" dump badging "$APK" | grep -E "^package|application-debuggable" || true
+          fi
+          sha256sum "$APK"
+
+      - name: Upload the APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: solevision-qa-instrumented-apk
+          path: build/app/outputs/flutter-apk/solevision-qa-instrumented.apk
+          retention-days: 30
+          # An APK is already compressed; re-deflating 244 MB buys nothing.
+          compression-level: 0
