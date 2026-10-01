@@ -9,6 +9,7 @@ import android.util.Log
 import android.view.View
 import com.google.ar.core.ArCoreApk
 import com.google.ar.core.exceptions.UnavailableUserDeclinedInstallationException
+import com.solevision.app.arfoot.DiagRelay
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
@@ -116,6 +117,19 @@ class ArTryOnPlugin(private val activity: Activity) : MethodChannel.MethodCallHa
 
     private data class PendingStart(val result: MethodChannel.Result, val deadlineMs: Long)
 
+    /**
+     * **The preview's half of the file channel** — see `ArTryOnView.relay` for why it exists at
+     * all: the phone this feature is being measured on has locked developer options, so no
+     * `adb logcat` will ever be read from it, and the events have to be written down where the app
+     * itself can hand them out.
+     *
+     * What belongs here is the *handover* — what Dart asked for, whether a view existed to receive
+     * it, and what was replayed when one appeared — because that is the half the view cannot see,
+     * and the half a “the box is empty” report turns on. The source tag is the same one the view
+     * uses, so `[preview]` greps the whole story in `nav_diag.log`.
+     */
+    private fun relay(message: String) = DiagRelay.log("preview", message)
+
     fun registerWith(flutterEngine: FlutterEngine) {
         Log.i(TAG, "registering '$AR_TRY_ON_VIEW_TYPE' + '$AR_TRY_ON_METHOD_CHANNEL'")
         val messenger = flutterEngine.dartExecutor.binaryMessenger
@@ -152,6 +166,7 @@ class ArTryOnPlugin(private val activity: Activity) : MethodChannel.MethodCallHa
                 override fun create(context: Context, viewId: Int, args: Any?): PlatformView {
                     val created = ArTryOnView(context, previewListener, ArTryOnView.Mode.PREVIEW)
                     previewView = created
+                    relay("preview view created (id=$viewId)")
                     onPreviewViewAvailable(created)
                     return object : PlatformView {
                         override fun getView(): View = created
@@ -160,6 +175,7 @@ class ArTryOnPlugin(private val activity: Activity) : MethodChannel.MethodCallHa
                             if (this@ArTryOnPlugin.previewView === created) {
                                 this@ArTryOnPlugin.previewView = null
                             }
+                            relay("preview view disposed by the framework")
                             created.dispose()
                         }
                     }
@@ -183,6 +199,7 @@ class ArTryOnPlugin(private val activity: Activity) : MethodChannel.MethodCallHa
     }
 
     fun unregister() {
+        relay("plugin unregister: the engine is detaching, so the preview slot goes with it")
         methodChannel?.setMethodCallHandler(null)
         eventChannel?.setStreamHandler(null)
         methodChannel = null
@@ -257,6 +274,11 @@ class ArTryOnPlugin(private val activity: Activity) : MethodChannel.MethodCallHa
      * the next frame), so the payload waits here and is replayed on creation.
      */
     private fun onPreviewViewAvailable(created: ArTryOnView) {
+        relay(
+            "preview view available — parked: model=${parkedPreviewModel != null}, " +
+                "size=${parkedPreviewSize != null}, color=${parkedPreviewColor != null}, " +
+                "diagnostics=${parkedPreviewDiagnostics}",
+        )
         parkedPreviewModel?.let(created::setModel)
         parkedPreviewSize?.let(created::setSize)
         parkedPreviewColor?.let(created::setColor)
@@ -274,10 +296,13 @@ class ArTryOnPlugin(private val activity: Activity) : MethodChannel.MethodCallHa
                 val spec = parseModelSpec(call)
                 if (spec == null) {
                     Log.w(TAG, "setPreviewModel: unusable payload ${call.arguments}")
+                    relay("setPreviewModel: unusable payload ${call.arguments}")
                 } else if (previewView == null) {
                     parkedPreviewModel = spec
+                    relay("setPreviewModel ${spec.modelId}: parked — the view does not exist yet")
                 } else {
                     previewView?.setModel(spec)
+                    relay("setPreviewModel ${spec.modelId}: handed to the live view")
                 }
                 result.success(null)
             }
@@ -299,11 +324,13 @@ class ArTryOnPlugin(private val activity: Activity) : MethodChannel.MethodCallHa
 
             "setPreviewDiagnostics" -> {
                 val enabled = (call.arguments as? Map<*, *>)?.get("enabled") == true
-                if (previewView == null) {
+                val parked = previewView == null
+                if (parked) {
                     parkedPreviewDiagnostics = enabled
                 } else {
                     previewView?.setDiagnostics(enabled)
                 }
+                relay("setPreviewDiagnostics($enabled) — ${if (parked) "parked" else "applied"}")
                 result.success(null)
             }
 

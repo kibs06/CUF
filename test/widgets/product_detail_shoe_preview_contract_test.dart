@@ -702,6 +702,74 @@ void main() {
       expect(qaBuild, contains('AppConstants.shoePreviewLowerEngineToLevel1'));
       expect(previewWidget, contains("'QA · engine pinned to level 1'"));
     });
+
+    test('the engine asks for the level the material path needs', () {
+      // ⚠️ Measured on hardware, 2026-10-01, and it is the reason this feature had
+      // never rendered anywhere: Filament's `BuilderDetails::mFeatureLevel` defaults
+      // to `FEATURE_LEVEL_1` (`filament/src/details/Engine.cpp`, v1.72.1) and
+      // `FEngine::init` then takes `std::min(requested, driver)` — the level can be
+      // clamped *down* and never raised. Nothing in this app ever asked for 2, so
+      // the engine came up at level 1 on a GLES 3.2 phone whose driver reported 2
+      // (`Feature level: 2` → `Backend feature level: 2` → `FEngine feature level:
+      // 1`), and `canLoadModels` refused on every device ever tried. The sentence
+      // the customer saw — "3D preview isn't supported on this phone." — was
+      // therefore about our own request, not about their phone.
+      final builder = between(
+        codeOf(view),
+        'val engineBuilder = Engine.Builder()',
+        'val created = engineBuilder.build()',
+      );
+      expect(
+        builder,
+        contains(
+          'engineBuilder.featureLevel(Engine.FeatureLevel.FEATURE_LEVEL_2)',
+        ),
+        reason: 'the builder default is level 1 on every device, so not asking '
+            'is the same as refusing; a level-1 device is unaffected because the '
+            'clamp is the driver\'s',
+      );
+      // The QA switch is the *other* branch, not a later override: a run that
+      // lowered the engine after building it at 2 would measure the wrong thing.
+      expect(
+        builder.indexOf('shouldLowerEngineToLevel1(pendingModel)'),
+        lessThan(builder.indexOf('FEATURE_LEVEL_2')),
+        reason: 'the lowering branch must be the else of the level-2 request',
+      );
+    });
+
+    test('the load stops at the first success, and nothing creates a second asset', () {
+      // ⚠️ A crash guard, and it cost a real process abort: `repeat`'s lambda
+      // return is a `continue`, so `if (loaded != null) return@repeat` kept
+      // loading — up to LOAD_ATTEMPTS whole assets, each holding material
+      // instances that nothing destroyed. Teardown's `destroyMaterials()` then
+      // aborted in native code, uncatchably, on a phone whose render was fine:
+      //
+      //     utils::PreconditionPanic: reason: destroying material
+      //     "base_lit_opaque" but 4 instances still alive.
+      //
+      // That is the crash on *leaving* the box — the one the owner's phone could
+      // never report, because it has no logcat.
+      final loader = between(
+        codeOf(view),
+        'for (attempt in 0 until LOAD_ATTEMPTS)',
+        'val createdAsset = loaded',
+      );
+      expect(loader, contains('if (loaded != null) break'));
+      expect(
+        loader,
+        isNot(contains('return@repeat')),
+        reason: 'a lambda return continues the loop, and every extra createAsset '
+            'is an asset nobody destroys',
+      );
+
+      // The staging loader is freed as well: `AssetLoader`'s own javadoc is
+      // `loadResources` … `resourceLoader.destroy()`.
+      expect(
+        codeOf(view),
+        contains('resources.destroy()'),
+        reason: 'the resource loader holds native staging buffers per open',
+      );
+    });
   });
 
   group('the rule itself still matches what the page assumes', () {

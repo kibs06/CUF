@@ -43,6 +43,7 @@ import com.google.ar.core.Pose
 import com.google.ar.core.Session
 import com.google.ar.core.TrackingState
 import com.google.ar.core.exceptions.CameraNotAvailableException
+import com.solevision.app.arfoot.DiagRelay
 import com.google.ar.core.exceptions.UnavailableApkTooOldException
 import com.google.ar.core.exceptions.UnavailableArcoreNotInstalledException
 import com.google.ar.core.exceptions.UnavailableDeviceNotCompatibleException
@@ -268,12 +269,22 @@ class ArTryOnView(
         }
 
         override fun onSurfaceTextureDestroyed(texture: SurfaceTexture): Boolean {
-            renderHandler.post {
-                destroySwapChain()
-                surface = null
-            }
+            // ⚠️ **The surface is gone the moment this returns `true`.** `TextureView` calls
+            // `nDestroyNativeWindow()` and releases the `SurfaceTexture` immediately after this
+            // listener returns (`TextureView.releaseSurfaceTexture`), so a swap chain still bound
+            // to that surface is left holding a dead buffer queue. That is the shape of the
+            // teardown aborts in Filament's own tracker (`google/filament#6933` — a native
+            // `SIGABRT` when a connected view is detached quickly; `#4724` — the same lifecycle
+            // reaching a destroyed engine). So the swap chain is destroyed and the engine is
+            // flushed **before** the surface goes away, and only then is `true` returned. That is
+            // exactly `UiHelper.RendererCallback.onDetachedFromSurface` ("Required to ensure we
+            // don't return before Filament is done executing the destroySwapChain command,
+            // otherwise Android might destroy the Surface too early"), made bounded so a wedged
+            // renderer cannot hold the UI thread.
+            detachSurfaceAndWait()
             // `true`: this view has no other consumer of the texture, so the texture itself may be
             // released with it. The `Surface` wrapper above is ours to drop, and it is dropped.
+            surface = null
             return true
         }
 
@@ -368,6 +379,18 @@ class ArTryOnView(
     private var lastLightSampleMs = 0L
     private var frameLoopRunning = false
     private var lastFrameNanos = 0L
+
+    /**
+     * Whether [teardown] has begun, and whether it has completed.
+     *
+     * `tearingDown` is the frame loop's stop sign and is set *before* anything is destroyed, so a
+     * vsync already queued on this thread can never touch a dead engine; it also stops a surface
+     * callback that arrives late from resurrecting a renderer. `tornDown` makes teardown
+     * idempotent — both the surface callback and the plugin's `dispose` can arrive, in either
+     * order, and the plugin's `unregister` can dispose the same view twice.
+     */
+    @Volatile private var tearingDown = false
+    private var tornDown = false
 
     // ── QA self-report (`SHOE_PREVIEW_DIAGNOSTICS`) ──────────────────────────────────────────
     //
@@ -536,6 +559,23 @@ class ArTryOnView(
      * *dropped* a parked model, which is why the parking is explicit here and replayed on engine
      * creation.
      */
+    /**
+     * **The file channel — and on the phone this was written for, the only one there is.**
+     *
+     * ⚠️ Both faults being chased happened on a Huawei P30 Pro whose developer options are locked
+     * behind a password its previous owner set, so `adb logcat` will *never* be read from it. The
+     * on-page heartbeat ([emitStatus]) answers "what is the renderer doing right now"; this answers
+     * "what happened on the way there" — the engine's level, the refusal, the load, the swap chain,
+     * the teardown — through [DiagRelay], the Phase-1b channel that already mirrors Kotlin events
+     * into the app's own `nav_diag.log`, which the app can hand out with a share sheet
+     * (Foot Sizing → the bug icon). No adb, no logcat, no cable.
+     *
+     * Keep the call sites **discrete**. The relay holds one `O_APPEND` descriptor and `fsync`s every
+     * line — that is what makes it survive a process death, and it is also why a per-frame call site
+     * is wrong: the frame loop would push out the very lines being looked for.
+     */
+    private fun relay(message: String) = DiagRelay.log("preview", message)
+
     /**
      * Turns the QA self-report on for this view.
      *
@@ -770,6 +810,7 @@ class ArTryOnView(
             } catch (t: Throwable) {
                 val outcome = sessionFailure(t)
                 Log.w(TAG, "startSession failed: ${outcome.reason} — ${outcome.message}", t)
+                relay("startSession failed: ${outcome.reason} — ${outcome.message}")
                 postToMain { onResult(outcome) }
             }
         }
@@ -793,14 +834,24 @@ class ArTryOnView(
         // so a throwing teardown cannot leave the next engine creation waiting for it.
         val finished = CountDownLatch(1)
         pendingTeardown = finished
-        renderHandler.post {
+        relay("dispose(): teardown posted — the next engine creation waits on the latch")
+        val posted = renderHandler.post {
             try {
                 teardown()
             } finally {
                 renderThread.quitSafely()
                 finished.countDown()
                 if (pendingTeardown === finished) pendingTeardown = null
+                relay("dispose(): finished — latch down, a new engine may be created")
             }
+        }
+        if (!posted) {
+            // A second `dispose()` after this view's render thread already quit: nothing is left
+            // to tear down, and a latch left un-counted-down would make the next view's
+            // `createEngineIfNeeded` wait out its full timeout for nothing.
+            finished.countDown()
+            if (pendingTeardown === finished) pendingTeardown = null
+            relay("dispose(): render thread already quit — latch dropped")
         }
     }
 
@@ -833,12 +884,13 @@ class ArTryOnView(
     }
 
     override fun surfaceDestroyed(holder: SurfaceHolder) {
-        renderHandler.post {
-            runCatching { session?.pause() }
-            sessionResumed = false
-            destroySwapChain()
-            surface = null
-        }
+        // ⚠️ The `SurfaceHolder.Callback` contract: "If you have a rendering thread that directly
+        // accesses the surface, you must ensure that thread is no longer touching the Surface
+        // before returning from this function." Posting the teardown and returning was exactly
+        // that violation; the preview's bounded helper now does the work here too (this is shared
+        // with AR mode and is the one line of AR's surface path this change touches).
+        detachSurfaceAndWait(pauseSession = true)
+        surface = null
     }
 
     // ════════════════════════════════════════════════════════════════════════════════════════
@@ -846,13 +898,26 @@ class ArTryOnView(
     // ════════════════════════════════════════════════════════════════════════════════════════
 
     private fun createEngineIfNeeded() {
+        // A surface callback that arrives after dispose must not resurrect a renderer on a view
+        // whose teardown is already running (or done): everything it would build would be
+        // destroyed underneath it. Same thread as teardown, so the flag is a reliable barrier.
+        if (tearingDown) return
         if (engine != null) return
         // ⚠️ One engine at a time, and the reason is a real-device crash (2026-10-01): opening the
         // viewer, leaving it and opening it again kills the app. `dispose()` tears the previous
         // view down *asynchronously on its own render thread*, so a second open used to build a
         // new engine while the old one was still being destroyed underneath it. The wait is
         // bounded: a wedged teardown must not become a hang on a customer's phone.
-        runCatching { pendingTeardown?.await(TEARDOWN_WAIT_SECONDS, TimeUnit.SECONDS) }
+        val pending = pendingTeardown
+        if (pending != null) {
+            val settled = runCatching { pending.await(TEARDOWN_WAIT_SECONDS, TimeUnit.SECONDS) }
+                .getOrDefault(false)
+            relay(
+                if (settled) "waited on the previous teardown: it finished"
+                else "the previous teardown was still running after ${TEARDOWN_WAIT_SECONDS}s " +
+                    "— creating an engine anyway",
+            )
+        }
         // Findings: these two are not optional and nothing else calls them. Without them the first
         // Engine.create() dies with UnsatisfiedLinkError (GltfioDecodeTest, finding 1).
         Filament.init()
@@ -868,6 +933,18 @@ class ArTryOnView(
         // after the fact: a renderer that is never allowed to reach level 2 does not have to be
         // talked down from it, and the builder is the only place that exists before a single frame
         // is drawn. See [shouldLowerEngineToLevel1].
+        //
+        // ⚠️ **Asking for the level is not optional, and not asking was the fault.** Filament's
+        // `BuilderDetails::mFeatureLevel` defaults to `FEATURE_LEVEL_1`
+        // (`filament/src/details/Engine.cpp`, v1.72.1) and `FEngine::init()` then takes
+        // `std::min(requested, driverApi.getFeatureLevel())` — the level can only be clamped
+        // *down*, never raised. So an engine built without a request comes up at level 1 on a
+        // device whose driver reports 2: measured on a GLES 3.2 PowerVR phone (2026-10-01), the
+        // device log read `Feature level: 2` → `Backend feature level: 2` → `FEngine feature
+        // level: 1`, and [canLoadModels] then refused every model with a sentence about the phone
+        // when the phone was never the problem. Asking for level 2 is the honest request — it is
+        // what the glTF material path needs — and a device whose ceiling is level 1 or 0 is
+        // unaffected, because the answer is the driver's clamp, not ours.
         val engineBuilder = Engine.Builder()
         if (shouldLowerEngineToLevel1(pendingModel)) {
             engineBuilder.featureLevel(Engine.FeatureLevel.FEATURE_LEVEL_1)
@@ -875,6 +952,8 @@ class ArTryOnView(
                 TAG,
                 "QA: building the engine at FEATURE_LEVEL_1 (SHOE_PREVIEW_LOWER_ENGINE_TO_LEVEL1)",
             )
+        } else {
+            engineBuilder.featureLevel(Engine.FeatureLevel.FEATURE_LEVEL_2)
         }
         val created = engineBuilder.build()
         engine = created
@@ -905,6 +984,10 @@ class ArTryOnView(
             "engine ready: backend=${created.backend} supportedFeatureLevel=" +
                 "${created.supportedFeatureLevel} activeFeatureLevel=${created.activeFeatureLevel}",
         )
+        relay(
+            "engine ready: backend=${created.backend} supported=${created.supportedFeatureLevel} " +
+                "active=${created.activeFeatureLevel}",
+        )
 
         // The material path below `FEATURE_LEVEL_2` cannot resolve a glTF's materials and can take
         // the process down with it — see [modelLoadingSupported]. Read from the *active* level
@@ -917,11 +1000,16 @@ class ArTryOnView(
                 "renderer is ${created.activeFeatureLevel}: glTF/ubershader materials cannot load " +
                     "here (F14) — refusing every model rather than aborting the process (F16)",
             )
+            relay(
+                "renderer ${created.activeFeatureLevel}: will refuse every model (F14/F16) — " +
+                    "$rendererDiagnostic",
+            )
         }
         // Read once, after the engine is up, whatever the answer: the refusal's message and a
         // failed load both carry it, and the page is where it is read.
         rendererDiagnostic = describeRenderer(created)
         Log.i(TAG, "renderer facts: $rendererDiagnostic")
+        relay("renderer facts: $rendererDiagnostic")
 
         // F18: the model may have arrived before the engine existed.
         applyPendingModel()
@@ -1009,6 +1097,10 @@ class ArTryOnView(
             "QA level-1 override ACTIVE: attempting the glTF load below FEATURE_LEVEL_2 — this may " +
                 "kill the process (F22); $rendererDiagnostic",
         )
+        relay(
+            "QA load override ACTIVE: a glTF load below ${Engine.FeatureLevel.FEATURE_LEVEL_2} on " +
+                "this renderer may kill the process (F22); $rendererDiagnostic",
+        )
         return true
     }
 
@@ -1028,9 +1120,11 @@ class ArTryOnView(
      *    for a stronger reason than that one had: lowering the renderer on purpose is not a crash
      *    that a customer might hit, it is a permanently worse product on their phone.
      *
-     * It cannot raise anything, and Filament would not let it: `Engine.Builder.featureLevel` asserts
-     * `featureLevel <= getSupportedFeatureLevel()`, so a device already at level 1 or 0 is
-     * unaffected by its own ceiling being asked for.
+     * It cannot raise anything: it only ever *requests* the lower level, and Filament keeps
+     * `min(requested, driver)` (`FEngine::init`), so a device already at level 1 or 0 is unaffected
+     * by its own ceiling being asked for. The mirror of this call — the plain `FEATURE_LEVEL_2`
+     * request [createEngineIfNeeded] now makes on every other path — is what a level-2 device
+     * needs; this switch exists only to ask for the level *below* its ceiling.
      */
     private fun shouldLowerEngineToLevel1(spec: ModelSpec?): Boolean {
         if (spec?.lowerEngineToLevel1 != true) return false
@@ -1134,12 +1228,14 @@ class ArTryOnView(
             .onFailure {
                 lastSwapChainError = "${it::class.java.simpleName}: ${it.message}"
                 Log.w(TAG, "createSwapChain failed", it)
+                relay("createSwapChain failed: $lastSwapChainError")
             }
             .getOrNull()
         if (swapChain == null) {
             scheduleSwapChainRetry()
         } else {
             swapChainRetryCount = 0
+            relay("swap chain built (creates=$swapChainCreates, ${surfaceWidth}x$surfaceHeight)")
         }
     }
 
@@ -1156,6 +1252,10 @@ class ArTryOnView(
     private fun scheduleSwapChainRetry() {
         if (swapChainRetryCount >= MAX_SWAP_CHAIN_RETRIES) return
         swapChainRetryCount++
+        relay(
+            "swap chain NULL — retry $swapChainRetryCount/$MAX_SWAP_CHAIN_RETRIES in " +
+                "${SWAP_CHAIN_RETRY_MS}ms",
+        )
         renderHandler.postDelayed({ createSwapChain() }, SWAP_CHAIN_RETRY_MS)
     }
 
@@ -1164,13 +1264,55 @@ class ArTryOnView(
         swapChain = null
     }
 
+    /**
+     * **Stops the loop, destroys the swap chain and flushes the engine — while the surface is
+     * still valid.**
+     *
+     * Both Android surface contracts forbid touching the surface from the rendering thread after
+     * the callback returns (`SurfaceHolder.Callback.surfaceDestroyed` says so explicitly, and
+     * `TextureView` destroys its native window and releases its `SurfaceTexture` the moment the
+     * listener says it may). Filament's own Android lifecycle pattern does this synchronously in
+     * [`UiHelper.RendererCallback.onDetachedFromSurface`](https://github.com/google/filament/blob/v1.72.1/android/filament-android/src/main/java/com/google/android/filament/android/UiHelper.java)
+     * and documents why: returning before the destroy finishes lets Android destroy the Surface
+     * too early. This file keeps every Filament call on the render thread, so the work is posted
+     * there and the caller waits — **bounded**, because the main thread must never block
+     * indefinitely on a renderer; a timed-out wait returns to the framework rather than becoming an
+     * ANR, and the next surface arrival rebuilds.
+     */
+    private fun detachSurfaceAndWait(pauseSession: Boolean = false) {
+        val done = CountDownLatch(1)
+        val posted = renderHandler.post {
+            try {
+                if (pauseSession) {
+                    runCatching { session?.pause() }
+                    sessionResumed = false
+                }
+                frameLoopRunning = false
+                destroySwapChain()
+                relay("surface detached: loop stopped, swap chain destroyed")
+                val created = engine
+                if (created != null) {
+                    val flushed = runCatching { created.flushAndWait(SURFACE_FLUSH_TIMEOUT_NANOS) }
+                        .getOrDefault(false)
+                    relay("surface detached: flushAndWait=${if (flushed) "ok" else "timeout"}")
+                }
+            } finally {
+                done.countDown()
+            }
+        }
+        // A quit render thread has already torn everything down (dispose); there is nothing to
+        // wait for, and posting would return false rather than enqueue.
+        if (!posted) return
+        runCatching { done.await(SURFACE_TEARDOWN_WAIT_MS, TimeUnit.MILLISECONDS) }
+    }
+
     // ════════════════════════════════════════════════════════════════════════════════════════
     // Frame loop
     // ════════════════════════════════════════════════════════════════════════════════════════
 
     private val frameCallback = object : Choreographer.FrameCallback {
         override fun doFrame(frameTimeNanos: Long) {
-            if (!frameLoopRunning) return
+            if (!frameLoopRunning || tearingDown) return
             try {
                 renderFrame(frameTimeNanos)
             } catch (t: Throwable) {
@@ -1181,6 +1323,7 @@ class ArTryOnView(
                 // a lost customer.
                 lastFrameError = "${t::class.java.simpleName}: ${t.message}"
                 Log.w(TAG, "renderFrame threw; stopping the loop", t)
+                relay("renderFrame threw, loop STOPPED: $lastFrameError")
                 frameLoopRunning = false
                 listener.onError("preview_frame_failed", lastFrameError)
                 emitStatus(frameTimeNanos, force = true)
@@ -1222,6 +1365,11 @@ class ArTryOnView(
             append(" present=").append(shownPresented)
             append(" beginFail=").append(beginFrameFails)
             append(" rebuild=").append(swapChainRebuilds)
+            // The one "why" Filament tells us from Java: an engine that hit an unrecoverable
+            // backend error (`Engine.hasUnrecoverableFailure`) explains a `beginFail` no chain
+            // rebuild can clear. There is no per-frame refusal reason on this API, and none is
+            // invented here — this is the only flag the engine exposes.
+            append(" unrec=").append(if (engine?.hasUnrecoverableFailure() == true) "1" else "0")
             append(" engine=").append(engineCreates).append('/').append(engineDestroys)
             append(" chain=").append(if (swapChain != null) "ok" else "NULL")
             append(" creates=").append(swapChainCreates)
@@ -1248,7 +1396,7 @@ class ArTryOnView(
     }
 
     private fun startFrameLoop() {
-        if (frameLoopRunning) return
+        if (frameLoopRunning || tearingDown) return
         frameLoopRunning = true
         // A fresh loop has no previous frame: without this the first delta after a pause is the
         // whole pause, and the idle spin jumps on resume.
@@ -1347,6 +1495,7 @@ class ArTryOnView(
      * read and the frame drawn from it must be the same [Frame].
      */
     private fun renderFrame(frameTimeNanos: Long) {
+        if (tearingDown) return
         val created = engine ?: return
         val activeRenderer = renderer ?: return
         val activeView = view ?: return
@@ -1392,12 +1541,32 @@ class ArTryOnView(
             // *returns null*). Bounded: a surface that truly cannot present must report, not spin.
             beginFrameFails++
             beginFrameFailStreak++
+            // ⚠️ This branch runs *per frame* and the relay fsyncs every line it is given, so only
+            // the start of a streak, the repair, and a slow milestone reach the file: a flood here
+            // would push out the lifecycle lines that say what led to it.
+            if (beginFrameFailStreak == 1) {
+                relay(
+                    "beginFrame refused the frame — chain=" +
+                        (if (swapChain != null) "ok" else "NULL") + ", rebuilds=$swapChainRebuilds",
+                )
+            }
             if (beginFrameFailStreak >= MAX_BEGIN_FRAME_FAILURES &&
                 swapChainRebuilds < MAX_SWAP_CHAIN_REBUILDS
             ) {
                 beginFrameFailStreak = 0
                 swapChainRebuilds++
+                relay(
+                    "beginFrame refused $MAX_BEGIN_FRAME_FAILURES frames in a row — rebuilding the " +
+                        "swap chain ($swapChainRebuilds/$MAX_SWAP_CHAIN_REBUILDS)",
+                )
                 runCatching { createSwapChain() }
+            } else if (beginFrameFailStreak != 0 &&
+                beginFrameFailStreak % REFUSAL_MILESTONE_FRAMES == 0
+            ) {
+                relay(
+                    "still refusing frames: $beginFrameFailStreak in a row, " +
+                        "$swapChainRebuilds/$MAX_SWAP_CHAIN_REBUILDS rebuilds used",
+                )
             }
             // Sleeping a millisecond beats spinning a core at vsync when this repeats.
             Thread.sleep(1L)
@@ -1535,6 +1704,12 @@ class ArTryOnView(
         // the park on purpose (it has to precede the parse), so this is the only copy in scope.
         if (!modelLoadingSupported && !allowsUnsupportedRenderer(pendingModel)) {
             pendingModel = null
+            // The line this channel exists for: on a phone whose renderer came up below
+            // `FEATURE_LEVEL_2`, this records *why* there is no shoe — a refusal, not a failure.
+            relay(
+                "REFUSED the load: renderer ${created.activeFeatureLevel} is below " +
+                    "${Engine.FeatureLevel.FEATURE_LEVEL_2} — nothing was parsed",
+            )
             listener.onError(
                 REASON_RENDERER_UNSUPPORTED,
                 "glTF loading needs ${Engine.FeatureLevel.FEATURE_LEVEL_2}; this renderer is " +
@@ -1558,7 +1733,19 @@ class ArTryOnView(
 
         var loaded: FilamentAsset? = null
         var lastFailure: String? = null
-        repeat(LOAD_ATTEMPTS) { attempt ->
+        // ⚠️ **A `for` with a `break`, not `repeat` with `return@repeat` — and that distinction is a
+        // crash, measured on hardware.** `return@repeat` returns from the *lambda*, which is a
+        // `continue`: a first attempt that already succeeded still ran the rest of the budget, and
+        // every extra `createAsset` built a whole second asset whose material instances were never
+        // destroyed (nothing holds it, and `asset` only ever keeps the last one). Teardown's
+        // `destroyMaterials()` then aborts the process — uncatchably, in native code:
+        //
+        //     utils::PreconditionPanic: reason: destroying material "base_lit_opaque" but 4
+        //     instances still alive.                     (Redmi 24094RAD4G, 2026-10-01)
+        //
+        // That was the crash on **leaving** the viewer, on a phone whose render was fine. The fix is
+        // to stop loading once something loaded.
+        for (attempt in 0 until LOAD_ATTEMPTS) {
             created.flushAndWait()
             val bytes = runCatching { file.readBytes() }.getOrElse { t ->
                 listener.onError("model_parse_failed", "cannot read ${spec.path}: ${t.message}")
@@ -1571,7 +1758,7 @@ class ArTryOnView(
                 lastFailure = t.message
                 null
             }
-            if (loaded != null) return@repeat
+            if (loaded != null) break
             lastFailure = lastFailure ?: "loader returned null (unsupported required extension?)"
             Thread.sleep(200L * (attempt + 1))
         }
@@ -1579,6 +1766,7 @@ class ArTryOnView(
         val createdAsset = loaded
         if (createdAsset == null) {
             Log.w(TAG, "createAsset failed after $LOAD_ATTEMPTS attempts: $lastFailure")
+            relay("load FAILED after $LOAD_ATTEMPTS attempts: $lastFailure")
             // The facts travel with the failure too: on a QA build running the level-1 override,
             // this line is the measurement — the load that used to be refused instead failed
             // gracefully here rather than aborting.
@@ -1586,8 +1774,15 @@ class ArTryOnView(
             return
         }
         asset = createdAsset
-        runCatching { ResourceLoader(created).loadResources(createdAsset) }
+        // The loader is destroyed after it has done its one job, which is the sequence
+        // `AssetLoader`'s own javadoc shows (`loadResources` … `resourceLoader.destroy()`): the
+        // object was previously created inline and dropped, leaving its native staging buffers
+        // behind on every open of the box.
+        val resources = ResourceLoader(created)
+        runCatching { resources.loadResources(createdAsset) }
             .onFailure { t -> Log.w(TAG, "loadResources failed", t) }
+        runCatching { resources.destroy() }
+            .onFailure { t -> Log.w(TAG, "ResourceLoader.destroy failed", t) }
         scene?.addEntities(createdAsset.renderableEntities)
         modelRoot = createdAsset.root
         runCatching { created.transformManager.create(modelRoot) }
@@ -1606,6 +1801,10 @@ class ArTryOnView(
             "model ${spec.modelId} loaded in ${loadMs}ms: renderables=" +
                 "${createdAsset.renderableEntities.size}, bbox(m)=${halfExtent.joinToString()}, " +
                 "authoredLengthMm=${spec.authoredLengthMm}",
+        )
+        relay(
+            "model ${spec.modelId} loaded in ${loadMs}ms: " +
+                "renderables=${createdAsset.renderableEntities.size}",
         )
         listener.onEvent("modelLoaded", mapOf("loadMs" to loadMs, "triangles" to -1))
     }
@@ -1841,25 +2040,77 @@ class ArTryOnView(
     // Teardown
     // ════════════════════════════════════════════════════════════════════════════════════════
 
+    /**
+     * Full teardown on the render thread, in destroy order, idempotent because both
+     * `surfaceDestroyed` and the plugin's `dispose` can arrive, in either order.
+     *
+     * ⚠️ **The order and the flush are contract, not style.** Filament 1.72.1's own Android sample
+     * destroys the swap chain and then calls `Engine.flushAndWait()` *while the surface is still
+     * valid*, because "Android might destroy the Surface too early" otherwise
+     * (`UiHelper.RendererCallback.onDetachedFromSurface`), and it destroys the engine **last**,
+     * after everything that references it (`Engine.destroy()`: "should be called last and after
+     * all other resources have been destroyed"). The frame callback is removed before anything is
+     * destroyed, so no queued vsync can touch a dead engine
+     * (`Choreographer.removeFrameCallback`, invoked from the looper it belongs to), and the gltfio
+     * objects go in their documented order — asset, then loader, then the provider's cached
+     * materials, then the provider (`MaterialProvider.destroyMaterials` / `destroy`;
+     * `AssetLoader.destroy` explicitly does *not* free the material cache). Entity ids are freed
+     * only after their components (`Engine.destroyEntity` destroys components only;
+     * `EntityManager.destroy` frees the id).
+     *
+     * Every phase is written to the file channel as it completes, so a crash inside teardown leaves
+     * the last completed step readable at the next launch — the only post-mortem this phone can
+     * produce.
+     */
     private fun teardown() {
+        if (tornDown) {
+            relay("teardown SKIPPED: already torn down")
+            return
+        }
+        tornDown = true
+        tearingDown = true
         frameLoopRunning = false
+        // The callback belongs to this thread's Choreographer. Removing it here (never from
+        // another thread) is what guarantees the next vsync cannot re-enter a destroyed engine.
+        choreographer.removeFrameCallback(frameCallback)
         engineDestroys++
+        relay("teardown BEGIN (engines ${engineCreates}/${engineDestroys}, presented=$presentedFrames)")
+        relay("teardown: loop stopped, frame callback removed")
         asset?.let { loaded -> assetLoader?.let { runCatching { it.destroyAsset(loaded) } } }
         asset = null
+        relay("teardown: asset destroyed")
         pendingModel = null
         modelRoot = 0
         runCatching { session?.close() }
         session = null
         sessionResumed = false
         destroySwapChain()
+        engine?.let { created ->
+            val flushed = runCatching { created.flushAndWait(TEARDOWN_FLUSH_TIMEOUT_NANOS) }
+                .getOrDefault(false)
+            relay("teardown: swap chain destroyed, flushAndWait=${if (flushed) "ok" else "timeout"}")
+        }
         view?.let { engine?.destroyView(it) }
         scene?.let { engine?.destroyScene(it) }
         renderer?.let { engine?.destroyRenderer(it) }
-        if (cameraEntity != 0) engine?.destroyCameraComponent(cameraEntity)
-        if (keyLight != 0) engine?.destroyEntity(keyLight)
-        if (fillLight != 0) engine?.destroyEntity(fillLight)
+        if (cameraEntity != 0) {
+            engine?.destroyCameraComponent(cameraEntity)
+            runCatching { EntityManager.get().destroy(cameraEntity) }
+        }
+        if (keyLight != 0) {
+            engine?.destroyEntity(keyLight)
+            runCatching { EntityManager.get().destroy(keyLight) }
+        }
+        if (fillLight != 0) {
+            engine?.destroyEntity(fillLight)
+            runCatching { EntityManager.get().destroy(fillLight) }
+        }
         assetLoader?.destroy()
+        // `destroy()` does not free the materials it created (its own javadoc), and the asset that
+        // used them is already gone, so the cache is drained explicitly first.
+        materialProvider?.destroyMaterials()
         materialProvider?.destroy()
+        relay("teardown: view/scene/renderer/entities/loader/materials destroyed")
         engine?.destroy()
         view = null
         scene = null
@@ -1871,6 +2122,7 @@ class ArTryOnView(
         cameraEntity = 0
         keyLight = 0
         fillLight = 0
+        relay("teardown END (engines ${engineCreates}/${engineDestroys})")
     }
 
     // ════════════════════════════════════════════════════════════════════════════════════════
@@ -1927,6 +2179,30 @@ class ArTryOnView(
 
         /** The swap-chain retry's budget: enough to survive a settle, not enough to spin. */
         const val SWAP_CHAIN_RETRY_MS = 120L
+
+        /**
+         * How long the UI thread may wait for a surface's swap chain to be destroyed and the
+         * engine flushed before the framework is allowed to release the surface.
+         *
+         * ⚠️ Must be **larger** than [SURFACE_FLUSH_TIMEOUT_NANOS], or the wait would return
+         * before the flush it exists for. Both are bounded: Filament's own sample waits forever
+         * here, which is allowed in a sample and is an ANR on a customer's phone.
+         */
+        const val SURFACE_TEARDOWN_WAIT_MS = 1_000L
+
+        /** The bound on that flush, handed to `Engine.flushAndWait(timeout)` in nanoseconds. */
+        const val SURFACE_FLUSH_TIMEOUT_NANOS = 750_000_000L
+
+        /** The bound on the final flush in [teardown], before the engine itself is destroyed. */
+        const val TEARDOWN_FLUSH_TIMEOUT_NANOS = 1_000_000_000L
+
+        /**
+         * How often a refusal streak that has nothing left to rebuild logs one line.
+         *
+         * The failure branch sleeps 1 ms, so 1,200 frames is about a second and a half — often
+         * enough to date a stall, rare enough that the shared diag file stays readable.
+         */
+        const val REFUSAL_MILESTONE_FRAMES = 1200
         const val MAX_SWAP_CHAIN_RETRIES = 3
 
         /**
