@@ -317,3 +317,34 @@ If you'd rather publish by hand:
 4. Update `releases/version.json` with the new version + APK URL + notes.
 5. Prepend the same entry to `releases/changelog.json`.
 6. Commit and push `pubspec.yaml` + both JSONs to `main`.
+
+## QA builds — a measurement, not a release
+
+**Where to get one:** [**Actions → QA APK (not a release)**](https://github.com/kibs06/CUF/actions/workflows/qa-apk.yml)
+→ *Run workflow* → open the finished run → the **Artifacts** box holds
+`solevision-qa-instrumented-apk`. It is a `.zip`, so unzip it before installing,
+and it expires after 30 days — dispatch a fresh one whenever it lapses, or from
+a terminal:
+
+```bash
+gh workflow run qa-apk.yml -f diagnostics=true -f lower_engine=true -f allow_level1=true
+```
+
+**Why it is not a release.** The three `SHOE_PREVIEW_*` QA switches are honoured
+only in a **debuggable** APK (a published release is not `FLAG_DEBUGGABLE`, so it
+ignores them — see the switch table above), and they measure the renderer rather
+than serve a customer. The APK is also ~244 MB, which GitHub refuses in an
+ordinary push, so it cannot live in the tree either: a workflow artifact is the
+one place it can exist without being a release. When the release signing secrets
+are present the artifact is **re-signed with the project key**, so it installs as
+an ordinary *update* over the shipped build — same package, same signer, login
+kept — while staying debuggable.
+
+**What it does that a release cannot.** It carries the renderer's own heartbeat
+printed under the box (loop iterations, frames actually presented, refused
+frames, swap-chain rebuilds, engines, touches) and parks the last line in a file,
+so a crash still leaves the previous process's final words on the screen. That is
+the only diagnostic channel for the phones this was written for: the test device
+has developer options locked behind a password its previous owner set, so
+`adb logcat` will never be read from it. Local builds of the same thing live in
+`build/qa/` (git-ignored).
