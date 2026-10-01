@@ -1,10 +1,10 @@
 {
-  "latest_version": "1.0.40",
-  "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.40/app-release-1.0.40.apk",
+  "latest_version": "1.0.41",
+  "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.41/app-release-1.0.41.apk",
   "released_at": "2026-10-01",
   "notes": [
-    "The app's own diagnostic log can now be read and sent from inside the app — Settings → Developer → App logs (visible while developer mode is on): the tail on screen, copy every line, or send the whole file",
-    "The 3D viewer now records the phone and the renderer it started with, so a problem there can name the step it happened at",
-    "No customer-visible changes — this build is a diagnostics release"
+    "The 3D viewer now writes a line before and after every native call inside the model load, so the next log from the phone names the exact call the process dies in",
+    "The two calls that could throw on the render thread without a catch (flushAndWait, addEntities) are now wrapped, so a Java-level failure leaves a line where it used to kill the process silently",
+    "No customer-visible changes — this build exists to name the P30 Pro's dying call"
   ]
 }
