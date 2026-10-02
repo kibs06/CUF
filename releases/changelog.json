@@ -1,5 +1,15 @@
 [
   {
+    "latest_version": "1.0.43",
+    "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.43/app-release-1.0.43.apk",
+    "released_at": "2026-10-02",
+    "notes": [
+      "The 3D viewer now drains the engine's queue before applying the model's transform, so a slow driver waits in a bounded call that reports instead of stalling in a call that cannot time out",
+      "The 3D viewer no longer destroys the model's asset explicitly at teardown — the engine destroy moments later frees the same resources, and the explicit destroy is the call a re-opened preview never returned from on the P30 Pro",
+      "No customer-visible changes — this build removes the two calls the P30 Pro's log stopped on"
+    ]
+  },
+  {
     "latest_version": "1.0.42",
     "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.42/app-release-1.0.42.apk",
     "released_at": "2026-10-02",
