@@ -76,6 +76,17 @@ void main() {
       expect(view, contains('load: asset built — ResourceLoader.loadResources'));
       expect(view, contains('load: entities added — applying the transform'));
       expect(view, contains('flushAndWait threw'));
+      // ⚠️ The 1.0.41 run cleared the load on the phone and moved the death into two single native
+      // calls: the load's last pair (`setTransform` / the bounding-box read) and the asset destroy
+      // of a *re-opened* preview's teardown. A log that ends on one of these lines names the call
+      // that stopped returning, so each line is load-bearing.
+      expect(view, contains('load: transform written — reading the bounding box'));
+      expect(view, contains('load: preview fit — radius='));
+      expect(view, contains('teardown: destroying the asset'));
+      // "It loads but it won't turn" needs the finger to be visible in the file at all: one line per
+      // touch-down, and the session's totals on the teardown line every completed leave writes.
+      expect(view, contains('touch: down #'));
+      expect(view, contains('touches='));
       expect(view, contains('REFUSED the load'));
       expect(view, contains('beginFrame refused'));
       expect(view, contains('rebuilding the ')); // the chain repair

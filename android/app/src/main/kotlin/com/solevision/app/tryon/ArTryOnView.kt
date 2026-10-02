@@ -517,6 +517,12 @@ class ArTryOnView(
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 touchDowns++
+                // ⚠️ **The only proof a finger reached this view.** "It loads but it won't turn"
+                // is two different faults — a gesture that never arrives (the Dart-side handover)
+                // and a camera that cannot move (the fit radius relayed after the load) — and with
+                // nothing here they read as the same silence. One line per gesture, never per
+                // move: a drag is a flood of MOVE events and the relay fsyncs every line.
+                relay("touch: down #$touchDowns")
                 lastTouchX = event.x
                 lastTouchY = event.y
                 interacting = true
@@ -1859,6 +1865,15 @@ class ArTryOnView(
         Matrix.setIdentityM(placement, 0)
         applyTransform()
 
+        // ⚠️ **The one number that decides whether the preview can move at all.**
+        // `applyPreviewCamera` returns before it writes a single camera transform — and before the
+        // idle spin advances — while this radius is zero, so a screen that presents frames but
+        // never turns (the owner's "I cannot touch it") is this value. Zero means `applyTransform`
+        // found no bounding box to frame: the read that produces it sits between the two lines
+        // above, so a log that ends on this one with a zero radius names a load that framed
+        // nothing rather than a camera that failed.
+        relay("load: preview fit — radius=${(previewRadiusM * 1000.0).roundToInt()}mm")
+
         val loadMs = (System.currentTimeMillis() - startedAt).toInt()
         val halfExtent = createdAsset.boundingBox.halfExtent
         Log.i(
@@ -1902,6 +1917,14 @@ class ArTryOnView(
         Matrix.scaleM(matrix, 0, scale, scale, scale)
         runCatching { created.transformManager.setTransform(modelRoot, matrix) }
             .onFailure { t -> Log.w(TAG, "setTransform failed", t) }
+        // ⚠️ **The load's last window, split at its midpoint (measured, 2026-10-02).** Twice on the
+        // P30 Pro the log ended one line *above* this one — after `entities added — applying the
+        // transform` — with half a second of silence before the activity finished, so the render
+        // thread was inside `setTransform` or inside the bounding-box read below it. Which of the
+        // two it was is this line: a log that never reaches it died in `setTransform`, and one that
+        // ends on it died in the box. (`applyTransform` is shared with the AR placement path; a
+        // placement pays one line for the same call, which has the same stall surface.)
+        relay("load: transform written — reading the bounding box")
 
         // What the preview camera frames, derived from the transform just written rather than from
         // the asset's raw box: the mesh is authored in metres, but a V0-era block-out is authored in
@@ -2139,8 +2162,22 @@ class ArTryOnView(
         // another thread) is what guarantees the next vsync cannot re-enter a destroyed engine.
         choreographer.removeFrameCallback(frameCallback)
         engineDestroys++
-        relay("teardown BEGIN (engines ${engineCreates}/${engineDestroys}, presented=$presentedFrames)")
+        // The touch totals ride the one teardown line every completed leave writes: a session whose
+        // `presented` is in the hundreds with `touches=0/0/0` is a preview whose gestures never
+        // arrived, which is a different fault from one whose camera never framed the shoe.
+        relay(
+            "teardown BEGIN (engines ${engineCreates}/${engineDestroys}, presented=$presentedFrames, " +
+                "touches=$touchDowns/$touchMoves/$touchUps)",
+        )
         relay("teardown: loop stopped, frame callback removed")
+        // ⚠️ **The line a re-opened preview's teardown never came back from (measured, 2026-10-02).**
+        // Both times the P30 Pro opened the preview, left it, opened it again and left again, the
+        // log ended at `loop stopped, frame callback removed` and the process lived about a second
+        // longer — long enough for the activity to write `onPause isFinishing=true` — so the stall
+        // is in the call these two lines bracket. The *first* teardown in the same process destroys
+        // the same asset in about a millisecond, and `destroyAsset` cannot be wrapped in a timeout,
+        // so this line is what separates "died before the destroy" from "died inside it".
+        relay("teardown: destroying the asset")
         asset?.let { loaded -> assetLoader?.let { runCatching { it.destroyAsset(loaded) } } }
         asset = null
         relay("teardown: asset destroyed")
