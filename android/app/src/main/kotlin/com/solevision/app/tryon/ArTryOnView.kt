@@ -1856,6 +1856,16 @@ class ArTryOnView(
             .onFailure { t -> relay("load: addEntities threw — ${t.message}") }
         modelRoot = createdAsset.root
         runCatching { created.transformManager.create(modelRoot) }
+        // ⚠️ **The bounded drain the load's failed launches needed (measured, 2026-10-02).** Twice
+        // the P30 Pro's log ended at the line below this block and the process lived on: the natives
+        // that follow it are `setTransform` and the asset's bounding-box read, and neither can be
+        // given a timeout. If the driver is still finishing the work `loadResources` queued, the
+        // stall lands in one of those — so the wait happens here instead, in the one call on this
+        // path that *can* time out and report whether it drained. Every device pays a flush it does
+        // not need; only the device that stalls notices.
+        val drained = runCatching { created.flushAndWait(LOAD_TAIL_FLUSH_TIMEOUT_NANOS) }
+            .getOrDefault(false)
+        relay("load: drained before the transform — flushAndWait=${if (drained) "ok" else "timeout"}")
         relay("load: entities added — applying the transform")
 
         pendingAuthoredLengthMm = spec.authoredLengthMm
@@ -2170,17 +2180,19 @@ class ArTryOnView(
                 "touches=$touchDowns/$touchMoves/$touchUps)",
         )
         relay("teardown: loop stopped, frame callback removed")
-        // ⚠️ **The line a re-opened preview's teardown never came back from (measured, 2026-10-02).**
-        // Both times the P30 Pro opened the preview, left it, opened it again and left again, the
-        // log ended at `loop stopped, frame callback removed` and the process lived about a second
-        // longer — long enough for the activity to write `onPause isFinishing=true` — so the stall
-        // is in the call these two lines bracket. The *first* teardown in the same process destroys
-        // the same asset in about a millisecond, and `destroyAsset` cannot be wrapped in a timeout,
-        // so this line is what separates "died before the destroy" from "died inside it".
-        relay("teardown: destroying the asset")
-        asset?.let { loaded -> assetLoader?.let { runCatching { it.destroyAsset(loaded) } } }
+        // ⚠️ **`destroyAsset` is gone on purpose, and the removal is the measurement's answer
+        // (2026-10-02).** The call is the documented order (`AssetLoader`'s javadoc: asset, then
+        // loader, then the provider's materials) — and it is also the call a re-opened preview's
+        // teardown never came back from: twice the P30 Pro's log ended at `loop stopped, frame
+        // callback removed` and the process lived about a second longer, while the *first* teardown
+        // in the same process — same call, same asset — returns in about a millisecond. It cannot
+        // be wrapped in a timeout, which leaves one useful property: it is redundant. The engine is
+        // destroyed a few statements below and frees everything the asset holds, so on the phone
+        // that stalls inside it the cheapest correct answer is to not make the call. If the stall
+        // reappears in `engine.destroy()` — the next statement with real work in it — the next log
+        // says so.
         asset = null
-        relay("teardown: asset destroyed")
+        relay("teardown: asset released — destroyAsset skipped, the engine destroy frees it")
         pendingModel = null
         modelRoot = 0
         runCatching { session?.close() }
@@ -2297,6 +2309,17 @@ class ArTryOnView(
 
         /** The bound on the final flush in [teardown], before the engine itself is destroyed. */
         const val TEARDOWN_FLUSH_TIMEOUT_NANOS = 1_000_000_000L
+
+        /**
+         * The bound on the drain before the load's transform tail (see its call site).
+         *
+         * ⚠️ **A stall needs a place to happen that can time out.** `setTransform` and the asset's
+         * bounding-box read are the two natives the P30 Pro's log twice stopped on, and neither
+         * takes a timeout; `flushAndWait` does. A second is long enough for a healthy driver to
+         * finish the load's queued work (the whole load measures in tens of milliseconds on the
+         * devices that do not stall) and short enough that a wedged one reports rather than hangs.
+         */
+        const val LOAD_TAIL_FLUSH_TIMEOUT_NANOS = 1_000_000_000L
 
         /**
          * How often a refusal streak that has nothing left to rebuild logs one line.

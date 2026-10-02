@@ -82,7 +82,15 @@ void main() {
       // that stopped returning, so each line is load-bearing.
       expect(view, contains('load: transform written — reading the bounding box'));
       expect(view, contains('load: preview fit — radius='));
-      expect(view, contains('teardown: destroying the asset'));
+      // The drain that moved the load's stall into a call that can time out: without it, the next
+      // natives on the path (`setTransform`, the bounding-box read) are the ones a wedged driver
+      // stops inside, and neither accepts a timeout.
+      expect(view, contains('load: drained before the transform — flushAndWait='));
+      // And the teardown's `destroyAsset` is *gone on purpose*: it is the call a re-opened
+      // preview's teardown never came back from on the P30 Pro (first teardowns return in ~1 ms,
+      // second ones stall, and the engine destroy a few statements later frees the same resources).
+      // This assertion is the guard that the stall surface does not come back silently.
+      expect(view, contains('teardown: asset released — destroyAsset skipped'));
       // "It loads but it won't turn" needs the finger to be visible in the file at all: one line per
       // touch-down, and the session's totals on the teardown line every completed leave writes.
       expect(view, contains('touch: down #'));
@@ -99,7 +107,8 @@ void main() {
       // it. One line per completed phase is what turns "it crashed when I left the viewer" into
       // "it reached the swap chain and never reached the engine".
       expect(view, contains('teardown: loop stopped, frame callback removed'));
-      expect(view, contains('teardown: asset destroyed'));
+      // The asset phase is the skip above rather than a destroy, so the phase that follows it is
+      // what a log ending after `loop stopped` would have to reach.
       expect(view, contains('teardown: swap chain destroyed, flushAndWait='));
       expect(view, contains('teardown: view/scene/renderer/entities/loader/materials destroyed'));
       expect(view, contains('teardown END'));
