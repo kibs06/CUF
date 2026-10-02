@@ -6,7 +6,9 @@ import 'package:flutter/material.dart';
 
 import '../constants/app_constants.dart';
 import '../services/ar_try_on_channel.dart';
+import '../services/diag_logger.dart';
 import '../services/shoe_preview_channel.dart';
+import 'shoe_preview_webview.dart';
 import 'sole_ar_pill.dart';
 
 /// The **3D box** — the customer turns the shoe with a finger, and the
@@ -68,6 +70,8 @@ class ShoePreview3D extends StatefulWidget {
     this.height = 240,
     this.paused = false,
     this.diagnostics = AppConstants.shoePreviewDiagnosticsEnabled,
+    this.useWebViewEngine = AppConstants.shoePreviewWebViewEnabled,
+    this.onEngineStatus,
   });
 
   /// The verified local model, in the same payload the AR path hands over.
@@ -82,6 +86,11 @@ class ShoePreview3D extends StatefulWidget {
   /// platform-view registry — so the view is reached through a seam rather than
   /// built inline, the same boundary `ARVirtualFitScreen.tryOnViewBuilder`
   /// documents.
+  ///
+  /// ⚠️ **It stands in for whichever engine is selected**, and that is what keeps
+  /// this widget's tests engine-agnostic: a test that injects a view asserts the
+  /// handover and the layout, and never needs to know whether a platform view or
+  /// a WebView would have been built.
   final Widget Function()? viewBuilder;
 
   /// The box's height. 240 px shows a whole shoe at a three-quarter view without
@@ -100,6 +109,27 @@ class ShoePreview3D extends StatefulWidget {
   /// readout is the evidence a device screenshot carries, so a test has to be able
   /// to turn it on without a `--dart-define` on the test run.
   final bool diagnostics;
+
+  /// **Which engine draws the box.** Defaults to
+  /// [AppConstants.shoePreviewWebViewEnabled].
+  ///
+  /// A parameter as well as the switch it defaults to, the same shape
+  /// [diagnostics] and [ShoePreviewSection.showDiagnostics] use and for the same
+  /// reason: the choice is compile-time in a shipped build, so without this a test
+  /// could never assert the path it is *not* built with. Both engines stay
+  /// reachable in every build; only the default differs.
+  final bool useWebViewEngine;
+
+  /// **The WebView engine's heartbeat, for the same readout the native one
+  /// feeds.**
+  ///
+  /// It exists because the two engines report their state through completely
+  /// different machinery — the native one raises `status` events over an
+  /// `EventChannel` from Kotlin, while the WebView one is a Dart widget with no
+  /// native side to raise anything — and a QA screenshot has to look the same
+  /// whichever engine produced it. The section owns the readout, so the section
+  /// owns the callback; see [ShoePreviewWebView.onStatus].
+  final ValueChanged<String>? onEngineStatus;
 
   @override
   State<ShoePreview3D> createState() => _ShoePreview3DState();
@@ -183,6 +213,21 @@ class _ShoePreview3DState extends State<ShoePreview3D> {
   Widget _view() {
     final injected = widget.viewBuilder;
     if (injected != null) return injected();
+
+    // ⚠️ **Which engine draws is a compile-time decision**
+    // (`AppConstants.shoePreviewWebViewEnabled`) and it is asked *before* the
+    // platform check below, because the two engines refuse different platforms:
+    // the native view has no iOS implementation at all, while the WebView engine
+    // is Android-only here only because the gate is (`resolveShoePreview`).
+    if (widget.useWebViewEngine) {
+      return ShoePreviewWebView(
+        model: widget.model,
+        diagnostics: widget.diagnostics,
+        // The QA line goes straight to the section's readout, which is where the
+        // native engine's `status` events land too — one surface, two engines.
+        onStatus: widget.onEngineStatus,
+      );
+    }
 
     // iOS has no renderer at all, and an `AndroidView` elsewhere throws instead
     // of degrading. The gate already refuses non-Android platforms; this is the
@@ -507,6 +552,7 @@ class ShoePreviewSection extends StatefulWidget {
     this.paused = false,
     this.events,
     this.showDiagnostics = AppConstants.shoePreviewDiagnosticsEnabled,
+    this.useWebViewEngine = AppConstants.shoePreviewWebViewEnabled,
   });
 
   final TryOnModelSpec model;
@@ -538,6 +584,11 @@ class ShoePreviewSection extends StatefulWidget {
   /// behaviours can both be asserted without a rebuild. See
   /// `_diagnosticDetail` for what the line carries and why it exists.
   final bool showDiagnostics;
+
+  /// Which engine the box is drawn with. See [ShoePreview3D.useWebViewEngine] —
+  /// forwarded rather than re-decided, so the section and the box can never
+  /// disagree about which engine is running.
+  final bool useWebViewEngine;
 
   @override
   State<ShoePreviewSection> createState() => _ShoePreviewSectionState();
@@ -604,6 +655,19 @@ class _ShoePreviewSectionState extends State<ShoePreviewSection> {
   /// exists in a customer one (the native side is never asked).
   String? _statusLine;
 
+  /// The WebView engine's own heartbeat, arriving as a callback instead of an
+  /// event.
+  ///
+  /// Kept separate from [_recordStatus] because the payloads are different kinds
+  /// of thing: a native `status` event carries structured counters
+  /// (`loop=`, `present=`, `beginFail=`), while this is already a finished line.
+  /// Folding them would mean inventing a fake `data` map for one of them.
+  void _recordEngineLine(String line) {
+    if (!widget.showDiagnostics || line.isEmpty) return;
+    if (!mounted || line == _statusLine) return;
+    setState(() => _statusLine = line);
+  }
+
   void _recordStatus(Object? data) {
     if (!widget.showDiagnostics || data is! Map) return;
     final line = data['line']?.toString();
@@ -660,6 +724,13 @@ class _ShoePreviewSectionState extends State<ShoePreviewSection> {
     super.dispose();
   }
 
+  /// One-shot record of which branch this section rendered.
+  ///
+  /// ⚠️ It is a measurement, not decoration: the failure branch and the success
+  /// branch differ by whether the box exists at all, and a customer sees both as
+  /// "the 3D thing is missing". This is the line that says which one ran.
+  bool _tracedBranch = false;
+
   @override
   Widget build(BuildContext context) {
     // The whole section, or nothing at all — and unmounting the box is what
@@ -670,6 +741,13 @@ class _ShoePreviewSectionState extends State<ShoePreviewSection> {
     // first device report showed the original all-or-nothing rule eating the
     // pill mid-visit: the customer opens AR, comes back, and both entries are
     // gone because the gate now says "shown" while the section says "gone").
+    if (widget.showDiagnostics && !_tracedBranch) {
+      _tracedBranch = true;
+      navDiag('[preview] section branch='
+          '${_unsupported || _diagnosticDetail != null ? 'failure' : 'box'} · '
+          'unsupported=$_unsupported · reason=$_errorReason · '
+          'engine=${widget.useWebViewEngine ? 'webview' : 'native'}');
+    }
     if (_unsupported || _diagnosticDetail != null) {
       return Padding(
         padding: const EdgeInsets.only(bottom: 12),
@@ -716,6 +794,14 @@ class _ShoePreviewSectionState extends State<ShoePreviewSection> {
           paused: widget.paused,
           // The section's own QA flag is the only one: one switch, not two that can disagree.
           diagnostics: widget.showDiagnostics,
+          useWebViewEngine: widget.useWebViewEngine,
+          // ⚠️ **The WebView engine's line arrives here rather than through
+          // `_onEvent`**, which only ever carries what the *native* side sends. A
+          // build running the WebView engine has no native renderer at all, so a
+          // readout fed only by `status` events would sit empty on exactly the
+          // engine that is being measured. Same surface, same gate, one extra
+          // source.
+          onEngineStatus: _recordEngineLine,
         ),
         if (widget.showDiagnostics && _statusLine != null) ...<Widget>[
           const SizedBox(height: 6),

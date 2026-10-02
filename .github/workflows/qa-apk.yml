@@ -57,6 +57,10 @@ on:
         description: 'SHOE_PREVIEW_ALLOW_LEVEL1 — let the load happen (may abort the process)'
         type: boolean
         default: true
+      webview_engine:
+        description: 'SHOE_PREVIEW_WEBVIEW — draw the box with the WebView model-viewer instead of native Filament'
+        type: boolean
+        default: true
       abi:
         description: 'Which engine to ship: arm64 = phone, x86_64 = emulator (Dart-side checks; cannot render), both = either.'
         type: choice
@@ -135,6 +139,7 @@ jobs:
           DIAGNOSTICS: ${{ inputs.diagnostics }}
           LOWER_ENGINE: ${{ inputs.lower_engine }}
           ALLOW_LEVEL1: ${{ inputs.allow_level1 }}
+          WEBVIEW_ENGINE: ${{ inputs.webview_engine }}
           ABI: ${{ inputs.abi }}
         run: |
           set -euo pipefail
@@ -155,6 +160,22 @@ jobs:
           [[ "$DIAGNOSTICS" == "true" ]] && ARGS+=(--dart-define=SHOE_PREVIEW_DIAGNOSTICS=true)
           [[ "$LOWER_ENGINE" == "true" ]] && ARGS+=(--dart-define=SHOE_PREVIEW_LOWER_ENGINE_TO_LEVEL1=true)
           [[ "$ALLOW_LEVEL1" == "true" ]] && ARGS+=(--dart-define=SHOE_PREVIEW_ALLOW_LEVEL1=true)
+          # ⚠️ The engine choice is the one input that is *not* an override of a QA
+          # lock: it decides which renderer the box uses, and the two are mutually
+          # exclusive. On is the WebView engine, which is now the shipped default
+          # (`shoePreviewWebViewEnabled` defaults to true — see the vivo V2022
+          # measurement there); off is the native Filament path, kept for rollback.
+          #
+          # ⚠️ **Both branches pass the define, and that is not symmetry for its own
+          # sake.** Since the code default became `true`, omitting the define when
+          # `webview_engine=false` would silently build a WebView APK while the
+          # input says native — a QA run that measures the wrong engine and reports
+          # the result as evidence.
+          if [[ "$WEBVIEW_ENGINE" == "true" ]]; then
+            ARGS+=(--dart-define=SHOE_PREVIEW_WEBVIEW=true)
+          else
+            ARGS+=(--dart-define=SHOE_PREVIEW_WEBVIEW=false)
+          fi
           # The surface itself has to be on or there is no box to look at.
           ARGS+=(--dart-define=SHOE_PREVIEW=true)
           echo "→ flutter build apk ${ARGS[*]}"
@@ -228,7 +249,7 @@ jobs:
             echo "| size | $(du -h "$APK" | cut -f1) |"
             echo "| sha256 | \`$(sha256sum "$APK" | cut -d' ' -f1)\` |"
             echo "| commit | \`$GITHUB_SHA\` |"
-            echo "| switches | diagnostics=${{ inputs.diagnostics }} · lower-engine=${{ inputs.lower_engine }} · allow-level1=${{ inputs.allow_level1 }} |"
+            echo "| switches | diagnostics=${{ inputs.diagnostics }} · lower-engine=${{ inputs.lower_engine }} · allow-level1=${{ inputs.allow_level1 }} · engine=${{ inputs.webview_engine && 'webview' || 'native-filament' }} |"
             echo
             echo "Not a release, deliberately: this is a measurement build (debuggable, QA switches on)."
           } >> "$GITHUB_STEP_SUMMARY"

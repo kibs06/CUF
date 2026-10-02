@@ -74,7 +74,41 @@ class DiagLogger {
     // Capture Dart-visible app lifecycle: if the activity finishes, the
     // engine detaches and we see it here as inactive/detached/paused.
     WidgetsBinding.instance.addObserver(_LifecycleObserver());
+    _installErrorHook();
     log('DiagLogger ready at $_path');
+  }
+
+  /// **Every uncaught Flutter error, written to this file.**
+  ///
+  /// ⚠️ It exists because the phones this app is measured on have no readable
+  /// logcat — the P30 Pro's developer options are locked behind the previous
+  /// owner's password, and the vivo V2022's ROM drops third-party `Log.i` output
+  /// entirely (measured 2026-10-02: zero `NavDiag` lines and zero Flutter lines
+  /// across four app launches, while the file route recorded all of them).
+  ///
+  /// Without this hook a Dart exception is simply **invisible** on such a device.
+  /// That is not hypothetical: a widget whose `initState` throws never reaches
+  /// `build` and never reaches `dispose`, so the only trace it leaves is an
+  /// absence — the mount line with no successor — which is indistinguishable from
+  /// a dozen other stalls. The first real find from this hook is expected to be
+  /// exactly that shape.
+  void _installErrorHook() {
+    final previous = FlutterError.onError;
+    FlutterError.onError = (FlutterErrorDetails details) {
+      // The message, then the top of the stack — enough to name the widget and
+      // the line, and bounded so a build failure cannot flood the relay.
+      log('[FLUTTER ERROR] ${details.exceptionAsString()}');
+      final stack = details.stack;
+      if (stack != null) {
+        for (final line in stack.toString().split('\n').take(14)) {
+          log('[FLUTTER ERROR] $line');
+        }
+      }
+      if (details.library != null) {
+        log('[FLUTTER ERROR] during ${details.library}');
+      }
+      previous?.call(details);
+    };
   }
 
   void log(String message) {

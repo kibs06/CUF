@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:app/constants/app_constants.dart';
 import 'package:app/services/ar_try_on_channel.dart';
 import 'package:app/services/shoe_preview_channel.dart';
 import 'package:app/widgets/shoe_preview_3d.dart';
@@ -65,6 +66,7 @@ void main() {
     Widget? child,
     bool showDiagnostics = false,
     bool showTryOn = true,
+    bool useWebViewEngine = false,
   }) {
     return MaterialApp(
       home: Scaffold(
@@ -77,6 +79,7 @@ void main() {
                   events: events,
                   showDiagnostics: showDiagnostics,
                   showTryOn: showTryOn,
+                  useWebViewEngine: useWebViewEngine,
                   viewBuilder: viewBuilder ??
                       () => const SizedBox(key: Key('fake-3d'), height: 240),
                 ),
@@ -556,6 +559,109 @@ void main() {
       );
 
       handle.dispose();
+    });
+  });
+
+  group('the engine switch', () {
+    // ⚠️ The two engines are reached through `useWebViewEngine`, a constructor
+    // parameter that defaults to the compile-time switch, the same shape
+    // `showDiagnostics` uses. Without the parameter a test could only ever assert
+    // whichever engine this build happens to be compiled with — so the routing
+    // itself would be the one thing never covered.
+
+    testWidgets('the WebView engine is the default, and it is a real switch',
+        (tester) async {
+      // ⚠️ **The default flipped on a device measurement, not on a preference.** On
+      // a vivo V2022 the native engine killed the app on 2 of 3 attempts to open
+      // the 3D box (`SIGSEGV` in `TransformManager_nSetTransform+64`); the WebView
+      // engine ran five opens in one process with no crash. `false` is still the
+      // rollback, and the section below asserts it.
+      expect(AppConstants.shoePreviewWebViewEnabled, isTrue);
+
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: ShoePreview3D(
+              model: model,
+              // No `viewBuilder`: this exercises the real routing decision.
+            ),
+          ),
+        ),
+      ));
+
+      // ⚠️ Asserted **negatively** through the native marker and **positively**
+      // through the WebView branch's own early exit. The model path does not exist
+      // under `flutter test`, and the WebView branch checks the disk before it
+      // builds a server, a controller or a renderer — so this sentence appearing is
+      // proof that the *WebView* branch ran, not merely that no `AndroidView` did.
+      expect(
+        find.byType(AndroidView),
+        findsNothing,
+        reason: 'the native platform view is now the opt-in path',
+      );
+      expect(find.text('The 3D model is not on this device.'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('the native engine is one parameter away, and still builds',
+        (tester) async {
+      // The rollback path, and the one the AR screen still needs: `Mode.AR` requires
+      // a GL surface and ARCore, which a WebView cannot give it.
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: ShoePreview3D(
+              model: model,
+              useWebViewEngine: false,
+            ),
+          ),
+        ),
+      ));
+
+      // Asserted by *type* rather than by whether mounting it throws: under
+      // `flutter test` there is no platform-view registry, and whether that surfaces
+      // as an exception is a Flutter-version detail rather than a fact about this
+      // widget.
+      expect(find.byType(AndroidView), findsOneWidget);
+      expect(
+        find.text('The 3D model is not on this device.'),
+        findsNothing,
+        reason: 'the WebView branch was taken with `useWebViewEngine: false`',
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a missing model on the WebView path says so, and never mounts',
+        (tester) async {
+      // The path this test can actually reach without a WebView: the disk check
+      // runs before any server, controller or renderer is built, so a model that
+      // is not where the handover said it was is reported on the box rather than
+      // surfacing as a blank frame.
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: ShoePreview3D(
+              model: model,
+              useWebViewEngine: true,
+            ),
+          ),
+        ),
+      ));
+
+      expect(find.text('The 3D model is not on this device.'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('the section forwards the engine choice rather than re-deciding it',
+        (tester) async {
+      // A section that defaulted the flag itself could disagree with the box it
+      // mounts — the exact class of bug a forwarded parameter prevents.
+      await tester.pumpWidget(harness(
+        useWebViewEngine: true,
+        viewBuilder: () => const SizedBox(key: Key('fake-webview'), height: 240),
+      ));
+
+      expect(find.byKey(const Key('fake-webview')), findsOneWidget);
     });
   });
 }

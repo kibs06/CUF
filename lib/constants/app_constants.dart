@@ -1025,6 +1025,73 @@ class AppConstants {
   static const bool shoePreviewLowerEngineToLevel1 =
       bool.fromEnvironment('SHOE_PREVIEW_LOWER_ENGINE_TO_LEVEL1');
 
+  /// **Which engine draws the 3D box: the native Filament view, or a WebView.**
+  ///
+  /// `false` (the default) mounts `ArTryOnView` — the Filament platform view the
+  /// whole feature was built on. `true` mounts a `WebViewWidget` running Google's
+  /// `<model-viewer>` web component instead, against the **same verified `.glb`
+  /// on disk**. Nothing else about the feature moves: the gate, the prefetch, the
+  /// two channel sets, the AR pill and the photo fallback are all unchanged.
+  ///
+  /// **Why a second engine exists at all, stated as the measurement that asked
+  /// for it.** Six rounds of device work on the owner's Huawei P30 Pro produced a
+  /// renderer that *draws* the shoe at `FEATURE_LEVEL_2` and ~57 fps — and then
+  /// stops returning from two specific native calls, on two specific paths:
+  /// `TransformManager.setTransform` on the load tail (2 of 5 launches) and
+  /// `AssetLoader.destroyAsset` on a **second** teardown in one process (2 of 2
+  /// re-opens). Neither is catchable and neither is a crash: the call simply never
+  /// comes back, and the process dies behind it. Both live in the vendor GL
+  /// driver, reached through Filament's JNI.
+  ///
+  /// A WebView changes that failure's *shape* rather than its probability. The
+  /// renderer runs in Chromium's own process, on its own driver calls, behind a
+  /// sandbox; when it stalls or dies the app is still standing and the box is
+  /// merely blank — which is a state this feature already knows how to be honest
+  /// about (`ShoePreviewHint`). That is the whole argument for this switch, and it
+  /// is an argument about **blast radius, not about picture quality**.
+  ///
+  /// **What it buys beyond that, and it is not nothing.** `<model-viewer>` needs
+  /// no ARCore and no `FEATURE_LEVEL_2`, so it draws on the OpenGL ES 3.0 phones
+  /// that Filament provably cannot (`canLoadModels()`, finding D10) — a strictly
+  /// larger audience than the native engine has ever had. Its gestures (drag,
+  /// pinch, momentum) are Chromium's rather than ours, which is the same code path
+  /// every e-commerce site on the internet already ships.
+  ///
+  /// **What it costs, so this is a trade and not a free win.** The model is
+  /// served to the WebView over a **loopback-only** HTTP server the package binds
+  /// (`HttpServer.bind(InternetAddress.loopbackIPv4, 0)`) — the bytes never leave
+  /// the device and never touch the network, but it does mean the app must permit
+  /// cleartext to `127.0.0.1`, which is why `android/app/src/main/res/xml/
+  /// network_security_config.xml` exists. It also needs a WebView that can run
+  /// WebGL2 (any Chromium since 2017; the P30 Pro has GMS, so its WebView is
+  /// Play-updatable), and the box is a second rendering surface rather than the
+  /// app's own frame.
+  ///
+  /// **⚠️ The default is now `true`, and a device measurement is why.** On a vivo
+  /// V2022 (Android 12, Adreno — a different GPU vendor from the P30 Pro's Mali),
+  /// the native engine **killed the app on 2 of 3 attempts** to open the 3D box,
+  /// every death at `load: entities added — applying the transform` with a
+  /// `SIGSEGV` in `TransformManager_nSetTransform+64`; the third survived and
+  /// reported the frozen-frame burst, which is the P30 Pro's *"it loads but I
+  /// cannot touch it"* symptom on a second vendor. The WebView engine on the same
+  /// phone, same model: **five opens in one process, zero crashes, zero errors**, a
+  /// correct `396x520` canvas every time, and a drag that turns the shoe. The
+  /// default follows the engine that has a device behind it — not the one that was
+  /// written first.
+  ///
+  /// **⚠️ This is still additive, and the native engine is not being deleted.**
+  /// Both engines stay compiled in and the switch picks one, so the rollback from
+  /// a shipped build is one define — the same rule §9 of
+  /// `docs/AI/PRODUCT_3D_VIEW_ARCHITECTURE.md` states for every other switch here.
+  /// The native path keeps its QA instrumentation and its tests either way, and
+  /// **AR is untouched**: `Mode.AR` needs a GL surface and ARCore, so the WebView
+  /// engine cannot draw it and the native view still does.
+  ///
+  /// **How it is turned off:** `--dart-define=SHOE_PREVIEW_WEBVIEW=false`, which
+  /// puts the Filament platform view back.
+  static const bool shoePreviewWebViewEnabled =
+      bool.fromEnvironment('SHOE_PREVIEW_WEBVIEW', defaultValue: true);
+
   // --- VIRTUAL FITTING: V0 RENDERER SPIKE (dev-only, delete on retirement) ---
   /// Gates the V0 virtual-fitting renderer spike — a dev-only screen that
   /// renders a placeholder GLB in AR through the native SceneView integration

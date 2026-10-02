@@ -86,6 +86,7 @@ turn them on later; one compiled *with* them cannot turn them off.
 | `SHOE_PREVIEW_DIAGNOSTICS` | `:938` | the QA banner + the heartbeat + the measured-facts line under a failure | — |
 | `SHOE_PREVIEW_ALLOW_LEVEL1` | `:970` | ⚠️ lets the glTF load proceed below `FEATURE_LEVEL_2` where it has always refused — the load that was a `SIGSEGV` on an emulator (F22) | the define **and** a debuggable APK |
 | `SHOE_PREVIEW_LOWER_ENGINE_TO_LEVEL1` | `:1012` | ⚠️ brings the engine up at `FEATURE_LEVEL_1` (or lowers a live one), to manufacture the cheap-phone case on hardware that is allowed to die | the define **and** a debuggable APK |
+| `SHOE_PREVIEW_WEBVIEW` | `:1077` | which engine draws the box: `false` = native Filament (default), `true` = WebView `<model-viewer>`. Additive — see §8a | — |
 
 **What a shipped build has.** The release pipeline passes `RELEASE_DART_DEFINES`,
 which is a **repository variable** (`.github/workflows/release.yml:130`), not
@@ -104,7 +105,9 @@ process`. The banner text is how a screenshot identifies which switches produced
 |---|---|
 | `lib/utils/shoe_preview_visibility.dart` | the gate: `resolveShoePreview` + `ShoePreviewReason{none, featureOff, notAndroid, noModel, modelNotReady}` + `ShoePreviewDecision`. Pure — no Flutter, no Supabase |
 | `lib/screens/customer/product_detail_screen.dart` | `_showPreviewIcon` (adds "bytes verified on disk" to the gate), `_openShoePreview`, the `[shoe-preview] …` log (`:1022`), the icon's `Positioned(right: 12, bottom: 50)` over the hero |
-| `lib/widgets/shoe_preview_3d.dart` | `ShoePreview3D` (the box; `diagnostics` param), `ShoePreviewIdle` (its `#0E0F12` matches the renderer's clear colour), `Sole3DIconButton`, `ShoePreviewHint`, `ShoePreviewQaBanner`, `ShoePreviewSection{model, onTryOnInAr, showTryOn, channel, viewBuilder, height, paused, events, showDiagnostics}`, `_QaStatusLine` |
+| `lib/widgets/shoe_preview_3d.dart` | `ShoePreview3D` (the box; `diagnostics` + `useWebViewEngine` params), `ShoePreviewIdle` (its `#0E0F12` matches the renderer's clear colour), `Sole3DIconButton`, `ShoePreviewHint`, `ShoePreviewQaBanner`, `ShoePreviewSection{model, onTryOnInAr, showTryOn, channel, viewBuilder, height, paused, events, showDiagnostics, useWebViewEngine}`, `_QaStatusLine` |
+| `lib/widgets/shoe_preview_webview.dart` | **the second engine** (§8a): `ShoePreviewWebView` — `ModelViewer` against `file://`, the `javascriptChannel` bridge that keeps a failed load visible, and the `gl:`/`box=` measurements that separate a broken renderer from a broken layout |
+| `android/app/src/main/res/xml/network_security_config.xml` | the loopback-only cleartext exception the WebView engine needs (§8a). Do not widen it |
 | `lib/screens/shared/shoe_preview_screen.dart` | the viewer. `new` (customer, model already resolved) / `forProduct` (seller). Owns the AR push and the `paused` flag that stops the box while AR is on top |
 | `lib/services/shoe_preview_channel.dart` | `kShoePreviewMethodChannel` `com.solevision/shoe_preview` (`:37`), `kShoePreviewEventChannel` `…/events` (`:45`), `kShoePreviewViewType` `…/view` (`:49`), `kRendererUnsupportedReason` (`:67`), `setModel/setSize/setColor/setDiagnostics`, `events` |
 | `lib/providers/try_on/try_on_mode.dart` | `TryOnDegradeReason.rendererUnsupported` — how a refusal reaches the AR flow's vocabulary |
@@ -360,6 +363,152 @@ repair confirmed on hardware yet):
    counters and the bounded chain rebuild (§6).
 2. *"I open the 3D model, then I leave, then I open it again and it crashes"* —
    diagnosed as the teardown race. Repair: the process-wide latch (§4.7).
+
+## 8a. The second engine: a WebView, and why it exists
+
+```
+SHOE_PREVIEW_WEBVIEW=true (SHIPPED)        SHOE_PREVIEW_WEBVIEW=false (rollback)
+ShoePreview3D                              ShoePreview3D
+  └── ShoePreviewWebView                     └── AndroidView(viewType: …)
+        └── ModelViewer (<model-viewer>)            └── ArTryOnView(Mode.PREVIEW)
+              └── WebView (Chromium, its own               └── Filament (JNI, in-process)
+                  process) on 127.0.0.1 → the same .glb
+```
+
+⚠️ **The default is the WebView engine, and the flip is a measurement.** `Mode.AR`
+is *not* covered by the WebView engine — it needs a GL surface and ARCore, so
+`ar_fitting_screen.dart` still mounts the native view through `kArTryOnViewType`
+regardless of this switch. Both engines therefore stay compiled in permanently; the
+switch picks the *preview* only.
+
+**The measurement that asked for it.** Six releases narrowed the P30 Pro's fault to
+two native calls that *stop returning*: `TransformManager.setTransform` on the load
+tail (2 of 5 launches) and `AssetLoader.destroyAsset` on a **second** teardown in one
+process (2 of 2 re-opens). 1.0.43 removed both call sites — the correct fix for those
+two, and not a fix for the class. A stall in our own process kills the app, and the
+next one will be elsewhere.
+
+**What changes is the blast radius, not the picture.** The WebView engine renders in
+Chromium's process: if it stalls or dies, the app survives and the box is blank — a
+state this feature already handles honestly (`ShoePreviewHint`, and the widget's own
+failure line). It also needs no ARCore and no `FEATURE_LEVEL_2`, so it draws on the
+ES 3.0 phones `canLoadModels()` provably cannot (D10).
+
+**⚠️ Three things about the WebView path that are load-bearing.**
+
+1. **The loopback server.** `model_viewer_plus` binds an `HttpServer` to
+   `InternetAddress.loopbackIPv4` on an ephemeral port and serves the page and the
+   model over it, reading the bytes from the local file. Nothing leaves the device,
+   but Android 9+ blocks cleartext by default — hence
+   `android/app/src/main/res/xml/network_security_config.xml`, which permits it to
+   `localhost` and `127.0.0.1` **only** while leaving the base config at `false`. Do
+   not widen it and do not replace it with `usesCleartextTraffic="true"`.
+2. **`ar: false` is not a preference.** `<model-viewer>` can hand a model to the
+   Google app over an `intent://` URL. The app has its own AR path with the fit logic
+   (`Mode.AR`, the pill under this box); a second, unmanaged AR door out of a product
+   page is not something this widget may open.
+3. **The page's events are the only witness.** The native engine reports through its
+   channel; the WebView engine has no native side, so `load`/`error`/`progress` are
+   bridged back over a `javascriptChannel` and land on the same QA readout the native
+   heartbeat feeds (`ShoePreviewSection._recordEngineLine`). Without them a WebView
+   that never draws looks exactly like one still loading — the "blank box with no
+   explanation" this feature exists to avoid. The two races are closed explicitly:
+   `customElements.whenDefined` (the deferred module script has not run when
+   `relatedJs` executes) and an `mv.loaded` read (a loopback model can finish before
+   any listener attaches).
+
+**It is additive, and the native engine is not being deleted.** Both are compiled in;
+`AppConstants.shoePreviewWebViewEnabled` picks one, and `ShoePreview3D.useWebViewEngine`
+forwards it as a parameter (defaulting to the switch) so both branches stay testable.
+The shipped default is **the WebView engine**: the switch is
+`bool.fromEnvironment('SHOE_PREVIEW_WEBVIEW', defaultValue: true)`, so a release gets
+`<model-viewer>` with no `--dart-define` at all. The rollback is one define
+(`SHOE_PREVIEW_WEBVIEW=false`), and the QA workflow passes the define on **both**
+branches — omitting it is no longer the same as asking for native, and a QA run that
+silently built the wrong engine would report the result as evidence.
+
+**✅ Measured on a real device, 2026-10-02 (vivo V2022, Android 12 / SDK 31, Adreno,
+WebView 154 — a *different vendor* from the P30 Pro's Mali).** The native engine
+crashed four times in its first thirty seconds there, with tombstones naming
+`TransformManager_nSetTransform` (SIGSEGV) and `destroyMaterials`
+(`PreconditionPanic: destroying material "base_lit_opaque" but 2 instances still
+alive`, SIGABRT). The WebView engine, same model, same device:
+
+| | result |
+|---|---|
+| open/close cycles | **5, all in one process** (`pid` unchanged throughout) |
+| loads | 5 of 5, ~0.9–1.2 s each |
+| errors | **0** (`error — :loadfailure` appeared in the first build and does not now) |
+| tombstones | **0** |
+| renderer | `gl:webgl2` on every load |
+| element box | `box=396x520 body=520 win=520`, identical every load |
+| drag | turns the shoe (verified by before/after screenshot) |
+
+And the shipped default on that device, for contrast — same model, same taps:
+**2 of 3 opens killed the app** at `load: entities added — applying the transform`
+(`SIGSEGV` in `TransformManager_nSetTransform+64`), and the one that survived reported
+the frozen-frame burst (`beginFrame refused the frame — chain=ok, rebuilds=5`) — the
+P30 Pro's "it loads but I cannot touch it" symptom, on a second GPU vendor. The count
+is from a debug QA build; the *fault* is not diagnostic-specific, because the 1.0.43
+**release** build tombstoned on the same frame.
+
+**And the teardown abort is fixed, verified on that device.** The screenshot of the
+fault was `PreconditionPanic: destroying material "base_lit_opaque" but 2 instances
+still alive` — SIGABRT, on **every** teardown — caused by a build that skipped
+`AssetLoader.destroyAsset` on the theory that `engine.destroy()` frees the same
+resources. It frees the engine, not the asset's material instances. Restoring the call
+in the documented order at the tail of `teardown()` (asset → loader → provider's
+materials) makes the block complete: `teardown: destroying the asset — …` followed 15 ms
+later by `…materials destroyed`, across five cycles in one process, zero tombstones.
+⚠️ **But `teardown END` never prints** — the teardown now stops inside
+`engine.destroy()`, the statement the skip was avoiding, and the process **survives** via
+the process-wide teardown latch (§4.7), which times out and lets the next open proceed
+with a ~3 s hiccup. Two consequences, both accepted: **each open leaks a Filament
+engine**, and this is deliberately not "fixed" by removing another call, because removal
+is what turned a stall into an abort. Nothing customer-facing depends on it any more
+(native is the opt-in path and `Engine.destroy()` accepts no timeout).
+
+**One clue worth keeping, explicitly not a diagnosis.** The fault is
+`SEGV_ACCERR` at `0x74f5b3f610`, while every live pointer in the dump is a tagged heap
+pointer `0xb4_0000_0074_xxxx_xxxx` whose **untagged** value is exactly that address;
+`x22`/`x2` hold `0x3ec00000` (`0.375f`) and `x23` holds `12`, the shape of a `mat4f` copy
+walking a column index. **Four tombstones fault at four different addresses with *two
+fault codes*** — `0x74f5b3f610` and `0x73ff6ae400` as `SEGV_ACCERR`, `0x724dc83fe0` and
+`0xb3fa8a3a10` as `SEGV_MAPERR` — where a fixed bad access would be one address and one
+code. That spread is what a stale or garbage pointer dereference looks like, so the
+reading is an out-of-bounds or use-after-free in the transform write; it is **not
+proven**, and naming it needs a symbolized `libfilament-jni.so`, which a stripped release
+`.so` does not give. The call site is clean: a correctly sized `FloatArray(16)` for a
+valid entity.
+
+**Two failures found by that run, both fixed, both worth not re-introducing.**
+
+1. **The blank box was a reload.** `ModelViewer` creates its loopback server and its
+   `WebViewController` in `initState`, so re-inflating the element discards the load
+   in flight and starts a second one. The first build drew its own QA overlay by
+   switching its root between `ModelViewer` and a `Stack`, which reloaded the model
+   every time a status line appeared — the log showed `error — :loadfailure` and a
+   full re-fetch. The parent (`ShoePreviewSection`) draws the only QA line; this
+   widget must never rebuild itself to say anything. Pinned by the `_report`-has-no-
+   `setState` assertion in `product_detail_shoe_preview_contract_test.dart`.
+2. **The template has no root height.** `body, model-viewer { height: 100% }` with no
+   height on `html` means neither percentage has a definite containing block. The
+   element still measured a correct `396x520`, so this was **not** the blank box —
+   `relatedCss: 'html { height: 100%; }'` is a guard, not the repair. Do not remove it
+   on the grounds that it did not fix anything.
+
+**And the page reports two measurements, because a colour cannot.** A missing WebGL
+context and a `model-viewer` element with no box to draw in are the same picture and
+raise the *same* `load` event. `gl:<kind>` is probed once per page and `box=` rides
+along with every event, relayed through the same bridge — which is how the two
+failures above were separated from "the renderer is broken" on a device whose ROM
+suppresses app-level `Log.i` entirely.
+
+**Not chosen, and why** (so this is not re-litigated): `flutter_scene` needs Flutter
+3.47+ and Impeller, and this app pins `EnableImpeller=false` in its manifest;
+`three_dart`/`flutter_gl` are unmaintained WebGL shims; a pre-rendered 360° turntable
+is the always-works fallback if both engines disappoint, at the cost of zoom and the
+"the mesh you turn is the mesh we track" story.
 
 ## 9. Rules for changing this
 

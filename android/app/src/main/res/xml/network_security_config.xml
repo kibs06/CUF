@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cleartext, for exactly one host: the loopback address the 3D preview's WebView
+  engine serves its model from.
+
+  ⚠️ **This file exists for one reason, and it is not "the app talks HTTP."** The
+  WebView engine (`SHOE_PREVIEW_WEBVIEW`, see `AppConstants.shoePreviewWebViewEnabled`)
+  hands the verified `.glb` to a `<model-viewer>` page running inside a WebView.
+  `model_viewer_plus` bridges the two with an `HttpServer` bound to
+  `InternetAddress.loopbackIPv4` on an **ephemeral port**, so the page loads from
+  `http://127.0.0.1:<port>/` — and Android 9 (API 28) flipped
+  `usesCleartextTraffic` to `false` by default, which would block it with
+  `net::ERR_CLEARTEXT_NOT_PERMITTED` and leave the box permanently blank.
+
+  **Why the scoped config rather than `android:usesCleartextTraffic="true"` on the
+  application.** The blanket flag would permit cleartext to *every* host, which is
+  a real regression for an app that ships a Supabase client, payment redirects and
+  an OTA APK updater — a downgrade attack on any of those stops being a bug in a
+  dependency and becomes something this app allowed. This file permits it to
+  `localhost` and `127.0.0.1` and nothing else, and the model bytes never travel
+  over it anyway: the server reads them from a local file and the WebView is on the
+  same device. There is no network path here to intercept.
+
+  ⚠️ **Do not widen `cleartextTrafficPermitted` to the base config**, and do not
+  delete this file while `SHOE_PREVIEW_WEBVIEW` is on — the WebView engine cannot
+  load a model without it. The native Filament engine does not need it at all, so a
+  build with the switch off is unaffected either way.
+-->
+<network-security-config>
+    <!-- The default stays exactly as Android 9 set it: no cleartext anywhere. -->
+    <base-config cleartextTrafficPermitted="false" />
+
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
+    </domain-config>
+</network-security-config>

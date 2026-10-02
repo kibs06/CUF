@@ -2180,19 +2180,15 @@ class ArTryOnView(
                 "touches=$touchDowns/$touchMoves/$touchUps)",
         )
         relay("teardown: loop stopped, frame callback removed")
-        // ⚠️ **`destroyAsset` is gone on purpose, and the removal is the measurement's answer
-        // (2026-10-02).** The call is the documented order (`AssetLoader`'s javadoc: asset, then
-        // loader, then the provider's materials) — and it is also the call a re-opened preview's
-        // teardown never came back from: twice the P30 Pro's log ended at `loop stopped, frame
-        // callback removed` and the process lived about a second longer, while the *first* teardown
-        // in the same process — same call, same asset — returns in about a millisecond. It cannot
-        // be wrapped in a timeout, which leaves one useful property: it is redundant. The engine is
-        // destroyed a few statements below and frees everything the asset holds, so on the phone
-        // that stalls inside it the cheapest correct answer is to not make the call. If the stall
-        // reappears in `engine.destroy()` — the next statement with real work in it — the next log
-        // says so.
-        asset = null
-        relay("teardown: asset released — destroyAsset skipped, the engine destroy frees it")
+        // ⚠️ **The asset is destroyed at the tail of this method, not here, and the move is a
+        // revert.** One build set `asset = null` here and skipped `AssetLoader.destroyAsset` on the
+        // theory that `engine.destroy()` a few statements later frees the same resources. It does
+        // not free the *material instances* the asset owns, so `destroyMaterials()` then found them
+        // alive and aborted the process — on a vivo V2022, on **every** teardown, on every device,
+        // `PreconditionPanic: destroying material "base_lit_opaque" but 2 instances still alive`,
+        // while the log line after it never printed. A guaranteed native abort is worse than the
+        // P30 Pro's second-teardown stall that the skip was avoiding, so the asset keeps its
+        // reference until the documented order can run below.
         pendingModel = null
         modelRoot = 0
         runCatching { session?.close() }
@@ -2219,9 +2215,25 @@ class ArTryOnView(
             engine?.destroyEntity(fillLight)
             runCatching { EntityManager.get().destroy(fillLight) }
         }
+        // ⚠️ **The asset goes before the loader and the provider, and that order is the fix for an
+        // abort this file shipped, not decoration.** `AssetLoader`'s own javadoc states it — asset,
+        // then loader, then the provider's materials — and `destroyMaterials()` **panics in native
+        // code** if any instance is still alive: `destroying material "base_lit_opaque" but 2
+        // instances still alive`. Those two instances are the loaded asset's, so the earlier
+        // `destroyAsset` is what makes the drain below legal. The relay sits *before* the call on
+        // purpose: it is a native call that a vendor driver may not return from (the P30 Pro's own
+        // second-teardown stall), so a log that ends here names the call and one that reaches the
+        // line after it proves the call returned.
+        asset?.let { loaded ->
+            assetLoader?.let { loader ->
+                relay("teardown: destroying the asset — destroyMaterials needs its instances gone")
+                runCatching { loader.destroyAsset(loaded) }
+            }
+        }
+        asset = null
         assetLoader?.destroy()
         // `destroy()` does not free the materials it created (its own javadoc), and the asset that
-        // used them is already gone, so the cache is drained explicitly first.
+        // used them is now gone, so the cache is drained explicitly here.
         materialProvider?.destroyMaterials()
         materialProvider?.destroy()
         relay("teardown: view/scene/renderer/entities/loader/materials destroyed")

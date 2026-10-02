@@ -772,6 +772,169 @@ void main() {
     });
   });
 
+  group('the WebView engine is additive, and cannot ship by accident', () {
+    // ⚠️ The second engine exists because the native one *stops returning* from
+    // two JNI calls into the P30 Pro's GL driver (`setTransform` on the load tail,
+    // `destroyAsset` on a second teardown). A WebView moves that failure into
+    // Chromium's process, where a stall blanks the box instead of killing the app.
+    // The guards below are about it staying a *second* engine: additive, off by
+    // default, and unable to smuggle the two QA locks in with it.
+    final webView = File('lib/widgets/shoe_preview_webview.dart').readAsStringSync();
+
+    test('it is an environment switch, and it now defaults to the engine with a device behind it', () {
+      // ⚠️ **The default flipped on measurement, and the measurement is the reason.**
+      // On a vivo V2022 the native engine killed the app on **2 of 3** attempts to open
+      // the 3D box (`SIGSEGV` in `TransformManager_nSetTransform+64`), while the WebView
+      // engine ran five opens in one process with zero crashes. This assertion pins the
+      // decision so it cannot be reverted by accident — and pins that it is still an
+      // environment switch, so `SHOE_PREVIEW_WEBVIEW=false` restores the native path
+      // from a shipped build with no code change.
+      expect(
+        constants,
+        contains(
+            "bool.fromEnvironment('SHOE_PREVIEW_WEBVIEW', defaultValue: true)"),
+        reason: 'the native engine is what crashes the app; the WebView engine is what '
+            'was measured working',
+      );
+    });
+
+    test('the QA workflow passes the define either way, so `false` really builds native', () {
+      // ⚠️ **This is a direct consequence of the default flipping, and it would fail
+      // silently without the assertion.** While the code default was `false`, the
+      // workflow could pass the define only when it wanted the WebView engine. With
+      // the default now `true`, omitting it for `webview_engine=false` builds a
+      // WebView APK while the input, the artifact name and the report all say native
+      // — a QA run measuring the wrong engine and filing the result as evidence.
+      final workflow = File('.github/workflows/qa-apk.yml').readAsStringSync();
+      expect(workflow, contains('--dart-define=SHOE_PREVIEW_WEBVIEW=true'));
+      expect(
+        workflow,
+        contains('--dart-define=SHOE_PREVIEW_WEBVIEW=false'),
+        reason: 'omitting the define now selects WebView by default, which is the '
+            'opposite of what `webview_engine=false` promises',
+      );
+    });
+
+    test('the native renderer is not deleted — both engines stay compiled in', () {
+      // The whole point of a switch rather than a rewrite: the rollback from a
+      // shipped build is one define, and the native path keeps its instrumentation
+      // and its tests while the new engine is measured.
+      expect(previewWidget, contains('kShoePreviewViewType'));
+      expect(previewWidget, contains('AndroidView('));
+      expect(previewWidget, contains('ShoePreviewWebView('));
+    });
+
+    test('the WebView engine never opens a second AR door', () {
+      // `<model-viewer>` can hand a model to the Google app over an `intent://`
+      // URL. The app has its own AR path with the fit logic behind it, and a
+      // shopper must not be launched into another application from the box.
+      expect(
+        codeOf(webView),
+        contains('ar: false'),
+        reason: 'a true here launches Scene Viewer out of a product page',
+      );
+    });
+
+    test('the model is loaded from disk, never from the network', () {
+      // The same rule the native side is held to (§5: "the native side never
+      // does HTTP"). The package serves the bytes over loopback from this file.
+      expect(webView, contains("src: 'file://\${widget.model.path}'"));
+      expect(
+        codeOf(webView),
+        isNot(contains('http://')),
+        reason: 'a model URL in the widget would mean the box fetches from a host',
+      );
+    });
+
+    test('the debug dump stays off', () {
+      // ⚠️ `debugLogging` defaults to **true** in the package, and it prints the
+      // whole generated HTML document on every build.
+      expect(
+        codeOf(webView),
+        contains('debugLogging: false'),
+        reason: 'the package default prints the entire HTML document per build',
+      );
+    });
+
+    test('the box says why it is empty, because a colour cannot', () {
+      // ⚠️ **A missing WebGL context and a `model-viewer` element with no box to
+      // draw in are the same picture and raise the *same* `load` event**, so a
+      // blank box cannot be diagnosed from Dart by looking at it. Both are probed
+      // on the page and relayed as measurements instead of as states. Measured on
+      // the vivo V2022 (2026-10-02) as `gl:webgl2` and `box=396x520`.
+      expect(webView, contains("post('gl:"));
+      expect(webView, contains('getContext'));
+      expect(webView, contains('box='));
+    });
+
+    test('the element is given a root height rather than trusting the template', () {
+      // ⚠️ The package's template sets `body, model-viewer { height: 100% }` and
+      // never sets a height on `html`, so neither percentage resolves. This is a
+      // **guard**, not the repair that made the shoe appear — the element measured
+      // a correct `396x520` while blank — and it is asserted so a future template
+      // or package bump cannot quietly remove the only height the canvas has.
+      expect(webView, contains('relatedCss:'));
+      expect(webView, contains('html { height: 100%; }'));
+    });
+
+    test('reporting a line never rebuilds the box, because rebuilding it reloads it', () {
+      // ⚠️ **The measured cause of the first blank box, and the least obvious one.**
+      // `ModelViewer` creates its loopback server and its `WebViewController` in
+      // `initState`, so re-inflating the element discards the load in flight and
+      // starts a second one. A build that drew its own QA line by switching its
+      // root between `ModelViewer` and a `Stack` therefore reloaded the model every
+      // time a status line appeared — logged on the vivo V2022 as
+      // `error — :loadfailure` followed by a full re-fetch. The parent draws the
+      // line; this widget must not rebuild itself to say anything.
+      final reportStart = webView.indexOf('void _report(');
+      expect(reportStart, greaterThan(-1));
+      final reportBody =
+          webView.substring(reportStart, webView.indexOf('\n  }', reportStart));
+      expect(
+        reportBody,
+        isNot(contains('setState')),
+        reason: 'a setState here re-inflates ModelViewer and restarts the load',
+      );
+    });
+
+    test('a load that fails says so on the page rather than staying blank', () {
+      // The native path reports through its channel; this engine has no native
+      // side, so the page's own `load`/`error` events are the only witness. Without
+      // them a WebView that never draws is indistinguishable from one still
+      // loading — the "blank box with no explanation" this feature exists to avoid.
+      expect(webView, contains("addEventListener('load'"));
+      expect(webView, contains("addEventListener('error'"));
+      expect(webView, contains('whenDefined'));
+    });
+
+    test('the cleartext exception is scoped to loopback, not the application', () {
+      // ⚠️ The package bridges Dart and the WebView over a loopback HTTP server,
+      // and Android 9+ blocks cleartext by default. The blanket
+      // `android:usesCleartextTraffic="true"` would permit it to *every* host — a
+      // real regression for an app carrying a Supabase client, payment redirects
+      // and an OTA updater.
+      final manifest =
+          File('android/app/src/main/AndroidManifest.xml').readAsStringSync();
+      final config = File(
+        'android/app/src/main/res/xml/network_security_config.xml',
+      ).readAsStringSync();
+
+      expect(manifest, contains('android:networkSecurityConfig="@xml/network_security_config"'));
+      expect(
+        manifest,
+        isNot(contains('usesCleartextTraffic="true"')),
+        reason: 'the blanket flag would allow cleartext to every host',
+      );
+      expect(config, contains('cleartextTrafficPermitted="true"'));
+      expect(config, contains('127.0.0.1'));
+      expect(
+        config,
+        contains('<base-config cleartextTrafficPermitted="false" />'),
+        reason: 'the default must stay exactly as Android 9 set it',
+      );
+    });
+  });
+
   group('the rule itself still matches what the page assumes', () {
     test('a product with no model shows neither half', () {
       final decision = resolveShoePreview(

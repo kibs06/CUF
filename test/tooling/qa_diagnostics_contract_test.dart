@@ -86,11 +86,17 @@ void main() {
       // natives on the path (`setTransform`, the bounding-box read) are the ones a wedged driver
       // stops inside, and neither accepts a timeout.
       expect(view, contains('load: drained before the transform — flushAndWait='));
-      // And the teardown's `destroyAsset` is *gone on purpose*: it is the call a re-opened
-      // preview's teardown never came back from on the P30 Pro (first teardowns return in ~1 ms,
-      // second ones stall, and the engine destroy a few statements later frees the same resources).
-      // This assertion is the guard that the stall surface does not come back silently.
-      expect(view, contains('teardown: asset released — destroyAsset skipped'));
+      // ⚠️ And `destroyAsset` is **back**, because removing it turned a stall into an abort.
+      // One build skipped the call on the theory that `engine.destroy()` frees the same resources;
+      // it does not free the asset's *material instances*, so `destroyMaterials()` then panicked in
+      // native code on every teardown, on every device (`destroying material "base_lit_opaque" but
+      // 2 instances still alive`). The line is pinned *before* the call because a driver the P30 Pro
+      // stalls inside leaves it as the last line written — one line with no successor naming the
+      // call, which is this file's whole method.
+      expect(view, contains('teardown: destroying the asset — destroyMaterials needs its instances gone'));
+      // ...and the asset must still be referenced when that call runs: nulling it early is exactly
+      // the shape of the regression above.
+      expect(view, contains('loader.destroyAsset(loaded)'));
       // "It loads but it won't turn" needs the finger to be visible in the file at all: one line per
       // touch-down, and the session's totals on the teardown line every completed leave writes.
       expect(view, contains('touch: down #'));
@@ -107,8 +113,9 @@ void main() {
       // it. One line per completed phase is what turns "it crashed when I left the viewer" into
       // "it reached the swap chain and never reached the engine".
       expect(view, contains('teardown: loop stopped, frame callback removed'));
-      // The asset phase is the skip above rather than a destroy, so the phase that follows it is
-      // what a log ending after `loop stopped` would have to reach.
+      // The asset destroy now sits at the tail rather than just after `loop stopped`, so a log
+      // that ends on the swap-chain line has reached the surface phase and still has the asset
+      // and the material drain ahead of it.
       expect(view, contains('teardown: swap chain destroyed, flushAndWait='));
       expect(view, contains('teardown: view/scene/renderer/entities/loader/materials destroyed'));
       expect(view, contains('teardown END'));
