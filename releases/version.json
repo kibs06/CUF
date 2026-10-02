@@ -1,10 +1,10 @@
 {
-  "latest_version": "1.0.41",
-  "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.41/app-release-1.0.41.apk",
-  "released_at": "2026-10-01",
+  "latest_version": "1.0.42",
+  "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.42/app-release-1.0.42.apk",
+  "released_at": "2026-10-02",
   "notes": [
-    "The 3D viewer now writes a line before and after every native call inside the model load, so the next log from the phone names the exact call the process dies in",
-    "The two calls that could throw on the render thread without a catch (flushAndWait, addEntities) are now wrapped, so a Java-level failure leaves a line where it used to kill the process silently",
-    "No customer-visible changes — this build exists to name the P30 Pro's dying call"
+    "The 3D viewer now records every touch-down, the session's touch totals and the preview-framing radius, so \"it loads but it won't turn\" can be told apart from a gesture that never arrived",
+    "The 3D viewer now writes a line on each side of the model's transform and the asset's bounding box, and before the asset's destruction, so the next log names the exact call that stops returning",
+    "No customer-visible changes — this build exists to name the finger and the stall"
   ]
 }
