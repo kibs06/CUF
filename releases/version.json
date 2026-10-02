@@ -1,10 +1,10 @@
 {
-  "latest_version": "1.0.43",
-  "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.43/app-release-1.0.43.apk",
+  "latest_version": "1.0.44",
+  "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.44/app-release-1.0.44.apk",
   "released_at": "2026-10-02",
   "notes": [
-    "The 3D viewer now drains the engine's queue before applying the model's transform, so a slow driver waits in a bounded call that reports instead of stalling in a call that cannot time out",
-    "The 3D viewer no longer destroys the model's asset explicitly at teardown — the engine destroy moments later frees the same resources, and the explicit destroy is the call a re-opened preview never returned from on the P30 Pro",
-    "No customer-visible changes — this build removes the two calls the P30 Pro's log stopped on"
+    "The 3D shoe viewer now renders with your phone's own built-in browser engine instead of the app's renderer, so the shoe appears and turns under your finger on phones where the previous engine failed",
+    "Leaving the 3D viewer no longer closes the app: the model's resources are released in the order the renderer requires, which fixes a shutdown crash present in the previous build",
+    "The shoe itself is unchanged — the same verified model already on your device, nothing downloaded — and the Try On in AR button works as before"
   ]
 }
