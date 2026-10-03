@@ -341,17 +341,39 @@ Select Color / Leather
 
 - If `product_color_images` has images for a color → shows the first image as a thumbnail
 - If no color images → falls back to a colored dot (deterministic from name)
+- Before any tap, the page's gallery is the **product's own photos** — the same ones the storefront card shows (see §8.2)
 - Tapping a color:
   1. Sets `_selectedColor`
-  2. Swaps the image gallery to that color's photos (`_sortedImageUrls` checks `product_color_images` first)
+  2. Swaps the image gallery to that color's photos (`_sortedImageUrls` keys off the tapped colour — see §8.2)
   3. Filters the size picker to that color's variants only (`_buildSizesMap()` filters by color)
+- Tapping the colour that is already ringed **deselects** it: `_selectedColor` returns
+  to null, the gallery falls back to the product's own photos, and pricing/sizes
+  fall back to the first colour — the same `allowDeselect` the seller's colour
+  sheet uses, so a mis-tap is one tap away from being undone.
+- The ring follows the **tap** (`_selectedColourOrNull == colorName`), not
+  `_effectiveColor`'s first-colour fallback: nothing is ringed until the shopper
+  picks a colour, which is what lets a deselect leave nothing ringed.
+
+**Placement:** the swatch row sits **above** the size selector. The size grid
+below it is filtered to the active colour (§8.3), so the colour is the choice the
+sizes depend on — and a swatch tap swaps the gallery directly above it.
 
 ### 8.2 Image Gallery
 
 `_sortedImageUrls` priority:
-1. `product_color_images` filtered by `_effectiveColor` → sorted by `display_order`
-2. `product_images` (general product photos) → sorted by `display_order`
+1. If the shopper has **tapped a colour** (`_selectedColourOrNull`) and `product_color_images` has photos for it → that colour's photos, sorted by `display_order`
+2. Otherwise `product_images` (the product's own photos) → sorted by `display_order` — the opening state, and the fallback for a tapped colour with no photos of its own
 3. `images` flat list (legacy fallback)
+
+The key is the *evidence of a tap*, not `_effectiveColor`. `_effectiveColor`
+(the shopper's pick, or the first colour before one exists) stays the colour used
+for pricing, `resolveVariant` and the size grid — but reading the gallery through
+it made a coloured product open on `colors/<first>/…` while the store card showed
+the product's first photo, and blanked the hero entirely when that colour's file
+was missing. Only a tap may swap the gallery.
+
+Pinned by `test/widgets/product_detail_gallery_rule_test.dart` (which also pins
+the swatch row's placement above the size grid).
 
 ### 8.3 Size Picker
 

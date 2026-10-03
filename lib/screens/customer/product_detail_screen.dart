@@ -508,9 +508,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
     with SingleTickerProviderStateMixin {
   String? _selectedSize;
 
-  /// Selected variant color NAME (real data from product_variants).
-  /// Null until the shopper picks one — the first available color is used
-  /// by default via [_effectiveColor].
+  /// The colour the **shopper tapped**, or null while none has been.
+  ///
+  /// Null is a real state and it is the one the page opens in: with no colour
+  /// picked, the gallery shows the product's own photos ([_sortedImageUrls]) and
+  /// only a tap swaps it to that colour's. Do not seed this from
+  /// [_effectiveColor] — an earlier version read through `_selectedColor ==
+  /// null ? first-colour : _selectedColor`, which made the page open on a
+  /// colour's photo and left the seller's own gallery unreachable until a tap.
   String? _selectedColor;
   bool _isDescriptionExpanded = false;
   bool _isLoadingSizes = false;
@@ -574,16 +579,30 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
     return colors;
   }
 
-  /// The color used for ordering: the shopper's pick, or the first
-  /// available color when none is picked yet.
+  /// The colour used for **ordering and resolution**: the shopper's pick, or the
+  /// first available colour when none is picked yet.
+  ///
+  /// Deliberately *not* the gallery's key — a colour nobody has tapped is still
+  /// the right colour to price, resolve a variant against and filter the size
+  /// grid by, but it is not a choice the shopper made, so it must not decide
+  /// what the page shows them. See [_selectedColourOrNull] and
+  /// [_sortedImageUrls].
   String? get _effectiveColor {
     final colors = _variantColorNames;
     if (colors.isEmpty) return null;
-    if (_selectedColor != null && colors.contains(_selectedColor)) {
-      return _selectedColor;
-    }
-    return colors.first;
+    return _selectedColourOrNull ?? colors.first;
   }
+
+  /// The shopper's own pick, or null when there is none to honour.
+  ///
+  /// The gallery's switch, and the only thing that may change it: the
+  /// **evidence of a tap** ([_selectedColor]) plus the colour still existing on
+  /// the product — a colour name that a seller renamed away mid-session must
+  /// not keep the gallery pointed at photos nothing can resolve.
+  String? get _selectedColourOrNull =>
+      _selectedColor != null && _variantColorNames.contains(_selectedColor)
+          ? _selectedColor
+          : null;
 
   /// Get the first image URL for a color from product_color_images.
   /// Returns null if no color images exist for this color.
@@ -1297,9 +1316,26 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
 
   /// Sorted product images for the carousel.
   /// Reads from `product_images` (list of maps) or falls back to `images` (list of strings).
+  ///
+  /// **The page opens on the PRODUCT's own photos, not a colour's.**
+  ///
+  /// This used to key off `_effectiveColor`, which falls back to the first
+  /// colour name when the shopper has not picked one — so a coloured product
+  /// opened on `colors/<first>/…` and the seller's own gallery never appeared at
+  /// all. On a live product that read as a bug: the store card showed the
+  /// product's first photo, the page it opened showed a different one, and the
+  /// seven photos the seller had uploaded were unreachable until a colour was
+  /// tapped — and when that colour's own file was missing, the hero was simply
+  /// **empty**, which is how this was found: a deleted colour photo left the
+  /// page blank where the card was fine.
+  ///
+  /// Tapping a colour still swaps the gallery to that colour's photos. The key
+  /// is [_selectedColourOrNull] — the *evidence of a tap* — never
+  /// [_effectiveColor], which falls back to the first colour name and is what
+  /// made the page open on a colour it had chosen for itself.
   List<String> get _sortedImageUrls {
-    // If a color is selected and has color images, use those
-    final color = _effectiveColor;
+    // A colour the shopper actually tapped, and only that, swaps the gallery.
+    final color = _selectedColourOrNull;
     if (color != null) {
       final colorImagesRaw = widget.product['product_color_images'] as List? ?? [];
       final colorImages = colorImagesRaw
@@ -1915,6 +1951,64 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                       ],
                       const SizedBox(height: 12),
 
+                      // Color variant swatches — real colors from the
+                      // product's variants; hidden when none are set.
+                      // Shows thumbnail images when color images exist,
+                      // falls back to color dots.
+                      //
+                      // Above the size selector on purpose: the size grid
+                      // (`_buildSizesMap`) is filtered to the active colour,
+                      // so the colour is the choice the sizes below depend on —
+                      // and a swatch tap swaps the gallery above it, so the
+                      // photograph answers the tap.
+                      //
+                      // A tap on the ringed colour is a **deselect**: the gallery
+                      // goes back to the product's own photos
+                      // ([_sortedImageUrls]) — the app's own `allowDeselect`
+                      // behaviour from the seller's colour sheet.
+                      if (_variantColorNames.isNotEmpty) ...[
+                        Text(
+                          'Select Color / Leather',
+                          style: AppConstants.bodyStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                        ),
+                        const SizedBox(height: 10),
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              for (final colorName in _variantColorNames)
+                                ColorThumbnailSwatch(
+                                  name: colorName,
+                                  fallbackColor: _swatchColorFor(colorName),
+                                  // The ring is the shopper's own pick, not
+                                  // `_effectiveColor`'s first-colour fallback:
+                                  // nothing is ringed until a tap, and the tap
+                                  // that takes a choice off has to be able to
+                                  // leave nothing ringed.
+                                  selected: _selectedColourOrNull == colorName,
+                                  imageUrl: _colorThumbnailUrl(colorName),
+                                  onTap: () => setState(() {
+                                    // Tapping the colour already showing takes
+                                    // the choice back off (`allowDeselect`, the
+                                    // seller's own sheet does the same). The
+                                    // gallery then falls back to the product's
+                                    // photos and pricing/sizes to the first
+                                    // colour, exactly as before any tap.
+                                    _selectedColor =
+                                        _selectedColourOrNull == colorName
+                                            ? null
+                                            : colorName;
+                                    // Reset image carousel when color changes
+                                    _currentImageIndex = 0;
+                                    _imagePageController.jumpToPage(0);
+                                  }),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 12),
+
                       // Size Selector Label + unit switcher, with the
                       // Size guide link aligned on the same row.
                       Row(
@@ -2233,39 +2327,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                           ),
                           ],
                         ),
-                      const SizedBox(height: 12),
-
-                      // Color variant swatches — real colors from the
-                      // product's variants; hidden when none are set.
-                      // Shows thumbnail images when color images exist,
-                      // falls back to color dots.
-                      if (_variantColorNames.isNotEmpty) ...[
-                        Text(
-                          'Select Color / Leather',
-                          style: AppConstants.bodyStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                        ),
-                        const SizedBox(height: 10),
-                        SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: [
-                              for (final colorName in _variantColorNames)
-                                ColorThumbnailSwatch(
-                                  name: colorName,
-                                  fallbackColor: _swatchColorFor(colorName),
-                                  selected: _effectiveColor == colorName,
-                                  imageUrl: _colorThumbnailUrl(colorName),
-                                  onTap: () => setState(() {
-                                    _selectedColor = colorName;
-                                    // Reset image carousel when color changes
-                                    _currentImageIndex = 0;
-                                    _imagePageController.jumpToPage(0);
-                                  }),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ],
                       const SizedBox(height: 12),
 
                       // Description section
