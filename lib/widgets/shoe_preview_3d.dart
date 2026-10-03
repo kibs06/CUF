@@ -4,15 +4,27 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
+import '../constants/app_brightness.dart';
 import '../constants/app_constants.dart';
 import '../services/ar_try_on_channel.dart';
 import '../services/diag_logger.dart';
 import '../services/shoe_preview_channel.dart';
 import 'shoe_preview_webview.dart';
-import 'sole_ar_pill.dart';
 
-/// The **3D box** — the customer turns the shoe with a finger, and the
-/// "Try On in AR" button sits underneath it ([ShoePreviewSection]).
+/// **The viewer page's horizontal gutter** — the 20 px the page insets its own
+/// text with.
+///
+/// It is one number in one place because the stage stopped taking it on
+/// 2026-10-03: the owner asked for more room to turn and zoom the shoe, so the
+/// box is the page's full width now, and the 20 px has to be carried by the
+/// things that *are* text — the header row drawn inside [ShoePreview3D] (via
+/// [ShoePreview3D.bleed]), the section's banner, its refusal sentence and its QA
+/// readout, and the viewer's own note and failure hint ([ShoePreviewScreen]
+/// insets those). Two numbers that disagreed would show up as a header that does
+/// not line up with the sentence beneath it.
+const double kShoePreviewGutter = 20;
+
+/// The **3D box** — the customer turns the shoe with a finger.
 ///
 /// ⚠️ **Where it is mounted changed on 2026-10-01, and the widget did not.** It
 /// used to be a row on the product page, 240 px tall, under the size grid. It is
@@ -20,8 +32,9 @@ import 'sole_ar_pill.dart';
 /// (`ShoePreviewScreen`, `Sole3DIconButton`) — same renderer, same payload, same
 /// section, at the size of a screen instead of the size of a paragraph. The page
 /// keeps only the recovery notice (`_shoePreviewNotice`) and the pinned
-/// "Try On in AR" pill is gone from it, so the AR escalation this section carries
-/// is now the only way into AR from a product.
+/// "Try On in AR" pill is gone from it — the viewer draws its own, at the foot of
+/// the page (`ShoePreviewScreen`), and that is the only way into AR from a
+/// product.
 ///
 /// **Why a box before a button.** "Try On in AR" was the only entry on the page
 /// and it asked for three things before it showed anything: an ARCore-capable
@@ -30,7 +43,8 @@ import 'sole_ar_pill.dart';
 /// The 3D box asks for none of them. It renders the **same verified `.glb`**
 /// through the same native renderer (`ArTryOnView` in `Mode.PREVIEW`), so what
 /// the customer turns is the mesh that would be tracked onto their foot, and a
-/// tap on the button below is the escalation rather than the entry fee.
+/// tap on the pill at the foot of the page is the escalation rather than the
+/// entry fee.
 ///
 /// **It is gated before it is built, not inside.** Whether this widget exists at
 /// all is `resolveShoePreview` in `lib/utils/shoe_preview_visibility.dart` — a
@@ -68,6 +82,7 @@ class ShoePreview3D extends StatefulWidget {
     this.channel,
     this.viewBuilder,
     this.height = 240,
+    this.bleed = false,
     this.paused = false,
     this.diagnostics = AppConstants.shoePreviewDiagnosticsEnabled,
     this.useWebViewEngine = AppConstants.shoePreviewWebViewEnabled,
@@ -96,6 +111,22 @@ class ShoePreview3D extends StatefulWidget {
   /// The box's height. 240 px shows a whole shoe at a three-quarter view without
   /// taking the size grid off the first screen.
   final double height;
+
+  /// **Whether the page has handed this box its full width** — see
+  /// [ShoePreviewScreen], which stopped insetting the box on 2026-10-03 so the
+  /// model has more room to turn and zoom in.
+  ///
+  /// When true the box spans the page edge to edge — square corners included,
+  /// because a rounded card hanging off both screen edges is neither a card nor
+  /// the page — and the **header row insets itself** by [kShoePreviewGutter]:
+  /// that row is drawn by this widget, and once the page's gutter is gone there
+  /// is nowhere else for it to come from.
+  ///
+  /// ⚠️ **What does not change is the model.** Only the window around it does:
+  /// the renderer gets the same asset, the same camera and the same stage tone,
+  /// and it frames the shoe by itself. A wider or taller box is more room to
+  /// turn and zoom in — never a stretched shoe.
+  final bool bleed;
 
   /// True while something is covering this box — in practice, the AR screen it
   /// just pushed. Mounts [ShoePreviewIdle] instead of the native view, which is
@@ -131,6 +162,22 @@ class ShoePreview3D extends StatefulWidget {
   /// owns the callback; see [ShoePreviewWebView.onStatus].
   final ValueChanged<String>? onEngineStatus;
 
+  /// **How long the box may sit untouched before it demonstrates the gesture**
+  /// ([ShoePreviewGestureHint]).
+  ///
+  /// Ten seconds is the owner's number, and it is deliberately longer than
+  /// `<model-viewer>`'s own prompt (3 s, which stays off here — see
+  /// `ShoePreviewWebView`'s `interactionPrompt`): the customer who opens this from
+  /// a photograph is *reading* a page, and a hand waving over the shoe after three
+  /// seconds is an interruption rather than a rescue. Ten is past the point where a
+  /// still shoe has been mistaken for a picture, which is the fault this answers.
+  ///
+  /// A parameter-of-the-build rather than a hidden literal for the same reason the
+  /// rest of this file's numbers are: the widget test waits it out with
+  /// `tester.pump(ShoePreview3D.hintAfterIdle)`, so the wait can be asserted without
+  /// a stopwatch.
+  static const Duration hintAfterIdle = Duration(seconds: 10);
+
   @override
   State<ShoePreview3D> createState() => _ShoePreview3DState();
 }
@@ -148,6 +195,10 @@ class _ShoePreview3DState extends State<ShoePreview3D> {
       unawaited(_channel.setDiagnostics(true));
     }
     _handOver();
+    // The countdown to the gesture tutorial starts with the box rather than with
+    // the model: the shoe is on screen within a frame, and a wait that began when
+    // the bytes arrived would be a different number on every connection.
+    _restartIdleHint();
   }
 
   @override
@@ -159,6 +210,96 @@ class _ShoePreview3DState extends State<ShoePreview3D> {
         oldWidget.model.path != widget.model.path) {
       _handOver();
     }
+    if (widget.paused != oldWidget.paused) {
+      // AR is on top (or has just come back). The tutorial is not shown to a
+      // customer looking at a camera, and coming back starts a fresh wait rather
+      // than showing a hand the instant the box reappears.
+      if (widget.paused) {
+        _idleTimer?.cancel();
+        _idleTimer = null;
+        if (_hintVisible) setState(() => _hintVisible = false);
+      } else {
+        _restartIdleHint();
+      }
+    }
+  }
+
+  /// The brightness the stage was last handed over for, so a rebuild that did not
+  /// change it re-sends nothing.
+  Brightness? _stageSent;
+
+  /// The countdown to [ShoePreviewGestureHint], or null while none is running.
+  ///
+  /// It is restarted — not resumed — by every touch that ends, so the wait is
+  /// always a full [hintAfterIdle] of stillness.
+  Timer? _idleTimer;
+
+  /// True while the gesture tutorial is up. Owned here rather than inside the
+  /// hint so the same `Listener` that dismisses it can also be the thing that
+  /// sees the touch at all.
+  bool _hintVisible = false;
+
+  /// **Whether the box has something to draw**, i.e. whether a gesture tutorial
+  /// over it would be teaching anything.
+  ///
+  /// ⚠️ Only the WebView engine can be in the other state, and it says so in words
+  /// (`'The 3D model is not on this device.'`): the bytes can be evicted between the
+  /// page's prefetch and this mount. The check is that engine's own
+  /// ([shoePreviewModelOnDisk], shared rather than re-spelled), and it is skipped
+  /// when a `viewBuilder` stands in for the engine — a test seam is not a file, and
+  /// asserting one would make every test mount a fixture on disk.
+  ///
+  /// The native engine has no equivalent state to ask about: a renderer that cannot
+  /// draw takes the whole section off the page before this widget is built
+  /// ([ShoePreviewSection]), and a load that fails on a renderer that *can* draw
+  /// leaves an empty stage that nothing reports — see [ShoePreviewHint].
+  bool get _engineDraws {
+    if (widget.paused) return false;
+    if (widget.viewBuilder != null) return true;
+    if (!widget.useWebViewEngine) return true;
+    return shoePreviewModelOnDisk(widget.model);
+  }
+
+  /// Starts the countdown to the gesture tutorial.
+  ///
+  /// Never while paused: the box is not on screen then (the AR screen is), and the
+  /// idle face must not come back with a hand waving over it.
+  void _restartIdleHint() {
+    _idleTimer?.cancel();
+    if (widget.paused) return;
+    _idleTimer = Timer(ShoePreview3D.hintAfterIdle, () {
+      if (!mounted || widget.paused || !_engineDraws) return;
+      setState(() => _hintVisible = true);
+    });
+  }
+
+  /// A finger has gone down on the box: whatever the customer is doing, they have
+  /// found the interaction, so the tutorial has done its job.
+  void _touchStarted(PointerDownEvent event) {
+    _idleTimer?.cancel();
+    if (_hintVisible) setState(() => _hintVisible = false);
+  }
+
+  /// The finger is gone (or the gesture was cancelled): the box is idle again, so
+  /// the countdown restarts from full — see [hintAfterIdle].
+  void _touchEnded(PointerEvent event) => _restartIdleHint();
+
+  /// **Tells the renderer which stage to clear to** — the same tone this widget
+  /// paints when no engine is mounted ([ShoePreviewIdle]).
+  ///
+  /// ⚠️ **It is called from `build`, and that is a finding rather than a
+  /// preference.** A brightness change repaints the tree element by element
+  /// (`AppThemeRefresh.rebuildAll` marks each element dirty), so it neither
+  /// re-creates this state (`initState`) nor updates this widget
+  /// (`didUpdateWidget`) — a customer who flips the theme with the viewer open
+  /// would leave the native renderer clearing to the old colour, which is exactly
+  /// the mismatch this exists to prevent. The guard keeps it to one call per
+  /// change, and the call is best-effort like every other one on this channel.
+  void _handOverStage() {
+    final brightness = AppBrightness.current;
+    if (_stageSent == brightness) return;
+    _stageSent = brightness;
+    unawaited(_channel.setBackground(AppConstants.stage));
   }
 
   void _handOver() {
@@ -168,42 +309,88 @@ class _ShoePreview3DState extends State<ShoePreview3D> {
   }
 
   @override
+  void dispose() {
+    _idleTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    // The stage colour follows the customer's appearance, and a theme flip has to
+    // reach a renderer that already exists: see [_handOverStage] for why this is
+    // not done in `initState`.
+    _handOverStage();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Icon(
-              Icons.threed_rotation,
-              size: 18,
-              color: AppConstants.primary,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              'View in 3D',
-              style: AppConstants.bodyStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.bold,
+        // The header keeps the page's gutter even when the box does not — it is
+        // text, and text at 0 px from a screen edge is a different widget's
+        // problem. See [bleed].
+        Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: widget.bleed ? kShoePreviewGutter : 0,
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.threed_rotation,
+                size: 18,
+                color: AppConstants.primary,
               ),
-            ),
-            const Spacer(),
-            Text(
-              'Drag to rotate',
-              style: AppConstants.bodyStyle(
-                fontSize: 12,
-                color: AppConstants.secondary.withValues(alpha: 0.6),
+              const SizedBox(width: 6),
+              Text(
+                'View in 3D',
+                style: AppConstants.bodyStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
-          ],
+              const Spacer(),
+              Text(
+                'Drag to rotate',
+                style: AppConstants.bodyStyle(
+                  fontSize: 12,
+                  color: AppConstants.secondary.withValues(alpha: 0.6),
+                ),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 8),
         ClipRRect(
-          borderRadius: BorderRadius.circular(16),
+          // A stage that is the page's own surface, edge to edge, is square:
+          // rounding it would only show the page's colour in the corners it
+          // does not cover. Inset, it stays the card it has always been.
+          borderRadius: BorderRadius.circular(widget.bleed ? 0 : 16),
           child: SizedBox(
             width: double.infinity,
             height: widget.height,
-            child: widget.paused ? const ShoePreviewIdle() : _view(),
+            child: Listener(
+              // ⚠️ **Raw pointer events rather than a gesture.** Both engines hand
+              // the gesture arena to their platform view (`EagerGestureRecognizer`
+              // on `AndroidView`, and the WebView widget's own), so a
+              // `GestureDetector` here would never win a drag — and, worse, would
+              // try: it would claim the arena on the tap and the shoe would stop
+              // turning. A `Listener` is not a competitor; it observes the pointer
+              // without asking for it, and `translucent` keeps the platform view in
+              // the hit test underneath (a `deferToChild` Listener would miss every
+              // event on a frame where the view has nothing to hit).
+              behavior: HitTestBehavior.translucent,
+              onPointerDown: _touchStarted,
+              onPointerUp: _touchEnded,
+              onPointerCancel: _touchEnded,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  widget.paused ? const ShoePreviewIdle() : _view(),
+                  // Only ever painted over a box that can draw and is on screen —
+                  // see [_engineDraws]; the pill itself is `IgnorePointer`, so the
+                  // drag it is teaching still reaches the renderer.
+                  if (_hintVisible && _engineDraws)
+                    const ShoePreviewGestureHint(),
+                ],
+              ),
+            ),
           ),
         ),
       ],
@@ -247,20 +434,199 @@ class _ShoePreview3DState extends State<ShoePreview3D> {
   }
 }
 
+/// **The gesture tutorial** — what the box shows a customer who has not touched
+/// it for `ShoePreview3D.hintAfterIdle`.
+///
+/// ⚠️ **Why it exists, stated as the fault it answers.** The box shipped with one
+/// line of instruction, in the section's header, above the frame: "Drag to rotate".
+/// That line is at the *edge* of a 240–520 px surface whose whole content is a shoe
+/// that already spins on its own (the engines' idle rotation), so a customer who
+/// reads it as a picture — a picture being the thing every other product surface on
+/// this page is — taps the AR pill and never learns the shoe turns. The hint is the
+/// same instruction moved to where the eyes are, and given the gesture rather than
+/// the words: a hand sweeps across the pill, over the shoe, exactly the way the
+/// renderer expects to be dragged.
+///
+/// **It is one widget for both engines, and that is a finding rather than tidiness.**
+/// `AndroidView` and `webview_flutter_android` both compose through **Texture Layer
+/// Hybrid Composition** (`displayWithHybridComposition` defaults to `false` in the
+/// package; the Flutter `AndroidView` widget defaults to the texture path), which is
+/// the mode that lets Flutter paint *over* a platform view. So the tutorial is Dart,
+/// in a `Stack` above whichever engine is running — no native overlay in Kotlin, no
+/// CSS/JS injection into the `<model-viewer>` page, and therefore no second visual
+/// language to keep in step with this one.
+///
+/// **What it deliberately does not do.**
+///
+///   * **It never eats the gesture it teaches** (`IgnorePointer`). There is no
+///     "Got it" button either: the way to dismiss it is to do the thing, and the box's
+///     own `Listener` hides it on the first touch — including the touch that starts a
+///     drag, which therefore still turns the shoe on the same finger down.
+///   * **It is silent to a screen reader** (`ExcludeSemantics`). The header already
+///     carries "Drag to rotate" as text, and the surface under this pill is a platform
+///     view a screen reader cannot turn at all — announcing a gesture with no
+///     accessible equivalent would be a promise this feature cannot keep. The AR pill
+///     below the box is the accessible route to the same shoe.
+///   * **It honours reduced motion by holding still, not by disappearing.**
+///     `MediaQuery.disableAnimations` stops the sweep (and parks the hand mid-travel)
+///     while the words and the glyph stay: the tutorial is the only thing on this
+///     screen that says a finger does anything, so a customer who asked for less
+///     motion is not the one to hide it from.
+class ShoePreviewGestureHint extends StatefulWidget {
+  const ShoePreviewGestureHint({super.key});
+
+  /// The line's label — spelled once, asserted in the widget test, and the same
+  /// words the section's header uses for the gesture it advertises.
+  static const String dragLabel = 'Drag to rotate';
+
+  /// The second gesture, and the one nothing else on the surface mentions: both
+  /// engines answer a pinch (`ScaleGestureDetector` on the native side,
+  /// `cameraControls` in `<model-viewer>`), and a customer who never pinches never
+  /// learns the shoe can be brought closer.
+  static const String pinchLabel = 'Pinch to zoom';
+
+  @override
+  State<ShoePreviewGestureHint> createState() => _ShoePreviewGestureHintState();
+}
+
+class _ShoePreviewGestureHintState extends State<ShoePreviewGestureHint>
+    with SingleTickerProviderStateMixin {
+  /// One sweep of the hand. `repeat(reverse: true)` — right, back, again — for as
+  /// long as the pill is up, which is until the customer touches the box.
+  late final AnimationController _sweep = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1100),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Read here rather than in `initState`: `MediaQuery` is an inherited widget, and
+    // this is the callback that may consult one.
+    if (MediaQuery.disableAnimationsOf(context)) {
+      // Parked mid-travel, so the glyph reads as *in motion* in a screenshot and in
+      // a still frame, without anything moving.
+      _sweep.stop();
+      _sweep.value = 0.5;
+    } else if (!_sweep.isAnimating) {
+      _sweep.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _sweep.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: ExcludeSemantics(
+        child: Center(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              // The dark-glass control the 3D icon on the product photo already
+              // wears (`Sole3DIconButton`): the pill sits on an unknown stage — a
+              // light neutral in light mode, near-black in dark — and pinned black
+              // glass with pinned white ink is legible on both, which no token can
+              // be.
+              color: Colors.black.withValues(alpha: 0.45),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.35),
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _GestureLine(
+                  label: ShoePreviewGestureHint.dragLabel,
+                  // The hand travels, the words do not: the gesture is the part a
+                  // customer cannot guess from a still shoe.
+                  icon: AnimatedBuilder(
+                    animation: _sweep,
+                    builder: (context, child) => Transform.translate(
+                      offset: Offset(
+                        -_hintSweepPx +
+                            2 * _hintSweepPx * Curves.easeInOut.transform(_sweep.value),
+                        0,
+                      ),
+                      child: child,
+                    ),
+                    child: const Icon(Icons.swipe, size: 18, color: Colors.white),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const _GestureLine(
+                  label: ShoePreviewGestureHint.pinchLabel,
+                  // Held still above the second line rather than animated: one
+                  // moving thing in a pill this small is a lesson, two is a
+                  // distraction.
+                  icon: Icon(Icons.pinch, size: 18, color: Colors.white),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// How far the sweeping hand travels each way, in logical pixels.
+///
+/// Deliberately small: the pill is roughly 150 px wide and the hand is 18 px, so
+/// ±8 px is a movement a customer reads as "back and forth" rather than as the
+/// glyph drifting out of its own line.
+const double _hintSweepPx = 8;
+
+/// One gesture in [ShoePreviewGestureHint]: a glyph, a gap, its words.
+class _GestureLine extends StatelessWidget {
+  const _GestureLine({required this.icon, required this.label});
+
+  final Widget icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Fixed width so the words of the two lines start at the same x — the
+        // animated hand must not shift the text it sits beside.
+        SizedBox(width: 26, child: Center(child: icon)),
+        Text(
+          label,
+          style: AppConstants.bodyStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 /// The box's face while no native view is mounted: the same height, and the same
 /// colour the renderer clears to.
 ///
-/// ⚠️ The colour is not decorative. `ArTryOnView.createEngineIfNeeded` sets
-/// `ClearOptions.clearColor` to `(0.055, 0.06, 0.07)`; matching it here means the
-/// box does not flash from one dark tone to another as the engine starts, and it
-/// keeps the layout honest — a preview that never loads looks exactly like a
-/// preview that has not loaded *yet*, which is the truth for both.
+/// ⚠️ The colour is not decorative, and it is no longer fixed. `ShoePreviewIdle`
+/// paints [AppConstants.stage] — the brightness-aware token the WebView engine's
+/// page and the native renderer's `Renderer.ClearOptions.clearColor` are both set
+/// from (`ArTryOnView.setBackground`) — so the box does not flash from one tone to
+/// another as the engine starts, and it keeps the layout honest: a preview that
+/// never loads looks exactly like a preview that has not loaded *yet*, which is
+/// the truth for both. Before this it was pinned to the renderer's `#0E0F12`
+/// in both modes, which framed the shoe on a white page as a black rectangle.
 class ShoePreviewIdle extends StatelessWidget {
   const ShoePreviewIdle({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return const ColoredBox(color: Color(0xFF0E0F12));
+    return ColoredBox(color: AppConstants.stage);
   }
 }
 
@@ -518,37 +884,37 @@ class ShoePreviewQaBanner extends StatelessWidget {
   }
 }
 
-/// **The section: the 3D box, and "Try On in AR" underneath it.**
+/// **The section: the 3D box, and what to say when the renderer refuses it.**
 ///
-/// One widget rather than two mounts on the page, because they are one decision:
-/// a product with a live model gets both, a product without gets neither
-/// (`resolveShoePreview`), and splitting them is how the button ends up on a
-/// page whose box is missing.
+/// The box, its honest silences (the refusal sentence, the QA banner, the
+/// measured facts behind [showDiagnostics]) — and nothing to tap.
 ///
-/// ⚠️ **And it is the widget that can lose its box and keep its button.** The
-/// native renderer refuses to load an asset below `FEATURE_LEVEL_2`
-/// (`kRendererUnsupportedReason`) rather than abort the process on it, and when
-/// that report arrives this section swaps the box for the not-supported line
-/// while **keeping the AR pill**: the AR screen degrades to its simulated mode
-/// on such a phone, so the entry stays honestly usable. (Originally the whole
-/// section removed itself — until a real phone showed the customer the pill
-/// vanishing mid-visit.) See `kRendererUnsupportedReason` for the crash that
-/// made the refusal necessary.
+/// ⚠️ **The AR escalation used to be this widget's own last child, and moved to
+/// the viewer's bottom edge on 2026-10-03.** Under a box that now fills most of
+/// the screen, a pill in the flow left a dead half-page beneath it; the owner
+/// asked for the pill at the bottom of the page instead, so `ShoePreviewScreen`
+/// draws it. The pairing the old arrangement existed to protect still holds, and
+/// holds structurally rather than by convention: the *viewer* mounts the box and
+/// draws the pill in the same build, so a product that resolves no model gets
+/// neither (`resolveShoePreview`).
 ///
-/// **The escalation is the customer's, and only the customer's**
-/// ([showTryOn]). The seller's door to this section (`ShoePreviewScreen
-/// .forProduct`) is a seller checking what the shop is selling; the person who
-/// tries the pair on is the customer, and a camera button on the seller's screen
-/// launches a fitting flow on the wrong side of the shop.
+/// ⚠️ **A refusal is this widget's whole second half.** The native renderer
+/// refuses to load an asset below `FEATURE_LEVEL_2` (`kRendererUnsupportedReason`)
+/// rather than abort the process on it, and when that report arrives the box is
+/// swapped for the not-supported line: the section stays mounted, saying why. The
+/// AR entry that used to have to survive this — the owner's decision of
+/// 2026-09-30, after a real phone showed the customer the whole section
+/// vanishing — is now outside this widget entirely, which is the stronger form of
+/// the same guarantee: there is no branch here that can drop it. See
+/// `kRendererUnsupportedReason` for the crash that made the refusal necessary.
 class ShoePreviewSection extends StatefulWidget {
   const ShoePreviewSection({
     super.key,
     required this.model,
-    required this.onTryOnInAr,
-    this.showTryOn = true,
     this.channel,
     this.viewBuilder,
     this.height = 240,
+    this.bleed = false,
     this.paused = false,
     this.events,
     this.showDiagnostics = AppConstants.shoePreviewDiagnosticsEnabled,
@@ -557,21 +923,23 @@ class ShoePreviewSection extends StatefulWidget {
 
   final TryOnModelSpec model;
 
-  /// Pushes the AR screen. The page owns this because the AR screen needs the
-  /// whole product row, which is the page's state rather than this section's.
-  final VoidCallback onTryOnInAr;
-
-  /// Whether the "Try On in AR" pill is drawn at all. True everywhere a customer
-  /// is looking at the shoe; false on the seller's viewer, which has nobody to
-  /// try the pair on. See the class header.
-  final bool showTryOn;
-
   final ShoePreviewChannel? channel;
   final Widget Function()? viewBuilder;
   final double height;
 
-  /// See [ShoePreview3D.paused]. The button keeps working while the box is
-  /// paused — it is the thing being opened at that moment.
+  /// **Whether the page has handed this section its full width, so that only the
+  /// box takes it** — see [ShoePreview3D.bleed].
+  ///
+  /// The box spans the page edge to edge; everything else this section draws —
+  /// the QA banner, the refusal sentence, the QA readout — keeps the page's
+  /// gutter ([kShoePreviewGutter]) by insetting itself. A section that bled its
+  /// *text* too would put a sentence against the screen edge every time the
+  /// renderer refused.
+  final bool bleed;
+
+  /// See [ShoePreview3D.paused]. The box is the only thing this flag reaches;
+  /// the AR entry is the viewer's, and it keeps working while the box is paused
+  /// — it is the thing being opened at that moment.
   final bool paused;
 
   /// Test seam: the preview's native event stream, instead of the channel's own.
@@ -724,6 +1092,12 @@ class _ShoePreviewSectionState extends State<ShoePreviewSection> {
     super.dispose();
   }
 
+  /// The page's gutter, applied to everything this section draws except the box
+  /// when the page has handed it the full width ([ShoePreviewSection.bleed]).
+  EdgeInsets get _gutter => widget.bleed
+      ? const EdgeInsets.symmetric(horizontal: kShoePreviewGutter)
+      : EdgeInsets.zero;
+
   /// One-shot record of which branch this section rendered.
   ///
   /// ⚠️ It is a measurement, not decoration: the failure branch and the success
@@ -750,7 +1124,7 @@ class _ShoePreviewSectionState extends State<ShoePreviewSection> {
     }
     if (_unsupported || _diagnosticDetail != null) {
       return Padding(
-        padding: const EdgeInsets.only(bottom: 12),
+        padding: EdgeInsets.fromLTRB(_gutter.left, 0, _gutter.right, 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -767,13 +1141,6 @@ class _ShoePreviewSectionState extends State<ShoePreviewSection> {
                   : '3D preview failed on this build.',
               detail: _diagnosticDetail,
             ),
-            if (widget.showTryOn) ...<Widget>[
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: SoleARPill(onPressed: widget.onTryOnInAr),
-              ),
-            ],
           ],
         ),
       );
@@ -783,7 +1150,7 @@ class _ShoePreviewSectionState extends State<ShoePreviewSection> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (_qaBuild) ...<Widget>[
-          const ShoePreviewQaBanner(),
+          Padding(padding: _gutter, child: const ShoePreviewQaBanner()),
           const SizedBox(height: 8),
         ],
         ShoePreview3D(
@@ -791,6 +1158,7 @@ class _ShoePreviewSectionState extends State<ShoePreviewSection> {
           channel: widget.channel,
           viewBuilder: widget.viewBuilder,
           height: widget.height,
+          bleed: widget.bleed,
           paused: widget.paused,
           // The section's own QA flag is the only one: one switch, not two that can disagree.
           diagnostics: widget.showDiagnostics,
@@ -805,17 +1173,7 @@ class _ShoePreviewSectionState extends State<ShoePreviewSection> {
         ),
         if (widget.showDiagnostics && _statusLine != null) ...<Widget>[
           const SizedBox(height: 6),
-          _QaStatusLine(text: _statusLine!),
-        ],
-        if (widget.showTryOn) ...<Widget>[
-          const SizedBox(height: 12),
-          // The same pill the page used to pin above the buy bar, full width and
-          // in the flow instead: it is the second thing this section offers, not
-          // a floating shortcut past it.
-          SizedBox(
-            width: double.infinity,
-            child: SoleARPill(onPressed: widget.onTryOnInAr),
-          ),
+          Padding(padding: _gutter, child: _QaStatusLine(text: _statusLine!)),
         ],
       ],
     );

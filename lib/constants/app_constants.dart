@@ -104,6 +104,24 @@ class AppConstants {
   // they have to go darker instead — lighter is no longer available.
   static Color get surfaceSubtle => AppPalette.of(AppBrightness.current).subtle;
 
+  // Stage – the backdrop a rendered object stands on.
+  //
+  // BRIGHTNESS-AWARE, and the only role that follows the *3D viewer* rather than
+  // the page: light for a light-mode customer, the renderer's own near-black
+  // `#0E0F12` on dark. All three faces of the 3D box read it — `ShoePreviewIdle`
+  // (the box while no engine is mounted), `_BoxFace` (the WebView engine's
+  // cannot-draw state) and the two engines themselves: the WebView's
+  // `ModelViewer.backgroundColor` and the native renderer's
+  // `Renderer.ClearOptions.clearColor`, which is handed over the preview channel
+  // (`ShoePreviewChannel.setBackground` → `setPreviewBackground` →
+  // `ArTryOnView.setBackground`). One token, so a box that cannot draw is the
+  // same rectangle as a box that is drawing.
+  //
+  // ⚠️ The *AR* screen is untouched by this and must stay so: it is a camera
+  // feed, it keeps [surfaceDark] in both modes, and the AR view is never sent a
+  // stage colour — the preview channel is the only caller.
+  static Color get stage => AppPalette.of(AppBrightness.current).stage;
+
   // Surface Raised – the card / popup tone.
   //
   // The customer-side name for the role [sellerCardBg] serves on the seller

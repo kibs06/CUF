@@ -66,7 +66,7 @@ const String kShoePreviewViewType = 'com.solevision/shoe_preview/view';
 /// Dart side does not know is a section that stays on screen over a crash.
 const String kRendererUnsupportedReason = 'renderer_feature_level_unsupported';
 
-/// The four calls the preview answers, and nothing else.
+/// The five calls the preview answers, and nothing else.
 ///
 /// No `startSession` (there is no session), no `placeShoe` (the shoe is not
 /// placed, it is framed), no `captureScreenshot` (the preview has no share
@@ -119,6 +119,31 @@ class ShoePreviewChannel {
   Future<void> setColor(Map<String, Object?> materialOverrides) =>
       _invoke('setPreviewColor', <String, Object?>{
         'materialOverrides': materialOverrides,
+      });
+
+  /// **The stage the shoe stands on** — the colour the native renderer clears to.
+  ///
+  /// It is the preview's alone, and it is the only call here that follows the
+  /// *customer's* appearance: the box is a page surface, so light mode clears to a
+  /// light neutral and dark mode to the `#0E0F12` this view has always used
+  /// (`AppConstants.stage`). ⚠️ **The AR view is never sent one** — it is a camera
+  /// feed and stays dark in both modes — which is also why this travels on the
+  /// preview channel rather than as a field of the shared model payload.
+  ///
+  /// Sent at mount **and again on every theme change**
+  /// (`ShoePreview3D._handOverStage`): without the second call a renderer that
+  /// already exists keeps clearing to the old tone, and a customer who flips the
+  /// theme with the viewer open sees a light page framing a black box.
+  ///
+  /// Legal before the engine exists, on the same parking contract as the model:
+  /// `Renderer.ClearOptions.clearColor` only exists once the engine is built, and
+  /// this arrives the moment the box is built — a frame before the platform view
+  /// does (F18).
+  Future<void> setBackground(Color color) =>
+      _invoke('setPreviewBackground', <String, Object?>{
+        // ARGB, because that is what a Flutter `Color` *is*: the native side splits
+        // the four bytes into `ClearOptions.clearColor`'s `double[]`.
+        'argb': color.toARGB32(),
       });
 
   /// Ask the renderer to describe itself, once a second, as `status` events.

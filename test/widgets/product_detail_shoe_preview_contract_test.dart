@@ -1,7 +1,10 @@
 import 'dart:io';
 
+import 'package:app/constants/app_constants.dart';
+import 'package:app/constants/app_palette.dart';
 import 'package:app/services/shoe_preview_channel.dart';
 import 'package:app/utils/shoe_preview_visibility.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// The product page's **3D entry**, pinned at the call site.
@@ -294,52 +297,113 @@ void main() {
     });
   });
 
-  group('there is exactly one AR entry on the page', () {
-    test('the button lives inside the section, under the box', () {
-      // From the section's declaration to the end of the file: `ShoePreviewSection`
-      // and the state that builds it are the last thing here, and both halves are
-      // this section.
+  group('the stage is the page, and the model is not stretched', () {
+    test('the viewer hands the box the full width and the words a gutter', () {
+      // 2026-10-03, the owner's request: the box takes the page's full width (its
+      // 20 px gutters came off) and the room that used to sit empty between it and
+      // the pinned pill, so the shoe has more room to turn and zoom. None of that
+      // touches the model — the renderer is handed the same asset and frames it
+      // itself — so what is pinned here is the *window*: the box bleeds, and
+      // everything that is text keeps the page's gutter.
+      expect(previewScreen, contains('bleed: true,'));
+      expect(
+        previewScreen,
+        contains('padding: const EdgeInsets.only(top: 8, bottom: 12)'),
+        reason: 'a scroll view that still insets the section undoes the bleed',
+      );
+      // The header row is drawn inside the box widget, so it is the one thing
+      // that has to inset itself — with the shared number, not a literal.
+      expect(
+        previewWidget,
+        contains('horizontal: widget.bleed ? kShoePreviewGutter : 0'),
+      );
+      expect(
+        previewWidget,
+        contains('borderRadius: BorderRadius.circular(widget.bleed ? 0 : 16)'),
+        reason: 'a stage that is the page surface has no corners to round; inset, '
+            'it stays the card its other callers draw',
+      );
+      // And the section forwards the flag rather than re-deciding it, the way it
+      // forwards the engine choice.
       final section = previewWidget.substring(
         previewWidget.indexOf('class ShoePreviewSection'),
       );
+      expect(section, contains('bleed: widget.bleed,'));
+    });
+
+    test('and its height is the room the page has, not a fixed strip', () {
+      // ⚠️ The reserve is the pill below and the header above, and it is a
+      // constant on purpose: the header row is laid out a frame *after* the box
+      // that has to be sized for it, and waiting for the measurement would cost a
+      // frame of the one surface the viewer was opened for.
+      final height = between(previewScreen, 'final boxHeight =', '.toDouble()');
+      expect(height, contains('_notTheStage'));
+      expect(height, contains('.clamp(240.0, _stageCeiling)'));
       expect(
+        previewScreen,
+        contains('static const double _notTheStage = 160;'),
+        reason: 'the reserve is the pill (~80) plus the header and padding (~50), '
+            'plus slack for a larger text scale',
+      );
+      expect(previewScreen, contains('static const double _stageCeiling = 900;'));
+    });
+  });
+
+  group('there is exactly one AR entry on the page', () {
+    test('the viewer draws it once, at the foot of the page', () {
+      // ⚠️ The pill lived inside the section from 2026-10-01 to 2026-10-03, in
+      // the flow directly under the box. The owner asked for it at the bottom of
+      // the screen — with a box that fills most of the page, the button left a
+      // dead half-page beneath it. What the move must not cost is the reason the
+      // two used to be one widget (one entry, present exactly when the box is,
+      // surviving a renderer that refuses), so each half of that is pinned here.
+      expect(
+        'SoleARPill('.allMatches(previewScreen).length,
+        1,
+        reason: 'one entry: a second pill is a second way into the same camera',
+      );
+      expect(previewScreen, contains('SoleARPill(onPressed: _openArTryOn)'));
+      // Drawn after the scroll body — the bottom bar is the page's own slot, not
+      // a child of the box — and only on the door that has someone to try the
+      // pair on.
+      expect(
+        previewScreen.indexOf('SoleARPill('),
+        greaterThan(previewScreen.indexOf('SingleChildScrollView(')),
+        reason: 'a pill in the flow under the box is the layout this moved to fix',
+      );
+      expect(
+        previewScreen,
+        contains('if (widget.showTryOn)'),
+        reason: "the seller's door must keep offering no camera at all",
+      );
+      // And the box widget draws none: no branch over there — the refusal
+      // included — can take the entry off the page any more. That is the
+      // structural half of the guarantee the owner asked for on 2026-09-30, after
+      // a real phone showed the whole section (button included) vanishing on
+      // return from AR.
+      final section = previewWidget.substring(
+        previewWidget.indexOf('class ShoePreviewSection'),
+      );
+      expect(section, isNot(contains('SoleARPill(')));
+      expect(section, isNot(contains('onTryOnInAr')));
+      // The refusal branch keeps its honest sentence — which is the whole of what
+      // that branch is now.
+      final unsupported = between(
         section,
-        contains('SoleARPill(onPressed: widget.onTryOnInAr)'),
-        reason: 'the button belongs to the section — including in the '
-            'unsupported-renderer state, where it is the one entry that survives',
+        'if (_unsupported || _diagnosticDetail != null)',
+        'return Column',
       );
-      // The normal composition: the customer looks at the shoe first; the camera
-      // is the escalation. (The unsupported fallback's pill sits earlier in the
-      // source than the box — that is the branch where there IS no box — so the
-      // order is pinned against the last occurrences, which are the normal path.)
-      expect(
-        section.lastIndexOf('ShoePreview3D('),
-        lessThan(section.lastIndexOf('SoleARPill(')),
-        reason: 'the customer looks at the shoe first; the camera is the escalation',
-      );
-      // And the unsupported state keeps the pill — the owner's decision after a
-      // real phone showed the whole section (button included) vanishing on
-      // return from AR, leaving no AR entry anywhere. The AR screen degrades to
-      // its simulated mode on such a phone, so the entry stays honestly usable.
-      //
-      // The branch grew a second condition on 2026-09-30 — it also answers the QA
-      // build's non-refusal failure (`_diagnosticDetail`, behind
-      // `SHOE_PREVIEW_DIAGNOSTICS`) — so this window is repointed to the whole
-      // branch. Both states keep the pill; what a customer build sees is still the
-      // one honest sentence, which the assertion below is about.
-      final unsupported =
-          between(section, 'if (_unsupported || _diagnosticDetail != null)', 'return Column');
       expect(
         unsupported,
         contains("'3D preview isn\\'t supported on this phone.'"),
       );
-      expect(unsupported, contains('SoleARPill('));
     });
 
-    test('the page itself mounts none of them — the icon is the only entry', () {
+    test('the product page itself mounts none of them — the icon is the only entry',
+        () {
       // The pinned pill came off the page on 2026-10-01. AR is now one tap
-      // deeper, inside the viewer, which is the escalation the section has
-      // always carried rather than a second, competing button on the page.
+      // deeper, inside the viewer, which is the escalation rather than a second,
+      // competing button on the page.
       expect(
         productScreen,
         isNot(contains('SoleARPill(')),
@@ -350,9 +414,6 @@ void main() {
         1,
         reason: 'two icon buttons would be two entries into the same viewer',
       );
-      // And the viewer gets exactly one, from the section rather than of its own.
-      expect(previewScreen, isNot(contains('SoleARPill(')));
-      expect(previewScreen, contains('onTryOnInAr: _openArTryOn'));
     });
   });
 
@@ -932,6 +993,190 @@ void main() {
         contains('<base-config cleartextTrafficPermitted="false" />'),
         reason: 'the default must stay exactly as Android 9 set it',
       );
+    });
+  });
+
+  group('the stage behind the shoe follows the customer\'s appearance', () {
+    // ⚠️ **The box was pinned dark in both brightnesses, and that was the one
+    // surface in the app that could not follow the theme.** The renderer cleared
+    // to `#0E0F12` (the tone the native view's `DEFAULT_CLEAR_COLOR` still holds),
+    // `ShoePreviewIdle` and the WebView engine's page matched it, and a light-mode
+    // customer looking at a white page got a black rectangle — the screenshot the
+    // owner filed on 2026-10-03. The stage is now one brightness-aware token
+    // (`AppConstants.stage`) and the guards below are about it staying one: every
+    // face of the box reads it, neither engine pins a hex, and the tone reaches a
+    // renderer that is *already running* when the customer flips the theme.
+    final webView =
+        File('lib/widgets/shoe_preview_webview.dart').readAsStringSync();
+    final view = File(
+      'android/app/src/main/kotlin/com/solevision/app/tryon/ArTryOnView.kt',
+    ).readAsStringSync();
+    final plugin = File(
+      'android/app/src/main/kotlin/com/solevision/app/tryon/ArTryOnPlugin.kt',
+    ).readAsStringSync();
+
+    test('it is one token, and neither engine pins a tone of its own', () {
+      // Light is a paper surface (the tone the app's recessed fills use) and dark
+      // is *exactly* the value this feature has cleared to since V3.2 — the one
+      // thing that must not move, because it is the tone the owner's device work
+      // was all measured against.
+      expect(AppPalette.light.stage.computeLuminance(), greaterThan(0.8),
+          reason: 'a light-mode box has to be a light surface, not a black slab');
+      expect(
+        AppPalette.dark.stage,
+        const Color(0xFF0E0F12),
+        reason: 'dark mode keeps the renderer tone, so nothing about the shipped '
+            'dark presentation moves',
+      );
+      expect(
+        AppConstants.stage,
+        AppPalette.light.stage,
+        reason: 'and the getter resolves through the published brightness',
+      );
+
+      for (final source in <String>[previewWidget, webView]) {
+        expect(
+          codeOf(source),
+          isNot(contains('0xFF0E0F12')),
+          reason: 'a pinned tone in either Dart face is the black rectangle in '
+              'light mode this change removed',
+        );
+      }
+    });
+
+    test('the WebView engine gets the token, and is re-keyed to repaint it', () {
+      // ⚠️ The package bakes `backgroundColor` into the HTML it serves from its
+      // loopback server and builds that document in `initState` — it has no
+      // `didUpdateWidget`, so a changed colour on the same element keeps serving
+      // the page it was built with. Re-keying is the only way a live box follows
+      // the theme.
+      expect(webView, contains('backgroundColor: AppConstants.stage'));
+      expect(
+        webView,
+        contains('AppBrightness.current.name'),
+        reason: 'the ModelViewer key has to carry the brightness, or a theme flip '
+            'leaves the old page running',
+      );
+    });
+
+    test('the native renderer is handed the token and restaged in place', () {
+      // The wire: the preview's own channel, a method of its own (a theme flip has
+      // no model to ride on), ARGB because that is what a Flutter `Color` is.
+      expect(previewChannel, contains("'setPreviewBackground'"));
+      expect(previewChannel, contains('color.toARGB32()'));
+      expect(
+        previewWidget,
+        contains('_handOverStage();'),
+        reason: 'the box has to send it — from `build`, because a brightness change '
+            'repaints these elements without re-creating or updating them',
+      );
+      expect(previewWidget, contains('AppBrightness.current'));
+
+      // Native: parked like the model (it arrives with the box, a frame before the
+      // platform view), replayed on creation, and applied to a *live* renderer too.
+      expect(plugin, contains('"setPreviewBackground" ->'));
+      expect(plugin, contains('created::setBackground'));
+      expect(plugin, contains('parkedPreviewBackground'));
+
+      expect(view, contains('fun setBackground(argb: Int)'));
+      expect(
+        codeOf(view),
+        contains('stageColor ?: DEFAULT_CLEAR_COLOR'),
+        reason: 'a colour that has not arrived must leave the shipped tone in place',
+      );
+      expect(
+        between(view, 'private fun applyClearColor(', '/**'),
+        contains('setClearOptions'),
+        reason: 'the only way a running renderer changes its stage',
+      );
+      expect(
+        between(view, 'createLights(created)', 'Log.i('),
+        contains('applyClearColor()'),
+        reason: 'engine creation is where a colour that arrived first is applied',
+      );
+      expect(
+        view,
+        contains('val DEFAULT_CLEAR_COLOR = doubleArrayOf(0.055, 0.06, 0.07, 1.0)'),
+        reason: 'the dark tone the feature shipped with, spelled once',
+      );
+
+      // ⚠️ **AR is not sent one, and must not be.** The AR screen is a camera feed:
+      // it keeps its dark clear colour in both brightnesses, so the stage travels
+      // on the preview channel rather than as a field of the shared model payload
+      // (which the AR session sends too).
+      expect(
+        File('lib/services/ar_try_on_channel.dart').readAsStringSync(),
+        isNot(contains('setBackground')),
+        reason: 'a stage colour on the AR channel would turn a camera surface into '
+            'a light-mode page',
+      );
+    });
+  });
+
+  group('the gesture tutorial is one overlay, and it cannot become a wall', () {
+    // ⚠️ The owner's report on 2026-10-03: the box carried one line of instruction
+    // ("Drag to rotate", in the section's header) over a shoe that *spins on its
+    // own*, so a customer who read it as a picture tapped the AR pill and never
+    // learned it turns. The tutorial answers that with a hand sweeping over the
+    // pill and both gestures named, after ten seconds of stillness — and these are
+    // the three properties that make it safe: it never competes for the gesture, it
+    // is silent to a screen reader that cannot turn the model anyway, and it does
+    // not leak a timer into every test or every visit.
+    final webView =
+        File('lib/widgets/shoe_preview_webview.dart').readAsStringSync();
+
+    test('it observes the touch without competing for it', () {
+      // Both engines hand the gesture arena to their platform view, so a
+      // `GestureDetector` here could never win a drag — and would try, which is how
+      // the shoe stops turning. A raw `Listener` is not a competitor.
+      expect(previewWidget, contains('behavior: HitTestBehavior.translucent'));
+      expect(previewWidget, contains('onPointerDown: _touchStarted'));
+      expect(
+        previewWidget,
+        contains('if (_hintVisible && _engineDraws)'),
+        reason: 'the pill is only ever drawn over a box that has something to draw',
+      );
+
+      // And the pill itself lets the finger through: a tutorial that eats the
+      // gesture it teaches is worse than none.
+      final hint = between(
+        previewWidget,
+        'class ShoePreviewGestureHint',
+        'class _GestureLine',
+      );
+      expect(hint, contains('IgnorePointer'));
+      expect(
+        hint,
+        contains('ExcludeSemantics'),
+        reason: 'the header already carries the instruction as text, and the box '
+            'under the pill is a platform view a screen reader cannot turn',
+      );
+    });
+
+    test('the wait is named, and the timer cannot outlive the box', () {
+      expect(previewWidget, contains('static const Duration hintAfterIdle'));
+      expect(
+        previewWidget,
+        contains('Timer(ShoePreview3D.hintAfterIdle'),
+        reason: 'a literal here would be a second number for the widget test to '
+            'guess at',
+      );
+      expect(
+        between(previewWidget, 'void dispose()', 'super.dispose();'),
+        contains('_idleTimer?.cancel();'),
+        reason: 'a pending timer fails every test that mounts the box (and would '
+            'fire a hand over a box that is gone)',
+      );
+    });
+
+    test('there is exactly one tutorial, because the package has one too', () {
+      // ⚠️ `<model-viewer>` shows its own animated hand after 3 s idle, and it is
+      // **on by default**. It stays off for a stronger reason than the one it was
+      // turned off for (the header said the same thing): two prompts in one box, in
+      // two visual languages — and the package's would cover the WebView engine
+      // only, which is how the two engines start looking like two products.
+      expect(codeOf(webView), contains('interactionPrompt: InteractionPrompt.none'));
+      expect(previewWidget, contains('class ShoePreviewGestureHint'));
     });
   });
 

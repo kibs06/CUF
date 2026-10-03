@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:model_viewer_plus/model_viewer_plus.dart';
 
+import '../constants/app_brightness.dart';
 import '../constants/app_constants.dart';
 import '../services/ar_try_on_channel.dart';
 import '../services/diag_logger.dart';
@@ -243,8 +244,7 @@ customElements.whenDefined('model-viewer').then(() => {
     // computing it during build is what makes this branch reachable at all: a
     // stored flag would have to be written from `initState`, which is the throw
     // this file exists to not repeat.
-    final missing = widget.model.path.isEmpty ||
-        !File(widget.model.path).existsSync();
+    final missing = !shoePreviewModelOnDisk(widget.model);
 
     if (!_traced) {
       _traced = true;
@@ -270,11 +270,17 @@ customElements.whenDefined('model-viewer').then(() => {
     }
 
     final engine = ModelViewer(
-      // ⚠️ **Keyed by path.** `ModelViewer` is a StatefulWidget that builds its
-      // loopback server and its WebView controller in `initState`, so a changed
-      // `src` on the same element would keep serving the *old* model. The key is
-      // what makes a colour variant actually swap the asset.
-      key: ValueKey<String>(widget.model.path),
+      // ⚠️ **Keyed by path — and by brightness.** `ModelViewer` is a StatefulWidget
+      // that builds its loopback server, its WebView controller and the whole HTML
+      // document in `initState` (it has no `didUpdateWidget`), so a changed `src`
+      // *or* a changed `backgroundColor` on the same element keeps serving the page
+      // it was built with. The key is what makes a colour variant swap the asset,
+      // and it is what makes a theme flip repaint the stage: re-inflating costs one
+      // reload from the local file, and the alternative is a live box clearing to
+      // #0E0F12 inside a light-mode viewer.
+      key: ValueKey<String>(
+        '${widget.model.path}#${AppBrightness.current.name}',
+      ),
       // The package turns this into the loopback URL `/model` and reads the file
       // itself; `file://` is the documented way to hand it a path on disk.
       src: 'file://${widget.model.path}',
@@ -295,9 +301,11 @@ customElements.whenDefined('model-viewer').then(() => {
       // The page header already says "Drag to rotate"; model-viewer's animated
       // hand would be a second, competing affordance for the same instruction.
       interactionPrompt: InteractionPrompt.none,
-      // The renderer's clear colour, exactly as `ShoePreviewIdle` uses it, so the
-      // box does not flash from one dark tone to another as the engine starts.
-      backgroundColor: const Color(0xFF0E0F12),
+      // The stage the shoe stands on — the same brightness-aware token the native
+      // renderer is handed (`ShoePreviewChannel.setBackground`) and the same one
+      // `ShoePreviewIdle` paints, so the box does not flash from one tone to
+      // another as the engine starts and all three faces are one rectangle.
+      backgroundColor: AppConstants.stage,
       alt: 'A 3D model of this shoe. Drag to rotate.',
       // ⚠️ **Off, and it defaults to ON.** The package prints the entire generated
       // HTML document to the console on every build when this is true.
@@ -320,12 +328,25 @@ customElements.whenDefined('model-viewer').then(() => {
   }
 }
 
+/// **Whether the bytes this box was handed are actually on disk.**
+///
+/// One implementation for two readers, so they can never disagree about which
+/// state the box is in: the WebView engine's own face (a model that vanished
+/// between the page's prefetch and this mount says so rather than drawing a blank
+/// box), and `ShoePreview3D`'s gesture tutorial, which must not appear over that
+/// sentence — see `_engineDraws`. A `stat` per build is what both can afford; the
+/// reasoning for reading it during `build` rather than storing it is on
+/// `ShoePreviewWebView.build`.
+bool shoePreviewModelOnDisk(TryOnModelSpec model) =>
+    model.path.isNotEmpty && File(model.path).existsSync();
+
 /// The box's face when it has nothing to draw, with an optional sentence on it.
 ///
-/// The same dark tone the renderer clears to (`#0E0F12`) rather than the page's
-/// white, so a box that cannot draw still reads as *the box* rather than as a gap
-/// in the layout — and it matches `ShoePreviewIdle` and the WebView engine's own
-/// background, so all three states are the same rectangle to a customer.
+/// The same tone the renderer clears to ([AppConstants.stage]) rather than the
+/// page behind it, so a box that cannot draw still reads as *the box* rather than
+/// as a gap in the layout — and it matches `ShoePreviewIdle` and the WebView
+/// engine's own background, so all three states are the same rectangle to a
+/// customer, in either brightness.
 class _BoxFace extends StatelessWidget {
   const _BoxFace({this.message});
 
@@ -335,7 +356,7 @@ class _BoxFace extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = message;
     return ColoredBox(
-      color: const Color(0xFF0E0F12),
+      color: AppConstants.stage,
       child: text == null
           ? const SizedBox.expand()
           : Center(

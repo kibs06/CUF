@@ -361,6 +361,23 @@ class ArTryOnView(
     private var surfaceWidth = 0
     private var surfaceHeight = 0
 
+    /**
+     * **The stage the shoe stands on: `Renderer.ClearOptions.clearColor`, as RGBA.**
+     *
+     * ⚠️ It follows the *customer's* appearance, not the renderer's, and the mode decides which of
+     * the three faces of this feature it is: the **preview** is a page surface, so Dart sends a
+     * light neutral in light mode and the `#0E0F12` this view has always cleared to in dark mode
+     * (`AppConstants.stage` → `setPreviewBackground` → [setBackground]); **AR** is a camera feed and
+     * stays dark in both modes, which is why nothing on the AR channel ever sends one.
+     *
+     * `null` means "nothing sent yet": [DEFAULT_CLEAR_COLOR] stays in place, which is the same tone
+     * the Dart-side idle face paints, so the box does not flash between tones as the engine starts
+     * (or, on a theme flip, between the two the customer chose).
+     *
+     * Render-thread state like everything else around it — [setBackground] posts.
+     */
+    private var stageColor: DoubleArray? = null
+
     private var asset: FilamentAsset? = null
     private var modelRoot = 0
     private var pendingModel: ModelSpec? = null
@@ -601,6 +618,30 @@ class ArTryOnView(
             statusFile?.takeIf { it.exists() }?.readText()?.trim()?.takeIf { it.isNotEmpty() }
         }.getOrNull()
         emitStatus(lastFrameNanos, force = true)
+    }
+
+    /**
+     * **Sets the stage behind the shoe — the colour the renderer clears to.**
+     *
+     * ARGB, as Flutter spells a colour; the four bytes become the RGBA `double[]`
+     * `Renderer.ClearOptions.clearColor` wants. Sent by the preview alone, at mount and again
+     * whenever the customer's appearance changes (see [stageColor]).
+     *
+     * ⚠️ **Legal before the engine exists** — the same parking contract the model follows, and for
+     * the same reason: Dart hands this over the moment the box is built, while the platform view
+     * (and therefore the renderer) is created a frame later. The value is kept and written by
+     * [createEngineIfNeeded] when the renderer appears, so an early brightness is not lost.
+     */
+    fun setBackground(argb: Int) {
+        renderHandler.post {
+            stageColor = doubleArrayOf(
+                ((argb shr 16) and 0xFF) / 255.0,
+                ((argb shr 8) and 0xFF) / 255.0,
+                (argb and 0xFF) / 255.0,
+                ((argb shr 24) and 0xFF) / 255.0,
+            )
+            applyClearColor()
+        }
     }
 
     fun setModel(spec: ModelSpec) {
@@ -996,14 +1037,12 @@ class ArTryOnView(
         materialProvider = provider
         assetLoader = AssetLoader(created, provider, EntityManager.get())
         createLights(created)
-        renderer?.setClearOptions(
-            Renderer.ClearOptions().apply {
-                clear = true
-                // A flat, dark backdrop where the camera feed will be (class header, gap 1).
-                // `ClearOptions.clearColor` is a `double[]` on this API, not a `float[]`.
-                clearColor = doubleArrayOf(0.055, 0.06, 0.07, 1.0)
-            },
-        )
+        // The stage. ⚠️ **Called rather than written inline**, because this is the one place a
+        // colour sent *before* the renderer existed must not be lost: `setBackground` parks the
+        // value on the render thread (Dart sends it the moment the box is built, a frame before
+        // this engine), and the application point is here. AR keeps [DEFAULT_CLEAR_COLOR] forever
+        // — see [stageColor].
+        applyClearColor()
         Log.i(
             TAG,
             "engine ready: backend=${created.backend} supportedFeatureLevel=" +
@@ -1038,6 +1077,31 @@ class ArTryOnView(
 
         // F18: the model may have arrived before the engine existed.
         applyPendingModel()
+    }
+
+    /**
+     * **Writes [stageColor] to the renderer — the stage the box clears to.**
+     *
+     * Called from two places, and both are needed. From [setBackground] on every colour that
+     * arrives while an engine is alive: a theme flip has to repaint a renderer that already
+     * exists, and there is no surface or swap-chain event to hang it off. From
+     * [createEngineIfNeeded], so a colour that arrived *first* (the common case — Dart sends it as
+     * the box is built) is applied to the engine that was built after it.
+     *
+     * A no-op before the renderer exists: the value is already parked in the field, and engine
+     * creation is what reads it.
+     */
+    private fun applyClearColor() {
+        val target = renderer ?: return
+        target.setClearOptions(
+            Renderer.ClearOptions().apply {
+                clear = true
+                // A flat backdrop where the camera feed will be (class header, gap 1) — the light
+                // stage in a light-mode preview, [DEFAULT_CLEAR_COLOR] otherwise.
+                // `ClearOptions.clearColor` is a `double[]` on this API, not a `float[]`.
+                clearColor = stageColor ?: DEFAULT_CLEAR_COLOR
+            },
+        )
     }
 
     /**
@@ -2282,6 +2346,20 @@ class ArTryOnView(
         const val NEAR_METERS = 0.1
         const val FAR_METERS = 30.0
         const val FOV_DEGREES = 60.0
+
+        /**
+         * **The stage with nothing sent — the near-black this view has cleared to since V3.2.**
+         *
+         * It is the same tone Dart's `#0E0F12` idle face paints, so the box does not flash
+         * between tones as the engine starts, and it is what AR keeps permanently: the camera
+         * feed is a dark surface in both brightnesses, and only the preview is ever sent a
+         * customer's stage ([setBackground]).
+         *
+         * ⚠️ A `val`, not a `const`: Kotlin has no const `DoubleArray`, and this array is only
+         * ever *read* — `Renderer.setClearOptions` copies it (`toFloatArray` on the native side),
+         * so nothing can mutate it through the renderer.
+         */
+        val DEFAULT_CLEAR_COLOR = doubleArrayOf(0.055, 0.06, 0.07, 1.0)
 
         /** §2.6's grading step, mirrored from `fit_engine.dart`'s `sizeStepMm`. */
         const val SIZE_STEP_MM = 6.67

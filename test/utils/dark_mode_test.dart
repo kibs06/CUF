@@ -59,6 +59,9 @@ void main() {
 
       expect(AppConstants.surfaceLight, const Color(0xFFFFFFFF));
       expect(AppConstants.surfaceSubtle, const Color(0xFFF5F5F5));
+      // The 3D viewer's stage is a *page* surface on light — the box that framed
+      // the shoe as a black rectangle inside a white page until 2026-10-03.
+      expect(AppConstants.stage, const Color(0xFFF5F5F5));
       expect(AppConstants.creamDeep, const Color(0xFFF5F5F5));
       expect(AppConstants.sellerCardBg, const Color(0xFFFFFFFF));
       expect(AppConstants.secondary, const Color(0xFF111111));
@@ -100,6 +103,7 @@ void main() {
       expect(AppBrightness.isDark, isTrue);
       expect(AppConstants.surfaceLight, AppPalette.dark.page);
       expect(AppConstants.surfaceSubtle, AppPalette.dark.subtle);
+      expect(AppConstants.stage, AppPalette.dark.stage);
       expect(AppConstants.creamDeep, AppPalette.dark.band);
       expect(AppConstants.sellerCardBg, AppPalette.dark.raised);
       expect(AppConstants.secondary, AppPalette.dark.onPage);
@@ -122,6 +126,12 @@ void main() {
       expect(AppConstants.primary, const Color(0xFF8B5A2B));
       expect(AppConstants.surfaceDark, const Color(0xFF111111));
       expect(AppConstants.inkInverse, const Color(0xFFFFFFFF));
+
+      // The one surface that follows the viewer rather than the page: on dark it
+      // keeps the tone the renderer has always cleared to, not the page's #111111
+      // — the shoe is lit against it, so it may not melt into the page.
+      expect(AppConstants.stage, const Color(0xFF0E0F12));
+      expect(AppConstants.stage, isNot(AppConstants.surfaceLight));
     });
 
     test('shadows collapse on dark (they are invisible on near-black)', () {

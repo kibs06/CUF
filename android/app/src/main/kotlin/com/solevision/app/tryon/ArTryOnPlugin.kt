@@ -103,6 +103,14 @@ class ArTryOnPlugin(private val activity: Activity) : MethodChannel.MethodCallHa
      */
     private var parkedPreviewDiagnostics: Boolean? = null
 
+    /**
+     * The stage colour (`setPreviewBackground`), parked for the same reason the model is: Dart sends
+     * it the moment the box is built — and again on every theme change — while the platform view is
+     * created a frame later. Legal before the engine, too: the view keeps it and writes it when the
+     * renderer is built (`ArTryOnView.setBackground`).
+     */
+    private var parkedPreviewBackground: Int? = null
+
     /** Payloads that arrived before the platform view did (F18). */
     private var parkedModel: ArTryOnView.ModelSpec? = null
     private var parkedSize: ArTryOnView.SizeSpec? = null
@@ -277,19 +285,23 @@ class ArTryOnPlugin(private val activity: Activity) : MethodChannel.MethodCallHa
         relay(
             "preview view available — parked: model=${parkedPreviewModel != null}, " +
                 "size=${parkedPreviewSize != null}, color=${parkedPreviewColor != null}, " +
+                "background=${parkedPreviewBackground != null}, " +
                 "diagnostics=${parkedPreviewDiagnostics}",
         )
         parkedPreviewModel?.let(created::setModel)
         parkedPreviewSize?.let(created::setSize)
         parkedPreviewColor?.let(created::setColor)
+        parkedPreviewBackground?.let(created::setBackground)
         parkedPreviewDiagnostics?.let(created::setDiagnostics)
         parkedPreviewModel = null
         parkedPreviewSize = null
         parkedPreviewColor = null
+        parkedPreviewBackground = null
         parkedPreviewDiagnostics = null
     }
 
-    /** `setPreviewModel` / `setPreviewSize` / `setPreviewColor` / `setPreviewDiagnostics`. */
+    /** `setPreviewModel` / `setPreviewSize` / `setPreviewColor` / `setPreviewBackground` /
+     * `setPreviewDiagnostics`. */
     private val previewCallHandler = MethodChannel.MethodCallHandler { call, result ->
         when (call.method) {
             "setPreviewModel" -> {
@@ -319,6 +331,25 @@ class ArTryOnPlugin(private val activity: Activity) : MethodChannel.MethodCallHa
                     ?.associate { (key, value) -> key.toString() to value }
                     ?: emptyMap()
                 if (previewView == null) parkedPreviewColor = map else previewView?.setColor(map)
+                result.success(null)
+            }
+
+            "setPreviewBackground" -> {
+                // The stage, and the one call in this handler that follows the *customer's*
+                // appearance rather than the product (`AppConstants.stage`, ARGB). Parked like the
+                // rest because it arrives with the box, and called again on every theme change —
+                // which is why it is a method rather than a field on the model payload: a theme
+                // flip has no model to ride on.
+                val argb = (call.arguments as? Map<*, *>)?.get("argb") as? Number
+                if (argb == null) {
+                    Log.w(TAG, "setPreviewBackground: unusable payload ${call.arguments}")
+                } else if (previewView == null) {
+                    parkedPreviewBackground = argb.toInt()
+                    relay("setPreviewBackground: parked — the view does not exist yet")
+                } else {
+                    previewView?.setBackground(argb.toInt())
+                    relay("setPreviewBackground: handed to the live view")
+                }
                 result.success(null)
             }
 

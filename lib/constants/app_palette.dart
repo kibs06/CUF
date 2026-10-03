@@ -27,6 +27,7 @@ class AppPalette {
     required this.page,
     required this.raised,
     required this.subtle,
+    required this.stage,
     required this.band,
     required this.chrome,
     required this.hairline,
@@ -53,6 +54,23 @@ class AppPalette {
 
   /// Input fields, unselected chips and section bands.
   final Color subtle;
+
+  /// The backdrop a rendered object stands on — the 3D viewer's box
+  /// (`ShoePreviewIdle`, the WebView engine's page, and the native renderer's
+  /// own clear colour, which is handed over the preview channel).
+  ///
+  /// Its own role rather than [subtle] or [page] because the two modes answer
+  /// differently, and neither existing token can serve both: on light the box is
+  /// the same soft neutral as the app's recessed fills (a *stage* reads as a
+  /// surface, not as a hole), while on dark it keeps the deep `#0E0F12` this
+  /// feature has always cleared to — darker than the `#111111` page, which is
+  /// the tone a photographic shoe is lit against. Pinned to [page] on dark
+  /// would melt the box into the page.
+  ///
+  /// ⚠️ It is not a *chrome* role: nothing is drawn on it but the render, and
+  /// the one sentence the empty box carries (`_BoxFace`) inks itself from
+  /// [onPage] / [muted], which resolve against the brightness either way.
+  final Color stage;
 
   /// Grounded band (the bottom navigation bar's default).
   final Color band;
@@ -134,6 +152,7 @@ class AppPalette {
     page: Color(0xFFFFFFFF),
     raised: Color(0xFFFFFFFF),
     subtle: Color(0xFFF5F5F5),
+    stage: Color(0xFFF5F5F5),
     band: Color(0xFFF5F5F5),
     chrome: Color(0xFF111111),
     hairline: Color(0xFFE5E5E5),
@@ -164,6 +183,7 @@ class AppPalette {
     page: Color(0xFF111111),
     raised: Color(0xFF1C1C1C),
     subtle: Color(0xFF1F1F1F),
+    stage: Color(0xFF0E0F12),
     band: Color(0xFF171717),
     chrome: Color(0xFF262626),
     hairline: Color(0xFF555555),

@@ -38,7 +38,7 @@
   order and returns *the first thing that stopped it* as an enum value, which the
   page logs as `[shoe-preview] hidden: <reason> — <product>`.
 - **The icon and the AR button are all-or-nothing.** A product with no model shows
-  **neither**; the button is part of the section the icon opens.
+  **neither**: the viewer the icon opens mounts the box *and* draws the button.
 - **Two channel sets, deliberately.** `com.solevision/shoe_preview*` for the box and
   `com.solevision/ar_try_on*` for AR, with separate native slots, so the AR screen
   (which is pushed on top of a still-mounted product page) can never receive the
@@ -60,19 +60,29 @@
 product photo (hero)
   └── [3D icon, bottom-right]            ← gated, see §2
         └── ShoePreviewScreen            ← full-screen viewer, two doors
-              ├── ShoePreviewSection     ← the box + the "Try On in AR" pill
+              ├── ShoePreviewSection     ← the box, and what it says when refused
               │     └── ShoePreview3D    ← AndroidView(SHOE_PREVIEW_VIEW_TYPE)
               │           └── ArTryOnView(Mode.PREVIEW)   [Kotlin]
               │                 ├── Filament Engine / Renderer / Scene / View
               │                 ├── gltfio AssetLoader + UbershaderProvider
               │                 └── Choreographer frame loop (orbit, idle spin)
-              └── [Try On in AR] ──► the AR screen (Mode.AR, same view class)
+              └── [Try On in AR]         ← pinned to the page's bottom edge
+                    └──► the AR screen (Mode.AR, same view class)
 ```
 
 The seller reaches the same viewer through a different door: the "3D fitting ready"
 row in `lib/widgets/shoe_model_request_tile.dart` calls
 `ShoePreviewScreen.forProduct`, which resolves the product's model itself and mounts
 with `showTryOn: false` — nobody on the seller's side is going to try the pair on.
+
+The "Try On in AR" pill is the **viewer's own bottom action** (since 2026-10-03):
+full width, pinned above the system bar, outside the scroll area. It sat in the flow
+directly under the box until the owner asked for it to move — a box that fills the
+page left a dead half-page beneath the button. The reason it used to be the
+section's own child still holds and is now structural: the viewer mounts the box and
+draws the pill in the same build, so a product that resolves no model gets neither,
+and a renderer refusal (which happens *inside* the section) cannot take the entry
+off the page.
 
 ## 2. The four switches (and what a build actually contains)
 
@@ -105,11 +115,11 @@ process`. The banner text is how a screenshot identifies which switches produced
 |---|---|
 | `lib/utils/shoe_preview_visibility.dart` | the gate: `resolveShoePreview` + `ShoePreviewReason{none, featureOff, notAndroid, noModel, modelNotReady}` + `ShoePreviewDecision`. Pure — no Flutter, no Supabase |
 | `lib/screens/customer/product_detail_screen.dart` | `_showPreviewIcon` (adds "bytes verified on disk" to the gate), `_openShoePreview`, the `[shoe-preview] …` log (`:1022`), the icon's `Positioned(right: 12, bottom: 50)` over the hero |
-| `lib/widgets/shoe_preview_3d.dart` | `ShoePreview3D` (the box; `diagnostics` + `useWebViewEngine` params), `ShoePreviewIdle` (its `#0E0F12` matches the renderer's clear colour), `Sole3DIconButton`, `ShoePreviewHint`, `ShoePreviewQaBanner`, `ShoePreviewSection{model, onTryOnInAr, showTryOn, channel, viewBuilder, height, paused, events, showDiagnostics, useWebViewEngine}`, `_QaStatusLine` |
+| `lib/widgets/shoe_preview_3d.dart` | `ShoePreview3D` (the box; `diagnostics` + `useWebViewEngine` params, `hintAfterIdle` = 10 s), `ShoePreviewIdle` (paints `AppConstants.stage`, the tone the renderer clears to), `ShoePreviewGestureHint` (the gesture tutorial: sweeping hand + both gestures, `IgnorePointer` + `ExcludeSemantics`, honours reduced motion), `_handOverStage` (the stage colour, sent at mount **and** on a theme flip), `Sole3DIconButton`, `ShoePreviewHint`, `ShoePreviewQaBanner`, `ShoePreviewSection{model, channel, viewBuilder, height, bleed, paused, events, showDiagnostics, useWebViewEngine}`, `kShoePreviewGutter` (the page's one gutter number), `_QaStatusLine` |
 | `lib/widgets/shoe_preview_webview.dart` | **the second engine** (§8a): `ShoePreviewWebView` — `ModelViewer` against `file://`, the `javascriptChannel` bridge that keeps a failed load visible, and the `gl:`/`box=` measurements that separate a broken renderer from a broken layout |
 | `android/app/src/main/res/xml/network_security_config.xml` | the loopback-only cleartext exception the WebView engine needs (§8a). Do not widen it |
-| `lib/screens/shared/shoe_preview_screen.dart` | the viewer. `new` (customer, model already resolved) / `forProduct` (seller). Owns the AR push and the `paused` flag that stops the box while AR is on top |
-| `lib/services/shoe_preview_channel.dart` | `kShoePreviewMethodChannel` `com.solevision/shoe_preview` (`:37`), `kShoePreviewEventChannel` `…/events` (`:45`), `kShoePreviewViewType` `…/view` (`:49`), `kRendererUnsupportedReason` (`:67`), `setModel/setSize/setColor/setDiagnostics`, `events` |
+| `lib/screens/shared/shoe_preview_screen.dart` | the viewer. `new` (customer, model already resolved) / `forProduct` (seller). Owns the AR push, the `paused` flag that stops the box while AR is on top, the `SoleARPill` pinned to the bottom edge (`showTryOn` decides whether the door gets one), and the stage's geometry — the box is handed the full width (`bleed: true`) and the room left above the pill (`_notTheStage`, `_stageCeiling`) |
+| `lib/services/shoe_preview_channel.dart` | `kShoePreviewMethodChannel` `com.solevision/shoe_preview` (`:37`), `kShoePreviewEventChannel` `…/events` (`:45`), `kShoePreviewViewType` `…/view` (`:49`), `kRendererUnsupportedReason` (`:67`), `setModel/setSize/setColor/setBackground/setDiagnostics`, `events` |
 | `lib/providers/try_on/try_on_mode.dart` | `TryOnDegradeReason.rendererUnsupported` — how a refusal reaches the AR flow's vocabulary |
 | `android/.../tryon/ArTryOnPlugin.kt` | the two channel sets, two slots, the parking/replay contract, `setPreviewDiagnostics` |
 | `android/.../tryon/ArTryOnView.kt` | the renderer (both modes), the QA heartbeat, the swap-chain repair, the teardown latch |
@@ -150,8 +160,60 @@ adb logcat -d | grep shoe-preview        # [shoe-preview] hidden: featureOff —
 
 ### 4.2 Mounting the box (`ShoePreview3D`)
 
+⚠️ **The gesture tutorial lives here, and it is Dart on purpose** (`ShoePreviewGestureHint`,
+`ShoePreview3D.hintAfterIdle` = 10 s). The box shipped with one line of instruction —
+"Drag to rotate", in the section's header — over a shoe that **spins on its own**, so a
+customer who read it as a picture tapped the pill below and never learned it
+turns (owner's report, 2026-10-03). After ten seconds of stillness the box performs the
+gesture itself: a hand sweeps across a dark-glass pill, both gestures named (drag *and*
+pinch — nothing else on the surface mentions the pinch, and both engines answer one).
+Three properties make it safe, and all three are pinned in
+`product_detail_shoe_preview_contract_test.dart`:
+
+  • **It observes, it does not compete.** The touch reaches it through a raw
+    `Listener` (`HitTestBehavior.translucent`) rather than a `GestureDetector`: both
+    engines hand the gesture arena to their platform view (`EagerGestureRecognizer`),
+    so a competing recognizer could never win a drag — it would only stop the shoe from
+    turning. The pill itself is an `IgnorePointer`, so the drag it teaches lands on the
+    same finger-down that dismisses it.
+  • **It is silent to a screen reader** (`ExcludeSemantics`). The header already carries
+    the instruction as text, and the surface under the pill is a platform view a screen
+    reader cannot turn — announcing a gesture with no accessible equivalent would be a
+    promise this feature cannot keep.
+  • **It is one overlay for both engines**, which is a *finding* rather than tidiness:
+    `AndroidView` and `webview_flutter_android` both compose through **Texture Layer
+    Hybrid Composition** (`displayWithHybridComposition` defaults to `false`), the mode
+    that lets Flutter paint over a platform view. So there is no Kotlin overlay and no
+    CSS/JS injected into the `<model-viewer>` page — and no second visual language to
+    keep in step. `<model-viewer>`'s own prompt stays off for the same reason
+    (`interactionPrompt: none`, 3 s, WebView engine only).
+
+The countdown starts with the box (not with the model), restarts from *full* after
+every touch that ends, and does not run while the box is `paused` (AR on top) — coming
+back from AR starts a fresh wait rather than showing a hand instantly. It is not drawn
+over the one state where the box paints a sentence instead of a shoe
+(`_engineDraws` → `shoePreviewModelOnDisk`).
+
+**The stage's geometry (2026-10-03).** The box is the page's **full width** and takes
+the room above the pinned AR pill: the viewer's scroll view carries no horizontal
+padding any more, `ShoePreviewSection.bleed` carries that down to
+`ShoePreview3D.bleed`, and the height is `maxHeight − 160` (the pill, the header row
+and the page's own breathing room) clamped `240…900`. What gets wider and longer is
+the **window**: the renderer is handed the same asset and frames it itself, so the
+shoe turns in a bigger stage rather than being stretched by one. Everything that is
+*text* — the header row (drawn inside the box widget, so it insets itself), the
+section's banner, its refusal sentence, its QA readout, the viewer's note and its
+failure hint — keeps the page's 20 px gutter, which is one constant
+(`kShoePreviewGutter`) precisely so those two numbers cannot drift apart.
+
 1. `initState` calls `setModel` (**before** the native view exists — it is parked,
-   §4.4) and, when `diagnostics` is on, `setDiagnostics(true)`.
+   §4.4) and, when `diagnostics` is on, `setDiagnostics(true)`. The first `build`
+   hands over the **stage colour** (`setBackground` — the customer's brightness,
+   §4.4), which is parked the same way, and sends it again on every theme change:
+   it lives in `build` rather than in `initState` because a brightness change
+   repaints the tree element by element (`AppThemeRefresh.rebuildAll`) without
+   re-creating or updating any widget — so `initState` and `didUpdateWidget` never
+   run, and a renderer that is already alive would keep the tone the customer left.
 2. The widget builds `AndroidView(viewType: kShoePreviewViewType)`; Flutter creates
    `ArTryOnView(context, previewListener, Mode.PREVIEW)` on the next frame.
 3. The view's `surfaceCreated` posts to its own render thread:
@@ -162,8 +224,9 @@ adb logcat -d | grep shoe-preview        # [shoe-preview] hidden: featureOff —
 ### 4.3 The handover (F18 parking) and why there are two channel sets
 
 The box is created by the framework, so a model sent the moment the widget mounts
-has nowhere to land. The plugin therefore **parks** `model`, `size`, `color` and the
-QA diagnostics request per slot, and replays them in `onPreviewViewAvailable`.
+has nowhere to land. The plugin therefore **parks** `model`, `size`, `color`, the
+stage colour (`background`) and the QA diagnostics request per slot, and replays them
+in `onPreviewViewAvailable`.
 V0's bug (a *dropped* parked model) is why this is explicit and test-pinned.
 
 ```
@@ -172,7 +235,7 @@ ShoePreview3D.initState  ──►  (view not created yet)  ──►  parkedPre
                                    │  next frame
                                    └──────────────────►  ArTryOnView created
                                                           onPreviewViewAvailable:
-                                                            replay model/size/color/diagnostics
+                                                            replay model/size/color/background/diagnostics
                                                           surfaceCreated → engine → chain → loop
 modelLoaded / error      ◄──  EventChannel ◄──────────  listener.onEvent/onError
 status (heartbeat)       ◄──  EventChannel ◄──────────  emitStatus (1 Hz, diagnostics only)
@@ -201,6 +264,14 @@ receive the other's model. Hence two names for everything (F18).
 - **Lighting.** A key/fill pair (`KEY_LUX`/`FILL_LUX`) in the preview; in AR the sun
   and ARCore's ambient estimate. The preview's rig **rotates with the orbit** — a
   world-fixed pair shows the customer the unlit side for half of every revolution.
+- **The stage.** `Renderer.ClearOptions.clearColor`, and the only thing here that
+  follows the *customer's* appearance: the preview clears to `AppConstants.stage`
+  (light neutral on light, the `#0E0F12` this view has always used on dark), sent by
+  Dart and applied by `applyClearColor()` — on a live renderer for a theme flip, and
+  at engine creation for a colour that arrived first (`setBackground` parks it). AR
+  is never sent one and keeps `DEFAULT_CLEAR_COLOR`: the camera feed is dark in both
+  brightnesses, which is why this travels on the **preview** channel rather than as
+  a field of the shared model payload.
 
 ### 4.5 The camera law (F23)
 
@@ -394,7 +465,7 @@ state this feature already handles honestly (`ShoePreviewHint`, and the widget's
 failure line). It also needs no ARCore and no `FEATURE_LEVEL_2`, so it draws on the
 ES 3.0 phones `canLoadModels()` provably cannot (D10).
 
-**⚠️ Three things about the WebView path that are load-bearing.**
+**⚠️ Four things about the WebView path that are load-bearing.**
 
 1. **The loopback server.** `model_viewer_plus` binds an `HttpServer` to
    `InternetAddress.loopbackIPv4` on an ephemeral port and serves the page and the
@@ -405,9 +476,9 @@ ES 3.0 phones `canLoadModels()` provably cannot (D10).
    not widen it and do not replace it with `usesCleartextTraffic="true"`.
 2. **`ar: false` is not a preference.** `<model-viewer>` can hand a model to the
    Google app over an `intent://` URL. The app has its own AR path with the fit logic
-   (`Mode.AR`, the pill under this box); a second, unmanaged AR door out of a product
+   (`Mode.AR`, the page's own AR path); a second, unmanaged AR door out of a product
    page is not something this widget may open.
-3. **The page's events are the only witness.** The native engine reports through its
+4. **The page's events are the only witness.** The native engine reports through its
    channel; the WebView engine has no native side, so `load`/`error`/`progress` are
    bridged back over a `javascriptChannel` and land on the same QA readout the native
    heartbeat feeds (`ShoePreviewSection._recordEngineLine`). Without them a WebView
@@ -496,6 +567,15 @@ valid entity.
    element still measured a correct `396x520`, so this was **not** the blank box —
    `relatedCss: 'html { height: 100%; }'` is a guard, not the repair. Do not remove it
    on the grounds that it did not fix anything.
+3. **The stage is baked into the served page, so a theme flip re-keys the element.**
+   `backgroundColor` is an attribute of the HTML the loopback server serves, and the
+   package builds that document in `initState` (it has no `didUpdateWidget`), so a
+   live box cannot be recoloured in place. The key therefore carries the brightness
+   (`'${model.path}#${AppBrightness.current.name}'`), and a theme change with the
+   viewer open re-inflates the element — one reload from the local file, which is the
+   deliberate exception to point 1 above: that rule is about rebuilding the box *to
+   say something*, while this changes what is drawn. The alternative is a light-mode
+   viewer framing a `#0E0F12` rectangle until the customer leaves and comes back.
 
 **And the page reports two measurements, because a colour cannot.** A missing WebGL
 context and a `model-viewer` element with no box to draw in are the same picture and
