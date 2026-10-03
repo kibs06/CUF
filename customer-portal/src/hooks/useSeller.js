@@ -9,6 +9,7 @@ import {
   fetchSellerProduct,
   fetchSellerProducts,
   isApprovedSeller,
+  removeAllProductImages,
   removeColourImage,
   removeProductImage,
   saveProductColourImages,
@@ -206,11 +207,24 @@ export function useSaveProductCustomizations(storeId) {
   })
 }
 
+/**
+ * Attach photos to a product.
+ *
+ * The seller's id is added here rather than asked of every caller, the same way
+ * `useSaveProductColourImages` and `useUploadStoreAsset` do it: it is the first
+ * segment of the storage path, and the `product-images` bucket's INSERT policy
+ * checks `(storage.foldername(name))[1] = auth.uid()`. A path that opens with
+ * anything else — `undefined/<productId>/…`, when the field was simply never
+ * filled — is refused by Postgres as "new row violates row-level security
+ * policy", an error that names the database and not the mistake.
+ */
 export function useUploadProductImages(storeId) {
+  const { user } = useAuth()
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (payload) => uploadProductImages(payload),
+    mutationFn: (payload) =>
+      uploadProductImages({ sellerId: user?.id, ...payload }),
     onSuccess: (_urls, payload) => {
       queryClient.invalidateQueries({ queryKey: ['seller-products', storeId] })
       queryClient.invalidateQueries({
@@ -221,14 +235,51 @@ export function useUploadProductImages(storeId) {
   })
 }
 
+/**
+ * Take one photo off a product — the row and the object, together.
+ *
+ * The form's OWN query is invalidated with the rest, and that is the whole fix
+ * for a live bug: the deletion was working, the card kept drawing the photo, and
+ * the button read as broken (a tile whose object had just gone even rendered as
+ * a broken image, because its cached row still pointed at it). A photo is also
+ * content on the storefront, so both the catalog list and the single product
+ * page's own query are invalidated.
+ */
 export function useRemoveProductImage(storeId) {
   const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: (payload) => removeProductImage(payload),
-    onSuccess: () => {
+    onSuccess: (_rows, payload) => {
       queryClient.invalidateQueries({ queryKey: ['seller-products', storeId] })
+      queryClient.invalidateQueries({
+        queryKey: ['seller-product', payload?.productId],
+      })
       queryClient.invalidateQueries({ queryKey: ['products'] })
+      queryClient.invalidateQueries({ queryKey: ['product'] })
+    },
+  })
+}
+
+/**
+ * Take every photo off a product, as one write.
+ *
+ * The invalidations are the single removal's, because it is the same change at a
+ * larger scale: the form must stop drawing the photos, the seller's list must
+ * stop counting them, and the storefront must stop serving them.
+ */
+export function useRemoveAllProductImages(storeId) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (payload) => removeAllProductImages(payload),
+    onSuccess: (_rows, payload) => {
+      queryClient.invalidateQueries({ queryKey: ['seller-products', storeId] })
+      queryClient.invalidateQueries({
+        queryKey: ['seller-product', payload?.productId],
+      })
+      queryClient.invalidateQueries({ queryKey: ['products'] })
+      queryClient.invalidateQueries({ queryKey: ['product'] })
     },
   })
 }

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AlertTriangle, ImagePlus, Plus, Trash2, X } from 'lucide-react'
 
+import { useScrollLock } from '../../hooks/useScrollLock.js'
 import Chip from '../ui/Chip.jsx'
 import VariantDialog, { SectionHead, colourLabel } from './VariantDialog.jsx'
 import { ColourPhotoGrid } from './ColourPhotos.jsx'
@@ -74,16 +75,24 @@ export function ColourDialogPanel({
       // dialog, and one key press must not close both.
       if (event.key === 'Escape' && !sizeSheetOpen) onClose?.()
     }
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
     window.addEventListener('keydown', onKeyDown)
     nameRef.current?.focus()
 
     return () => {
-      document.body.style.overflow = previousOverflow
       window.removeEventListener('keydown', onKeyDown)
     }
   }, [onClose, sizeSheetOpen])
+
+  /*
+    The lock is deliberately NOT part of the effect above. That effect re-runs
+    whenever the size sheet opens or closes (the Escape handler has to know
+    which dialog is innermost), and a lock inside it would re-read
+    `body.style.overflow` while the nested sheet had it hidden — remembering
+    `hidden` as the page's own value and restoring a locked page afterwards.
+    That was the seller's "cannot scroll after applying a size" bug; the hook
+    counts locks instead, so nesting order cannot matter.
+  */
+  useScrollLock()
 
   const trimmed = name.trim()
   const clash = colourClash(colours, trimmed, previous)

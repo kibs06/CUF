@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { MessageSquare, X } from 'lucide-react'
 
+import { useScrollLock } from '../../hooks/useScrollLock.js'
 import { quickOrderMessages } from '../../lib/messages.js'
 
 /**
@@ -58,16 +59,16 @@ export default function MessageMakerDialog({
       if (event.key === 'Escape' && !pending) onClose?.()
     }
 
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
     window.addEventListener('keydown', onKeyDown)
     firstRef.current?.focus()
 
     return () => {
-      document.body.style.overflow = previousOverflow
       window.removeEventListener('keydown', onKeyDown)
     }
   }, [open, pending, onClose])
+
+  // Shared with every other dialog — see `useScrollLock`.
+  useScrollLock(open)
 
   if (!open) return null
 

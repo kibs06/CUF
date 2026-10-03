@@ -2,6 +2,8 @@ import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { AlertTriangle, X } from 'lucide-react'
 
+import { useScrollLock } from '../../hooks/useScrollLock.js'
+
 /**
  * A yes/no dialog for the two destructive things Settings offers.
  *
@@ -42,8 +44,6 @@ export default function ConfirmDialog({
       if (event.key === 'Escape' && !pending) onClose?.()
     }
 
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
     window.addEventListener('keydown', onKeyDown)
     // Focus the confirm button rather than the panel: a keyboard user who
     // opened this wants to answer it, and the first Tab from the panel would
@@ -51,10 +51,13 @@ export default function ConfirmDialog({
     confirmRef.current?.focus()
 
     return () => {
-      document.body.style.overflow = previousOverflow
       window.removeEventListener('keydown', onKeyDown)
     }
   }, [open, pending, onClose])
+
+  // Shared with every other dialog — see `useScrollLock` for why the page's own
+  // overflow is counted rather than saved and restored per dialog.
+  useScrollLock(open)
 
   if (!open) return null
 

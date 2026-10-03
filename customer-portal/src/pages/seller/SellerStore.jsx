@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from 'react'
   unit suite to say why. Every other seller page imports it.
 */
 import { useOutletContext } from 'react-router-dom'
-import { ExternalLink, Loader2, Upload } from 'lucide-react'
+import { AlertTriangle, ExternalLink, Loader2, Upload } from 'lucide-react'
 
 import Field from '../../components/ui/Field'
 import {
@@ -15,6 +15,7 @@ import {
   SellerPageHeader,
   SellerSection,
 } from '../../components/seller/SellerPage.jsx'
+import { screenPickedPhotos } from '../../lib/photoFiles.js'
 import { storeCompleteness } from '../../lib/seller.js'
 import {
   useUpdateSellerStore,
@@ -321,6 +322,7 @@ export default function SellerStore() {
  */
 function AssetSlot({ kind, label, url, storeId, aspect }) {
   const mutation = useUploadStoreAsset(storeId)
+  const [refused, setRefused] = useState(null)
 
   return (
     <div>
@@ -356,10 +358,23 @@ function AssetSlot({ kind, label, url, storeId, aspect }) {
             const file = event.target.files?.[0]
             event.target.value = ''
             if (!file) return
-            mutation.mutate({ file, type: kind })
+            const { accepted, notice } = screenPickedPhotos([file])
+            setRefused(notice)
+            if (accepted.length === 0) return
+            mutation.mutate({ file: accepted[0], type: kind })
           }}
         />
       </label>
+
+      {refused && (
+        <p
+          role="status"
+          className="mt-2 flex items-start gap-2 rounded-field border border-crimson/30 bg-crimson/[0.07] px-3 py-2 text-xs leading-relaxed text-ink"
+        >
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-crimson" aria-hidden="true" />
+          {refused}
+        </p>
+      )}
 
       {mutation.isError && (
         <p className="mt-2 text-xs text-crimson">

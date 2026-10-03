@@ -1,5 +1,7 @@
-import { ImageOff, Plus, X } from 'lucide-react'
+import { useState } from 'react'
+import { AlertTriangle, ImageOff, Plus, X } from 'lucide-react'
 
+import { screenPickedPhotos } from '../../lib/photoFiles.js'
 import { MAX_COLOUR_IMAGES, colourImagesFor } from '../../lib/productColourImages.js'
 
 /**
@@ -77,10 +79,15 @@ export function ColourThumbnailStrip({ images, limit = 3 }) {
  * row and the object immediately, which is the app's behaviour too
  * (`removeColorImage`). A pending file is just dropped from the draft, because
  * nothing has been written yet.
+ *
+ * HEIC files are screened out before `onAdd` ever sees them, and the reason is
+ * shown right here — see `photoFiles.js` for why the portal, unlike the app, has
+ * to refuse them itself.
  */
 export function ColourPhotoGrid({ images, onAdd, onRemoveStored, onRemovePending, disabled = false }) {
   const shown = colourImagesFor({ colour: images }, 'colour')
   const remaining = Math.max(0, MAX_COLOUR_IMAGES - shown.length)
+  const [refused, setRefused] = useState(null)
 
   return (
     <div className="space-y-2.5">
@@ -138,12 +145,24 @@ export function ColourPhotoGrid({ images, onAdd, onRemoveStored, onRemovePending
           onChange={(event) => {
             const picked = [...(event.target.files ?? [])]
             event.target.value = ''
+            const { accepted, notice } = screenPickedPhotos(picked)
+            setRefused(notice)
             // The app's own cap behaviour: it takes as many as are left
             // (`picked.take(remaining)`) rather than refusing the whole pick.
-            onAdd?.(picked.slice(0, remaining))
+            onAdd?.(accepted.slice(0, remaining))
           }}
         />
       </label>
+
+      {refused && (
+        <p
+          role="status"
+          className="flex items-start gap-2 rounded-field border border-crimson/30 bg-crimson/[0.07] px-3 py-2 text-xs leading-relaxed text-ink"
+        >
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-crimson" aria-hidden="true" />
+          {refused}
+        </p>
+      )}
     </div>
   )
 }

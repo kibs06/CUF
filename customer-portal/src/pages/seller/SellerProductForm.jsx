@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useOutletContext, useParams } from 'react-router-dom'
-import { ArrowLeft, ImageOff, Loader2, Trash2, Upload } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, ImageOff, Loader2, Trash2, Upload } from 'lucide-react'
 
 import Chip from '../../components/ui/Chip.jsx'
+import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx'
 import Field from '../../components/ui/Field.jsx'
 import CustomisationEditor from '../../components/seller/CustomisationEditor.jsx'
 import TagPicker from '../../components/seller/TagPicker.jsx'
@@ -13,6 +14,7 @@ import {
   SellerSection,
 } from '../../components/seller/SellerPage.jsx'
 import { PRODUCT_CATEGORIES, formatCurrency, formatDate } from '../../lib/constants.js'
+import { screenPickedPhotos } from '../../lib/photoFiles.js'
 import { salePreview } from '../../lib/pricing.js'
 import {
   PRODUCT_AUDIENCE_OPTIONS,
@@ -32,6 +34,7 @@ import {
 import {
   useCreateSellerProduct,
   useDeleteSellerProduct,
+  useRemoveAllProductImages,
   useRemoveColourImage,
   useRemoveProductImage,
   useSaveProductColourImages,
@@ -580,16 +583,16 @@ export default function SellerProductForm() {
         </div>
 
         <div className="flex flex-col gap-6">
-          <SellerSection title="Photos">
-            {product ? (
-              <ProductPhotos product={product} storeId={storeId} />
-            ) : (
+          {product ? (
+            <ProductPhotos product={product} storeId={storeId} />
+          ) : (
+            <SellerSection title="Photos">
               <p className="text-sm text-muted">
                 Save the product first, then add its photos — an upload needs the
                 product to exist so the file has somewhere to belong.
               </p>
-            )}
-          </SellerSection>
+            </SellerSection>
+          )}
 
           <SellerSection
             title="Customisation options"
@@ -666,6 +669,15 @@ export default function SellerProductForm() {
  * a seller adding their fourth photo must not lose the first three. Removing one
  * takes the object out of storage as well as the row, because a row without its
  * file is a broken image on the storefront and there is nothing to notice it by.
+ * **Remove all** is the same write at the scale of the gallery — one statement,
+ * behind a confirmation, because a mis-tap would otherwise take every photo with
+ * it. That button belongs in the card's own header, which is why this component
+ * renders the `SellerSection` rather than sitting inside one.
+ *
+ * The card says when a removal fails, and it used to say nothing — which is how a
+ * working delete came to read as a broken button: the row and the object were
+ * being deleted, but the form's own query was never told, so the tile stayed on
+ * screen and a tile whose object had just gone drew as a broken image.
  *
  * Per-colour galleries (`product_color_images`) are deliberately not here: the
  * app requires at least one photo for every colour, and the storefront does not
@@ -676,69 +688,136 @@ export default function SellerProductForm() {
 function ProductPhotos({ product, storeId }) {
   const uploadMutation = useUploadProductImages(storeId)
   const removeMutation = useRemoveProductImage(storeId)
+  const removeAllMutation = useRemoveAllProductImages(storeId)
+  const [confirmingRemoveAll, setConfirmingRemoveAll] = useState(false)
+  const [refused, setRefused] = useState(null)
+
+  const photoCount = product.images.length
 
   return (
-    <div className="space-y-4">
-      {product.images.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-card border border-dashed border-hairline bg-subtle/40 py-8 text-center">
-          <ImageOff className="h-6 w-6 text-muted" aria-hidden="true" />
-          <p className="mt-2 text-xs text-muted">No photos yet.</p>
+    <>
+      <SellerSection
+        title="Photos"
+        actions={
+          photoCount > 0 ? (
+            <button
+              type="button"
+              onClick={() => setConfirmingRemoveAll(true)}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted underline-offset-4 transition-colors duration-200 ease-out-cubic hover:text-crimson hover:underline"
+            >
+              <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+              Remove all
+            </button>
+          ) : undefined
+        }
+      >
+        <div className="space-y-4">
+          {photoCount === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-card border border-dashed border-hairline bg-subtle/40 py-8 text-center">
+              <ImageOff className="h-6 w-6 text-muted" aria-hidden="true" />
+              <p className="mt-2 text-xs text-muted">No photos yet.</p>
+            </div>
+          ) : (
+            <ul className="grid grid-cols-3 gap-2">
+              {product.imageRows.map((image) => (
+                <li key={image.id ?? image.url} className="group relative">
+                  <img
+                    src={image.url}
+                    alt=""
+                    className="aspect-square w-full rounded-product object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      removeMutation.mutate({
+                        productId: product.id,
+                        imageId: image.id,
+                        url: image.url,
+                      })
+                    }
+                    disabled={removeMutation.isPending}
+                    aria-label="Remove this photo"
+                    className="absolute right-1 top-1 rounded-full bg-chrome/80 p-1 text-white opacity-0 transition-opacity duration-200 ease-out-cubic focus-visible:opacity-100 group-hover:opacity-100 disabled:cursor-not-allowed"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {removeMutation.isError && (
+            <p role="alert" className="text-xs text-crimson">
+              {removeMutation.error?.message ?? 'That photo could not be removed.'}
+            </p>
+          )}
+
+          <label className="btn btn-outline w-full cursor-pointer">
+            {uploadMutation.isPending ? (
+              <Loader2 size={15} className="animate-spin" />
+            ) : (
+              <Upload className="h-4 w-4" aria-hidden="true" />
+            )}
+            {uploadMutation.isPending ? 'Uploading…' : 'Add photos'}
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              className="sr-only"
+              disabled={uploadMutation.isPending}
+              onChange={(event) => {
+                const files = [...(event.target.files ?? [])]
+                event.target.value = ''
+                if (files.length === 0) return
+                const { accepted, notice } = screenPickedPhotos(files)
+                setRefused(notice)
+                if (accepted.length === 0) return
+                uploadMutation.mutate({
+                  productId: product.id,
+                  files: accepted,
+                  startOrder: product.images.length,
+                })
+              }}
+            />
+          </label>
+
+          {refused && (
+            <p
+              role="status"
+              className="flex items-start gap-2 rounded-field border border-crimson/30 bg-crimson/[0.07] px-3 py-2 text-xs leading-relaxed text-ink"
+            >
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-crimson" aria-hidden="true" />
+              {refused}
+            </p>
+          )}
+
+          {uploadMutation.isError && (
+            <p role="alert" className="text-xs text-crimson">
+              {uploadMutation.error?.message ?? 'That upload did not work.'}
+            </p>
+          )}
         </div>
-      ) : (
-        <ul className="grid grid-cols-3 gap-2">
-          {product.imageRows.map((image) => (
-            <li key={image.id ?? image.url} className="group relative">
-              <img
-                src={image.url}
-                alt=""
-                className="aspect-square w-full rounded-product object-cover"
-              />
-              <button
-                type="button"
-                onClick={() =>
-                  removeMutation.mutate({ imageId: image.id, url: image.url })
-                }
-                aria-label="Remove this photo"
-                className="absolute right-1 top-1 rounded-full bg-chrome/80 p-1 text-white opacity-0 transition-opacity duration-200 ease-out-cubic focus-visible:opacity-100 group-hover:opacity-100"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+      </SellerSection>
 
-      <label className="btn btn-outline w-full cursor-pointer">
-        {uploadMutation.isPending ? (
-          <Loader2 size={15} className="animate-spin" />
-        ) : (
-          <Upload className="h-4 w-4" aria-hidden="true" />
-        )}
-        {uploadMutation.isPending ? 'Uploading…' : 'Add photos'}
-        <input
-          type="file"
-          accept="image/*"
-          multiple
-          className="sr-only"
-          disabled={uploadMutation.isPending}
-          onChange={(event) => {
-            const files = [...(event.target.files ?? [])]
-            event.target.value = ''
-            if (files.length === 0) return
-            uploadMutation.mutate({
-              productId: product.id,
-              files,
-              startOrder: product.images.length,
-            })
-          }}
-        />
-      </label>
-
-      {uploadMutation.isError && (
-        <p className="text-xs text-crimson">
-          {uploadMutation.error?.message ?? 'That upload did not work.'}
-        </p>
-      )}
-    </div>
+      <ConfirmDialog
+        open={confirmingRemoveAll}
+        title="Remove all photos?"
+        description={
+          photoCount === 1
+            ? 'The photo comes off this product and out of the bucket. The storefront falls back to its placeholder until you add another — this cannot be undone.'
+            : `All ${photoCount} photos come off this product and out of the bucket. The storefront falls back to its placeholder until you add more — this cannot be undone.`
+        }
+        confirmLabel="Remove all"
+        pending={removeAllMutation.isPending}
+        error={removeAllMutation.error?.message ?? null}
+        onConfirm={() =>
+          removeAllMutation.mutate(
+            { productId: product.id, urls: product.images },
+            { onSuccess: () => setConfirmingRemoveAll(false) },
+          )
+        }
+        onClose={() => setConfirmingRemoveAll(false)}
+      />
+    </>
   )
 }

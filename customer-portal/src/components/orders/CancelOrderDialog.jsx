@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AlertTriangle, X } from 'lucide-react'
 
+import { useScrollLock } from '../../hooks/useScrollLock.js'
 import { CANCELLATION_REASONS, OTHER_REASON } from '../../lib/orders'
 
 /**
@@ -63,16 +64,16 @@ export default function CancelOrderDialog({
       if (event.key === 'Escape' && !pending) onClose?.()
     }
 
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
     window.addEventListener('keydown', onKeyDown)
     firstRef.current?.focus()
 
     return () => {
-      document.body.style.overflow = previousOverflow
       window.removeEventListener('keydown', onKeyDown)
     }
   }, [open, pending, onClose])
+
+  // Shared with every other dialog — see `useScrollLock`.
+  useScrollLock(open)
 
   const needsDetails = reason === OTHER_REASON
   const blocked = needsDetails && details.trim().length === 0

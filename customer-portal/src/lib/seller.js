@@ -611,6 +611,43 @@ export async function removeProductImage({ imageId, url }) {
 }
 
 /**
+ * Take every photo off a product — the rows first, then the objects.
+ *
+ * One statement rather than a loop of `removeProductImage`, the same way the
+ * variants and the customisation options are replaced as a set: "remove all" is
+ * one decision about the gallery, and a loop of single removals would be N round
+ * trips for it and could stop half-way with some photos gone and some not.
+ *
+ * The order is `removeProductImage`'s, for the same reason: a failure after the
+ * rows are gone leaves orphaned objects, which cost a few kilobytes and break
+ * nothing, while the other order leaves the storefront serving images whose
+ * files have been deleted.
+ *
+ * Only URLs that genuinely live in this bucket are removed — a seeded product's
+ * photo is an external URL with no object here, and guessing a path for it is
+ * how the wrong file gets deleted. Duplicates collapse, because two rows may
+ * point at one object.
+ */
+export async function removeAllProductImages({ productId, urls }) {
+  const { error } = await supabase
+    .from('product_images')
+    .delete()
+    .eq('product_id', productId)
+  if (error) throw error
+
+  const paths = [
+    ...new Set(
+      (Array.isArray(urls) ? urls : [])
+        .map((url) => storagePathFromUrl(url, 'product-images'))
+        .filter(Boolean),
+    ),
+  ]
+  if (paths.length === 0) return
+
+  await supabase.storage.from('product-images').remove(paths)
+}
+
+/**
  * `product_color_images` rows → the form's per-colour map.
  *
  * Grouped rather than left flat, because every read of it is per colour: a card's
