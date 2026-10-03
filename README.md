@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="customer-portal/public/logo.svg" width="132" alt="CUFMAI — a C with a loafer inside it, in champagne gold on a deep brown tile" />
+</p>
+
 # CUFMAI
 
 **The official app of the Carcar United Footwear Manufacturers Association, Inc. — a marketplace for handcrafted footwear from Carcar City, Cebu.**
