@@ -1,5 +1,15 @@
 [
   {
+    "latest_version": "1.0.45",
+    "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.45/app-release-1.0.45.apk",
+    "released_at": "2026-10-03",
+    "notes": [
+      "The 3D viewer now fills the page: the shoe has room to turn and zoom, it follows your phone's light or dark theme, and Try On in AR is pinned at the bottom where your thumb rests",
+      "After ten seconds of stillness the 3D box now demonstrates the gesture itself, so a shoe that spins on its own no longer reads as just a picture",
+      "Fixed: the colour selector is back on product pages, and the page opens on the product's own photos — tap a colour to see its photos, tap the ringed swatch again to return to the product's photos"
+    ]
+  },
+  {
     "latest_version": "1.0.44",
     "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.44/app-release-1.0.44.apk",
     "released_at": "2026-10-02",
