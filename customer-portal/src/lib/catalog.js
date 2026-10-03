@@ -107,6 +107,37 @@ export async function fetchProductById(productId) {
 }
 
 /**
+ * **The 3D model on a product, if it has one that is live.**
+ *
+ * `active` only, and newest version first: that is the row a customer is allowed
+ * to see (`Active product models are viewable by everyone` — draft and rejected
+ * rows are the seller's work list) and the one a renderer should draw. The rule
+ * is repeated in `shoeModel.js`, which is what the hook actually selects with;
+ * this query is the filter, that module is the guard.
+ *
+ * `maybeSingle` rather than `single`: a product with no model is the common case
+ * in this catalogue, not an error, and the caller draws nothing either way.
+ *
+ * ⚠️ **It is deliberately not part of `PRODUCT_SELECT`.** Embedding the relation
+ * would make every product row carry model columns the grid never draws, and a
+ * project whose schema predates the migration would fail the whole catalogue
+ * read rather than this one query — the shop must not go down over a decoration.
+ */
+export async function fetchProductModel(productId) {
+  const { data, error } = await supabase
+    .from('product_models')
+    .select('id, product_id, storage_path, version, status, authored_length_mm')
+    .eq('product_id', productId)
+    .eq('status', 'active')
+    .order('version', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) throw error
+  return data ?? null
+}
+
+/**
  * Every open store, newest first — `StoreService.fetchAllStores`'s query.
  * `is_active` is the same predicate the app filters on, so a deactivated store
  * disappears from the portal at the same moment it disappears from the app.

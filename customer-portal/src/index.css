@@ -27,6 +27,13 @@
   --band: 245 245 245;
   --chrome: 17 17 17;
 
+  /* The 3D stage: the tone a renderer clears to, not a UI surface. It is
+     `AppPalette.stage` exactly, the value the app hands its own box
+     (`ShoePreviewChannel.setBackground`), and it keeps its own token rather
+     than borrowing `subtle` because on dark the two stop agreeing — the stage
+     goes near-black there so a lit shoe reads against it. */
+  --stage: 245 245 245;
+
   --hairline: 229 229 229;
   --hairline-soft: 239 239 239;
   --card-edge: 201 201 201;
@@ -63,6 +70,7 @@
   --subtle: 31 31 31;
   --band: 23 23 23;
   --chrome: 38 38 38;
+  --stage: 14 15 18;
 
   /*
     `hairline` is a MID grey, not a near-page one, and that is inherited from

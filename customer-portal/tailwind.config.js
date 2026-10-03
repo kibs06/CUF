@@ -66,6 +66,10 @@ export default {
         subtle: 'rgb(var(--subtle) / <alpha-value>)', // inputs, unselected chips
         band: 'rgb(var(--band) / <alpha-value>)', // grounded band
         chrome: 'rgb(var(--chrome) / <alpha-value>)', // dark bar / control fill
+        // The 3D stage — the tone a renderer clears to (`AppPalette.stage`,
+        // the role the app's own 3D box clears to). Its own token because it is
+        // not a surface: on dark it is near-black, not `subtle`.
+        stage: 'rgb(var(--stage) / <alpha-value>)',
 
         // ── Hairlines ──
         hairline: 'rgb(var(--hairline) / <alpha-value>)',

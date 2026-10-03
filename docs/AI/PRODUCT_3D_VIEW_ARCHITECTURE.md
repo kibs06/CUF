@@ -75,6 +75,26 @@ row in `lib/widgets/shoe_model_request_tile.dart` calls
 `ShoePreviewScreen.forProduct`, which resolves the product's model itself and mounts
 with `showTryOn: false` — nobody on the seller's side is going to try the pair on.
 
+**The customer website shows the same model** (2026-10-03). `customer-portal/` — the
+React storefront — reads the same `product_models` row (RLS: customers see `active`
+rows) and draws it with the same library this app's box falls back to,
+`<model-viewer>`, on the same stage tone (`AppPalette.stage` there too). It offers the
+**look** (drag, pinch) and not the fitting: no ARCore, no camera, so no try-on — see
+that repo's README for the two rules it ports (`active` only, newest version) and the
+live check that the public bucket URL answers. ⚠️ Two traps the web half had to learn
+that this half never meets: React 18 writes `className` on a custom element as the
+literal `classname` attribute, so `<model-viewer>` silently kept its own 300×150
+`:host` box until the size went on as an inline style (the shoe drew small in the
+corner of the stage); and the library's default opening orbit looks straight down the
+model's length, so the portal sets the app's own three-quarter opening pose
+(`INITIAL_YAW_DEG`/`INITIAL_PITCH_DEG`) instead. The third is the stage tone this
+doc pins: `<model-viewer>` renders the shoe identically in both brightnesses, so
+the *same* leather has to read against `#0E0F12` on dark and `#F5F5F5` on light —
+neither of which the portal may move. It therefore holds the light render back a
+little and grounds it more gently (`exposure` 0.85 / `shadow-intensity` 0.45,
+against the library's 1 / 0.8 on dark) so the lit surfaces and the cast shadow
+both stay clear of a bright stage.
+
 The "Try On in AR" pill is the **viewer's own bottom action** (since 2026-10-03):
 full width, pinned above the system bar, outside the scroll area. It sat in the flow
 directly under the box until the owner asked for it to move — a box that fills the

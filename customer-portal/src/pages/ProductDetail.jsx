@@ -1,8 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { Footprints, ImageOff, Info, PackageOpen, Ruler, Truck } from 'lucide-react'
+import {
+  Footprints,
+  ImageOff,
+  Info,
+  PackageOpen,
+  Rotate3d,
+  Ruler,
+  Truck,
+} from 'lucide-react'
 
 import Price from '../components/ui/Price'
+import Product3DViewer from '../components/product/Product3DViewer'
 import ProductGrid from '../components/product/ProductGrid'
 import SaleBadge from '../components/ui/SaleBadge'
 import EmptyState from '../components/ui/EmptyState'
@@ -14,6 +23,7 @@ import { useAuth } from '../hooks/useAuth.jsx'
 import { useCart } from '../hooks/useCart.jsx'
 import { useMySize } from '../hooks/useMySize.js'
 import { useProduct, useProducts, useStore } from '../hooks/useCatalog'
+import useProductModel from '../hooks/useProductModel'
 import { availableSizes, stockForSize } from '../lib/stock'
 import { salePercent } from '../lib/pricing'
 import { sizeAdvice } from '../lib/sizeMatchRules'
@@ -34,6 +44,13 @@ import { sizeAdvice } from '../lib/sizeMatchRules'
  * is **advice, not a selection**. This page requires a deliberate choice (the
  * buy button is disabled until one is made), and pre-selecting a size would
  * quietly reverse that — see the README.
+ *
+ * **And it can show the shoe itself** (2026-10-03): a product whose model the
+ * workshop has published gets a "View in 3D" button under the gallery, opening
+ * `Product3DViewer` — the web half of the app's box, the same verified `.glb`
+ * from the same public bucket. The rule is the app's own: a product with no live
+ * model shows **neither** a viewer nor a button, and a read that fails draws
+ * nothing rather than an apology.
  */
 export default function ProductDetail() {
   const { productId } = useParams()
@@ -43,11 +60,16 @@ export default function ProductDetail() {
   const storeQuery = useStore(product?.store_id)
   const storeProductsQuery = useProducts({ storeId: product?.store_id })
 
+  // The 3D model the workshop published, if there is one — null for most of the
+  // catalogue, which is a state this page draws nothing for.
+  const { model } = useProductModel(productId)
+
   const navigate = useNavigate()
   const { isSignedIn } = useAuth()
   const { addItem } = useCart()
 
   const [activeImage, setActiveImage] = useState(0)
+  const [viewerOpen, setViewerOpen] = useState(false)
   const [selectedSize, setSelectedSize] = useState(null)
   const [adding, setAdding] = useState(false)
   const [added, setAdded] = useState(false)
@@ -56,6 +78,7 @@ export default function ProductDetail() {
   // A new product is a new gallery and a new size to choose.
   useEffect(() => {
     setActiveImage(0)
+    setViewerOpen(false)
     setSelectedSize(null)
     setAdded(false)
     setAddError(null)
@@ -194,13 +217,32 @@ export default function ProductDetail() {
         </nav>
 
         <div className="grid gap-10 lg:grid-cols-2 lg:gap-14">
-          <Gallery
-            images={images}
-            name={product.name}
-            activeIndex={activeImage}
-            onSelect={setActiveImage}
-            badge={percent}
-          />
+          <div>
+            <Gallery
+              images={images}
+              name={product.name}
+              activeIndex={activeImage}
+              onSelect={setActiveImage}
+              badge={percent}
+            />
+
+            {/* ⚠️ The button exists only when the model does. "3D is ready" is a
+                claim about a `product_models` row; the entry is drawn from a row
+                that is `active` and has bytes to fetch (`useProductModel`), so a
+                product with neither a row nor a file shows nothing at all — no
+                button, and no gap where one would have been. That is the app's
+                rule too: the box and its entry are one decision. */}
+            {model && (
+              <button
+                type="button"
+                onClick={() => setViewerOpen(true)}
+                className="btn btn-outline mt-4 w-full gap-2"
+              >
+                <Rotate3d size={16} strokeWidth={2} />
+                View in 3D
+              </button>
+            )}
+          </div>
 
           {/* ── Details ─────────────────────────────────────────── */}
           <div className="lg:pt-2">
@@ -394,6 +436,13 @@ export default function ProductDetail() {
           </div>
         </section>
       ) : null}
+
+      <Product3DViewer
+        open={viewerOpen}
+        url={model?.url ?? null}
+        name={product.name}
+        onClose={() => setViewerOpen(false)}
+      />
     </>
   )
 }
