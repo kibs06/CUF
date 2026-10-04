@@ -12,6 +12,7 @@ import '../../../providers/v2/scan_session_controller.dart';
 import '../../../services/ar_core_channel.dart' show ArTrackingState;
 import '../../../utils/ar_foot_measurement_pipeline.dart' show idealSampleCount;
 import '../../../utils/foot_detector.dart' show FootPoint;
+import '../../../utils/ar_core_install.dart';
 import '../../../utils/foot_measurement_utils.dart' show mapNormalizedToView;
 import '../../../widgets/foot_size_v2/foot_trace_overlay.dart';
 import '../../../widgets/foot_size_v2/scan_instruction_overlay.dart';
@@ -45,10 +46,20 @@ class FootScanSessionScreenV2 extends StatefulWidget {
 }
 
 class _FootScanSessionScreenV2State extends State<FootScanSessionScreenV2>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   late final ScanSessionController _session;
   StreamSubscription<ScanSessionEvent>? _eventsSub;
   bool _navigatedToResults = false;
+
+  /// Whether we have already sent the customer to Google Play for the ARCore
+  /// install. Gates both the automatic retry when they come back and the
+  /// escalation to the definitive "not available on this phone" message.
+  bool _arInstallOpened = false;
+
+  /// Whether a start has been re-attempted AFTER the Play hand-off. Only then
+  /// does another `needs_install` mean "Play had nothing to install" — tapping
+  /// the install button alone must not declare the device incapable.
+  bool _arPostInstallRetry = false;
 
   /// GIF-style instruction demo state: auto-plays once per capture step,
   /// dismissible, replayable via the "How to scan" chip.
@@ -61,6 +72,7 @@ class _FootScanSessionScreenV2State extends State<FootScanSessionScreenV2>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _session = ScanSessionController(
       footCondition: widget.footCondition,
       shoeCategory: widget.shoeCategory,
@@ -77,6 +89,7 @@ class _FootScanSessionScreenV2State extends State<FootScanSessionScreenV2>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _eventsSub?.cancel();
     _session.removeListener(_onSessionChanged);
     _breathe.dispose();
@@ -84,6 +97,22 @@ class _FootScanSessionScreenV2State extends State<FootScanSessionScreenV2>
     // disposal (D1 rule).
     _session.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Back from the Play Store we sent them to. If the session is still parked
+    // on "AR support needed", re-run the native start automatically: with
+    // ARCore installed it now succeeds, and without it the sheet says so
+    // plainly instead of asking for a retry that can never work.
+    if (state != AppLifecycleState.resumed || !_arInstallOpened || !mounted) {
+      return;
+    }
+    if (_session.phase == ScanPhase.startFailed &&
+        _session.startFailureReason == 'needs_install') {
+      _arPostInstallRetry = true;
+      _session.retryStart();
+    }
   }
 
   void _onSessionChanged() {
@@ -145,8 +174,17 @@ class _FootScanSessionScreenV2State extends State<FootScanSessionScreenV2>
         fit: StackFit.expand,
         children: [
           // ── AR camera feed ──
-          if (_session.phase != ScanPhase.needsPermission &&
-              _session.phase != ScanPhase.startFailed)
+          //
+          // Mounted from `starting` onwards — never gated on a started phase.
+          // The native ARCore session is created by this platform view itself
+          // (ArFootSizingView.getView → createSession), and `initialize()`'s
+          // startSession reply is parked native-side until the view reports an
+          // outcome. Gating the view on a started phase while the controller
+          // opened in `needsPermission` deadlocked the two: no view → no
+          // reply → the 15 s timeout fired and the camera never opened on a
+          // cold first scan. Only the permission state — where there is
+          // deliberately no camera — omits the view.
+          if (_session.phase != ScanPhase.needsPermission)
             _buildArView(),
 
           // ── Guide frame (ready/capturing only) ──
@@ -587,11 +625,24 @@ class _FootScanSessionScreenV2State extends State<FootScanSessionScreenV2>
 
   Widget _buildStartFailedSheet() {
     final reason = _session.startFailureReason;
+    // A repeat `needs_install` on a start re-attempted AFTER the Play hand-off
+    // means Play had nothing to install — that is the device, not a hiccup
+    // (observed on a vivo V2022: Play answers "The device is not supported.").
+    final installImpossible =
+        reason == 'needs_install' && _arInstallOpened && _arPostInstallRetry;
     final (icon, title, message) = switch (reason) {
+      'needs_install' when installImpossible => (
+          Icons.block_outlined,
+          "AR scanning isn't available on this phone",
+          "Google Play didn't install Google Play Services for AR for this "
+              'device. You can still measure your feet with '
+              '"Enter size manually".',
+        ),
       'needs_install' => (
           Icons.downloading_rounded,
-          'Finishing AR setup',
-          'Google Play is installing ARCore. Try again in a moment.',
+          'AR support needed',
+          'Foot Size 2.0 uses Google Play Services for AR. Install it from '
+              "Google Play, then come back — we'll retry automatically.",
         ),
       'unsupported_device' ||
       'user_opted_out' ||
@@ -613,6 +664,13 @@ class _FootScanSessionScreenV2State extends State<FootScanSessionScreenV2>
           _session.startFailureMessage ?? 'Please try again.',
         ),
     };
+
+    // Reasons that describe the device itself are not retryable — offering
+    // Retry there is exactly the endless loop this sheet used to have.
+    final retryable = reason != 'unsupported_device' &&
+        reason != 'user_opted_out' &&
+        reason != 'unsupported';
+    final offerInstall = reason == 'needs_install' && !installImpossible;
 
     return Positioned.fill(
       child: ColoredBox(
@@ -645,8 +703,10 @@ class _FootScanSessionScreenV2State extends State<FootScanSessionScreenV2>
                     ),
                   ),
                   const SizedBox(height: 20),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 12,
+                    runSpacing: 10,
                     children: [
                       OutlinedButton(
                         onPressed: () => Navigator.of(context).pop(),
@@ -657,15 +717,27 @@ class _FootScanSessionScreenV2State extends State<FootScanSessionScreenV2>
                         ),
                         child: const Text('Close'),
                       ),
-                      const SizedBox(width: 12),
-                      FilledButton(
-                        onPressed: () => _retryStart(),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppConstants.accent,
-                          foregroundColor: AppConstants.secondary,
+                      if (offerInstall)
+                        OutlinedButton(
+                          onPressed: _openArInstall,
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.white,
+                            side: BorderSide(
+                                color: Colors.white.withValues(alpha: 0.4)),
+                          ),
+                          child: const Text('Get AR support'),
                         ),
-                        child: const Text('Retry'),
-                      ),
+                      if (retryable)
+                        FilledButton(
+                          onPressed: () => _retryStart(),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppConstants.accent,
+                            foregroundColor: AppConstants.secondary,
+                          ),
+                          child: Text(
+                            installImpossible ? 'Try again' : 'Retry',
+                          ),
+                        ),
                     ],
                   ),
                 ],
@@ -677,8 +749,21 @@ class _FootScanSessionScreenV2State extends State<FootScanSessionScreenV2>
     );
   }
 
+  /// Hand the customer to the Play listing for ARCore. Coming back re-runs the
+  /// failed start automatically (see [didChangeAppLifecycleState]).
+  Future<void> _openArInstall() async {
+    setState(() => _arInstallOpened = true);
+    await openArCoreInstallPage();
+  }
+
+  /// Retry the failed start for real — `retrySession` makes the native side
+  /// create a fresh session instead of replaying the cached failure (which is
+  /// why this button used to be useless after an ARCore install).
   Future<void> _retryStart() async {
-    await _session.initialize();
+    // A retry after the Play hand-off is the post-install attempt: if it fails
+    // the same way, the sheet escalates instead of promising progress forever.
+    if (_arInstallOpened) _arPostInstallRetry = true;
+    await _session.retryStart();
   }
 }
 

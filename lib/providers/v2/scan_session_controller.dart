@@ -213,7 +213,13 @@ class ScanSessionController extends ChangeNotifier {
   int _lastFrameRotation = 0;
 
   // ── Session progress ──
-  ScanPhase _phase = ScanPhase.needsPermission;
+  // `starting` (not `needsPermission`): the screen only mounts the AR
+  // platform view outside the permission state, and the native session is
+  // created BY that view. A needsPermission start here left no view in the
+  // tree, so `startSession` parked unanswered until its 15 s timeout — the
+  // camera never opened on a cold first entry. Permission is pre-flighted by
+  // the setup screen; `reportPermissionDenied()` still owns that phase.
+  ScanPhase _phase = ScanPhase.starting;
   CaptureStep _currentStep = CaptureStep.leftTop;
   CoachHint? _coachHint;
 
@@ -363,8 +369,33 @@ class ScanSessionController extends ChangeNotifier {
   Future<void> initialize() async {
     if (_disposed) return;
     _detector = _detectorFactory();
+    await _beginSession(_arCore.startSession);
+  }
 
-    final start = await _arCore.startSession();
+  /// Retry a FAILED start in place (failure sheet → Retry).
+  ///
+  /// Goes through the native `retrySession` call rather than [initialize]: the
+  /// plugin caches this view's terminal outcome, so another `startSession`
+  /// replays the same failure instantly. Creating a fresh native session is
+  /// what lets a customer who just installed ARCore recover without closing
+  /// the screen — and what lets a device that can never install it reach the
+  /// definitive "AR not available" message instead of looping.
+  Future<void> retryStart() async {
+    if (_disposed) return;
+    await _beginSession(_arCore.retrySession);
+  }
+
+  Future<void> _beginSession(
+    Future<ArSessionStartResult> Function() request,
+  ) async {
+    // Say "warming up" (and leave needsPermission) BEFORE the await so the
+    // screen mounts `ar_foot_scan` while the native start is in flight — the
+    // view's createSession is what resolves this very call. Also makes Retry
+    // from startFailed re-mount the view instead of replaying the failed
+    // phase's gated tree.
+    _setPhase(ScanPhase.starting);
+
+    final start = await request();
     if (_disposed) return;
     if (!start.started) {
       _startFailureReason = start.reason;
@@ -373,14 +404,19 @@ class ScanSessionController extends ChangeNotifier {
       return;
     }
 
+    _eventSubscription?.cancel();
     _eventSubscription = _arCore.events.listen(_onSessionEvent);
 
     // Localized plane tracking: poll whether the current guide-box region is
     // covered by a tracked plane (planes grow incrementally over time).
+    _areaCheckTimer?.cancel();
     _areaCheckTimer = Timer.periodic(
       const Duration(milliseconds: 500),
       (_) => refreshAreaTracking(),
     );
+    _startFailureReason = null;
+    _startFailureMessage = null;
+    _coachHint = null;
     _setPhase(ScanPhase.positioning);
   }
 

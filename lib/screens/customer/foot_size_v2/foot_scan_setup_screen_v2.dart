@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../../constants/app_constants.dart';
+import '../../../services/ar_core_channel.dart';
+import '../../../utils/ar_core_install.dart';
 import 'foot_scan_session_screen_v2.dart';
 
 /// Entry screen for "Get Your Foot Size 2.0" — the clean-rewrite auto scan.
@@ -27,7 +29,8 @@ class FootScanSetupScreenV2 extends StatefulWidget {
   State<FootScanSetupScreenV2> createState() => _FootScanSetupScreenV2State();
 }
 
-class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2> {
+class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2>
+    with WidgetsBindingObserver {
   /// Shopping preference: men's / women's / kids' sizing.
   String _shoeCategory = 'men';
 
@@ -37,15 +40,91 @@ class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2> {
   /// Whether camera permission is already granted (drives CTA label).
   bool _cameraGranted = false;
 
+  /// ARCore availability on this device, probed up front so a phone that can't
+  /// run ARCore never drops into the camera screen (see [ArCoreChannel]).
+  /// `null` until the first probe resolves, and inconclusive probes stay
+  /// [ArCoreSupport.unknown] — the CTA keeps its normal behaviour for both, so
+  /// a slow or flaky Play Services round-trip can't block a working device.
+  ArCoreAvailability? _arAvailability;
+
+  /// Whether we have already handed the customer off to Google Play for the
+  /// ARCore install. Drives the honest dead-end message on devices Play won't
+  /// serve (their listing answers "The device is not supported." — the vivo
+  /// V2022 that surfaced this).
+  bool _arInstallOffered = false;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     Permission.camera.status.then((status) {
       if (mounted) setState(() => _cameraGranted = status.isGranted);
     });
+    _checkArSupport();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Returning from the Play Store we sent them to: re-probe so the CTA
+    // unlocks the moment ARCore is actually installed.
+    if (state == AppLifecycleState.resumed && _arInstallOffered) {
+      _checkArSupport();
+    }
+  }
+
+  Future<void> _checkArSupport() async {
+    final availability = await ArCoreChannel.instance.checkAvailability();
+    if (!mounted) return;
+    setState(() => _arAvailability = availability);
+  }
+
+  /// True when AR scanning cannot run here: ARCore reports the device as
+  /// unsupported, or Play was already offered the install and ARCore is still
+  /// missing after we came back (so Play has nothing to give this device).
+  bool get _arScanBlocked {
+    final support = _arAvailability?.support;
+    if (support == ArCoreSupport.unsupported) return true;
+    return _arInstallOffered &&
+        (support == ArCoreSupport.needsInstall ||
+            support == ArCoreSupport.needsUpdate);
+  }
+
+  bool get _arNeedsInstall =>
+      !_arScanBlocked &&
+      (_arAvailability?.support == ArCoreSupport.needsInstall ||
+          _arAvailability?.support == ArCoreSupport.needsUpdate);
+
+  IconData get _ctaIcon {
+    if (_arScanBlocked) return Icons.view_in_ar_outlined;
+    if (_arNeedsInstall) return Icons.download_for_offline_outlined;
+    return _cameraGranted
+        ? Icons.view_in_ar_rounded
+        : Icons.photo_camera_outlined;
+  }
+
+  String get _ctaLabel {
+    if (_arScanBlocked) return 'AR scanning not supported here';
+    if (_arNeedsInstall) return 'Install AR support';
+    return _cameraGranted ? 'Start scanning' : 'Allow camera access';
   }
 
   Future<void> _onCtaPressed() async {
+    if (_arScanBlocked) return;
+
+    if (_arNeedsInstall) {
+      setState(() => _arInstallOffered = true);
+      await openArCoreInstallPage();
+      // The probe re-runs on app resume, so a successful install turns this
+      // CTA into "Start scanning" without the customer leaving the screen.
+      return;
+    }
+
     if (!_cameraGranted) {
       final status = await Permission.camera.request();
       if (!mounted) return;
@@ -73,6 +152,7 @@ class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2> {
 
   @override
   Widget build(BuildContext context) {
+    final arNotice = _buildArSupportNotice();
     final body = Stack(
         children: [
           AppConstants.noiseOverlay(opacity: 0.03),
@@ -113,6 +193,10 @@ class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2> {
                         ),
                         const SizedBox(height: 16),
                         _buildDisclaimer(),
+                        if (arNotice != null) ...[
+                          const SizedBox(height: 16),
+                          arNotice,
+                        ],
                       ],
                     ),
                   ),
@@ -125,7 +209,7 @@ class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2> {
                     width: double.infinity,
                     height: 56,
                     child: FilledButton.icon(
-                      onPressed: _onCtaPressed,
+                      onPressed: _arScanBlocked ? null : _onCtaPressed,
                       style: FilledButton.styleFrom(
                         backgroundColor: AppConstants.accent,
                         foregroundColor: AppConstants.secondary,
@@ -133,15 +217,15 @@ class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2> {
                           borderRadius: AppConstants.stadiumRadius,
                         ),
                       ),
-                      icon: Icon(_cameraGranted
-                          ? Icons.view_in_ar_rounded
-                          : Icons.photo_camera_outlined),
+                      icon: Icon(_ctaIcon),
                       label: Text(
-                        _cameraGranted ? 'Start scanning' : 'Allow camera access',
+                        _ctaLabel,
                         style: AppConstants.bodyStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: AppConstants.secondary,
+                          color: _arScanBlocked
+                              ? AppConstants.secondary.withValues(alpha: 0.45)
+                              : AppConstants.secondary,
                         ),
                       ),
                     ),
@@ -419,6 +503,85 @@ class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2> {
                 color: AppConstants.secondary.withValues(alpha: 0.55),
                 height: 1.4,
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Inline explanation when ARCore isn't usable here. Null while the first
+  /// probe is in flight and for inconclusive states — an offline moment must
+  /// never read as "this phone can't do it".
+  Widget? _buildArSupportNotice() {
+    final support = _arAvailability?.support;
+    if (support == null || support == ArCoreSupport.unknown) return null;
+
+    if (_arScanBlocked) {
+      return _notice(
+        icon: Icons.block_outlined,
+        title: "AR scanning isn't supported on this phone",
+        body: _arInstallOffered
+            ? "Google Play didn't install Google Play Services for AR — the "
+                "listing isn't available for this device. You can still "
+                'measure your feet with "Enter size manually".'
+            : "This phone can't run ARCore (Google Play Services for AR). You "
+                'can still measure your feet with "Enter size manually".',
+      );
+    }
+
+    if (support == ArCoreSupport.needsInstall ||
+        support == ArCoreSupport.needsUpdate) {
+      return _notice(
+        icon: Icons.download_for_offline_outlined,
+        title: 'AR support needed',
+        body: 'Foot Size 2.0 uses Google Play Services for AR. Install it from '
+            'Google Play, then come back — this check runs again for you.',
+      );
+    }
+
+    return null;
+  }
+
+  Widget _notice({
+    required IconData icon,
+    required String title,
+    required String body,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppConstants.accent.withValues(alpha: 0.08),
+        borderRadius: AppConstants.buttonRadius,
+        border: Border.all(color: AppConstants.accent.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 20, color: AppConstants.accent),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: AppConstants.bodyStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: AppConstants.secondary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  body,
+                  style: AppConstants.bodyStyle(
+                    fontSize: 12,
+                    color: AppConstants.secondary.withValues(alpha: 0.65),
+                    height: 1.4,
+                  ),
+                ),
+              ],
             ),
           ),
         ],

@@ -48,6 +48,16 @@ class FakeArCore implements ArCoreChannel {
   }
 
   @override
+  Future<ArCoreAvailability> checkAvailability() async =>
+      const ArCoreAvailability(
+        rawValue: 'SUPPORTED_INSTALLED',
+        support: ArCoreSupport.ready,
+      );
+
+  @override
+  Future<ArSessionStartResult> retrySession() => startSession();
+
+  @override
   Future<void> stopSession() async {
     sessionActive = false;
   }

@@ -73,6 +73,29 @@ class FakeArCore implements ArCoreChannel {
     return startCompleter.future;
   }
 
+  /// Availability reported to the controller's callers (the setup screen's
+  /// pre-flight probe lives outside this controller, but the interface must
+  /// still be satisfied).
+  ArCoreAvailability availability = const ArCoreAvailability(
+    rawValue: 'SUPPORTED_INSTALLED',
+    support: ArCoreSupport.ready,
+  );
+
+  /// Terminal outcome of a [retrySession] call. Unset → reuse the start
+  /// completer so tests that never retry behave exactly as before.
+  Future<ArSessionStartResult>? retryReply;
+  int retryCalls = 0;
+
+  @override
+  Future<ArCoreAvailability> checkAvailability() async => availability;
+
+  @override
+  Future<ArSessionStartResult> retrySession() {
+    retryCalls++;
+    sessionActive = true;
+    return retryReply ?? startCompleter.future;
+  }
+
   @override
   Future<void> stopSession() async {
     sessionActive = false;
@@ -275,6 +298,66 @@ void main() {
             ScanSessionController(arCore: ar, detectorFactory: () => detector);
         ctrl.reportPermissionDenied();
         expect(ctrl.phase, ScanPhase.needsPermission);
+        ctrl.dispose();
+      });
+    });
+
+    test('initializes in `starting` — the phase that mounts the AR platform '
+        'view (regression: camera never opened on a cold first scan)', () {
+      fakeAsync((async) {
+        ar = FakeArCore();
+        detector = FakeDetector();
+        ctrl =
+            ScanSessionController(arCore: ar, detectorFactory: () => detector);
+
+        // The screen gates the ar_foot_scan platform view on the phase; the
+        // native session is created BY that view, so any gated starting phase
+        // parks the startSession reply until its 15 s timeout.
+        expect(ctrl.phase, ScanPhase.starting);
+
+        ctrl.initialize();
+        expect(ctrl.phase, ScanPhase.starting,
+            reason: 'setup keeps warming-up state while the start is in flight');
+
+        ar.startCompleter.complete(const ArSessionStartResult(started: true));
+        async.flushMicrotasks();
+        expect(ctrl.phase, ScanPhase.positioning);
+        ctrl.dispose();
+      });
+    });
+
+    test(
+        'retryStart asks for a FRESH native session (not the replayed failure) '
+        'and recovers into positioning', () {
+      fakeAsync((async) {
+        ar = FakeArCore();
+        detector = FakeDetector();
+        ctrl =
+            ScanSessionController(arCore: ar, detectorFactory: () => detector);
+
+        ctrl.initialize();
+        ar.startCompleter.complete(const ArSessionStartResult(
+          started: false,
+          reason: 'needs_install',
+          message: 'ARCore is being installed from Google Play.',
+        ));
+        async.flushMicrotasks();
+        expect(ctrl.phase, ScanPhase.startFailed);
+        expect(ctrl.startFailureReason, 'needs_install');
+
+        // The customer installed ARCore from Play and tapped Retry.
+        ar.retryReply = Future.value(const ArSessionStartResult(started: true));
+        ctrl.retryStart();
+        expect(ctrl.phase, ScanPhase.starting,
+            reason: 'retry re-enters the warming-up phase while it runs');
+
+        async.flushMicrotasks();
+        expect(ar.retryCalls, 1,
+            reason: 'retry must call retrySession — startSession would replay '
+                'the cached native failure forever');
+        expect(ctrl.phase, ScanPhase.positioning);
+        expect(ctrl.startFailureReason, isNull,
+            reason: 'the failure sheet must clear once a retry succeeds');
         ctrl.dispose();
       });
     });

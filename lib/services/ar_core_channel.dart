@@ -178,6 +178,77 @@ class ArSessionStartResult {
       'ArSessionStartResult(started: $started, reason: $reason, message: $message)';
 }
 
+/// How usable ARCore is on this device — the answer to
+/// [ArCoreChannel.checkAvailability].
+///
+/// Only [unsupported] is a definitive "this phone can't do it"; every
+/// inconclusive outcome maps to [unknown] so a transient Play Services hiccup
+/// can never permanently disable the feature.
+enum ArCoreSupport {
+  /// ARCore is installed and ready — scanning can start now.
+  ready,
+
+  /// The device is supported and Play can install ARCore.
+  needsInstall,
+
+  /// Play can update the installed (too old) ARCore.
+  needsUpdate,
+
+  /// ARCore itself reports the device as incapable, or the user opted out.
+  unsupported,
+
+  /// The probe could not reach a conclusion (offline, Play Services missing,
+  /// older native build without the method). Proceed and let the session
+  /// start report the real outcome.
+  unknown,
+}
+
+/// Result of the native ARCore availability probe, suitable for deciding what
+/// the scan CTA should say before a session is ever created.
+class ArCoreAvailability {
+  /// Raw ARCore enum name (e.g. `SUPPORTED_INSTALLED`), for diagnostics.
+  final String rawValue;
+
+  final ArCoreSupport support;
+
+  const ArCoreAvailability({required this.rawValue, required this.support});
+
+  factory ArCoreAvailability.fromNative(Object? native) {
+    final raw = native is Map ? native['availability']?.toString() : null;
+    switch (raw) {
+      case 'SUPPORTED_INSTALLED':
+        return const ArCoreAvailability(
+          rawValue: 'SUPPORTED_INSTALLED',
+          support: ArCoreSupport.ready,
+        );
+      case 'SUPPORTED_NOT_INSTALLED':
+        return const ArCoreAvailability(
+          rawValue: 'SUPPORTED_NOT_INSTALLED',
+          support: ArCoreSupport.needsInstall,
+        );
+      case 'SUPPORTED_APK_TOO_OLD':
+        return const ArCoreAvailability(
+          rawValue: 'SUPPORTED_APK_TOO_OLD',
+          support: ArCoreSupport.needsUpdate,
+        );
+      case 'UNSUPPORTED_DEVICE_NOT_CAPABLE':
+      case 'UNAVAILABLE_DEVICE_NOT_COMPATIBLE':
+      case 'UNAVAILABLE_ARCORE_NOT_INSTALLED':
+      case 'UNAVAILABLE_USER_OPTED_OUT':
+        return ArCoreAvailability(rawValue: raw!, support: ArCoreSupport.unsupported);
+      default:
+        // UNKNOWN_CHECKING / UNKNOWN_TIMED_OUT / UNKNOWN_ERROR / missing.
+        return ArCoreAvailability(
+          rawValue: raw ?? 'UNKNOWN',
+          support: ArCoreSupport.unknown,
+        );
+    }
+  }
+
+  @override
+  String toString() => 'ArCoreAvailability($rawValue → $support)';
+}
+
 /// Detected horizontal plane (floor).
 class ArPlane {
   final double centerX;
@@ -289,11 +360,47 @@ class ArCoreChannel {
   /// parks until its outcome resolves. A cached "active" flag would lie across
   /// screen transitions, where one view's session dies with its widget while
   /// the next view's session hasn't started yet.
-  Future<ArSessionStartResult> startSession() async {
+  Future<ArSessionStartResult> startSession() => _requestSessionStart('startSession');
+
+  /// Retry a FAILED start for the current platform view (failure sheet →
+  /// Retry).
+  ///
+  /// Deliberately NOT [startSession]: once the native side has recorded this
+  /// view's terminal outcome, another `startSession` replays that cached
+  /// failure instantly — so the one recovery the customer can perform (install
+  /// ARCore, come back, try again) could never succeed. `retrySession` drops
+  /// the cache and creates a brand-new native session.
+  Future<ArSessionStartResult> retrySession() =>
+      _requestSessionStart('retrySession');
+
+  /// Probe ARCore availability WITHOUT starting a session.
+  ///
+  /// Lets the setup screen say "this phone can't run AR scanning" (or "ARCore
+  /// needs installing") before a scan screen ever opens. Never throws: an
+  /// inconclusive probe resolves to [ArCoreSupport.unknown] so callers proceed
+  /// as if the check didn't exist.
+  Future<ArCoreAvailability> checkAvailability() async {
+    try {
+      final result = await _methodChannel.invokeMethod<Object>('checkAvailability');
+      return ArCoreAvailability.fromNative(result);
+    } on PlatformException catch (e) {
+      debugPrint('[ArCoreChannel] checkAvailability error: ${e.message}');
+    } on MissingPluginException {
+      debugPrint('[ArCoreChannel] checkAvailability not implemented natively');
+    } catch (e) {
+      debugPrint('[ArCoreChannel] checkAvailability failed: $e');
+    }
+    return const ArCoreAvailability(
+      rawValue: 'UNKNOWN',
+      support: ArCoreSupport.unknown,
+    );
+  }
+
+  Future<ArSessionStartResult> _requestSessionStart(String method) async {
     _startListening();
 
     try {
-      final result = await _methodChannel.invokeMethod<Object>('startSession');
+      final result = await _methodChannel.invokeMethod<Object>(method);
       final start = ArSessionStartResult.fromNative(result);
       // Honest state: only a genuinely-started session marks us active, so
       // hitTest/acquireCameraFrame are properly gated instead of silently
@@ -301,11 +408,18 @@ class ArCoreChannel {
       _sessionActive = start.started;
       return start;
     } on PlatformException catch (e) {
-      debugPrint('[ArCoreChannel] startSession error: ${e.message}');
+      debugPrint('[ArCoreChannel] $method error: ${e.message}');
       return ArSessionStartResult(
         started: false,
         reason: 'error',
         message: e.message,
+      );
+    } on MissingPluginException {
+      debugPrint('[ArCoreChannel] $method not implemented natively');
+      return const ArSessionStartResult(
+        started: false,
+        reason: 'error',
+        message: 'AR scanning is not available in this build',
       );
     }
   }

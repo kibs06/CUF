@@ -25,6 +25,14 @@ class ArFootSizingPlugin(private val activity: Activity) {
         // submitted" on the next call). Covers pathological cases where the
         // platform view is never created or session creation hangs forever.
         private const val SESSION_START_TIMEOUT_MS = 15000L
+
+        // Availability probe (`checkAvailability`): the ARCore compatibility
+        // check can go remote on Android 11+ (first call answers
+        // UNKNOWN_CHECKING), so the probe polls on the main looper instead of
+        // blocking a thread, and reports whatever state is current after this
+        // cap. ~3 s is enough for the Play verification round-trip.
+        private const val AVAILABILITY_POLL_DELAY_MS = 250L
+        private const val AVAILABILITY_MAX_POLLS = 12
     }
 
     private var methodChannel: MethodChannel? = null
@@ -57,10 +65,17 @@ class ArFootSizingPlugin(private val activity: Activity) {
     // new startSession call for a session that doesn't exist yet.
     private var lastSessionOutcome: Map<String, Any>? = null
 
+    // Engine attachment state + a generation token for in-flight availability
+    // polls. unregister() flips both so a poll that outlives its engine can
+    // never answer a torn-down channel.
+    private var registered = false
+    private var availabilityPollToken = 0
+
     private val mainHandler = Handler(Looper.getMainLooper())
 
     fun registerWith(flutterEngine: FlutterEngine) {
         Log.i(TAG, "registerWith called — registering '${PLATFORM_VIEW_TYPE}' view factory and '${METHOD_CHANNEL}' method channel")
+        registered = true
         // TEMPORARY (Phase 1b diagnostics) — remove with DiagRelay.kt.
         DiagRelay.log("plugin", "registerWith (engine attached)")
         val messenger = flutterEngine.dartExecutor.binaryMessenger
@@ -88,6 +103,8 @@ class ArFootSizingPlugin(private val activity: Activity) {
     fun unregister() {
         // TEMPORARY (Phase 1b diagnostics) — remove with DiagRelay.kt.
         DiagRelay.log("plugin", "unregister (engine detaching)")
+        registered = false
+        availabilityPollToken++
         methodChannel?.setMethodCallHandler(null)
         methodChannel = null
         eventChannel?.setStreamHandler(null)
@@ -119,6 +136,8 @@ class ArFootSizingPlugin(private val activity: Activity) {
                 result.success(null)
             }
             "startSession" -> handleStartSession(result)
+            "retrySession" -> handleRetrySession(result)
+            "checkAvailability" -> handleCheckAvailability(result)
             "stopSession" -> {
                 // D1 fix: Dart NO LONGER calls this on screen transitions.
                 // Native view/session teardown is single-owned by Flutter's
@@ -238,6 +257,14 @@ class ArFootSizingPlugin(private val activity: Activity) {
             result.success(outcome)
             return
         }
+        parkStartResult(result)
+    }
+
+    /**
+     * Parks a `startSession`/`retrySession` reply until the view reports a
+     * terminal outcome, guarded by a timeout so it is always answered.
+     */
+    private fun parkStartResult(result: MethodChannel.Result) {
         pendingStartResults.add(result)
         mainHandler.postDelayed({
             // Identity removal: only fire if THIS reply is still parked
@@ -250,6 +277,114 @@ class ArFootSizingPlugin(private val activity: Activity) {
                 ))
             }
         }, SESSION_START_TIMEOUT_MS)
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // ARCORE AVAILABILITY (pre-flight probe for the setup screen)
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * `checkAvailability` — lets Dart ask whether this device can run ARCore
+     * BEFORE it opens the camera flow.
+     *
+     * Without this, an unsupported device walks into the scan screen, the
+     * platform view asks Play to install ARCore, and Play answers "The device
+     * is not supported." (observed on a vivo V2022: com.google.ar.core is a
+     * version-0 stub and Finsky refuses the install) — leaving the customer on
+     * a camera screen that can never recover. Reporting the same availability
+     * enum the view already uses keeps one source of truth for the reason
+     * codes.
+     */
+    private fun handleCheckAvailability(result: MethodChannel.Result) {
+        availabilityPollToken++
+        pollAvailability(availabilityPollToken, AVAILABILITY_MAX_POLLS, result)
+    }
+
+    private fun pollAvailability(
+        token: Int,
+        attemptsLeft: Int,
+        result: MethodChannel.Result
+    ) {
+        if (!registered || token != availabilityPollToken) return
+        val availability = try {
+            com.google.ar.core.ArCoreApk.getInstance().checkAvailability(activity)
+        } catch (e: Exception) {
+            Log.e(TAG, "checkAvailability threw", e)
+            answerAvailability(result, "UNKNOWN_ERROR", supported = false, installed = false)
+            return
+        }
+        if (availability == com.google.ar.core.ArCoreApk.Availability.UNKNOWN_CHECKING &&
+            attemptsLeft > 0
+        ) {
+            // Remote compatibility check in flight — poll without blocking the
+            // main thread (the view's own loop already does this on its
+            // background session executor).
+            mainHandler.postDelayed({
+                pollAvailability(token, attemptsLeft - 1, result)
+            }, AVAILABILITY_POLL_DELAY_MS)
+            return
+        }
+        Log.i(TAG, "Availability probe: $availability")
+        answerAvailability(
+            result,
+            availability.toString(),
+            supported = availability.isSupported,
+            installed = availability == com.google.ar.core.ArCoreApk.Availability.SUPPORTED_INSTALLED
+        )
+    }
+
+    private fun answerAvailability(
+        result: MethodChannel.Result,
+        availability: String,
+        supported: Boolean,
+        installed: Boolean
+    ) {
+        try {
+            result.success(mapOf(
+                "availability" to availability,
+                "supported" to supported,
+                "installed" to installed
+            ))
+        } catch (e: Exception) {
+            // Channel torn down mid-probe (engine detach) — nothing to answer.
+            Log.w(TAG, "Availability result dropped: ${e.message}")
+        }
+    }
+
+    /**
+     * `retrySession` — a REAL restart for the failure sheet's Retry action.
+     *
+     * `startSession` answers from [lastSessionOutcome] once a terminal outcome
+     * exists, so retrying after a `needs_install` failure used to replay the
+     * cached failure instantly: the one recovery the user can perform (install
+     * ARCore, come back, retry) could never succeed. This drops the cache, asks
+     * the current view to create a fresh session, and parks the reply on the
+     * same machinery `startSession` uses.
+     */
+    private fun handleRetrySession(result: MethodChannel.Result) {
+        val view = currentView
+        if (view == null || !registered) {
+            result.success(mapOf(
+                "started" to false,
+                "reason" to "error",
+                "message" to "AR view is not mounted"
+            ))
+            return
+        }
+        lastSessionOutcome = null
+        if (!view.retryCreateSession()) {
+            // Disposed, or a session already exists — report instead of
+            // parking a reply that can never be resolved.
+            val outcome = mapOf<String, Any>(
+                "started" to false,
+                "reason" to "error",
+                "message" to "AR session is no longer available"
+            )
+            lastSessionOutcome = outcome
+            result.success(outcome)
+            return
+        }
+        parkStartResult(result)
     }
 
     fun setView(view: ArFootSizingView) {

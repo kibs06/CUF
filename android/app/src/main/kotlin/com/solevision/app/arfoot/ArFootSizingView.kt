@@ -98,6 +98,28 @@ class ArFootSizingView(
     /** Whether the ARCore session has actually reached "created + resumed". */
     fun isSessionStarted(): Boolean = sessionStarted
 
+    /**
+     * Re-run session creation after a FAILED start (the failure sheet's Retry
+     * action, via the plugin's `retrySession` call).
+     *
+     * Returns false when this view is disposed or already owns a session, so
+     * the plugin can answer the method call instead of parking it against a
+     * view that will never report an outcome. Resets the availability retry
+     * budget so a previous UNKNOWN_CHECKING timeout can't poison the fresh
+     * attempt.
+     */
+    fun retryCreateSession(): Boolean {
+        if (disposed || sessionStarted) return false
+        availabilityRetryCount = 0
+        return try {
+            sessionExecutor.execute { createSession() }
+            true
+        } catch (e: java.util.concurrent.RejectedExecutionException) {
+            Log.w(TAG, "retryCreateSession rejected — executor is shut down", e)
+            false
+        }
+    }
+
     // Guards the session assignment in createSession() against destroySession()
     // in dispose() — makes the disposed-check-then-assign atomic so an
     // in-flight async creation can never leak a live resumed session.
