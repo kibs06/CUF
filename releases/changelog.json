@@ -1,5 +1,16 @@
 [
   {
+    "latest_version": "1.0.46",
+    "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.46/app-release-1.0.46.apk",
+    "released_at": "2026-10-05",
+    "notes": [
+      "Virtual Try-On works end to end now: the camera view is upright and the shoe anchors to your foot on the floor",
+      "Fixed: the shoe appears reliably when you place your foot in frame, even right after opening the camera",
+      "New flashlight button in the AR screen brightens dark rooms, and the whole camera feed renders brighter at night",
+      "Every product now shows its own real 3D shoe model instead of a shared placeholder"
+    ]
+  },
+  {
     "latest_version": "1.0.45",
     "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.45/app-release-1.0.45.apk",
     "released_at": "2026-10-03",
