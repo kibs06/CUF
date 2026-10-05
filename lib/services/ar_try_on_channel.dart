@@ -22,21 +22,31 @@
 /// spike, its screen and its native package are deleted together on retirement;
 /// until then **import one or the other, never both.**
 ///
-/// **The contract is a subset of §2.8 on purpose.** `setFootPose` and
-/// `setFootMask` (V4's detection loop) and the `footLock` event are omitted
-/// because nothing can call them yet: a wrapper for a conversation neither side
-/// can have is not a contract, it is a guess. They arrive with V4, which also
-/// needs `FootPoseFrame`. What is here is what V3 works with — start/stop, the
-/// model handover, size and colour, placement, the screenshot, and the QA mode
-/// switch.
+/// **V4 extended the contract rather than guessing at it (2026-10-04).** The V3
+/// subset deliberately omitted `setFootPose`, `setFootMask` and the `footLock`
+/// event because nothing could call them; V4's detection loop is now that
+/// caller, so all three are here, plus [FootPoseFrame] — the payload §2.8
+/// specifies (`heelUv`, `toeUv`, `widthUv[2]`, `confidence`, `footSide`).
+///
+/// **One addition is not in §2.8's table: [ArTryOnChannel.acquireCameraFrame].**
+/// §2.8's Dart→native list starts at `setFootPose`, which silently assumes Dart
+/// already has frames — and it cannot, because the try-on session owns the
+/// camera while the scan's `ArCoreChannel` talks to a *different* plugin. D3
+/// keeps detection in Dart, so the frames have to come across; the architecture
+/// marks the copied frame acquisition as deliberate debt ("if a third AR screen
+/// ever appears, extract a shared `ArSessionController` then — not now"). The
+/// payload is the scan's own [ArCameraFrame], so a second frame vocabulary does
+/// not exist.
 library;
 
 import 'dart:async';
 
-// `Uint8List` comes from services.dart's export of dart:typed_data.
+// `Uint8List` and `Offset` come from services.dart's exports of dart:typed_data
+// and dart:ui.
 import 'package:flutter/services.dart';
 
 import '../utils/shoe_model_resolver.dart';
+import 'ar_core_channel.dart' show ArCameraFrame;
 
 /// `MethodChannel` name, beside the scan's `com.solevision/ar_foot_sizing`.
 const String kArTryOnMethodChannel = 'com.solevision/ar_try_on';
@@ -194,6 +204,70 @@ class TryOnPerf {
       '${frameMs.toStringAsFixed(1)} ms)';
 }
 
+/// One foot observation, as the renderer's tracker consumes it (§2.8).
+///
+/// Every point is **normalized upright-image UV** (0–1), the space ARCore's
+/// `hitTest` takes — the same space `FootPoint` uses, so no conversion happens
+/// between detection and the channel.
+///
+/// **Dart publishes observations, not decisions.** There is no smoothing, no
+/// world basis and no lock state in this payload: all of that lives in the
+/// native `FootPoseTracker`, which can see the frames between these samples and
+/// can undo nothing Dart has already filtered. The one thing Dart *has* decided
+/// is which frames are worth sending — `TemporalFootGate`'s consecutive-positive
+/// requirement — because dropping an obviously bad frame at the source is
+/// cheaper than teaching the tracker to distrust it.
+class FootPoseFrame {
+  /// Rear-most extent of the foot (the heel).
+  final Offset heelUv;
+
+  /// Forward-most extent (the tip of the longest toe).
+  final Offset toeUv;
+
+  /// The widest-point pair, or empty when the detector has none (the
+  /// pose-based detector never does; segmentation usually does). Two points
+  /// when present — the native side uses them to orient the shoe's lateral
+  /// axis, and absence is legal rather than an error.
+  final List<Offset> widthUv;
+
+  /// The combined quality score the frame was accepted on (§2.9's
+  /// `qualityScore`, the same number the scan's sample gate reads). The
+  /// native lock enters at ≥0.7 and leaves below 0.45 (§2.9/§2.10).
+  final double confidence;
+
+  /// `'left'` or `'right'` when the detector is sure, null when it is not.
+  final String? footSide;
+
+  const FootPoseFrame({
+    required this.heelUv,
+    required this.toeUv,
+    this.widthUv = const <Offset>[],
+    required this.confidence,
+    this.footSide,
+  });
+
+  /// The wire shape §2.8 specifies.
+  ///
+  /// Built by hand rather than reflected: every value crosses a platform
+  /// boundary where `Offset` is not a type the channel knows, and `widthUv`
+  /// is empty for most frames today, so the list must survive an empty case.
+  Map<String, Object?> toMap() => <String, Object?>{
+        'heelUv': <String, double>{'x': heelUv.dx, 'y': heelUv.dy},
+        'toeUv': <String, double>{'x': toeUv.dx, 'y': toeUv.dy},
+        'widthUv': <Map<String, double>>[
+          for (final Offset point in widthUv)
+            <String, double>{'x': point.dx, 'y': point.dy},
+        ],
+        'confidence': confidence,
+        'footSide': footSide,
+      };
+
+  @override
+  String toString() => 'FootPoseFrame(heel: $heelUv, toe: $toeUv, '
+      'width: ${widthUv.length}, conf: ${confidence.toStringAsFixed(2)}, '
+      'side: ${footSide ?? '-'})';
+}
+
 /// One message from the native renderer.
 sealed class ArTryOnEvent {
   const ArTryOnEvent();
@@ -226,6 +300,16 @@ sealed class ArTryOnEvent {
           reason: data['reason']?.toString() ?? 'error',
           message: data['message']?.toString(),
         ),
+      'footLock' => TryOnFootLockEvent(
+          locked: data['locked'] == true,
+          quality: _asDouble(data['quality']),
+          side: data['side']?.toString(),
+        ),
+      'footMeasure' => TryOnFootMeasureEvent(
+          lengthMm: _asDouble(data['lengthMm']),
+          quality: _asDouble(data['quality']),
+        ),
+      'status' => TryOnStatusEvent(line: data['line']?.toString() ?? ''),
       'screenshot' => TryOnScreenshotEvent(bytes: _asBytes(data['bytes'])),
       _ => ArTryOnUnknownEvent(type: type, data: data),
     };
@@ -259,6 +343,70 @@ class TryOnErrorEvent extends ArTryOnEvent {
   const TryOnErrorEvent({required this.reason, this.message});
 }
 
+/// The native tracker's lock state changed (§2.8's `footLock`).
+///
+/// **This drives the coach card, not the render** — the render is
+/// native-resident, and this event exists so Dart can say "hold still" or "got
+/// it" without asking. [quality] is the tracker's post-smoothing score, which
+/// is why the Dart side does not compare it against the enter/leave thresholds
+/// itself: the native hysteresis already decided, and a second opinion here
+/// would flicker.
+class TryOnFootLockEvent extends ArTryOnEvent {
+  /// True when the tracker holds a lock, false when it lost or never had one.
+  final bool locked;
+
+  /// Post-smoothing quality (0–1).
+  final double quality;
+
+  /// `'left'`/`'right'` when the tracker knows which foot, null otherwise.
+  final String? side;
+
+  const TryOnFootLockEvent({
+    required this.locked,
+    required this.quality,
+    this.side,
+  });
+}
+
+/// **V4.6's live measurement** — the tracker's eased heel→toe length in mm,
+/// with the smoothed quality it was read at.
+///
+/// The first event on this channel that is a *number* rather than a state, and
+/// the one Dart's fit engine grades with: the verdict beside the shoe is built
+/// from this reading, not from the saved scan, so it describes the foot in the
+/// frame. Emitted at ~2 Hz while the tracker has an anchor (the view's own
+/// throttle), so a malformed payload degrades to `0` here and the controller
+/// refuses it rather than doing arithmetic on it.
+class TryOnFootMeasureEvent extends ArTryOnEvent {
+  /// Eased heel→toe length in millimetres. Zero/invalid when the native side
+  /// said nothing usable; the controller drops those, never the card.
+  final double lengthMm;
+
+  /// Post-smoothing quality (0–1) at the instant the length was read.
+  final double quality;
+
+  const TryOnFootMeasureEvent({required this.lengthMm, required this.quality});
+}
+
+/// **The renderer's own heartbeat (V4.9)** — one line a second while
+/// [ArTryOnChannel.setDiagnostics] is on, carrying `loop`, `foot`, `len`,
+/// `scale`, `mask` and `thermal` (§2.16's heartbeat fields).
+///
+/// The native half has written this line since V4.2, but until V4.9 the only
+/// switch that could ask for it belonged to the inline preview — the try-on
+/// session's own readout was unreachable, which is exactly what a device
+/// session would have discovered with no way to explain itself. The event type
+/// is the other half: the readout goes on the screen, so a phone with no `adb
+/// logcat` carries its numbers in a screenshot.
+class TryOnStatusEvent extends ArTryOnEvent {
+  /// The whole line, verbatim. Empty when a native build sent the event with
+  /// nothing in it — the controller ignores those rather than drawing a blank
+  /// strip over the camera.
+  final String line;
+
+  const TryOnStatusEvent({required this.line});
+}
+
 /// Async screenshot completion. `captureScreenshot` normally returns the bytes
 /// directly; this is the channel's other way of delivering them.
 class TryOnScreenshotEvent extends ArTryOnEvent {
@@ -267,8 +415,9 @@ class TryOnScreenshotEvent extends ArTryOnEvent {
   const TryOnScreenshotEvent({required this.bytes});
 }
 
-/// Forward-compatibility catch-all: a future event type (V4's `footLock`, for
-/// instance) reaches the controller as an unknown rather than as a crash.
+/// Forward-compatibility catch-all: an event type this Dart build has not heard
+/// of (V5/V6 additions) reaches the controller as an unknown rather than as a
+/// crash.
 class ArTryOnUnknownEvent extends ArTryOnEvent {
   final String type;
   final Map<String, dynamic> data;
@@ -367,6 +516,43 @@ class ArTryOnChannel {
         <String, Object?>{'materialOverrides': materialOverrides},
       );
 
+  /// Publishes one foot observation (V4.1's caller, ≥5 Hz while searching).
+  ///
+  /// Answers `true` when the native tracker accepted the frame. The reply is
+  /// deliberately not awaited by the loop's cadence logic: a dropped frame must
+  /// not back-pressure the next one, and a failure here is already the
+  /// simulated screen's business — not the renderer's.
+  Future<void> setFootPose(FootPoseFrame frame) =>
+      _methods.invokeMethod<void>('setFootPose', frame.toMap());
+
+  /// Sends the downsampled foot mask for stencil occlusion (§2.10). V4.4's
+  /// caller — **nothing calls this yet**, and the shape is here so the native
+  /// side can be written against a pinned payload rather than a guess: 32×32
+  /// bytes, ~1 KB per frame.
+  Future<void> setFootMask({
+    required Uint8List bytes32x32,
+    required double confidence,
+  }) =>
+      _methods.invokeMethod<void>('setFootMask', <String, Object?>{
+        'bytes': bytes32x32,
+        'confidence': confidence,
+      });
+
+  /// **The detection loop's frame source.** Returns the most recent throttled
+  /// CPU frame (NV21 + geometry), or null when the native side has none yet.
+  ///
+  /// Copied from the scan's plugin on purpose (the architecture records the
+  /// duplication as debt): two ARCore sessions cannot exist at once, so the
+  /// try-on session's plugin is the only thing that can serve frames while the
+  /// try-on screen is up, and ML Kit needs NV21 — not a GPU texture. The
+  /// response is the scan channel's own `ArCameraFrame`, parsed by the same
+  /// `fromMap`, so there is exactly one frame vocabulary.
+  Future<ArCameraFrame?> acquireCameraFrame() async {
+    final native = await _methods.invokeMethod<Object?>('acquireCameraFrame');
+    if (native is Map) return ArCameraFrame.fromMap(native);
+    return null;
+  }
+
   /// Places the shoe at a screen point — the manual fallback when no foot is
   /// found. V3.4's caller.
   Future<void> placeShoe({required double x, required double y}) =>
@@ -386,5 +572,31 @@ class ArTryOnChannel {
       _methods.invokeMethod<void>(
         'setTryOnMode',
         <String, Object?>{'mode': mode.wireName},
+      );
+
+  /// Ask the native renderer for its one-line heartbeat (`status` events, at
+  /// most once a second) — **V4.9's readout seam.**
+  ///
+  /// QA only: the native side cannot read a Dart define, so this call *is* the
+  /// switch's other half, and the try-on session's `foot=` / `len=` / `scale=`
+  /// / `mask=` / `thermal=` line is emitted only for a build that makes it.
+  /// Legal before the native view exists — the plugin parks it and applies it
+  /// on view creation (the F18 contract) — so the readout is already on for a
+  /// view whose session never starts.
+  Future<void> setDiagnostics(bool enabled) =>
+      _methods.invokeMethod<void>(
+        'setDiagnostics',
+        <String, Object?>{'enabled': enabled},
+      );
+
+  /// **V4.9: the night-aid torch** — the AR screen's flash toggle, passed
+  /// straight to the native view. The native side stores the wish and applies
+  /// it at session configure time, or reconfigures a live session on the spot.
+  /// Fire-and-forget: a failed toggle is retried by the next tap, and losing
+  /// one is one frame of dark feed, never a session fault.
+  Future<void> setTorch(bool enabled) =>
+      _methods.invokeMethod<void>(
+        'setTorch',
+        <String, Object?>{'enabled': enabled},
       );
 }

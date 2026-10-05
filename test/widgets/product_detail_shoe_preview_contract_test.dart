@@ -615,6 +615,32 @@ void main() {
       expect(defines, contains('"SHOE_PREVIEW_LOWER_ENGINE_TO_LEVEL1": false'));
     });
 
+    test('the QA model seam reaches the page gate too, or the 3D entry has no '
+        'way in (V4.9)', () {
+      // The device session's own finding: the try-on screen's QA seam made the
+      // *session* reachable, but the page's gate still read `noModel` on every
+      // product while `product_models` holds 0 rows — and the "Try On in AR"
+      // button lives inside the viewer that gate hides. Pinned at the call
+      // site, where the page builds its prefetch.
+      final construction = between(
+        productScreen,
+        'TryOnPrefetch(',
+        ');',
+      );
+      expect(
+        construction,
+        contains('AppConstants.tryOnPlaceholderModelEnabled'),
+        reason: 'the bundled-bytes boundary must reach the page gate too, or '
+            'the entry the session is run through cannot appear',
+      );
+      expect(
+        construction,
+        contains('placeholderModelService()'),
+        reason: 'the same production service pointed at the bundled asset the '
+            'try-on screen uses',
+      );
+    });
+
     test('the override rides on the preview handover, and only there', () {
       final handover = between(
         previewChannel,

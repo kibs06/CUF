@@ -117,6 +117,15 @@ class ArTryOnPlugin(private val activity: Activity) : MethodChannel.MethodCallHa
     private var parkedColor: Map<String, Any?>? = null
     private var parkedMode: String? = null
 
+    /**
+     * **V4.9: the AR session's own readout request, parked like the preview's.** The try-on
+     * heartbeats (`foot=`, `len=`, `scale=`, `mask=`, `thermal=`) had no way to be switched on for
+     * the AR view — the switch only existed on the preview channel — so a device session could not
+     * read the numbers the V4 phases are tuned with. Dart asks before the view exists, hence the
+     * parking; `onViewAvailable` replays it.
+     */
+    private var parkedDiagnostics: Boolean? = null
+
     /** `startSession` calls waiting for a view, with the 15 s net the Dart side was promised. */
     private val pendingStarts = mutableListOf<PendingStart>()
 
@@ -384,10 +393,12 @@ class ArTryOnPlugin(private val activity: Activity) : MethodChannel.MethodCallHa
         parkedSize?.let(created::setSize)
         parkedColor?.let(created::setColor)
         parkedMode?.let(created::setTryOnMode)
+        parkedDiagnostics?.let(created::setDiagnostics)
         parkedModel = null
         parkedSize = null
         parkedColor = null
         parkedMode = null
+        parkedDiagnostics = null
         // Any `startSession` that was waiting on the view can go now.
         flushPendingStarts()
     }
@@ -441,6 +452,89 @@ class ArTryOnPlugin(private val activity: Activity) : MethodChannel.MethodCallHa
                 result.success(null)
             }
 
+            // ── V4.9: the AR session's readout seam ─────────────────────────────────────────
+            "setDiagnostics" -> {
+                // The model/BUILD cannot read a Dart define; this call is the switch's other
+                // half, parked when it arrives before the view (the framework creates the view a
+                // frame after Dart builds the screen).
+                val enabled = (call.arguments as? Map<*, *>)?.get("enabled") == true
+                val parked = view == null
+                if (parked) {
+                    parkedDiagnostics = enabled
+                } else {
+                    view?.setDiagnostics(enabled)
+                }
+                relay("setDiagnostics($enabled) — ${if (parked) "parked" else "applied"}")
+                result.success(null)
+            }
+
+            // ── V4.9: the night-aid torch ──────────────────────────────────────────────────
+            // A user-facing toggle (the AR screen's flash button), not a build switch, so it
+            // has no parking: the platform view exists before the screen draws any control
+            // that could call this, and a dropped toggle is retried by the next tap.
+            "setTorch" -> {
+                val enabled =
+                    (call.arguments as? Map<*, *>)?.get("enabled") == true
+                val target = view
+                if (target == null) {
+                    Log.w(TAG, "setTorch($enabled): no view yet — dropped")
+                } else {
+                    target.setTorch(enabled)
+                }
+                result.success(null)
+            }
+
+            // ── V4.2: the detection loop's two calls ────────────────────────────────────────
+            "setFootPose" -> {
+                // One observation per accepted detection (§2.8). A malformed payload is logged
+                // and dropped: an observation is never fatal, and the Dart loop's own failure
+                // accounting already handles a native side that stops answering.
+                val observation = parseFootPose(call.arguments)
+                if (observation == null) {
+                    Log.w(TAG, "setFootPose: unusable payload ${call.arguments}")
+                } else {
+                    view?.setFootPose(observation)
+                }
+                result.success(null)
+            }
+
+            // ── V4.4: the same detection's occlusion mask ──────────────────────────────────
+            "setFootMask" -> {
+                // A 32×32 byte mask plus the sample's quality (`lib/services/ar_try_on_channel.dart`'s
+                // `setFootMask`). Dropped when malformed, for the same reason an observation is:
+                // losing one mask costs one frame of occlusion, and a throw would cost the loop.
+                val mask = parseFootMask(call.arguments)
+                if (mask == null) {
+                    Log.w(TAG, "setFootMask: unusable payload")
+                } else {
+                    view?.setFootMask(mask.bytes, mask.confidence)
+                }
+                result.success(null)
+            }
+
+            "acquireCameraFrame" -> {
+                val target = view
+                if (target == null || !target.hasCachedCameraFrame()) {
+                    // Not an error: the first ~150 ms of a session have no CPU frame yet, and
+                    // the Dart loop skips a null frame rather than counting it a failure.
+                    result.success(null)
+                } else {
+                    val bytes = target.getCachedCameraFrameBytes()
+                    if (bytes == null) {
+                        result.success(null)
+                    } else {
+                        result.success(
+                            mapOf(
+                                "bytes" to bytes,
+                                "width" to target.getCachedCameraFrameWidth(),
+                                "height" to target.getCachedCameraFrameHeight(),
+                                "rotationDegrees" to target.getCachedCameraFrameRotationDegrees(),
+                            ),
+                        )
+                    }
+                }
+            }
+
             "captureScreenshot" -> {
                 val target = view
                 if (target == null) {
@@ -459,6 +553,50 @@ class ArTryOnPlugin(private val activity: Activity) : MethodChannel.MethodCallHa
             else -> result.notImplemented()
         }
     }
+
+    /**
+     * V4.2: parse one `setFootPose` payload (`lib/services/ar_try_on_channel.dart`'s
+     * `FootPoseFrame.toMap`).
+     *
+     * Defensive on purpose, the same rule every parser in this codebase follows: a Dart build
+     * that sends a shape this native build has not heard of must degrade to a dropped observation,
+     * never to a throw across the channel on a screen a customer is holding.
+     */
+    private fun parseFootPose(arguments: Any?): FootPoseTracker.Observation? {
+        val map = arguments as? Map<*, *> ?: return null
+        val heel = map["heelUv"] as? Map<*, *> ?: return null
+        val toe = map["toeUv"] as? Map<*, *> ?: return null
+        val heelU = (heel["x"] as? Number)?.toDouble() ?: return null
+        val heelV = (heel["y"] as? Number)?.toDouble() ?: return null
+        val toeU = (toe["x"] as? Number)?.toDouble() ?: return null
+        val toeV = (toe["y"] as? Number)?.toDouble() ?: return null
+        val confidence = (map["confidence"] as? Number)?.toDouble() ?: return null
+        val side = map["footSide"] as? String
+        return FootPoseTracker.Observation(heelU, heelV, toeU, toeV, confidence, side)
+    }
+
+    /**
+     * V4.4: parse one `setFootMask` payload — `{bytes: Uint8List, confidence: double}`.
+     *
+     * The mask is a byte array, not a list of numbers: the Dart side hands over the output of
+     * `downsampleFootMask` unchanged, and `StandardMessageCodec` carries `Uint8List` as `ByteArray`
+     * (a `List<Int>` would decode to `List` and is accepted as a fallback rather than assumed
+     * away, because the two are one Dart-side edit apart).
+     */
+    private fun parseFootMask(arguments: Any?): FootMaskPayload? {
+        val map = arguments as? Map<*, *> ?: return null
+        val bytes = when (val raw = map["bytes"]) {
+            is ByteArray -> raw
+            is List<*> -> ByteArray(raw.size) { i -> ((raw[i] as? Number)?.toInt() ?: 0).toByte() }
+            else -> return null
+        }
+        if (bytes.isEmpty()) return null
+        val confidence = (map["confidence"] as? Number)?.toDouble() ?: return null
+        return FootMaskPayload(bytes, confidence)
+    }
+
+    /** V4.4: a parsed `setFootMask` — the mask bytes and the sample quality they came with. */
+    private class FootMaskPayload(val bytes: ByteArray, val confidence: Double)
 
     /**
      * The session start: the two UI-thread preconditions, then the view's session.

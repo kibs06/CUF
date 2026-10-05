@@ -107,6 +107,34 @@ class TryOnModelReadyEvent extends TryOnSessionEvent {
       '${fromCache ? 'cache' : 'download'}, ${stageMs}ms)';
 }
 
+/// The native tracker's lock state changed (V4, `footLock` on the channel).
+///
+/// A one-shot event rather than only controller state, because the screen acts
+/// on it exactly once: "got it" and "hold still" are beats, not levels. The
+/// current level stays readable from the controller's `footLocked`/`footQuality`
+/// getters, so a rebuild that arrives late can still draw the right chip.
+class TryOnFootLockChangedEvent extends TryOnSessionEvent {
+  /// True when the tracker holds a lock.
+  final bool locked;
+
+  /// Post-smoothing quality, 0–1.
+  final double quality;
+
+  /// `'left'`/`'right'` when the tracker knows, null otherwise.
+  final String? side;
+
+  const TryOnFootLockChangedEvent({
+    required this.locked,
+    required this.quality,
+    this.side,
+  });
+
+  @override
+  String toString() => 'TryOnFootLockChangedEvent('
+      '${locked ? 'locked' : 'lost'}, '
+      'q=${quality.toStringAsFixed(2)}${side == null ? '' : ', $side'})';
+}
+
 /// The session fell back to the simulated screen, with the reason why.
 class TryOnDegradedEvent extends TryOnSessionEvent {
   final TryOnDegradeReason reason;

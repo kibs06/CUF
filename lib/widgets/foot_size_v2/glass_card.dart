@@ -12,9 +12,11 @@ import '../../constants/app_constants.dart';
 ///
 /// Tone variants tint the glass: [GlassTone.neutral] is a plain dark smoke,
 /// [active] adds an accent edge, [success]/[warning] shift toward their
-/// semantic colors. All tones keep white-ish foreground text since they sit
-/// on camera imagery.
-enum GlassTone { neutral, active, success, warning }
+/// semantic colors, and [error] is the wrong-direction tone added for V4.6's
+/// live fit verdict (a shoe that is a whole size out should read as a problem
+/// exactly as it does on the product page). All tones keep white-ish
+/// foreground text since they sit on camera imagery.
+enum GlassTone { neutral, active, success, warning, error }
 
 class GlassCard extends StatelessWidget {
   final Widget child;
@@ -48,6 +50,8 @@ class GlassCard extends StatelessWidget {
         return AppConstants.success.withValues(alpha: 0.35);
       case GlassTone.warning:
         return AppConstants.statusPendingColor.withValues(alpha: 0.38);
+      case GlassTone.error:
+        return AppConstants.error.withValues(alpha: 0.35);
     }
   }
 
@@ -61,6 +65,8 @@ class GlassCard extends StatelessWidget {
         return AppConstants.success.withValues(alpha: 0.7);
       case GlassTone.warning:
         return AppConstants.statusPendingColor.withValues(alpha: 0.7);
+      case GlassTone.error:
+        return AppConstants.error.withValues(alpha: 0.7);
     }
   }
 

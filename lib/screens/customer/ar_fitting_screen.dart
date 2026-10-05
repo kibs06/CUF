@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/product_provider.dart';
@@ -16,6 +18,11 @@ import '../../providers/try_on/try_on_mode.dart';
 import '../../providers/try_on/try_on_phase.dart';
 import '../../providers/try_on/try_on_session_controller.dart';
 import '../../services/ar_try_on_channel.dart';
+import '../../utils/try_on_coach.dart';
+import '../../utils/try_on_fit.dart';
+import '../../widgets/try_on/try_on_coach_card.dart';
+import '../../widgets/try_on/try_on_fit_card.dart';
+import '../../widgets/try_on/try_on_saved_size_card.dart';
 import '../../services/try_on_placeholder_model.dart';
 
 class ARVirtualFitScreen extends StatefulWidget {
@@ -72,7 +79,8 @@ class ARVirtualFitScreen extends StatefulWidget {
   State<ARVirtualFitScreen> createState() => _ARVirtualFitScreenState();
 }
 
-class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProviderStateMixin {
+class _ARVirtualFitScreenState extends State<ARVirtualFitScreen>
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   late Map<String, dynamic> _activeProduct;
   late String _activeSize;
   late String _activeColor;
@@ -92,12 +100,42 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProv
   /// simulated feed (D8) instead of a black rectangle the customer cannot explain.
   bool _tryOnShowingView = false;
 
+  /// **V4.9: whether the platform view this screen asked for actually exists.**
+  ///
+  /// `startAr` may never be told `arViewReady: true` before the view is there
+  /// (F17: the native side parks such a call and answers `timeout` after 15 s),
+  /// and the framework creating the view is the only proof of it. The model
+  /// handover can finish *after* that proof arrives — the ordering a phone
+  /// actually produces — which is what makes this a field rather than the
+  /// one-shot call it used to be.
+  bool _tryOnViewCreated = false;
+
   /// Whether this screen built [_tryOn] and must therefore dispose it.
   bool _ownsTryOn = false;
+
+  /// **V4.8's rotation lock.** While this screen is open the app is pinned to
+  /// portrait: the AR surface, the camera projection and the coaching column are
+  /// all laid out for it, and a mid-session rotation moves the renderer — the
+  /// one path nobody has run on a device. Taken in [initState], restored in
+  /// [dispose], so no other route inherits it.
+  static const List<DeviceOrientation> _tryOnOrientations =
+      <DeviceOrientation>[DeviceOrientation.portraitUp];
+
+  /// **V4.8: the simulated feed's timers, cancellable.** The 20-open/close rule
+  /// holds this screen to leaving nothing armed when it unmounts, and a
+  /// `Future.delayed` cannot be cancelled out of one.
+  Timer? _simulatedLockTimer;
+  Timer? _relockTimer;
 
   // GlobalKeys for the fly-to-cart overlay animation (Add to Cart → cart icon)
   final GlobalKey _addToCartButtonKey = GlobalKey();
   final GlobalKey _cartIconKey = GlobalKey();
+
+  /// **V4.9: the night-aid torch.** The camera feed's own brightness is capped by
+  /// the sensor in a dark room (ARCore's auto-exposure is already maxed), so the
+    /// only honest brightener is more light: this drives the phone's flash through
+    /// the session (`ArTryOnView.setTorch`), and the chip lights up while it is on.
+  bool _torchOn = false;
   
   late AnimationController _pulseController;
   late AnimationController _particleController;
@@ -105,6 +143,8 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProv
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    SystemChrome.setPreferredOrientations(_tryOnOrientations);
     final productProvider = Provider.of<ProductProvider>(context, listen: false);
     
     // Fallback if no preselected product
@@ -147,6 +187,14 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProv
         // *and* size (V2.2's D-2 deferral), so a colour-scoped model would render on
         // one size only.
         enabled: true,
+        // V4.1's QA/development seam. Off in every customer build; on a build
+        // that passes it, the loop still needs a live session (and so, in
+        // practice, `TRY_ON_V3=true`) before it spends a frame.
+        footTrackEnabled: AppConstants.tryOnFootTrackEnabled,
+        // V4.9's readout switch. Passed rather than read inside the controller
+        // for the same reason the two switches above are: a
+        // `bool.fromEnvironment` cannot be flipped under `flutter test`.
+        diagnostics: AppConstants.shoePreviewDiagnosticsEnabled,
         models: AppConstants.tryOnPlaceholderModelEnabled
             ? placeholderModelService()
             : null,
@@ -164,8 +212,10 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProv
       _tryOn!.prepareModel();
     }
 
-    // Simulated tracking lock on after 2.5 seconds
-    Future.delayed(const Duration(milliseconds: 2500), () {
+    // Simulated tracking lock on after 2.5 seconds, in a timer this screen can
+    // cancel: V4.8's 20-open/close rule is exactly about what a `Future.delayed`
+    // leaves behind when the screen closes first.
+    _simulatedLockTimer = Timer(const Duration(milliseconds: 2500), () {
       if (mounted) {
         _isTracking.value = true;
       }
@@ -186,13 +236,33 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProv
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    // V4.8: the rotation lock lives and dies with this route.
+    SystemChrome.setPreferredOrientations(DeviceOrientation.values);
+    _simulatedLockTimer?.cancel();
+    _relockTimer?.cancel();
     _pulseController.dispose();
     _particleController.dispose();
     // D1: the platform view owns native teardown; disposing the controller cancels
     // its subscriptions and stops listening, and makes no `stopSession` call.
+    // V4.8: the listener comes off first either way — an *injected* controller is
+    // not disposed here (its owner still holds it), so it must not keep a dead
+    // state listening across the 20 open/close cycles this screen has to survive.
+    _tryOn?.removeListener(_onTryOnChanged);
     if (_ownsTryOn) _tryOn?.dispose();
     _isTracking.dispose();
     super.dispose();
+  }
+
+  /// **V4.8: backgrounding pauses the frame spending, and only a real resume
+  /// undoes it.** The screen owns this because the screen is what sees the app's
+  /// lifecycle; the controller owns what a pause means for the loop (a failure
+  /// stop and a degraded session stay stopped). The native half — ARCore paused
+  /// and resumed with the platform view's own surface — belongs to the view and
+  /// needs no call from here.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _tryOn?.setAppForeground(foreground: state == AppLifecycleState.resumed);
   }
 
   /// True only when the switch is on **and** the entry says a model is cached.
@@ -221,6 +291,36 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProv
       // Real ARCore tracking replaces the simulated 2.5 s lock-on.
       _isTracking.value = true;
     }
+    _startArIfReady();
+  }
+
+  /// **V4.9: the second chance `startAr` needs, and why the camera went black
+  /// without it.**
+  ///
+  /// This screen's other call site is the platform view's creation, and
+  /// `startAr` returns at its `modelReady` gate when the handover has not
+  /// finished yet — which on a device is the *usual* ordering: the view is
+  /// created a frame or two after this screen builds, while the model still has
+  /// to be resolved, downloaded, verified and handed over. A dropped start used
+  /// to be both silent and final: QA held exactly that screen for 48 minutes on
+  /// 2026-10-05 — no session, no camera, 173,660 frames of black — because
+  /// nothing ever called `startAr` a second time.
+  ///
+  /// So the phase reaching `modelReady` calls back in through the controller's
+  /// own [`TryOnSessionController.needsArStart`] seam, and the guard against
+  /// starting twice is the controller's (`startAr` is idempotent, and
+  /// `needsArStart` is false the moment AR is asked to start).
+  void _startArIfReady() {
+    final controller = _tryOn;
+    if (controller == null || !mounted) return;
+    if (!_tryOnShowingView || !controller.needsArStart) return;
+    // The view half of the precondition, and it is not a formality: `startAr`
+    // with `arViewReady: false` degrades the session instead of starting it, so a
+    // retry that guessed here would turn a race into the fallback screen. Under
+    // `tryOnViewBuilder` (tests only) the injected widget *is* the view, and
+    // `onPlatformViewCreated` never fires for it.
+    if (!_tryOnViewCreated && widget.tryOnViewBuilder == null) return;
+    unawaited(controller.startAr(arViewReady: true));
   }
 
   /// The real renderer, or null so [ARViewPlaceholder] keeps its simulated feed.
@@ -239,7 +339,10 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProv
       gestureRecognizers: <Factory<OneSequenceGestureRecognizer>>{
         Factory<OneSequenceGestureRecognizer>(() => EagerGestureRecognizer()),
       },
-      onPlatformViewCreated: (_) => _tryOn?.startAr(arViewReady: true),
+      onPlatformViewCreated: (_) {
+        _tryOnViewCreated = true;
+        _startArIfReady();
+      },
     );
   }
 
@@ -249,9 +352,11 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProv
       final sizesMap = Map<String, dynamic>.from(product['sizes'] ?? {});
       _activeSize = sizesMap.keys.firstWhere((s) => sizesMap[s] > 0, orElse: () => '39');
       
-      // Simulate tracking relocking on shoe change
+      // Simulate tracking relocking on shoe change — re-armed, so the previous
+      // shoe's timer is cancelled first rather than firing under the new one.
       _isTracking.value = false;
-      Future.delayed(const Duration(milliseconds: 1800), () {
+      _relockTimer?.cancel();
+      _relockTimer = Timer(const Duration(milliseconds: 1800), () {
         if (mounted) {
           _isTracking.value = true;
         }
@@ -382,6 +487,7 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProv
   Widget build(BuildContext context) {
     final productProvider = context.watch<ProductProvider>();
     final otherProducts = productProvider.products;
+    final coach = _tryOn;
     final sizesMap = Map<String, dynamic>.from(_activeProduct['sizes'] ?? {});
 
     return Scaffold(
@@ -455,7 +561,28 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProv
                           ],
                         ),
                       ),
-                      const SizedBox(width: 4),
+                      // V4.9: the night-aid torch — the one fix that actually adds
+                      // light at night (exposure gain multiplies noise; the flash
+                      // multiplies signal). Shown only while the real AR view is on
+                      // screen: the simulated feed has no camera to flash.
+                      if (_tryOnShowingView)
+                        GestureDetector(
+                          onTap: () {
+                            setState(() => _torchOn = !_torchOn);
+                            _tryOn?.setTorch(_torchOn);
+                          },
+                          child: CircleAvatar(
+                            radius: 18,
+                            backgroundColor:
+                                _torchOn ? AppConstants.accent : Colors.white24,
+                            child: Icon(
+                              _torchOn ? Icons.flash_on : Icons.flash_off,
+                              color: AppConstants.inkInverse,
+                              size: 18,
+                            ),
+                          ),
+                        ),
+                      const SizedBox(width: 8),
                       // Cart shortcut — fly-to-cart target for the add-to-cart animation
                       CartIconButton(
                         iconKey: _cartIconKey,
@@ -467,6 +594,76 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProv
               ),
             ),
           ),
+
+          // V4.9: the native renderer's heartbeat, when the build asked for it
+          // — one dim line under the top panel, so a phone with no adb still
+          // leaves the session's own numbers (`foot=`, `len=`, `scale=`,
+          // `mask=`, `thermal=`) in a screenshot. Nothing is drawn until the
+          // first `status` event arrives, and in a customer build the native
+          // side is never even asked, so this stays empty.
+          if (coach != null)
+            Positioned(
+              top: 130,
+              left: 20,
+              right: 20,
+              child: ValueListenableBuilder<String?>(
+                valueListenable: coach.nativeStatusLine,
+                builder: (context, line, _) => line == null
+                    ? const SizedBox.shrink()
+                    : _TryOnStatusLine(text: line),
+              ),
+            ),
+
+          // V4.5/V4.6/V4.7: the coaching column — the saved-size suggestion
+          // above the live fit verdict above the coach card, over the camera.
+          // Gated twice on purpose: the real view has to be the one on screen
+          // (`_tryOnShowingView`), and the build has to have asked for foot
+          // tracking at all (`footTrackEnabled`, the V4.1 switch — separate from
+          // V3's, because "may render a shoe" and "may coach a foot" are
+          // different permissions). Every widget collapses to nothing on its
+          // own, so a session that is not tracking draws no empty panel, and
+          // the column keeps the three from ever overlapping as they grow
+          // upward from the bottom panel.
+          if (coach != null &&
+              _tryOnShowingView &&
+              coach.footTrackEnabled)
+            Positioned(
+              left: 20,
+              right: 20,
+              bottom: 246,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // V4.7: the saved-profile comparison, first in the column and
+                  // therefore the only card that moves when it appears or
+                  // disappears — the verdict and the coach card keep their
+                  // positions above the bottom panel.
+                  ValueListenableBuilder<TryOnLiveFoot>(
+                    valueListenable: coach.liveFoot,
+                    builder: (context, live, _) =>
+                        TryOnSavedSizeCard(live: live),
+                  ),
+                  // V4.6: the fit verdict, graded live from the tracker's own
+                  // measurement (`coach.liveFoot`) — never from the saved scan,
+                  // which is a different day's reading (V4.7 compares the two).
+                  ValueListenableBuilder<TryOnLiveFoot>(
+                    valueListenable: coach.liveFoot,
+                    builder: (context, live, _) => TryOnFitCard(
+                      product: _activeProduct,
+                      selectedSize: _activeSize,
+                      live: live,
+                    ),
+                  ),
+                  ValueListenableBuilder<TryOnCoachCue?>(
+                    valueListenable: coach.coachCue,
+                    builder: (context, cue, _) => TryOnCoachCard(
+                      cue: cue,
+                      onPlaceManually: coach.dismissManualOffer,
+                    ),
+                  ),
+                ],
+              ),
+            ),
 
           // Bottom overlay: Glassmorphism menu box (~210px tall)
           Positioned(
@@ -793,6 +990,40 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen> with TickerProv
           ),
         ),
       ],
+    );
+  }
+}
+
+/// **V4.9: the renderer's own heartbeat, as one dim line over the camera.**
+///
+/// The try-on session's evidence channel for a phone whose developer options
+/// are locked: `adb logcat` will never be read from it, so the facts a
+/// screenshot can carry — where the foot tracker is, the millimetres and the
+/// ×N it produced, the mask's state and the device's thermal word — have to
+/// live on the screen. The preview's own readout, restyled for a camera
+/// backdrop; never customer copy, and drawn only when the native side sent a
+/// line, which it only does in a QA build that turned the readout on.
+class _TryOnStatusLine extends StatelessWidget {
+  const _TryOnStatusLine({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        text,
+        style: AppConstants.bodyStyle(
+          fontSize: 10,
+          color: AppConstants.surfaceLight.withValues(alpha: 0.75),
+        ),
+      ),
     );
   }
 }

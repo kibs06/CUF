@@ -6,11 +6,14 @@ import android.content.pm.ApplicationInfo
 import android.graphics.Bitmap
 import android.graphics.PixelFormat
 import android.graphics.SurfaceTexture
+import android.media.Image
 import android.opengl.Matrix
 import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.Looper
+import android.os.PowerManager
+import android.os.SystemClock
 import android.util.Log
 import android.view.Choreographer
 import android.view.MotionEvent
@@ -22,6 +25,7 @@ import android.view.SurfaceView
 import android.view.TextureView
 import android.widget.FrameLayout
 import com.google.android.filament.Camera
+import com.google.android.filament.ColorGrading
 import com.google.android.filament.Engine
 import com.google.android.filament.EntityManager
 import com.google.android.filament.Filament
@@ -30,6 +34,7 @@ import com.google.android.filament.MaterialInstance
 import com.google.android.filament.Renderer
 import com.google.android.filament.Scene
 import com.google.android.filament.SwapChain
+import com.google.android.filament.ToneMapper
 import com.google.android.filament.View
 import com.google.android.filament.Viewport
 import com.google.android.filament.gltfio.AssetLoader
@@ -37,6 +42,8 @@ import com.google.android.filament.gltfio.FilamentAsset
 import com.google.android.filament.gltfio.Gltfio
 import com.google.android.filament.gltfio.ResourceLoader
 import com.google.android.filament.gltfio.UbershaderProvider
+import com.google.ar.core.CameraConfig
+import com.google.ar.core.CameraConfigFilter
 import com.google.ar.core.Config
 import com.google.ar.core.Frame
 import com.google.ar.core.Plane
@@ -70,7 +77,9 @@ import kotlin.math.sqrt
  * It is not SceneView: V0.7 measured SceneView + Compose at +27.7 MB on the release APK against an
  * ≤8 MB budget, and variant C measured the same commit with `filament-android` + `gltfio-android`
  * alone at ≈+6.4 MB per arm64 device. So this file drives Filament's own Java API and owns the
- * three things SceneView used to supply (`docs/RoadMap/AR_TRY_ON_SPIKE_FINDINGS.md` §5.5).
+ * four things SceneView used to supply: the engine lifecycle, the glTF material path, the
+ * camera-feed draw, and the plane visuals still to come
+ * (`docs/RoadMap/AR_TRY_ON_SPIKE_FINDINGS.md` §5.5).
  *
  * ## What is real here
  *
@@ -81,8 +90,8 @@ import kotlin.math.sqrt
  *  • **The camera is ARCore's, not a made-up eye position.** Every frame takes
  *    `Frame.camera.pose.toMatrix()` as the Filament camera's model matrix and ARCore's own
  *    `getProjectionMatrix(near, far)` as a custom projection. The shoe is therefore world-anchored
- *    and correctly placed *before* the camera feed exists — which is the point of doing it now:
- *    when the feed lands, the geometry does not move.
+ *    and correctly placed *before* the feed is composited — which is the point of that ordering:
+ *    when the room appears behind it, the geometry does not move.
  *  • **Lighting** is a key + fill directional pair, with the key's intensity and colour driven by
  *    ARCore's ambient light estimate (`Config.LightEstimationMode.AMBIENT_INTENSITY`) so the shoe
  *    sits in the room's light rather than one hard-coded value. **There is no image-based
@@ -94,26 +103,30 @@ import kotlin.math.sqrt
  *    plane is found.
  *  • **Model handover, scale, colour, perf sampling and the screenshot** — the five other methods
  *    the Dart controller speaks (`lib/services/ar_try_on_channel.dart`).
+ *  • **The camera feed is composited — F20's first half, and the reason `feed=` exists in the QA
+ *    heartbeat.** [ArCameraFeed] creates the external OES texture ARCore writes frames into, inside
+ *    an EGL context shared with the engine, and draws it as a full-screen quad with a vendored
+ *    `camera_stream_flat.filamat` (SceneView 4.34.0, Apache-2.0, 42,544 B). The material is
+ *    version-locked to the Filament that compiled it, so [ArCameraFeed.attach] checks its
+ *    parameters and attributes against the live engine and reports a mismatch instead of drawing a
+ *    black backdrop; a missing asset reports the same way.
  *
  * ## What is deliberately not built, and why
  *
- *  1. **The camera feed is not composited.** Every route to drawing it needs a Filament material
- *     sampling ARCore's external OES texture, and **no `.filamat` ships in the artifacts this route
- *     uses** — measured: `filament-android`, `gltfio-android` and `filament-utils-android` contain
- *     zero assets. SceneView carried `camera_stream_flat.filamat` (42,544 B) inside its own package.
- *     So the shoe is drawn over a flat clear colour today. This is V3's largest visible gap and it
- *     is recorded as a gap rather than faked with a placeholder background.
+ *  1. **Planes are not visualized** — the camera feed's sibling gap. SceneView's
+ *     `plane_renderer.filamat` (40,976 B) has no counterpart vendored yet, and the IBL (~2.1 MB)
+ *     has none either, so the shoe has no reflections. Planes are still *used*: hit-testing needs
+ *     plane detection, so placement on a real floor works while the floor stays invisible.
  *  2. **Planes are not visualized** — same missing asset (SceneView's `plane_renderer.filamat`,
  *     40,976 B). They are still *used*: hit-testing needs plane detection, so placement on a real
  *     floor works while the floor stays invisible.
- *  3. **Hand-rolling geometry against the ubershader is not attempted.** Finding 3 of
+ *  2. **Hand-rolling geometry against the ubershader is not attempted.** Finding 3 of
  *     `GltfioDecodeTest` is a measured SIGABRT: a material/mesh mismatch (wrong parameters, missing
- *     vertex attributes) trips `utils::PreconditionPanic` inside `createAsset`. Building a
- *     full-screen quad or plane mesh against an ubershader whose exact attribute set is unverified
- *     is exactly that crash, on a screen a customer is holding. The two asset routes to close 1 and
- *     2 are in the roadmap: vendor the two Apache-2.0 `.filamat` files (with a version check — a
- *     `.filamat` is version-locked to the Filament that compiled it), or compile our own with
- *     `matc` in CI.
+ *     vertex attributes) trips `utils::PreconditionPanic` inside `createAsset`. Building a plane
+ *     mesh against an ubershader whose exact attribute set is unverified is exactly that crash, on
+ *     a screen a customer is holding. The feed took the vendoring route — an Apache-2.0 `.filamat`
+ *     with the version check [ArCameraFeed.attach] performs — and the plane material can take that
+ *     route or `matc` in CI.
  *
  * ## Threading
  *
@@ -227,8 +240,8 @@ class ArTryOnView(
     private val surfaceView: SurfaceView? = if (mode == Mode.AR) {
         SurfaceView(context).apply {
             holder.addCallback(this@ArTryOnView)
-            // ARCore owns the camera and nothing is drawn behind this surface yet, so opaque is
-            // correct until the feed becomes a Filament draw call (class header, gap 1).
+            // ARCore owns the camera and the feed is a Filament draw call on this surface, so
+            // opaque is correct: nothing composited behind the view is meant to show through.
             holder.setFormat(PixelFormat.OPAQUE)
             holder.setKeepScreenOn(true)
         }
@@ -307,6 +320,25 @@ class ArTryOnView(
     // ── Render-thread state. Never touched from another thread. ──────────────────────────────
     private var engine: Engine? = null
     private var renderer: Renderer? = null
+
+    /**
+     * **V4.9 night-feed grading — the exposure/tone-mapping the AR view grades every frame with.**
+     *
+     * The camera feed is an unlit quad drawn into the same view as the shoe, so it rides
+     * Filament's colour-grading post-process. With no grading set, the view's default
+     * (filmic/ACES-style) tone mapping crushes the already dark low-light feed — the device's
+     * HAL logs show ARCore's auto-exposure pinned at its ceiling in a dark room
+     * (`u4Eposuretime:33332` = the 30 fps cap, `u4AfeGain`/`u4ISO` at max), so the extra
+     * compression made a starved feed look worse than the sensor delivered. `Linear`
+     * tone mapping passes the feed through as the sensor saw it, and [FEED_EXPOSURE_EV]
+     * adds software gain on top. Built in [createEngineIfNeeded], destroyed in [teardown].
+     */
+    private var colorGrading: ColorGrading? = null
+
+    /** V4.9: the torch wish. Written from any thread ([setTorch]), read on the render
+     * thread by [startSession]'s config and the live reconfigure. Volatile because the
+     * writer is the channel thread and the reader is the render thread. */
+    @Volatile private var torchEnabled = false
     private var swapChain: SwapChain? = null
     private var scene: Scene? = null
     private var view: View? = null
@@ -318,6 +350,39 @@ class ArTryOnView(
     private var fillLight = 0
 
     private var session: Session? = null
+
+    /**
+     * **The camera feed — F20's first half, AR mode only.** It owns the OES texture ARCore writes
+     * into, the vendored `camera_stream_flat.filamat` that samples it, and the full-screen quad that
+     * draws the room behind the shoe ([ArCameraFeed]). Created by [createEngineIfNeeded], because
+     * the engine has to be built against its EGL context, and destroyed by [teardown] before the
+     * engine it was built against. Null in [Mode.PREVIEW], which has no camera to show.
+     */
+    private var cameraFeed: ArCameraFeed? = null
+
+    /**
+     * **V4.4's occlusion draw** — mask-shaped geometry with the camera feed's own material, painted
+     * over the shoe so the foot reads as inside it ([FootMaskOverlay]). Built in
+     * [createEngineIfNeeded] against the feed's texture, driven per frame by [applyFootMask], and
+     * destroyed by [teardown] before the feed whose texture it samples.
+     */
+    private var footMaskOverlay: FootMaskOverlay? = null
+
+    /** The latest mask Dart sent, awaiting the next AR frame ([setFootMask]). */
+    private var pendingFootMask: FootMaskFrame? = null
+
+    /**
+     * One accepted frame's occlusion mask: the 32×32 bytes `lib/utils/foot_mask.dart` built, plus
+     * the sample's quality. Held as one object so a posted mask can never be half-read.
+     */
+    private class FootMaskFrame(val bytes: ByteArray, val confidence: Double)
+
+    /**
+     * Two pixels of scratch for [uprightImageUvToPixels], reused by the pose hit tests and the
+     * mask's corners alike: a full mask is up to 16 K corners at ≥5 Hz, and this runs on the
+     * render thread, where per-corner garbage is the one cost that shows up as jank.
+     */
+    private val uvScratch = FloatArray(2)
 
     /**
      * ⚠️ **Whether this renderer can load a glTF asset at all — measured, not assumed.**
@@ -357,6 +422,20 @@ class ArTryOnView(
     private var rendererDiagnostic = "renderer not probed"
 
     private var sessionResumed = false
+
+    /**
+     * **V4.8: whether the session is paused because its surface went away, and only that.**
+     *
+     * Backgrounding an app destroys the `SurfaceView`'s surface; `surfaceDestroyed` pauses the
+     * ARCore session — and until this flag existed nothing resumed it: the customer returned to a
+     * screen whose session stayed paused for the rest of the visit, because Dart's [startSession]
+     * is one-shot per screen open. `surfaceCreated` may undo the pause only when the surface is
+     * what applied it: an explicit [pauseSession] (the QA `stopSession`) and a torn-down session
+     * must not be revived by a surface event.
+     *
+     * Render-thread state, like [sessionResumed] beside it.
+     */
+    private var pausedForSurfaceDetach = false
     private var surface: Surface? = null
     private var surfaceWidth = 0
     private var surfaceHeight = 0
@@ -380,6 +459,32 @@ class ArTryOnView(
 
     private var asset: FilamentAsset? = null
     private var modelRoot = 0
+
+    /**
+     * Whether the last model transform write was refused because the root entity has no transform
+     * component ([modelRootTransformInstance] answers `0`). Read by [applyTransform] to decide
+     * whether its `transform written` line is true — the line is the load's probe for where a
+     * native stall sits, and it must not be printed for a write that never happened.
+     */
+    private var transformWriteRefused = false
+
+    /**
+     * Whether a refusal has already been logged for the current asset. The per-frame path attempts
+     * the write at display rate, so the log is an edge rather than a rate: at 60 Hz an unthrottled
+     * line would push the rest of the session out of logcat's ring. Reset by every load, which is
+     * also when the component state resets.
+     */
+    private var transformRefusalNoted = false
+
+    /**
+     * **Whether a failing `session.update()` has already been relayed (V4.9, 2026-10-05).** The AR
+     * loop calls it at display rate, and the failure this was added for — ARCore refusing every
+     * frame with `MissingGlContextException` because no GL context was current on this thread —
+     * wrote a stack trace per frame into logcat and **nothing** into `nav_diag`, which is the file
+     * the locked-down phone can actually export. One line per session is what a reader needs;
+     * reset by every [startSession].
+     */
+    private var arUpdateFailureNoted = false
     private var pendingModel: ModelSpec? = null
     private var pendingAuthoredLengthMm: Double? = null
     private var yawOffsetDeg = 0.0
@@ -387,10 +492,64 @@ class ArTryOnView(
     /** Uniform scale from `setSize`; 1.0 until a size is selected. */
     private var sizeScale = 1.0f
 
+    /**
+     * **V4.3's baseline:** the internal last (mm) [sizeScale] grades to — `lastLengthMm + (size −
+     * refSize) × 6.67`, the graded number itself rather than the ratio it becomes, because the
+     * frame-scale correction compares the measured foot against it and re-deriving the grade here
+     * would be a second place the same arithmetic lives. Null until `setSize` (or after a model
+     * swap), which is exactly when the chart's answer is unknown and the correction must not
+     * apply.
+     */
+    private var renderedLastMm: Double? = null
+
     /** Placement as a 4×4 column-major matrix (translation in 12..14); identity until placed. */
     private val placement = FloatArray(16).also { Matrix.setIdentityM(it, 0) }
     private var placed = false
     private var placedYawDeg = 0f
+
+    // ── V4.2: the CPU frame source and the foot tracker ─────────────────────────────────────
+    //
+    // Dart's detection loop (V4.1) asks for one throttled NV21 frame per tick over
+    // `acquireCameraFrame` and answers with one `setFootPose` observation per accepted detection.
+    // The cache below is the frame half; [footTracker] is the world half — Dart's normalized UV
+    // points are hit-tested onto the floor and filtered into an anchor. Both are render-thread
+    // state, like everything else this renderer owns; the getters are read from the UI thread by
+    // the plugin, hence `@Volatile` on the four fields it touches.
+
+    /** Latest throttled CPU frame (NV21 + geometry), or null before the first acquire. */
+    @Volatile private var cachedFrameBytes: ByteArray? = null
+    @Volatile private var cachedFrameWidth = 0
+    @Volatile private var cachedFrameHeight = 0
+    @Volatile private var cachedFrameRotationDegrees = 0
+    private var lastFrameAcquireMs = 0L
+
+    /** V4.2's tracker: observations in, a world anchor and a lock state out. */
+    private val footTracker = FootPoseTracker()
+
+    /** The last observation from Dart, waiting for the next render frame to hit-test it. */
+    private var pendingFootPose: FootPoseTracker.Observation? = null
+
+    // V4.9: pose-rejection telemetry. The 2026-10-06 device run had 254 detections and 0
+    // locks, and nothing in the log said why: [sampleFoot] answers null for four different
+    // reasons (no plane, non-tracking plane, polygon miss, degenerate axis) and all of them
+    // were silent. Counted per rejection, logged at most once a second, and the running
+    // totals ride the heartbeat so a phone with no adb still shows them.
+    private var poseRejects = 0
+    private var poseRejectsAccepted = 0
+    private var lastPoseRejectLogMs = 0L
+    private var lastPoseRejectReason = "-"
+
+    // V4.9: how the accepted samples were accepted — inside the plane's polygon (the strict
+    // read) or past its edge (the fallback). An edge-heavy ratio says the plane is tracking
+    // but its extent estimate lags the foot, which is session-youngness, not a bad floor.
+    private var hitTestsInPolygon = 0
+    private var hitTestsOnEdge = 0
+
+    /** Whether poses drive placement: true by default, false while QA forces `floor` mode. */
+    private var footModeRequested = true
+
+    /** When the last `footMeasure` went out — V4.6's throttle (see [FOOT_MEASURE_INTERVAL_MS]). */
+    private var lastFootMeasureMs = 0L
 
     private var frames = 0
     private var frameWindowStartNanos = 0L
@@ -609,6 +768,44 @@ class ArTryOnView(
      * engine never came up, which is exactly the state a failed load or a refused renderer leaves
      * behind (and the state the second-open crash leaves behind is "no view at all").
      */
+    /**
+     * **V4.9: the night-aid torch.** ARCore's auto-exposure is already at its ceiling in a
+     * dark room (the HAL logs cap exposure at the 30 fps frame time with maxed analogue
+     * gain), so past a point the feed can only get brighter with more light. The torch is
+     * the honest fix: `Config.FlashMode.TORCH` drives the phone's own flash through the
+     * session, no second camera client, no Camera2 fight.
+     *
+     * Stored before the session starts (read by [startSession]'s config) and reconfigured
+     * live when a session is already running: `Session.configure` replaces the *whole*
+     * config, so the live path sends `session.config` — the config in effect, which already
+     * carries plane finding, focus and the rest — with only the flash mode changed. A call
+     * with no live session is a no-op that only parks the value.
+     */
+    fun setTorch(enabled: Boolean) {
+        torchEnabled = enabled
+        relay("setTorch($enabled)")
+        renderHandler.post {
+            val target = session
+            if (target == null || !sessionResumed) {
+                relay("torch: $enabled stored (applies at next session start)")
+                return@post
+            }
+            val outcome = runCatching {
+                target.configure(
+                    target.getConfig().apply {
+                        flashMode = if (enabled) Config.FlashMode.TORCH else Config.FlashMode.OFF
+                    },
+                )
+            }
+            if (outcome.isSuccess) {
+                relay("torch: $enabled applied live")
+            } else {
+                relay("torch: $enabled FAILED: ${outcome.exceptionOrNull()?.message}")
+                Log.w(TAG, "torch reconfigure failed", outcome.exceptionOrNull())
+            }
+        }
+    }
+
     fun setDiagnostics(enabled: Boolean) {
         diagnosticsEnabled = enabled
         if (!enabled) return
@@ -668,6 +865,10 @@ class ArTryOnView(
      * Two guards, because a bad number here inflates a model on a customer's screen: the step
      * delta is clamped to ±3 EU (the spirit of `kMaxExtrapolationSteps`), and any missing input
      * leaves the scale untouched rather than guessing.
+     *
+     * **The graded last is kept, not just the ratio (V4.3).** `renderedLastMm` is the number
+     * [FootScaleCorrection] weighs the live measured foot against; storing it here is what keeps
+     * one grade in the app — the same one this method just applied.
      */
     fun setSize(spec: SizeSpec) {
         renderHandler.post {
@@ -681,6 +882,7 @@ class ArTryOnView(
             val graded = last + steps * SIZE_STEP_MM
             if (graded <= 0.0) return@post
             sizeScale = (graded / last).toFloat()
+            renderedLastMm = graded
             applyTransform()
         }
     }
@@ -758,6 +960,50 @@ class ArTryOnView(
         }
     }
 
+    /**
+     * **V4.1's loop calls this** (§2.8's `acquireCameraFrame`): the most recent throttled CPU
+     * frame, or null when none is ready yet.
+     *
+     * Read from the UI thread by the plugin while the render thread writes, hence the `@Volatile`
+     * fields. A frame that lands a millisecond after this check is *next* tick's frame, which is
+     * exactly what the Dart loop's 200 ms cadence assumes — and null is a skip there, not a
+     * failure.
+     */
+    fun hasCachedCameraFrame(): Boolean = cachedFrameBytes != null
+    fun getCachedCameraFrameBytes(): ByteArray? = cachedFrameBytes
+    fun getCachedCameraFrameWidth(): Int = cachedFrameWidth
+    fun getCachedCameraFrameHeight(): Int = cachedFrameHeight
+    fun getCachedCameraFrameRotationDegrees(): Int = cachedFrameRotationDegrees
+
+    /**
+     * One observation from Dart's detection loop (§2.8's `setFootPose`), in normalized
+     * upright-image UV.
+     *
+     * Posted to the render thread rather than processed here: the hit tests need the render
+     * thread's current `Frame`, and this call arrives on the UI thread mid-frame. Only the latest
+     * observation is kept — a backlog of 2D poses is stale by definition, and the Dart side already
+     * drops ticks it could not keep up with (`kFootTrackInterval`'s overlap guard).
+     */
+    internal fun setFootPose(observation: FootPoseTracker.Observation) {
+        if (mode != Mode.AR) return
+        renderHandler.post { pendingFootPose = observation }
+    }
+
+    /**
+     * **V4.4: one accepted frame's occlusion mask** — 32×32 bytes plus the sample's quality.
+     *
+     * Posted like [setFootPose] and for the same reason (the draw needs the render thread's
+     * current `Frame`, and this call arrives on the UI thread); only the latest is kept, because a
+     * mask belongs to the frame that produced it and a backlog would occlude a foot that has
+     * already moved. The bytes are row-major, top-down, in the detection's own normalized space
+     * (`lib/utils/foot_mask.dart`), which is what lets [applyFootMask] map a quad through the same
+     * function the heel and toe rays are cast through.
+     */
+    internal fun setFootMask(bytes: ByteArray, confidence: Double) {
+        if (mode != Mode.AR) return
+        renderHandler.post { pendingFootMask = FootMaskFrame(bytes, confidence) }
+    }
+
     /** A PNG of the current frame, or null when there is nothing to copy. */
     fun captureScreenshot(onResult: (ByteArray?) -> Unit) {
         // The share-sheet image belongs to the AR screen (it is also the only place that offers
@@ -776,8 +1022,8 @@ class ArTryOnView(
             return
         }
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        // PixelCopy rather than Filament's readPixels: it copies the *composited* surface, so the
-        // day the camera feed is a real layer in this view the screenshot picks it up for free —
+        // PixelCopy rather than Filament's readPixels: it copies the *composited* surface, and the
+        // feed is a real layer in this view, so the screenshot picks it up for free —
         // §2.8's share-sheet image is "what the customer saw", not "what Filament drew".
         PixelCopy.request(
             target,
@@ -804,12 +1050,33 @@ class ArTryOnView(
     /**
      * The QA/capability switch (§2.8's `setTryOnMode`).
      *
-     * `floor` is what V3 ships; `foot` is V4's tracked mode, which needs the detection loop and so
-     * currently behaves like `floor`. Recorded rather than rejected, so a device session sees the
-     * wrong mode in the log instead of a silent no-op.
+     * `foot` (the default) is V4's tracked mode: pose observations drive placement and the tracker
+     * owns the lock. `floor` is the V3 behaviour and the QA escape hatch — the tracker is reset
+     * and ignored, so a device session can compare the two modes on the same product. Recorded
+     * rather than rejected, so a session sees the mode in the log instead of a silent no-op.
      */
     fun setTryOnMode(mode: String) {
-        Log.i(TAG, "setTryOnMode: $mode (V3 implements floor placement; foot arrives with V4)")
+        // V4.2: `foot` is now real — poses drive placement — and `floor` is the QA escape hatch
+        // that disables the tracker (the shoe keeps its last placement; taps still place it).
+        renderHandler.post {
+            val wasRequested = footModeRequested
+            footModeRequested = mode != "floor"
+            if (wasRequested && !footModeRequested) {
+                pendingFootPose = null
+                // V4.4: the mask goes with the tracker. Leaving it up would draw a foot-shaped
+                // hole over a shoe that has stopped following anything.
+                pendingFootMask = null
+                engine?.let { created -> footMaskOverlay?.hide(created) }
+                val wasLocked = footTracker.reset()
+                if (wasLocked) {
+                    listener.onEvent(
+                        "footLock",
+                        mapOf("locked" to false, "quality" to 0.0, "side" to null),
+                    )
+                }
+            }
+        }
+        Log.i(TAG, "setTryOnMode: $mode (V4.2: `foot` runs the tracker; `floor` disables it)")
     }
 
     /**
@@ -839,27 +1106,70 @@ class ArTryOnView(
                 postToMain { onResult(StartOutcome(started = true)) }
                 return@post
             }
+            // V4.9: ARCore binds the session to the GL context that is current **here**, and
+            // demands that same context current on the thread calling `update()`. The feed's
+            // context is the one the camera texture lives in, so it is the one both ends must see
+            // (`ArCameraFeed.makeArContextCurrent`). Without this the session starts, then refuses
+            // every frame: `MissingGlContextException`, camera black, pose frozen.
+            val feed = cameraFeed
+            val contextBound = feed?.makeArContextCurrent() ?: false
+            arUpdateFailureNoted = false
             try {
                 val created = session ?: Session(context).also { session = it }
                 created.configure(
                     Config(created).apply {
                         planeFindingMode = Config.PlaneFindingMode.HORIZONTAL
-                        // Ambient intensity, not ENVIRONMENTAL_HDR: HDR light estimation needs the
-                        // camera texture, which this route cannot draw yet.
+                        // Ambient intensity, not ENVIRONMENTAL_HDR: the HDR estimate needs the
+                        // camera texture, which the feed now binds — but switching the estimate
+                        // mode is a separately measured change, not a side effect of the feed.
                         lightEstimationMode = Config.LightEstimationMode.AMBIENT_INTENSITY
                         updateMode = Config.UpdateMode.LATEST_CAMERA_IMAGE
                         focusMode = Config.FocusMode.AUTO
+                        // V4.9: the night-aid torch, requested before the session existed
+                        // (see [setTorch]). Every `configure` call must carry the current
+                        // wish, because configure replaces the whole config.
+                        flashMode =
+                            if (torchEnabled) Config.FlashMode.TORCH else Config.FlashMode.OFF
                     },
                 )
+                // V4.9: **ARCore's viewport.** The surface callbacks above ran before this session
+                // existed, so this is the first — and on a cold screen the only — moment ARCore can
+                // be told what it is rendering into. See [applyDisplayGeometry] for what its absence
+                // cost on the device.
+                applyDisplayGeometry(created, "startSession")
+                // V4.9: the feed looked zoomed because ARCore fills this tall screen from a
+                // wide camera stream, cropping the sides. Pick the supported config that
+                // wastes the least of the display — must land before `resume()`.
+                selectCameraConfig(created)
+                // F20: hand ARCore the feed's OES texture BEFORE resuming. ARCore starts writing
+                // frames the moment the session is live, so a texture bound afterwards leaves the
+                // first frames — and every frame after a session restart — undrawn.
+                cameraFeed?.bindToSession(created)
                 created.resume()
                 sessionResumed = true
+                // V4.8: an explicit start supersedes any surface-detach pause that was pending.
+                pausedForSurfaceDetach = false
                 Log.i(TAG, "session resumed")
+                // V4.9: the same start marked through the in-app relay, so a phone with no adb
+                // carries a timestamp to measure "how long until the first lock" against
+                // (`tool/qa_capture.sh --tryon` reads both ends from one log).
+                relay("session resumed (startSession)")
+                relay(
+                    "AR session GL context: " +
+                        if (contextBound) {
+                            "the camera feed's context is current"
+                        } else {
+                            "NOT current — ARCore will refuse every frame"
+                        },
+                )
                 postToMain { onResult(StartOutcome(started = true)) }
             } catch (t: Throwable) {
                 val outcome = sessionFailure(t)
                 Log.w(TAG, "startSession failed: ${outcome.reason} — ${outcome.message}", t)
                 relay("startSession failed: ${outcome.reason} — ${outcome.message}")
                 postToMain { onResult(outcome) }
+            } finally {
+                if (contextBound) feed.releaseArContext()
             }
         }
     }
@@ -869,7 +1179,42 @@ class ArTryOnView(
         renderHandler.post {
             runCatching { session?.pause() }.onFailure { Log.w(TAG, "pause failed", it) }
             sessionResumed = false
+            // V4.8: a stop someone asked for is not the surface's pause, so the surface's return
+            // must not undo it. (`stopSession` is the only caller.)
+            pausedForSurfaceDetach = false
         }
+    }
+
+    /**
+     * **V4.8: undo the pause [detachSurfaceAndWait] applied, once the surface is back.**
+     *
+     * The recovery for a backgrounded-then-returned session, and deliberately narrow: it resumes
+     * only the pause the surface itself made — an explicit [pauseSession], a session a failure
+     * already dropped, and a torn-down view all leave the flag false or [session] null, and the
+     * early returns say so. The flag is cleared even when `Session.resume` throws, because retrying
+     * a resume the framework refused on every surface callback turns one failure into a loop; the
+     * next [startSession] (a fresh screen open) is the recovery path.
+     */
+    private fun resumeAfterSurfaceDetach() {
+        if (!pausedForSurfaceDetach) return
+        pausedForSurfaceDetach = false
+        val existing = session ?: return
+        // V4.9: the resume runs in the session's own context, like every other ARCore call here.
+        val feed = cameraFeed
+        val contextBound = feed?.makeArContextCurrent() ?: false
+        runCatching { existing.resume() }
+            .onSuccess {
+                sessionResumed = true
+                // V4.9: view data does not survive the pause/resume, and the surface that came back
+                // may be a different size or rotation than the one ARCore was last told about.
+                applyDisplayGeometry(existing, "surface returned")
+                relay("session resumed after the surface returned")
+            }
+            .onFailure {
+                Log.w(TAG, "session resume after surface return failed", it)
+                relay("session resume after surface return FAILED: ${it.message}")
+            }
+        if (contextBound) feed.releaseArContext()
     }
 
     /**
@@ -913,22 +1258,124 @@ class ArTryOnView(
             createEngineIfNeeded()
             createSwapChain()
             startFrameLoop()
+            // V4.8: and if the surface's own disappearance is what paused the ARCore session (the
+            // app was backgrounded), undo that pause. Without this the backgrounding is permanent:
+            // nothing else in the app ever asks for this session to start again.
+            resumeAfterSurfaceDetach()
         }
     }
 
     override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
         surfaceWidth = width
         surfaceHeight = height
-        val rotation = runCatching { display?.rotation }.getOrNull()
         renderHandler.post {
             // `setViewport` takes a `Viewport`, not four ints (Filament 1.72's Java API).
             view?.setViewport(Viewport(0, 0, width, height))
             createSwapChain()
-            if (rotation != null) {
-                runCatching { session?.setDisplayGeometry(rotation, width, height) }
-                    .onFailure { t -> Log.w(TAG, "setDisplayGeometry failed", t) }
-            }
+            // V4.9: the session usually does not exist yet here — on a first session it never does
+            // (the surface callbacks run when the view mounts; the session is created later, when
+            // Dart asks for it). This call is what catches a resize or rotation once it does.
+            session?.let { applyDisplayGeometry(it, "surfaceChanged") }
         }
+    }
+
+    /**
+     * **Tells ARCore the viewport it is rendering into. One call site cannot do this.**
+     *
+     * ⚠️ **The device measurement behind this method (V4.9, 2026-10-05).** This view's lifecycle puts
+     * the surface callbacks first and the session second: `surfaceCreated`/`surfaceChanged` run when
+     * the platform view mounts, while the session is created in [startSession], after the model
+     * handover reaches Dart. So the call that used to live only in `surfaceChanged` was a silent
+     * no-op on the first session — its `session?.` was null — and ARCore ran with **no display
+     * geometry at all**. Its own logs said so: `view_manager_utils.cc: Display geometry has an
+     * invalid width: 0`, on every frame. Three costs followed, all measured on the device:
+     *
+     *  - `Frame.transformCoordinates2d` cannot convert the quad's view-normalized corners into
+     *    texture coordinates, so the camera quad samples the wrong texels — coloured static that
+     *    changes as the camera moves instead of the room;
+     *  - every `Frame.hitTest` logs `session.cc: Invalid ray produced by view data!` and returns
+     *    nothing (498 times in one 84-second session), which is tap-to-place broken;
+     *  - `Camera.getProjectionMatrix` is computed from the same empty view data, so the shoe would
+     *    be projected with a matrix that has nothing to do with this surface.
+     *
+     * Called from [startSession] (the first and, on a cold screen, the only moment the session
+     * exists), from [resumeAfterSurfaceDetach] (a returning surface may have a new size or rotation)
+     * and from [surfaceChanged] (a resize or rotation while the session is running).
+     */
+    private fun applyDisplayGeometry(session: Session, reason: String) {
+        val width = surfaceWidth
+        val height = surfaceHeight
+        if (width <= 0 || height <= 0) return
+        val rotation = runCatching { display?.rotation }.getOrNull() ?: 0
+        runCatching { session.setDisplayGeometry(rotation, width, height) }
+            .onSuccess {
+                relay("display geometry applied ($reason): ${width}x$height rot=$rotation")
+            }
+            .onFailure { t -> Log.w(TAG, "setDisplayGeometry failed ($reason)", t) }
+    }
+
+    /**
+     * **V4.9: picks the ARCore camera config that shows the widest view on this display.**
+     *
+     * Why this exists (the "zoomed-in" feed): ARCore fills the view with the camera image,
+     * cropping whatever does not fit. This phone's screen is 1080x2400 (aspect ~0.45) while
+     * the camera's usual stream is 16:9 (aspect 1.78) — filling the tall screen from the wide
+     * image shows only ~25% of the image's width, which reads as a ~2x zoom next to the
+     * camera app. ARCore usually offers a 4:3 stream too (1440x1080 here): the same texel
+     * density on screen but ~34% of the width visible — a measurably wider view for the same
+     * sharpness, because the crop, not the resolution, sets the zoom.
+     *
+     * Called from [startSession] before `resume()`, the documented safe point for
+     * `setCameraConfig`. Enumerates every supported config, relays them all (so a phone with
+     * no adb still records what it chose from), and picks the config whose texture aspect
+     * wastes the least of the display: the visible fraction of the cropped axis is
+     * `displayAspect / textureAspect` (width, on a portrait screen) or its inverse —
+     * maximize it, tie-break on texture area for sharpness. Any failure keeps ARCore's own
+     * default: a wider feed is not worth a session that never starts.
+     */
+    private fun selectCameraConfig(session: Session) {
+        val width = surfaceWidth
+        val height = surfaceHeight
+        if (width <= 0 || height <= 0) return
+        val displayAspect = width.toDouble() / height
+        // The filter overload is the non-deprecated path; no restrictions, so it lists
+        // every config the device offers — the same set the deprecated getter returned.
+        val candidates =
+            runCatching { session.getSupportedCameraConfigs(CameraConfigFilter(session)) }
+            .onFailure { t -> Log.w(TAG, "getSupportedCameraConfigs failed", t) }
+            .getOrDefault(emptyList())
+        if (candidates.isEmpty()) {
+            relay("camera config: none listed — keeping ARCore's default")
+            return
+        }
+        val scored = candidates.map { cfg ->
+            val tex = cfg.textureSize
+            Triple(cfg, tex.width, tex.height)
+        }
+        scored.forEach { (cfg, tw, th) ->
+            relay(
+                "camera config candidate: texture ${tw}x${th} " +
+                    "image ${cfg.imageSize.width}x${cfg.imageSize.height} " +
+                    "fps ${cfg.fpsRange.lower}..${cfg.fpsRange.upper}",
+            )
+        }
+        fun visibleFraction(texW: Int, texH: Int): Double {
+            val texAspect = texW.toDouble() / texH
+            return if (texAspect > displayAspect) displayAspect / texAspect
+            else texAspect / displayAspect
+        }
+        val chosen = scored.maxWith(
+            compareBy({ visibleFraction(it.second, it.third) }, { it.second.toLong() * it.third }),
+        )
+        val pct = (visibleFraction(chosen.second, chosen.third) * 100).toInt()
+        runCatching { session.cameraConfig = chosen.first }
+            .onSuccess {
+                relay(
+                    "camera config: chosen ${chosen.second}x${chosen.third} — $pct% of the " +
+                        "cropped axis visible (widest of ${candidates.size})",
+                )
+            }
+            .onFailure { t -> Log.w(TAG, "setCameraConfig failed — keeping default", t) }
     }
 
     override fun surfaceDestroyed(holder: SurfaceHolder) {
@@ -1008,6 +1455,22 @@ class ArTryOnView(
         }
         relay("engine creation BEGIN: requested=$requestedLevel · ${deviceFacts()}")
         val engineBuilder = Engine.Builder()
+        // ── F20: the feed's OES texture needs a share group ────────────────────────────────
+        // Filament can only sample a GL texture that lives in a context sharing with its own, so
+        // the feed creates an EGL context and the engine is built against it (the Filament API
+        // requires exactly this: an `android.opengl.EGLContext`, not a handle). AR-only, because
+        // the preview has no camera. A context that cannot be created is reported and the engine
+        // still comes up: the shoe must render even when the room cannot.
+        if (mode == Mode.AR) {
+            val feed = cameraFeed ?: ArCameraFeed(context).also { cameraFeed = it }
+            val shared = feed.prepareSharedContext()
+            if (shared != null) {
+                engineBuilder.sharedContext(shared)
+                relay("camera feed: EGL context prepared and shared with the engine")
+            } else {
+                relay("camera feed: no shared EGL context — ${feed.describe()}")
+            }
+        }
         if (shouldLowerEngineToLevel1(pendingModel)) {
             engineBuilder.featureLevel(Engine.FeatureLevel.FEATURE_LEVEL_1)
             Log.w(
@@ -1027,7 +1490,16 @@ class ArTryOnView(
         val createdScene = created.createScene()
         scene = createdScene
         renderer = created.createRenderer()
-        view = created.createView().apply { setScene(createdScene) }
+        view = created.createView().apply {
+            setScene(createdScene)
+            // V4.9 night-feed grading — see [colorGrading]. Applied to the whole view, so the
+            // shoe gains the same exposure as the feed; in a dark room that is the intent.
+            colorGrading = ColorGrading.Builder()
+                .toneMapper(ToneMapper.Linear())
+                .exposure(FEED_EXPOSURE_EV)
+                .build(created)
+                .also { colorGrading = it }
+        }
         cameraEntity = EntityManager.get().create()
         camera = created.createCamera(cameraEntity).apply {
             setProjection(FOV_DEGREES, 1.0, NEAR_METERS, FAR_METERS, Camera.Fov.VERTICAL)
@@ -1037,6 +1509,28 @@ class ArTryOnView(
         materialProvider = provider
         assetLoader = AssetLoader(created, provider, EntityManager.get())
         createLights(created)
+        // F20: the feed's quad, material and texture, built against the live engine. AR-only, and
+        // after the scene exists because the feed adds one entity to it. A failure here (missing
+        // asset, material mismatch) is carried in [ArCameraFeed.describe] rather than thrown: the
+        // shoe is the point of this screen, and it must render with or without the room.
+        if (mode == Mode.AR) {
+            cameraFeed?.attach(created, createdScene)
+            relay("camera feed: ${cameraFeed?.describe() ?: "off"}")
+            // V4.4: the overlay draws with the feed's own texture (see [FootMaskOverlay.attach]),
+            // so it attaches *after* the feed — and only when the feed is ready, because an
+            // unbound external texture samples black, and painting black over the shoe would look
+            // worse than not occluding it. Both attach failures are one line in the log rather
+            // than an exception: the shoe is the point of this screen.
+            val feed = cameraFeed
+            if (feed != null && feed.isReady) {
+                val overlay =
+                    footMaskOverlay ?: FootMaskOverlay(context).also { footMaskOverlay = it }
+                overlay.attach(created, createdScene, feed.cameraTexture)
+                relay("foot mask overlay: ${overlay.describe()}")
+            } else {
+                relay("foot mask overlay: off (camera feed not ready)")
+            }
+        }
         // The stage. ⚠️ **Called rather than written inline**, because this is the one place a
         // colour sent *before* the renderer existed must not be lost: `setBackground` parks the
         // value on the render thread (Dart sends it the moment the box is built, a frame before
@@ -1096,7 +1590,7 @@ class ArTryOnView(
         target.setClearOptions(
             Renderer.ClearOptions().apply {
                 clear = true
-                // A flat backdrop where the camera feed will be (class header, gap 1) — the light
+                // The stage ARCore's first frame replaces — the light
                 // stage in a light-mode preview, [DEFAULT_CLEAR_COLOR] otherwise.
                 // `ClearOptions.clearColor` is a `double[]` on this API, not a `float[]`.
                 clearColor = stageColor ?: DEFAULT_CLEAR_COLOR
@@ -1392,6 +1886,11 @@ class ArTryOnView(
                 if (pauseSession) {
                     runCatching { session?.pause() }
                     sessionResumed = false
+                    // V4.8: remember that the surface is what paused, so its return may resume; and
+                    // drop the cached detection frame, so a resumed Dart loop finds null — a skipped
+                    // tick, its normal case — instead of a frozen frame from before the backgrounding.
+                    pausedForSurfaceDetach = session != null
+                    cachedFrameBytes = null
                 }
                 frameLoopRunning = false
                 destroySwapChain()
@@ -1481,12 +1980,51 @@ class ArTryOnView(
             append(" creates=").append(swapChainCreates)
             append(" surface=").append(if (surface != null) "ok" else "NULL")
             append(" asset=").append(if (asset != null) "ok" else "NULL")
+            // F20: whether the room is being drawn, and — when it is not — the reason, on the line
+            // a phone with no logcat is read from. `off` in preview mode, which has no feed.
+            append(" feed=").append(cameraFeed?.describe() ?: "off")
+            // V4.2: where the tracker is (idle/search/locked), and whether Dart's next frame
+            // request will find a CPU image — the two facts a foot-tracking bug report needs and
+            // a phone with no logcat cannot otherwise give.
+            append(" foot=").append(footTracker.describe())
+            // V4.9: pose pipeline health at a glance — accepted/rejected and how many of the
+            // accepted came from the polygon-edge fallback (the `e` number). A rising edge
+            // count with accepted>0 means ARCore's planes are tracking but still growing —
+            // give it a second pointing at the floor rather than concluding the feature is
+            // broken.
+            append(" pose=").append(poseRejectsAccepted).append('/')
+                .append(poseRejects).append('e').append(hitTestsOnEdge)
+            // V4.3: the two numbers the frame-scale correction is made of. `len` is the measured
+            // foot, `-` before the first accepted pose; `scale` is the ×N it produced, so 1.000
+            // reads as "the size chart's answer stands" — no anchor, a refused measurement, or a
+            // foot that matches the size exactly. A device session tunes [FootScaleCorrection]'s
+            // constants from this pair on real feet.
+            val statusFoot = footTracker.anchor()
+            append(" len=").append(
+                statusFoot?.lengthMeters?.let { "${(it * 1000.0).roundToInt()}mm" } ?: "-",
+            )
+            append(" scale=").append(
+                fmt(FootScaleCorrection.factor(statusFoot?.lengthMeters, renderedLastMm)),
+            )
+            append(" frame=").append(
+                cachedFrameBytes?.let {
+                    "${cachedFrameWidth}x${cachedFrameHeight}@${cachedFrameRotationDegrees}"
+                } ?: "none",
+            )
+            // V4.4: whether the foot is being cut out of the shoe, the last mask's quad count and
+            // its confidence. `off` when the overlay never attached (no camera feed, no texture),
+            // `ready (no mask yet)` when it did and Dart has not sent one — the distinction a
+            // "the shoe is not occluded" report turns on.
+            append(" mask=").append(footMaskOverlay?.describe() ?: "off")
             append(" r=").append((previewRadiusM * 1000.0).roundToInt()).append("mm")
             append(" yaw=").append(orbitYawDeg.roundToInt())
             append(" touch=").append(touchDowns).append('/').append(touchMoves)
                 .append('/').append(touchUps)
             append(" interacting=").append(if (interacting) "1" else "0")
             append(" size=").append(surfaceWidth).append('x').append(surfaceHeight)
+            // V4.8: the device's thermal state, the one fact of the thermal check a screenshot
+            // cannot otherwise carry. `n/a` below Android 10, where the getter does not exist.
+            append(" thermal=").append(thermalLabel())
         }
         runCatching { statusFile?.writeText(line) }
         val payload = mutableMapOf<String, Any?>("line" to line, "loopRunning" to frameLoopRunning)
@@ -1499,6 +2037,20 @@ class ArTryOnView(
             previousStatus?.let { payload["fromLastRun"] = it }
         }
         listener.onEvent("status", payload)
+    }
+
+    /**
+     * The thermal readout for [emitStatus] — V4.8's check, one word.
+     *
+     * Read on the render thread with the rest of the heartbeat; `getCurrentThermalStatus` is a
+     * cheap getter, and the API guard is the whole reason [ThermalReport] takes a nullable: below
+     * Android 10 the platform cannot answer, and "n/a" says that instead of inventing `none`.
+     */
+    private fun thermalLabel(): String {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return ThermalReport.label(null)
+        val manager = runCatching { context.getSystemService(PowerManager::class.java) }.getOrNull()
+        val status = runCatching { manager?.currentThermalStatus }.getOrNull()
+        return ThermalReport.label(status)
     }
 
     private fun startFrameLoop() {
@@ -1617,13 +2169,37 @@ class ArTryOnView(
 
         val activeSession = session
         if (activeSession != null && sessionResumed) {
+            // V4.9: the context the session was built in, current for the whole AR block —
+            // `update()` refuses to run without it (`MissingGlContextException`).
+            val feed = cameraFeed
+            val contextBound = feed?.makeArContextCurrent() ?: false
             try {
                 val frame = activeSession.update()
                 applyArCamera(frame)
                 sampleArLighting(frame)
+                // V4.2: the CPU frame the Dart loop will ask for next tick, then the tracker —
+                // poses before the frame so the anchor is current when it is drawn.
+                captureFrameForDetection(frame)
+                applyFootTracking(frame)
+                // V4.4: the mask over the shoe, from the same frame the pose above was sampled
+                // from, and before the auto-placement fallback so the draw sees this frame's
+                // viewport state rather than the next frame's.
+                applyFootMask(frame)
                 autoPlaceIfNeeded(frame)
+                // F20: the room. `update` binds the texture ARCore wrote this frame into the feed's
+                // material and re-derives the quad's UVs when the display geometry changed.
+                // Wrapped so a feed failure costs the backdrop rather than the frame: the pose
+                // above is already applied, and a black room must not become a stopped loop.
+                runCatching { cameraFeed?.update(created, activeSession, frame) }
+                    .onFailure { Log.w(TAG, "camera feed update failed", it) }
             } catch (t: Throwable) {
                 Log.w(TAG, "session.update threw; keeping the last pose", t)
+                if (!arUpdateFailureNoted) {
+                    arUpdateFailureNoted = true
+                    relay("session.update threw ${t.javaClass.simpleName}: ${t.message}")
+                }
+            } finally {
+                if (contextBound) feed.releaseArContext()
             }
         } else if (mode == Mode.PREVIEW) {
             // No session is the *normal* case here rather than a degraded one: this branch is what
@@ -1696,7 +2272,7 @@ class ArTryOnView(
         if (surfaceWidth > 0 && surfaceHeight > 0) {
             // ARCore offers **only** the out-param form (`getProjectionMatrix(dest, offset, near,
             // far)`) — there is no float[]-returning convenience to call. Requires
-            // `setDisplayGeometry` to have run, hence the guard above and the call in surfaceChanged.
+            // `setDisplayGeometry` to have run, hence the guard above and [applyDisplayGeometry].
             val projection = FloatArray(16)
             runCatching {
                 frame.camera.getProjectionMatrix(
@@ -1748,6 +2324,10 @@ class ArTryOnView(
      * re-places it ([placeShoe]); this is only the initial answer.
      */
     private fun autoPlaceIfNeeded(frame: Frame) {
+        // A tracked shoe is already placed where it belongs: auto-placement is the answer for the
+        // seconds *before* the tracker has seen a foot, and fighting it afterwards would teleport
+        // the shoe back to the screen centre on every frame.
+        if (footTracker.hasAnchor) return
         if (placed || asset == null) return
         if (surfaceWidth <= 0 || surfaceHeight <= 0) return
         val pose = firstFloorHit(frame, surfaceWidth * 0.5f, surfaceHeight * 0.62f)
@@ -1918,8 +2498,33 @@ class ArTryOnView(
         relay("load: staging loader freed — adding the entities")
         runCatching { scene?.addEntities(createdAsset.renderableEntities) }
             .onFailure { t -> relay("load: addEntities threw — ${t.message}") }
+        // V4.4: the shoe draws after the camera feed and before the occlusion mask. Filament draws
+        // higher priorities first, so this is the ordering half of the mask's contract (the mask's
+        // near-depth write is the other half); the feed's own `priority(7)` is the same rule from
+        // SceneView, and the mask's 0 is FootMaskOverlay's default.
+        runCatching {
+            val renderables = created.renderableManager
+            for (entity in createdAsset.renderableEntities) {
+                renderables.setPriority(entity, FootMaskOverlay.SHOE_PRIORITY)
+            }
+        }.onFailure { t -> Log.w(TAG, "shoe priority write failed", t) }
         modelRoot = createdAsset.root
-        runCatching { created.transformManager.create(modelRoot) }
+        // ⚠️ **The entity is the handle this side keeps; the transform *instance* is what
+        // `setTransform` takes, and the two are different packed ints — passing the entity where
+        // an instance belongs is the crash of 2026-10-05.** The first real load died inside
+        // native `nSetTransform` (`Fatal signal 11 (SIGSEGV), code 1 (SEGV_MAPERR)` in
+        // `libfilament-jni`, the frame directly under `applyTransform`; `runCatching` cannot see
+        // a native fault) because this line stored the entity and the write handed it straight
+        // to `setTransform`. [modelRootTransformInstance] resolves the instance for every write,
+        // and the relay below puts both handles in the file channel for the load — the refusal
+        // case has to be readable on a phone with no logcat.
+        transformWriteRefused = false
+        transformRefusalNoted = false
+        val rootInstance = modelRootTransformInstance(created)
+        relay(
+            "load: root transform — entity=$modelRoot instance=$rootInstance" +
+                if (rootInstance == 0) " (no component — nothing can be written to it)" else "",
+        )
         // ⚠️ **The bounded drain the load's failed launches needed (measured, 2026-10-02).** Twice
         // the P30 Pro's log ended at the line below this block and the process lived on: the natives
         // that follow it are `setTransform` and the asset's bounding-box read, and neither can be
@@ -1935,6 +2540,9 @@ class ArTryOnView(
         pendingAuthoredLengthMm = spec.authoredLengthMm
         yawOffsetDeg = spec.yawOffsetDeg ?: 0.0
         sizeScale = 1.0f
+        // A new asset invalidates the grade with it: the next `setSize` re-establishes both, and
+        // until then the frame-scale correction has no baseline and must answer ×1 (V4.3).
+        renderedLastMm = null
         placed = false
         Matrix.setIdentityM(placement, 0)
         applyTransform()
@@ -1970,26 +2578,22 @@ class ArTryOnView(
      * 278 mm renders as 278 mm rather than "some size in metres" — the `authored_length_mm`
      * column's entire purpose (§2.5.1). The correction is a *ratio* against the asset's own
      * bounding box, not an assumption about units: a glTF is metres by spec, but V0's block-out was
-     * authored in millimetres, and both must render at the right size.
+     * authored in millimetres, and both must render at the right size. **Since V4.3 there is a
+     * third factor** — the foot measured in the frame — and it is read from [effectiveScale] here
+     * *and* by the tracker's per-frame path, for the same reason [authoredLengthCorrection] is one
+     * function: two places that compute a scale eventually disagree about the shoe's size.
      */
     private fun applyTransform() {
         val created = engine ?: return
         if (modelRoot == 0) return
 
-        val authoredExtent = asset?.boundingBox?.halfExtent?.get(2)?.times(2f) ?: 0f
-        val declaredMm = pendingAuthoredLengthMm
-        var authoredCorrection = 1.0f
-        if (declaredMm != null && declaredMm > 0 && authoredExtent > 1e-6f) {
-            authoredCorrection = (declaredMm / 1000.0).toFloat() / authoredExtent
-        }
-
-        val scale = sizeScale * authoredCorrection
+        val scale = effectiveScale(footTracker.anchor())
         val matrix = FloatArray(16)
         Matrix.setIdentityM(matrix, 0)
         Matrix.translateM(matrix, 0, placement[12], placement[13], placement[14])
         if (placed) Matrix.rotateM(matrix, 0, placedYawDeg + yawOffsetDeg.toFloat(), 0f, 1f, 0f)
         Matrix.scaleM(matrix, 0, scale, scale, scale)
-        runCatching { created.transformManager.setTransform(modelRoot, matrix) }
+        runCatching { writeModelTransform(created, matrix) }
             .onFailure { t -> Log.w(TAG, "setTransform failed", t) }
         // ⚠️ **The load's last window, split at its midpoint (measured, 2026-10-02).** Twice on the
         // P30 Pro the log ended one line *above* this one — after `entities added — applying the
@@ -1998,7 +2602,13 @@ class ArTryOnView(
         // two it was is this line: a log that never reaches it died in `setTransform`, and one that
         // ends on it died in the box. (`applyTransform` is shared with the AR placement path; a
         // placement pays one line for the same call, which has the same stall surface.)
-        relay("load: transform written — reading the bounding box")
+        //
+        // Since 2026-10-05 this line is also skipped, deliberately, when the write was refused
+        // for a missing transform component ([transformWriteRefused]): a load whose log has no
+        // `transform written` line is then either the native stall described above *or* a
+        // refusal — and a refusal leaves its own lines before this point (`root transform …
+        // instance=0` at the load, plus the `transform write refused` warning).
+        if (!transformWriteRefused) relay("load: transform written — reading the bounding box")
 
         // What the preview camera frames, derived from the transform just written rather than from
         // the asset's raw box: the mesh is authored in metres, but a V0-era block-out is authored in
@@ -2027,6 +2637,71 @@ class ArTryOnView(
         }
     }
 
+    /**
+     * The root's **transform component instance** — the handle every `setTransform` takes — or `0`
+     * when the entity has no component and one could not be created.
+     *
+     * ⚠️ **Entity ≠ instance, and passing the wrong one is the crash of 2026-10-05.** Filament
+     * hands out two different packed `int` handles and this file keeps the *entity* ([modelRoot],
+     * from `FilamentAsset.getRoot()`): `hasComponent` / `create` / `getInstance` take the entity,
+     * `setTransform` takes the *instance* those return. Both are `int`s and both read `0` as
+     * "nothing", so the mistake compiles — and then the write indexes the transform store with a
+     * number from another handle space. Measured on the Redmi 24094RAD4G (Android 16), inside the
+     * first real load: a native fault in
+     * `Java_com_google_android_filament_TransformManager_nSetTransform`, with the file channel
+     * stopping at `entities added — applying the transform`. `SceneView`'s own `Node` resolves
+     * `getInstance(entity)` before every write for exactly this reason; this function is that
+     * resolution.
+     *
+     * The component is created on demand, guarded the way `SceneView`'s `Node.init` guards it
+     * (`if (!hasComponent) create`): the root is documented only as "the transform root for the
+     * asset", and `FilamentAsset`'s "all of these have a transform component" note covers the
+     * glTF nodes, not the root it returns. Creating when a component already exists is at best
+     * redundant and at worst a destroy-and-recreate that reindexes the store mid-session, so the
+     * guard stays.
+     *
+     * Re-read on every write, never cached: the store is a packed array that compacts when any
+     * component is destroyed (every asset swap destroys one), so a handle cached across a swap can
+     * name another entity's slot — `SceneView` generation-checks its cached copy for the same
+     * reason. The entity is the stable half of the pair, which is why [modelRoot] keeps it.
+     */
+    private fun modelRootTransformInstance(created: Engine): Int {
+        if (modelRoot == 0) return 0
+        val transformManager = created.transformManager
+        return runCatching {
+            if (!transformManager.hasComponent(modelRoot)) transformManager.create(modelRoot)
+            transformManager.getInstance(modelRoot)
+        }.getOrElse { t ->
+            Log.w(TAG, "transform component lookup failed for entity $modelRoot", t)
+            0
+        }
+    }
+
+    /**
+     * The one write of the model's matrix — both the load's [applyTransform] and the tracker's
+     * [applyFootTransform] go through here, so the instance resolution cannot be right in one
+     * place and wrong in the other (the 2026-10-05 crash was exactly a write line shared by both
+     * sites, both passing the entity).
+     *
+     * A refusal (no component) is recorded in [transformWriteRefused] and logged once per load:
+     * the per-frame caller runs at display rate and must not refill logcat with one line. A Java
+     * throwable from the native call is left to the caller — both call sites already wrap this in
+     * `runCatching` and log with their own message.
+     */
+    private fun writeModelTransform(created: Engine, matrix: FloatArray) {
+        val instance = modelRootTransformInstance(created)
+        if (instance == 0) {
+            transformWriteRefused = true
+            if (!transformRefusalNoted) {
+                transformRefusalNoted = true
+                Log.w(TAG, "transform write refused — entity $modelRoot has no transform component")
+            }
+            return
+        }
+        transformWriteRefused = false
+        created.transformManager.setTransform(instance, matrix)
+    }
+
     /** Three decimals for the log, since the fit input is millimetres and this is the line read
      * during a device session. */
     private fun fmt(value: Float): String = String.format(java.util.Locale.US, "%.3f", value)
@@ -2044,6 +2719,461 @@ class ArTryOnView(
     // ════════════════════════════════════════════════════════════════════════════════════════
     // Placement math
     // ════════════════════════════════════════════════════════════════════════════════════════
+
+    // ════════════════════════════════════════════════════════════════════════════════════════
+    // V4.2 — CPU frame source and foot tracking
+    // ════════════════════════════════════════════════════════════════════════════════════════
+
+    /**
+     * **The frame half of V4.2** — the CPU image Dart's detector runs on.
+     *
+     * ARCore hands out the camera image as a separate CPU stream (`acquireCameraImage`) that
+     * coexists with the GPU texture the feed draws, and this render loop is the only place it can
+     * be read: a `Frame` is valid for one `Session.update()` cycle, on the thread that made it.
+     * Throttled at [CAMERA_FRAME_INTERVAL_MS] — the scan plugin's own value — so a 5 Hz reader
+     * always finds something fresh without paying a YUV conversion per render frame.
+     *
+     * ⚠️ **A deliberate copy of `ArFootSizingView`'s acquisition**, recorded as debt alongside the
+     * rest of the renderer duplication (architecture §2.4): the try-on session owns the camera
+     * while the scan's plugin owns *its* session, so neither can borrow the other's frames. The
+     * result shape is identical on purpose — `ArCameraFrame.fromMap` reads this exact map, so the
+     * app keeps one frame vocabulary rather than two.
+     */
+    private fun captureFrameForDetection(frame: Frame) {
+        if (mode != Mode.AR) return
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastFrameAcquireMs < CAMERA_FRAME_INTERVAL_MS) return
+        lastFrameAcquireMs = now
+        try {
+            val image: Image? = frame.acquireCameraImage()
+            if (image != null) {
+                try {
+                    cachedFrameBytes = yuv420ToNv21(image)
+                    cachedFrameWidth = image.width
+                    cachedFrameHeight = image.height
+                    cachedFrameRotationDegrees = currentDisplayRotationDegrees()
+                } finally {
+                    // ⚠️ Must always close, or the buffer pool exhausts and every later frame
+                    // throws — the scan found this the hard way.
+                    image.close()
+                }
+            }
+        } catch (t: Throwable) {
+            // `NotYetAvailableException` for the first frames after resume, or intermittently.
+            // Debug level: this can fire until the first frame is ready and is not a fault.
+            Log.d(TAG, "camera image not available: ${t.message}")
+        }
+    }
+
+    /**
+     * **The world half of V4.2.** At most one observation per render frame: hit-test both
+     * endpoints onto the floor, hand the tracker a world sample, then draw from its anchor.
+     *
+     * Every rejection below is a *frame*, not a failure: no cached frame yet (the UV mapping
+     * needs the image's upright dimensions), no floor under the heel or the toe (normal for the
+     * first second of a session, and for a foot at the edge of a plane), or an axis too short to
+     * orient a shoe. Dart's loop keeps publishing through all of them, and the tracker's staleness
+     * decay is what turns a long run into `footLock {locked=false}` rather than a silent freeze.
+     */
+    private fun applyFootTracking(frame: Frame) {
+        if (mode != Mode.AR || !footModeRequested) return
+
+        val observation = pendingFootPose
+        if (observation != null) {
+            pendingFootPose = null
+            sampleFoot(frame, observation)?.let { emitFootLock(it) }
+        }
+        footTracker.onFrame(SystemClock.elapsedRealtime())?.let { emitFootLock(it) }
+
+        // Draw from the eased anchor. Note what is *not* checked: the lock. The lock is a
+        // coaching state (§2.9), and a shoe that stops following the moment the score dips below
+        // 0.45 would visibly detach from a foot the tracker can still see.
+        val anchor = footTracker.anchor() ?: return
+        applyFootTransform(anchor)
+
+        // V4.6: the fit verdict's live measurement. The anchor exists here or we returned above,
+        // and the throttle is why this is not a 60 Hz event stream for a value that eases.
+        val nowMs = SystemClock.elapsedRealtime()
+        if (nowMs - lastFootMeasureMs >= FOOT_MEASURE_INTERVAL_MS) {
+            lastFootMeasureMs = nowMs
+            footTracker.measure()?.let { emitFootMeasure(it) }
+        }
+    }
+
+    /**
+     * **V4.4's draw: the mask, over the shoe.**
+     *
+     * Two things happen here, in order. A newly arrived mask becomes geometry and is uploaded
+     * ([FootMaskOverlay.submit]); a mask that has stopped arriving is hidden by the overlay's own
+     * staleness rule, so an old foot is never painted over a shoe the tracker has since moved.
+     *
+     * The quads are mapped with [uprightImageUvToPixels] — the same function [hitTestFloorPoint]
+     * casts its rays through. That sharing is the whole reason the mask rides the pose's
+     * coordinate space (`lib/utils/foot_mask.dart`): one mapping, so the occlusion cannot sit
+     * somewhere the pose did not.
+     */
+    private fun applyFootMask(frame: Frame) {
+        val overlay = footMaskOverlay ?: return
+        if (mode != Mode.AR || !footModeRequested) return
+        val created = engine ?: return
+
+        val pending = pendingFootMask
+        val now = SystemClock.elapsedRealtime()
+        if (pending != null) {
+            pendingFootMask = null
+            val quads = FootMaskMesh.build(pending.bytes)
+            val drawn = overlay.submit(
+                engine = created,
+                frame = frame,
+                quads = quads,
+                viewportWidth = surfaceWidth,
+                viewportHeight = surfaceHeight,
+                confidence = pending.confidence,
+                nowMs = now,
+                mapUv = ::uprightImageUvToPixels,
+            )
+            if (drawn == 0 && !quads.isEmpty) {
+                // Worth one line: the mask crossed the channel and built quads, but nothing was
+                // drawn — a viewport or frame geometry that is not ready yet. Distinguishes a
+                // coordinate problem from "Dart sent nothing" in a log with no logcat.
+                Log.w(
+                    TAG,
+                    "foot mask: ${quads.count} quads could not be drawn this frame " +
+                        "(surface=${surfaceWidth}x$surfaceHeight, conf=${pending.confidence})",
+                )
+            }
+        }
+        overlay.update(created, now)
+    }
+
+    /**
+     * **V4.9: counts one rejected observation and, at most once a second, says why.**
+     *
+     * The throttle matters: the detection loop publishes at ~5 Hz and a dark floor rejects
+     * every one of them, so per-rejection logging would be the loudest line in the log for
+     * information the previous second already carried. The one-second line is what turns
+     * "foot detected, no lock" (254 detections, 0 locks, nothing else on 2026-10-06) into a
+     * readable cause — `no heel plane` means ARCore has no TRACKING horizontal floor, which is
+     * a light/texture problem, not a detection one.
+     */
+    private fun rejectPose(reason: String) {
+        poseRejects++
+        lastPoseRejectReason = reason
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastPoseRejectLogMs >= 1_000L) {
+            lastPoseRejectLogMs = now
+            Log.i(
+                TAG,
+                "foot pose: rejected x$poseRejects (accepted $poseRejectsAccepted) — last: $reason",
+            )
+        }
+    }
+
+    /**
+     * Two floor hit tests and one world sample, or null when this observation cannot be placed.
+     *
+     * [forward] is `toe − heel` in the floor plane; its length is passed through as
+     * [FootPoseTracker.Sample.lengthMeters] — **V4.3's measurement**, the number the frame-scale
+     * correction is made of. It is the same axis this method already checks for degeneracy, so no
+     * extra arithmetic runs for it.
+     */
+    private fun sampleFoot(
+        frame: Frame,
+        observation: FootPoseTracker.Observation,
+    ): FootPoseTracker.LockChange? {
+        val heel =
+            hitTestFloorPoint(frame, observation.heelU, observation.heelV)
+                ?: run { rejectPose("no heel plane") ; return null }
+        val toe =
+            hitTestFloorPoint(frame, observation.toeU, observation.toeV)
+                ?: run { rejectPose("no toe plane") ; return null }
+        val forward = doubleArrayOf(
+            (toe.tx() - heel.tx()).toDouble(),
+            0.0,
+            (toe.tz() - heel.tz()).toDouble(),
+        )
+        val axis = sqrt(forward[0] * forward[0] + forward[2] * forward[2])
+        if (axis < MIN_FOOT_AXIS_METERS) {
+            rejectPose("axis %.0fmm < min".format(axis * 1000))
+            return null
+        }
+        poseRejectsAccepted++
+        return footTracker.observe(
+            FootPoseTracker.Sample(
+                heel = doubleArrayOf(
+                    heel.tx().toDouble(),
+                    heel.ty().toDouble(),
+                    heel.tz().toDouble(),
+                ),
+                forward = forward,
+                lengthMeters = axis,
+                quality = observation.confidence,
+                side = observation.side,
+            ),
+            SystemClock.elapsedRealtime(),
+        )
+    }
+
+    /**
+     * A normalized upright-image point → a world point on a tracked horizontal plane.
+     *
+     * Two conversions, both copied from the scan for measured reasons:
+     *
+     *  1. **UV → viewport pixels is a centre-crop (fill) mapping**, not a stretch — see
+     *     [uprightImageUvToPixels], which V4.4's mask overlay draws through as well, so a pose and
+     *     its occlusion can never land in different places. The scan shipped without this once,
+     *     and its symptom was "foot detected but 0 samples".
+     *  2. **Only `HORIZONTAL_UPWARD_FACING` planes count.** A toe ray that clips the side of a
+     *     box is still a hit, and a shoe anchored to a wall reads as broken.
+     */
+    private fun hitTestFloorPoint(frame: Frame, u: Double, v: Double): Pose? {
+        if (!uprightImageUvToPixels(u, v, uvScratch)) return null
+        val hits = runCatching { frame.hitTest(uvScratch[0], uvScratch[1]) }.getOrNull()
+            ?: return null
+        // V4.9: **two-tier acceptance.** A TRACKING horizontal plane whose polygon does not
+        // yet reach the sample point was a silent rejection before — the device run of
+        // 2026-10-06 answered 20 `no heel/toe plane` rejections to 1 accept with the foot in
+        // frame, which is the "sometimes it does not display" report. The polygon is only
+        // ARCore's conservative *extent estimate*: it grows as the camera sees more floor, so
+        // early in a session — or right after a move — it has not reached under the foot even
+        // though the plane's pose is valid there. An in-polygon hit still wins; a hit on a
+        // TRACKING plane past its edge is the fallback, counted so the heartbeat can show how
+        // much of the acceptance is edge. What still fails outright is a ray with no TRACKING
+        // horizontal plane at all — no plane exists yet, and extrapolating one would put the
+        // shoe above nothing.
+        var edgeHit: Pose? = null
+        for (hit in hits) {
+            val plane = hit.trackable as? Plane ?: continue
+            if (plane.type != Plane.Type.HORIZONTAL_UPWARD_FACING) continue
+            if (plane.trackingState != TrackingState.TRACKING) continue
+            if (plane.isPoseInPolygon(hit.hitPose)) {
+                hitTestsInPolygon++
+                return hit.hitPose
+            }
+            if (edgeHit == null) edgeHit = hit.hitPose
+        }
+        if (edgeHit != null) {
+            hitTestsOnEdge++
+            return edgeHit
+        }
+        return null
+    }
+
+    /**
+     * **A normalized upright-image point → viewport pixels, centre-crop (fill).**
+     *
+     * The camera preview fills the view by `max(scaleX, scaleY)` and crops the excess, so this is
+     * the mapping that turns a point the detector named into the pixel ARCore's `hitTest` expects
+     * — and the mapping V4.4's mask quads are drawn through, which is why it is a function instead
+     * of a block inside [hitTestFloorPoint]: a pose and the occlusion over it share one convention
+     * or they drift apart.
+     *
+     * Answers false and leaves [out] untouched while the frame geometry is unknown (no cached
+     * frame yet, or a viewport that has not been measured) — every caller skips the frame instead
+     * of guessing a mapping.
+     *
+     * Doubles through the mapping and floats at the end: ARCore takes float pixels, and rounding
+     * the intermediate would move a corner by up to half a pixel for nothing.
+     */
+    private fun uprightImageUvToPixels(u: Double, v: Double, out: FloatArray): Boolean {
+        if (out.size < 2) return false
+        if (surfaceWidth <= 0 || surfaceHeight <= 0) return false
+        val uprightW =
+            if (cachedFrameRotationDegrees % 180 == 90) cachedFrameHeight else cachedFrameWidth
+        val uprightH =
+            if (cachedFrameRotationDegrees % 180 == 90) cachedFrameWidth else cachedFrameHeight
+        if (uprightW <= 0 || uprightH <= 0) return false
+
+        val viewW = surfaceWidth.toFloat()
+        val viewH = surfaceHeight.toFloat()
+        val scale = Math.max(viewW / uprightW, viewH / uprightH)
+        val drawnW = viewW / scale
+        val drawnH = viewH / scale
+        val offsetX = (uprightW - drawnW) / 2f
+        val offsetY = (uprightH - drawnH) / 2f
+        out[0] = ((u * uprightW - offsetX) * scale).toFloat()
+        out[1] = ((v * uprightH - offsetY) * scale).toFloat()
+        return true
+    }
+
+    /**
+     * The per-frame transform write for the foot anchor.
+     *
+     * **Deliberately lighter than [applyTransform]:** that one also does the preview's
+     * bounding-box fit and writes diag lines for the load's tail, and both are load-time work.
+     * This path runs at display rate, so it writes the transform and nothing else — the same
+     * placement × scale math, because the tracker drives the same shoe.
+     */
+    private fun applyFootTransform(anchor: FootPoseTracker.Anchor) {
+        val created = engine ?: return
+        if (modelRoot == 0) return
+        Matrix.setIdentityM(placement, 0)
+        Matrix.translateM(placement, 0, anchor.x.toFloat(), anchor.y.toFloat(), anchor.z.toFloat())
+        placedYawDeg = anchor.yawDeg.toFloat()
+        placed = true
+        val scale = effectiveScale(anchor)
+        val matrix = FloatArray(16)
+        Matrix.setIdentityM(matrix, 0)
+        Matrix.translateM(matrix, 0, placement[12], placement[13], placement[14])
+        Matrix.rotateM(matrix, 0, placedYawDeg + yawOffsetDeg.toFloat(), 0f, 1f, 0f)
+        Matrix.scaleM(matrix, 0, scale, scale, scale)
+        runCatching { writeModelTransform(created, matrix) }
+            .onFailure { t -> Log.w(TAG, "foot setTransform failed", t) }
+    }
+
+    /**
+     * **V4.3's ×N, in one place for both transform paths.**
+     *
+     * Two factors already existed here — the selected size and the authored length — and the foot
+     * measurement is the third. The multiplication lives in this function rather than at each
+     * call site for the reason [authoredLengthCorrection] is a function: the load's transform and
+     * the tracker's per-frame transform must agree, and a shoe that changes size the first time
+     * the tracker takes over is the one thing an anchor swap must not do.
+     *
+     * The anchor is passed in rather than read from the tracker so the per-frame path pays one
+     * lookup and cannot be scaled for an anchor other than the one it is drawing. A null anchor —
+     * preview mode, or the seconds before the first accepted pose — is the size chart's answer,
+     * untouched ([FootScaleCorrection.factor] answers ×1).
+     */
+    private fun effectiveScale(footAnchor: FootPoseTracker.Anchor?): Float {
+        val frame = FootScaleCorrection.factor(footAnchor?.lengthMeters, renderedLastMm)
+        return (sizeScale * authoredLengthCorrection() * frame).toFloat()
+    }
+
+    /**
+     * The authored-length correction, extracted so the load's transform and the tracker's
+     * per-frame transform cannot disagree about it: if they did, the shoe would change size the
+     * first time the tracker took over — the one thing an anchor swap must not do.
+     */
+    private fun authoredLengthCorrection(): Float {
+        val authoredExtent = asset?.boundingBox?.halfExtent?.get(2)?.times(2f) ?: 0f
+        val declaredMm = pendingAuthoredLengthMm
+        if (declaredMm != null && declaredMm > 0 && authoredExtent > 1e-6f) {
+            return (declaredMm / 1000.0).toFloat() / authoredExtent
+        }
+        return 1.0f
+    }
+
+    /**
+     * One `footMeasure` event (V4.6) — the eased heel→toe length in mm and the smoothed quality.
+     *
+     * Throttled by the caller ([FOOT_MEASURE_INTERVAL_MS]); this is the first thing to cross the
+     * channel that is a *number* rather than a state, and it exists so Dart's fit engine can grade
+     * the foot the camera can actually see instead of the saved scan from some earlier day.
+     */
+    private fun emitFootMeasure(measure: FootPoseTracker.Measure) {
+        listener.onEvent(
+            "footMeasure",
+            mapOf(
+                "lengthMm" to measure.lengthMeters * 1000.0,
+                "quality" to measure.quality,
+            ),
+        )
+    }
+
+    /** One `footLock` event. Edges only: [FootPoseTracker] returns a change only on a flip. */
+    private fun emitFootLock(change: FootPoseTracker.LockChange) {
+        Log.i(TAG, "footLock locked=${change.locked} quality=${change.quality} side=${change.side}")
+        // V4.9: the lock edges also go through the in-app relay, because the phone this session is
+        // measured on cannot produce a logcat. Edges are rare (two or three per session), so the
+        // relay's fsync-per-line cost is noise — and without this the exit criterion ("≥85% of
+        // sessions lock within 10 s") would have no evidence at all on that phone.
+        relay("footLock locked=${change.locked} quality=${fmt(change.quality)} side=${change.side}")
+        listener.onEvent(
+            "footLock",
+            mapOf(
+                "locked" to change.locked,
+                "quality" to change.quality,
+                "side" to change.side,
+            ),
+        )
+    }
+
+    /**
+     * Rotation (degrees) that makes the sensor image upright — the scan's own formula and caveat.
+     *
+     * A rear camera captures in landscape (sensor orientation 90°), so portrait is 90°, not 0°.
+     * It is used here only to decide which of the cached frame's dimensions are its *upright*
+     * ones; the value never leaves this view.
+     */
+    private fun currentDisplayRotationDegrees(): Int {
+        val displayDegrees = when (runCatching { display?.rotation }.getOrNull()) {
+            Surface.ROTATION_90 -> 90
+            Surface.ROTATION_180 -> 180
+            Surface.ROTATION_270 -> 270
+            else -> 0
+        }
+        val sensorOrientation = 90
+        return (sensorOrientation - displayDegrees + 360) % 360
+    }
+
+    /**
+     * Convert a YUV_420_888 [Image] into one NV21 byte array — what ML Kit takes on Android.
+     *
+     * Handles arbitrary row/pixel strides by copying plane-by-plane (a vendor's camera can and
+     * does hand back padded planes; assuming `width × height` here produces sheared images and
+     * silent mis-detections). Copied from `ArFootSizingView` with the renderer duplication above;
+     * the two must stay byte-compatible or the same detector will see two different images.
+     */
+    private fun yuv420ToNv21(image: Image): ByteArray {
+        val width = image.width
+        val height = image.height
+        val ySize = width * height
+        val nv21 = ByteArray(ySize + ySize / 2) // Y plane + interleaved VU
+
+        val yPlane = image.planes[0]
+        val uPlane = image.planes[1]
+        val vPlane = image.planes[2]
+
+        copyPlane(nv21, 0, yPlane, width, height)
+
+        val chromaWidth = width / 2
+        val chromaHeight = height / 2
+        val vBuffer = vPlane.buffer
+        val uBuffer = uPlane.buffer
+        val vRowStride = vPlane.rowStride
+        val uRowStride = uPlane.rowStride
+        val vPixelStride = vPlane.pixelStride
+        val uPixelStride = uPlane.pixelStride
+
+        vBuffer.rewind()
+        uBuffer.rewind()
+
+        var dstPos = ySize
+        for (row in 0 until chromaHeight) {
+            val vRowStart = row * vRowStride
+            val uRowStart = row * uRowStride
+            for (col in 0 until chromaWidth) {
+                // NV21 order: V first, then U.
+                nv21[dstPos++] = vBuffer.get(vRowStart + col * vPixelStride)
+                nv21[dstPos++] = uBuffer.get(uRowStart + col * uPixelStride)
+            }
+        }
+
+        return nv21
+    }
+
+    /** Copy one [Image.Plane] into [dst] at [dstOffset], respecting row/pixel strides. */
+    private fun copyPlane(
+        dst: ByteArray,
+        dstOffset: Int,
+        plane: Image.Plane,
+        width: Int,
+        height: Int,
+    ) {
+        val buffer = plane.buffer
+        val rowStride = plane.rowStride
+        val pixelStride = plane.pixelStride
+        buffer.rewind()
+
+        var dstPos = dstOffset
+        for (row in 0 until height) {
+            val rowStart = row * rowStride
+            for (col in 0 until width) {
+                dst[dstPos++] = buffer.get(rowStart + col * pixelStride)
+            }
+        }
+    }
 
     /** The first ARCore hit on a tracked, horizontal, upward-facing plane, or null. */
     private fun firstFloorHit(frame: Frame, px: Float, py: Float): Pose? {
@@ -2255,9 +3385,14 @@ class ArTryOnView(
         // reference until the documented order can run below.
         pendingModel = null
         modelRoot = 0
+        pendingFootPose = null
+        pendingFootMask = null
+        cachedFrameBytes = null
+        footTracker.reset()
         runCatching { session?.close() }
         session = null
         sessionResumed = false
+        pausedForSurfaceDetach = false
         destroySwapChain()
         engine?.let { created ->
             val flushed = runCatching { created.flushAndWait(TEARDOWN_FLUSH_TIMEOUT_NANOS) }
@@ -2267,6 +3402,10 @@ class ArTryOnView(
         view?.let { engine?.destroyView(it) }
         scene?.let { engine?.destroyScene(it) }
         renderer?.let { engine?.destroyRenderer(it) }
+        // V4.9: the grading object is engine-owned like the view above it — destroyed in the
+        // same pass, after the renderer that drew with it.
+        colorGrading?.let { engine?.destroyColorGrading(it) }
+        colorGrading = null
         if (cameraEntity != 0) {
             engine?.destroyCameraComponent(cameraEntity)
             runCatching { EntityManager.get().destroy(cameraEntity) }
@@ -2300,6 +3439,19 @@ class ArTryOnView(
         // used them is now gone, so the cache is drained explicitly here.
         materialProvider?.destroyMaterials()
         materialProvider?.destroy()
+        // V4.4: the overlay samples the feed's texture, so it is destroyed first — before the feed
+        // that owns the texture and the engine that owns them both. Its own material instance is
+        // destroyed with it, in the one order native code does not panic over.
+        footMaskOverlay?.destroy(engine)
+        footMaskOverlay = null
+        relay("teardown: foot mask overlay destroyed")
+        // F20: the feed owns a material instance of its own, so it goes after the material drain
+        // and before the engine it was built against — which is destroyed a few statements later.
+        // Its EGL context dies here too; the engine's context shares that group but outlives it by
+        // design, and nothing else references the feed afterwards.
+        cameraFeed?.destroy(engine)
+        cameraFeed = null
+        relay("teardown: camera feed destroyed")
         relay("teardown: view/scene/renderer/entities/loader/materials destroyed")
         engine?.destroy()
         view = null
@@ -2348,6 +3500,18 @@ class ArTryOnView(
         const val FOV_DEGREES = 60.0
 
         /**
+         * **V4.9 night-feed exposure gain, in EV stops, applied by [colorGrading].**
+         *
+         * +1.5 EV ≈ 2.8× brightness on top of undoing the default filmic tone mapping's
+         * shadow crush (the switch to `Linear` alone lifts the dark end: ACES maps 0.18
+         * linear to roughly a tenth of the range and takes the deep shadows toward black).
+         * Chosen for a night room where the sensor is already maxed — the software gain
+         * multiplies noise with the signal, so it is deliberately not higher; the torch
+         * (see [setTorch]) is the real fix when the room is truly dark.
+         */
+        const val FEED_EXPOSURE_EV = 1.5f
+
+        /**
          * **The stage with nothing sent — the near-black this view has cleared to since V3.2.**
          *
          * It is the same tone Dart's `#0E0F12` idle face paints, so the box does not flash
@@ -2371,6 +3535,34 @@ class ArTryOnView(
         const val PERF_WINDOW_NANOS = 5_000_000_000L
         const val LIGHT_SAMPLE_MS = 1_000L
         const val MAX_PLACEMENT_METERS = 12.0
+
+        // ── V4.2 foot tracking ───────────────────────────────────────────────────────────────
+
+        /**
+         * How often the render loop converts a camera image to NV21 for the Dart detector.
+         *
+         * 150 ms, the scan plugin's own value: Dart reads at 5 Hz, so every tick finds a frame
+         * that is at most ~150 ms old while the conversion is paid at two-thirds of the render
+         * rate at most.
+         */
+        const val CAMERA_FRAME_INTERVAL_MS = 150L
+
+        /**
+         * How often the tracker's live measurement is published to Dart (V4.6).
+         *
+         * 500 ms — the verdict card is the consumer, and a sentence that redraws twice a second
+         * is already more than a customer can read; the eased anchor changes slowly, so faster
+         * events would repeat the same number more often rather than inform anyone. The edge
+         * events (`footLock`) are unaffected: they stay edges-only.
+         */
+        const val FOOT_MEASURE_INTERVAL_MS = 500L
+
+        /**
+         * Below this, the heel and toe hit the same floor point and there is no axis to build.
+         * 1 mm is two orders of magnitude under a real foot's length, so only a degenerate hit —
+         * not a small foot — can trip it.
+         */
+        const val MIN_FOOT_AXIS_METERS = 1e-3
 
         /** A stall must not turn into a jump: the idle spin takes at most this much per frame. */
         const val MAX_FRAME_DELTA_SECONDS = 0.1f

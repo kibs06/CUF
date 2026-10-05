@@ -856,6 +856,31 @@ class AppConstants {
   /// a dead end). Flipping it back is the whole rollback.
   static const bool tryOnV3Enabled = bool.fromEnvironment('TRY_ON_V3');
 
+  /// Gates **V4's foot tracking** — the detection loop that turns camera frames
+  /// into pose observations for the native renderer
+  /// (`lib/providers/try_on/try_on_session_controller.dart`, roadmap V4.1).
+  ///
+  /// **OFF by default, and separate from [tryOnV3Enabled] on purpose.** V3's
+  /// switch says "this build may render a shoe"; this one says "this build may
+  /// spend camera frames and battery looking for the customer's foot". A device
+  /// session diagnosing the renderer wants the first without the second, and
+  /// the reverse is not meaningful — so the loop additionally requires the V3
+  /// switch and a live AR session, and this flag alone changes nothing.
+  ///
+  /// **The two halves arrive at different times.** The Dart half is built
+  /// (loop, gate, pose payload, `footLock` handling). The native half —
+  /// `acquireCameraFrame` on the try-on plugin and the `FootPoseTracker` that
+  /// consumes `setFootPose` (V4.2) — is not; on a build without it the loop
+  /// stops after five consecutive failures by design (`kFootTrackFailureLimit`)
+  /// rather than throwing five times a second. That is why this ships off: on a
+  /// customer's phone it would cost frames and produce nothing.
+  ///
+  /// **How it is turned on:** `--dart-define=TRY_ON_FOOT_TRACK=true`, for a
+  /// device build that also passes `TRY_ON_V3=true`. Off means **nothing
+  /// happens**: no timer, no frame request, no detector is even constructed.
+  static const bool tryOnFootTrackEnabled =
+      bool.fromEnvironment('TRY_ON_FOOT_TRACK');
+
   /// **QA/development seam: let the try-on path render the repo's bundled
   /// block-out.** Default **off**; nothing is constructed and no asset is read
   /// while it is.

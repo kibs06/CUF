@@ -1,13 +1,21 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:app/models/foot_measurement.dart';
+import 'package:app/providers/auth_provider.dart';
 import 'package:app/providers/cart_provider.dart';
+import 'package:app/providers/foot_measurement_provider.dart';
 import 'package:app/providers/product_provider.dart';
 import 'package:app/providers/try_on/try_on_mode.dart';
+import 'package:app/providers/try_on/try_on_phase.dart';
 import 'package:app/providers/try_on/try_on_session_controller.dart';
 import 'package:app/screens/customer/ar_fitting_screen.dart';
 import 'package:app/services/ar_try_on_channel.dart';
 import 'package:app/services/shoe_model_service.dart';
+import 'package:app/utils/shoe_model_resolver.dart';
+import 'package:app/utils/try_on_fit.dart';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -31,16 +39,32 @@ import 'package:provider/provider.dart';
 void main() {
   const fakeViewKey = Key('fake-ar-view');
 
-  Widget wrap(Widget page) {
+  Widget wrap(
+    Widget page, {
+    Map<String, dynamic>? profile,
+    FootMeasurement? measurement,
+  }) {
     final cart = _MockCartProvider();
     when(() => cart.itemCount).thenReturn(0);
     final products = _MockProductProvider();
     when(() => products.products).thenReturn(const []);
 
+    // V4.7's card reads both of these; the screen itself does not. With no
+    // profile it never asks for a measurement, which is what every existing
+    // test in this file exercises.
+    final auth = _MockAuthProvider();
+    when(() => auth.profile).thenReturn(profile);
+    when(() => auth.currentUser).thenReturn(const {'id': 'user-1'});
+    final foot = _MockFootMeasurementProvider();
+    when(() => foot.latestMeasurement).thenReturn(measurement);
+    when(() => foot.loadLatest(any())).thenAnswer((_) async {});
+
     return MultiProvider(
       providers: [
         ChangeNotifierProvider<CartProvider>.value(value: cart),
         ChangeNotifierProvider<ProductProvider>.value(value: products),
+        ChangeNotifierProvider<AuthProvider>.value(value: auth),
+        ChangeNotifierProvider<FootMeasurementProvider>.value(value: foot),
       ],
       child: MaterialApp(home: page),
     );
@@ -69,9 +93,10 @@ void main() {
     required bool tryOnEnabled,
     required bool modelAvailable,
     TryOnSessionController? controller,
+    Map<String, dynamic> product = _product,
   }) =>
       ARVirtualFitScreen(
-        preselectedProduct: _product,
+        preselectedProduct: product,
         tryOnEnabled: tryOnEnabled,
         modelAvailable: modelAvailable,
         tryOnSessionController: controller,
@@ -79,15 +104,23 @@ void main() {
             const ColoredBox(color: Colors.black, key: fakeViewKey),
       );
 
-  Future<void> pump(WidgetTester tester, ARVirtualFitScreen page) async {
-    await tester.pumpWidget(wrap(page));
+  Future<void> pump(
+    WidgetTester tester,
+    ARVirtualFitScreen page, {
+    Map<String, dynamic>? profile,
+    FootMeasurement? measurement,
+  }) async {
+    await tester.pumpWidget(
+      wrap(page, profile: profile, measurement: measurement),
+    );
     await tester.pump(const Duration(milliseconds: 100));
   }
 
-  /// Drains the screen's simulated lock-on timer (2.5 s), which `initState` arms
-  /// unconditionally. Without this the binding reports "a Timer is still pending"
-  /// after the tree is disposed — a property of the screen as shipped, not of the
-  /// swap under test.
+  /// Advances past the screen's simulated lock-on timer (2.5 s) so later
+  /// assertions see the settled state. Since V4.8 that timer is a cancellable
+  /// `Timer`, so this is about frame time rather than about the binding's
+  /// pending-timer check — the check is what the 20-cycle test in
+  /// `ar_fitting_lifecycle_test.dart` uses as its leak detector.
   Future<void> settle(WidgetTester tester) =>
       tester.pump(const Duration(seconds: 3));
 
@@ -196,6 +229,278 @@ void main() {
     expect(simulatedFeedShown(), isTrue);
     await settle(tester);
   });
+
+  // ── V4.6: the live verdict is wired to the reading, and gated ───────────
+
+  testWidgets('the live verdict appears when a measured foot is locked',
+      (tester) async {
+    final controller = TryOnSessionController(
+      productId: 'product-1',
+      enabled: true,
+      footTrackEnabled: true,
+      channel: _QuietChannel(),
+      models: ShoeModelService(dataSource: _NeverResolvingSource()),
+    );
+    await pump(
+      tester,
+      screen(
+        tryOnEnabled: true,
+        modelAvailable: true,
+        controller: controller,
+        product: _productWithSpecs,
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('try-on-fit-verdict')), findsNothing,
+        reason: 'no reading has arrived yet, so the card must be silent');
+
+    // What the native `footMeasure` + `footLock` pair would publish.
+    controller.liveFoot.value = const TryOnLiveFoot(
+      lengthMm: 265,
+      quality: 0.9,
+      locked: true,
+    );
+    await tester.pump();
+
+    expect(find.text('True to size'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('try-on-fit-verdict')),
+        matching: find.text('EU 42'),
+      ),
+      findsOneWidget,
+      reason: 'the bottom panel prints its own size label; the chip must be '
+          "the verdict card's",
+    );
+    await settle(tester);
+  });
+
+  testWidgets('no foot tracking, no live verdict — even with a reading',
+      (tester) async {
+    final controller = TryOnSessionController(
+      productId: 'product-1',
+      enabled: true,
+      // footTrackEnabled defaults to false: the V4.1 switch is the gate, the
+      // same one the coach card reads.
+      channel: _QuietChannel(),
+      models: ShoeModelService(dataSource: _NeverResolvingSource()),
+    );
+    await pump(
+      tester,
+      screen(
+        tryOnEnabled: true,
+        modelAvailable: true,
+        controller: controller,
+        product: _productWithSpecs,
+      ),
+    );
+
+    controller.liveFoot.value = const TryOnLiveFoot(
+      lengthMm: 265,
+      quality: 0.9,
+      locked: true,
+    );
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('try-on-fit-verdict')), findsNothing);
+    expect(find.text('True to size'), findsNothing);
+    await settle(tester);
+  });
+
+  // ── V4.7: the saved-size suggestion, and where it sits ──────────────────
+
+  testWidgets('a saved scan that disagrees with the live foot is offered a '
+      'rescan', (tester) async {
+    final controller = TryOnSessionController(
+      productId: 'product-1',
+      enabled: true,
+      footTrackEnabled: true,
+      channel: _QuietChannel(),
+      models: ShoeModelService(dataSource: _NeverResolvingSource()),
+    );
+    await pump(
+      tester,
+      screen(
+        tryOnEnabled: true,
+        modelAvailable: true,
+        controller: controller,
+        product: _productWithSpecs,
+      ),
+      profile: const {'foot_size_ph': 42, 'foot_profile_source': 'ar_scan'},
+      measurement: _savedFoot(264),
+    );
+
+    expect(find.byKey(const ValueKey('try-on-saved-size')), findsNothing);
+
+    controller.liveFoot.value = const TryOnLiveFoot(
+      lengthMm: 273.4,
+      quality: 0.9,
+      locked: true,
+    );
+    await tester.pump();
+
+    expect(
+      find.text('Your saved size may be stale — rescan?'),
+      findsOneWidget,
+    );
+    // The suggestion is first in the column, above the verdict: the two cards
+    // the customer is acting on must not be displaced by a hint about old
+    // data appearing and disappearing.
+    final notice = tester.getRect(
+      find.byKey(const ValueKey('try-on-saved-size')),
+    );
+    final verdict = tester.getRect(
+      find.byKey(const ValueKey('try-on-fit-verdict')),
+    );
+    expect(notice.bottom, lessThanOrEqualTo(verdict.top + 1));
+    await settle(tester);
+  });
+
+  testWidgets('a saved scan that agrees keeps the suggestion off the screen',
+      (tester) async {
+    final controller = TryOnSessionController(
+      productId: 'product-1',
+      enabled: true,
+      footTrackEnabled: true,
+      channel: _QuietChannel(),
+      models: ShoeModelService(dataSource: _NeverResolvingSource()),
+    );
+    await pump(
+      tester,
+      screen(
+        tryOnEnabled: true,
+        modelAvailable: true,
+        controller: controller,
+        product: _productWithSpecs,
+      ),
+      profile: const {'foot_size_ph': 42, 'foot_profile_source': 'ar_scan'},
+      measurement: _savedFoot(268),
+    );
+
+    controller.liveFoot.value = const TryOnLiveFoot(
+      lengthMm: 273.4,
+      quality: 0.9,
+      locked: true,
+    );
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('try-on-saved-size')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('try-on-fit-verdict')),
+      findsOneWidget,
+      reason: 'the verdict is still the V4.6 card; only the saved-size hint is silent',
+    );
+    await settle(tester);
+  });
+
+  // ── V4.9: the start that the view beat, and the retry that answers it ────
+  //
+  // The defect these two pin is why the AR camera went black on a device
+  // (QA, 2026-10-05). The screen calls `startAr` from the platform view's
+  // creation; `prepareModel` hands the model over asynchronously. When the view
+  // wins that race `startAr` returns at its `modelReady` gate, and nothing calls
+  // it again — the QA phone sat on exactly that screen for 48 minutes: no
+  // session, no camera, 173,660 frames of a black rectangle.
+
+  testWidgets('the model landing after the view still starts AR', (tester) async {
+    final source = _GatedRowSource(
+      Uint8List.fromList(List<int>.generate(96, (i) => (i * 11) % 256)),
+    );
+    final channel = _RecordingChannel();
+    final controller = TryOnSessionController(
+      productId: 'product-1',
+      enabled: true,
+      channel: channel,
+      models: _MemoryModelService(source, source.bytes),
+    );
+
+    await pump(
+      tester,
+      screen(tryOnEnabled: true, modelAvailable: true, controller: controller),
+    );
+
+    // The ordering a phone really produces: the view is up (the injected builder
+    // stands in for it) while the handover is still running.
+    expect(controller.phase, TryOnPhase.loadingModel);
+    expect(channel.calls, isEmpty,
+        reason: 'nothing to start yet — startAr is gated on modelReady');
+
+    // The handover lands. The row wait is a gate here rather than a network
+    // round trip, but everything after it is the production path: the row is
+    // parsed, the spec resolved and the model handed over.
+    source.gate.complete();
+    await tester.pump();
+
+    expect(controller.modelPath, isNotNull,
+        reason: 'the handover itself has to have finished, or this test is '
+            'measuring a phase that never landed');
+    expect(channel.calls, contains('startSession'),
+        reason: 'the phase reaching modelReady is the second chance F17 left '
+            'the screen, and without it the camera never starts');
+    expect(controller.mode, TryOnMode.real);
+    await settle(tester);
+  });
+
+  testWidgets('a view with no model to show never starts a camera',
+      (tester) async {
+    // The retry's other half: it waits for the model, so a session that is still
+    // staging cannot start a camera the customer has nothing to see in.
+    final channel = _RecordingChannel();
+    final controller = TryOnSessionController(
+      productId: 'product-1',
+      enabled: true,
+      channel: channel,
+      models: ShoeModelService(dataSource: _NeverResolvingSource()),
+    );
+
+    await pump(
+      tester,
+      screen(tryOnEnabled: true, modelAvailable: true, controller: controller),
+    );
+    await settle(tester);
+
+    expect(controller.phase, TryOnPhase.loadingModel);
+    expect(channel.calls, isEmpty);
+  });
+
+  // ── V4.1's switch, pinned as source because no test can define it ────────
+  //
+  // `AppConstants.tryOnFootTrackEnabled` is a `bool.fromEnvironment`, so the
+  // `--dart-define=TRY_ON_FOOT_TRACK=true` path cannot be exercised here — and
+  // the switch's own doc says it can turn the loop on. That is only true while
+  // the screen's construction site reads it (the call sites that must not drift
+  // are the V3.9 gate tests' subject too). The controller's runtime behaviour
+  // under either flag value is pinned in `try_on_foot_track_test.dart`.
+  test('the screen hands the foot-tracking switch to the controller', () {
+    final source = File(
+      'lib/screens/customer/ar_fitting_screen.dart',
+    ).readAsStringSync();
+
+    expect(
+      source,
+      contains('footTrackEnabled: AppConstants.tryOnFootTrackEnabled'),
+      reason: 'the switch is inert unless the only construction site reads it',
+    );
+  });
+
+  // ── V4.9's readout switch, pinned for the same reason ────────────────────
+  //
+  // The defect this phase fixed was that the V4 heartbeat could not be switched
+  // on for the try-on session at all. The screen reading the QA define is the
+  // half that keeps it reachable: a refactor that dropped this line would take
+  // the whole device session's evidence with it, silently.
+  test('the screen hands the QA readout switch to the controller', () {
+    final source = File(
+      'lib/screens/customer/ar_fitting_screen.dart',
+    ).readAsStringSync();
+
+    expect(
+      source,
+      contains('diagnostics: AppConstants.shoePreviewDiagnosticsEnabled'),
+      reason: 'the readout is unreachable on a device unless the only '
+          'construction site passes the switch',
+    );
+  });
 }
 
 const Map<String, dynamic> _product = {
@@ -205,6 +510,29 @@ const Map<String, dynamic> _product = {
   'images': <String>[],
   'sizes': <String, int>{'39': 5},
 };
+
+/// The same product with the last spec the fit engine grades — V4.6's card has
+/// nothing to say without one (the V1 rule, unchanged).
+const Map<String, dynamic> _productWithSpecs = {
+  'id': 'product-1',
+  'name': 'Test Spec Oxford',
+  'price': 1099.0,
+  'images': <String>[],
+  'sizes': <String, int>{'42': 5},
+  'last_length_mm': 275.0,
+  'fit_ref_size_eu': 42.0,
+  'last_width_mm': 100.0,
+};
+
+/// V4.7's saved profile: 264 mm on the sizing (right) foot — the number
+/// `maxFootLength` returns and therefore the number the engine grades with.
+FootMeasurement _savedFoot(double lengthMm) => FootMeasurement(
+      userId: 'user-1',
+      sizingFootSide: 'right',
+      footLengthRightMm: lengthMm,
+      paperSizeUsed: 'ar',
+      scanDate: DateTime(2026, 9, 27),
+    );
 
 /// The model read never resolves, so `prepareModel` stays in flight and the
 /// session is neither ready nor degraded — the real state at mount.
@@ -229,10 +557,10 @@ class _EmptyRowsSource implements ShoeModelDataSource {
   Future<Uint8List> download(String storagePath) async => Uint8List(0);
 }
 
-/// The screen never calls `startAr` under this harness (no platform view is
-/// created), so the channel only has to exist — but it must not be the default
-/// one, or a future refactor that does start a session would reach a real
-/// platform channel from a test.
+/// The channel for tests where no session may start: `startSession` answers a
+/// refusal, so a screen that reached one would degrade rather than quietly pass.
+/// It must not be the default channel either, or a screen that does start a
+/// session would reach a real platform channel from a test.
 class _QuietChannel extends ArTryOnChannel {
   @override
   Future<TryOnStartResult> startSession() async =>
@@ -241,6 +569,98 @@ class _QuietChannel extends ArTryOnChannel {
   @override
   void attach() {}
 }
+
+/// Records what the screen asked the native side to do, and answers the two
+/// calls a started session makes.
+///
+/// Both answers matter for the same reason: under `flutter test` there is no
+/// platform behind the channel, and an unanswered `invokeMethod` is a future
+/// that never completes — which would leave the model handover mid-await and
+/// make this file measure the harness instead of the screen.
+class _RecordingChannel extends ArTryOnChannel {
+  final List<String> calls = <String>[];
+
+  @override
+  Future<void> setModel(TryOnModelSpec spec) async {
+    calls.add('setModel');
+  }
+
+  @override
+  Future<TryOnStartResult> startSession() async {
+    calls.add('startSession');
+    return const TryOnStartResult(started: true);
+  }
+
+  @override
+  void attach() {}
+}
+
+/// One real model row, held until the test opens [gate]: the handover has to
+/// succeed for the phase to reach `modelReady`, and the row carries bytes whose
+/// digest the production resolver can actually accept.
+///
+/// The gate is what makes the ordering deliberate rather than incidental — the
+/// screen's view exists before the model lands, which is what a phone does
+/// (a network round trip, then a file check) and what the fake clock would
+/// otherwise collapse into the same frame.
+class _GatedRowSource implements ShoeModelDataSource {
+  _GatedRowSource(this.bytes);
+
+  final Uint8List bytes;
+  final Completer<void> gate = Completer<void>();
+
+  @override
+  Future<List<Map<String, dynamic>>> activeModelRows(String productId) async {
+    await gate.future;
+    return <Map<String, dynamic>>[
+      <String, dynamic>{
+        'id': 7,
+        'variant_id': null,
+        'storage_path': 'store-1/product-1/model.glb',
+        'sha256': sha256.convert(bytes).toString(),
+        'version': 2,
+        'authored_length_mm': 278,
+        'shoe_side': 'right',
+      },
+    ];
+  }
+
+  @override
+  Future<Uint8List> download(String storagePath) async => bytes;
+}
+
+/// The production service with its one disk-bound step answered from memory.
+///
+/// `ensureLocal` is where a phone spends the time this race turns on:
+/// `File.exists` and `readAsBytes`, real I/O that cannot complete under the
+/// fake clock. Everything the screen's retry depends on — the resolved spec, the
+/// handed-over path, the `modelReady` phase — still comes from the real code
+/// above it.
+class _MemoryModelService extends ShoeModelService {
+  _MemoryModelService(ShoeModelDataSource source, this.bytes)
+      : super(dataSource: source);
+
+  final Uint8List bytes;
+
+  @override
+  Future<ShoeModelFile> ensureLocal(
+    ShoeModelSpec spec, {
+    bool force = false,
+  }) async =>
+      ShoeModelFile(
+        path: 'try-on/model.glb',
+        fromCache: true,
+        bytes: bytes.length,
+      );
+}
+
+class _MockAuthProvider extends Mock
+    with ChangeNotifier
+    implements AuthProvider {}
+
+class _MockFootMeasurementProvider extends Mock
+    with ChangeNotifier
+    implements FootMeasurementProvider {}
 
 class _MockCartProvider extends Mock with ChangeNotifier implements CartProvider {}
 

@@ -1,9 +1,11 @@
 import { useState } from 'react'
-import { AlertTriangle, Check, Cuboid, Loader2, Ruler, Upload } from 'lucide-react'
+import { AlertTriangle, Check, Cuboid, Loader2, Ruler, Sparkles, Upload } from 'lucide-react'
 import Modal from '../ui/Modal.jsx'
 import { usePublishModelRequest } from '../../hooks/usePublishModel.js'
+import { useCompressModel } from '../../hooks/useCompressModel.js'
 import { describeError } from '../../lib/errors.js'
 import {
+  BUCKET_CAP_BYTES,
   DECLARATION_FIELD,
   declarationMessageFor,
   declaredLengthAgreement,
@@ -11,6 +13,12 @@ import {
   readDeclaration,
   MODELLING_ENDING,
 } from '../../lib/modelPublish.js'
+import {
+  FILE_SIZE_BUDGET_BYTES,
+  compressFailureMessage,
+  compressionSummary,
+  formatBytes,
+} from '../../lib/modelCompress.js'
 // P3: what the seller is told, which is the database's doing and this page's
 // claim — see `askDelivery.js` and the contract test that keeps them equal.
 import {
@@ -101,6 +109,11 @@ export default function UploadModelModal({ request, onClose, onDone }) {
   const [sizeEu, setSizeEu] = useState(prefill.authoredSizeEu)
   const [note, setNote] = useState('')
   const [error, setError] = useState(null)
+  // What the compress step produced, and the sentence it ended with — kept
+  // beside `file` because both are "the source", and the admin needs to see
+  // which one is in hand before pressing Publish.
+  const [compressed, setCompressed] = useState(null)
+  const compress = useCompressModel()
 
   const declaration = readDeclaration({ externalLengthMm: lengthMm, authoredSizeEu: sizeEu })
   const agreement = declaredLengthAgreement({
@@ -114,26 +127,83 @@ export default function UploadModelModal({ request, onClose, onDone }) {
   const ready =
     hasSource && !declaration.error && declaration.externalLengthMm !== null && !publish.isPending
 
+  // ⚠️ The file that was compressed, tracked by identity rather than by name:
+  // a second file with the same name from another folder is a different file,
+  // and offering the previous run's bytes for it would be the worst kind of
+  // quiet mistake. So the result is dropped whenever the picked file changes.
+  const compressedMatchesFile = compressed !== null && compressed.forFile === file
+
+  // Offered when a picked file is over the authoring budget, or when the last
+  // run left its result in hand (so the admin can see it, and re-run it).
+  const overBudget = Boolean(file) && file.size > FILE_SIZE_BUDGET_BYTES
+  const showCompress = Boolean(file) && (overBudget || compressedMatchesFile)
+
   const reset = () => {
     setLink('')
     setFile(null)
     setNote('')
     setError(null)
+    setCompressed(null)
+    compress.clear()
   }
 
   const close = () => {
     if (publish.isPending) return
+    // A run in flight is stopped rather than left to finish into a closed
+    // modal: it holds a few hundred megabytes until it does.
+    compress.stop()
     reset()
     onClose()
+  }
+
+  const handleCompress = async () => {
+    if (!file) return
+    // ⚠️ Deliberately not `setError`: that one is the *publish* error and is
+    // rendered under "That did not publish", which would be a lie about a
+    // compression that never reached the server. The hook keeps its own.
+    compress.clear()
+
+    // A copy this component owns, because the hook transfers the buffer to the
+    // worker rather than cloning 90 MB of it. `arrayBuffer()` already returns a
+    // fresh buffer per call, so this is a view onto a copy, not the file itself.
+    const outcome = await compress.compress({
+      bytes: new Uint8Array(await file.arrayBuffer()),
+      declaredLengthMm: declaration.externalLengthMm,
+      authoredSizeEu: declaration.authoredSizeEu,
+    })
+
+    if (!outcome.ok) return
+
+    setCompressed({
+      forFile: file,
+      blob: new Blob([outcome.result.bytes], { type: 'model/gltf-binary' }),
+      bytes: outcome.result.bytes,
+      changes: outcome.result.changes,
+      before: outcome.result.before,
+      after: outcome.result.after,
+      summary: compressionSummary({
+        beforeBytes: file.size,
+        afterBytes: outcome.result.bytes.length,
+        triangleCount: outcome.plan.triangleCount,
+        triangleCountAfter: outcome.result.after?.triangles ?? null,
+      }),
+    })
   }
 
   const handlePublish = async () => {
     setError(null)
     try {
+      // The compressed bytes go in as the file, under the picked file's name.
+      // The upload pipeline reads them exactly as it reads a picked file, so
+      // nothing downstream changes: the server still judges the stored bytes.
+      const source = compressedMatchesFile
+        ? new File([compressed.blob], file.name, { type: 'model/gltf-binary' })
+        : file
+
       const result = await publish.mutateAsync({
         request,
         link,
-        file,
+        file: source,
         declaration,
         note: note.trim() === '' ? null : note.trim(),
       })
@@ -273,21 +343,119 @@ export default function UploadModelModal({ request, onClose, onDone }) {
       <div className="mt-4">
         <label className={labelClass} htmlFor="model-file">
           Choose a .glb file
-        </label>
-        <input
-          id="model-file"
-          type="file"
-          accept=".glb,model/gltf-binary"
-          onChange={(e) => {
-            setFile(e.target.files?.[0] ?? null)
-            setError(null)
-          }}
-          className="w-full rounded-xl border border-[#D9D0C7] bg-white px-3 py-2 text-sm text-[#3B2314] file:mr-3 file:rounded-lg file:border-0 file:bg-[#8B5A2B] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
-        />
+        </label>          <input
+            id="model-file"
+            type="file"
+            accept=".glb,model/gltf-binary"
+            onChange={(e) => {
+              setFile(e.target.files?.[0] ?? null)
+              setError(null)
+              // A different file is a different problem: the previous run's
+              // bytes and change log are no longer about what is in hand.
+              setCompressed(null)
+              compress.clear()
+            }}
+            className="w-full rounded-xl border border-[#D9D0C7] bg-white px-3 py-2 text-sm text-[#3B2314] file:mr-3 file:rounded-lg file:border-0 file:bg-[#8B5A2B] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
+          />
         <p className="mt-1 text-xs text-[#6B5C4E]">
-          Under 8 MB, exported as glTF binary (.glb). This is the source that always works.
+          Under {formatBytes(BUCKET_CAP_BYTES)}, exported as glTF binary (.glb). This is the source
+          that always works.
         </p>
       </div>
+
+      {/* ── The compress step ────────────────────────────────────────
+          Offered only when there is something to fix, and it is the *budget*
+          (5 MB) rather than the bucket cap (8 MB) that raises it: a file
+          between the two uploads and is then refused by the server, which
+          costs a round trip and a download to be told what this button
+          already knows.
+
+          What it does NOT do: judge the model. It runs the same reference
+          normalizer the CLI runs — re-axis, re-ground, rescale to the declared
+          length, re-bake textures, rename parts — plus a decimation pass the
+          CLI cannot do at all. The server still reads the stored bytes, and a
+          green run here is not acceptance (guide §5.2). */}
+      {showCompress && (
+        <div className="mt-3 rounded-xl border border-[#F5F0EB] bg-[#FBF8F5] px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="flex items-center gap-2 text-sm font-semibold text-[#3B2314]">
+                <Sparkles size={14} className="text-[#8B5A2B]" />
+                {compressedMatchesFile
+                  ? 'Compressed and ready to upload'
+                  : 'This file is over the authoring budget'}
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-[#6B5C4E]">
+                {compressedMatchesFile
+                  ? 'The compressed bytes are in hand and are what Publish will upload — the ' +
+                    'picked file itself is left alone.'
+                  : `${formatBytes(file.size)} against a ${formatBytes(FILE_SIZE_BUDGET_BYTES)} ` +
+                    'budget — the bucket takes it, but the server will refuse it. Compressing ' +
+                    'decimates the mesh and re-bakes the textures to 1024², then runs the same ' +
+                    'normalizer the CLI runs: re-aimed axes, grounded, scaled to the declared ' +
+                    'length, parts renamed. It runs in the background — a minute or so for a ' +
+                    'file this size, and the tab stays usable while it does.'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleCompress}
+              disabled={compress.isRunning || !ready}
+              className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-[#8B5A2B] px-4 py-2 text-sm font-semibold text-[#8B5A2B] transition-colors hover:bg-[#8B5A2B] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {compress.isRunning ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" />
+                  Compressing…
+                </>
+              ) : (
+                <>
+                  <Sparkles size={14} />
+                  {compressedMatchesFile ? 'Compress again' : 'Compress it'}
+                </>
+              )}
+            </button>
+          </div>
+
+          {compress.isRunning && compress.stageSentence && (
+            <p className="mt-2 text-xs text-[#8B5A2B]">{compress.stageSentence}</p>
+          )}
+
+          {!ready && !compress.isRunning && (
+            <p className="mt-2 text-xs text-[#6B5C4E]">
+              Fill in the declared length first — the mesh is scaled to it, so compressing
+              without one would leave the scale wrong.
+            </p>
+          )}
+
+          {compress.error && !compress.isRunning && (
+            <div className="mt-2">
+              <Notice title="That file could not be compressed">{compress.error}</Notice>
+            </div>
+          )}
+
+          {compressedMatchesFile && !compress.isRunning && (
+            <div className="mt-2">
+              <p className="text-xs font-semibold text-[#3B2314]">
+                {compressed.summary}
+              </p>
+              {/* ⚠️ The assumptions, shown rather than applied quietly. The toe
+                  end and the sole cut line are decisions the file cannot make
+                  for itself, and the reviewer still has to confirm both. */}
+              <details className="mt-2">
+                <summary className="cursor-pointer text-xs font-semibold text-[#8B5A2B]">
+                  What it changed ({compressed.changes.length})
+                </summary>
+                <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[11px] leading-relaxed text-[#6B5C4E]">
+                  {compressed.changes.map((change, index) => (
+                    <li key={index}>{change}</li>
+                  ))}
+                </ul>
+              </details>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="mt-3">
         <label className={labelClass} htmlFor="model-link">

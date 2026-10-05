@@ -352,6 +352,13 @@ emulator *can* hand over, because `adb` works there.
 gh workflow run qa-apk.yml -f abi=x86_64 -f diagnostics=true -f lower_engine=true -f allow_level1=true
 ```
 
+**The V4 try-on session.** The workflow carries the try-on switches too —
+`-f try_on=true -f foot_track=true -f qa_model=true` — which build the renderer,
+the V4 foot loop and the bundled partner asset (necessary while `product_models`
+holds 0 rows), all behind `SHOE_PREVIEW_DIAGNOSTICS=true`'s on-screen heartbeat.
+They default off, so the box artifact is unchanged. The device session they exist
+for is `docs/RoadMap/VIRTUAL_FITTING_V4_9_DEVICE_REVIEW.md`.
+
 **Why it is not a release.** The three `SHOE_PREVIEW_*` QA switches are honoured
 only in a **debuggable** APK (a published release is not `FLAG_DEBUGGABLE`, so it
 ignores them — see the switch table above), and they measure the renderer rather

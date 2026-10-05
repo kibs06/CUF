@@ -20,6 +20,7 @@ import '../../services/supabase_service.dart';
 import '../../providers/try_on/try_on_mode.dart';
 import '../../services/ar_try_on_channel.dart';
 import '../../services/try_on_prefetch.dart';
+import '../../services/try_on_placeholder_model.dart';
 import '../../utils/sale_price.dart';
 import '../../utils/shoe_preview_visibility.dart';
 import '../../utils/variant_swatch_color.dart';
@@ -872,7 +873,21 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
     ).variantId;
 
     final prefetch = _shoePrefetch ??= widget.tryOnPrefetch ??
-        TryOnPrefetch(enabled: AppConstants.tryOnPrefetchEnabled);
+        TryOnPrefetch(
+          enabled: AppConstants.tryOnPrefetchEnabled,
+          // V4.9's reachability half, and the reason the device session can be
+          // reached at all while `product_models` holds 0 rows: the page's gate
+          // asks *this* service whether the product has a model, so with the
+          // QA switch on the production read service is pointed at the bundled
+          // asset (the V3.5 boundary substitution the try-on screen already
+          // uses) — and the 3D viewer, plus the "Try On in AR" button inside
+          // it, appears for the product under test. Only where the bytes come
+          // from changes; resolution, digest verify, `.part` rename and the
+          // cache budget all still run as production code.
+          models: AppConstants.tryOnPlaceholderModelEnabled
+              ? placeholderModelService()
+              : null,
+        );
     prefetch
         .prefetch(productId: productId, variantId: variantId)
         .then(_recordTryOnAvailability)

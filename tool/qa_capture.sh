@@ -31,7 +31,16 @@
 #   bash tool/qa_capture.sh                       # 60 s, the only device attached
 #   bash tool/qa_capture.sh --seconds 90 --serial emulator-5554
 #   bash tool/qa_capture.sh --out build/qa/run2 --no-launch
+#   bash tool/qa_capture.sh --tryon               # V4.9's session: steps, locks, meminfo
 #   bash tool/qa_capture.sh --check                # "is a device here?", for CI
+#
+# `--tryon` is V4.9's mode. It prints the try-on session's own steps instead of
+# the preview box's repro, samples `dumpsys meminfo` beside the heartbeat, and
+# adds a digest section that answers the V4 exit criteria from one run:
+# `tryon_sessions`, `tryon_locks_within_10s` (first `footLock locked=true` after
+# each `session resumed (startSession)`, on logcat's own clock) and the last
+# heartbeat's `foot`/`len`/`scale`/`thermal`. The protocol it feeds lives in
+# `docs/RoadMap/VIRTUAL_FITTING_V4_9_DEVICE_REVIEW.md`.
 #
 # Exit codes: 0 captured · 2 no device (or several, and none named) · 3 no adb
 #             4 the app is not installed. `--check` exits 0/2/3 and captures nothing:
@@ -47,6 +56,7 @@ SERIAL=""
 OUT=""
 LAUNCH=1
 CHECK=0
+TRYON=0
 
 # Tags this feature logs under. `NavDiag` carries the try-on lines relayed into the
 # app's own diag file, `Filament`/`gltfio`/`FEngine`/`libfilament` are Filament's own
@@ -63,6 +73,7 @@ QA capture — pull a device run's log and the renderer's heartbeat into one fol
   --serial S    which adb device (default: the only one attached)
   --out DIR     where to write (default: build/qa/capture-<UTC timestamp>)
   --no-launch   do not force-stop/start the app; capture what is already running
+  --tryon       V4.9's try-on session: its steps, lock-rate metrics and meminfo
   --check       report whether a device is attached (exit 0), and capture nothing
   -h, --help    this text
 EOF
@@ -74,6 +85,7 @@ while [[ $# -gt 0 ]]; do
     --serial)  SERIAL="${2:?--serial needs a value}"; shift 2 ;;
     --out)     OUT="${2:?--out needs a path}"; shift 2 ;;
     --no-launch) LAUNCH=0; shift ;;
+    --tryon)   TRYON=1; shift ;;
     --check)   CHECK=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "unknown argument: $1" >&2; usage >&2; exit 2 ;;
@@ -197,22 +209,41 @@ fi
 "${ADB_RUN[@]}" logcat -c || true
 if [[ "$LAUNCH" == 1 ]]; then
   echo
-  echo "  The app is starting. Do this while the capture runs — it is the fault report, in steps:"
-  echo "    1. JBC Crown Leather Sandals → tap the 3D icon in the corner of the photo"
-  echo "    2. drag the shoe — the freeze lands about a second in"
-  echo "    3. back out of the viewer, then open it again — this is where the app dies"
+  if [[ "$TRYON" == 1 ]]; then
+    echo "  The app is starting. Do this while the capture runs — one lock session, in steps:"
+    echo "    1. a product with a size chart → 'Try On in AR'"
+    echo "    2. point the camera at the floor, put the foot in frame, hold still until the shoe locks"
+    echo "    3. move the foot a little — the shoe should stay attached, not slide or resize"
+    echo "    4. wait for the manual offer or 30 s, then press back (one session ends)"
+    echo "    Repeat for each product in the run; the digest reads the log, not the screen."
+  else
+    echo "  The app is starting. Do this while the capture runs — it is the fault report, in steps:"
+    echo "    1. JBC Crown Leather Sandals → tap the 3D icon in the corner of the photo"
+    echo "    2. drag the shoe — the freeze lands about a second in"
+    echo "    3. back out of the viewer, then open it again — this is where the app dies"
+  fi
   echo
   "${ADB_RUN[@]}" shell am start -n "$ACTIVITY" >/dev/null 2>&1 || \
     echo "  ⚠️  could not start $ACTIVITY — start the app by hand."
 fi
 
 : > "$OUT/heartbeats.txt"
+if [[ "$TRYON" == 1 ]]; then : > "$OUT/meminfo.txt"; fi
 elapsed=0
 previous=""
 identical=0
 while [[ "$elapsed" -lt "$WINDOW_SECONDS" ]]; do
   sleep "$SNAPSHOT_EVERY"
   elapsed=$((elapsed + SNAPSHOT_EVERY))
+  if [[ "$TRYON" == 1 ]]; then
+    # V4.9: the ≤ 250 MB session budget is a *sustained* number, so it is
+    # sampled on the same clock as the heartbeat. Parses both the modern
+    # ('TOTAL PSS:') and the older ('TOTAL') App Summary lines.
+    pss=$("${ADB_RUN[@]}" shell dumpsys meminfo "$PACKAGE" 2>/dev/null \
+      | tr -d '\r' \
+      | awk '/TOTAL PSS:/ {print $3; exit} /^ *TOTAL / {print $2; exit}' || true)
+    echo "--- t=+${elapsed}s total_pss_kb=${pss:-?}" >> "$OUT/meminfo.txt"
+  fi
   # `exec-out` rather than `shell`: it does not translate newlines on the way back.
   beat=$("${ADB_RUN[@]}" exec-out run-as "$PACKAGE" cat "$STATUS_FILE" 2>/dev/null \
     | tr -d '\r' | grep -a 'loop=' | tail -1 || true)
@@ -283,6 +314,38 @@ LAST_BEAT="$(grep -a 'loop=' "$OUT/heartbeats.txt" 2>/dev/null | tail -1 || true
   echo "material_load_failures=$(count_of 'No material with the specified requirements' "$OUT/logcat-app.txt")"
   echo "frame_loop_stopped=$(count_of 'renderFrame threw|preview_frame_failed' "$OUT/logcat-app.txt")"
   echo "crash_signatures=$(count_of 'SIGSEGV|Fatal signal|tombstone' "$OUT/logcat-full.txt")"
+  if [[ "$TRYON" == 1 ]]; then
+    # ── V4.9: the session's own numbers ─────────────────────────────────────────────────────
+    # A "session" is one `startAr`, marked through the in-app relay
+    # (`session resumed (startSession)`); a lock is the first
+    # `footLock locked=true` after it, on logcat's own threadtime clock. Both
+    # markers are also what the nav_diag export carries on a phone with no adb,
+    # so the same rule can be re-applied to an exported log by hand.
+    awk '
+      function secs(t,   p) { split(t, p, ":"); return p[1]*3600 + p[2]*60 + p[3] }
+      /session resumed \(startSession\)/ { starts++; startAt = secs($2); waiting = 1; next }
+      /ArTryOnView: footLock locked=true/ {
+        if (waiting) {
+          waiting = 0
+          d = secs($2) - startAt
+          if (d >= 0) { printf "session %d: first lock %.1fs\n", starts, d; locks++ }
+        }
+      }
+      END { printf "sessions=%d locks=%d\n", starts + 0, locks + 0 }
+    ' "$OUT/logcat-app.txt" > "$OUT/tryon_lock_times.txt"
+    echo "tryon_sessions=$(grep -c 'session resumed (startSession)' "$OUT/logcat-app.txt" || true)"
+    echo "tryon_lock_edges=$(count_of 'ArTryOnView: footLock locked=' "$OUT/logcat-app.txt")"
+    echo "tryon_locks_within_10s=$(awk -F': first lock ' 'NF == 2 { split($2, a, "s"); if (a[1] + 0 <= 10) n++ } END { print n + 0 }' "$OUT/tryon_lock_times.txt")"
+    echo "tryon_first_locks=$(grep -c 'first lock' "$OUT/tryon_lock_times.txt" || true)"
+    echo "foot_last=$(last_of 'foot=[a-z]+' "$OUT/heartbeats.txt")"
+    echo "len_last=$(last_of 'len=[0-9]+mm' "$OUT/heartbeats.txt")"
+    echo "scale_last=$(last_of 'scale=[0-9.]+' "$OUT/heartbeats.txt")"
+    echo "thermal_last=$(last_of 'thermal=[a-zA-Z0-9()]+' "$OUT/heartbeats.txt")"
+    echo "mask_last=$(grep -ao 'mask=[a-z]*' "$OUT/heartbeats.txt" | tail -1 | cut -d= -f2 || true)"
+    echo "meminfo_samples=$(grep -c -- '--- t=+' "$OUT/meminfo.txt" || true)"
+    echo "meminfo_max_pss_kb=$(grep -aoE 'total_pss_kb=[0-9]+' "$OUT/meminfo.txt" | cut -d= -f2 | sort -n | tail -1 || true)"
+    echo "meminfo_last_pss_kb=$(grep -aoE 'total_pss_kb=[0-9]+' "$OUT/meminfo.txt" | cut -d= -f2 | tail -1 || true)"
+  fi
 } > "$OUT/digest.txt"
 
 cat > "$OUT/MANIFEST.txt" <<EOF
@@ -307,6 +370,18 @@ Files
 Read digest.txt first. In heartbeats.txt, "present=" climbing means frames are being
 presented; repeats of an identical line with a live "loop=on" are the freeze.
 EOF
+
+if [[ "$TRYON" == 1 ]]; then
+  cat >> "$OUT/MANIFEST.txt" <<EOF
+
+Try-on session (--tryon)
+  tryon_lock_times.txt   one line per session: how long until its first lock
+  meminfo.txt            TOTAL PSS every ${SNAPSHOT_EVERY}s (the ≤ 250 MB budget)
+
+The V4.9 thresholds these feed are in docs/RoadMap/VIRTUAL_FITTING_V4_9_DEVICE_REVIEW.md
+(≥ 85% of sessions lock within 10 s; ≤ 250 MB across the twenty-cycle run).
+EOF
+fi
 
 echo
 echo "=== digest ==="

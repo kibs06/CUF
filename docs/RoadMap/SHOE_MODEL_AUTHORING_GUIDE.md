@@ -283,6 +283,23 @@ It writes `<name>.contract.glb` and prints before/after size, triangles, part na
 
 Do not treat C9.1 as a replacement for §C1–C3. A file that needed the normaliser is a file whose scene was left with an unapplied transform, an unmeasured scale, or an un-split mesh — the fixer repairs the symptom; the next asset should still be authored correctly in Blender.
 
+#### C9.1b — The same repair, from the admin queue (no terminal)
+
+Since 2026-10-03 the portal's `/model-requests` queue runs the same normaliser in the browser, so an admin answering a request no longer needs a shell. When a picked `.glb` is over the 5 MiB authoring budget, the upload dialog offers **Compress it**; it decimates the mesh and then runs **the same `normalizeShoeModel` this guide's CLI runs** — `lib/utils/glb_normalizer.dart`, compiled to JavaScript by `tool/build_shoe_model_normalizer_web.mjs` rather than reimplemented, so there is still exactly one copy of the rules.
+
+What that adds over the CLI, and what it does not:
+
+| | CLI (§C9.1) | Portal (C9.1b) |
+|---|---|---|
+| Bake node transform, re-axis, ground, re-bake textures, rename parts | yes | yes (same code) |
+| **Decimate** a mesh over the 60 k triangle cap | **no** — a manual `gltf-transform simplify` first | yes — ratio chosen to land near 40 k, skipped when already inside the cap |
+| `--toe +x/-x/+z/-z` | yes | no — assumes the positive end and says so, exactly as the CLI does without the flag |
+| `--material from=to` for several unapproved names | yes | no — it refuses with the names and the CLI command instead, because guessing which is the upper repaints the wrong part |
+| `--sole-band-mm` | yes | yes, at the 12 mm default, reported as the approximation it is |
+| Runs the §C9 checks and prints a report card | yes | **no** — the portal adds no third implementation of the eleven rules; the server judges the stored bytes on upload, as always |
+
+A run takes roughly 40 s for a 90 MB export and happens in a Web Worker, so the tab stays usable. Its output is the same file the CLI produces (verified byte-identical on the 90 MB recovery below), and **its green is not acceptance any more than the CLI's is**: the four reviewer rows in the table above are untouched by either route.
+
 Optional external sanity checks: the Khronos **glTF-Validator**, and **gltf.report** for a quick visual + structural look.
 
 **Attach the tool's output to the handover** as `validator-output.txt` (§5.1): the same checks run again on upload and in the server-side validator (roadmap V2.3/V2.4), so a mismatch there is an automatic rejection rather than a negotiation.

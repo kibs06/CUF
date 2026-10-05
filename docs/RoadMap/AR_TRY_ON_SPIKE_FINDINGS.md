@@ -375,7 +375,7 @@ it also removes the race between two staging passes (double-tapping Reload).
 
 ---
 
-### F20 — The Filament-direct route ships **no assets**, so the camera feed, the plane visual and IBL are ours to supply
+### F20 — The Filament-direct route ships **no assets**, so the camera feed, the plane visual and IBL are ours to supply *(feed material vendored 2026-10-04; plane + IBL still open)*
 
 Measured 2026-09-28 by unzipping the three artifacts the production route depends on:
 `filament-android`, `gltfio-android` and `filament-utils-android` 1.72.1 each contain **zero** files
@@ -388,7 +388,7 @@ camera feed or a plane without a material:
 
 | What it needs | The file SceneView carried | Size |
 |---|---|---|
-| Camera feed as a background | `assets/materials/camera_stream_flat.filamat` | 42,544 B |
+| Camera feed as a background | `assets/materials/camera_stream_flat.filamat` | 42,544 B — ✅ **vendored into `android/app/src/main/assets/materials/` 2026-10-04** |
 | Floor plane visualization | `assets/materials/plane_renderer.filamat` | 40,976 B |
 | Image-based lighting (reflections) | `assets/environments/neutral_ibl.ktx` (+ skybox) | 2,095,464 B (+1,572,932 B) |
 
@@ -397,13 +397,21 @@ material/mesh mismatch trips `utils::PreconditionPanic` inside `AssetLoader::cre
 full-screen quad or a plane mesh built against an ubershader whose exact attribute and parameter
 set has not been verified *is* that crash, on a customer's screen.
 
-Two honest routes, both open. **Vendor the two small `.filamat` files** (~85 KB total, Apache-2.0)
-into `android/app/src/main/assets/materials/` — after checking they load on Filament 1.72.1, because
-a `.filamat` is version-locked to the `matc` that compiled it, so this is a test and not a copy. Or
-**compile our own with `matc` in CI**, which is more work and removes the licensing question. The
-IBL is optional and much larger: without it the shoe has no reflections and reads slightly flat —
-a look problem, not a correctness one, which is why the built view ships two directional lights and
-no environment map.
+**The camera-feed half is vendored and wired (2026-10-04).** `camera_stream_flat.filamat` came from
+`io.github.sceneview:arsceneview:4.34.0` (Apache-2.0) into
+`android/app/src/main/assets/materials/` — byte-identical to SceneView's copy (42,544 B, sha256
+`b5c9afba07357e383c2d611e84e6aeca5790a9054cbe8b57b3ceb7a0212ec087`) — and it is **checked, not
+trusted**, which is the version-lock turned into a runtime fact: `ArCameraFeed.attach` verifies the
+two parameters and two vertex attributes the quad sets against the live engine and reports
+`material_mismatch` on the QA heartbeat, because a `.filamat` is version-locked to the `matc` that
+compiled it and the failure mode is a silently black backdrop. `ArTryOnView` shares the feed's EGL
+context with the engine, points ARCore at the texture before `session.resume()`, updates the quad
+per frame behind the shoe, and destroys the feed before the engine. **Still open, by the same two
+routes:** the plane material (`plane_renderer.filamat`, 40,976 B) and the IBL — vendor with a check,
+or **compile our own with `matc` in CI**, which is more work and removes the version-lock question
+entirely. The IBL is optional and much larger: without it the shoe has no reflections and reads
+slightly flat — a look problem, not a correctness one, which is why the built view ships two
+directional lights and no environment map.
 
 ### F21 — A marketplace/AI-generated `.glb` is the realistic partner asset, and its failures are arithmetic, not modelling
 
@@ -688,7 +696,7 @@ Still unmeasured, in the order worth doing them:
 | --- | --- | --- |
 | 1 | The same A/B with **R8 enabled** (`minifyEnabled true` + `shrinkResources true`) | Compose dex is the biggest single line item; R8 shrinks it, but nobody has measured by how much — and enabling R8 is an app-wide change, not an AR one |
 | 2 | ~~A **native-only (Filament, no SceneView)** build~~ | ✅ **DONE 2026-09-28 — see §5.5**: 225,325,390 → 214,744,457 B (`−10,580,933`), ≈+6.4 MB per arm64 device, D3/D4 settled |
-| 3 | **Supply the camera-feed and plane materials** the Filament route no longer inherits | ⬜ **OPEN — the route's real cost, measured 2026-09-28 (F20)**: `filament-android`/`gltfio-android`/`filament-utils-android` ship **zero assets**, so `camera_stream_flat.filamat` (42,544 B) and `plane_renderer.filamat` (40,976 B) have to come from us, and an IBL would add ~2.1 MB. Vendor ≈85 KB (version-checked) or build with `matc` in CI. Blocks V3.2's camera background and plane visual, not its model rendering |
+| 3 | **Supply the camera-feed and plane materials** the Filament route no longer inherits | ◐ **HALF DONE 2026-10-04 — F20**: `camera_stream_flat.filamat` (42,544 B, sha256 `b5c9afba…`) is vendored from SceneView 4.34.0 (Apache-2.0) with an engine-side parameter/attribute check in `ArCameraFeed.attach`, and `ArTryOnView` shares the feed's EGL context so the quad draws behind the shoe — Kotlin compiles clean and the asset is in both debug and release asset merges, but **no device has run it**. Still open: `plane_renderer.filamat` (40,976 B) and the IBL (~2.1 MB) |
 | 3 | `--split-per-abi` APK sizes | The per-device figures above are derived from entry sizes, not measured as a single-artifact download |
 
 Recipe used for §5.3 (re-runnable; back up what you edit and restore byte-for-byte, as was

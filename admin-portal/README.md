@@ -80,6 +80,33 @@ The **declaration** — the model's external length in millimetres, and optional
 
 It is **not** a third implementation of the 11-check authoring contract: the Dart reference and the TypeScript mirror inside `validate-shoe-model` already cover those rules, so the portal sends the bytes, asks the server, and shows the server's answer. A refusal arrives with the failing rows named, the row stays hidden as a `draft`, and the ask stays open.
 
+### A 90 MB export, without a terminal
+
+The queue used to assume the model arrived ready. A partner's raw export does not: the file this was written against was 90.1 MB, 1.5 million triangles, three 4096² textures, one material called `Material.001`, and authored 4.37× life size. Every one of those is a refusal, and the only route to a fixed file was `dart run tool/prepare_shoe_model.dart` in a shell — which is exactly the gap the Flutter screen's own header describes ("only ever be filled by someone with a terminal").
+
+So when a picked file is over the **5 MB authoring budget**, the modal offers **Compress it**, and it runs in the browser:
+
+1. **Decimate** (`@gltf-transform/core` + `functions` with `meshoptimizer`'s WASM simplifier) — the one stage the Dart normalizer cannot do at all. A ratio is picked to land the mesh near 40,000 triangles, and no decimation runs when the mesh is already inside the cap.
+2. **Normalize** — the *compiled reference normalizer*, not a port of it: `lib/utils/glb_normalizer.dart`, built to JavaScript by `tool/build_shoe_model_normalizer_web.mjs`. Re-aimed axes, grounded at the heel-bottom-centre, scaled to the declared length, textures re-baked to 1024², materials renamed, sole band cut.
+
+Both stages run in a Web Worker, so the tab stays usable for the ~40 seconds it takes, and the worker is terminated the moment the run ends or the modal closes.
+
+**What comes out is plain, uncompressed glTF.** Draco, meshopt and KTX2 are refused by the contract, so meshopt is used as a *tool* (the simplifier) and never as an output format — the bytes that reach the bucket are ordinary triangles, textures at 1024², parts named `upper`/`sole`.
+
+**What it will not do is guess.** Two unapproved material names are refused with the names and the CLI command to fix them, because which of `Material.001` and `Material.002` is the upper is a modelling question the bytes cannot answer, and a wrong guess repaints a shoe. One material (or none) gets the documented geometric sole cut, reported as the approximation it is. Which end of the long axis is the toe is left to the reviewer, and the change log says so.
+
+⚠️ **A green compress is not acceptance.** The server still judges the stored bytes when you publish — nothing here returns a verdict, and the modal shows no report card. The reviewer rows are untouched by any of it: toe direction, de-lit albedo, likeness and on-device frame rate still need a human eye (guide §5.2).
+
+### Where the artifact lives
+
+The compiled normalizer is **checked in** (`src/lib/glb_normalizer.gen.js`, 512 KB) so `npm install && npm run build` needs Node and nothing else — the portal's CI job installs no Dart SDK. `src/lib/modelCompress.contract.test.js` compares the digest stamped into the artifact against the Dart sources on every `npm test`, and fails with the rebuild command if they have drifted:
+
+```bash
+node tool/build_shoe_model_normalizer_web.mjs
+```
+
+Run that after any change to `lib/utils/glb_normalizer.dart`, and commit both.
+
 Only a live model can close an ask, so a publish has three endings: **closed**, **not live** (refused — the reason is shown and the modal stays open), and **live but still open** (the model passed the server, the close failed; this one is toasted as an error because somebody has to act on it).
 
 Publishing needs the model-request flow applied to the live database (`supabase/migrations/20260928140000_add_shoe_model_requests.sql`) — see `supabase/MIGRATIONS_LIVE_STATUS.md`.

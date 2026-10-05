@@ -212,6 +212,17 @@ void main() {
       expect(calls.last.arguments, <String, Object?>{'mode': 'foot'});
     });
 
+    test('setDiagnostics asks for the readout as one named bit', () async {
+      respond(true);
+
+      await channel.setDiagnostics(true);
+      expect(calls.single.method, 'setDiagnostics');
+      expect(calls.single.arguments, <String, Object?>{'enabled': true});
+
+      await channel.setDiagnostics(false);
+      expect(calls.last.arguments, <String, Object?>{'enabled': false});
+    });
+
     test('stopSession is callable but is not part of teardown', () async {
       respond(true);
 
@@ -292,15 +303,17 @@ void main() {
     });
 
     test('an event type this build has never heard of is not a crash', () {
-      // V4's `footLock` will arrive this way on a Dart build that predates it.
+      // A V5/V6 event reaches a Dart build that predates it as an unknown
+      // rather than as an exception — the property that let `footLock` be added
+      // without breaking anything (V4), and the one the next addition needs.
       final event = ArTryOnEvent.fromMap(<Object?, Object?>{
-        'type': 'footLock',
-        'data': <Object?, Object?>{'locked': true, 'quality': 0.8},
+        'type': 'depthReady',
+        'data': <Object?, Object?>{'available': true},
       });
 
       expect(event, isA<ArTryOnUnknownEvent>());
-      expect((event as ArTryOnUnknownEvent).type, 'footLock');
-      expect(event.data['locked'], isTrue);
+      expect((event as ArTryOnUnknownEvent).type, 'depthReady');
+      expect(event.data['available'], isTrue);
     });
 
     test('missing, malformed and non-numeric payloads never throw', () {
@@ -338,6 +351,184 @@ void main() {
       await channel.detach();
 
       expect(channel.events, isA<Stream<ArTryOnEvent>>());
+    });
+  });
+
+  group('the V4 foot-tracking contract', () {
+    test('a footLock names the state, the post-smoothing quality and the side',
+        () {
+      final event = ArTryOnEvent.fromMap(<Object?, Object?>{
+        'type': 'footLock',
+        'data': <Object?, Object?>{
+          'locked': true,
+          'quality': 0.83,
+          'side': 'right',
+        },
+      });
+
+      expect(event, isA<TryOnFootLockEvent>());
+      final lock = event as TryOnFootLockEvent;
+      expect(lock.locked, isTrue);
+      expect(lock.quality, 0.83);
+      expect(lock.side, 'right');
+    });
+
+    test('a lost lock and a malformed payload both parse as unlocked', () {
+      final lost = ArTryOnEvent.fromMap(<Object?, Object?>{
+        'type': 'footLock',
+        'data': <Object?, Object?>{'locked': false, 'quality': 0.4},
+      }) as TryOnFootLockEvent;
+
+      expect(lost.locked, isFalse);
+      expect(lost.quality, 0.4);
+      expect(lost.side, isNull);
+
+      final malformed = ArTryOnEvent.fromMap(<Object?, Object?>{
+        'type': 'footLock',
+        'data': <Object?, Object?>{'locked': 'yes', 'quality': 'high'},
+      }) as TryOnFootLockEvent;
+
+      expect(malformed.locked, isFalse,
+          reason: 'only a real bool means locked');
+      expect(malformed.quality, 0);
+    });
+
+    test('a footMeasure carries the live length and quality', () {
+      final event = ArTryOnEvent.fromMap(<Object?, Object?>{
+        'type': 'footMeasure',
+        'data': <Object?, Object?>{'lengthMm': 264.7, 'quality': 0.82},
+      });
+
+      expect(event, isA<TryOnFootMeasureEvent>());
+      final measure = event as TryOnFootMeasureEvent;
+      expect(measure.lengthMm, 264.7);
+      expect(measure.quality, 0.82);
+    });
+
+    test('a malformed footMeasure degrades to zeros the controller refuses',
+        () {
+      final event = ArTryOnEvent.fromMap(<Object?, Object?>{
+        'type': 'footMeasure',
+        'data': <Object?, Object?>{'lengthMm': 'long', 'quality': null},
+      }) as TryOnFootMeasureEvent;
+
+      expect(event.lengthMm, 0,
+          reason: 'a missing number is 0 here; the controller is what refuses '
+              'it, so a malformed payload can never reach the fit engine');
+      expect(event.quality, 0);
+    });
+
+    test('a status event carries the heartbeat line verbatim (V4.9)', () {
+      const line = 'loop=on iter=61 present=58 foot=locked quality=0.82 '
+          'len=264mm scale=1.024 mask=ready thermal=none';
+      final event = ArTryOnEvent.fromMap(<Object?, Object?>{
+        'type': 'status',
+        'data': <Object?, Object?>{'line': line, 'loopRunning': true},
+      });
+
+      expect(event, isA<TryOnStatusEvent>());
+      expect((event as TryOnStatusEvent).line, line);
+    });
+
+    test('a status with no line degrades to empty, which the controller '
+        'ignores rather than drawing', () {
+      final event = ArTryOnEvent.fromMap(<Object?, Object?>{
+        'type': 'status',
+        'data': <Object?, Object?>{'loopRunning': false},
+      }) as TryOnStatusEvent;
+
+      expect(event.line, isEmpty);
+    });
+
+    test('a pose frame serializes to the §2.8 payload', () {
+      const frame = FootPoseFrame(
+        heelUv: Offset(0.25, 0.75),
+        toeUv: Offset(0.30, 0.20),
+        widthUv: <Offset>[Offset(0.22, 0.5), Offset(0.34, 0.5)],
+        confidence: 0.81,
+        footSide: 'left',
+      );
+
+      final map = frame.toMap();
+
+      expect(map['heelUv'], <String, double>{'x': 0.25, 'y': 0.75});
+      expect(map['toeUv'], <String, double>{'x': 0.30, 'y': 0.20});
+      expect(map['widthUv'], <Map<String, double>>[
+        <String, double>{'x': 0.22, 'y': 0.5},
+        <String, double>{'x': 0.34, 'y': 0.5},
+      ]);
+      expect(map['confidence'], 0.81);
+      expect(map['footSide'], 'left');
+    });
+
+    test('an empty width pair is a legal payload, not a missing key', () {
+      const frame = FootPoseFrame(
+        heelUv: Offset(0.1, 0.9),
+        toeUv: Offset(0.2, 0.3),
+        confidence: 0.7,
+      );
+
+      final map = frame.toMap();
+
+      expect(map.containsKey('widthUv'), isTrue);
+      expect(map['widthUv'], isEmpty);
+      expect(map['footSide'], isNull);
+    });
+
+    test('setFootPose sends the frame as its own argument map', () async {
+      respond(true);
+      const frame = FootPoseFrame(
+        heelUv: Offset(0.4, 0.8),
+        toeUv: Offset(0.4, 0.2),
+        confidence: 0.9,
+        footSide: 'right',
+      );
+
+      await channel.setFootPose(frame);
+
+      expect(calls.single.method, 'setFootPose');
+      final args = calls.single.arguments as Map<Object?, Object?>;
+      expect((args['heelUv'] as Map<Object?, Object?>)['y'], 0.8);
+      expect(args['confidence'], 0.9);
+      expect(args['footSide'], 'right');
+    });
+
+    test('setFootMask sends bytes and a confidence, nothing else', () async {
+      respond(true);
+      final mask = Uint8List.fromList(List<int>.filled(32 * 32, 255));
+
+      await channel.setFootMask(bytes32x32: mask, confidence: 0.77);
+
+      expect(calls.single.method, 'setFootMask');
+      final args = calls.single.arguments as Map<Object?, Object?>;
+      expect(args['bytes'], mask);
+      expect(args['confidence'], 0.77);
+      expect(args.keys.toSet(), <String>{'bytes', 'confidence'});
+    });
+
+    test('acquireCameraFrame parses the scan frame shape', () async {
+      final bytes = Uint8List.fromList(<int>[1, 2, 3, 4]);
+      respond(<Object?, Object?>{
+        'bytes': bytes,
+        'width': 640,
+        'height': 480,
+        'rotationDegrees': 90,
+      });
+
+      final frame = await channel.acquireCameraFrame();
+
+      expect(frame, isNotNull);
+      expect(frame!.nv21Bytes, bytes);
+      expect(frame.width, 640);
+      expect(frame.height, 480);
+      expect(frame.rotationDegrees, 90);
+    });
+
+    test('acquireCameraFrame answers null when there is no frame yet',
+        () async {
+      respond(null);
+
+      expect(await channel.acquireCameraFrame(), isNull);
     });
   });
 }

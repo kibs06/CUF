@@ -27,6 +27,8 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui';
 
+import 'foot_mask.dart';
+
 // ═══════════════════════════════════════════════════════════════════
 // CONFIDENCE THRESHOLDS (§3.3 of the prompt)
 // ═══════════════════════════════════════════════════════════════════
@@ -194,6 +196,25 @@ class FootDetectionResult {
   /// When null, the caller falls back to a proportional width estimate.
   final List<FootPoint>? widthPoints;
 
+  /// **V4.4's occlusion mask** — the segmentation field the points above were
+  /// extracted from, box-averaged to [kFootMaskSize]² (0–255, row-major,
+  /// top-down) by [downsampleFootMask].
+  ///
+  /// Same normalized space as [heelPoint]/[toePoint], on purpose: the Android
+  /// side maps mask quads and pose points through one mapping, so the occlusion
+  /// cannot drift from the shoe's anchor.
+  ///
+  /// **Deliberately the unclipped mask.** When [evaluateFootMask] was given a
+  /// `guideRect`, the *geometry* is clipped to it, but the mask keeps the whole
+  /// segmented person region: occlusion is a paint of the camera's own pixels,
+  /// and a guide box is a capture-time constraint that has no business deleting
+  /// a toe from it mid-session.
+  ///
+  /// Null means "no mask on this frame" and is legal on the wire — the pose
+  /// detector has none, and the native side answers by drawing no occlusion
+  /// rather than by guessing one.
+  final Uint8List? mask;
+
   /// Combined sample-quality score (0.0–1.0) from the weighted sub-scores
   /// below (§1 of EFFICIENCY_ACCURACY_OVERHAUL_PROMPT). A frame is accepted
   /// as a foot detection when this ≥ [kSampleAcceptScore] — replacing the
@@ -221,6 +242,7 @@ class FootDetectionResult {
     this.heelPoint,
     this.toePoint,
     this.widthPoints,
+    this.mask,
     this.qualityScore = 0.0,
     this.segmentationScore = 0.0,
     this.shapeScore = 0.0,
@@ -949,6 +971,10 @@ FootDetectionResult evaluateFootMask({
     heelPoint: heelPoint,
     toePoint: toePoint,
     widthPoints: widthPoints,
+    // V4.4: the same confidences the geometry was extracted from, at the wire
+    // size — computed here because this is the one place that still holds both
+    // the mask array and its dimensions once the result exists.
+    mask: downsampleFootMask(confidences, width, height),
     qualityScore: qualityScore,
     segmentationScore: overallConfidence,
     shapeScore: shapeScore,

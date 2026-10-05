@@ -61,6 +61,18 @@ on:
         description: 'SHOE_PREVIEW_WEBVIEW — draw the box with the WebView model-viewer instead of native Filament'
         type: boolean
         default: true
+      try_on:
+        description: 'TRY_ON_V3 — let the product path render a real shoe (V4.9 device session)'
+        type: boolean
+        default: false
+      foot_track:
+        description: 'TRY_ON_FOOT_TRACK — run the V4 foot-tracking loop (needs try_on)'
+        type: boolean
+        default: false
+      qa_model:
+        description: 'TRY_ON_PLACEHOLDER_MODEL + TRY_ON_QA_MODEL — serve the bundled partner shoe as every product''s model (needs try_on)'
+        type: boolean
+        default: false
       abi:
         description: 'Which engine to ship: arm64 = phone, x86_64 = emulator (Dart-side checks; cannot render), both = either.'
         type: choice
@@ -140,6 +152,9 @@ jobs:
           LOWER_ENGINE: ${{ inputs.lower_engine }}
           ALLOW_LEVEL1: ${{ inputs.allow_level1 }}
           WEBVIEW_ENGINE: ${{ inputs.webview_engine }}
+          TRY_ON: ${{ inputs.try_on }}
+          FOOT_TRACK: ${{ inputs.foot_track }}
+          QA_MODEL: ${{ inputs.qa_model }}
           ABI: ${{ inputs.abi }}
         run: |
           set -euo pipefail
@@ -178,6 +193,18 @@ jobs:
           fi
           # The surface itself has to be on or there is no box to look at.
           ARGS+=(--dart-define=SHOE_PREVIEW=true)
+          # ── V4 try-on session (V4.9's device session) ───────────────────────────────────
+          # All three default off, so the artifact's documented default behavior (the inline
+          # preview box) is unchanged. `qa_model` is the pair the renderer needs to draw a
+          # shoe at all while `product_models` holds 0 rows: the bundled partner asset is
+          # served through the production resolver (the V3.5 QA seam substitutes where the
+          # bytes come from, never the logic under test), and the choice is a build one.
+          [[ "$TRY_ON" == "true" ]] && ARGS+=(--dart-define=TRY_ON_V3=true)
+          [[ "$FOOT_TRACK" == "true" ]] && ARGS+=(--dart-define=TRY_ON_FOOT_TRACK=true)
+          if [[ "$QA_MODEL" == "true" ]]; then
+            ARGS+=(--dart-define=TRY_ON_PLACEHOLDER_MODEL=true)
+            ARGS+=(--dart-define=TRY_ON_QA_MODEL=assets/models/qa_partner_shoe_v1.glb)
+          fi
           echo "→ flutter build apk ${ARGS[*]}"
           flutter build apk "${ARGS[@]}"
           # The default (arm64) keeps the names it has always had, so the documented
@@ -250,6 +277,7 @@ jobs:
             echo "| sha256 | \`$(sha256sum "$APK" | cut -d' ' -f1)\` |"
             echo "| commit | \`$GITHUB_SHA\` |"
             echo "| switches | diagnostics=${{ inputs.diagnostics }} · lower-engine=${{ inputs.lower_engine }} · allow-level1=${{ inputs.allow_level1 }} · engine=${{ inputs.webview_engine && 'webview' || 'native-filament' }} |"
+            echo "| try-on | ${{ inputs.try_on && 'on' || 'off' }} · foot-track: ${{ inputs.foot_track && 'on' || 'off' }} · qa-model: ${{ inputs.qa_model && 'on' || 'off' }} |"
             echo
             echo "Not a release, deliberately: this is a measurement build (debuggable, QA switches on)."
           } >> "$GITHUB_STEP_SUMMARY"

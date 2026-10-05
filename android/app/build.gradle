@@ -79,6 +79,9 @@ android {
 
     sourceSets {
         main.java.srcDirs += 'src/main/kotlin'
+        // V4.2: JVM unit tests for pure Kotlin (no Android deps) — FootPoseTracker's math is
+        // filter/threshold logic, and a device is the wrong place to discover it is wrong.
+        test.java.srcDirs += 'src/test/kotlin'
     }
 
     // Compose is required only by the V0 virtual-fitting renderer spike
@@ -186,4 +189,8 @@ dependencies {
     // so this changes no shipped byte). See GltfioDecodeTest.
     androidTestImplementation 'androidx.test:runner:1.6.2'
     androidTestImplementation 'androidx.test.ext:junit:1.2.1'
+
+    // V4.2's tracker tests run on the JVM (`:app:testDebugUnitTest`); junit only, no Robolectric —
+    // FootPoseTracker is deliberately Android-free so these stay desk-runnable.
+    testImplementation 'junit:junit:4.13.2'
 }
