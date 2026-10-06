@@ -22,6 +22,16 @@ import { useScrollLock } from '../../hooks/useScrollLock.js'
  *     animation, so a stalled frame loop cannot leave a transparent sheet over
  *     the site eating clicks.
  *  3. **The scroll lock is keyed to `open`**, so it cannot outlive the dialog.
+ *
+ * ## When the answer is a link (`confirmHref`)
+ *
+ * The confirm action is usually a mutation — log out, delete this — and a button
+ * is right for that. Some answers are somewhere to go instead: the Try On in AR
+ * prompt's action is the app's download page, and drawing it as a button that
+ * calls `window.open` would take away the two things an `<a>` has for free —
+ * middle-click and cmd-click, which a customer comparing prices on a laptop
+ * genuinely uses. So `confirmHref` swaps the confirm button for an anchor
+ * carrying the same classes, focus and `onConfirm`.
  */
 export default function ConfirmDialog({
   open,
@@ -32,6 +42,8 @@ export default function ConfirmDialog({
   tone = 'danger',
   pending = false,
   error = null,
+  confirmHref = null,
+  confirmTarget = '_blank',
   onConfirm,
   onClose,
 }) {
@@ -128,15 +140,28 @@ export default function ConfirmDialog({
           >
             {cancelLabel}
           </button>
-          <button
-            ref={confirmRef}
-            type="button"
-            disabled={pending}
-            onClick={() => onConfirm?.()}
-            className={`${confirmClass} disabled:cursor-not-allowed disabled:opacity-60`}
-          >
-            {pending ? 'Working…' : confirmLabel}
-          </button>
+          {confirmHref ? (
+            <a
+              ref={confirmRef}
+              href={confirmHref}
+              target={confirmTarget}
+              rel="noopener noreferrer"
+              onClick={() => onConfirm?.()}
+              className={confirmClass}
+            >
+              {confirmLabel}
+            </a>
+          ) : (
+            <button
+              ref={confirmRef}
+              type="button"
+              disabled={pending}
+              onClick={() => onConfirm?.()}
+              className={`${confirmClass} disabled:cursor-not-allowed disabled:opacity-60`}
+            >
+              {pending ? 'Working…' : confirmLabel}
+            </button>
+          )}
         </footer>
       </div>
     </div>,

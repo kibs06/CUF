@@ -227,6 +227,19 @@ export default function App() {
             }
           />
           {/*
+            The seller's read-only preview of this product's storefront page,
+            reached from the product row's ContextMenu. Deliberately a seller
+            route: the customer's `/product/:id` redirects an approved seller
+            back to the portal, which is why that menu item used to flash the
+            product and then bounce to the dashboard. `ProductDetail` is already
+            in this bundle (the shop draws it), and the `preview` prop is what
+            disables the purchase — see the component for what it changes.
+          */}
+          <Route
+            path="products/:productId/preview"
+            element={<ProductDetail preview />}
+          />
+          {/*
             The seller's own notifications and messages.
 
             Two routes each have their own pages rather than reusing the

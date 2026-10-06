@@ -16,8 +16,13 @@ import { staggerChildren } from '../motion/transitions'
  * Column counts step with the viewport (2 → 3 → 4) rather than staying at the
  * app's fixed two: a desktop storefront showing two huge tiles is the reason
  * the phone layout was not simply stretched to fit here.
+ *
+ * `productPath` is the one way to draw this grid somewhere other than the shop:
+ * a tile links to `/product/:id` by default, and the seller's read-only preview
+ * cannot — that route redirects a seller to their dashboard. Passing a builder
+ * keeps the grid a single implementation instead of a preview copy of it.
  */
-export default function ProductGrid({ products, className = '' }) {
+export default function ProductGrid({ products, className = '', productPath }) {
   return (
     <motion.div
       variants={staggerChildren()}
@@ -26,7 +31,11 @@ export default function ProductGrid({ products, className = '' }) {
       className={`grid grid-cols-2 gap-x-4 gap-y-6 sm:gap-x-5 md:grid-cols-3 xl:grid-cols-4 ${className}`}
     >
       {products.map((product) => (
-        <ProductCard key={product.id} product={product} />
+        <ProductCard
+          key={product.id}
+          product={product}
+          productPath={productPath}
+        />
       ))}
     </motion.div>
   )

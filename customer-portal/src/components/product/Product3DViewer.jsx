@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Rotate3d, X } from 'lucide-react'
+import { Footprints, Rotate3d, X } from 'lucide-react'
 
+import ConfirmDialog from '../ui/ConfirmDialog.jsx'
+import { APP_DOWNLOAD_URL, tryOnAppPrompt } from '../../lib/appDownload.js'
 import { useScrollLock } from '../../hooks/useScrollLock.js'
 import { useTheme } from '../../hooks/useTheme.jsx'
 import { useTransitionTiming } from '../motion/transitions'
@@ -17,9 +19,13 @@ import { useTransitionTiming } from '../motion/transitions'
  * gets here is the **look**: drag to turn, pinch or scroll to zoom. There is no
  * try-on, and that is a limit rather than an omission — the app's fitting screen
  * needs ARCore and a live camera, which is not something this page can ask a
- * browser for, so it is not offered and not pretended.
+ * browser for. What the foot of the box offers instead is honest about being a
+ * door to the app rather than a door to AR: **Try On in AR** opens a prompt that
+ * says where the fitting actually lives and offers the download (see
+ * `lib/appDownload.js`). The app pins the same control at the foot of the same
+ * box, so the two viewers offer the same thing rather than two different ones.
  *
- * Six decisions worth naming, because a viewer is easy to write badly:
+ * Seven decisions worth naming, because a viewer is easy to write badly:
  *
  *  1. **The library is a dynamic import.** `<model-viewer>` is a few hundred
  *     kilobytes of WebGL plumbing, and most visits never open this dialog: a
@@ -68,6 +74,12 @@ import { useTransitionTiming } from '../motion/transitions'
  *     and the shadow nothing can see. Both are properties the library re-reads
  *     live, so a theme flip with the dialog open re-lights the shoe in place.
  *
+ *  7. **The AR prompt is a nested dialog, and Escape is layered.** The prompt is
+ *     a `ConfirmDialog`, drawn over this one, and both listen for the same key —
+ *     so the viewer ignores Escape while the prompt is open. Innermost first is
+ *     the app's own order (the README's search entry spells it out); without it
+ *     one keypress would answer the prompt and throw the viewer away together.
+ *
  * ⚠️ **The size is an inline style, never a class.** `<model-viewer>` is a custom
  * element, and React 18 writes `className` on one as the literal attribute
  * `classname="…"` — a name no stylesheet matches, and one no warning is printed
@@ -82,6 +94,7 @@ export default function Product3DViewer({ open, url, name, onClose }) {
   const { reduce } = useTransitionTiming()
   const { isDark } = useTheme()
   const [ready, setReady] = useState(false)
+  const [tryOnOpen, setTryOnOpen] = useState(false)
   const closeRef = useRef(null)
 
   // See decision 6. `exposure` and `shadow-intensity` are the two knobs this
@@ -116,7 +129,8 @@ export default function Product3DViewer({ open, url, name, onClose }) {
     if (!open) return undefined
 
     const onKeyDown = (event) => {
-      if (event.key === 'Escape') onClose?.()
+      // See decision 7: the prompt closes first, and this dialog stays open.
+      if (event.key === 'Escape' && !tryOnOpen) onClose?.()
     }
 
     window.addEventListener('keydown', onKeyDown)
@@ -125,76 +139,108 @@ export default function Product3DViewer({ open, url, name, onClose }) {
     return () => {
       window.removeEventListener('keydown', onKeyDown)
     }
-  }, [open, onClose])
+  }, [open, onClose, tryOnOpen])
 
   // Shared with every other dialog — see `useScrollLock`.
   useScrollLock(open)
 
   if (!open || !url) return null
 
-  return createPortal(
-    <div
-      className="fade-enter fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-scrim p-3 backdrop-blur-[2px] sm:items-center sm:p-6"
-      onClick={() => onClose?.()}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="product-3d-title"
-        onClick={(event) => event.stopPropagation()}
-        className="rise-enter w-full max-w-5xl overflow-hidden rounded-card border border-hairline bg-raised shadow-premium sm:max-w-[min(64rem,calc((100dvh-11rem)*1.6))]"
-      >
-        <header className="flex items-center gap-2.5 border-b border-hairline-soft px-4 py-3 sm:px-5">
-          <Rotate3d size={16} strokeWidth={2} className="shrink-0 text-clay-ink" />
-          <h2
-            id="product-3d-title"
-            className="min-w-0 flex-1 truncate font-display text-base font-semibold text-ink"
+  return (
+    <>
+      {createPortal(
+        <div
+          className="fade-enter fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-scrim p-3 backdrop-blur-[2px] sm:items-center sm:p-6"
+          onClick={() => onClose?.()}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="product-3d-title"
+            onClick={(event) => event.stopPropagation()}
+            className="rise-enter w-full max-w-5xl overflow-hidden rounded-card border border-hairline bg-raised shadow-premium sm:max-w-[min(64rem,calc((100dvh-11rem)*1.6))]"
           >
-            {name}
-          </h2>
-          <button
-            ref={closeRef}
-            type="button"
-            onClick={() => onClose?.()}
-            aria-label="Close the 3D view"
-            className="-mr-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted transition-colors duration-200 hover:bg-subtle hover:text-ink"
-          >
-            <X size={16} strokeWidth={2} />
-          </button>
-        </header>
-
-        {/* The stage. `bg-stage` is the renderer's own tone, so the shoe sits on
-            the same surface in the browser that it does inside the app. */}
-        <div className="relative aspect-[4/3] w-full bg-stage sm:aspect-[16/10]">
-          {ready ? (
-            <model-viewer
-              src={url}
-              alt={`${name} — 3D model`}
-              // Presence, not value: the library reads these as attributes.
-              camera-controls=""
-              touch-action="none"
-              interaction-prompt="none"
-              camera-orbit="-60deg 72deg 105%"
-              exposure={lighting.exposure}
-              shadow-intensity={lighting.shadow}
-              {...(reduce ? {} : { 'auto-rotate': '' })}
-              style={{ display: 'block', width: '100%', height: '100%' }}
-            />
-          ) : (
-            <div className="absolute inset-0 grid place-items-center">
-              <p className="shimmer h-3 w-40 rounded-full" aria-hidden="true" />
-              <span className="sr-only">Loading the 3D viewer…</span>
+            <header className="flex items-center gap-2.5 border-b border-hairline-soft px-4 py-3 sm:px-5">
+              <Rotate3d size={16} strokeWidth={2} className="shrink-0 text-clay-ink" />
+              <h2
+                id="product-3d-title"
+                className="min-w-0 flex-1 truncate font-display text-base font-semibold text-ink"
+              >
+                {name}
+              </h2>
+              <button
+                ref={closeRef}
+                type="button"
+                onClick={() => onClose?.()}
+                aria-label="Close the 3D view"
+                className="-mr-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted transition-colors duration-200 hover:bg-subtle hover:text-ink"
+              >
+                <X size={16} strokeWidth={2} />
+              </button>
+            </header>
+    
+            {/* The stage. `bg-stage` is the renderer's own tone, so the shoe sits on
+                the same surface in the browser that it does inside the app. */}
+            <div className="relative aspect-[4/3] w-full bg-stage sm:aspect-[16/10]">
+              {ready ? (
+                <model-viewer
+                  src={url}
+                  alt={`${name} — 3D model`}
+                  // Presence, not value: the library reads these as attributes.
+                  camera-controls=""
+                  touch-action="none"
+                  interaction-prompt="none"
+                  camera-orbit="-60deg 72deg 105%"
+                  exposure={lighting.exposure}
+                  shadow-intensity={lighting.shadow}
+                  {...(reduce ? {} : { 'auto-rotate': '' })}
+                  style={{ display: 'block', width: '100%', height: '100%' }}
+                />
+              ) : (
+                <div className="absolute inset-0 grid place-items-center">
+                  <p className="shimmer h-3 w-40 rounded-full" aria-hidden="true" />
+                  <span className="sr-only">Loading the 3D viewer…</span>
+                </div>
+              )}
             </div>
-          )}
-        </div>
+    
+            {/*
+              The box's foot, which is where the app pins the same control. The
+              sentence no longer mentions the app as an aside: the button is the
+              door, and the prompt behind it does the explaining.
+            */}
+            <div className="flex flex-col gap-3 border-t border-hairline-soft px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+              <p className="text-xs leading-relaxed text-muted">
+                Drag to turn the shoe · pinch or scroll to zoom. This is the model
+                the workshop published, not a photo.
+              </p>
+              <button
+                type="button"
+                onClick={() => setTryOnOpen(true)}
+                className="btn btn-primary w-full shrink-0 gap-2 sm:w-auto"
+              >
+                <Footprints size={16} strokeWidth={2} aria-hidden="true" />
+                Try On in AR
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
 
-        <p className="border-t border-hairline-soft px-4 py-3 text-xs leading-relaxed text-muted sm:px-5">
-          Drag to turn the shoe · pinch or scroll to zoom. This is the model the
-          workshop published, not a photo — try-on with your camera lives in the
-          CUFMAI app.
-        </p>
-      </div>
-    </div>,
-    document.body
+      {/*
+        A prompt rather than a link straight out. The customer asked for AR and is
+        about to be handed a download — a swap of one thing for another, which is
+        exactly the kind of answer that needs saying out loud.
+      */}
+      <ConfirmDialog
+        open={tryOnOpen}
+        {...tryOnAppPrompt()}
+        tone="primary"
+        confirmHref={APP_DOWNLOAD_URL}
+        onConfirm={() => setTryOnOpen(false)}
+        onClose={() => setTryOnOpen(false)}
+      />
+    </>
   )
 }

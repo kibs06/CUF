@@ -3,6 +3,7 @@ import { describe, it } from 'node:test'
 
 import {
   availableSizes,
+  isOnTheStorefront,
   isOutOfStock,
   purchasableProducts,
   stockForSize,
@@ -85,6 +86,51 @@ describe('purchasableProducts', () => {
       purchasableProducts(rows).map((row) => row.id),
       ['b'],
     )
+  })
+})
+
+describe('isOnTheStorefront', () => {
+  it('is both halves of the catalog rule: published and in stock', () => {
+    assert.equal(
+      isOnTheStorefront({
+        is_published: true,
+        inventory: [{ size: '8', stock: 2 }],
+      }),
+      true,
+    )
+  })
+
+  it('is false for a published product with no stock — the "Not visible" case', () => {
+    // This is the state the seller's list has to name and the storefront never
+    // shows: switched ON, and still dropped by `purchasableProducts`. It covers
+    // both a product with no sizes at all (no inventory rows) and one every size
+    // of which is at zero.
+    assert.equal(
+      isOnTheStorefront({
+        is_published: true,
+        inventory: [{ size: '8', stock: 0 }],
+      }),
+      false,
+    )
+    assert.equal(isOnTheStorefront({ is_published: true }), false)
+  })
+
+  it('is false for an unpublished product, however much stock it has', () => {
+    assert.equal(
+      isOnTheStorefront({
+        is_published: false,
+        inventory: [{ size: '8', stock: 99 }],
+      }),
+      false,
+    )
+  })
+
+  it('reads the same literal `true` the catalog query filters on', () => {
+    // `catalog.js` asks Postgres for `.eq('is_published', true)`, so a missing
+    // or non-boolean value is not on the storefront — the badge must not be more
+    // generous than the query that decides it.
+    assert.equal(isOnTheStorefront({ inventory: [{ size: '8', stock: 1 }] }), false)
+    assert.equal(isOnTheStorefront(null), false)
   })
 })
 

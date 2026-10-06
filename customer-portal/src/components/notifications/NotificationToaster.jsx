@@ -63,6 +63,15 @@ const POSITIONS = {
  * documents. The leaving card is pulled out of the flow instead, so the next one
  * can arrive immediately.
  *
+ * ## Which edge the card comes from
+ *
+ * Left to itself, a card rises from the edge it is anchored to: a small rise
+ * plus the fade and the blur, which is what makes it read as *delivered* into
+ * the corner rather than pasted there. `slideFrom` replaces that rise with a
+ * horizontal slide for a corner where a card should read as arriving *from the
+ * side* — the seller's save confirmation uses `right`. Passing nothing keeps the
+ * rise exactly as it was, so no existing toast changes.
+ *
  * ## Reduced motion
  *
  * Durations come from `useTransitionTiming` and collapse to zero; the blur is
@@ -82,6 +91,7 @@ export default function NotificationToaster({
   position = 'bottom-right',
   visibleMs = 6000,
   allowDismiss = true,
+  slideFrom = null,
   className = '',
 }) {
   const { d, reduce } = useTransitionTiming()
@@ -130,14 +140,33 @@ export default function NotificationToaster({
     return () => window.clearTimeout(timer)
   }, [current, visibleMs, dismiss])
 
+  /*
+    The distance is a nudge either way, not a full off-screen travel: a card that
+    crossed the whole page to arrive would be a card the eye follows rather than
+    one it notices. `null` is the vertical rise, which is the default for every
+    caller that does not ask for a side.
+  */
   const rise = (position ?? '').startsWith('top') ? -16 : 16
+  const nudge = {
+    left: { x: -24, y: 0 },
+    right: { x: 24, y: 0 },
+    top: { x: 0, y: -16 },
+    bottom: { x: 0, y: 16 },
+  }[slideFrom] ?? { x: 0, y: rise }
+
   const entering = {
     opacity: 0,
-    y: rise,
+    ...nudge,
     scale: 0.96,
     filter: reduce ? 'blur(0px)' : 'blur(6px)',
   }
-  const resting = { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }
+  /*
+    `x: 0` and `y: 0` are both named, and both have to be: motion animates the
+    keys it is given and leaves the others at whatever `initial` set, so a
+    horizontal entrance whose resting state forgot `x` would land 24px off — and
+    stay there for as long as the card was on screen.
+  */
+  const resting = { opacity: 1, x: 0, y: 0, scale: 1, filter: 'blur(0px)' }
 
   return (
     <div

@@ -51,6 +51,21 @@ export function purchasableProducts(products) {
 }
 
 /**
+ * Whether a customer can see this product at all.
+ *
+ * The catalog applies the rule in two steps — the query keeps only
+ * `is_published`, and `purchasableProducts` then drops anything out of stock —
+ * and this is both of them in one place. It exists because the seller's own
+ * list applies NEITHER: it does not filter on stock, so a product customers
+ * cannot see looks exactly like one that is selling, and it is the whole reason
+ * the list draws a "Not visible" badge at all. Reading this rather than
+ * re-checking the two facts keeps that badge from disagreeing with the shop.
+ */
+export function isOnTheStorefront(product) {
+  return product?.is_published === true && !isOutOfStock(product)
+}
+
+/**
  * Stock for one size, or 0 when that size has no row. Used by the product
  * page's size selector.
  *

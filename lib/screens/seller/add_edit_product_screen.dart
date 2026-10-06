@@ -1462,6 +1462,21 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
       );
       return;
     }
+    // A product with no sizes has nothing in `inventory`, and every customer
+    // surface drops a product whose total stock is zero — so it would save,
+    // publish itself and appear to nobody. The size sheet already refuses a
+    // sizeless variant ('Select at least one size.'); this is the product-level
+    // version of that rule, and the web portal's own `productProblems` holds it
+    // too, so both clients refuse the same invisible product.
+    final hasSizes =
+        _colors.any((c) => c.variants.any((v) => v.size.trim().isNotEmpty));
+    if (!hasSizes) {
+      _showSnackBar(
+        'Please add at least 1 size. A product with no sizes cannot be sold.',
+        isError: true,
+      );
+      return;
+    }
     if (_storeId == null) {
       _showSnackBar('No store linked to your account. Contact admin.',
           isError: true);

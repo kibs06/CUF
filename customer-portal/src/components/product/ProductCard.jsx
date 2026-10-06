@@ -45,10 +45,19 @@ import { isOutOfStock } from '../../lib/stock'
  * heading that already names the size — but the shelf is the catalog's own grid
  * now, and there a card without the tag reads as a *different* card rather than
  * as an unlabelled one.
+ *
+ * ## `productPath`
+ *
+ * Where the tile goes. Defaults to the storefront's `/product/:id`, and the only
+ * caller that overrides it is the seller's read-only preview, where a link into
+ * the shop would be a link the seller's own session cannot follow — `AppLayout`
+ * would replace the page with their dashboard a moment after the click.
  */
-export default function ProductCard({ product }) {
+export default function ProductCard({ product, productPath }) {
   const { d, reduce } = useTransitionTiming()
   const [loaded, setLoaded] = useState(false)
+
+  const href = productPath ? productPath(product) : `/product/${product.id}`
 
   const onSale = isOnSale(product)
   const percent = salePercent(product)
@@ -94,7 +103,7 @@ export default function ProductCard({ product }) {
       className="group relative flex flex-col overflow-hidden rounded-card border border-hairline bg-raised shadow-card transition-[border-color,box-shadow] duration-300 ease-out-cubic hover:border-card-edge hover:shadow-card-lift"
     >
       <Link
-        to={`/product/${product.id}`}
+        to={href}
         className="absolute inset-0 z-20 rounded-card"
         aria-label={accessibleLabel}
       />

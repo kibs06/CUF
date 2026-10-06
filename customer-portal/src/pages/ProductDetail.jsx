@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
+  Eye,
   Footprints,
   ImageOff,
   Info,
@@ -26,6 +27,7 @@ import { useProduct, useProducts, useStore } from '../hooks/useCatalog'
 import useProductModel from '../hooks/useProductModel'
 import { availableSizes, stockForSize } from '../lib/stock'
 import { salePercent } from '../lib/pricing'
+import { sellerProductPreviewPath } from '../lib/sellerPaths.js'
 import { sizeAdvice } from '../lib/sizeMatchRules'
 
 /**
@@ -51,8 +53,31 @@ import { sizeAdvice } from '../lib/sizeMatchRules'
  * from the same public bucket. The rule is the app's own: a product with no live
  * model shows **neither** a viewer nor a button, and a read that fails draws
  * nothing rather than an apology.
+ *
+ * ## The same page, drawn for the seller (`preview`)
+ *
+ * The seller's product menu offers *View on your storefront*, and the shop is
+ * closed to sellers — `AppLayout` sends an approved seller back to the portal
+ * from every customer route, which is why that item used to flash this page for
+ * a moment and then replace it with the dashboard. So the preview has its own
+ * route under `/seller`, and it renders **this component**, not a copy of it:
+ * what a seller checks is whether the photographs, the price and the sizes look
+ * right, and a second implementation would be free to look right about different
+ * things.
+ *
+ * `preview` changes exactly two things:
+ *
+ *  1. **Nothing can be bought.** The purchase button is disabled. This is what
+ *     keeps the route an exception in the *routing* rather than a hole in the
+ *     marketplace rule — a seller still cannot put their own stock in a cart. It
+ *     is drawn rather than removed, because "is the buy button there and does it
+ *     say the right thing" is part of what a preview is for.
+ *  2. **Links that leave stay put.** The breadcrumb and the maker chip lead into
+ *     the shop, where the seller would be redirected out of the page they are
+ *     reading, so in preview they are plain text. The related grid links to
+ *     other products' previews instead (`sellerProductPreviewPath`).
  */
-export default function ProductDetail() {
+export default function ProductDetail({ preview = false }) {
   const { productId } = useParams()
   const productQuery = useProduct(productId)
   const product = productQuery.data
@@ -129,15 +154,32 @@ export default function ProductDetail() {
   }
 
   if (!product) {
+    /*
+      In the preview this is the stale-link case rather than the shop's own —
+      the menu only offers the preview for a published product, so a `null` here
+      means the row went away after the list was loaded. Either way the way out
+      is the seller's own list: `/shop` is a route their session cannot stay on.
+    */
     return (
       <div className="mx-auto max-w-3xl px-4 py-20 sm:px-6">
         <EmptyState
           Icon={PackageOpen}
-          title="This product is no longer available"
-          description="It may have sold out, or the maker may have retired it."
+          title={
+            preview
+              ? 'We could not find that product'
+              : 'This product is no longer available'
+          }
+          description={
+            preview
+              ? 'It may have been deleted since this list was loaded.'
+              : 'It may have sold out, or the maker may have retired it.'
+          }
           action={
-            <Link to="/shop" className="btn btn-outline">
-              Browse the catalog
+            <Link
+              to={preview ? '/seller/products' : '/shop'}
+              className="btn btn-outline"
+            >
+              {preview ? 'Back to your products' : 'Browse the catalog'}
             </Link>
           }
         />
@@ -188,26 +230,60 @@ export default function ProductDetail() {
     }
   }
 
+  /*
+    The maker chip's contents, so the preview keeps the chip's shape without
+    keeping its link: the same avatar and the same sentence, in a wrapper that is
+    a `Link` for a customer and a plain element for the seller.
+  */
+  const makerChip = (
+    <>
+      <StoreAvatar store={storeQuery.data} size={28} />
+      <span className="text-xs font-medium text-muted-strong">
+        Made by{' '}
+        <span className="font-semibold text-ink">
+          {storeQuery.data?.name ?? product.store_name ?? 'a CUFMAI maker'}
+        </span>
+      </span>
+    </>
+  )
+
   return (
     <>
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        {/*
+          First, before the page itself: a seller who does not know this is a
+          preview will read the disabled buy button as a bug. It says what the
+          page is, what it cannot do, and why the links do not leave.
+        */}
+        {preview && (
+          <p className="mb-7 flex items-start gap-2.5 rounded-field border border-hairline bg-subtle/50 px-4 py-3 text-xs leading-relaxed text-muted">
+            <Eye className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <span>
+              <span className="font-semibold text-ink">Preview.</span> This is the
+              page a customer sees for this pair. Nothing can be bought from
+              here, and the links stay inside your portal — your seller account
+              is kept out of the shop.
+            </span>
+          </p>
+        )}
+
         <nav aria-label="Breadcrumb" className="mb-7">
           <ol className="flex flex-wrap items-center gap-1.5 text-xs text-muted">
             <li>
-              <Link to="/shop" className="transition-colors duration-200 hover:text-clay-ink">
+              <CrumbLink to="/shop" preview={preview}>
                 Shop
-              </Link>
+              </CrumbLink>
             </li>
             {product.category && (
               <>
                 <li aria-hidden="true">/</li>
                 <li>
-                  <Link
+                  <CrumbLink
                     to={`/shop?category=${encodeURIComponent(product.category)}`}
-                    className="transition-colors duration-200 hover:text-clay-ink"
+                    preview={preview}
                   >
                     {product.category}
-                  </Link>
+                  </CrumbLink>
                 </li>
               </>
             )}
@@ -246,20 +322,19 @@ export default function ProductDetail() {
 
           {/* ── Details ─────────────────────────────────────────── */}
           <div className="lg:pt-2">
-            {product.store_id && (
-              <Link
-                to={`/makers/${product.store_id}`}
-                className="group inline-flex items-center gap-3 rounded-full border border-hairline py-1.5 pl-1.5 pr-4 transition-colors duration-200 ease-out-cubic hover:border-card-edge hover:bg-subtle"
-              >
-                <StoreAvatar store={storeQuery.data} size={28} />
-                <span className="text-xs font-medium text-muted-strong">
-                  Made by{' '}
-                  <span className="font-semibold text-ink">
-                    {storeQuery.data?.name ?? product.store_name ?? 'a CUFMAI maker'}
-                  </span>
-                </span>
-              </Link>
-            )}
+            {product.store_id &&
+              (preview ? (
+                <div className="inline-flex items-center gap-3 rounded-full border border-hairline py-1.5 pl-1.5 pr-4">
+                  {makerChip}
+                </div>
+              ) : (
+                <Link
+                  to={`/makers/${product.store_id}`}
+                  className="group inline-flex items-center gap-3 rounded-full border border-hairline py-1.5 pl-1.5 pr-4 transition-colors duration-200 ease-out-cubic hover:border-card-edge hover:bg-subtle"
+                >
+                  {makerChip}
+                </Link>
+              ))}
 
             <h1 className="mt-5 font-display text-3xl font-semibold leading-tight text-ink sm:text-4xl">
               {product.name}
@@ -361,10 +436,15 @@ export default function ProductDetail() {
 
             {/* ── Purchase ──────────────────────────────────────── */}
             <div className="mt-8 space-y-3">
+              {/*
+                Disabled in preview, not hidden: the paragraph under it is the
+                only place that says why, and the label itself ("Add to cart",
+                "Sold out") is part of what a seller is checking.
+              */}
               <button
                 type="button"
                 onClick={onAddToCart}
-                disabled={soldOutEntirely || needsSize || adding}
+                disabled={preview || soldOutEntirely || needsSize || adding}
                 className="btn btn-primary w-full disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {soldOutEntirely
@@ -377,6 +457,13 @@ export default function ProductDetail() {
               {needsSize && !soldOutEntirely && (
                 <p className="text-center text-xs text-muted">
                   Choose a size to continue.
+                </p>
+              )}
+
+              {preview && (
+                <p className="text-center text-xs text-muted">
+                  A customer can add this to their cart. It is disabled here
+                  because your seller account cannot buy.
                 </p>
               )}
 
@@ -431,7 +518,16 @@ export default function ProductDetail() {
             {storeProductsQuery.isLoading ? (
               <ProductGridSkeleton count={4} />
             ) : (
-              <ProductGrid products={related} />
+              <ProductGrid
+                products={related}
+                /*
+                  A related tile goes to another product. On the storefront that
+                  is `/product/:id`; in the preview it has to be that product's
+                  own preview, or the first tile a seller clicks bounces them out
+                  of the page they just opened.
+                */
+                productPath={preview ? sellerProductPreviewPath : undefined}
+              />
             )}
           </div>
         </section>
@@ -444,6 +540,24 @@ export default function ProductDetail() {
         onClose={() => setViewerOpen(false)}
       />
     </>
+  )
+}
+
+/**
+ * A breadcrumb crumb.
+ *
+ * A `Link` for a customer, plain text in the seller's preview — where the shop
+ * breadcrumb would be a link the seller's own session cannot follow (the portal
+ * redirects them out of it). Drawn as a component rather than branched inline
+ * three times, so the crumbs cannot end up half-linked.
+ */
+function CrumbLink({ to, preview, children }) {
+  if (preview) return <span className="text-muted">{children}</span>
+
+  return (
+    <Link to={to} className="transition-colors duration-200 hover:text-clay-ink">
+      {children}
+    </Link>
   )
 }
 

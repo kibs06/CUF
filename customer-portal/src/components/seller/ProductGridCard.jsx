@@ -4,11 +4,11 @@ import { ImageOff, Package, Pencil } from 'lucide-react'
 
 import QuickStockPanel from './QuickStockPanel.jsx'
 import SizeStockChips from './SizeStockChips.jsx'
-import { productRowMenuItems, productRowPath } from './sellerRowMenus.js'
-import { useContextMenu } from '../ui/ContextMenu.jsx'
+import { useProductRowMenu } from './useProductRowMenu.jsx'
 import Switch from '../ui/Switch.jsx'
 import { formatCurrency } from '../../lib/constants.js'
 import { stockState, stockSummary } from '../../lib/sizeSystems.js'
+import { isOnTheStorefront } from '../../lib/stock.js'
 import { useUpdateSellerProduct } from '../../hooks/useSeller.js'
 
 /**
@@ -36,11 +36,20 @@ import { useUpdateSellerProduct } from '../../hooks/useSeller.js'
  *
  * ## The badges moved onto the photograph
  *
- * "Hidden", "Sold out" and "Running low" are states of the *product*, and the
- * photograph is where a seller's eye already is. They used to be small grey words
- * under the price, which is the part of a tile nobody reads. On the image they
- * are unmissable and they cost no vertical space, which is what pays for the
- * size chips underneath.
+ * "Hidden", "Sold out", "Running low" and "Not visible" are states of the
+ * *product*, and the photograph is where a seller's eye already is. They used to
+ * be small grey words under the price, which is the part of a tile nobody reads.
+ * On the image they are unmissable and they cost no vertical space, which is what
+ * pays for the size chips underneath.
+ *
+ * **"Hidden" and "Not visible" are two different ways to be off the storefront,
+ * and this card is the only place that says so.** "Hidden" is the switch: the
+ * seller turned the product off. "Not visible" is the storefront's own rule: the
+ * product is switched ON and still not in the shop, because `purchasableProducts`
+ * drops anything with zero stock — which is every product that has not been given
+ * a size yet, and every one sold out. Both read `isOnTheStorefront`, the same
+ * rule the customer surfaces apply, so the badge cannot disagree with the
+ * catalog about whether a pair is on it.
  *
  * ## Right-click, and why it is on the `li`
  *
@@ -49,15 +58,19 @@ import { useUpdateSellerProduct } from '../../hooks/useSeller.js'
  * `li` and catches the whole tile rather than the link's own box. The primitive
  * steps aside for text fields, which matters here: the quick-stock panel's inputs
  * keep the browser's menu, and its paste.
+ *
+ * The menu itself — items, and the 3D-model request prompt one of them opens — is
+ * `useProductRowMenu`, so this card and `ProductListRow` cannot offer different
+ * things about the same product.
  */
 export default function ProductGridCard({ product, storeId }) {
   const mutation = useUpdateSellerProduct(storeId)
   const [stockOpen, setStockOpen] = useState(false)
-  const { onContextMenu, menu } = useContextMenu({
-    items: productRowMenuItems(product),
-    link: productRowPath(product),
-    label: product.name,
-  })
+  /*
+    The menu and its one prompt come from the hook — see `useProductRowMenu` for
+    why the row does not assemble `useContextMenu` itself.
+  */
+  const { onContextMenu, menu } = useProductRowMenu(product)
 
   const cover = product.images?.[0] ?? null
   const stock = stockSummary(product.inventory)
@@ -71,6 +84,15 @@ export default function ProductGridCard({ product, storeId }) {
   const states = (product.inventory ?? []).map((row) => stockState(row?.stock))
   const soldOut = stock.sizes > 0 && stock.total <= 0
   const runningLow = !soldOut && states.includes('low')
+  /*
+    Published, and still not on the storefront: `isOnTheStorefront` includes
+    the stock half of the rule, which is the half this list does not apply. Said
+    as the switch AND the storefront's rule rather than one call, because an
+    unpublished product is "Hidden" and a published one that customers cannot
+    see is a different thing worth a different word.
+  */
+  const notVisible =
+    Boolean(product.is_published) && !isOnTheStorefront(product)
 
   const onTogglePublished = (next) =>
     mutation.mutate({ productId: product.id, patch: { is_published: next } })
@@ -108,6 +130,21 @@ export default function ProductGridCard({ product, storeId }) {
         {!product.is_published && (
           <span className="pointer-events-none absolute left-3 top-3 rounded-full bg-chrome/85 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-inverse backdrop-blur-sm">
             Hidden
+          </span>
+        )}
+
+        {/*
+          The other half of "is this in the shop", and the one with no switch to
+          flip: it is published and customers still cannot see it. Opposite
+          corner from "Hidden" so the two never read as one badge, and the same
+          chrome tone because they answer the same question.
+        */}
+        {notVisible && (
+          <span
+            title="Not visible to customers — nothing in stock, so the storefront hides it."
+            className="pointer-events-none absolute right-3 top-3 rounded-full bg-chrome/85 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-inverse backdrop-blur-sm"
+          >
+            Not visible
           </span>
         )}
 

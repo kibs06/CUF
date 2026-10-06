@@ -31,6 +31,7 @@ import {
   coloursFromVariants,
   variantsFromProduct,
 } from '../../lib/productVariants.js'
+import { productSavedFlash } from '../../lib/sellerFlash.js'
 import {
   useCreateSellerProduct,
   useDeleteSellerProduct,
@@ -44,6 +45,7 @@ import {
   useUpdateSellerProduct,
   useUploadProductImages,
 } from '../../hooks/useSeller.js'
+import { useSellerFlash } from '../../hooks/useSellerFlash.jsx'
 
 /**
  * Create or edit one product.
@@ -80,6 +82,18 @@ import {
  * operation with its own progress and its own failures, and bundling it would
  * mean a failed upload rolled back a description edit. Each section saves itself
  * and says so.
+ *
+ * ## What a successful save says, and where it leaves the seller
+ *
+ * A confirmation card in the corner of the shell (`useSellerFlash`), and then
+ * straight to the products list — the same destination for a create and an edit.
+ * The card rides along because the shell owns it rather than this form: a card
+ * raised here would be unmounted by the very save that raised it.
+ *
+ * Creating used to land on the new product's own page, because the photo section
+ * is the one thing this form cannot do before the row exists. The list is where a
+ * seller wants to be after either write, so the new pair's missing photos are
+ * named on the card instead and are one click away from the list.
  */
 
 export default function SellerProductForm() {
@@ -92,6 +106,7 @@ export default function SellerProductForm() {
   const productQuery = useSellerProduct(isNew ? null : productId)
   const product = productQuery.data ?? null
 
+  const { flash } = useSellerFlash()
   const createMutation = useCreateSellerProduct(storeId)
   const updateMutation = useUpdateSellerProduct(storeId)
   const variantMutation = useSaveProductVariants(storeId)
@@ -115,7 +130,6 @@ export default function SellerProductForm() {
   */
   const [serverError, setServerError] = useState(null)
   const [attempted, setAttempted] = useState(false)
-  const [saved, setSaved] = useState(false)
   const hydrated = useRef(null)
 
   /*
@@ -166,7 +180,6 @@ export default function SellerProductForm() {
   const onSave = async (event) => {
     event.preventDefault()
     setServerError(null)
-    setSaved(false)
     setAttempted(true)
 
     if (problems.errors.length > 0) return
@@ -193,16 +206,23 @@ export default function SellerProductForm() {
         await colourImageMutation.mutateAsync({ productId: id, colourImages })
       }
 
-      if (isNew) {
-        /*
-          Straight into the edit page for the row that was just created — a
-          product with no photos is not finished, and the photo section is the
-          one thing this page cannot do before the product exists.
-        */
-        navigate(`/seller/products/${id}`, { replace: true })
-        return
-      }
-      setSaved(true)
+      /*
+        The card, then straight to the products list — one destination for both
+        writes, so a save always ends in the same place. The card survives the
+        move because the shell owns it rather than this form (see
+        `SellerFlashProvider`), which is why it is raised here and not by the
+        page it lands on.
+
+        The name is the one that was written, not the one in the box: a card
+        that quoted whitespace the save had just trimmed would be the only
+        surface still showing it.
+
+        `replace` rather than a push. On a create that history entry is `/new`,
+        and leaving it behind is a Back press into a blank form that would
+        happily create the pair a second time.
+      */
+      flash(productSavedFlash({ created: isNew, name: columns.name }))
+      navigate('/seller/products', { replace: true })
     } catch (failure) {
       setServerError(failure?.message ?? 'We could not save this product.')
     }
@@ -289,12 +309,6 @@ export default function SellerProductForm() {
         >
           {serverError}
         </div>
-      )}
-
-      {saved && (
-        <p className="rounded-field border border-olive/30 bg-olive/[0.07] px-4 py-3 text-sm text-ink">
-          Saved.
-        </p>
       )}
 
       <form onSubmit={onSave} className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">

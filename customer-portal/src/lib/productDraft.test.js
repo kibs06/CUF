@@ -13,6 +13,9 @@ import {
 } from './productDraft.js'
 import { PRODUCT_TAG_GROUPS } from './productTags.js'
 
+/** One size-bearing variant — the least a product can carry and still be sold. */
+const SIZED = [{ size: 'EU 42', color: null, stock: 1 }]
+
 /** A stored `products` row, as `mapSellerProduct` hands it over. */
 const STORED = {
   id: 'p1',
@@ -187,27 +190,75 @@ test('a zero sale price is written as NULL, not as 0', () => {
 test('productProblems blocks a save for the app’s own refusals', () => {
   const { errors } = productProblems({
     draft: emptyProductDraft({ name: '  ', price: '' }),
+    variants: SIZED,
   })
   assert.deepEqual(errors, ['Give the product a name.', 'Enter a price.'])
 
   assert.deepEqual(
-    productProblems({ draft: emptyProductDraft({ name: 'A', price: 'abc' }) }).errors,
+    productProblems({
+      draft: emptyProductDraft({ name: 'A', price: 'abc' }),
+      variants: SIZED,
+    }).errors,
     ['Enter a price of 0 or more.'],
   )
   assert.deepEqual(
-    productProblems({ draft: emptyProductDraft({ name: 'A', price: '-1' }) }).errors,
+    productProblems({
+      draft: emptyProductDraft({ name: 'A', price: '-1' }),
+      variants: SIZED,
+    }).errors,
     ['Enter a price of 0 or more.'],
   )
+})
+
+test('productProblems blocks a product with no sizes at all', () => {
+  /*
+    The one rule this form holds that the phone's save does not. A product with no
+    sizes has no `inventory` rows, so the storefront's zero-stock rule drops it —
+    it publishes itself and is invisible, which is the bug this rule exists to
+    stop. A size that is merely at zero is NOT this: it saves, and the note says
+    what the customer sees.
+  */
+  const { errors, notes } = productProblems({
+    draft: emptyProductDraft({ name: 'A', price: '1' }),
+    variants: [],
+    colours: [],
+  })
+  assert.deepEqual(errors, [
+    'Add at least one size — a product with no sizes cannot be sold, so customers will not see it.',
+  ])
+
+  assert.deepEqual(
+    productProblems({
+      draft: emptyProductDraft({ name: 'A', price: '1' }),
+      variants: [{ size: '  ', color: null, stock: 3 }],
+    }).errors,
+    [
+      'Add at least one size — a product with no sizes cannot be sold, so customers will not see it.',
+    ],
+    'a blank size is not a size',
+  )
+
+  const restocked = productProblems({
+    draft: emptyProductDraft({ name: 'A', price: '1' }),
+    variants: [{ size: 'EU 42', color: null, stock: 0 }],
+  })
+  assert.deepEqual(restocked.errors, [])
+  assert.deepEqual(notes, [])
+  assert.deepEqual(restocked.notes, [
+    'Every size is at zero, so customers will not see this product until something is restocked.',
+  ])
 })
 
 test('productProblems: a sale price that is not a discount blocks the save', () => {
   const { errors } = productProblems({
     draft: emptyProductDraft({ name: 'A', price: '1000', sale_price: '1000' }),
+    variants: SIZED,
   })
   assert.deepEqual(errors, ['Sale price must be lower than the base price.'])
   assert.deepEqual(
     productProblems({
       draft: emptyProductDraft({ name: 'A', price: '1000', sale_price: '900' }),
+      variants: SIZED,
     }).errors,
     [],
   )
@@ -221,6 +272,7 @@ test('productProblems: a barcode past the app’s limit blocks the save', () => 
         price: '1',
         barcode: '9'.repeat(MAX_BARCODE_LENGTH),
       }),
+      variants: SIZED,
     }).errors,
     [],
   )
@@ -231,6 +283,7 @@ test('productProblems: a barcode past the app’s limit blocks the save', () => 
         price: '1',
         barcode: '9'.repeat(MAX_BARCODE_LENGTH + 1),
       }),
+      variants: SIZED,
     }).errors,
     ['Barcode must be under 50 characters.'],
   )
@@ -245,6 +298,7 @@ test('productProblems: a sale window that can never open is only a note', () => 
       sale_starts_at: '2026-09-30',
       sale_ends_at: '2026-09-01',
     }),
+    variants: SIZED,
   })
   assert.deepEqual(errors, [])
   assert.deepEqual(notes, [
@@ -278,7 +332,10 @@ test('productProblems carries the variant rules, errors and notes apart', () => 
     variants: [],
     colours: ['Black', 'black'],
   })
-  assert.deepEqual(blocked.errors, ['Two colours are both named black.'])
+  assert.deepEqual(blocked.errors, [
+    'Add at least one size — a product with no sizes cannot be sold, so customers will not see it.',
+    'Two colours are both named black.',
+  ])
 
   const warned = productProblems({
     draft: emptyProductDraft({ name: 'A', price: '1' }),
@@ -293,13 +350,14 @@ test('productProblems carries the variant rules, errors and notes apart', () => 
   assert.deepEqual(warned.notes, [
     'Olive has no sizes yet, so nothing is stored for that colour.',
     'Olive has no photos yet — customers see the product\u2019s own photos for it.',
-    'Every size is at zero, so this product will be marked unavailable until something is restocked.',
+    'Every size is at zero, so customers will not see this product until something is restocked.',
   ])
 })
 
 test('productProblems names the option it is complaining about', () => {
   const { errors, notes } = productProblems({
     draft: emptyProductDraft({ name: 'A', price: '1' }),
+    variants: SIZED,
     customizations: [
       { option_name: 'Sole colour', option_type: '', options: [] },
       { option_name: '  ', option_type: 'text', options: [] },

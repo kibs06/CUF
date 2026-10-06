@@ -27,14 +27,19 @@
  * The split is deliberate:
  *
  *  - An **error** blocks the save. Errors are the app's own refusals (a name, a
- *    price, a sale price that is not a discount, an option with no type) plus the
- *    two shapes the schema cannot hold (a barcode over the column's habit, a
- *    colour column with no name).
+ *    price, a sale price that is not a discount, an option with no type), the two
+ *    shapes the schema cannot hold (a barcode over the column's habit, a colour
+ *    column with no name), and the one product-level rule this form holds that the
+ *    phone's save does not — a product with no sizes at all, which no customer
+ *    surface can show (see `productProblems`).
  *  - A **note** does not. A note is a product that saves exactly as drawn but is
  *    probably not what the seller meant — a sale window that can never open, a
  *    Kids' audience with adult sizes, a colour with no sizes, everything at zero.
  *    Refusing those would mean this form rejects products the app accepts, which
  *    is how a seller ends up unable to fix a typo in a name.
+ *
+ * The no-sizes error is the deliberate exception to that last sentence, and it is
+ * spelled out where it is checked rather than left to look like a contradiction.
  */
 
 import { PRODUCT_CATEGORIES } from './constants.js'
@@ -222,6 +227,32 @@ export function productProblems({
     errors.push(`Barcode must be under ${MAX_BARCODE_LENGTH} characters.`)
   }
 
+  /*
+    A product with no sizes cannot be sold, and no customer surface will show it.
+    Every reader of stock reads `inventory` (one row per size), which is derived
+    from `product_variants` — and the storefront drops any product whose total
+    stock is zero (`purchasableProducts`, and the app's own `hideOutOfStock`). A
+    product that never got a size has no rows in either table, so it publishes
+    itself and is invisible: the seller sees it in their own list, which does not
+    filter on stock, and a customer sees nothing at all.
+
+    This is the ONE rule here that the phone's save does not share, and it is
+    deliberate rather than drift to be tidied away. The phone's size sheet refuses
+    to write a variant without a size ('Select at least one size.'), but its save
+    has no such check, so the same invisible product can be created there and this
+    form is then the only surface that will name the problem. Both states that
+    reach it are fixed by adding a size: a brand-new product nobody has stocked
+    yet, and a save that failed after the product row but before its variants. So
+    this refuses a save that cannot produce a sellable product, rather than an
+    edit the seller has a reason to make.
+  */
+  const hasSizes = variants.some((row) => String(row?.size ?? '').trim())
+  if (!hasSizes) {
+    errors.push(
+      'Add at least one size — a product with no sizes cannot be sold, so customers will not see it.',
+    )
+  }
+
   const variant = variantProblems({ variants, colours })
   errors.push(...variant.errors)
   notes.push(...variant.notes)
@@ -258,15 +289,18 @@ export function productProblems({
     notes.push('These sizes look like adult sizing — check the audience is right.')
   }
 
-  // `is_active` is derived from stock — the app re-derives it after every
-  // variant write — so a product with nothing in stock is about to be marked
-  // unavailable. Saying so is the difference between a consequence and a
-  // surprise.
-  const hasRows = variants.some((row) => String(row?.size ?? '').trim())
+  /*
+    `is_active` is derived from stock — the app re-derives it after every variant
+    write — and the storefront hides anything with none, so a product at zero is
+    about to leave every customer surface rather than merely look unavailable.
+    Saying so is the difference between a consequence and a surprise. This is the
+    one place a note stops short of an error on purpose: the product has the sizes
+    it needs and only lacks a count, which is a restock rather than a repair.
+  */
   const hasStock = variants.some((row) => Number(row?.stock) > 0)
-  if (hasRows && !hasStock) {
+  if (hasSizes && !hasStock) {
     notes.push(
-      'Every size is at zero, so this product will be marked unavailable until something is restocked.',
+      'Every size is at zero, so customers will not see this product until something is restocked.',
     )
   }
 

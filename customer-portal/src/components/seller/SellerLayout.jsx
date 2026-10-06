@@ -10,6 +10,7 @@ import SellerPanelContent from './SellerPanels.jsx'
 import SellerSidePanel from './SellerSidePanel.jsx'
 import { useAuth } from '../../hooks/useAuth.jsx'
 import { useMyStore } from '../../hooks/useSeller.js'
+import { SellerFlashProvider } from '../../hooks/useSellerFlash.jsx'
 import { SellerPanelProvider, useSellerPanel } from '../../hooks/useSellerPanel.jsx'
 import { sellerPanelPage, sellerPanelTitle } from '../../lib/sellerPanelRules.js'
 import { subscribeToSellerNotifications } from '../../lib/sellerNotifications.js'
@@ -51,6 +52,10 @@ import { supabase } from '../../lib/supabase.js'
  *     can pop without the page being the one that owns it — see
  *     `SellerNotificationToaster`, which reads the query the bar's bell and the
  *     realtime channels above already keep warm.
+ *  7. **The confirmation cards**, through `SellerFlashProvider`, for a related but
+ *     different reason: a save is followed by a navigation (a created product
+ *     lands on its own page), and a card owned by the form would be unmounted by
+ *     the save that raised it.
  *
  * There is no "Back to the shop" link, and its absence is deliberate. There used
  * to be one, and it is gone because the shop is closed to sellers — `AppLayout`
@@ -73,46 +78,48 @@ export default function SellerLayout() {
 
   return (
     <SellerPanelProvider>
-      <div className="flex min-h-dvh flex-col bg-page">
-        <SellerHeader storeName={storeName} storeId={storeId} onSignOut={onSignOut} />
+      <SellerFlashProvider>
+        <div className="flex min-h-dvh flex-col bg-page">
+          <SellerHeader storeName={storeName} storeId={storeId} onSignOut={onSignOut} />
 
-        <SellerRealtime storeId={storeId} />
+          <SellerRealtime storeId={storeId} />
 
-        {/*
-          The docked panel is a flex sibling of `<main>`, not a layer over it, so
-          a pinned panel narrows the page instead of covering it. That is the
-          whole difference the pin buys: orders on the left, the inbox on the
-          right, both readable.
-        */}
-        <div className="flex min-w-0 flex-1">
-          <main className="min-w-0 flex-1">
-            {/*
-              Both keys are the pathname, deliberately: a page that threw keeps
-              its error boundary until the seller actually goes somewhere else,
-              and the transition replays per route rather than per render.
-            */}
-            <PageTransition key={location.pathname}>
-              <ErrorBoundary key={location.pathname}>
-                {!isLoading && store === null ? (
-                  <NoStoreNotice />
-                ) : (
-                  <Outlet context={{ store }} />
-                )}
-              </ErrorBoundary>
-            </PageTransition>
-          </main>
+          {/*
+            The docked panel is a flex sibling of `<main>`, not a layer over it, so
+            a pinned panel narrows the page instead of covering it. That is the
+            whole difference the pin buys: orders on the left, the inbox on the
+            right, both readable.
+          */}
+          <div className="flex min-w-0 flex-1">
+            <main className="min-w-0 flex-1">
+              {/*
+                Both keys are the pathname, deliberately: a page that threw keeps
+                its error boundary until the seller actually goes somewhere else,
+                and the transition replays per route rather than per render.
+              */}
+              <PageTransition key={location.pathname}>
+                <ErrorBoundary key={location.pathname}>
+                  {!isLoading && store === null ? (
+                    <NoStoreNotice />
+                  ) : (
+                    <Outlet context={{ store }} />
+                  )}
+                </ErrorBoundary>
+              </PageTransition>
+            </main>
 
-          <SellerPanel storeId={storeId} />
+            <SellerPanel storeId={storeId} />
+          </div>
+
+          {/*
+            Outside the `<main>`/panel row on purpose: the toast is not part of
+            the page's layout, and a card that is a flex sibling of a resizable
+            panel would either narrow the panel or be narrowed by it. It also
+            keeps the announcement last in the DOM, after the work it is about.
+          */}
+          <SellerNotificationToaster storeId={storeId} />
         </div>
-
-        {/*
-          Outside the `<main>`/panel row on purpose: the toast is not part of
-          the page's layout, and a card that is a flex sibling of a resizable
-          panel would either narrow the panel or be narrowed by it. It also
-          keeps the announcement last in the DOM, after the work it is about.
-        */}
-        <SellerNotificationToaster storeId={storeId} />
-      </div>
+      </SellerFlashProvider>
     </SellerPanelProvider>
   )
 }

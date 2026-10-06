@@ -4,11 +4,11 @@ import { ImageOff, Package, Pencil } from 'lucide-react'
 
 import QuickStockPanel from './QuickStockPanel.jsx'
 import SizeStockChips from './SizeStockChips.jsx'
-import { productRowMenuItems, productRowPath } from './sellerRowMenus.js'
-import { useContextMenu } from '../ui/ContextMenu.jsx'
+import { useProductRowMenu } from './useProductRowMenu.jsx'
 import Switch from '../ui/Switch.jsx'
 import { formatCurrency } from '../../lib/constants.js'
 import { stockState, stockSummary } from '../../lib/sizeSystems.js'
+import { isOnTheStorefront } from '../../lib/stock.js'
 import { useUpdateSellerProduct } from '../../hooks/useSeller.js'
 
 /**
@@ -35,24 +35,30 @@ import { useUpdateSellerProduct } from '../../hooks/useSeller.js'
  *
  * Below `xl` the size chips go. A phone cannot show a name, a price, chips, a
  * switch and a pencil side by side at readable sizes, and the chips are the part
- * worth less than the rest *because* the badges stay: "Sold out" and "Running
- * low" are on every screen size, in the name's own line, and the per-size detail
- * is one tap away on the row itself. The row is a link to the product — that is
- * what the stretched link and the pencil mean.
+ * worth less than the rest *because* the badges stay: "Hidden", "Not visible",
+ * "Sold out" and "Running low" are on every screen size, in the name's own line,
+ * and the per-size detail is one tap away on the row itself. The row is a link to
+ * the product — that is what the stretched link and the pencil mean.
  *
- * Right-click opens the row's menu (`productRowMenuItems`, the same items the grid
- * card offers), which is where the *numbers* view gets the two things a catalogue
- * owner wants from it without leaving the list: the storefront in another tab, and
- * the SKU on the clipboard.
+ * **"Hidden" and "Not visible" are two different ways to be off the storefront.**
+ * "Hidden" is the switch — the seller turned the product off. "Not visible" is the
+ * storefront's own rule: switched ON and still not in the shop, because zero stock
+ * drops it out of the catalog (`purchasableProducts`). Every product with no sizes
+ * yet is in that state, and every one sold out, and this list is otherwise the one
+ * surface where such a product looks healthy — it does not filter on stock.
+ *
+ * Right-click opens the row's menu (`useProductRowMenu` → `productRowMenuItems`,
+ * the same items the grid card offers), which is where the *numbers* view gets the
+ * two things a catalogue owner wants from it without leaving the list: the
+ * storefront in another tab, and the SKU on the clipboard. It is also where a
+ * seller asks for a 3D model — the one thing on the menu the portal cannot do
+ * itself, so it points at the app that can.
  */
 export default function ProductListRow({ product, storeId }) {
   const mutation = useUpdateSellerProduct(storeId)
   const [stockOpen, setStockOpen] = useState(false)
-  const { onContextMenu, menu } = useContextMenu({
-    items: productRowMenuItems(product),
-    link: productRowPath(product),
-    label: product.name,
-  })
+  // The menu and its one prompt, at both call sites — see `useProductRowMenu`.
+  const { onContextMenu, menu } = useProductRowMenu(product)
 
   const cover = product.images?.[0] ?? null
   const stock = stockSummary(product.inventory)
@@ -60,6 +66,9 @@ export default function ProductListRow({ product, storeId }) {
   const states = (product.inventory ?? []).map((row) => stockState(row?.stock))
   const soldOut = stock.sizes > 0 && stock.total <= 0
   const runningLow = !soldOut && states.includes('low')
+  // The switch AND the storefront's own rule — see `isOnTheStorefront`.
+  const notVisible =
+    Boolean(product.is_published) && !isOnTheStorefront(product)
 
   const onTogglePublished = (next) =>
     mutation.mutate({ productId: product.id, patch: { is_published: next } })
@@ -103,6 +112,19 @@ export default function ProductListRow({ product, storeId }) {
             {!product.is_published && (
               <span className="shrink-0 rounded-full bg-chrome/85 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-ink-inverse">
                 Hidden
+              </span>
+            )}
+            {/*
+              Published and unsellable — the storefront hides it, so a seller
+              reading only this row would take it for a product that is on sale.
+              Reads the same `isOnTheStorefront` rule the catalog does.
+            */}
+            {notVisible && (
+              <span
+                title="Not visible to customers — nothing in stock, so the storefront hides it."
+                className="shrink-0 rounded-full bg-chrome/85 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-ink-inverse"
+              >
+                Not visible
               </span>
             )}
             {soldOut && (
