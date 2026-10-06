@@ -14,3 +14,7 @@ dist-ssr
 .vscode/*
 !.vscode/extensions.json
 .idea
+
+# Vercel CLI writes this when the project is linked; it names the account
+# and the project, so it is not committed.
+.vercel
