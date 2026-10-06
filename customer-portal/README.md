@@ -136,8 +136,10 @@ npm test         # business-rule tests (Node's built-in runner, no test deps)
 **The host must rewrite every unknown path to `/index.html`.** These are client-side routes, so `https://…/product/abc` only works if the host serves the app shell and lets the router resolve it. Without that rewrite, a customer who refreshes on a product page gets a 404 — and that URL is exactly the one people share.
 
 - Netlify: `/* /index.html 200` in `_redirects`
-- Vercel: a catch-all rewrite to `/index.html`
+- Vercel: a catch-all rewrite to `/index.html` — committed here as `vercel.json`
 - Firebase Hosting: `"rewrites": [{ "source": "**", "destination": "/index.html" }]`
+
+For Vercel specifically, the project's **Root Directory has to be `customer-portal`** — this repo also holds the Flutter app and the admin portal, so a project rooted at the repository root will not find this `package.json`. Then put the two values from `.env.example` (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`) in Project → Settings → Environment Variables. Vite inlines them at build time, so changing either one needs a fresh deploy, not just a reload.
 
 Before sign-up works, the deployed origin must also be in Supabase → **Authentication → URL Configuration → Redirect URLs** — the same list the app's `solvision://auth/confirm` is on.
 
