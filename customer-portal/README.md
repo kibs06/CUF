@@ -197,6 +197,28 @@ src/
                 Notifications, Messages, MessageThread, Account, NotFound
 ```
 
+### The product page's two columns, and the 260px they cost on a phone
+
+`ProductDetail` puts the gallery and the buy column in a grid that only becomes two
+columns at `lg`. Below that it was a bare `grid`, and a bare `grid` has one *implicit*
+column sized `auto` — so the track took its width from the widest thing inside it, and
+the widest thing is the gallery's thumbnail strip (`flex gap-3 overflow-x-auto`, eight
+80px thumbs). That strip's min-content is **632px**, the track grew to match, and the
+page was **258px wider than a 390px phone**. It is the one URL people paste into a
+message, and every mobile browser could drag it sideways.
+
+`grid-cols-1` is not the whole fix: it makes the track `minmax(0, 1fr)`, but a grid
+item's `min-width: auto` still floors it at min-content, so the gallery column and the
+buy column both carry `min-w-0` as well. Measured over CDP after the change: **0
+overflow** at 360, 375, 390 and 414; at 1280 the two columns are still side by side
+(573px each at `left 32` / `left 661`).
+
+⚠️ Measure this class of bug with mobile emulation **off**. Under `mobile: true` Chrome
+shrink-to-fits rather than scrolling: `window.innerWidth` silently becomes **648px** on
+this page and `scrollWidth` matches it, so an overflow test written against
+`innerWidth` reports a clean page that is in fact 258px too wide. Compare against the
+device width, not the layout viewport.
+
 ## The rule that matters most
 
 **Business rules are ported, never re-implemented.** `lib/pricing.js` and `lib/stock.js` are line-for-line translations of their Dart counterparts, including the details that look like nitpicks and are not:

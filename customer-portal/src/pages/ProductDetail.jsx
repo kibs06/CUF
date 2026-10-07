@@ -140,7 +140,7 @@ export default function ProductDetail({ preview = false }) {
   if (productQuery.isLoading) {
     return (
       <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-        <div className="grid gap-10 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-10 lg:grid-cols-2">
           <div className="shimmer aspect-square rounded-premium" />
           <div className="space-y-4 pt-4">
             <div className="shimmer h-6 w-1/3 rounded-lg" />
@@ -292,8 +292,8 @@ export default function ProductDetail({ preview = false }) {
           </ol>
         </nav>
 
-        <div className="grid gap-10 lg:grid-cols-2 lg:gap-14">
-          <div>
+        <div className="grid grid-cols-1 gap-10 lg:grid-cols-2 lg:gap-14">
+          <div className="min-w-0">
             <Gallery
               images={images}
               name={product.name}
@@ -321,7 +321,7 @@ export default function ProductDetail({ preview = false }) {
           </div>
 
           {/* ── Details ─────────────────────────────────────────── */}
-          <div className="lg:pt-2">
+          <div className="min-w-0 lg:pt-2">
             {product.store_id &&
               (preview ? (
                 <div className="inline-flex items-center gap-3 rounded-full border border-hairline py-1.5 pl-1.5 pr-4">
