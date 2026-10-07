@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:app/constants/app_constants.dart';
+import 'package:app/models/foot_measurement.dart';
 import 'package:app/providers/auth_provider.dart';
 import 'package:app/providers/foot_measurement_provider.dart';
 import 'package:app/providers/product_provider.dart';
@@ -49,6 +50,7 @@ Map<String, dynamic> product({
   required String name,
   double price = 1000,
   List<(String, int)> stock = const [],
+  String? audience,
 }) {
   return {
     'id': id,
@@ -56,20 +58,26 @@ Map<String, dynamic> product({
     'category': 'Sneakers',
     'price': price,
     'images': <String>[],
+    ?audience: audience,
     'inventory': [
       for (final (size, units) in stock) {'size': size, 'stock': units},
     ],
   };
 }
 
-Widget wrap(ProductProvider provider, {Map<String, dynamic>? profile}) {
+Widget wrap(
+  ProductProvider provider, {
+  Map<String, dynamic>? profile,
+  FootMeasurement? measurement,
+}) {
   final auth = _MockAuthProvider();
   when(() => auth.profile).thenReturn(profile);
 
   // No scan in memory: the signed-in-but-no-scan-this-session state, where the
-  // profile snapshot has to be enough on its own.
+  // profile snapshot has to be enough on its own. A test handing a measurement
+  // overrides it — the fallback path the category resolver reads.
   final foot = _MockFootMeasurementProvider();
-  when(() => foot.latestMeasurement).thenReturn(null);
+  when(() => foot.latestMeasurement).thenReturn(measurement);
 
   return MultiProvider(
     providers: [
@@ -107,8 +115,10 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     // The heading is the poster tile, not a line of text above the grid — and
-    // the grid now closes with the shelf's door, which is the second FitCard.
-    expect(find.byType(FitCard), findsNWidgets(2));
+    // the grid closes on the product alone: one match is the whole shelf, so
+    // there is no "more" for a card to open onto (the owner's rule).
+    expect(find.byType(FitCard), findsOneWidget);
+    expect(find.byType(SeeMoreCard), findsNothing);
     for (final line in const ['Based', 'on your', 'size']) {
       expect(find.text(line), findsOneWidget);
     }
@@ -215,7 +225,10 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.byType(FitCard), findsNWidgets(2));
+    // The poster is the only FitCard left: a one-product shelf has no beyond
+    // for the door to open onto.
+    expect(find.byType(FitCard), findsOneWidget);
+    expect(find.byType(SeeMoreCard), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -365,17 +378,29 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('the arrow is there at any shelf length, even the whole shelf', (
+  testWidgets('no arrow at the preview length: ten products close the shelf', (
     tester,
   ) async {
     await tester.pumpWidget(wrap(shelfOf(10), profile: {'foot_size_ph': 42}));
     await tester.pump(const Duration(milliseconds: 300));
 
-    // The card is the shelf's door, not a "there is more" promise: with the
-    // whole shelf already on screen it still opens the shelf as a place — and
-    // on a short catalog that is the only way in, so the section never ends on
-    // products with no way to say "all of mine live here".
+    // Ten is the whole preview AND the whole shelf: a "See more" here would
+    // open a listing identical to what is already on screen, so the section
+    // closes on its products alone (the owner's rule, 2026-10-08).
     expect(renderedNames(tester).length, 10);
+    expect(find.byType(SeeMoreCard), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the arrow appears the moment the shelf outruns the preview', (
+    tester,
+  ) async {
+    await tester.pumpWidget(wrap(shelfOf(11), profile: {'foot_size_ph': 42}));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // One product past the preview is one more than the feed showed, and the
+    // card is the way to it.
+    expect(renderedNames(tester).length, kHomePreviewCount);
     expect(find.byType(SeeMoreCard), findsOneWidget);
 
     // And it really is the door: tapping it lands on the shelf page. (It sits
@@ -387,7 +412,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 120));
     }
     expect(find.byType(SizeListingScreen), findsOneWidget);
-    expect(find.text('10 pairs · EU 42'), findsOneWidget);
+    expect(find.text('11 pairs · EU 42'), findsOneWidget);
   });
 
   testWidgets('the door closes the grid in its own column, on one bottom edge', (
@@ -487,6 +512,144 @@ void main() {
           .product['name'],
       'P0',
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  // ── The gendered half ─────────────────────────────────────────────
+
+  testWidgets('a stated scale narrows the shelf to that audience, plus unisex', (
+    tester,
+  ) async {
+    final provider = ProductProvider.seeded(
+      products: [
+        product(
+          id: 'w',
+          name: 'Women Pair',
+          stock: [('EU 42', 3)],
+          audience: 'women',
+        ),
+        product(
+          id: 'u',
+          name: 'Unisex Pair',
+          stock: [('EU 42', 3)],
+          audience: 'unisex',
+        ),
+        product(
+          id: 'm',
+          name: 'Men Pair',
+          stock: [('EU 42', 3)],
+          audience: 'men',
+        ),
+        // No stated audience: not part of any audience, so a gendered shelf
+        // skips it (stated data only, never inferred).
+        product(id: 'none', name: 'Untagged Pair', stock: [('EU 42', 3)]),
+      ],
+      unitsSold: const {},
+    );
+
+    await tester.pumpWidget(
+      wrap(
+        provider,
+        profile: {'foot_size_ph': 42, 'foot_size_category': 'women'},
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(renderedNames(tester), ['Women Pair', 'Unisex Pair']);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a men-scale customer gets the men pairs, not the women ones', (
+    tester,
+  ) async {
+    final provider = ProductProvider.seeded(
+      products: [
+        product(
+          id: 'w',
+          name: 'Women Pair',
+          stock: [('EU 42', 3)],
+          audience: 'women',
+        ),
+        product(
+          id: 'm',
+          name: 'Men Pair',
+          stock: [('EU 42', 3)],
+          audience: 'men',
+        ),
+      ],
+      unitsSold: const {},
+    );
+
+    await tester.pumpWidget(
+      wrap(provider, profile: {'foot_size_ph': 42, 'foot_size_category': 'men'}),
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(renderedNames(tester), ['Men Pair']);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('no stated scale keeps the shelf size-only, not empty', (
+    tester,
+  ) async {
+    final provider = ProductProvider.seeded(
+      products: [
+        product(
+          id: 'w',
+          name: 'Women Pair',
+          stock: [('EU 42', 3)],
+          audience: 'women',
+        ),
+        product(id: 'none', name: 'Untagged Pair', stock: [('EU 42', 3)]),
+      ],
+      unitsSold: const {},
+    );
+
+    // A size with no chart on file: guessing 'men' would hide the women pair
+    // from exactly the customer it fits, so the shelf stays size-only.
+    await tester.pumpWidget(wrap(provider, profile: {'foot_size_ph': 42}));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(renderedNames(tester), ['Women Pair', 'Untagged Pair']);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the scan\'s scale narrows the shelf when the snapshot has none', (
+    tester,
+  ) async {
+    final provider = ProductProvider.seeded(
+      products: [
+        product(
+          id: 'w',
+          name: 'Women Pair',
+          stock: [('EU 42', 3)],
+          audience: 'women',
+        ),
+        product(
+          id: 'm',
+          name: 'Men Pair',
+          stock: [('EU 42', 3)],
+          audience: 'men',
+        ),
+      ],
+      unitsSold: const {},
+    );
+
+    await tester.pumpWidget(
+      wrap(
+        provider,
+        profile: {'foot_size_ph': 42},
+        measurement: FootMeasurement(
+          userId: 'u1',
+          paperSizeUsed: 'a4',
+          shoeCategory: 'men',
+          scanDate: DateTime(2026, 10, 8),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(renderedNames(tester), ['Men Pair']);
     expect(tester.takeException(), isNull);
   });
 }

@@ -288,10 +288,30 @@ class ProductProvider extends ChangeNotifier {
   /// rail-sized sample; the home section now decides its own preview length (ten
   /// cells plus a "See more" card) and asks for the *whole* shelf so that card
   /// can be honest about what is behind it.
-  List<Map<String, dynamic>> productsInSize(double? euSize, {int limit = 0}) {
+  List<Map<String, dynamic>> productsInSize(
+    double? euSize, {
+    String? category,
+    int limit = 0,
+  }) {
     if (euSize == null) return const [];
 
-    final matches = _products.where((p) => stocksMySize(p, euSize)).toList();
+    // The customer's stated scale narrows the shelf to products stated for it —
+    // plus `unisex`, which is a real answer here: this is a personal shelf, not
+    // a curated rail, and a unisex product in the customer's size IS in their
+    // size. (The rails skip it only because it would be listed three times.)
+    // A product with NO stated audience is excluded when a scale IS stated —
+    // the stated-data-only rule the audience rails already follow, never
+    // inferred from the size band. With no stated scale the shelf stays
+    // size-only: a guessed scale is what the absence-safe rule forbids, and
+    // emptying the section for a customer who never picked one would hide the
+    // one surface that reads their size at all.
+    final wanted = productAudienceFrom(category);
+    final matches = _products.where((p) {
+      if (!stocksMySize(p, euSize)) return false;
+      if (wanted == null || wanted == kUnisexAudience) return true;
+      final audience = productAudienceFrom(p['audience']?.toString());
+      return audience == wanted || audience == kUnisexAudience;
+    }).toList();
 
     return limit > 0 && matches.length > limit
         ? matches.sublist(0, limit)

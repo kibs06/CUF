@@ -95,11 +95,15 @@ class _SizeListingScreenState extends State<SizeListingScreen> {
           (p) => p.latestMeasurement,
         );
     final euSize = shoppingEuSizeFrom(profile, measurement: measurement);
+    // The same gendered half the home section filters on — resolved here with
+    // the same helper, so the listing behind the "See more" card can never
+    // disagree with the shelf that opened it.
+    final category = shoppingCategoryFrom(profile, measurement: measurement);
 
     final shelf = euSize == null
         ? const <Map<String, dynamic>>[]
         : context.select<ProductProvider, List<Map<String, dynamic>>>(
-            (p) => p.productsInSize(euSize),
+            (p) => p.productsInSize(euSize, category: category),
           );
     final provider = context.read<ProductProvider>();
 

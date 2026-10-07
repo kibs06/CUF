@@ -23,12 +23,14 @@ import 'see_more_card.dart';
 /// below
 /// this section on the same page.
 ///
-/// The card is **not** conditional on the shelf being longer than the preview:
-/// it renders whenever this section does. On a small catalog the preview is the
-/// whole shelf, and the card is still the door to that shelf — a page that
-/// keeps existing while the feed scrolls on, and grows on its own as sellers
-/// add stock. Making it a "there is more" promise instead would hide the only
-/// way in whenever the shelf happens to be short.
+/// The card **is** conditional on the shelf being longer than the preview
+/// (the owner's decision, 2026-10-08): it renders only when
+/// `products.length > kHomePreviewCount` — the only case where "more" names
+/// something the preview did not already show. The earlier rule rendered it
+/// whenever the section did, on the reading that the card is the shelf's door
+/// even when the shelf is short; on a one-product catalog that read as a lie —
+/// a "See more" whose page held exactly the product already on screen — and a
+/// promise that opens onto nothing is worse than no promise.
 const int kHomePreviewCount = 10;
 
 /// "Based on your size" on the customer home — only the products that stock the
@@ -64,12 +66,12 @@ const int kHomePreviewCount = 10;
 /// right edge by the same amount, and the number floating off the bottom. The
 /// card's radius, fill and hairline are untouched.
 ///
-/// **The grid closes with the shelf's door.** A [SeeMoreCard] — the same poster
-/// saying `See` / `more` over a painted arrow — takes the grid's last cell and
-/// pushes the full [SizeListingScreen]. It renders whenever this section does:
-/// on a shelf longer than the preview it is the way to the rest of it, and on a
-/// short one it is still the way to the shelf as a place, so the section never
-/// ends on products with no way to say "all of mine live here".
+/// **The grid closes with the shelf's door — when there is a beyond.** A
+/// [SeeMoreCard] — the same poster saying `See` / `more` over a painted arrow —
+/// takes the grid's last cell and pushes the full [SizeListingScreen], but only
+/// when the shelf holds more than the preview shows. A short shelf ends on its
+/// products; the card would open a listing identical to what is already on
+/// screen.
 ///
 /// Where "my size" comes from: [shoppingEuSizeFrom] — the profile snapshot
 /// first (written by both the scan and the manual picker), then a scan already
@@ -109,19 +111,32 @@ class InYourSizeSection extends StatelessWidget {
     final euSize = shoppingEuSizeFrom(profile, measurement: measurement);
     if (euSize == null) return const SizedBox.shrink();
 
+    // The gendered half of "based on your size": the scale the customer shops
+    // (Men's/Women's/Kids', from the same snapshot the size came from, with the
+    // scan as fallback) narrows the shelf to products stated for it — plus
+    // unisex. Null when they never picked a scale: the shelf stays size-only
+    // rather than guessing one.
+    final category = shoppingCategoryFrom(profile, measurement: measurement);
+
     // The WHOLE shelf: the preview length is decided below, and the provider
     // no longer pre-truncates — the "See more" card opens the rest of this
     // list, so the order it opens must be this list's order (the shuffled
     // catalog order the provider hands back).
     final products = context
         .select<ProductProvider, List<Map<String, dynamic>>>(
-          (p) => p.productsInSize(euSize, limit: 0),
+          (p) => p.productsInSize(euSize, category: category, limit: 0),
         );
     if (products.isEmpty) return const SizedBox.shrink();
 
     final preview = products.length > kHomePreviewCount
         ? products.sublist(0, kHomePreviewCount)
         : products;
+
+    // The door renders only when there is a beyond for it to open onto: a
+    // shelf at or under the preview length is fully shown above, and a "See
+    // more" that opened the same products would be the false promise the
+    // owner removed (see the class doc). At ten products the preview IS the
+    // shelf; at eleven, one more lives behind the card.
 
     // The card names the size the section was built on (so a wrong one is
     // visible and correctable in Settings → Size Your Foot): `euSizeValue`
@@ -143,17 +158,16 @@ class InYourSizeSection extends StatelessWidget {
         heroValue: euSizeValue(euSize),
       ),
       products: preview,
-      // The last cell, always: the shelf's door, not a "there is more" promise.
-      // It is a sibling of the size poster, one cell wide and in the right
-      // column, so the grid closes the way it opens. No `AspectRatio` here:
-      // the grid measures this card against the anchor product's bottom and
-      // hands it exactly that box (the poster gives up its reference proportion
-      // to close the section on one edge).
-      trailing: SeeMoreCard(
-        onTap: () => Navigator.of(
-          context,
-        ).push(MaterialPageRoute(builder: (_) => const SizeListingScreen())),
-      ),
+      // The last cell, only when the shelf outruns the preview: the door, not
+      // a "there is more" promise with nothing behind it. Null closes the grid
+      // on products alone (`closingCount: 0`, the catalog's own packing).
+      trailing: products.length > kHomePreviewCount
+          ? SeeMoreCard(
+              onTap: () => Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const SizeListingScreen())),
+            )
+          : null,
     );
   }
 }

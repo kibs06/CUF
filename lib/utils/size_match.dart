@@ -11,6 +11,7 @@
 library;
 
 import '../models/foot_measurement.dart';
+import 'customer_profile_fields.dart';
 import 'size_key.dart';
 
 /// The band a catalog size must fall inside to be believed as EU.
@@ -182,6 +183,32 @@ double? shoppingEuSizeFrom(
     return sizeNumberInEu(scanned);
   }
   return null;
+}
+
+/// The customer's shopping SCALE — the gendered half of "based on your size" —
+/// or null when they never picked one.
+///
+/// **Why the chart and not the account's `gender` column.** The scale is what
+/// pairs a size with the Men's/Women's split the catalog itself is stated in
+/// (`products.audience`), it is written by the same surfaces that write the
+/// size (the scan and the manual picker), and the code owns the warning
+/// already: the `gender` column "answers a different question and may be
+/// unset" — and it is free-text-able, so `'Agender'` can never become an
+/// audience. A woman shopping men's shoes picked Men's; this shelf shows her
+/// what her SCALE shops for.
+///
+/// Order mirrors [shoppingEuSizeFrom]: the profile snapshot first, then a scan
+/// already in memory. Null when neither holds a recognised value — callers
+/// render the size-only shelf rather than guessing a scale.
+String? shoppingCategoryFrom(
+  Map<String, dynamic>? profile, {
+  FootMeasurement? measurement,
+}) {
+  final saved = savedFootSizeCategory(profile);
+  if (saved != null) return saved;
+
+  final scanned = measurement?.shoeCategory;
+  return footSizeCategoryLabel(scanned) == null ? null : scanned;
 }
 
 /// A resolved EU size as a display label — `42.0` → `'EU 42'`.
