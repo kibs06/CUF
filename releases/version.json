@@ -1,11 +1,9 @@
 {
-  "latest_version": "1.0.46",
-  "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.46/app-release-1.0.46.apk",
-  "released_at": "2026-10-05",
+  "latest_version": "1.0.47",
+  "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.47/app-release-1.0.47.apk",
+  "released_at": "2026-10-07",
   "notes": [
-    "Virtual Try-On works end to end now: the camera view is upright and the shoe anchors to your foot on the floor",
-    "Fixed: the shoe appears reliably when you place your foot in frame, even right after opening the camera",
-    "New flashlight button in the AR screen brightens dark rooms, and the whole camera feed renders brighter at night",
-    "Every product now shows its own real 3D shoe model instead of a shared placeholder"
+    "The Men's, Women's and Kids' sections on the home page now share one row, so all three are visible at once — tap any photo to open that section's shelf",
+    "Fixed: a product saved with no sizes used to be hidden from every customer by the storefront; the seller's form now refuses to save one"
   ]
 }
