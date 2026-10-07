@@ -6,6 +6,7 @@ import Chip from '../../components/ui/Chip.jsx'
 import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx'
 import Field from '../../components/ui/Field.jsx'
 import CustomisationEditor from '../../components/seller/CustomisationEditor.jsx'
+import { PhotoOrderGrid } from '../../components/seller/PhotoOrderGrid.jsx'
 import TagPicker from '../../components/seller/TagPicker.jsx'
 import VariantEditor from '../../components/seller/VariantEditor.jsx'
 import {
@@ -14,7 +15,11 @@ import {
   SellerSection,
 } from '../../components/seller/SellerPage.jsx'
 import { PRODUCT_CATEGORIES, formatCurrency, formatDate } from '../../lib/constants.js'
-import { screenPickedPhotos } from '../../lib/photoFiles.js'
+import {
+  previewUrl,
+  screenPickedPhotos,
+  stagedPhotoKey,
+} from '../../lib/photoFiles.js'
 import { salePreview } from '../../lib/pricing.js'
 import {
   PRODUCT_AUDIENCE_OPTIONS,
@@ -27,6 +32,7 @@ import {
   productDraftFrom,
   productProblems,
 } from '../../lib/productDraft.js'
+import { productSavePlan } from '../../lib/productSavePlan.js'
 import {
   coloursFromVariants,
   variantsFromProduct,
@@ -39,6 +45,7 @@ import {
   useRemoveColourImage,
   useRemoveProductImage,
   useSaveProductColourImages,
+  useSaveProductImageOrder,
   useSaveProductCustomizations,
   useSaveProductVariants,
   useSellerProduct,
@@ -65,23 +72,24 @@ import { useSellerFlash } from '../../hooks/useSellerFlash.jsx'
  * That is the point of the arrangement — a form that decided for itself what a
  * sale price is would be a second opinion about money.
  *
- * ## Four writes, one button
+ * ## Five writes, one button
  *
- * Save writes the product row, then `product_variants` + `inventory`, then
- * `product_customizations`, then the colours' photo galleries — the app's own order,
- * and the order matters: the row is what the other tables resolve ownership through,
- * so a new product must exist before its sizes can, and a colour's photos resolve
- * through the product id as well. A failure part-way leaves a product with no sizes
- * rather than a product nobody can buy, and the caption under the button says so.
+ * Save writes the product row, then its own photos, then `product_variants` +
+ * `inventory`, then `product_customizations`, then the colours' photo galleries —
+ * `createProduct`'s order, and the order matters: the row is what the other tables
+ * resolve ownership through, so a new product has to exist before its photos and its
+ * sizes can. A failure part-way leaves a product with no sizes rather than a product
+ * nobody can buy, and the caption under the button says so.
  *
- * The colour photos are the exception to "uploads live in their own section": they
- * are *part of* a colour (`ColourDialog` will not save one without a photo), so they
- * travel with the sizes that colour owns rather than in a section of their own.
- *
- * The photos stay separate, and the reason is not tidiness: an upload is a file
- * operation with its own progress and its own failures, and bundling it would
- * mean a failed upload rolled back a description edit. Each section saves itself
- * and says so.
+ * The product's own photos are the exception to "uploads live in their own section",
+ * and they are *staged* for exactly that reason: a seller picks them while filling
+ * the form in (`NewProductPhotos` holds the Files, previews and all) and the same
+ * save that creates the row sends them. So a photo is a field on this form like any
+ * other rather than a second visit to the product — the app's own arrangement, which
+ * has always put picked files in `_imageItems` and uploaded them from `createProduct`.
+ * The colour photos are the other exception: they are *part of* a colour
+ * (`ColourDialog` will not save one without a photo), so they travel with the sizes
+ * that colour owns.
  *
  * ## What a successful save says, and where it leaves the seller
  *
@@ -90,10 +98,19 @@ import { useSellerFlash } from '../../hooks/useSellerFlash.jsx'
  * The card rides along because the shell owns it rather than this form: a card
  * raised here would be unmounted by the very save that raised it.
  *
- * Creating used to land on the new product's own page, because the photo section
- * is the one thing this form cannot do before the row exists. The list is where a
- * seller wants to be after either write, so the new pair's missing photos are
- * named on the card instead and are one click away from the list.
+ * Creating used to land on the new product's own page, because the photo section is
+ * the one thing this form could not do before the row existed. It can now: the picked
+ * files are held here and uploaded by the create itself, so a save always ends on the
+ * list, and the card names the photos only when the seller picked none.
+ *
+ * ## A save that creates the row and then fails
+ *
+ * The new id is kept (`createdId`) and the next Save **updates** that product instead
+ * of creating a second one — which is what the button says, and what stops an upload
+ * failure (the likeliest failure here) from leaving two half-built products behind.
+ * Photos are dropped from the draft as they land, so a retry cannot send the same file
+ * twice, and the next batch's `display_order` carries on behind them. Both rules are
+ * `productSavePlan`'s rather than this form's, and that is where the reasoning lives.
  */
 
 export default function SellerProductForm() {
@@ -110,11 +127,29 @@ export default function SellerProductForm() {
   const createMutation = useCreateSellerProduct(storeId)
   const updateMutation = useUpdateSellerProduct(storeId)
   const variantMutation = useSaveProductVariants(storeId)
+  const uploadMutation = useUploadProductImages(storeId)
   const customizationMutation = useSaveProductCustomizations(storeId)
   const colourImageMutation = useSaveProductColourImages(storeId)
   const removeColourImageMutation = useRemoveColourImage(storeId)
   const deleteMutation = useDeleteSellerProduct(storeId)
 
+  /*
+    A new product's photos, held as Files rather than rows: nothing can be uploaded
+    until the product exists to own the object, so the seller's pick is staged here
+    and sent by the same save that creates the row (see `NewProductPhotos`).
+  */
+  const [galleryPhotos, setGalleryPhotos] = useState([])
+  /*
+    How many of them a save has already stored. The Files are dropped as they land,
+    so a retry cannot upload one twice; this is only what the next batch's
+    `display_order` — and therefore the cover — is counted from.
+  */
+  const [photosStored, setPhotosStored] = useState(0)
+  /*
+    The id of a row an earlier save created before it failed, so the next Save
+    finishes THAT product instead of creating a second one.
+  */
+  const [createdId, setCreatedId] = useState(null)
   const [draft, setDraft] = useState(emptyProductDraft)
   const [variants, setVariants] = useState([])
   const [colours, setColours] = useState([])
@@ -173,6 +208,7 @@ export default function SellerProductForm() {
   const saving =
     createMutation.isPending ||
     updateMutation.isPending ||
+    uploadMutation.isPending ||
     variantMutation.isPending ||
     customizationMutation.isPending ||
     colourImageMutation.isPending
@@ -184,13 +220,44 @@ export default function SellerProductForm() {
 
     if (problems.errors.length > 0) return
 
+    /*
+      Which row this save writes and which photos it sends. Both rules live in
+      `productSavePlan`, the second one included: a create that failed after its row
+      landed is finished by the next save rather than duplicated, and the batch of
+      photos sent is only what is still pending, counted behind what already landed.
+    */
+    const plan = productSavePlan({
+      productId,
+      createdId,
+      photos: galleryPhotos,
+      photosStored,
+    })
+    let id = plan.id
+
     try {
-      let id = productId
-      if (isNew) {
+      if (plan.row === 'create') {
         const created = await createMutation.mutateAsync(draft)
         id = created.id
+        setCreatedId(id)
       } else {
-        await updateMutation.mutateAsync({ productId, patch: columns })
+        await updateMutation.mutateAsync({ productId: id, patch: columns })
+      }
+
+      /*
+        The product's own photos, right after the row — `createProduct`'s image step,
+        and the reason it can be done here at all: an object's path and its
+        `product_id` resolve through the row, so the row goes first and the files
+        follow in the same save. First of the rest because an upload is the slowest
+        write here and the one thing the seller would have to re-pick by hand.
+      */
+      if (plan.photos.length > 0) {
+        await uploadMutation.mutateAsync({
+          productId: id,
+          files: plan.photos,
+          startOrder: plan.photoStartOrder,
+        })
+        setPhotosStored(plan.photoCount)
+        setGalleryPhotos([])
       }
 
       await variantMutation.mutateAsync({ productId: id, variants })
@@ -221,10 +288,26 @@ export default function SellerProductForm() {
         and leaving it behind is a Back press into a blank form that would
         happily create the pair a second time.
       */
-      flash(productSavedFlash({ created: isNew, name: columns.name }))
+      flash(
+        productSavedFlash({
+          created: isNew,
+          name: columns.name,
+          photos: plan.photoCount,
+        }),
+      )
       navigate('/seller/products', { replace: true })
     } catch (failure) {
-      setServerError(failure?.message ?? 'We could not save this product.')
+      setServerError(
+        /*
+          With a row in place, the failure's own message is not the honest sentence:
+          what the seller needs to know is that the product exists, that the save is
+          unfinished, and that saving again finishes it rather than making another.
+        */
+        id && !productId
+          ? `${columns.name} is saved, but the rest of the save did not finish. ` +
+            'Save again to finish it — this updates that product rather than creating a second one.'
+          : failure?.message ?? 'We could not save this product.',
+      )
     }
   }
 
@@ -600,12 +683,7 @@ export default function SellerProductForm() {
           {product ? (
             <ProductPhotos product={product} storeId={storeId} />
           ) : (
-            <SellerSection title="Photos">
-              <p className="text-sm text-muted">
-                Save the product first, then add its photos — an upload needs the
-                product to exist so the file has somewhere to belong.
-              </p>
-            </SellerSection>
+            <NewProductPhotos files={galleryPhotos} onChange={setGalleryPhotos} />
           )}
 
           <SellerSection
@@ -649,13 +727,18 @@ export default function SellerProductForm() {
               className="btn btn-primary w-full"
             >
               {saving && <Loader2 size={15} className="animate-spin" />}
-              {isNew ? 'Create product' : 'Save changes'}
+              {createdId
+                ? 'Finish saving'
+                : isNew
+                  ? 'Create product'
+                  : 'Save changes'}
             </button>
 
             <p className="mt-3 text-xs leading-relaxed text-muted">
-              Details, a sale, tags, the audience, colours and stock, and the
-              options are written together, in that order — so a failure part-way
-              leaves a product with no sizes rather than a product nobody can buy.
+              Details, a sale, tags, the audience, the photos, colours and stock,
+              and the options are written together, in that order — so a failure
+              part-way leaves a product with no sizes rather than a product nobody
+              can buy.
             </p>
 
             {!isNew && (
@@ -677,6 +760,103 @@ export default function SellerProductForm() {
 }
 
 /**
+ * A new product's photos — the pick, before there is a product to hold it.
+ *
+ * The row has to come first and that is not an arrangement this card can change:
+ * the object's path opens `{sellerId}/{productId}/…`, the bucket's INSERT policy
+ * reads the seller's id out of it, and `product_images.product_id` is a real
+ * foreign key — so there is nothing to upload *to* until a row exists. What this
+ * card changes is what that requirement costs the seller: the files are picked and
+ * held here, previewed from the browser's own blob URLs, and sent by the same save
+ * that creates the row. "Add the photos" is therefore part of creating the product
+ * rather than a chore waiting on the other side of a save — which is what the app
+ * does with its own `_imageItems`.
+ *
+ * **The first photo is the cover.** It uploads at `display_order` 0 with
+ * `is_primary`, and the storefront draws the lowest order first. There is no
+ * reorder control for the same reason the colour galleries have none: the app has
+ * none either, and taking the cover away promotes the next photo.
+ *
+ * A removal here is just a file dropped from a list — nothing has been written yet,
+ * which is why there is no confirmation and no server call (compare the X on a
+ * stored photo in `ProductPhotos`, which deletes a row and an object).
+ *
+ * HEIC files are screened out before they ever reach the list, with the reason shown
+ * beside the button that took them — see `photoFiles.js` for why this portal, unlike
+ * the app, has to refuse them itself.
+ */
+function NewProductPhotos({ files, onChange }) {
+  const [refused, setRefused] = useState(null)
+
+  /*
+    A pending file's identity is the File object itself, and its preview is a blob
+    URL — both cached per file in `photoFiles.js`, so a drag can move a tile
+    without the `<img>` being handed a new URL or a new React key.
+  */
+  const items = files.map((file) => ({
+    key: stagedPhotoKey(file),
+    src: previewUrl(file),
+    value: file,
+  }))
+
+  return (
+    <SellerSection
+      title="Photos"
+      description="Uploaded with the product when you save it. Drag one to change the order customers see it in — the first is the cover."
+    >
+      <div className="space-y-4">
+        {files.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-card border border-dashed border-hairline bg-subtle/40 py-8 text-center">
+            <ImageOff className="h-6 w-6 text-muted" aria-hidden="true" />
+            <p className="mt-2 text-xs text-muted">No photos yet.</p>
+          </div>
+        ) : (
+          <PhotoOrderGrid
+            items={items}
+            onReorder={(next) => onChange(next.map((item) => item.value))}
+            /* By identity, not by index: a removal that did not follow the tile
+               through a reorder would delete whichever photo happens to sit at
+               that position now. */
+            onRemove={(item) =>
+              onChange(files.filter((file) => file !== item.value))
+            }
+            coverLabel="Cover"
+          />
+        )}
+
+        <label className="btn btn-outline w-full cursor-pointer">
+          <Upload className="h-4 w-4" aria-hidden="true" />
+          {files.length === 0 ? 'Add photos' : 'Add more photos'}
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            className="sr-only"
+            onChange={(event) => {
+              const picked = [...(event.target.files ?? [])]
+              event.target.value = ''
+              const { accepted, notice } = screenPickedPhotos(picked)
+              setRefused(notice)
+              if (accepted.length > 0) onChange([...files, ...accepted])
+            }}
+          />
+        </label>
+
+        {refused && (
+          <p
+            role="status"
+            className="flex items-start gap-2 rounded-field border border-crimson/30 bg-crimson/[0.07] px-3 py-2 text-xs leading-relaxed text-ink"
+          >
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-crimson" aria-hidden="true" />
+            {refused}
+          </p>
+        )}
+      </div>
+    </SellerSection>
+  )
+}
+
+/**
  * Photos for an existing product.
  *
  * The upload appends rather than replaces, which is the difference that matters:
@@ -693,6 +873,15 @@ export default function SellerProductForm() {
  * being deleted, but the form's own query was never told, so the tile stayed on
  * screen and a tile whose object had just gone drew as a broken image.
  *
+ * **The order is a third immediate write, and the reason is the same one.**
+ * `display_order` is what the storefront sorts by and draws first, so a drag is not
+ * a draft field like the ones on the left of this page: it lands in the table the
+ * moment the photo is dropped (`saveProductImageOrder`, one `upsert`), and `is_primary`
+ * goes with it so the first tile genuinely is the cover. An order the table refuses
+ * is put back on screen — keeping an arrangement nothing recorded would promise a
+ * shape the shop will not draw, which is the mistake the removal above already made
+ * once.
+ *
  * Per-colour galleries (`product_color_images`) are deliberately not here: the
  * app requires at least one photo for every colour, and the storefront does not
  * read that table at all — it falls back to the product's own gallery when it has
@@ -703,15 +892,51 @@ function ProductPhotos({ product, storeId }) {
   const uploadMutation = useUploadProductImages(storeId)
   const removeMutation = useRemoveProductImage(storeId)
   const removeAllMutation = useRemoveAllProductImages(storeId)
+  const orderMutation = useSaveProductImageOrder(storeId)
   const [confirmingRemoveAll, setConfirmingRemoveAll] = useState(false)
   const [refused, setRefused] = useState(null)
 
-  const photoCount = product.images.length
+  /*
+    The rows the card draws, filtered to the ones with a URL rather than taken
+    whole: a row whose object is missing would render as a broken tile, and the
+    reorder write drops it anyway (`imageOrderRows` needs an id).
+  */
+  const serverRows = (product.imageRows ?? []).filter((row) => row.url)
+  const photoCount = serverRows.length
+
+  /*
+    The order on screen. A reorder writes immediately — like the X, it is a fact
+    about the rows rather than a field in a draft — so this is the table's own
+    order plus whatever the seller has just done to it, and it is re-synced when
+    the fetched order genuinely changes, which is also what puts it back after a
+    write the database refused.
+  */
+  const serverOrder = serverRows.map((row) => row.id ?? row.url).join('|')
+  const [rows, setRows] = useState(serverRows)
+  const fetched = useRef(serverOrder)
+  useEffect(() => {
+    if (fetched.current === serverOrder) return
+    fetched.current = serverOrder
+    setRows(serverRows)
+  }, [serverOrder, serverRows])
+
+  const onReorder = (next) => {
+    const previous = rows
+    const reordered = next.map((item) => item.value)
+    setRows(reordered)
+    orderMutation.mutate(
+      { productId: product.id, images: reordered },
+      /* An order the table refused is not an order: leaving it on screen would
+         promise a shape the storefront will not draw. */
+      { onError: () => setRows(previous) },
+    )
+  }
 
   return (
     <>
       <SellerSection
         title="Photos"
+        description="Drag a photo to change the order customers see it in — the first one is the cover."
         actions={
           photoCount > 0 ? (
             <button
@@ -732,32 +957,31 @@ function ProductPhotos({ product, storeId }) {
               <p className="mt-2 text-xs text-muted">No photos yet.</p>
             </div>
           ) : (
-            <ul className="grid grid-cols-3 gap-2">
-              {product.imageRows.map((image) => (
-                <li key={image.id ?? image.url} className="group relative">
-                  <img
-                    src={image.url}
-                    alt=""
-                    className="aspect-square w-full rounded-product object-cover"
-                  />
-                  <button
-                    type="button"
-                    onClick={() =>
-                      removeMutation.mutate({
-                        productId: product.id,
-                        imageId: image.id,
-                        url: image.url,
-                      })
-                    }
-                    disabled={removeMutation.isPending}
-                    aria-label="Remove this photo"
-                    className="absolute right-1 top-1 rounded-full bg-chrome/80 p-1 text-white opacity-0 transition-opacity duration-200 ease-out-cubic focus-visible:opacity-100 group-hover:opacity-100 disabled:cursor-not-allowed"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <PhotoOrderGrid
+              items={rows.map((row) => ({
+                key: row.id ?? row.url,
+                src: row.url,
+                value: row,
+              }))}
+              onReorder={onReorder}
+              onRemove={(item) =>
+                removeMutation.mutate({
+                  productId: product.id,
+                  imageId: item.value.id,
+                  url: item.value.url,
+                })
+              }
+              disabled={orderMutation.isPending}
+              coverLabel="Cover"
+            />
+          )}
+
+          {orderMutation.isError && (
+            <p role="alert" className="text-xs text-crimson">
+              {orderMutation.error?.message
+                ? `That order did not save (${orderMutation.error.message}) — the photos are back where they were.`
+                : 'That order did not save — the photos are back where they were.'}
+            </p>
           )}
 
           {removeMutation.isError && (

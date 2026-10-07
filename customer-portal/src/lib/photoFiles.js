@@ -132,3 +132,43 @@ export function screenPickedPhotos(files) {
   const { accepted, rejected } = splitPickedPhotos(files)
   return { accepted, notice: heicRejectionNotice(rejected) }
 }
+
+/**
+ * A preview URL for a file the seller picked and nothing has uploaded yet.
+ *
+ * Cached per file, because `URL.createObjectURL` returns a **new** URL every call:
+ * one made during a render would change on the next one and make the browser
+ * re-fetch a photo it already has, and the `<img>` would flicker on every
+ * keystroke elsewhere in the form. Kept for the life of the page rather than
+ * revoked, which leaks one blob URL per picked photo until the tab closes — the
+ * cost of not having to track lifetimes through a sheet that can be opened,
+ * cancelled and reopened, or through a gallery that can be rearranged.
+ */
+const PREVIEWS = new WeakMap()
+
+export function previewUrl(file) {
+  if (!file) return null
+  if (!PREVIEWS.has(file)) PREVIEWS.set(file, URL.createObjectURL(file))
+  return PREVIEWS.get(file)
+}
+
+/**
+ * A stable identity for a file that has no id yet.
+ *
+ * React needs a key that does **not** change while a seller rearranges photos, and
+ * a pending file's only identity is the object itself: an index-based key would
+ * remount every tile a drag passes over — re-decoding every preview — and
+ * `name + size + lastModified` collides for the same photo picked twice. A
+ * `WeakMap` gives one key per File object, for as long as the page lives.
+ */
+const KEYS = new WeakMap()
+let nextStagedKey = 0
+
+export function stagedPhotoKey(file) {
+  if (!file) return 'staged-photo'
+  if (!KEYS.has(file)) {
+    nextStagedKey += 1
+    KEYS.set(file, `staged-photo-${nextStagedKey}`)
+  }
+  return KEYS.get(file)
+}

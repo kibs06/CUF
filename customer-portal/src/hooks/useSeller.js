@@ -14,6 +14,7 @@ import {
   removeProductImage,
   saveProductColourImages,
   saveProductCustomizations,
+  saveProductImageOrder,
   saveProductVariants,
   updateSellerOrderStatus,
   updateSellerProduct,
@@ -303,6 +304,31 @@ export function useSaveProductColourImages(storeId) {
   return useMutation({
     mutationFn: (payload) =>
       saveProductColourImages({ sellerId: user?.id, ...payload }),
+    onSuccess: (_rows, payload) => {
+      queryClient.invalidateQueries({ queryKey: ['seller-products', storeId] })
+      queryClient.invalidateQueries({
+        queryKey: ['seller-product', payload?.productId],
+      })
+      queryClient.invalidateQueries({ queryKey: ['products'] })
+      queryClient.invalidateQueries({ queryKey: ['product'] })
+    },
+  })
+}
+
+/**
+ * Save the gallery's order.
+ *
+ * The invalidations are the removal's, for the same reason: the order is what the
+ * form draws next, what the seller's product list shows as the product's photo,
+ * and what the storefront draws first — so every one of those caches has to move.
+ * Nothing is uploaded and nothing is deleted, which is why no storage handling
+ * appears here: a reorder is purely the rows' `display_order`.
+ */
+export function useSaveProductImageOrder(storeId) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (payload) => saveProductImageOrder(payload),
     onSuccess: (_rows, payload) => {
       queryClient.invalidateQueries({ queryKey: ['seller-products', storeId] })
       queryClient.invalidateQueries({

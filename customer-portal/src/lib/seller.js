@@ -5,6 +5,7 @@ import {
 } from './productCustomizations.js'
 import { productColumnsFromDraft } from './productDraft.js'
 import { colourImagePath, colourImagesFor } from './productColourImages.js'
+import { imageOrderRows } from './productImages.js'
 import { inventoryRowsFromVariants, variantRowsForInsert } from './productVariants.js'
 
 // The rules live next door — including `sellerOrderActions`, which is what
@@ -583,6 +584,32 @@ export async function uploadProductImages({
   if (error) throw error
 
   return urls
+}
+
+/**
+ * The gallery's order, written as a set.
+ *
+ * One `upsert` rather than a loop of per-row updates, and the difference matters
+ * more than it looks: the rows conflict on their primary key, so a single
+ * statement either renumbers the whole gallery or writes none of it. A loop (the
+ * shape the admin portal's banner order uses) can stop half-way and leave a
+ * gallery in *neither* the old order nor the new one — and the old one is not
+ * recoverable afterwards, because nothing recorded it.
+ *
+ * `is_primary` travels with the order, from `imageOrderRows`: position 0 is the
+ * cover the storefront draws first, and a column that disagreed with
+ * `display_order` would be a second answer to the same question. Rows without an
+ * id are dropped there, because a row with no primary key is not an update of
+ * anything — `upsert` would INSERT it and duplicate the photo.
+ */
+export async function saveProductImageOrder({ productId, images }) {
+  const rows = imageOrderRows({ productId, images })
+  if (rows.length === 0) return []
+
+  const { error } = await supabase.from('product_images').upsert(rows)
+  if (error) throw error
+
+  return rows
 }
 
 /**

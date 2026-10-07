@@ -1,27 +1,8 @@
 import { useState } from 'react'
 import { AlertTriangle, ImageOff, Plus, X } from 'lucide-react'
 
-import { screenPickedPhotos } from '../../lib/photoFiles.js'
+import { previewUrl, screenPickedPhotos } from '../../lib/photoFiles.js'
 import { MAX_COLOUR_IMAGES, colourImagesFor } from '../../lib/productColourImages.js'
-
-/**
- * A preview URL for a file the seller picked and nothing has uploaded yet.
- *
- * Cached per file, because `URL.createObjectURL` returns a **new** URL every call:
- * one made during a render would change on the next one and make the browser
- * re-fetch a photo it already has, and the `<img>` would flicker on every
- * keystroke elsewhere in the sheet. Kept for the life of the page rather than
- * revoked, which leaks one blob URL per picked photo until the tab closes — the
- * cost of not having to track lifetimes through a dialog that can be opened,
- * cancelled and reopened.
- */
-const PREVIEWS = new WeakMap()
-
-export function previewUrl(file) {
-  if (!file) return null
-  if (!PREVIEWS.has(file)) PREVIEWS.set(file, URL.createObjectURL(file))
-  return PREVIEWS.get(file)
-}
 
 /** The image behind one entry: what is stored, or the file waiting to be. */
 function sourceOf(image) {
