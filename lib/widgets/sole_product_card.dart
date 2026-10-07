@@ -23,11 +23,35 @@ class SoleProductCard extends StatelessWidget {
   /// When null (default), the card fills its parent height as before.
   final double? imageAspectRatio;
 
+  /// When true the card IS the photo: the name, the rating row and the whole
+  /// price block are not drawn, and the card's height is its image's.
+  ///
+  /// The audience sections' tiles use it. Those four cells are *doors* to an
+  /// audience's shelf rather than products to read, so the name and the price
+  /// would be a caption for something the tap does not open — and the shelf
+  /// names and prices every one of them one tap later anyway.
+  final bool imageOnly;
+
+  /// The whole card's accessible name, for a card whose content is only a
+  /// photograph.
+  ///
+  /// An image-only tile draws no words at all, so there is nothing for a screen
+  /// reader to collect and the tile announces as an unlabelled button — four of
+  /// them in an audience section. The label is spelled here for the same reason
+  /// `SeeMoreCard` spells "See more products": the card has to say what it is.
+  ///
+  /// Null — the default, and every caller except the audience sections' tiles —
+  /// changes nothing, so an ordinary card keeps announcing the name, the rating
+  /// and the price it draws.
+  final String? semanticsLabel;
+
   const SoleProductCard({
     super.key,
     required this.product,
     required this.onTap,
     this.imageAspectRatio,
+    this.imageOnly = false,
+    this.semanticsLabel,
   });
 
   /// The card's outer surface — carries the 1px card edge. Exposed so widget
@@ -80,7 +104,7 @@ class SoleProductCard extends StatelessWidget {
     // shadow without rebuilding this card (and its image, its text and its sale
     // overlay) on every frame of the way down — and so the fill, the radius and
     // the hairline stay this card's own.
-    return PressSink(
+    final card = PressSink(
       onTap: onTap,
       idle: AppConstants.productCardShadow,
       pressed: AppConstants.productCardShadowPressed,
@@ -135,7 +159,9 @@ class SoleProductCard extends StatelessWidget {
                       saleEndsAt: saleEnd,
                     ),
                   ),
-                // Bottom half: Name and Price details
+                // Bottom half: Name and Price details — omitted entirely in
+                // image-only mode, where the photo is the whole card.
+                if (!imageOnly)
                 Padding(
                   padding: const EdgeInsets.all(12.0),
                   key: ValueKey('product_info_${product['id']}'),
@@ -298,6 +324,21 @@ class SoleProductCard extends StatelessWidget {
             ),
         ],
       ),
+    );
+
+    // Only a card with nothing to read gets wrapped, and the child is NOT
+    // excluded (unlike `FitCard`, whose excluded arrow is pure paint with
+    // nothing to say): an audience tile can still carry a sale band, and that
+    // band is worth announcing. Wrapping only when there is a label keeps every
+    // other card in the app byte-for-byte as it was.
+    if (semanticsLabel == null) return card;
+    return Semantics(
+      // `onTap` is required on this card (unlike `FitCard`'s), so the node is
+      // always a button.
+      container: true,
+      button: true,
+      label: semanticsLabel,
+      child: card,
     );
   }
 

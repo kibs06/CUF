@@ -61,7 +61,7 @@ A `CustomScrollView` with slivers, wrapped in `RefreshIndicator`. No AppBar — 
 2. **Sheet** — `SliverToBoxAdapter` with rounded top corners (`ClipRRect` `borderRadius: 22`), containing:
    - Foot profile banner (conditional — only for incomplete profiles)
    - Based on your size (conditional — see below — a `FitCard` size poster as the first cell of The Workshop Collection's 2-column masonry grid, not a rail)
-   - Men's / Women's / Kids' rails (conditional — see below; gated by `AppConstants.productAudienceEnabled`, **now `true`**, and each hides itself when the catalog holds nothing for that audience — which is every audience today: P4 measured all 15 live products as unset, so the rails render nothing until a seller answers "Who is it for?" on a product)
+   - Men's / Women's / Kids' sections, side by side in one row — four image-only tiles each, every tile opening that audience's shelf (conditional — see below; gated by `AppConstants.productAudienceEnabled`, **now `true`**, and each hides itself when the catalog holds nothing for that audience — which is every audience today: P4 measured all 15 live products as unset, so the sections render nothing until a seller answers "Who is it for?" on a product)
    - On Sale section (conditional — only when no search + no category filter + sale items exist)
    - Best Sellers rail (**currently gated off** by `kBestSellersRailEnabled = false` in `customer_home_screen.dart`; the widget and its data are kept, so re-enabling is a one-const flip. Also conditional — same gate as On Sale; hidden when nothing has sold). See `docs/AI/HOME_ON_SALE_ARCHITECTURE.md` §4.4
    - The Workshop Collection card (the heading; tapping it flips it over onto the sort list — it announces that in three ways: an idle beat that tips it a few degrees every ~4.5s, the product cards' lift under it, and a one-time `Tap to sort` hint; see `lib/widgets/workshop_collection_card.dart`)
@@ -176,13 +176,15 @@ loop; it was never reproduced with these box-level grids, and
 `GridView` on its own merits — its cards are uniform by design, which is what
 `childAspectRatio: 0.58` is tuned for.
 
-### Audience rails — Men's / Women's / Kids'
+### Audience sections — Men's / Women's / Kids'
 
-`lib/widgets/audience_section.dart` — one rail per rail-eligible audience, in the
-frame order fixed by `productRailAudiences` (`['men', 'women', 'kids']`), sitting
-between the size rail and On Sale. The home screen **iterates that list** rather
-than listing three widgets, so the order and the `unisex` exclusion are decided
-by one constant instead of by call-site discipline.
+`lib/widgets/audience_section.dart` holds **two** widgets: `AudienceSections`, the
+**row** the home screen renders, and `AudienceSection`, **one column** of it. The
+columns come from `productRailAudiences` (`['men', 'women', 'kids']`) in that
+fixed order, and the row sits between the size grid and On Sale. The feed no
+longer iterates that list itself — the order, the `unisex` exclusion and the
+row's geometry are one widget's business — so call-site discipline cannot get them
+out of step.
 
 **Gated — and the gate is now ON.** `AppConstants.productAudienceEnabled` is
 `true` (flipped at P5 of `docs/AI/PRODUCT_AUDIENCE_PLAN.md`), and the widget
@@ -198,30 +200,96 @@ tagged — the one honest source being a seller (or an admin), never a guess.
 
 **Stated, never inferred.** `ProductProvider.productsForAudience(audience)` keeps
 products whose `audience` equals the value exactly and ranks them with the same
-`_compareSuggestions` the size rail uses (units sold → rating → name), capped at
-`kAudienceRailLimit`. `null` and `'unisex'` are excluded **hard** — an unset
+`_compareSuggestions` the size rail uses (units sold → rating → name); the cap
+belongs to the caller — `kAudienceRailLimit` by default, `kAudiencePreviewCount`
+from these sections. `null` and `'unisex'` are excluded **hard** — an unset
 product stays in the catalog grid, search and every category and is only absent
-from these three rails, while a `unisex` product in all three would put one card
-three times down the feed. An unrecognised argument returns EMPTY rather than
-defaulting to a rail.
+from these three sections, while a `unisex` product in all three would put one
+card three times down the feed. An unrecognised argument returns EMPTY rather
+than defaulting to a section.
 
 **Header.** The title is `productAudienceLabel(audience)`, not a string passed by
 this screen — `"Men's"` / `"Women's"` / `"Kids'"` are spelled in exactly one file
-(`lib/utils/product_audience.dart`), and a rail can never be labelled with an
+(`lib/utils/product_audience.dart`), and a section can never be labelled with an
 audience it does not query.
 
-**Shared rail body.** The three audience rails render through
+**Four photos, and a door rather than a shelf.** Each column renders four cells,
+each cell the catalog's card with its caption dropped
+(`SoleProductCard.imageOnly`), so the picture is the whole tile and no band is
+reserved under it for words that are not drawn. No name and no price is shown —
+four names and four prices under a heading that already says who they are for is a
+second catalog above the real one, and the shelf behind a tile names and prices
+all of them. The count is `kAudiencePreviewCount` (4), the one count that fills
+**every** shape a column can take without a stump: two clean rows where two tiles
+fit side by side, four clean rows where they do not. That matters more here than
+on any other section, because a block of pictures is read as a *block* and a short
+last row looks broken rather than merely short. It is deliberately **not**
+`kAudienceRailLimit` (12), which sizes the provider's own default cap and that
+other callers' tests rely on.
+
+**A column's photos take the shape the column can afford.** `AudienceSection`
+lays its tiles through a `LayoutBuilder` and asks `audienceTileColumnsFor(width)`:
+two tiles across when two of at least `kAudienceTileMinWidth` (150px) fit, one
+otherwise. That one rule is why a lone audience still lays out the 2-column grid
+it always did — a full-width section is ~374px on a phone — while a column in the
+row, at roughly a third of the page, stacks its four. It is also why this section
+does **not** reuse `ProductGridSection`: that widget is the feed's own 2-column
+masonry and cannot stack a single column, which is exactly what a third of a
+phone's width needs.
+
+**Only the audiences that have something get a column.** The row asks the provider
+which audiences are present — `ProductProvider.audiencesInCatalog`, its own single
+pass over the catalog, intersected with `productRailAudiences` to keep the fixed
+order and to drop `unisex` — so with Kids' untagged (its state today) the row is
+two columns and they grow into the space a third would have taken. Asking
+`productsForAudience` once per audience would filter *and sort* the matches three
+times over to answer a question that is only "is this audience here at all?". A reserved empty column is not neutral — two filled
+columns beside a deliberate hole reads as a broken layout — and a hole in the feed
+is exactly what every other section avoids by hiding itself. The cost is visible:
+tagging a Kid's product resizes the other two columns. The count is capped at
+`AudienceSections.kAudienceMaxColumns` (3), so a future vocabulary cannot squeeze
+five columns into a phone's width.
+
+**Edge to edge, so the parent owns the margin.** `AudienceSection` adds no side
+margin of its own, and hands `ProductSectionHeader` a `sideInset` of 0, because
+the page margin belongs to whatever is laying sections out — the row, which
+carries `AppConstants.feedMargin` around itself and `productGridGutter` between
+its columns. Without that, a heading inside a column would start 8px further in
+than the photos beneath it.
+
+**Measured, not assumed.** Across 320/360/390/414/768px at 1.0x and 1.3x text, with
+two audiences and with three: no overflow in any of the 20 combinations. With two
+audiences at 390px each photo comes out at 183px — the size of a catalog card,
+and the case the live catalog is actually in today (Men's and Women's only).
+
+**Every tile is a door to the same shelf.** A tap opens `AudienceListingScreen`
+for that audience — the page the Home hero's audience chip opens, and the same
+move `SeeMoreCard` makes for the size grid. It is deliberately *not* that
+product's detail page: the four tiles are one block, so the tap answers *"show me
+the Men's shelf"*, and opening one product out of a set the customer never chose
+between is the opposite of what the picture asked. Nothing on a tile is labelled
+with a name or a price, so nothing on it promises a product page.
+
+**A tile that draws no words has to say what it is.** `imageOnly` leaves a screen
+reader nothing to collect, so each cell carries a spelled accessible name —
+`"See the Men's shelf, 2 of 4"` — for the same reason `SeeMoreCard` spells
+"See more products". The index is in the label because four buttons under one
+identical label are four buttons a screen reader cannot choose between. Both are
+pinned by `test/widgets/audience_section_test.dart`.
+
+**The strip is no longer any audience surface's body.**
 `lib/widgets/product_rail_section.dart` (header row + `HorizontalProductCard`
-strip + trailing gap), and share `lib/widgets/product_section_header.dart` (title
-+ optional muted `meta` line) with "Based on your size"'s grid. It does **not** hide
-itself: hiding
-belongs to the section widget, which is the only thing that knows whether
+strip + trailing gap) is now what genuinely wants a strip —
+`SearchResultsScreen`'s "Popular right now" — and shares
+`lib/widgets/product_section_header.dart` (title + optional muted `meta` line)
+with the grids instead of being their header. It does **not** hide itself: hiding
+belongs to the section widget above it, which is the only thing that knows whether
 "nothing to show" means "not applicable" (no size on file, no matching audience)
 or "empty catalog".
 
 **Absent-safe, and self-spacing.** Same caller-side browse gate as every other
-conditional rail. When a section renders nothing it renders *nothing* — no
-header, no strip, no residual gap — which is the normal state until P4's
+conditional section. When a section renders nothing it renders *nothing* — no
+header, no tiles, no residual gap — which is the normal state until P4's
 backfill, so "invisible" has to be the default rather than something this screen
 arranges.
 
@@ -380,7 +448,7 @@ All providers are app-root singletons, created in `main.dart` and consumed via `
 
 | Widget | File | Used by |
 |--------|------|---------|
-| `SoleProductCard` | `widgets/sole_product_card.dart` | Home grid, sale section, cross-store row. Text-scale safe: its price/category row and rating/sold row wrap rather than overflow on a narrow phone at a large scale (they overflowed at 2.0× until P2's chip-row work surfaced it). Its photo area is a `ProductImagePager` |
+| `SoleProductCard` | `widgets/sole_product_card.dart` | Home grid, sale section, cross-store row, and the audience tiles in `imageOnly` mode (the photo is the whole card, which is why its accessible name is spelled by the caller). Text-scale safe: its price/category row and rating/sold row wrap rather than overflow on a narrow phone at a large scale (they overflowed at 2.0× until P2's chip-row work surfaced it). Its photo area is a `ProductImagePager` |
 | `ProductImagePager` | `widgets/product_image_pager.dart` | The card's swiped photo: one page per image, dots for the current one, and the sale countdown stacked under them |
 | `BestSellersSection` | `widgets/best_sellers_section.dart` | Home — horizontally-scrolling Best Sellers rail (live `units_sold` order) |
 | `HorizontalProductCard` | `widgets/horizontal_product_card.dart` | Home Best Sellers rail, profile Buy Again / Recently Viewed rails |
@@ -396,8 +464,9 @@ All providers are app-root singletons, created in `main.dart` and consumed via `
 | `FitCard` | `widgets/fit_card.dart` | The "Fit Card" poster tile — copy scaled to fill the card, no icons; "Based on your size · EU 42" is the reference card. The hero is a value or a widget (`heroWidget`), which is how "See more" carries an arrow |
 | `SeeMoreCard` | `widgets/see_more_card.dart` | Home — the capped grid's last cell: a `FitCard` saying `See` / `more` over a painted `ArrowGlyph`, nudging on press, opening `SizeListingScreen` |
 | `ProductSectionHeader` | `widgets/product_section_header.dart` | Home — the shared section header (title + muted meta) rails and grid both use |
-| `ProductRailSection` | `widgets/product_rail_section.dart` | Home — the shared rail body (header + 130×180 strip + trailing gap) the three audience rails render through |
-| `AudienceSection` | `widgets/audience_section.dart` | Home — one Men's / Women's / Kids' rail (self-hiding, switch-gated) |
+| `ProductRailSection` | `widgets/product_rail_section.dart` | Search — the shared rail body (header + 130×180 strip + trailing gap), now only "Popular right now": the audience sections left it for the 2-col grid |
+| `AudienceSections` | `widgets/audience_section.dart` | Home — the audience **row**: up to three equal columns side by side, one per audience that has products, owning the page margin and the gutters. Self-hiding, switch-gated |
+| `AudienceSection` | `widgets/audience_section.dart` | Home — **one column** of that row: a heading over four image-only tiles (`kAudiencePreviewCount`), each opening that audience's shelf, stacking or pairing its tiles by the width it is handed |
 | `HomeCategoryRow` | `screens/customer/widgets/home_category_row.dart` | Home hero — category chips + the audience shelf chips |
 | `CatalogEndCap` | `widgets/catalog_end_cap.dart` | Home — the "that's the whole shelf" sign-off at the end of the catalog |
 

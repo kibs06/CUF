@@ -10,15 +10,15 @@ import 'package:app/utils/customer_profile_fields.dart';
 import 'package:app/utils/product_audience.dart';
 import 'package:app/utils/size_key.dart';
 import 'package:app/widgets/audience_section.dart';
-import 'package:app/widgets/horizontal_product_card.dart';
+import 'package:app/widgets/sole_product_card.dart';
 
 /// **P5's combined regression pass** — the whole audience feature checked as one
 /// system, over ONE catalog, rather than phase by phase.
 ///
 /// Each phase had its own gate, and each gate proved its own slice. What no
-/// phase could prove alone is that the slices agree: that the product the rails
+/// phase could prove alone is that the slices agree: that the product the sections
 /// show is the product whose label is read on that audience's chart, that the
-/// products the rails *omit* are exactly the ones still sitting in the catalog
+/// products the sections *omit* are exactly the ones still sitting in the catalog
 /// grid, and that the seller is being asked to fix precisely the set nobody can
 /// answer for. This file is that cross-check, so a change that is right in each
 /// phase and wrong in combination fails here.
@@ -57,22 +57,27 @@ const _shopper = <String, dynamic>{'foot_size_category': 'women'};
 Map<String, dynamic> byId(String id) =>
     _catalog.firstWhere((p) => p['id'] == id);
 
-Finder railOf(String audience) => find.byWidgetPredicate(
+Finder sectionOf(String audience) => find.byWidgetPredicate(
       (w) => w is AudienceSection && w.audience == audience,
     );
 
-List<String> namesInRail(WidgetTester tester, String audience) => tester
-    .widgetList<HorizontalProductCard>(
+/// The product names carried by one section's tiles, in DOM order.
+///
+/// Read off the card, not off rendered text: an audience tile is its photo
+/// alone and draws no name at all (see the image-only test in
+/// audience_section_test.dart).
+List<String> namesInSection(WidgetTester tester, String audience) => tester
+    .widgetList<SoleProductCard>(
       find.descendant(
-          of: railOf(audience), matching: find.byType(HorizontalProductCard)),
+          of: sectionOf(audience), matching: find.byType(SoleProductCard)),
     )
     .map((c) => c.product['name'].toString())
     .toList();
 
 void main() {
-  group('rails + catalog grid, over one catalog', () {
-    testWidgets('each rail shows its own audience, and the grid keeps '
-        'everything — including what the rails skip', (tester) async {
+  group('sections + catalog grid, over one catalog', () {
+    testWidgets('each section shows its own audience, and the grid keeps '
+        'everything — including what the sections skip', (tester) async {
       final provider =
           ProductProvider.seeded(products: _catalog, unitsSold: const {});
 
@@ -84,7 +89,7 @@ void main() {
               body: SingleChildScrollView(
                 child: Column(
                   children: [
-                    // The three rails in their shipped order.
+                    // The three sections in their shipped order.
                     for (final audience in productRailAudiences)
                       AudienceSection(audience: audience, enabled: true),
                     // Then what the customer scrolls into: the catalog grid, as
@@ -100,16 +105,16 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(namesInRail(tester, 'men'), ['Derby']);
-      expect(namesInRail(tester, 'women'), ['Ballet Flat']);
-      expect(namesInRail(tester, 'kids'), ['School Shoe']);
+      expect(namesInSection(tester, 'men'), ['Derby']);
+      expect(namesInSection(tester, 'women'), ['Ballet Flat']);
+      expect(namesInSection(tester, 'kids'), ['School Shoe']);
 
-      // Unisex is an answer the rails skip by design, and the unset rows were
-      // never answered at all. Neither belongs in a rail...
+      // Unisex is an answer the sections skip by design, and the unset rows were
+      // never answered at all. Neither belongs in a section...
       for (final audience in productRailAudiences) {
-        final names = namesInRail(tester, audience);
+        final names = namesInSection(tester, audience);
         expect(names, isNot(contains('House Slipper')),
-            reason: 'unisex would appear in all three rails at once');
+            reason: 'unisex would appear in all three sections at once');
         expect(names, isNot(contains('Legacy Loafer')));
         expect(names, isNot(contains('Legacy Slide')));
       }
@@ -122,9 +127,9 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    test('the rails partition the stated, non-unisex products exactly once', () {
-      // A product in two rails reads as a bug in the feed, and a stated product
-      // in no rail is a product nobody can find by audience. This is the one
+    test('the sections partition the stated, non-unisex products exactly once', () {
+      // A product in two sections reads as a bug in the feed, and a stated product
+      // in no section is a product nobody can find by audience. This is the one
       // assertion that catches both.
       final provider =
           ProductProvider.seeded(products: _catalog, unitsSold: const {});
@@ -142,7 +147,7 @@ void main() {
           .toSet();
 
       expect(railed.length, railed.toSet().length,
-          reason: 'a product appeared in more than one rail');
+          reason: 'a product appeared in more than one section');
       expect(railed.toSet(), expected);
     });
   });
@@ -211,11 +216,11 @@ void main() {
 
       expect(missing.map((p) => p['id']), ['x1', 'x2']);
       // The interesting half: `unisex` is NOT in that list, even though the
-      // rails skip it. Two different questions — "has anyone answered?" versus
+      // sections skip it. Two different questions — "has anyone answered?" versus
       // "can it be sold on one chart?" — and a nudge that conflated them would
       // tell a seller to change an answer they already gave.
       expect(missing.map((p) => p['id']), isNot(contains('u')));
-      // Everything the seller is asked about is a product no rail can use.
+      // Everything the seller is asked about is a product no section can use.
       for (final p in missing) {
         expect(productAudienceFrom(p['audience']?.toString()), isNull);
       }

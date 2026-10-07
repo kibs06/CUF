@@ -17,9 +17,11 @@ import 'product_section_header.dart';
 /// products to show, and what (if anything) to say beside the title.
 ///
 /// "Based on your size" renders through `ProductGridSection` instead — one section
-/// wanted the feed's own 2-column grid rather than a strip — so this is now the
-/// rails' body (Men's / Women's / Kids') sharing [ProductSectionHeader] with
-/// it rather than its header.
+/// wanted the feed's own 2-column grid rather than a strip, and the Men's /
+/// Women's / Kids' sections left for that same grid on 2026-10-06 — so a strip is
+/// now only what genuinely wants one: `SearchResultsScreen`'s "Popular right
+/// now". It shares [ProductSectionHeader] with the grids rather than being their
+/// header.
 ///
 /// **Self-spacing, and assumes a non-empty list.** It does NOT hide itself —
 /// that belongs to the section widget above it, which is the only thing that

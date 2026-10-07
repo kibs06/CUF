@@ -10,7 +10,7 @@ import 'package:app/utils/product_audience.dart';
 import 'package:app/widgets/audience_section.dart';
 
 /// **P5's device-variation sweep** over the new customer-visible audience
-/// surfaces: the home rails, the shelf chips, and a shelf page.
+/// surfaces: the home sections, the shelf chips, and a shelf page.
 ///
 /// Every configuration below is the same assertion — nothing overflows, nothing
 /// is clipped, and the surface is actually still readable at that size — run
@@ -62,7 +62,7 @@ Map<String, dynamic> product({
     };
 
 /// The catalog every surface in this file renders: one product per audience,
-/// plus an unset row, so a rail header, a chip and a grid are all populated.
+/// plus an unset row, so a section header, a chip and a grid are all populated.
 ProductProvider seed() => ProductProvider.seeded(
       products: [
         product(id: 'm', name: 'Derby', audience: 'men'),
@@ -139,7 +139,7 @@ void main() {
   tearDown(AppBrightness.reset);
 
   sweep(
-    'audience rail',
+    'audience section',
     (provider) => ChangeNotifierProvider<ProductProvider>.value(
       value: provider,
       child: Scaffold(
@@ -162,7 +162,7 @@ void main() {
       value: provider,
       child: Scaffold(
         backgroundColor: Colors.black,
-        // `audienceChipsEnabled: true` pinned, exactly as the rails pin
+        // `audienceChipsEnabled: true` pinned, exactly as the sections pin
         // `enabled: true`: this sweep is about layout across device
         // configurations, and a sweep whose content depends on the feature
         // switch silently stops sweeping anything the day the switch is off.

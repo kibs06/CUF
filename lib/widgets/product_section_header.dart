@@ -12,7 +12,12 @@ import '../constants/app_constants.dart';
 /// second copy of a thirty-line row is how one of them ends up at 15px while
 /// the other stays 16.
 class ProductSectionHeader extends StatelessWidget {
-  const ProductSectionHeader({super.key, required this.title, this.meta});
+  const ProductSectionHeader({
+    super.key,
+    required this.title,
+    this.meta,
+    this.sideInset = AppConstants.feedMargin,
+  });
 
   /// Section title in the serif headline face (e.g. "Based on your size",
   /// "Men's").
@@ -23,13 +28,23 @@ class ProductSectionHeader extends StatelessWidget {
   /// would put the section title and this detail in competition.
   final String? meta;
 
+  /// The side inset, so a section inside a narrower column can drop the page
+  /// margin the page has already applied around it.
+  ///
+  /// Defaults to [AppConstants.feedMargin], which is what a section sitting
+  /// directly on the page wants. The audience row passes `0`: its columns are
+  /// laid out inside a padded row, so a heading that also inset itself would sit
+  /// 8px further in than the tiles under it.
+  final double sideInset;
+
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppConstants.feedMargin,
+      // Not `const`: the inset is this widget's own field.
+      padding: EdgeInsets.fromLTRB(
+        sideInset,
         4,
-        AppConstants.feedMargin,
+        sideInset,
         10,
       ),
       child: Row(

@@ -1,7 +1,7 @@
 # Product Audience Plan — Who a Product Is For (Men's / Women's / Kids')
 
 **Date:** September 18, 2026
-**Status:** **All phases complete — P0–P4 shipped, P5 verified and documented (2026-09-19) · the switch is on · the audience chip row + per-audience listing page built on request (see the note below the P5 section).** The column is live, the vocabulary exists, sellers can set, change and clear a product's audience on Add / Edit Product, and the three home rails (Men's / Women's / Kids') and audience-aware size-chart labels are all **live** — `AppConstants.productAudienceEnabled` is `true` (and remains the whole rollback).
+**Status:** **All phases complete — P0–P4 shipped, P5 verified and documented (2026-09-19) · the switch is on · the audience chip row + per-audience listing page built on request · the three home rails are now one row of three image-only columns, every tile a door to that shelf (2026-10-06; see the notes below the P5 section).** The column is live, the vocabulary exists, sellers can set, change and clear a product's audience on Add / Edit Product, and the three home rails (Men's / Women's / Kids') and audience-aware size-chart labels are all **live** — `AppConstants.productAudienceEnabled` is `true` (and remains the whole rollback).
 
 The one thing P5 could **not** complete here is the on-device pass: real fonts, real banner images, a real phone. Everything that a widget test and a seeded regression catalog can settle is settled and recorded under P5 below; the device sweep on a tagged catalog is the remaining step, and it is listed there as open rather than claimed.
 
@@ -93,7 +93,7 @@ column is that it is *stated*, never inferred.
 | **3** | Legacy / unset products | **Excluded from the audience rails; untouched everywhere else.** Stated > inferred. Measure the count before shipping (P4) so nobody is surprised by thin rails | P2 |
 | **4** | Multi-value (a style sold to both)? | **Single value + `unisex`.** Multi-value doubles every filter and re-opens the chart question per value. A future `TEXT[]` migration is possible without changing the UI contract | P0 |
 | **5** | Does a Kids' product's band matter? | **Warn, don't block/derive.** If audience is `kids` and every stocked size is outside EU 22–35 (say 40–44), surface a soft warning at entry. The rail itself must NOT re-derive audience from sizes — a mistyped field should be visible, not silently reinterpreted | P1 / P2 |
-| **6** | Rails or a chip? | **Rails** (Men's / Women's / Kids', each hiding itself), audience orthogonal to the existing style chip row. **Superseded in part (2026-09-18):** the rails shipped as decided, and an audience chip row was then added on the user's request — but it does **not** narrow the feed (the pseudo-category shape this line anticipated). Each chip opens that audience's own listing page, so a shelf can hold more than a 12-card rail, `unisex` has somewhere to live, and the feed's own filters stay about product categories | P2 + chip row |
+| **6** | Rails or a chip? | **Rails** (Men's / Women's / Kids', each hiding itself), audience orthogonal to the existing style chip row. **Superseded in part (2026-09-18):** the rails shipped as decided, and an audience chip row was then added on the user's request — but it does **not** narrow the feed (the pseudo-category shape this line anticipated). Each chip opens that audience's own listing page, so a shelf can hold more than a 12-card rail, `unisex` has somewhere to live, and the feed's own filters stay about product categories. **Superseded again (2026-10-06):** the rails' bodies are now columns of four image-only tiles sharing a single row, each tile opening that audience's shelf — same data, same fixed order, same `unisex` exclusion, same kill switch; only the body, the arrangement and what a tap does changed (`docs/AI/CUSTOMER_HOME_ARCHITECTURE.md` §Audience sections) | P2 + chip row |
 | **7** | Which chart labels a product's US/UK sizes? | **The product's own audience wins** when set; otherwise today's rule (the shopper's `foot_size_category`, men's as the final fallback). `unisex` → men's chart, stated as the app's existing default | P3 |
 | 8 | Rail order | Fixed: Men's, Women's, Kids'. Optional nicety — put the customer's own scale first — is an open question (§8) | P2 |
 
@@ -213,6 +213,13 @@ where it differs from the sketch:
   between "In your size, EU 42" and "Men's". *(Sep 19, 2026: "In your size" has since left this body — it is
   the Artisan Catalog's 2-column grid now, `lib/widgets/product_grid_section.dart` — so what the two share is the
   header, `lib/widgets/product_section_header.dart`. Everything here about the rails themselves still holds.)*
+
+  *(Oct 6, 2026: the rails have since left the strip too, and then left the grid shape — at the user's request the
+  audience sections are now a **single row of side-by-side columns**, each holding four **image-only** tiles, every
+  tile opening that audience's shelf, so `product_rail_section.dart` is left to `SearchResultsScreen`'s "Popular
+  right now". The data, the fixed order, the `unisex` exclusion, the kill switch and the self-hiding behaviour are
+  all unchanged, and a column with nothing in it is simply not drawn; see
+  `docs/AI/CUSTOMER_HOME_ARCHITECTURE.md` §Audience sections.)*
   Callers own just the two things that genuinely differ: which
   products, and what to say beside the title. It does **not** hide itself — hiding belongs to the section widget,
   which is the only thing that knows whether "nothing" means "not applicable" or "empty catalog".

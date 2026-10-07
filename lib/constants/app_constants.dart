@@ -615,7 +615,8 @@ class AppConstants {
   /// Flipping it back to `false` is still the whole rollback: no surface is
   /// half-built behind it.
   ///
-  /// Everything that reads it: `AudienceSection` (rails),
+  /// Everything that reads it: `AudienceSection` (a grid of four image-only
+  /// tiles per audience),
   /// `ProductProvider.audiencesInCatalog` as surfaced by `HomeHero` (chips),
   /// and `productSizeChart()`'s `audienceEnabled` argument at the product
   /// page. Nothing else reads the audience column.

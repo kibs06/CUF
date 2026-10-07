@@ -23,7 +23,6 @@ import '../../widgets/best_sellers_section.dart';
 import '../../widgets/catalog_end_cap.dart';
 import '../../widgets/in_your_size_section.dart';
 import '../../widgets/audience_section.dart';
-import '../../utils/product_audience.dart';
 import '../../widgets/chat/chat_view.dart';
 import 'cart_screen.dart';
 import 'audience_listing_screen.dart';
@@ -380,19 +379,21 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                             const InYourSizeSection(),
 
                           // ── Men's / Women's / Kids' (conditional) ──
-                          // One rail per rail-eligible audience, in the fixed
-                          // order `productRailAudiences` fixes — iterated rather
-                          // than laid out by hand so this list is the only place
-                          // the order (and the `unisex` exclusion) is decided.
-                          // Each renders itself away when the catalog holds
-                          // nothing for that audience, which is the normal case
-                          // until the P4 backfill. Same browse gate as the rails
-                          // around it: a curated rail above a category filter
-                          // would read as a second feed.
+                          // One row, side by side, in the fixed order
+                          // `productRailAudiences` fixes — the row, its order and
+                          // the `unisex` exclusion all belong to
+                          // `AudienceSections`, so this screen decides only
+                          // *whether* the section belongs on the feed. Each
+                          // audience gets a column of four image-only tiles, every
+                          // one of them opening that audience's whole shelf, and a
+                          // column appears only for an audience the catalog
+                          // actually holds something for — which is the normal
+                          // case for Kids' until the P4 backfill. Same browse gate
+                          // as the sections around it: a curated grid above a
+                          // category filter would read as a second feed.
                           if (productProvider.selectedCategory == null ||
                               productProvider.selectedCategory == 'All')
-                            for (final audience in productRailAudiences)
-                              AudienceSection(audience: audience),
+                            const AudienceSections(),
 
                           // ── On Sale section ──
                           // The heading IS the section's grid now: the poster
