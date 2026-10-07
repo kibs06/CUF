@@ -389,9 +389,32 @@ class _ShoePreviewScreenState extends State<ShoePreviewScreen> {
                 if (widget.showTryOn)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: SoleARPill(onPressed: _openArTryOn),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // The disclosure the 3D box owes the photos above it: the
+                        // render comes from the compressed deliverable (≤60k
+                        // triangles, ≤1024² textures — the authoring contract the
+                        // published model passed), the gallery photos do not. Set
+                        // as a fact rather than an apology, one line under the
+                        // button it explains.
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Text(
+                            'Due to file compression, the 3D model may look '
+                            'slightly different from the pictures. We will '
+                            'make this better in future updates.',
+                            textAlign: TextAlign.center,
+                            style: AppConstants.bodyStyle(
+                              fontSize: 11,
+                              color: AppConstants.secondary
+                                  .withValues(alpha: 0.7),
+                            ),
+                          ),
+                        ),
+                        SoleARPill(onPressed: _openArTryOn),
+                      ],
                     ),
                   ),
               ],

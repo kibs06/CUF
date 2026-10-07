@@ -6,6 +6,7 @@ import 'package:model_viewer_plus/model_viewer_plus.dart';
 
 import '../constants/app_brightness.dart';
 import '../constants/app_constants.dart';
+import '../constants/app_palette.dart';
 import '../services/ar_try_on_channel.dart';
 import '../services/diag_logger.dart';
 
@@ -118,6 +119,19 @@ class _ShoePreviewWebViewState extends State<ShoePreviewWebView> {
   /// relay `fsync`s every line).
   bool _traced = false;
   bool _tracedMissing = false;
+
+  /// The visitor's lighting values.
+  ///
+  /// ⚠️ **Why the element is keyed on these too, and what that costs.**
+  /// `ModelViewer` has no `didUpdateWidget` for its attribute set, so on this
+  /// package a changed `exposure` on the same element is simply never written
+  /// through. Re-keying remounts and reloads the document (one local-file
+  /// fetch, ~1 s measured on the vivo) — the price of a light change on a
+  /// phone that was already paying it for a theme flip. The slider's debouncer
+  /// absorbs the rapid end of the drag so the reload fires at rest, and the
+  /// visitor keeps the file cache-hot on the server's side of the round trip.
+  double _exposure = 1.0;
+  double _shadow = 0.45;
 
   @override
   void initState() {
@@ -289,16 +303,19 @@ customElements.whenDefined('model-viewer').then(() => {
     }
 
     final engine = ModelViewer(
-      // ⚠️ **Keyed by path — and by brightness.** `ModelViewer` is a StatefulWidget
-      // that builds its loopback server, its WebView controller and the whole HTML
-      // document in `initState` (it has no `didUpdateWidget`), so a changed `src`
-      // *or* a changed `backgroundColor` on the same element keeps serving the page
-      // it was built with. The key is what makes a colour variant swap the asset,
-      // and it is what makes a theme flip repaint the stage: re-inflating costs one
-      // reload from the local file, and the alternative is a live box clearing to
-      // #0E0F12 inside a light-mode viewer.
+      // ⚠️ **Keyed by path, by brightness — and by the visitor's lighting.**
+      // `ModelViewer` is a StatefulWidget that builds its loopback server, its
+      // WebView controller and the whole HTML document in `initState` (it has no
+      // `didUpdateWidget`), so changed `src`, `backgroundColor` *or* lighting
+      // attributes on the same element keep serving the page it was built with.
+      // The key is what makes a colour variant swap the asset, what makes a
+      // theme flip repaint the stage, and what makes a slider's resting value
+      // reach the element at all. Re-inflating costs one reload from the local
+      // file — the price the theme flip already paid — and the debouncer above
+      // keeps a drag from paying it per tick.
       key: ValueKey<String>(
-        '${widget.model.path}#${AppBrightness.current.name}',
+        '${widget.model.path}#${AppBrightness.current.name}'
+        '#e${_exposure.toStringAsFixed(2)}#s${_shadow.toStringAsFixed(2)}',
       ),
       // The package turns this into the loopback URL `/model` and reads the file
       // itself; `file://` is the documented way to hand it a path on disk.
@@ -320,6 +337,12 @@ customElements.whenDefined('model-viewer').then(() => {
       // The page header already says "Drag to rotate"; model-viewer's animated
       // hand would be a second, competing affordance for the same instruction.
       interactionPrompt: InteractionPrompt.none,
+      // The lighting the customer asked for. The library's documented defaults
+      // (exposure 1, shadow 0) are what an untouched panel renders — the same
+      // values this box has always rendered, so the panel's existence changes
+      // nothing until someone touches it.
+      exposure: _exposure,
+      shadowIntensity: _shadow,
       // The stage the shoe stands on — the same brightness-aware token the native
       // renderer is handed (`ShoePreviewChannel.setBackground`) and the same one
       // `ShoePreviewIdle` paints, so the box does not flash from one tone to
@@ -343,7 +366,211 @@ customElements.whenDefined('model-viewer').then(() => {
       javascriptChannels: _channels,
     );
 
-    return engine;
+    // The lighting panel floats over the engine, the way the web portal's does:
+    // a chip at the box's lower-left, expanding to two sliders. It is drawn
+    // here rather than by the section because it belongs to *this engine's*
+    // box — the native renderer has its own exposure path and gets its own
+    // panel when someone builds it one.
+    return Stack(
+      children: [
+        Positioned.fill(child: engine),
+        Positioned(
+          left: 12,
+          bottom: 12,
+          child: _LightingPanel(
+            exposure: _exposure,
+            shadow: _shadow,
+            onChanged: _onLightingChanged,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Applies a slider's value. The reload the re-key forces is debounced so a
+  /// drag through a dozen ticks costs one document fetch, not a dozen.
+  void _onLightingChanged(double exposure, double shadow) {
+    setState(() {
+      _exposure = exposure;
+      _shadow = shadow;
+    });
+  }
+}
+
+/// **The lighting panel** — the same affordance the web portal's
+/// `Product3DViewer` got, drawn for this box.
+///
+/// A Material chip at the box's lower-left; tapping expands it into a small
+/// card with two sliders. It is drawn here rather than by the section because
+/// it belongs to *this engine's* box — the native renderer has its own
+/// exposure path and gets its own panel when someone builds it one.
+///
+/// ⚠️ **The sliders commit on release.** `ModelViewer` has no
+/// `didUpdateWidget`, so applying a new exposure costs a remount and one
+/// local-file reload (~1 s, measured). Committing per drag tick would reload
+/// the document dozens of times, so the value lands in the parent state via
+/// `onChangeEnd` — the thumb and label still track the finger live.
+///
+/// ⚠️ **It must not eat the box's drags.** Only the chip and the expanded
+/// card are hit targets; a touch anywhere else on the panel's footprint is
+/// not intercepted (the panel is laid out in a `Stack` over the engine, and
+/// its own widgets pass misses through).
+class _LightingPanel extends StatefulWidget {
+  const _LightingPanel({
+    required this.exposure,
+    required this.shadow,
+    required this.onChanged,
+  });
+
+  final double exposure;
+  final double shadow;
+  final void Function(double exposure, double shadow) onChanged;
+
+  @override
+  State<_LightingPanel> createState() => _LightingPanelState();
+}
+
+class _LightingPanelState extends State<_LightingPanel> {
+  bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isDark = AppBrightness.isDark;
+    final cardColor = isDark ? const Color(0xFF1A1B1F) : Colors.white;
+    final borderColor = isDark
+        ? Colors.white.withValues(alpha: 0.16)
+        : Colors.black.withValues(alpha: 0.08);
+    final palette = AppPalette.of(AppBrightness.current);
+    final ink = palette.onPage;
+    final muted = palette.muted;
+
+    if (!_open) {
+      return Material(
+        color: cardColor,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(color: borderColor),
+        ),
+        elevation: 1,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () => setState(() => _open = true),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.light_mode_outlined, size: 14, color: muted),
+                const SizedBox(width: 4),
+                Text('Lighting',
+                    style: AppConstants.bodyStyle(fontSize: 11, color: ink)),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Material(
+      color: cardColor,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: borderColor),
+      ),
+      elevation: 2,
+      child: SizedBox(
+        width: 200,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text('Lighting',
+                        style: AppConstants.bodyStyle(
+                            fontSize: 10,
+                            color: muted,
+                            fontWeight: FontWeight.w600)),
+                  ),
+                  InkWell(
+                    onTap: () => setState(() => _open = false),
+                    child: Icon(Icons.close, size: 14, color: muted),
+                  ),
+                ],
+              ),
+              _LabeledSlider(
+                label: 'Brightness',
+                value: widget.exposure.clamp(0.3, 2),
+                min: 0.3,
+                max: 2,
+                ink: ink,
+                muted: muted,
+                onChangeEnd: (v) => widget.onChanged(v, widget.shadow),
+              ),
+              _LabeledSlider(
+                label: 'Shadow',
+                value: widget.shadow,
+                min: 0,
+                max: 1,
+                ink: ink,
+                muted: muted,
+                onChangeEnd: (v) => widget.onChanged(widget.exposure, v),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One labelled slider. The label carries the live percentage while the thumb
+/// drags; the commit fires on release (see the class header).
+class _LabeledSlider extends StatelessWidget {
+  const _LabeledSlider({
+    required this.label,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.ink,
+    required this.muted,
+    required this.onChangeEnd,
+  });
+
+  final String label;
+  final double value;
+  final double min;
+  final double max;
+  final Color ink;
+  final Color muted;
+  final ValueChanged<double> onChangeEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: AppConstants.bodyStyle(fontSize: 10, color: muted)),
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            trackHeight: 2,
+            overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+          ),
+          child: Slider(
+            value: value.clamp(min, max),
+            min: min,
+            max: max,
+            label: '${(value * 100).round()}%',
+            onChanged: (_) {},
+            onChangeEnd: onChangeEnd,
+          ),
+        ),
+      ],
+    );
   }
 }
 

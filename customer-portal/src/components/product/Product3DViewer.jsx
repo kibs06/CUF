@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Footprints, Rotate3d, X } from 'lucide-react'
+import { Footprints, Rotate3d, Sun, X } from 'lucide-react'
 
 import ConfirmDialog from '../ui/ConfirmDialog.jsx'
 import { APP_DOWNLOAD_URL, tryOnAppPrompt } from '../../lib/appDownload.js'
@@ -95,13 +95,24 @@ export default function Product3DViewer({ open, url, name, onClose }) {
   const { isDark } = useTheme()
   const [ready, setReady] = useState(false)
   const [tryOnOpen, setTryOnOpen] = useState(false)
+  const [panelOpen, setPanelOpen] = useState(false)
   const closeRef = useRef(null)
 
-  // See decision 6. `exposure` and `shadow-intensity` are the two knobs this
-  // needs; everything else about the rig stays the library's default.
-  const lighting = isDark
-    ? { exposure: '1', shadow: '0.8' }
-    : { exposure: '0.85', shadow: '0.45' }
+  // The theme-aware defaults from decision 6. `exposure` and `shadow-intensity`
+  // are the two knobs the stage needs; everything else about the rig stays the
+  // library's default.
+  const defaults = isDark ? { exposure: 1, shadow: 0.8 } : { exposure: 0.85, shadow: 0.45 }
+
+  // The visitor's own adjustments, seeded from the theme defaults so a visit
+  // that never touches the sliders renders exactly as decision 6 measured. A
+  // theme flip re-seeds them — a dark-stage default on a light stage is not a
+  // "setting", it is a mistake the flip should undo.
+  const [exposure, setExposure] = useState(defaults.exposure)
+  const [shadow, setShadow] = useState(defaults.shadow)
+  useEffect(() => {
+    setExposure(defaults.exposure)
+    setShadow(defaults.shadow)
+  }, [defaults.exposure, defaults.shadow])
 
   // Once per visit at most: the module is cached by the browser and by Vite's
   // chunk cache, so later opens resolve from memory.
@@ -191,8 +202,8 @@ export default function Product3DViewer({ open, url, name, onClose }) {
                   touch-action="none"
                   interaction-prompt="none"
                   camera-orbit="-60deg 72deg 105%"
-                  exposure={lighting.exposure}
-                  shadow-intensity={lighting.shadow}
+                  exposure={exposure}
+                  shadow-intensity={shadow}
                   {...(reduce ? {} : { 'auto-rotate': '' })}
                   style={{ display: 'block', width: '100%', height: '100%' }}
                 />
@@ -200,6 +211,115 @@ export default function Product3DViewer({ open, url, name, onClose }) {
                 <div className="absolute inset-0 grid place-items-center">
                   <p className="shimmer h-3 w-40 rounded-full" aria-hidden="true" />
                   <span className="sr-only">Loading the 3D viewer…</span>
+                </div>
+              )}
+
+              {/*
+                The lighting panel. A chip on the stage rather than a control in
+                the footer: it adjusts the *render*, not the shoe, and the footer
+                is already the AR door's row. The library re-reads `exposure` and
+                `shadow-intensity` as live attributes, so dragging re-lights the
+                shoe in place — no remount, no reload of the glb.
+
+                `stopPropagation` on the whole panel: the stage's parent is not
+                clickable here (the backdrop owns dismissal), but a click that
+                bubbled would still be a click the sliders should never answer.
+                `onPointerDown` stops drag-to-orbit from starting when the press
+                lands on a slider — `<model-viewer>` listens on its own surface,
+                and the panel floats above it.
+              */}
+              {ready && (
+                <div
+                  className="absolute bottom-3 left-3"
+                  onClick={(event) => event.stopPropagation()}
+                  onPointerDown={(event) => event.stopPropagation()}
+                >
+                  {panelOpen ? (
+                    <div
+                      role="group"
+                      aria-label="Lighting adjustments"
+                      className="w-56 rounded-card border border-hairline bg-raised/95 p-3 shadow-premium backdrop-blur-sm"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold uppercase tracking-wider text-muted">
+                          Lighting
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setPanelOpen(false)}
+                          aria-label="Hide lighting controls"
+                          className="inline-flex h-6 w-6 items-center justify-center rounded-full text-muted transition-colors duration-200 hover:bg-subtle hover:text-ink"
+                        >
+                          <X size={12} strokeWidth={2} />
+                        </button>
+                      </div>
+
+                      {/* Sliders step in hundredths: finer than that is noise the
+                          eye cannot resolve, coarser jumps the render visibly. */}
+                      <label className="mt-2 block text-xs text-muted">
+                        <span className="flex items-center justify-between">
+                          Brightness
+                          <span className="font-medium tabular-nums text-ink">
+                            {Math.round(exposure * 100)}%
+                          </span>
+                        </span>
+                        <input
+                          type="range"
+                          min="0.3"
+                          max="2"
+                          step="0.01"
+                          value={exposure}
+                          onChange={(event) => setExposure(event.target.valueAsNumber)}
+                          aria-label="Model brightness"
+                          className="mt-1 w-full accent-clay"
+                        />
+                      </label>
+
+                      <label className="mt-2 block text-xs text-muted">
+                        <span className="flex items-center justify-between">
+                          Shadow
+                          <span className="font-medium tabular-nums text-ink">
+                            {Math.round(shadow * 100)}%
+                          </span>
+                        </span>
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.01"
+                          value={shadow}
+                          onChange={(event) => setShadow(event.target.valueAsNumber)}
+                          aria-label="Model shadow intensity"
+                          className="mt-1 w-full accent-clay"
+                        />
+                      </label>
+
+                      {/* Reset is the theme default, not an arbitrary neutral —
+                          what it restores is what decision 6 measured. */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setExposure(defaults.exposure)
+                          setShadow(defaults.shadow)
+                        }}
+                        disabled={exposure === defaults.exposure && shadow === defaults.shadow}
+                        className="btn btn-ghost mt-2 w-full px-2 py-1.5 text-xs"
+                      >
+                        Reset to default
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setPanelOpen(true)}
+                      aria-label="Adjust lighting"
+                      aria-expanded="false"
+                      className="inline-flex h-9 items-center gap-1.5 rounded-full border border-hairline bg-raised/95 px-3 text-xs font-medium text-ink shadow-premium backdrop-blur-sm transition-colors duration-200 hover:bg-subtle"
+                    >
+                      <Sun size={14} strokeWidth={2} aria-hidden="true" />
+                      Lighting
+                    </button>
+                  )}
                 </div>
               )}
             </div>
