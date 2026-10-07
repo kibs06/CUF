@@ -39,6 +39,18 @@ import '../services/diag_logger.dart';
 /// `destroyAsset` on a second teardown — have no counterpart here, because this
 /// path makes no native call of ours at all.
 ///
+/// ⚠️ **This engine is now the first rung of a ladder, not the whole answer.**
+/// Being first is a claim about blast radius, and blast radius says nothing about
+/// whether a given phone's WebView can draw at all: the P30 Pro that started this
+/// feature shows a blank stage, and a WebView with no WebGL2 context (or one too
+/// old to run the bundle — see [kWebViewNoWebgl2Reason]) will never draw on any
+/// phone. So the box above this one watches for exactly that and hands the same
+/// model to the native renderer instead ([shoePreviewWebViewCannotDrawReason],
+/// `ShoePreviewSection`). What this widget owes that ladder is a verdict it can
+/// act on: the `gl:` probe, the element's `error` and the element's `loaded` all
+/// travel up through [onStatus], and `loaded` is the signal that a page which
+/// *stopped* speaking is a fault rather than a load in flight.
+///
 /// **What the package does with the model, since it is the part worth knowing.**
 /// `model_viewer_plus` binds an `HttpServer` to `InternetAddress.loopbackIPv4` on
 /// an ephemeral port and serves the page plus the model over it, so the WebView
@@ -229,9 +241,16 @@ customElements.whenDefined('model-viewer').then(() => {
               // other way to tell them apart.
               _report('progress ${text.substring(9)}');
             } else {
-              // `gl:<kind>` — a measurement, not a state. It never changes the
-              // box; it only ever explains one.
-              _logOnly(text);
+              // ⚠️ `gl:<kind>` goes up as well as to the log, and that is a change
+              // of address rather than of meaning. It used to be logged and
+              // dropped here, on the reading that it is "a measurement, not a
+              // state, and it never changes the box". It does now: a phone whose
+              // WebView hands out no WebGL2 context can never draw with this
+              // engine, so the box above acts on this line — it hands the model to
+              // the native renderer instead ([shoePreviewWebViewCannotDrawReason],
+              // and the ladder in `ShoePreviewSection`). Nothing about the probe
+              // itself moved; only who is told.
+              _report(text);
             }
           },
         ),
@@ -327,6 +346,121 @@ customElements.whenDefined('model-viewer').then(() => {
     return engine;
   }
 }
+
+/// ⚠️ **The three ways this engine proves it cannot draw, in the words the
+/// ladder's lane reads.** The first two arrive from the page; the third is the
+/// box's own clock (`kShoePreviewWebViewLoadDeadline`).
+
+/// **The reason a phone whose WebView cannot give the page a WebGL2 context
+/// reports** — the common one, and the one no retry can change.
+///
+/// ⚠️ **`<model-viewer>` needs WebGL2 and nothing else.** The `model-viewer.min.js`
+/// this package ships (`model_viewer_plus` 1.10.0, `assets/model-viewer.min.js`,
+/// 979 KB) contains three.js **r174**, whose WebGL renderer requests exactly one
+/// context name — `const t = "webgl2"` — and, when that comes back null, throws
+/// `Error creating WebGL context.`. There is no `webgl1` or
+/// `experimental-webgl` fallback anywhere in the file (three.js dropped WebGL1
+/// support in r163). So on a phone whose system WebView cannot hand out a WebGL2
+/// context — an old, never-updated Android System WebView, a WebView GPU
+/// blocklist, a bundle too new for the Chromium in it to parse — the page loads,
+/// the element upgrades, and the canvas stays empty for good. That is the state
+/// this reason names, and it is invisible from Dart without the `gl:` probe.
+const String kWebViewNoWebgl2Reason = 'webview_webgl2_unavailable';
+
+/// **The reason a page that tried and gave up reports** — the element's own
+/// `error` event (`loadfailure`, `no-element`, a model the renderer will not
+/// parse).
+const String kWebViewLoadFailedReason = 'webview_load_failed';
+
+/// **The reason a page that drew into a box nothing can see reports** — the one
+/// verdict that is not the page's own, and the one that was needed on the owner's
+/// phone.
+///
+/// ⚠️ **Measured on the P30 Pro on 2026-10-07, and it is not a WebGL fault.** With
+/// the WebView engine mounted the page reported everything a working page reports —
+/// `gl:webgl2`, progress to 100, `loaded box=424x672` — and a screenshot of the
+/// glass showed the box region as **pure `#FFFFFF`** (the Flutter page behind the
+/// platform view), not one pixel of the `#F5F5F5` stage the page paints inline on
+/// the `<model-viewer>` element itself. So the page rendered and its surface never
+/// reached the screen. Nothing in the page can see that: `loaded` means the model
+/// is in the scene, not that a pixel was composited. The only witness is the box's
+/// own pixels, which is what [kShoePreviewBlankBoxLine] measures — and the same
+/// phone, on the same build, with the native engine, measured **459 distinct
+/// colours and 26% dark ink** in the same region.
+///
+/// The mechanism is the platform view's composition: `model_viewer_plus` mounts
+/// the WebView through `WebViewWidget`, and `webview_flutter_android` defaults that
+/// to `displayWithHybridComposition: false` — rendering into an **Android
+/// SurfaceTexture** for Flutter to composite, which is the mode its own
+/// documentation names as having a limitation ("doesn't have the limitation of
+/// rendering to an Android SurfaceTexture" is the reason to choose the other). On
+/// this phone that texture arrives empty.
+const String kWebViewBlankBoxReason = 'webview_box_blank';
+
+/// The prefix of the line the box sends when it has read its own pixels — see
+/// [kWebViewBlankBoxReason]. Spelled once and asserted, because the section's
+/// ladder reads this prefix and nothing else does.
+const String kShoePreviewBlankBoxLine = 'blank:';
+
+/// **The reason a page that never said anything reports** — no `loaded` line
+/// within [kShoePreviewWebViewLoadDeadline].
+///
+/// ⚠️ **It is the reason an old WebView earns without ever raising an error.** A
+/// `model-viewer.min.js` the Chromium in the phone cannot parse never upgrades the
+/// custom element at all: `customElements.whenDefined('model-viewer')` simply
+/// never resolves, no listener is ever attached, and the page reports exactly
+/// what a renderer that was still loading reports — nothing. Without a deadline
+/// that phone would keep the blank box, which is the fault this ladder exists to
+/// remove.
+const String kWebViewLoadTimeoutReason = 'webview_load_timeout';
+
+/// **How long the page has to say it drew the model before the box stops waiting
+/// for it.**
+///
+/// Eight seconds against a load measured at **~1 s on a vivo V2022** (five of
+/// five opens) from a `.glb` already verified on disk and served over loopback:
+/// the only thing between the mount and the picture is a local file and a local
+/// HTTP server, so this is not a network budget. It is long enough for a slow,
+/// cold WebView process to start Chromium and parse the bundle on a phone doing
+/// something else, and past the point where "still loading" is a hopeful reading
+/// of a page with no renderer at all.
+const Duration kShoePreviewWebViewLoadDeadline = Duration(seconds: 8);
+
+/// **Which of the box's own page lines means this phone cannot draw the shoe** —
+/// and null for every line that is merely news.
+///
+///   * a `gl:` probe that is anything but `webgl2`. `gl:webgl1` is the dangerous
+///     one — the device *has* 3D, and only the renderer's own WebGL2 requirement
+///     stands between it and a picture — and `gl:none` is the same verdict for a
+///     blunter reason. See [kWebViewNoWebgl2Reason].
+///   * any `error` from the element. See [kWebViewLoadFailedReason].
+///
+/// ⚠️ **`loaded` and `progress` are never failures**, however little they sound
+/// like good news: a load in flight reports progress, and the progress line is the
+/// only thing that can tell a stall at 40% from a load that never started. The
+/// deadline, not this function, is what catches a page that never speaks.
+String? shoePreviewWebViewCannotDrawReason(String line) {
+  if (line.startsWith('gl:')) {
+    return line == 'gl:webgl2' ? null : kWebViewNoWebgl2Reason;
+  }
+  if (line.startsWith('error')) return kWebViewLoadFailedReason;
+  // ⚠️ The one verdict the *box* contributes rather than the page — see
+  // [kWebViewBlankBoxReason]. `progress … box=396x520` carries the word `box=` and
+  // is deliberately not matched: the page's box measurement is news.
+  if (line.startsWith(kShoePreviewBlankBoxLine)) return kWebViewBlankBoxReason;
+  return null;
+}
+
+/// **Whether a page line is the model itself arriving** — the one line that
+/// proves this engine drew something, and therefore the one line that cancels the
+/// deadline.
+///
+/// ⚠️ It has to be read separately from
+/// [shoePreviewWebViewCannotDrawReason], which answers "cannot draw": a line that
+/// answers neither is news (`progress`, a box measurement), and a ladder that
+/// treated those as success would hand a stalled page the whole deadline after
+/// every one of them.
+bool shoePreviewWebViewLoaded(String line) => line.startsWith('loaded');
 
 /// **Whether the bytes this box was handed are actually on disk.**
 ///

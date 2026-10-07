@@ -387,15 +387,26 @@ void main() {
       expect(section, isNot(contains('SoleARPill(')));
       expect(section, isNot(contains('onTryOnInAr')));
       // The refusal branch keeps its honest sentence — which is the whole of what
-      // that branch is now.
+      // that branch is now. ⚠️ **Repointed on 2026-10-07, and the words are still
+      // pinned:** the sentence moved into `kShoePreviewUnsupportedMessage` because
+      // the engine ladder gave it a second speaker (the phone whose WebView cannot
+      // draw *and* whose native fallback is latched off), and the branch's condition
+      // gained that second state. Both are asserted rather than the old literal, so
+      // the guard is about the state of things rather than about a spelling.
       final unsupported = between(
         section,
-        'if (_unsupported || _diagnosticDetail != null)',
-        'return Column',
+        'if (_unsupported || _fallbackBlocked || _diagnosticDetail != null)',
+        'detail: _diagnosticDetail',
       );
       expect(
         unsupported,
-        contains("'3D preview isn\\'t supported on this phone.'"),
+        contains('kShoePreviewUnsupportedMessage'),
+        reason: 'the honest sentence is the whole of what this branch says',
+      );
+      expect(
+        previewWidget,
+        contains("3D preview isn\\'t supported on this phone."),
+        reason: 'spelled once, and spelled here',
       );
     });
 
@@ -947,8 +958,11 @@ void main() {
       // ⚠️ **A missing WebGL context and a `model-viewer` element with no box to
       // draw in are the same picture and raise the *same* `load` event**, so a
       // blank box cannot be diagnosed from Dart by looking at it. Both are probed
-      // on the page and relayed as measurements instead of as states. Measured on
-      // the vivo V2022 (2026-10-02) as `gl:webgl2` and `box=396x520`.
+      // on the page and relayed. Measured on the vivo V2022 (2026-10-02) as
+      // `gl:webgl2` and `box=396x520`. ⚠️ `gl:` is no longer only a measurement:
+      // since 2026-10-07 a non-`webgl2` probe is the line the engine ladder acts on
+      // (see the ladder group below), which is why the probe has to keep reaching
+      // Dart and not just the log.
       expect(webView, contains("post('gl:"));
       expect(webView, contains('getContext'));
       expect(webView, contains('box='));
@@ -1018,6 +1032,110 @@ void main() {
         config,
         contains('<base-config cleartextTrafficPermitted="false" />'),
         reason: 'the default must stay exactly as Android 9 set it',
+      );
+    });
+  });
+
+  group('the engine ladder, and the latch that keeps it from looping', () {
+    // ⚠️ **The fault this answers is the owner's own phone, and it is also why the
+    // ladder cannot be tested end to end here.** A Huawei P30 Pro showed a blank
+    // stage in the 3D viewer while other phones showed the shoe: the shipped engine
+    // is the WebView one, and the `model-viewer.min.js` it runs ships three.js
+    // **r174**, whose renderer asks for a `webgl2` context and names no fallback —
+    // so a phone whose WebView cannot hand one out can never draw, and the page has
+    // no words for it. `ShoePreviewSection` therefore runs a **ladder** — WebView,
+    // then the native Filament renderer, then the honest sentence — and the guards
+    // below are the ones a widget test cannot reach: `ModelViewer` cannot mount
+    // under `flutter test`, so the page's half of the ladder is pinned as source
+    // here, while the section's half (the move itself, the deadline, the latch) is
+    // covered behaviourally in `shoe_preview_3d_test.dart`.
+    final webView =
+        File('lib/widgets/shoe_preview_webview.dart').readAsStringSync();
+    final guard =
+        File('lib/services/shoe_preview_fallback_guard.dart').readAsStringSync();
+
+    test('the page\'s verdict reaches the box instead of only the log', () {
+      // ⚠️ For one build the probe was logged and dropped here, on the reading that
+      // it was "a measurement, not a state". It is the state: without it the box
+      // cannot tell a phone that will never draw from one that is still starting —
+      // which is precisely the blank stage on that phone.
+      expect(webView, contains('_report(text)'));
+      expect(webView, contains("post('gl:'"));
+    });
+
+    test('the verdict is classified before the QA gate, or the switch decides for customers',
+        () {
+      // ⚠️ `showDiagnostics` is off in every customer build, and it used to be the
+      // first statement in the classifier. A verdict taken after it would mean a QA
+      // switch, not the phone, decided whether a customer's box falls back to the
+      // engine that can draw — and the builds it would have decided against are the
+      // only builds most customers ever run.
+      // `codeOf` first, and it is not tidiness: the body's own comment names the
+      // very expression this guard is about (it explains the ordering), so a raw
+      // read would find the explanation and pass for the wrong reason.
+      final body = codeOf(between(
+        previewWidget,
+        'void _recordEngineLine(String line)',
+        '\n  /// **The verdict arrives',
+      ));
+      final classified = body.indexOf('shoePreviewWebViewCannotDrawReason');
+      final gated = body.indexOf('showDiagnostics');
+      expect(classified, isNonNegative, reason: 'the ladder reads the page lines');
+      expect(gated, isNonNegative, reason: 'the readout still has its own gate');
+      expect(
+        classified,
+        lessThan(gated),
+        reason: 'classify first, then gate the readout',
+      );
+    });
+
+    test('the native attempt is announced synchronously, before the view is mounted',
+        () {
+      // ⚠️ **The ordering is the safety property, not an implementation detail.**
+      // The death this records happens about a second after the mount and takes the
+      // process with it, so an announcement made *after* the mount — or written
+      // asynchronously — is not on disk when the next launch reads it, and the
+      // ladder becomes the crash loop this latch exists to prevent.
+      final body = between(
+        previewWidget,
+        'Future<void> _failOver(',
+        '\n  void _recordStatus(',
+      );
+      expect(body, contains('markAttempt()'));
+      expect(body, contains('_webViewEngine = false'));
+      expect(
+        body.indexOf('markAttempt()'),
+        lessThan(body.indexOf('_webViewEngine = false')),
+        reason: 'the marker has to exist before the native renderer is mounted',
+      );
+      expect(guard, contains('writeAsStringSync('));
+      expect(guard, contains('existsSync()'));
+      expect(guard, contains('deleteSync()'));
+    });
+
+    test('the latch is released by the native engine\'s own load, not by the heartbeat',
+        () {
+      // `modelLoaded` is raised in every build; the `status` heartbeat beside it is
+      // diagnostics-only. Hanging the latch on the heartbeat would leave every
+      // customer's phone latched off after one unlucky start — a bug in the
+      // direction that costs a picture.
+      final body = between(
+        previewWidget,
+        "if (type == 'modelLoaded')",
+        "if (type == 'status')",
+      );
+      expect(body, contains('clearAttempt()'));
+    });
+
+    test('the ladder moves one way, and only on evidence', () {
+      final code = codeOf(previewWidget);
+      expect(code, contains('_webViewEngine = false'));
+      expect(
+        code,
+        isNot(contains('_webViewEngine = true')),
+        reason: 'a phone\'s WebView does not learn to hand out a WebGL2 context: a '
+            'ladder that moved back would put the blank box in front of a customer '
+            'again on the next product',
       );
     });
   });

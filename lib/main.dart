@@ -41,6 +41,7 @@ import 'services/deep_link_service.dart';
 import 'services/supabase_service.dart';
 import 'services/gcash_payment_service.dart';
 import 'services/push_notification_service.dart';
+import 'services/webview_composition.dart';
 import 'widgets/connectivity_banner.dart';
 
 /// Root navigator key — lets the deep-link handler push the GCash
@@ -62,6 +63,12 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // The 3D box's WebView is mounted through a composition mode that needs the
+  // phone to hand Flutter a surface, and one phone in the field does not (see
+  // services/webview_composition.dart). Installed here, before any
+  // `WebViewController` exists and before the first frame.
+  installHybridCompositionWebViews();
 
   // TEMPORARY (Phase 1b diagnostics): start the in-app nav log capture.
   // No-op unless kNavDiagEnabled — remove with diag_logger.dart.

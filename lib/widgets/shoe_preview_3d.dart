@@ -1,14 +1,17 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 import '../constants/app_brightness.dart';
 import '../constants/app_constants.dart';
 import '../services/ar_try_on_channel.dart';
 import '../services/diag_logger.dart';
 import '../services/shoe_preview_channel.dart';
+import '../services/shoe_preview_fallback_guard.dart';
 import 'shoe_preview_webview.dart';
 
 /// **The viewer page's horizontal gutter** — the 20 px the page insets its own
@@ -23,6 +26,20 @@ import 'shoe_preview_webview.dart';
 /// insets those). Two numbers that disagreed would show up as a header that does
 /// not line up with the sentence beneath it.
 const double kShoePreviewGutter = 20;
+
+/// **The one sentence a phone that cannot draw 3D is owed**, spelled once because
+/// two states now say it.
+///
+/// The renderer's own refusal (`kRendererUnsupportedReason`, an engine below
+/// glTF's `FEATURE_LEVEL_2`) is the state it was written for. Since 2026-10-07 the
+/// engine ladder adds a second: a phone whose WebView engine cannot draw **and**
+/// whose native fallback is latched off, because the last attempt to use it killed
+/// the app inside the load (`ShoePreviewFallbackGuard`). Two call sites, one
+/// sentence — a phone told "not supported" twice in slightly different words would
+/// read as two different faults, and this app's whole diagnostic history says the
+/// words are how a fault is found.
+const String kShoePreviewUnsupportedMessage =
+    '3D preview isn\'t supported on this phone.';
 
 /// The **3D box** — the customer turns the shoe with a finger.
 ///
@@ -81,6 +98,10 @@ class ShoePreview3D extends StatefulWidget {
     required this.model,
     this.channel,
     this.viewBuilder,
+    this.webViewBuilder,
+    this.pixelProbeOverride,
+    this.pixelCaptureSeesPlatformView =
+        !AppConstants.shoePreviewHybridComposition,
     this.height = 240,
     this.bleed = false,
     this.paused = false,
@@ -107,6 +128,69 @@ class ShoePreview3D extends StatefulWidget {
   /// handover and the layout, and never needs to know whether a platform view or
   /// a WebView would have been built.
   final Widget Function()? viewBuilder;
+
+  /// **Test seam: the WebView engine, handed the page's line channel.**
+  ///
+  /// It stands where [viewBuilder] cannot, and the split is deliberate rather than
+  /// tidy. [viewBuilder] is returned *before* the engine is chosen, so a test that
+  /// injects one can never exercise the WebView branch — and the ladder this box
+  /// now belongs to (`ShoePreviewSection`) is built entirely out of the lines that
+  /// branch produces (`gl:webgl2`, `loaded`, `error`). Those lines come from a page
+  /// that only exists inside a real WebView, which `flutter test` cannot mount.
+  ///
+  /// So a ladder test injects this instead: a stand-in that keeps the callback and
+  /// hands it back to the test, letting the test report exactly what a phone's page
+  /// reported and assert what the box did about it. The `onStatus` it is given is
+  /// the real channel, not a copy — the same one the section's readout and the
+  /// ladder listen on — which is why a stand-in engine's line still travels the
+  /// production path all the way to the decision.
+  final Widget Function(ValueChanged<String> onStatus)? webViewBuilder;
+
+  /// **Test seam: the box's own pixels, in place of the raster capture.**
+  ///
+  /// The real capture (`RenderRepaintBoundary.toImage`) needs a *real* event loop —
+  /// a fake clock does not advance the raster thread, which is why golden tests wrap
+  /// theirs in `runAsync` — and crossing into the real loop in this suite also lets
+  /// the harness's unrelated traffic run (a preview EventChannel with no plugin host,
+  /// `google_fonts` reaching for a font over the network), so a test taking the real
+  /// picture would fail on the harness rather than on the box. Those are artifacts of
+  /// the test, not of the code.
+  ///
+  /// So the seam is the **bytes**, not the capture: everything this feature decides
+  /// ([measureBoxPixels], [blankBoxColourFloor], the `blank:` line, the ladder's move)
+  /// is then exercised exactly, and the capture itself is verified where it matters —
+  /// on a phone, where it caught this fault in the first place.
+  final Uint8List Function()? pixelProbeOverride;
+
+  /// **Whether a capture of this box can contain the engine's pixels at all** —
+  /// and therefore whether [ShoePreview3D.pixelProbeOverride]'s reading is a
+  /// verdict or only news.
+  ///
+  /// ⚠️ **In hybrid composition it cannot, and this is measured rather than
+  /// assumed.** On the owner's P30 Pro on 2026-10-07, the moment the page reported
+  /// `loaded` the *screen* measured **77.6% exactly `#F5F5F5`** (137,200 of 176,904
+  /// sampled pixels of the box's band — the stage the page paints inline on its
+  /// element) with **696 distinct colours** and 14.5% dark ink: the shoe, drawn on
+  /// the glass by the WebView. A `RepaintBoundary` capture of that same box, that
+  /// same second, read `distinct=1 dark=100%` — because a hybrid-composited
+  /// platform view is presented *over* the Flutter scene
+  /// (`initExpensiveAndroidView`'s `FlutterImageView`) rather than inside the layer
+  /// tree `toImage` rasterises. The instrument is blind to the thing it was built
+  /// to measure, and a blind instrument that reports "empty" would move a working
+  /// box onto the frozen native renderer on **every** phone.
+  ///
+  /// So the reading is kept and the *verdict* is dropped when the capture cannot
+  /// see the view: the line still lands in the log (it is the control that proves
+  /// the capture works at all in the other mode), and
+  /// [kShoePreviewBlankBoxLine] is never sent. The other three verdicts — `gl:`, an
+  /// element `error`, and eight seconds of silence — are page-side and unaffected,
+  /// so a WebView that genuinely cannot draw is still handed to the native engine.
+  ///
+  /// It is a `final` on the widget rather than a bare constant so both directions
+  /// are testable; its default follows the same switch that chooses the composition
+  /// mode ([AppConstants.shoePreviewHybridComposition]), which is what keeps the two
+  /// from drifting apart.
+  final bool pixelCaptureSeesPlatformView;
 
   /// The box's height. 240 px shows a whole shoe at a three-quarter view without
   /// taking the size grid off the first screen.
@@ -178,6 +262,26 @@ class ShoePreview3D extends StatefulWidget {
   /// a stopwatch.
   static const Duration hintAfterIdle = Duration(seconds: 10);
 
+  /// **How long after the engine reports a draw the box waits before it reads its
+  /// own pixels.**
+  ///
+  /// Enough for a compositor to have presented a frame and for `loaded` to mean a
+  /// picture rather than a scene — and short enough that the cartoon hand of
+  /// [ShoePreviewGestureHint] (which appears after [hintAfterIdle] of stillness)
+  /// cannot be in the picture, because a hint is not a shoe.
+  static const Duration paintCheckDelay = Duration(milliseconds: 1500);
+
+  /// **The floor below which a captured box counts as empty.**
+  ///
+  /// Pinned as a name because it is a decision, not a magic number: the failure it
+  /// exists for leaves the box *one* colour (the Flutter page behind a platform
+  /// view that rendered into nothing — measured on the owner's P30 Pro), while any
+  /// drawing of a shoe — even a white shoe on a white stage — carries shading, a
+  /// shadow and an edge, which is dozens to hundreds of distinct colours in the
+  /// same region (the native renderer on that phone measures 459 on the glass).
+  /// Twelve is far from both.
+  static const int blankBoxColourFloor = 12;
+
   @override
   State<ShoePreview3D> createState() => _ShoePreview3DState();
 }
@@ -185,6 +289,45 @@ class ShoePreview3D extends StatefulWidget {
 class _ShoePreview3DState extends State<ShoePreview3D> {
   late final ShoePreviewChannel _channel =
       widget.channel ?? const ShoePreviewChannel();
+
+  /// **The box's own pixels.** The only witness in this app that can see a platform
+  /// view which rendered and never arrived — see [kWebViewBlankBoxReason] for the
+  /// phone that produced that verdict, and [_checkPaint] for what is measured.
+  final GlobalKey _boxKey = GlobalKey();
+
+  /// Reads the box's picture as raw RGBA, or null when there is nothing to read.
+  ///
+  /// Split out from [_checkPaint] so the *decision* can be exercised without a
+  /// raster thread — see [ShoePreview3D.pixelProbeOverride].
+  Future<Uint8List?> _captureBoxPixels() async {
+    final boundary = _boxKey.currentContext?.findRenderObject();
+    if (boundary is! RenderRepaintBoundary) return null;
+    try {
+      final image = await boundary.toImage();
+      final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+      image.dispose();
+      return data?.buffer.asUint8List();
+    } catch (_) {
+      // A capture that fails says nothing about the phone, and must never become a
+      // verdict — a frame that has not painted yet, a boundary whose layer is not on
+      // screen (the box is paused, or gone).
+      return null;
+    }
+  }
+
+  /// One shot per engine mount, so a rebuild cannot turn one picture into a loop.
+  bool _paintChecked = false;
+
+  /// The one pending picture, held so [dispose] can cancel it — a timer that outlives
+  /// its box is a leak, and a test suite is the first place that shows.
+  Timer? _paintTimer;
+
+  /// Passes an engine line up, and starts the pixel check the moment the page says
+  /// it drew.
+  void _onEngineLine(String line) {
+    widget.onEngineStatus?.call(line);
+    if (shoePreviewWebViewLoaded(line)) _schedulePaintCheck();
+  }
 
   @override
   void initState() {
@@ -199,6 +342,7 @@ class _ShoePreview3DState extends State<ShoePreview3D> {
     // the model: the shoe is on screen within a frame, and a wait that began when
     // the bytes arrived would be a different number on every connection.
     _restartIdleHint();
+    if (!widget.useWebViewEngine) _scheduleNativePaintCheck();
   }
 
   @override
@@ -209,6 +353,14 @@ class _ShoePreview3DState extends State<ShoePreview3D> {
     if (oldWidget.model.modelId != widget.model.modelId ||
         oldWidget.model.path != widget.model.path) {
       _handOver();
+    }
+    // ⚠️ The ladder moved this box onto the other engine, and it must be measured
+    // too: the native renderer's own reading is what proves the instrument can see
+    // a *working* platform view, without which "the capture is empty" would be a
+    // claim about the instrument rather than about the phone.
+    if (oldWidget.useWebViewEngine != widget.useWebViewEngine) {
+      _paintChecked = false;
+      if (!widget.useWebViewEngine) _scheduleNativePaintCheck();
     }
     if (widget.paused != oldWidget.paused) {
       // AR is on top (or has just come back). The tutorial is not shown to a
@@ -258,6 +410,67 @@ class _ShoePreview3DState extends State<ShoePreview3D> {
     if (widget.viewBuilder != null) return true;
     if (!widget.useWebViewEngine) return true;
     return shoePreviewModelOnDisk(widget.model);
+  }
+
+  /// Schedules the box's one picture of itself, [#paintCheckDelay] after the page
+  /// says it drew.
+  void _schedulePaintCheck() {
+    if (_paintChecked) return;
+    _paintChecked = true;
+    _paintTimer = Timer(ShoePreview3D.paintCheckDelay, () => unawaited(_checkPaint()));
+  }
+
+  /// Schedules the same picture on the native engine, which reports its state only
+  /// in a QA build — so the box cannot wait to be told and waits a fixed beat
+  /// instead. It is the control for the WebView verdict, logged and never acted on:
+  /// the native renderer is the last rung, so there is nothing below it to hand the
+  /// box to.
+  void _scheduleNativePaintCheck() {
+    if (_paintChecked) return;
+    _paintChecked = true;
+    _paintTimer = Timer(
+      ShoePreview3D.paintCheckDelay + const Duration(seconds: 3),
+      () => unawaited(_checkPaint()),
+    );
+  }
+
+  /// **Reads the box's own pixels, because nothing else in the app can see the
+  /// fault this was written for.**
+  ///
+  /// `loaded` means the model is in `<model-viewer>`'s scene; it does **not** mean a
+  /// pixel reached the glass, and on the owner's P30 Pro (2026-10-07) it did not: the
+  /// page reported `gl:webgl2` and `loaded box=424x672` while the screen measured
+  /// pure `#FFFFFF` in the box — the Flutter page behind a platform view whose
+  /// surface never arrived. The page cannot detect that. A capture of the box can,
+  /// and the question it answers is the cheap one: *does this region contain more
+  /// than a handful of colours?*
+  ///
+  /// ⚠️ **Only the WebView engine's answer is a verdict**, and only when the picture
+  /// is flat ([ShoePreview3D.blankBoxColourFloor]): the line goes up the same channel
+  /// the page's lines use (see [kShoePreviewBlankBoxLine]) and the section's ladder
+  /// does the rest. The native engine's reading is a log line, because there is no
+  /// engine below it to fall back to.
+  Future<void> _checkPaint() async {
+    final override = widget.pixelProbeOverride;
+    final bytes = override != null ? override() : await _captureBoxPixels();
+    if (bytes == null) return;
+    final pixels = measureBoxPixels(bytes);
+    if (pixels.sampled == 0) return;
+    final flat = pixels.colours < ShoePreview3D.blankBoxColourFloor;
+    final engine = widget.useWebViewEngine ? 'webview' : 'native';
+    final verdictIsPossible = widget.pixelCaptureSeesPlatformView;
+    final line = '${kShoePreviewBlankBoxLine}distinct=${pixels.colours} '
+        'dark=${pixels.darkPercent}%';
+    navDiag(
+      '[preview] box pixels: $line flat=$flat ($engine'
+      '${verdictIsPossible ? '' : ' · a hybrid-composited view is not in this capture'})',
+    );
+    // See [ShoePreview3D.pixelCaptureSeesPlatformView]: where the capture cannot
+    // contain the platform view, a flat reading says nothing about the phone and
+    // must not move the ladder.
+    if (flat && widget.useWebViewEngine && mounted && verdictIsPossible) {
+      widget.onEngineStatus?.call(line);
+    }
   }
 
   /// Starts the countdown to the gesture tutorial.
@@ -311,6 +524,7 @@ class _ShoePreview3DState extends State<ShoePreview3D> {
   @override
   void dispose() {
     _idleTimer?.cancel();
+    _paintTimer?.cancel();
     super.dispose();
   }
 
@@ -379,16 +593,21 @@ class _ShoePreview3DState extends State<ShoePreview3D> {
               onPointerDown: _touchStarted,
               onPointerUp: _touchEnded,
               onPointerCancel: _touchEnded,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  widget.paused ? const ShoePreviewIdle() : _view(),
-                  // Only ever painted over a box that can draw and is on screen —
-                  // see [_engineDraws]; the pill itself is `IgnorePointer`, so the
-                  // drag it is teaching still reaches the renderer.
-                  if (_hintVisible && _engineDraws)
-                    const ShoePreviewGestureHint(),
-                ],
+              // ⚠️ The boundary that makes the fault this feature cannot otherwise
+              // see *visible*: see [_checkPaint] and [kWebViewBlankBoxReason].
+              child: RepaintBoundary(
+                key: _boxKey,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    widget.paused ? const ShoePreviewIdle() : _view(),
+                    // Only ever painted over a box that can draw and is on screen —
+                    // see [_engineDraws]; the pill itself is `IgnorePointer`, so the
+                    // drag it is teaching still reaches the renderer.
+                    if (_hintVisible && _engineDraws)
+                      const ShoePreviewGestureHint(),
+                  ],
+                ),
               ),
             ),
           ),
@@ -406,13 +625,23 @@ class _ShoePreview3DState extends State<ShoePreview3D> {
     // platform check below, because the two engines refuse different platforms:
     // the native view has no iOS implementation at all, while the WebView engine
     // is Android-only here only because the gate is (`resolveShoePreview`).
+    //
+    // ⚠️ The flag is handed down rather than read here, because the *section* owns
+    // the ladder: a WebView engine that reports it cannot draw flips this to
+    // `false` and rebuilds the box around the native renderer — see
+    // `ShoePreviewSection`.
     if (widget.useWebViewEngine) {
+      final standIn = widget.webViewBuilder;
+      if (standIn != null) return standIn(_onEngineLine);
       return ShoePreviewWebView(
         model: widget.model,
         diagnostics: widget.diagnostics,
-        // The QA line goes straight to the section's readout, which is where the
-        // native engine's `status` events land too — one surface, two engines.
-        onStatus: widget.onEngineStatus,
+        // The QA line goes to the section's readout, which is where the native
+        // engine's `status` events land too — one surface, two engines. ⚠️ It goes
+        // through [_onEngineLine] rather than straight up, because the box has to
+        // see the page's `loaded` itself: that line is what starts the one pixel
+        // check this engine needs ([_checkPaint]).
+        onStatus: _onEngineLine,
       );
     }
 
@@ -573,6 +802,57 @@ class _ShoePreviewGestureHintState extends State<ShoePreviewGestureHint>
       ),
     );
   }
+}
+
+/// **What a captured box contains, in the two numbers that can tell a shoe from
+/// nothing**: how many distinct colours it holds (5 bits per channel) and what
+/// share of it is dark ink.
+///
+/// A named record rather than a bare pair, and a pure function rather than a body
+/// inside the capture, because it is the *decision* that has to be testable — a
+/// raster thread is not something a widget test can always give it
+/// (`RenderRepaintBoundary.toImage` needs the real event loop).
+class ShoePreviewBoxPixels {
+  const ShoePreviewBoxPixels({
+    required this.colours,
+    required this.darkPercent,
+    required this.sampled,
+  });
+
+  /// Distinct colours, quantised to 5 bits per channel — the same quantisation the
+  /// device measurements in this file's history used, so a log line and a phone
+  /// screenshot can be compared without converting anything.
+  final int colours;
+
+  /// Share of sampled pixels below half luminance, rounded to a percent.
+  final int darkPercent;
+
+  /// How many pixels were read, so a caller can refuse to judge an empty image.
+  final int sampled;
+}
+
+/// Measures raw RGBA bytes — see [ShoePreviewBoxPixels].
+///
+/// ⚠️ **Every fourth pixel** (`stride` in bytes, four bytes per pixel): a 424x672
+/// box holds 285,000 of them, the answer cannot change between neighbours, and the
+/// readback is a GPU stall worth bounding.
+ShoePreviewBoxPixels measureBoxPixels(Uint8List rgba, {int stride = 16}) {
+  final seen = <int>{};
+  var dark = 0;
+  var sampled = 0;
+  for (var i = 0; i + 3 < rgba.length; i += stride) {
+    final r = rgba[i];
+    final g = rgba[i + 1];
+    final b = rgba[i + 2];
+    seen.add((r >> 3) << 10 | (g >> 3) << 5 | (b >> 3));
+    if ((r * 299 + g * 587 + b * 114) ~/ 1000 < 128) dark++;
+    sampled++;
+  }
+  return ShoePreviewBoxPixels(
+    colours: seen.length,
+    darkPercent: sampled == 0 ? 0 : (100 * dark / sampled).round(),
+    sampled: sampled,
+  );
 }
 
 /// How far the sweeping hand travels each way, in logical pixels.
@@ -907,6 +1187,20 @@ class ShoePreviewQaBanner extends StatelessWidget {
 /// vanishing — is now outside this widget entirely, which is the stronger form of
 /// the same guarantee: there is no branch here that can drop it. See
 /// `kRendererUnsupportedReason` for the crash that made the refusal necessary.
+///
+/// ⚠️ **And since 2026-10-07 the section owns the engine ladder, because a
+/// refusal is no longer the only way a box ends up with nothing.** The shipped
+/// engine is the WebView one, and a WebView cannot draw where its phone gives it
+/// no WebGL2 context — the owner's P30 Pro is exactly that phone (a blank stage,
+/// with every other phone showing the shoe). So the section watches the engine it
+/// mounted: the page's `gl:` probe, the element's `error`, or
+/// [kShoePreviewWebViewLoadDeadline] passing with no line at all each mean the same
+/// thing — this phone's WebView cannot draw — and the box is rebuilt around the
+/// **native** renderer, the one measured to draw this very shoe on that very
+/// phone. The ladder moves one way and only on evidence, and when even that phone's
+/// native renderer is off the table (`ShoePreviewFallbackGuard`, because it has
+/// already killed this app once inside the load) the honest sentence above is what
+/// is left — which is why both states say it in the same words.
 class ShoePreviewSection extends StatefulWidget {
   const ShoePreviewSection({
     super.key,
@@ -917,6 +1211,7 @@ class ShoePreviewSection extends StatefulWidget {
     this.bleed = false,
     this.paused = false,
     this.events,
+    this.webViewBuilder,
     this.showDiagnostics = AppConstants.shoePreviewDiagnosticsEnabled,
     this.useWebViewEngine = AppConstants.shoePreviewWebViewEnabled,
   });
@@ -925,6 +1220,11 @@ class ShoePreviewSection extends StatefulWidget {
 
   final ShoePreviewChannel? channel;
   final Widget Function()? viewBuilder;
+
+  /// See [ShoePreview3D.webViewBuilder] — forwarded rather than re-spelled, so
+  /// the box a test drives and the box this section mounts are the same box.
+  final Widget Function(ValueChanged<String> onStatus)? webViewBuilder;
+
   final double height;
 
   /// **Whether the page has handed this section its full width, so that only the
@@ -953,9 +1253,15 @@ class ShoePreviewSection extends StatefulWidget {
   /// `_diagnosticDetail` for what the line carries and why it exists.
   final bool showDiagnostics;
 
-  /// Which engine the box is drawn with. See [ShoePreview3D.useWebViewEngine] —
-  /// forwarded rather than re-decided, so the section and the box can never
-  /// disagree about which engine is running.
+  /// **Which engine the box is *started* with.** See
+  /// [ShoePreview3D.useWebViewEngine] — forwarded rather than re-decided, so the
+  /// section and the box can never disagree about which engine is running.
+  ///
+  /// ⚠️ **It is the ladder's first rung, not its verdict.** The section hands the
+  /// box this value and then watches the engine it produces: a WebView that cannot
+  /// draw here moves the box to the native renderer without the caller's
+  /// involvement (see `_failOver`), so the engine a running box is using is not
+  /// always the one this flag asked for.
   final bool useWebViewEngine;
 
   @override
@@ -980,14 +1286,131 @@ class _ShoePreviewSectionState extends State<ShoePreviewSection> {
   String? _errorReason;
   String? _errorMessage;
 
+  /// **The ladder: which engine the box is drawn with right now.**
+  ///
+  /// It starts at [ShoePreviewSection.useWebViewEngine] and moves **one way** — to
+  /// the native renderer — when the WebView engine reports that it cannot draw this
+  /// model on this phone ([shoePreviewWebViewCannotDrawReason], or
+  /// [kShoePreviewWebViewLoadDeadline] passing with nothing said). It never moves
+  /// back: a phone's WebView does not learn to hand out a WebGL2 context, and
+  /// re-trying would put a blank box in front of a customer on every product.
+  late bool _webViewEngine = widget.useWebViewEngine;
+
+  /// True once the WebView engine has proved it cannot draw on this phone.
+  bool _webViewCannotDraw = false;
+
+  /// Why, in the ladder's own vocabulary — the label half of the verdict.
+  String? _webViewReason;
+
+  /// The page line the verdict was read from, so a QA screenshot carries the
+  /// evidence (`gl:webgl1`, `error — loadfailure`) rather than only the label.
+  String? _webViewLine;
+
+  /// True while the fallback decision is in flight, so a page that repeats its
+  /// verdict cannot start two of them.
+  bool _failingOver = false;
+
+  /// **True when the native fallback is latched off on this phone** — the last
+  /// attempt to use it ended in a process death inside the load, so this phone does
+  /// not get a second one ([ShoePreviewFallbackGuard]). Only meaningful together
+  /// with [_webViewCannotDraw]: with the WebView still drawing, the latch is never
+  /// consulted.
+  bool _fallbackBlocked = false;
+
+  /// True once the page has said the model loaded — the one line that keeps the
+  /// deadline from ever being armed again for this box.
+  bool _webViewDrew = false;
+
+  /// The clock that turns "the page never spoke" into a verdict — armed when this
+  /// section hands the box the WebView engine, disarmed by the page's own `loaded`
+  /// line.
+  Timer? _webViewDeadline;
+
   @override
   void initState() {
     super.initState();
     _events = (widget.events ?? _channel.events).listen(_onEvent);
+    _armWebViewDeadline();
+  }
+
+  @override
+  void didUpdateWidget(covariant ShoePreviewSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // A caller that changes the engine asks for a fresh ladder, not for the
+    // verdict taken about the engine it replaced. Nothing in the app flips this at
+    // runtime (it is a compile-time switch); the parameter exists so tests can
+    // reach both branches, and this is what keeps a reused `State` honest.
+    if (oldWidget.useWebViewEngine != widget.useWebViewEngine) {
+      _webViewEngine = widget.useWebViewEngine;
+      _webViewCannotDraw = false;
+      _failingOver = false;
+      _fallbackBlocked = false;
+      _webViewReason = null;
+      _webViewLine = null;
+      _webViewDrew = false;
+      _armWebViewDeadline();
+    }
+    // ⚠️ **A hidden box is not a slow one.** `paused` is set while the AR screen is
+    // on top, and the box is unmounted then — so a clock left running would time out
+    // a page that was never asked to draw and move the ladder on a verdict about
+    // nothing. It stops while the box is hidden and starts fresh when it comes
+    // back, which is also the honest reading of "how long has this page been
+    // failing?": from the moment it was on screen.
+    if (oldWidget.paused != widget.paused) {
+      if (widget.paused) {
+        _webViewDeadline?.cancel();
+        _webViewDeadline = null;
+      } else {
+        _armWebViewDeadline();
+      }
+    }
+  }
+
+  /// [kShoePreviewWebViewLoadDeadline] against a page that has not said `loaded`.
+  ///
+  /// ⚠️ **Armed once per engine mount, not from `build`.** A rebuild — a theme
+  /// flip, the gesture tutorial appearing, a QA line landing — must not restart
+  /// the clock, or a page that never speaks would reset its own deadline every
+  /// time it produced any news at all.
+  ///
+  /// ⚠️ **And never against a box that has nothing to draw.** The bytes can be
+  /// evicted between the page's prefetch and this mount, and the WebView engine is
+  /// the only face that says so in words ("The 3D model is not on this device.").
+  /// A clock running there would time that sentence out and hand the box to a
+  /// renderer with no file to open — trading the one honest state this feature has
+  /// for a blank stage.
+  void _armWebViewDeadline() {
+    _webViewDeadline?.cancel();
+    _webViewDeadline = null;
+    if (!_webViewEngine ||
+        _webViewDrew ||
+        widget.paused ||
+        !shoePreviewModelOnDisk(widget.model)) {
+      return;
+    }
+    _webViewDeadline = Timer(kShoePreviewWebViewLoadDeadline, () {
+      unawaited(_failOver(
+        kWebViewLoadTimeoutReason,
+        'no load in ${kShoePreviewWebViewLoadDeadline.inSeconds}s',
+      ));
+    });
   }
 
   void _onEvent(Map<String, dynamic> event) {
     final type = event['type']?.toString();
+    if (type == 'modelLoaded') {
+      // ⚠️ **The native renderer got past the load, and that is the whole latch.**
+      // Every measured death on this feature sits *before* this event — the P30 Pro
+      // and the vivo V2022 both stop at `load: entities added — applying the
+      // transform` and the process goes with them — so an engine that reaches it is
+      // one this phone survived, and the next launch may try the native fallback
+      // again. It is read here, in every build, because the native side raises this
+      // event unconditionally; the `status` heartbeat beside it is diagnostics-only,
+      // and hanging the latch on that would leave every customer's phone latched
+      // forever after one unlucky start.
+      ShoePreviewFallbackGuard.clearAttempt();
+      return;
+    }
     if (type == 'status') {
       _recordStatus(event['data']);
       return;
@@ -1031,9 +1454,88 @@ class _ShoePreviewSectionState extends State<ShoePreviewSection> {
   /// (`loop=`, `present=`, `beginFail=`), while this is already a finished line.
   /// Folding them would mean inventing a fake `data` map for one of them.
   void _recordEngineLine(String line) {
-    if (!widget.showDiagnostics || line.isEmpty) return;
-    if (!mounted || line == _statusLine) return;
+    if (line.isEmpty) return;
+    // ⚠️ **Classified before the readout's gate, and the ordering is the fix
+    // rather than a detail.** `showDiagnostics` is off in every customer build, and
+    // it used to be the first statement in this method — so the QA switch, not the
+    // phone, would have decided whether a box falls back to the engine that can
+    // draw. The builds it would have decided against are the only builds most
+    // customers ever run.
+    final reason = shoePreviewWebViewCannotDrawReason(line);
+    if (reason != null) {
+      unawaited(_failOver(reason, line));
+    } else if (shoePreviewWebViewLoaded(line)) {
+      // The model is on screen: the page has kept the one promise the deadline was
+      // waiting for, and it is never asked again for this box (a theme flip does not
+      // make a page that drew stop having drawn).
+      _webViewDrew = true;
+      _webViewDeadline?.cancel();
+      _webViewDeadline = null;
+    }
+    if (!widget.showDiagnostics || !mounted || line == _statusLine) return;
     setState(() => _statusLine = line);
+  }
+
+  /// **The verdict arrives: the WebView engine cannot draw this model on this
+  /// phone, so the box is handed to the native renderer** — unless this phone has
+  /// already proved that the native renderer kills it, in which case the box says
+  /// so instead of dying again.
+  ///
+  /// ⚠️ **Why a ladder at all, in one sentence:** each engine is blind where the
+  /// other sees. The native renderer is the one measured to draw this shoe on the
+  /// owner's P30 Pro (~57 fps) and the one measured to abort the process on a vivo
+  /// V2022; `<model-viewer>` is the reverse — five clean opens on the vivo, and a
+  /// blank box on any phone whose WebView cannot hand it a WebGL2 context. A box
+  /// that only ever tries one of them cannot show a shoe on every phone, and the
+  /// requirement is every phone.
+  ///
+  /// ⚠️ **The latch is read here, not in `build`** — it is a disk read, and the one
+  /// place it can be awaited is the moment a verdict arrives, which is long after
+  /// the first frame and never inside a build.
+  Future<void> _failOver(String reason, String line) async {
+    if (_failingOver || _webViewCannotDraw) return;
+    _failingOver = true;
+    _webViewDeadline?.cancel();
+    _webViewDeadline = null;
+
+    final blocked = await ShoePreviewFallbackGuard.blockedOrLoad();
+    if (!mounted) return;
+
+    if (blocked) {
+      navDiag('[preview] webview cannot draw ($reason · $line) and the native '
+          'fallback is latched off on this phone — saying so instead');
+      setState(() {
+        _webViewCannotDraw = true;
+        _fallbackBlocked = true;
+        _webViewReason = reason;
+        _webViewLine = line;
+        // The readout is the only witness on a phone with no logcat, and the
+        // ladder's own move has to be on it: without this line a screenshot of a
+        // refused box says "not supported" and nothing about why.
+        if (widget.showDiagnostics) {
+          _statusLine = 'ladder: webview → blocked · $reason · $line';
+        }
+      });
+      return;
+    }
+
+    // ⚠️ **Written before the native view is mounted, and synchronously.** The
+    // death this records happens inside the load — about a second from here on the
+    // phones it was measured on — and it takes the process with it, so an async
+    // write queued behind a platform channel would not be on disk when the evidence
+    // was needed. See `ShoePreviewFallbackGuard`.
+    ShoePreviewFallbackGuard.markAttempt();
+    navDiag('[preview] webview cannot draw ($reason · $line) — falling back to '
+        'the native renderer');
+    setState(() {
+      _webViewCannotDraw = true;
+      _webViewReason = reason;
+      _webViewLine = line;
+      _webViewEngine = false;
+      if (widget.showDiagnostics) {
+        _statusLine = 'ladder: webview → native · $reason · $line';
+      }
+    });
   }
 
   void _recordStatus(Object? data) {
@@ -1057,18 +1559,37 @@ class _ShoePreviewSectionState extends State<ShoePreviewSection> {
   /// to print — a customer build, or no failure yet.
   ///
   /// One string rather than three widgets because it is one idea: which renderer
-  /// this phone turned out to have. `SHOE_PREVIEW_ALLOW_LEVEL1` also announces
-  /// itself here, so a screenshot from a QA run says which build produced it —
+  /// this phone turned out to have. Since the ladder exists it also carries the
+  /// engine's own verdict (`engine=webview → native` and the page line that
+  /// produced it), because "the box said not supported" and "the box said not
+  /// supported after the WebView refused and the native renderer was latched off"
+  /// are different facts about the same screenshot. `SHOE_PREVIEW_ALLOW_LEVEL1`
+  /// also announces itself here, so a screenshot from a QA run says which build
+  /// produced it —
   /// and `SHOE_PREVIEW_LOWER_ENGINE_TO_LEVEL1` announces itself separately,
   /// because "level-1 override on" and "the engine *is* level 1" are different
   /// claims about the same run and the `supported=` half of the line is the only
   /// thing that can tell a lowered engine from a capped one.
   String? get _diagnosticDetail {
-    if (!widget.showDiagnostics || _errorReason == null) return null;
+    if (!widget.showDiagnostics) return null;
+    // ⚠️ **Non-null only where there is a failure to explain, and the ladder's own
+    // verdict is not one.** A WebView that cannot draw has *moved the box to the
+    // other engine*: that state has a shoe in it, so it must not be what puts this
+    // section in its failure branch — which is exactly what a first cut of this did
+    // in a QA build, taking the native box off the page the moment the fallback had
+    // succeeded. The ladder's facts still ride in the detail line once a failure
+    // exists (a latched-off fallback, or the native renderer's own refusal), and a
+    // successful fallback is narrated by the status line under the box instead.
+    if (_errorReason == null && !_fallbackBlocked) return null;
     return <String>[
       if (AppConstants.shoePreviewAllowLevel1) 'QA · level-1 override on',
       if (AppConstants.shoePreviewLowerEngineToLevel1) 'QA · engine pinned to level 1',
-      _errorReason!,
+      if (_webViewCannotDraw)
+        'engine=webview → '
+            '${_fallbackBlocked ? 'no native fallback (latched off)' : 'native'}',
+      ?_webViewReason,
+      ?_webViewLine,
+      ?_errorReason,
       if (_errorMessage != null && _errorMessage!.isNotEmpty) _errorMessage!,
       // The heartbeat goes here rather than becoming its own widget on this path:
       // the box is gone, so the native view is gone, and the last line it sent is
@@ -1089,6 +1610,7 @@ class _ShoePreviewSectionState extends State<ShoePreviewSection> {
   @override
   void dispose() {
     _events?.cancel();
+    _webViewDeadline?.cancel();
     super.dispose();
   }
 
@@ -1117,12 +1639,20 @@ class _ShoePreviewSectionState extends State<ShoePreviewSection> {
     // gone because the gate now says "shown" while the section says "gone").
     if (widget.showDiagnostics && !_tracedBranch) {
       _tracedBranch = true;
+      // Spelled into a local rather than nested inside the interpolation: two
+      // ternaries deep, the lexer reads the inner quotes as the end of the
+      // template. One line, one label.
+      final ladder = !_webViewCannotDraw
+          ? 'untouched'
+          : (_fallbackBlocked ? 'blocked' : 'fell back');
       navDiag('[preview] section branch='
-          '${_unsupported || _diagnosticDetail != null ? 'failure' : 'box'} · '
+          '${_unsupported || _fallbackBlocked || _diagnosticDetail != null ? 'failure' : 'box'} · '
           'unsupported=$_unsupported · reason=$_errorReason · '
-          'engine=${widget.useWebViewEngine ? 'webview' : 'native'}');
+          'engine=${_webViewEngine ? 'webview' : 'native'} · '
+          'ladder=$ladder · '
+          'asked=${widget.useWebViewEngine ? 'webview' : 'native'}');
     }
-    if (_unsupported || _diagnosticDetail != null) {
+    if (_unsupported || _fallbackBlocked || _diagnosticDetail != null) {
       return Padding(
         padding: EdgeInsets.fromLTRB(_gutter.left, 0, _gutter.right, 12),
         child: Column(
@@ -1136,8 +1666,8 @@ class _ShoePreviewSectionState extends State<ShoePreviewSection> {
             // QA readout (if any) underneath it rather than folded into it: the
             // sentence is what a customer is owed, the numbers are a diagnosis.
             ShoePreviewHint(
-              message: _unsupported
-                  ? '3D preview isn\'t supported on this phone.'
+              message: _unsupported || _fallbackBlocked
+                  ? kShoePreviewUnsupportedMessage
                   : '3D preview failed on this build.',
               detail: _diagnosticDetail,
             ),
@@ -1157,12 +1687,16 @@ class _ShoePreviewSectionState extends State<ShoePreviewSection> {
           model: widget.model,
           channel: widget.channel,
           viewBuilder: widget.viewBuilder,
+          webViewBuilder: widget.webViewBuilder,
           height: widget.height,
           bleed: widget.bleed,
           paused: widget.paused,
           // The section's own QA flag is the only one: one switch, not two that can disagree.
           diagnostics: widget.showDiagnostics,
-          useWebViewEngine: widget.useWebViewEngine,
+          // ⚠️ The ladder's current rung, not the caller's request. A WebView that
+          // reported it cannot draw has already flipped this, which is what makes
+          // the fallback a single `setState` rather than a second widget tree.
+          useWebViewEngine: _webViewEngine,
           // ⚠️ **The WebView engine's line arrives here rather than through
           // `_onEvent`**, which only ever carries what the *native* side sends. A
           // build running the WebView engine has no native renderer at all, so a

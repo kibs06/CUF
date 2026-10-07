@@ -485,6 +485,139 @@ state this feature already handles honestly (`ShoePreviewHint`, and the widget's
 failure line). It also needs no ARCore and no `FEATURE_LEVEL_2`, so it draws on the
 ES 3.0 phones `canLoadModels()` provably cannot (D10).
 
+### 8b. The ladder: WebView → native, and the brake on it (2026-10-07)
+
+⚠️ **A WebView cannot draw where the phone gives it no WebGL2 context, and that is
+not a fault the page can repair.** The `model-viewer.min.js` this package ships
+contains three.js **r174**, whose `WebGLRenderer` requests exactly one context name
+(`const t = "webgl2"`) and has no `webgl1`/`experimental-webgl` fallback — three.js
+dropped WebGL1 in r163. On a phone whose system WebView cannot hand one out (an old,
+never-updated Android System WebView; a WebView GPU blocklist; a bundle the Chromium
+in it cannot parse) the page loads, the element upgrades, and the canvas stays empty
+**with no error and no line at all**. That was the reading for the owner's **P30 Pro**
+— the blank stage reported on 2026-10-07, while the same build and the same model
+show the shoe on other phones. ⚠️ **It is now falsified for that phone, and the truth
+is worse for the page's own instruments: measured over adb on 2026-10-07, the P30
+Pro's WebView reports `gl:webgl2` and `<model-viewer>` reports `loaded box=424x672`
+— every line a working page prints — while a screenshot of the glass measures the box
+region as **91.2% exactly `#FFFFFF`** (161,417 of 176,904 sampled pixels), with only **15** pixels of the `#F5F5F5` stage the page paints
+inline on the element itself. The page drew and its surface never reached the screen,
+so no verdict read from the page's words can ever see this fault. The only witness is
+the box's own pixels — the fourth verdict, below.**
+
+**So the section runs a ladder, and it is the requirement that forces it.** The two
+engines are blind where the other sees:
+
+| engine | draws on | measured failure |
+|---|---|---|
+| WebView (`<model-viewer>`) | any phone whose WebView gives it WebGL2 | **two silent faults**: no WebGL2 context at all (`gl:webgl1`/`none`), and — measured on **this P30 Pro** — a WebGL2 context whose surface never reaches the glass (`webview_box_blank`) |
+| native (Filament, `ArTryOnView`) | **the P30 Pro itself, at ~57 fps** | inside the load, taking the process with it: `SIGSEGV` in `TransformManager_nSetTransform` (vivo V2022, 2 of 3 opens) |
+
+````
+ShoePreviewSection  (owns the ladder)
+  └── ShoePreview3D(useWebViewEngine: _webViewEngine)
+        ├── true  → ShoePreviewWebView   → <model-viewer> on 127.0.0.1
+        └── false → AndroidView          → ArTryOnView(Mode.PREVIEW), Filament
+                                       → (if it refuses) the honest sentence
+
+verdicts that move it      one way only:  _webViewEngine = false, never back
+  gl: != webgl2        → webview_webgl2_unavailable
+  element `error`      → webview_load_failed
+  no `loaded` in 8 s   → webview_load_timeout   (kShoePreviewWebViewLoadDeadline)
+  own pixels flat      → webview_box_blank      the box's own reading, 1.5 s after
+                          `loaded` and before the gesture hint; only the WebView
+                          engine's is a verdict, the native engine's is logged as the
+                          control (there is no rung below it)
+````
+
+**Three properties, all of them load-bearing.** (1) **One way.** A phone's WebView
+does not learn to hand out a WebGL2 context, so the ladder never moves back; a second
+attempt would put the blank box in front of a customer again on the next product.
+(2) **Classified before the QA gate.** `_recordEngineLine` used to return early unless
+`showDiagnostics` was on — which would have made a QA switch, not the phone, decide
+whether a customer's box falls back to the engine that can draw.
+(3) **A clock that stops with the box.** The deadline is armed per engine mount, is
+disarmed by the page's own `loaded`, does **not** run while the box is behind the AR
+screen (`paused`) — a hidden box is not a slow one — and never runs for a box whose
+bytes are gone (`shoePreviewModelOnDisk`): the WebView engine is the only face that
+says *"The 3D model is not on this device."* in words, and timing that sentence out
+would trade the one honest state this feature has for a blank stage.
+
+**The brake, because the ladder is otherwise a crash loop.** WebView cannot draw →
+native mounted → the app dies inside the load → reopen → WebView cannot draw → native
+mounted → the app dies again. `ShoePreviewFallbackGuard` breaks it: a marker file
+(`native_attempt`, inside the app support directory beside `shoe_models`) is written
+**synchronously, before the native view is mounted**, and deleted the moment the
+native engine raises **`modelLoaded`** — the event it raises after the asset is
+parsed, the entities are added and the transform is written
+(`ArTryOnView.kt`), which is precisely the window every measured native death sits
+in. A launch that finds the marker still there is standing on evidence, so that phone
+is sent to the honest sentence instead of a second native attempt — permanently, until
+app data is cleared.
+
+⚠️ **What that costs, and what it does not cover.** A *clean* death inside the same
+window — an OOM kill, a force-stop, an unrelated crash while the box was loading — is
+indistinguishable from the renderer's fault, and costs that phone the 3D picture. That
+is the safe direction: the customer loses a picture they were not seeing anyway (the
+WebView had already refused to draw) rather than losing the session. And a death
+*after* the load (the second-teardown fault, the frozen-frame burst) has already
+cleared the marker, so it is not caught by this — a native-side signal for it does not
+exist in a customer build, because the heartbeat is diagnostics-only. Both limits are
+deliberate and both are written into the guard's own header.
+
+✅ **Measured on the P30 Pro on 2026-10-07: the ladder has now been on hardware, and
+on that phone it moves.** The installed build was verified rather than assumed — the
+APK pulled back off the device (`/data/app/com.solevision.app-*/base.apk`) is
+byte-identical to the build (sha256 `163135df13af9f3d367c4699cb4f2d962a8a66cb00795a563e7e6a7d8e8f7433`,
+175,522,747 bytes both sides). One open of the viewer, in order:
+`section branch=box · engine=webview · ladder=untouched` → `[preview-web] gl:webgl2` →
+`[preview-web] loaded box=424x672 body=672 win=672` →
+**`[preview] box pixels: blank:distinct=1 dark=100% flat=true (webview)`** →
+**`[preview] webview cannot draw (webview_box_blank · blank:distinct=1 dark=100%) — falling back to the native renderer`**
+→ `[preview-web] disposed (model 7)` → `engine built: backend=OPENGL … FEATURE_LEVEL_2`
+→ **`[preview] model 7 loaded in 187ms: renderables=1`** → `swap chain built (creates=1, 1080x1714)`.
+The owner's report of that same session: **the shoe is there, and it does not turn.** So
+`webview_box_blank` is the verdict this phone earns, the ladder moves exactly once, and
+the fallback target draws.
+
+⚠️ **What that run leaves open on this phone is the frame, not the picture.** The native
+engine's own control reading four seconds later was
+`box pixels: blank:distinct=125 dark=32% flat=false (native)` — real content in the box,
+and the proof that the capture can see a working platform view rather than describing
+itself — while the present loop gave up exactly as it does in 1.0.41: `beginFrame
+refused 3 frames in a row — rebuilding the swap chain` ×5, then `beginFrame refused the
+frame — chain=ok, rebuilds=5`, the frozen-frame fault recorded under **Open device
+faults** above. Before this round a customer on this phone saw a blank stage; now they
+see a shoe that will not rotate — a smaller and precisely defined defect. That is what
+the next round is for: the compositing fix (mounting the WebView with
+`displayWithHybridComposition: true`) would cure the cause instead of routing around
+it — **and on the same day it was built, and the phone's outcome changed.**
+
+**The same day, later: the compositing fix shipped, and with it the instrument that
+had to be corrected.** `lib/services/webview_composition.dart` wraps the webview
+stack's own `WebViewPlatform` (a four-method interface) and rebuilds exactly one
+method — `createPlatformWebViewWidget` — as an `AndroidWebViewWidget` with
+`displayWithHybridComposition: true`; installed in `main()` before the first frame,
+Android-only, once, and rolled back with `--dart-define=SHOE_PREVIEW_HYBRID=false`
+(`AppConstants.shoePreviewHybridComposition`, on by default). On the same phone that
+cure was then measured working: with the page reporting `loaded`, the glass measured
+**77.6% exactly `#F5F5F5`** (137,200 of 176,904 sampled pixels) with **696 distinct
+colours** — the shoe, drawn by the WebView — while the first hybrid build's
+`RepaintBoundary` capture still read `distinct=1 dark=100%`: **a hybrid-composited
+platform view is presented over the Flutter scene, not inside the layer tree
+`toImage` rasterises**, so the reading was the instrument, not the phone, and the
+ladder sent the customer to the frozen native renderer with a working picture on the
+glass. The corrected build keeps the `box pixels:` log line but the `blank:` **verdict**
+is sent only where the capture could have contained the view
+(`ShoePreview3D.pixelCaptureSeesPlatformView`, defaulted to
+`!shoePreviewHybridComposition`); the other three verdicts are page-side and
+unaffected. Re-measured on that phone after the corrections: two opens, ~9 s each,
+**entirely on the WebView engine** — no fallback, no native engine — and a 20-frame,
+1 s-apart burst shows **the shoe rotating on its own** (three poses 8 s apart are
+visibly different), which the native engine in the same never managed on this phone.
+`webview_flutter_android` and `webview_flutter_platform_interface` moved from
+transitive to declared at their already-locked versions (4.14.1 / 2.15.1).
+
 **⚠️ Four things about the WebView path that are load-bearing.**
 
 1. **The loopback server.** `model_viewer_plus` binds an `HttpServer` to

@@ -1136,6 +1136,30 @@ class AppConstants {
   static const bool shoePreviewWebViewEnabled =
       bool.fromEnvironment('SHOE_PREVIEW_WEBVIEW', defaultValue: true);
 
+  /// Whether the box's WebView is mounted with **hybrid composition** — Flutter's
+  /// `initExpensiveAndroidView` path, where the view's own surface is composited
+  /// into the Flutter scene — instead of the package's default, where Flutter draws
+  /// from an Android `SurfaceTexture` the view hands it.
+  ///
+  /// **ON, and the default is not a preference.** The texture path is the fault
+  /// measured on the owner's P30 Pro on 2026-10-07: with the WebView engine mounted
+  /// the page reported `gl:webgl2` and `loaded box=424x672` — a working page — while
+  /// the box region of the glass measured **91.2% exactly `#FFFFFF`** (161,417 of
+  /// 176,904 sampled pixels) with only **15** pixels of the `#F5F5F5` stage the page
+  /// paints inline on its element. The same model drew on the native engine and in
+  /// the customer portal's browser, so the model, the library and the phone are all
+  /// fine and the *embedding* was the difference. See
+  /// `lib/services/webview_composition.dart` for the mechanism and the wrapper that
+  /// changes it.
+  ///
+  /// **How it is turned off:** `--dart-define=SHOE_PREVIEW_HYBRID=false`, which
+  /// puts every WebView in this app back on the package's own default — the same
+  /// one-define rollback every switch in this feature keeps. The ladder stays under
+  /// it either way: a box that still cannot draw reports `blank:` and moves to the
+  /// native renderer.
+  static const bool shoePreviewHybridComposition =
+      bool.fromEnvironment('SHOE_PREVIEW_HYBRID', defaultValue: true);
+
   // --- VIRTUAL FITTING: V0 RENDERER SPIKE (dev-only, delete on retirement) ---
   /// Gates the V0 virtual-fitting renderer spike — a dev-only screen that
   /// renders a placeholder GLB in AR through the native SceneView integration

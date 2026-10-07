@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:app/constants/app_brightness.dart';
 import 'package:app/constants/app_constants.dart';
@@ -6,7 +7,9 @@ import 'package:app/constants/app_palette.dart';
 import 'package:app/constants/app_theme.dart';
 import 'package:app/services/ar_try_on_channel.dart';
 import 'package:app/services/shoe_preview_channel.dart';
+import 'package:app/services/shoe_preview_fallback_guard.dart';
 import 'package:app/widgets/shoe_preview_3d.dart';
+import 'package:app/widgets/shoe_preview_webview.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -77,6 +80,8 @@ void main() {
   Widget harness({
     TryOnModelSpec spec = model,
     Widget Function()? viewBuilder,
+    Widget Function(ValueChanged<String> onStatus)? webViewBuilder,
+    bool realNativeView = false,
     Stream<Map<String, dynamic>>? events,
     Widget? child,
     bool showDiagnostics = false,
@@ -96,8 +101,17 @@ void main() {
                   paused: paused,
                   bleed: bleed,
                   useWebViewEngine: useWebViewEngine,
-                  viewBuilder: viewBuilder ??
-                      () => const SizedBox(key: Key('fake-3d'), height: 240),
+                  // ⚠️ `realNativeView` is the one way to reach the native *engine*
+                  // through this harness. The default stand-in is returned before the
+                  // engine is chosen (that is the seam's whole contract), so a test
+                  // that wants to see the ladder hand the box to a real `AndroidView`
+                  // has to mount without one — which is also the only way to assert
+                  // what a customer actually gets on such a phone.
+                  viewBuilder: realNativeView
+                      ? null
+                      : (viewBuilder ??
+                          () => const SizedBox(key: Key('fake-3d'), height: 240)),
+                  webViewBuilder: webViewBuilder,
                 ),
           ),
         ),
@@ -989,6 +1003,606 @@ void main() {
 
       await tester.pumpWidget(harness());
       expect(stageCalls(), hasLength(1));
+    });
+  });
+
+  group('the engine ladder', () {
+    // ⚠️ **The fault, the two blind engines, and the requirement — in that order.**
+    // The owner opened the 3D viewer on a **Huawei P30 Pro** and got a blank stage
+    // under "Drag to rotate"; the same build and the same model show the shoe on
+    // other phones. The shipped engine is the WebView one, and a WebView can draw
+    // only where its phone hands it a **WebGL2** context: `model-viewer.min.js`
+    // ships three.js r174, whose renderer asks for `"webgl2"` and nothing else, so
+    // on that phone the page loads, the element upgrades, and the canvas stays
+    // empty for good — with no error and no line. The native Filament renderer is
+    // the mirror image: it *is* measured drawing this shoe on that phone (~57 fps)
+    // and it is measured killing the app inside the load on a vivo V2022 (2 of 3
+    // opens). Neither engine reaches every phone alone, and the requirement is
+    // every phone — so the section runs a ladder, and the tests below are about the
+    // three things that keep a ladder safe: a verdict it can act on, a move that
+    // goes one way only, and a brake that cannot become a crash loop.
+
+    late Directory guardDir;
+
+    /// The model this box is handed, **as a real file**.
+    ///
+    /// ⚠️ Not a nicety: the deadline is armed only for a box that has bytes to
+    /// draw — a box whose model vanished says so in words and must not be timed out
+    /// of that sentence — so a test about the clock has to mount what a product
+    /// page mounts.
+    late TryOnModelSpec spec;
+
+    setUp(() {
+      // The latch is process-wide by design — it has to outlive a process death —
+      // which also makes it the one thing here that can leak between tests.
+      ShoePreviewFallbackGuard.resetForTest();
+      guardDir = Directory.systemTemp.createTempSync('shoe_preview_guard_test');
+      ShoePreviewFallbackGuard.dirOverrideForTest = guardDir.path;
+      spec = TryOnModelSpec(
+        path: '${guardDir.path}${Platform.pathSeparator}7_v1_abc.glb',
+        modelId: 7,
+        sha256: 'abc',
+        authoredLengthMm: 270,
+      );
+      File(spec.path).writeAsStringSync('glTF');
+    });
+
+    tearDown(() {
+      ShoePreviewFallbackGuard.resetForTest();
+      if (guardDir.existsSync()) guardDir.deleteSync(recursive: true);
+    });
+
+    File marker() => File(
+          '${guardDir.path}${Platform.pathSeparator}'
+          '${ShoePreviewFallbackGuard.markerName}',
+        );
+
+    /// Mounts the section on the WebView engine with a stand-in for the page, and
+    /// hands the test the page's line channel.
+    ///
+    /// It is the *real* channel rather than a copy: the callback the stand-in is
+    /// given is the one the box forwards from `ShoePreviewWebView.onStatus`, which
+    /// is the one the ladder reads — so a line reported here travels the production
+    /// path (page → box → section) and the assertions below are about the widget,
+    /// not about a test harness. `realNativeView` is why this harness can see the
+    /// ladder move at all: the default stand-in is returned before the engine is
+    /// chosen, so it would hide the native view the fallback mounts.
+    Future<ValueChanged<String>> mountWebViewEngine(
+      WidgetTester tester, {
+      bool diagnostics = false,
+      Stream<Map<String, dynamic>>? events,
+    }) async {
+      final captured = Completer<ValueChanged<String>>();
+      await tester.pumpWidget(harness(
+        spec: spec,
+        useWebViewEngine: true,
+        realNativeView: true,
+        showDiagnostics: diagnostics,
+        events: events,
+        webViewBuilder: (onStatus) {
+          if (!captured.isCompleted) captured.complete(onStatus);
+          return const SizedBox(key: Key('fake-webview'), height: 240);
+        },
+      ));
+      return captured.future;
+    }
+
+    /// The verdict is awaited (the latch is a disk read) and the box then rebuilds:
+    /// one pump for the read, one for the frame that follows it.
+    Future<void> settle(WidgetTester tester) async {
+      await tester.pump();
+      await tester.pump();
+    }
+
+    testWidgets('a box whose model vanished keeps its sentence instead of the clock',
+        (tester) async {
+      // The other honest state this feature has: bytes evicted between the page's
+      // prefetch and this mount. The WebView engine is the only face that says so in
+      // words, so it must never be timed out of that sentence and handed to a
+      // renderer with no file to open.
+      // No stand-in page here: the sentence is the real `ShoePreviewWebView`'s own
+      // face, and a fake engine would replace exactly the widget under test.
+      File(spec.path).deleteSync();
+      await tester.pumpWidget(harness(
+        spec: spec,
+        useWebViewEngine: true,
+        realNativeView: true,
+      ));
+
+      expect(
+        find.text('The 3D model is not on this device.'),
+        findsOneWidget,
+        reason: 'the box says why it is empty rather than drawing nothing',
+      );
+
+      await tester.pump(
+        kShoePreviewWebViewLoadDeadline + const Duration(seconds: 2),
+      );
+      await settle(tester);
+
+      expect(
+        find.byType(AndroidView),
+        findsNothing,
+        reason: 'the ladder must not trade a sentence for a blank stage',
+      );
+      expect(find.text('The 3D model is not on this device.'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    test('the page lines that mean "this phone cannot draw", as a table', () {
+      // Two verdicts from the page and none from anything else. `loaded` and
+      // `progress` are deliberately in the news column: a load in flight reports
+      // progress, and only a clock — never a line — can call that a fault.
+      expect(shoePreviewWebViewCannotDrawReason('gl:webgl2'), isNull);
+      expect(
+        shoePreviewWebViewCannotDrawReason('gl:webgl1'),
+        kWebViewNoWebgl2Reason,
+        reason: 'the device has 3D and the renderer still cannot use it — the '
+            'P30 Pro line that started this',
+      );
+      expect(shoePreviewWebViewCannotDrawReason('gl:none'), kWebViewNoWebgl2Reason);
+      expect(
+        shoePreviewWebViewCannotDrawReason('error — loadfailure'),
+        kWebViewLoadFailedReason,
+      );
+      expect(
+        shoePreviewWebViewCannotDrawReason('error:no-element'),
+        kWebViewLoadFailedReason,
+      );
+      expect(shoePreviewWebViewCannotDrawReason('loaded box=396x520'), isNull);
+      expect(
+        shoePreviewWebViewCannotDrawReason('progress 40 box=396x520'),
+        isNull,
+        reason: 'a stall at 40% is not a verdict about the phone',
+      );
+
+      expect(shoePreviewWebViewLoaded('loaded box=396x520'), isTrue);
+      expect(shoePreviewWebViewLoaded('progress 40 box=396x520'), isFalse);
+      expect(shoePreviewWebViewLoaded('gl:webgl2'), isFalse);
+
+      // ⚠️ The box's own verdict, and the one the owner's P30 Pro earned on
+      // 2026-10-07: a page that reported `gl:webgl2` and `loaded` while the screen
+      // stayed pure white. See [kWebViewBlankBoxReason].
+      expect(
+        shoePreviewWebViewCannotDrawReason('blank:distinct=1 dark=0%'),
+        kWebViewBlankBoxReason,
+      );
+      expect(
+        shoePreviewWebViewCannotDrawReason('blank:distinct=3 dark=2%'),
+        kWebViewBlankBoxReason,
+      );
+    });
+
+    test('a captured box is judged on its colours, not on its brightness', () {
+      // ⚠️ **Why the metric is colour count.** The shoe on the owner's product is
+      // ivory on a light stage: a *darkness* test would call a correctly drawn white
+      // shoe empty. Shading, a shadow and an edge are what no blank box can fake, and
+      // they are exactly what a colour count sees.
+      Uint8List pixels(int Function(int i) rgb, {int count = 400}) {
+        final bytes = Uint8List(count * 4);
+        for (var i = 0; i < count; i++) {
+          final value = rgb(i);
+          bytes[i * 4] = value & 0xFF;
+          bytes[i * 4 + 1] = (value >> 8) & 0xFF;
+          bytes[i * 4 + 2] = (value >> 16) & 0xFF;
+          bytes[i * 4 + 3] = 0xFF;
+        }
+        return bytes;
+      }
+
+      final blank = measureBoxPixels(pixels((_) => 0xFFFFFF));
+      expect(blank.sampled, greaterThan(0));
+      expect(blank.colours, 1, reason: 'a platform view that arrived empty leaves '
+          'exactly one colour: the page behind it');
+      expect(blank.darkPercent, 0);
+
+      final stageOnly = measureBoxPixels(pixels((_) => 0xF5F5F5));
+      expect(
+        stageOnly.colours,
+        1,
+        reason: 'even the stage colour alone is not a picture',
+      );
+
+      final drawn = measureBoxPixels(
+        pixels((i) => 0x808080 + ((i % 60) << 8) + ((i % 37) << 16)),
+      );
+      expect(
+        drawn.colours,
+        greaterThan(ShoePreview3D.blankBoxColourFloor),
+        reason: 'shading is the signature of a drawn model, however light it is',
+      );
+
+      final ink = measureBoxPixels(pixels((_) => 0x101010));
+      expect(ink.darkPercent, 100);
+      expect(ink.colours, 1);
+    });
+
+    test('the latch reads the disk once, and only a death leaves it set', () async {
+      // The file *is* the memory: nothing in the app clears it, so its presence at
+      // the next launch is the phone saying "the native renderer killed me inside
+      // the load".
+      expect(
+        ShoePreviewFallbackGuard.blocked,
+        isFalse,
+        reason: 'not known yet must not read as known-safe, but the getter is not '
+            'what the ladder consults — `blockedOrLoad` is',
+      );
+
+      expect(await ShoePreviewFallbackGuard.blockedOrLoad(), isFalse);
+      expect(marker().existsSync(), isFalse);
+
+      marker().writeAsStringSync('native fallback attempt began\n');
+      ShoePreviewFallbackGuard.resetForTest();
+      ShoePreviewFallbackGuard.dirOverrideForTest = guardDir.path;
+      expect(await ShoePreviewFallbackGuard.blockedOrLoad(), isTrue);
+      expect(ShoePreviewFallbackGuard.blocked, isTrue);
+    });
+
+    testWidgets('a WebView with no WebGL2 hands the box to the native renderer',
+        (tester) async {
+      final report = await mountWebViewEngine(tester);
+      expect(find.byKey(const Key('fake-webview')), findsOneWidget);
+      expect(find.byType(AndroidView), findsNothing);
+
+      // The P30 Pro's own line: the phone has WebGL1, and `model-viewer` will
+      // never accept it.
+      report('gl:webgl1');
+      await settle(tester);
+
+      expect(
+        find.byType(AndroidView),
+        findsOneWidget,
+        reason: 'the native renderer is the engine measured drawing this shoe on '
+            'the phone whose WebView cannot',
+      );
+      expect(find.byKey(const Key('fake-webview')), findsNothing);
+      expect(
+        find.text(kShoePreviewUnsupportedMessage),
+        findsNothing,
+        reason: 'the ladder exists so this sentence is the last resort, not the '
+            'first',
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('an element that raised an error hands the box over as well',
+        (tester) async {
+      final report = await mountWebViewEngine(tester);
+
+      // `loadfailure` is the package's own signal that the page gave up on the
+      // model (measured once on a real device, from a widget that reloaded itself).
+      report('error — loadfailure');
+      await settle(tester);
+
+      expect(find.byType(AndroidView), findsOneWidget);
+      expect(find.byKey(const Key('fake-webview')), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a page that drew is never timed out afterwards', (tester) async {
+      // The deadline's other half, and the one that would be invisible without
+      // this test: it has to be *disarmed* by the page's own `loaded`, or every
+      // phone that works would be handed to the other engine eight seconds in.
+      final report = await mountWebViewEngine(tester);
+      report('gl:webgl2');
+      report('loaded box=396x520');
+      await tester.pump();
+
+      expect(find.byKey(const Key('fake-webview')), findsOneWidget);
+      await tester.pump(
+        kShoePreviewWebViewLoadDeadline + const Duration(seconds: 1),
+      );
+
+      expect(
+        find.byType(AndroidView),
+        findsNothing,
+        reason: 'a shoe already on screen must not be taken away by a clock',
+      );
+      expect(find.byKey(const Key('fake-webview')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a page that never speaks is timed out into the native renderer',
+        (tester) async {
+      // The old-WebView case, and the reason a clock exists at all: a bundle the
+      // Chromium in the phone cannot parse never upgrades the custom element, so
+      // `whenDefined` never resolves, no listener is ever attached, and the page
+      // raises *nothing* — not even an error. Silence is the fault.
+      await mountWebViewEngine(tester, diagnostics: true);
+
+      await tester.pump(
+        kShoePreviewWebViewLoadDeadline - const Duration(seconds: 1),
+      );
+      expect(
+        find.byType(AndroidView),
+        findsNothing,
+        reason: 'seven seconds is not eight — the deadline is asserted, not '
+            'eyeballed',
+      );
+
+      await tester.pump(const Duration(seconds: 1));
+      await settle(tester);
+
+      expect(find.byType(AndroidView), findsOneWidget);
+      expect(
+        find.textContaining(kWebViewLoadTimeoutReason),
+        findsOneWidget,
+        reason: 'a QA screenshot has to say which verdict moved the box',
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    /// RGBA bytes for a box that contains a picture: shades and an edge, which is
+    /// what no blank box can fake (and which a *darkness* test would miss entirely on
+    /// a white shoe — see `measureBoxPixels`).
+    Uint8List paintedBox({int count = 400}) {
+      final bytes = Uint8List(count * 4);
+      for (var i = 0; i < count; i++) {
+        bytes[i * 4] = 0x40 + (i % 64);
+        bytes[i * 4 + 1] = 0x80 + (i % 48);
+        bytes[i * 4 + 2] = 0xC0 - (i % 56);
+        bytes[i * 4 + 3] = 0xFF;
+      }
+      return bytes;
+    }
+
+    /// RGBA bytes for the state the owner's phone was in: the page behind the box,
+    /// and nothing of the box itself.
+    Uint8List blankBox({int count = 400}) {
+      final bytes = Uint8List(count * 4);
+      for (var i = 0; i < count; i++) {
+        bytes[i * 4] = 0xFF;
+        bytes[i * 4 + 1] = 0xFF;
+        bytes[i * 4 + 2] = 0xFF;
+        bytes[i * 4 + 3] = 0xFF;
+      }
+      return bytes;
+    }
+
+    Future<List<String>> mountBoxAndReport(
+      WidgetTester tester,
+      Uint8List Function() pixels, {
+      bool captureSeesPlatformView = true,
+    }) async {
+      final lines = <String>[];
+      ValueChanged<String>? report;
+      // The same shape the file's own harness uses: the box is a full-width child of
+      // a scrolling page, and its header row needs the width.
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: Center(
+              child: ShoePreview3D(
+                model: spec,
+                useWebViewEngine: true,
+                pixelProbeOverride: pixels,
+                pixelCaptureSeesPlatformView: captureSeesPlatformView,
+                onEngineStatus: lines.add,
+                webViewBuilder: (onStatus) {
+                  report = onStatus;
+                  return const SizedBox(key: Key('fake-webview'), height: 240);
+                },
+              ),
+            ),
+          ),
+        ),
+      ));
+      report!('loaded box=424x672');
+      await tester.pump();
+      await tester.pump(ShoePreview3D.paintCheckDelay);
+      await tester.pump();
+      return lines;
+    }
+
+    testWidgets('a page that drew into a box nothing can see says so on the wire',
+        (tester) async {
+      // ⚠️ **The fault this closes, measured on the owner's P30 Pro on 2026-10-07:**
+      // the page reported `gl:webgl2` and `loaded box=424x672`, and the screen showed
+      // the box as pure `#FFFFFF` — a platform view whose surface never arrived. No
+      // page-side signal can see that, so the box reads its own pixels and reports
+      // `blank:` when there is no picture in them; the ladder's reaction to that line
+      // is the section's half, covered above.
+      //
+      // `captureSeesPlatformView: true` is the **texture-layer** build, which is the
+      // mode this verdict was written in and the only one where the capture contains
+      // the platform view at all. The shipped mode is the other one — see the test
+      // below.
+      final lines =
+          await mountBoxAndReport(tester, blankBox, captureSeesPlatformView: true);
+
+      expect(
+        lines.where((line) => line.startsWith(kShoePreviewBlankBoxLine)),
+        hasLength(1),
+        reason: 'a box with no pixels in it is a blank box, whatever the page says',
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('and a box that has a picture in it says nothing', (tester) async {
+      // The other direction, and the one that matters on every phone where the
+      // WebView *does* compose: a drawn box must not move the ladder.
+      final lines =
+          await mountBoxAndReport(tester, paintedBox, captureSeesPlatformView: true);
+
+      expect(
+        lines.where((line) => line.startsWith(kShoePreviewBlankBoxLine)),
+        isEmpty,
+        reason: 'a shoe that is on screen must not be taken away by a check',
+      );
+      expect(find.byKey(const Key('fake-webview')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('in the shipped mode the capture is blind, so it moves nothing',
+        (tester) async {
+      // ⚠️ **The measurement that changed this verdict, on the owner's P30 Pro on
+      // 2026-10-07.** With the WebView mounted in hybrid composition the screen
+      // measured **77.6% exactly `#F5F5F5`** (137,200 of 176,904 sampled pixels) and
+      // 696 distinct colours in the box's band at the instant the page reported
+      // `loaded` — the shoe, drawn by the WebView, on the glass. A capture of that
+      // same box read `distinct=1 dark=100%`, because a hybrid-composited platform
+      // view is presented over the Flutter scene instead of inside the layer tree
+      // `toImage` rasterises. Flat pixels there mean "this instrument cannot see",
+      // not "this phone cannot draw" — and a verdict taken from them would send a
+      // working box to the frozen native renderer on every phone.
+      final lines = await mountBoxAndReport(
+        tester,
+        blankBox,
+        captureSeesPlatformView: false,
+      );
+
+      expect(
+        lines.where((line) => line.startsWith(kShoePreviewBlankBoxLine)),
+        isEmpty,
+        reason: 'a capture that cannot contain the platform view is not a verdict',
+      );
+      expect(
+        find.byKey(const Key('fake-webview')),
+        findsOneWidget,
+        reason: 'the box keeps the engine that is drawing on the glass',
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('the shipped default follows the composition mode', (tester) async {
+      // The two switches cannot drift: the mode that decides whether the platform
+      // view is inside the capture is the mode that decides whether the reading is a
+      // verdict.
+      expect(
+        AppConstants.shoePreviewHybridComposition,
+        isTrue,
+        reason: 'the shipped APK mounts the box with hybrid composition',
+      );
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: Center(
+              child: ShoePreview3D(
+                model: spec,
+                useWebViewEngine: true,
+                pixelProbeOverride: blankBox,
+                webViewBuilder: (_) =>
+                    const SizedBox(key: Key('fake-webview'), height: 240),
+              ),
+            ),
+          ),
+        ),
+      ));
+      expect(
+        tester.widget<ShoePreview3D>(find.byType(ShoePreview3D))
+            .pixelCaptureSeesPlatformView,
+        isFalse,
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a box hidden behind AR is not timed out while it is hidden',
+        (tester) async {
+      // ⚠️ **A hidden box is not a slow one.** While the AR screen is on top the box
+      // is unmounted — no engine, no page, nothing loading — so a clock that kept
+      // running would hand a phone with a perfectly good WebView to the other engine
+      // on a verdict about a page that was never drawn. The clock stops with the box
+      // and starts again when the customer comes back.
+      Widget build({required bool paused}) => harness(
+            spec: spec,
+            useWebViewEngine: true,
+            realNativeView: true,
+            paused: paused,
+            webViewBuilder: (_) =>
+                const SizedBox(key: Key('fake-webview'), height: 240),
+          );
+
+      await tester.pumpWidget(build(paused: true));
+      await tester.pump(
+        kShoePreviewWebViewLoadDeadline + const Duration(seconds: 2),
+      );
+      expect(
+        find.byType(AndroidView),
+        findsNothing,
+        reason: 'the box was under AR for those seconds, not failing to load',
+      );
+
+      await tester.pumpWidget(build(paused: false));
+      await tester.pump(
+        kShoePreviewWebViewLoadDeadline - const Duration(seconds: 1),
+      );
+      expect(find.byType(AndroidView), findsNothing,
+          reason: 'seven seconds is not eight');
+
+      await tester.pump(const Duration(seconds: 1));
+      await settle(tester);
+      expect(
+        find.byType(AndroidView),
+        findsOneWidget,
+        reason: 'the clock starts when the box comes back, not while it is hidden',
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a phone that already died on the native fallback is not sent back to it',
+        (tester) async {
+      // ⚠️ **The brake, and the loop it exists to break:** WebView cannot draw →
+      // native mounted → the app dies inside the load → reopen → WebView cannot
+      // draw → native mounted → the app dies again. The marker on disk is the only
+      // thing that survives that loop, so a launch that finds it does not fall back
+      // again — it says so.
+      marker().writeAsStringSync('native fallback attempt began\n');
+      final report = await mountWebViewEngine(tester, diagnostics: true);
+
+      report('gl:none');
+      await settle(tester);
+
+      expect(
+        find.byType(AndroidView),
+        findsNothing,
+        reason: 'attempting this again is attempting the crash again',
+      );
+      expect(find.text(kShoePreviewUnsupportedMessage), findsOneWidget);
+      expect(find.textContaining(kWebViewNoWebgl2Reason), findsOneWidget);
+      expect(find.textContaining('latched off'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('the attempt reaches the disk before the native view, and leaves when it loads',
+        (tester) async {
+      // ⚠️ **The ordering is the safety property, not an implementation detail.**
+      // The death this records happens about a second after the mount and takes the
+      // process with it, so an announcement made *after* the mount would never be
+      // read — which is exactly why the write is synchronous (`writeAsStringSync`)
+      // rather than a queued preferences write.
+      final events = StreamController<Map<String, dynamic>>();
+      addTearDown(events.close);
+      final report = await mountWebViewEngine(tester, events: events.stream);
+      expect(
+        marker().existsSync(),
+        isFalse,
+        reason: 'no native attempt has been made yet',
+      );
+
+      report('gl:webgl1');
+      await settle(tester);
+
+      expect(
+        marker().existsSync(),
+        isTrue,
+        reason: 'the native view is mounted now, and the announcement has to '
+            'survive the death it is recording',
+      );
+      expect(ShoePreviewFallbackGuard.attemptMarks, 1);
+
+      // `modelLoaded` is the native side's own proof that it got past the load —
+      // raised after the asset is parsed, the entities are added and the transform
+      // is written, which is the window every measured native death sits in. It is
+      // raised in every build, which is what makes it the signal the latch can hang
+      // on: the heartbeat beside it is diagnostics-only.
+      events.add(<String, dynamic>{
+        'type': 'modelLoaded',
+        'data': <String, dynamic>{'loadMs': 111, 'triangles': -1},
+      });
+      await tester.pump();
+
+      expect(marker().existsSync(), isFalse);
+      expect(ShoePreviewFallbackGuard.clears, 1);
     });
   });
 }

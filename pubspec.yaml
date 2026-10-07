@@ -90,6 +90,13 @@ dependencies:
   dio: ^5.11.1
   open_filex: ^4.7.0
   model_viewer_plus: ^1.10.0
+  # Mounted directly (see lib/services/webview_composition.dart): the box's WebView
+  # has to be built as an `AndroidWebViewWidget` to request hybrid composition, and
+  # `model_viewer_plus` builds it itself with the package default. Both already sit
+  # in the lock file as transitive dependencies at these exact versions, so this
+  # pins no new version.
+  webview_flutter_android: ^4.14.1
+  webview_flutter_platform_interface: ^2.15.1
 dev_dependencies:
   flutter_test:
     sdk: flutter
