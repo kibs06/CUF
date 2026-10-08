@@ -62,6 +62,7 @@ class FakeArCore implements ArCoreChannel {
   @override
   Future<List<ArWorldPoint?>> hitTestBatch({
     required List<Offset> screenPoints,
+    bool preferDepth = false,
   }) async {
     if (screenPoints.length == 5 && probeHits.length == 5) return probeHits;
     if (nextHits.length == screenPoints.length) return nextHits;
@@ -72,7 +73,7 @@ class FakeArCore implements ArCoreChannel {
   Future<ArCameraFrame?> acquireCameraFrame() async => nextFrame;
 
   @override
-  Future<ArWorldPoint?> hitTest({required double x, required double y}) async =>
+  Future<ArWorldPoint?> hitTest({required double x, required double y, bool preferDepth = false}) async =>
       null;
 
   @override

@@ -10,26 +10,23 @@ library;
 // CAPTURE STEPS
 // ═══════════════════════════════════════════════════════════════════
 
-/// The four guided captures of one session, in order.
+/// The guided captures of one session, in order.
 ///
-/// Each foot is captured twice: a top-down view (primary for WIDTH) and a
-/// side/profile view (primary for LENGTH). Left foot completes fully before
-/// the right foot starts — feet can differ in size, and finishing one foot's
-/// statistics immediately protects them from later-pass failures.
-enum CaptureStep { leftTop, leftSide, rightTop, rightSide }
+/// Each foot is captured once from the top (the phone held straight above it).
+/// The top view gives both measurements: the outline's long axis is the length
+/// and its widest span is the width. The side/profile capture was dropped
+/// because holding the phone beside the foot was too hard to do reliably.
+/// Left foot completes fully before the right foot starts — feet can differ in
+/// size, and finishing one foot's statistics immediately protects them from
+/// later-pass failures.
+enum CaptureStep { leftTop, rightTop }
 
 extension CaptureStepX on CaptureStep {
   /// Which foot this capture belongs to ('left' | 'right').
-  String get footSide =>
-      this == CaptureStep.leftTop || this == CaptureStep.leftSide
-          ? 'left'
-          : 'right';
+  String get footSide => this == CaptureStep.leftTop ? 'left' : 'right';
 
-  /// Which capture angle this step drives: 'front' (top-down) or 'side'.
-  String get captureAngle =>
-      this == CaptureStep.leftTop || this == CaptureStep.rightTop
-          ? 'front'
-          : 'side';
+  /// Every v2 capture is top-down ('front'); the guide and coaching key off it.
+  String get captureAngle => 'front';
 
   /// Zero-based position in the session order.
   int get index => CaptureStep.values.indexOf(this);
@@ -37,6 +34,22 @@ extension CaptureStepX on CaptureStep {
   CaptureStep? get next {
     final i = index + 1;
     return i < CaptureStep.values.length ? CaptureStep.values[i] : null;
+  }
+}
+
+/// The capture steps for a session's feet, in order.
+///
+/// `'left'` or `'right'` measures one foot — the default for most customers,
+/// whose feet match. `'both'` measures each foot, for customers whose feet
+/// differ in size or shape.
+List<CaptureStep> stepsForFootMode(String footMode) {
+  switch (footMode) {
+    case 'left':
+      return const [CaptureStep.leftTop];
+    case 'right':
+      return const [CaptureStep.rightTop];
+    default:
+      return const [CaptureStep.leftTop, CaptureStep.rightTop];
   }
 }
 
@@ -97,6 +110,9 @@ enum CoachReason {
 
   /// Tracking degraded — move slower / improve lighting.
   moveSlowly,
+
+  /// The camera frames are too blurry to measure — hold steady, wipe the lens.
+  holdSteady,
 
   /// Floor ready — position your foot inside the guide frame.
   positionFoot,

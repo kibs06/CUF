@@ -36,6 +36,8 @@ class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2>
 
   /// 'bare' or 'socks' — sock thickness affects compensation.
   String _footCondition = 'bare';
+  // One foot by default; 'both' for customers whose feet differ in size or shape.
+  String _scanFeet = 'left';
 
   /// Whether camera permission is already granted (drives CTA label).
   bool _cameraGranted = false;
@@ -145,6 +147,7 @@ class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2>
         builder: (_) => FootScanSessionScreenV2(
           footCondition: _footCondition,
           shoeCategory: _shoeCategory,
+          footMode: _scanFeet,
         ),
       ),
     );
@@ -179,6 +182,19 @@ class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2>
                           ],
                           selected: _shoeCategory,
                           onSelect: (v) => setState(() => _shoeCategory = v),
+                        ),
+                        const SizedBox(height: 24),
+                        _buildChipSection(
+                          title: 'Which feet',
+                          subtitle:
+                              'One foot is enough if your feet match. Choose both if they differ in size or shape.',
+                          options: const [
+                            ('left', 'Left foot'),
+                            ('right', 'Right foot'),
+                            ('both', 'Both feet'),
+                          ],
+                          selected: _scanFeet,
+                          onSelect: (v) => setState(() => _scanFeet = v),
                         ),
                         const SizedBox(height: 24),
                         _buildChipSection(
@@ -324,7 +340,7 @@ class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2>
         _expectRow(
           icon: Icons.crop_free_rounded,
           title: 'Frame your foot',
-          description: 'Follow the guide — top view first, then side view.',
+          description: 'Hold your phone straight above each foot, inside the guide.',
           delay: 0,
         ),
         _expectRow(

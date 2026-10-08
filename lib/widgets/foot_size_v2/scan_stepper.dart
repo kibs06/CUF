@@ -5,8 +5,8 @@ import '../../providers/v2/scan_phase.dart';
 
 /// Animated 4-segment progress stepper for the v2 scan session.
 ///
-/// One segment per [CaptureStep] (Left·Top → Left·Side → Right·Top →
-/// Right·Side), docked across the top of the camera view:
+/// One segment per [CaptureStep] (Left·Top → Right·Top), docked across the
+/// top of the camera view:
 /// - Completed segments fill solid + draw an animated checkmark.
 /// - The active segment shows a shimmering fill whose extent tracks capture
 ///   progress (0.0–1.0) while capturing, or a slow pulse while ready.
@@ -24,9 +24,13 @@ class ScanStepper extends StatelessWidget {
   /// Whether the active segment is actively sampling (vs waiting).
   final bool capturing;
 
+  /// The session's steps, one segment each (one foot or both feet).
+  final List<CaptureStep> steps;
+
   const ScanStepper({
     super.key,
     required this.activeIndex,
+    required this.steps,
     this.activeProgress = 0,
     this.capturing = false,
   });
@@ -35,7 +39,7 @@ class ScanStepper extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        for (int i = 0; i < CaptureStep.values.length; i++) ...[
+        for (int i = 0; i < steps.length; i++) ...[
           if (i > 0)
             Expanded(
               child: _Connector(
@@ -50,7 +54,7 @@ class ScanStepper extends StatelessWidget {
                     ? _StepState.done
                     : _StepState.upcoming),
             progress: i == activeIndex ? activeProgress.clamp(0.0, 1.0) : 0,
-            label: CaptureStep.values[i].shortLabel,
+            label: steps[i].shortLabel,
           ),
         ],
       ],
@@ -59,17 +63,13 @@ class ScanStepper extends StatelessWidget {
 }
 
 extension on CaptureStep {
-  /// Two-letter badge for the dot ("LT", "LS", "RT", "RS").
+  /// Two-letter badge for the dot ("LT", "RT").
   String get shortLabel {
     switch (this) {
       case CaptureStep.leftTop:
         return 'L·T';
-      case CaptureStep.leftSide:
-        return 'L·S';
       case CaptureStep.rightTop:
         return 'R·T';
-      case CaptureStep.rightSide:
-        return 'R·S';
     }
   }
 }

@@ -33,11 +33,13 @@ import '../../../widgets/foot_size_v2/scan_stepper.dart';
 class FootScanSessionScreenV2 extends StatefulWidget {
   final String footCondition; // 'bare' | 'socks'
   final String shoeCategory; // 'men' | 'women' | 'kids'
+  final String footMode; // 'left' | 'right' | 'both'
 
   const FootScanSessionScreenV2({
     super.key,
     required this.footCondition,
     this.shoeCategory = 'men',
+    this.footMode = 'both',
   });
 
   @override
@@ -76,6 +78,7 @@ class _FootScanSessionScreenV2State extends State<FootScanSessionScreenV2>
     _session = ScanSessionController(
       footCondition: widget.footCondition,
       shoeCategory: widget.shoeCategory,
+      footMode: widget.footMode,
     );
     _session.addListener(_onSessionChanged);
     _eventsSub = _session.events.listen(_onSessionEvent);
@@ -224,6 +227,7 @@ class _FootScanSessionScreenV2State extends State<FootScanSessionScreenV2>
                               horizontal: 14, vertical: 10),
                           child: ScanStepper(
                             activeIndex: _activeStepIndex,
+                            steps: _session.planSteps,
                             activeProgress: _session.captureProgress,
                             capturing: _session.phase == ScanPhase.capturing,
                           ),
@@ -267,7 +271,7 @@ class _FootScanSessionScreenV2State extends State<FootScanSessionScreenV2>
   int? get _activeStepIndex =>
       _session.phase == ScanPhase.capturing ||
               _session.phase == ScanPhase.stepComplete
-          ? _session.currentStep.index
+          ? _session.planSteps.indexOf(_session.currentStep)
           : null;
 
   /// Debug overlay (detection points) — flip to true for on-device debugging.
@@ -334,9 +338,7 @@ class _FootScanSessionScreenV2State extends State<FootScanSessionScreenV2>
               locked: locked,
               // 1.00–1.03 breathing while unlocked; solid when locked.
               breathe: locked ? 0 : 0.03 * _breathe.value,
-              label: _session.currentStep.captureAngle == 'front'
-                  ? 'TOP VIEW'
-                  : 'SIDE VIEW',
+              label: 'TOP VIEW',
             ),
           ),
         ),
@@ -522,6 +524,8 @@ class _FootScanSessionScreenV2State extends State<FootScanSessionScreenV2>
         return Icons.explore_outlined;
       case CoachReason.moveSlowly:
         return Icons.speed_outlined;
+      case CoachReason.holdSteady:
+        return Icons.blur_on_rounded;
       case CoachReason.positionFoot:
         return Icons.crop_free_rounded;
       case CoachReason.holdStill:
@@ -535,14 +539,14 @@ class _FootScanSessionScreenV2State extends State<FootScanSessionScreenV2>
   }
 
   String hintText(CoachHint hint) {
-    final stepLabel = _session.currentStep.captureAngle == 'front'
-        ? 'top view'
-        : 'side view';
+    const stepLabel = 'top view';
     switch (hint.reason) {
       case CoachReason.findFloor:
         return 'Move your phone slowly over the floor';
       case CoachReason.moveSlowly:
         return 'Keep moving gently — tracking is limited here';
+      case CoachReason.holdSteady:
+        return 'The image is blurry — hold steady and wipe the lens';
       case CoachReason.positionFoot:
         return 'Position your $stepLabel inside the frame';
       case CoachReason.holdStill:
@@ -610,12 +614,8 @@ class _FootScanSessionScreenV2State extends State<FootScanSessionScreenV2>
     switch (_session.currentStep) {
       case CaptureStep.leftTop:
         return 'left foot · top';
-      case CaptureStep.leftSide:
-        return 'left foot · side';
       case CaptureStep.rightTop:
         return 'right foot · top';
-      case CaptureStep.rightSide:
-        return 'right foot · side';
     }
   }
 

@@ -10,11 +10,15 @@ import android.util.Log
 import android.view.Surface
 import android.view.View
 import io.flutter.plugin.platform.PlatformView
+import com.google.ar.core.CameraConfigFilter
 import com.google.ar.core.Config
+import com.google.ar.core.Coordinates2d
 import com.google.ar.core.Frame
 import com.google.ar.core.Plane
+import com.google.ar.core.Pose
 import com.google.ar.core.Session
 import com.google.ar.core.TrackingState
+import java.nio.ByteOrder
 import java.util.concurrent.Executors
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
@@ -94,6 +98,11 @@ class ArFootSizingView(
     // created, configured AND resumed). Lets the plugin answer `startSession`
     // method calls with the REAL state instead of an unconditional `true`.
     @Volatile private var sessionStarted = false
+
+    // V5: true only when the device supports ARCore depth AND the session is
+    // configured with it. Decides whether measurement points come from the
+    // foot's depth surface (preferred) or the floor-plane raycast (fallback).
+    @Volatile private var depthAvailable = false
 
     /** Whether the ARCore session has actually reached "created + resumed". */
     fun isSessionStarted(): Boolean = sessionStarted
@@ -399,15 +408,23 @@ class ArFootSizingView(
             // ── Step 3: Create and configure ARCore session ──
             val arSession = Session(activity)
 
+            // V5: depth is optional. Enable it only where the device supports it;
+            // otherwise measurement keeps the floor-plane raycast.
+            val depthSupported = arSession.isDepthModeSupported(Config.DepthMode.AUTOMATIC)
             val config = Config(arSession).apply {
                 planeFindingMode = Config.PlaneFindingMode.HORIZONTAL_AND_VERTICAL
                 updateMode = Config.UpdateMode.LATEST_CAMERA_IMAGE
                 lightEstimationMode = Config.LightEstimationMode.ENVIRONMENTAL_HDR
                 focusMode = Config.FocusMode.AUTO
+                if (depthSupported) depthMode = Config.DepthMode.AUTOMATIC
             }
 
             arSession.configure(config)
+            // Widest-view camera config before resume(), the documented safe point
+            // (same as the try-on screen): a less cropped feed, not a zoomed one.
+            selectWidestCameraConfig(arSession)
             arSession.resume()
+            depthAvailable = depthSupported
 
             // If the view was disposed while this async creation was in flight,
             // close the fresh session instead of leaking a live ARCore session
@@ -455,6 +472,49 @@ class ArFootSizingView(
         }
     }
 
+    /**
+     * Applies the ARCore camera config that shows the widest view on this display.
+     *
+     * ARCore fills the view with the camera texture and crops the rest. On a tall phone
+     * the usual 16:9 stream shows only part of the width, which reads as zoomed in next to
+     * the normal camera app. A 4:3 stream from the same camera shows more of it. The choice
+     * is scored in [pickWidestCameraConfig]. Any failure keeps ARCore's default.
+     */
+    private fun selectWidestCameraConfig(session: Session) {
+        val metrics = activity.resources.displayMetrics
+        if (metrics.widthPixels <= 0 || metrics.heightPixels <= 0) return
+        val displayAspect = metrics.widthPixels.toDouble() / metrics.heightPixels
+
+        val configs = runCatching {
+            session.getSupportedCameraConfigs(CameraConfigFilter(session))
+        }
+            .onFailure { Log.w(TAG, "getSupportedCameraConfigs failed", it) }
+            .getOrDefault(emptyList())
+        if (configs.isEmpty()) return
+
+        val shapes = configs.mapIndexed { i, cfg ->
+            CameraConfigShape(
+                index = i,
+                textureWidth = cfg.textureSize.width,
+                textureHeight = cfg.textureSize.height,
+                imageWidth = cfg.imageSize.width,
+                imageHeight = cfg.imageSize.height,
+            )
+        }
+        val chosen = pickWidestCameraConfig(shapes, displayAspect) ?: return
+        val config = configs[chosen]
+        runCatching { session.cameraConfig = config }
+            .onSuccess {
+                Log.i(
+                    TAG,
+                    "camera config: texture ${config.textureSize.width}x${config.textureSize.height} " +
+                        "image ${config.imageSize.width}x${config.imageSize.height} " +
+                        "(widest of ${configs.size})",
+                )
+            }
+            .onFailure { Log.w(TAG, "setCameraConfig failed — keeping default", it) }
+    }
+
     private fun destroySession() {
         try {
             lastFrame = null
@@ -462,6 +522,7 @@ class ArFootSizingView(
             hasSetCameraTexture = false // Reset so texture rebinds on session recreation
             cachedFrameBytes = null
             sessionStarted = false // E3: the started state dies with the session
+            depthAvailable = false
             session?.pause()
             session?.close()
         } catch (e: Exception) {
@@ -727,7 +788,7 @@ class ArFootSizingView(
     // PUBLIC API (called from platform channel)
     // ═══════════════════════════════════════════════════════════════
 
-    fun hitTest(x: Float, y: Float): Map<String, Any>? {
+    fun hitTest(x: Float, y: Float, preferDepth: Boolean = false): Map<String, Any>? {
         val arSession = session ?: return null
         val frame = lastFrame ?: return null
 
@@ -765,6 +826,14 @@ class ArFootSizingView(
                 py = (y * uprightH - offsetY) * scale
             }
 
+            // V5: measurement points come from the foot's own depth surface when
+            // depth is available. A pixel with no valid depth returns null (the
+            // sample is rejected) rather than falling back to the floor, which
+            // would reintroduce the projection error this path removes.
+            if (preferDepth && depthAvailable) {
+                return depthHitTest(frame, px, py)
+            }
+
             val hitResults = frame.hitTest(px, py)
             Log.d(TAG, "hitTest norm=($x,$y) -> viewport=($px,$py) hits=${hitResults.size}")
             // E4 fix: the session detects VERTICAL planes too
@@ -788,14 +857,10 @@ class ArFootSizingView(
                 if (!trackable.isPoseInPolygon(hit.hitPose)) continue
 
                 val pose = hit.hitPose
-                val dist = Math.sqrt(
-                    (pose.tx() * pose.tx() + pose.ty() * pose.ty() + pose.tz() * pose.tz()).toDouble()
-                )
-                return mapOf(
-                    "x" to pose.tx().toDouble(),
-                    "y" to pose.ty().toDouble(),
-                    "z" to pose.tz().toDouble(),
-                    "distance" to dist
+                return worldPointMap(
+                    floatArrayOf(pose.tx(), pose.ty(), pose.tz()),
+                    frame.camera.pose,
+                    "plane",
                 )
             }
             // Reaching here means every hit was rejected by the floor filter.
@@ -809,9 +874,107 @@ class ArFootSizingView(
         return null
     }
 
-    fun hitTestBatch(points: List<Map<String, Double>>): List<Map<String, Any>?> {
+    /**
+     * V5 depth measurement: unprojects the foot-surface depth at the view point
+     * (px, py) into world space. Returns null when depth is missing or
+     * implausible at that pixel.
+     */
+    private fun depthHitTest(frame: Frame, px: Float, py: Float): Map<String, Any>? {
+        val camera = frame.camera
+        if (camera.trackingState != TrackingState.TRACKING) return null
+
+        val viewPoint = floatArrayOf(px, py)
+        val texturePoint = FloatArray(2)
+        frame.transformCoordinates2d(
+            Coordinates2d.VIEW,
+            viewPoint,
+            Coordinates2d.TEXTURE_NORMALIZED,
+            texturePoint,
+        )
+
+        val depthImage = try {
+            frame.acquireDepthImage16Bits()
+        } catch (e: Exception) {
+            // Depth is not ready yet (NotYetAvailableException) or unsupported.
+            return null
+        }
+        try {
+            val depthMm = sampleDepthMm(depthImage, texturePoint[0], texturePoint[1])
+                ?: return null
+
+            val intrinsics = camera.imageIntrinsics
+            val focal = intrinsics.focalLength
+            val principal = intrinsics.principalPoint
+            val dims = intrinsics.imageDimensions
+            val imageX = texturePoint[0] * dims[0]
+            val imageY = texturePoint[1] * dims[1]
+            val cameraPoint = unprojectToCameraSpace(
+                imageX,
+                imageY,
+                depthMm / 1000f,
+                focal[0],
+                focal[1],
+                principal[0],
+                principal[1],
+            )
+            val world = camera.pose.transformPoint(cameraPoint)
+            return worldPointMap(world, camera.pose, "depth")
+        } finally {
+            depthImage.close()
+        }
+    }
+
+    /**
+     * Median plausible depth (mm) in the 3x3 neighbourhood of a normalized
+     * texture coordinate, or null when the neighbourhood has too few valid
+     * pixels. DEPTH16 rows are [Image.Plane.getRowStride] bytes apart and pixels
+     * [Image.Plane.getPixelStride] bytes apart.
+     */
+    private fun sampleDepthMm(image: Image, u: Float, v: Float): Float? {
+        val plane = image.planes[0]
+        val buffer = plane.buffer.duplicate().order(ByteOrder.LITTLE_ENDIAN)
+        val width = image.width
+        val height = image.height
+        val cx = (u * width).toInt().coerceIn(0, width - 1)
+        val cy = (v * height).toInt().coerceIn(0, height - 1)
+
+        val neighbours = ArrayList<Int>(9)
+        for (dy in -1..1) {
+            for (dx in -1..1) {
+                val x = cx + dx
+                val y = cy + dy
+                if (x !in 0 until width || y !in 0 until height) continue
+                val offset = y * plane.rowStride + x * plane.pixelStride
+                val raw = buffer.getShort(offset).toInt() and 0xFFFF
+                neighbours.add(depthMmFromRaw16(raw))
+            }
+        }
+        return medianPlausibleDepthMm(neighbours)?.toFloat()
+    }
+
+    /**
+     * World point map for the platform channel. `distance` is measured from the
+     * camera's position (E9 fix: it used to be the distance from the world origin).
+     */
+    private fun worldPointMap(world: FloatArray, cameraPose: Pose, source: String): Map<String, Any> {
+        val dx = (world[0] - cameraPose.tx()).toDouble()
+        val dy = (world[1] - cameraPose.ty()).toDouble()
+        val dz = (world[2] - cameraPose.tz()).toDouble()
+        return mapOf(
+            "x" to world[0].toDouble(),
+            "y" to world[1].toDouble(),
+            "z" to world[2].toDouble(),
+            "distance" to Math.sqrt(dx * dx + dy * dy + dz * dz),
+            "source" to source,
+        )
+    }
+
+    fun hitTestBatch(
+        points: List<Map<String, Double>>,
+        preferDepth: Boolean = false,
+    ): List<Map<String, Any>?> {
         return points.map { point ->
-            hitTest(point["x"]?.toFloat() ?: 0f, point["y"]?.toFloat() ?: 0f)
+            hitTest(point["x"]?.toFloat() ?: 0f, point["y"]?.toFloat() ?: 0f, preferDepth)
         }
     }
 

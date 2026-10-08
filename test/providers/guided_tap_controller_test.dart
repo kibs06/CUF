@@ -63,7 +63,7 @@ class FakeArCore implements ArCoreChannel {
   }
 
   @override
-  Future<ArWorldPoint?> hitTest({required double x, required double y}) async {
+  Future<ArWorldPoint?> hitTest({required double x, required double y, bool preferDepth = false}) async {
     if (gate != null && !gate!.isCompleted) await gate!.future;
     if (hitScript.isEmpty) return null;
     return hitScript.last;
@@ -72,6 +72,7 @@ class FakeArCore implements ArCoreChannel {
   @override
   Future<List<ArWorldPoint?>> hitTestBatch({
     required List<Offset> screenPoints,
+    bool preferDepth = false,
   }) async {
     if (batchHits.length == screenPoints.length) return batchHits;
     return List.filled(screenPoints.length, null);

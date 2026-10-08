@@ -104,6 +104,7 @@ class FakeArCore implements ArCoreChannel {
   @override
   Future<List<ArWorldPoint?>> hitTestBatch({
     required List<Offset> screenPoints,
+    bool preferDepth = false,
   }) async {
     if (screenPoints.length == 5 && probeHits.length == 5) {
       return [
@@ -121,7 +122,7 @@ class FakeArCore implements ArCoreChannel {
   Future<ArCameraFrame?> acquireCameraFrame() async => nextFrame;
 
   @override
-  Future<ArWorldPoint?> hitTest({required double x, required double y}) async =>
+  Future<ArWorldPoint?> hitTest({required double x, required double y, bool preferDepth = false}) async =>
       null;
 
   @override
@@ -201,10 +202,34 @@ FootDetectionResult detectedLowConfidence({String side = 'left'}) =>
       toePoint: const FootPoint(x: 0.60, y: 0.45, likelihood: 0.4),
     );
 
+/// A full-size NV21 frame with sharp vertical edges, so it passes the blur
+/// gate the way a focused camera frame would.
+const int _frameW = 640;
+const int _frameH = 480;
+Uint8List _sharpLuma() {
+  final bytes = Uint8List(_frameW * _frameH * 3 ~/ 2);
+  for (var i = 0; i < _frameW * _frameH; i++) {
+    // Period-4 stripes: the sampler reads every 2nd pixel, so a period-2
+    // pattern would alias to a flat plane.
+    bytes[i] = (i % _frameW) % 4 < 2 ? 0 : 255;
+  }
+  return bytes;
+}
+
 ArCameraFrame frame() => ArCameraFrame(
-      nv21Bytes: Uint8List.fromList(List.filled(64, 1)),
-      width: 640,
-      height: 480,
+      nv21Bytes: _sharpLuma(),
+      width: _frameW,
+      height: _frameH,
+      rotationDegrees: 90,
+    );
+
+/// The same frame, smoothed to a flat luma plane: what a blurry lens delivers.
+ArCameraFrame blurredFrame() => ArCameraFrame(
+      nv21Bytes: Uint8List.fromList(
+        List.filled(_frameW * _frameH * 3 ~/ 2, 128),
+      ),
+      width: _frameW,
+      height: _frameH,
       rotationDegrees: 90,
     );
 
@@ -215,13 +240,18 @@ void main() {
   final List<ScanSessionEvent> caughtEvents = [];
 
   /// Build controller + complete session start + drive to 'ready'.
-  void harness(FakeAsync async, {String condition = 'bare'}) {
+  void harness(
+    FakeAsync async, {
+    String condition = 'bare',
+    String footMode = 'both',
+  }) {
     ar = FakeArCore();
     detector = FakeDetector();
     ctrl = ScanSessionController(
       arCore: ar,
       detectorFactory: () => detector,
       footCondition: condition,
+      footMode: footMode,
     );
     caughtEvents.clear();
     ctrl.events.listen(caughtEvents.add);
@@ -378,37 +408,27 @@ void main() {
   });
 
   group('ScanSessionController — full successful scan', () {
-    test('advances L·T → L·S → R·T → R·S and emits compensated payload', () {
+    test('advances L·T → R·T and emits compensated payload', () {
       fakeAsync((async) {
         harness(async);
 
-        // Plenty of good ticks for all four passes (script repeats last).
+        // Plenty of good ticks for both top passes (script repeats last).
         for (int i = 0; i < 40; i++) {
           stageGoodTick(withWidth: true, side: i % 2 == 0 ? 'left' : 'right');
         }
         stageGoodTick(); // sticky tail
 
-        // Pass 1: LEFT TOP.
+        // Pass 1: LEFT TOP → the left foot is measured and frozen at once.
         runPass(async);
-        expect(ctrl.currentStep, CaptureStep.leftSide);
+        expect(ctrl.currentStep, CaptureStep.rightTop);
         expect(ctrl.phase, ScanPhase.ready);
         expect(caughtEvents.whereType<StepCompletedEvent>().single.step,
             CaptureStep.leftTop);
-
-        // Pass 2: LEFT SIDE → left foot frozen immediately.
-        relockArea(async);
-        runPass(async);
-        expect(ctrl.currentStep, CaptureStep.rightTop);
         final footDone = caughtEvents.whereType<FootCompletedEvent>().single;
         expect(footDone.footSide, 'left');
         expect(footDone.lengthMm, greaterThan(0));
 
-        // Pass 3: RIGHT TOP.
-        relockArea(async);
-        runPass(async);
-        expect(ctrl.currentStep, CaptureStep.rightSide);
-
-        // Pass 4: RIGHT SIDE → complete.
+        // Pass 2: RIGHT TOP → complete.
         relockArea(async);
         runPass(async);
         expect(ctrl.phase, ScanPhase.complete);
@@ -448,9 +468,6 @@ void main() {
         stageGoodTick(withWidth: false); // sticky: estimates from here on
 
         runPass(async); // LEFT TOP — mixes 10 measured + ~8 estimated rows
-
-        relockArea(async);
-        runPass(async); // LEFT SIDE — all estimated rows
         // Left foot combined NOW with frozen statistics.
         final footDone = caughtEvents.whereType<FootCompletedEvent>().single;
 
@@ -466,8 +483,6 @@ void main() {
         stageGoodTick();
         relockArea(async);
         runPass(async); // RIGHT TOP
-        relockArea(async);
-        runPass(async); // RIGHT SIDE
 
         final p = caughtEvents.whereType<ScanCompleteEvent>().single.payload;
         // Left foot was the mixed-measured one; its width must reflect the
@@ -491,11 +506,7 @@ void main() {
 
         runPass(async); // LEFT TOP
         relockArea(async);
-        runPass(async); // LEFT SIDE
-        relockArea(async);
         runPass(async); // RIGHT TOP
-        relockArea(async);
-        runPass(async); // RIGHT SIDE
 
         final p = caughtEvents.whereType<ScanCompleteEvent>().single.payload;
         expect(p.leftLengthMm!, closeTo(p.leftRawLengthMm! - kSockLengthOffsetMm, 0.01));
@@ -593,7 +604,7 @@ void main() {
   });
 
   group('ScanSessionController — visible-band geometry (off-screen box fix)', () {
-    test('side guide rect clamps into the visible crop band', () {
+    test('top guide rect stays on screen in the visible crop band', () {
       fakeAsync((async) {
         harness(async);
 
@@ -601,32 +612,18 @@ void main() {
         final front = ctrl.effectiveGuideRect;
         expect(front, ctrl.currentGuideRect);
 
-        // Drive to the side step.
-        for (int i = 0; i < 25; i++) {
-          stageGoodTick();
-        }
-        stageGoodTick();
-        runPass(async);
-        expect(ctrl.currentStep, CaptureStep.leftSide);
-
-        // Side rect (x 0.15–0.85) must clamp to the visible band
-        // [0.5 ∓ (va/fa)/2] ≈ [0.192, 0.808] on the simulated tall phone.
-        // Y is untouched — horizontal center-crop only.
+        // The one top-down guide (x 0.30–0.70) sits inside the visible band on
+        // the simulated tall phone, so it is never clamped.
         final band = ar._visibleBand;
         final eff = ctrl.effectiveGuideRect;
-        expect(eff.left, closeTo(band.left, 0.001));
-        expect(eff.right, closeTo(band.right, 0.001));
-        expect(eff.top, closeTo(0.35, 0.001));
-        expect(eff.bottom, closeTo(0.65, 0.001));
-        // Fully inside the band (corners sit exactly ON the edges — the
-        // clamp is inclusive; Rect.contains is half-open so don't use it).
+        expect(eff, ctrl.currentGuideRect);
         expect(eff.left >= band.left && eff.right <= band.right, isTrue);
         expect(eff.top >= band.top && eff.bottom <= band.bottom, isTrue);
         ctrl.dispose();
       });
     });
 
-    test('area re-locks for the side step (regression: off-screen probes)',
+    test('area re-locks for the right-foot step (regression: off-screen probes)',
         () {
       fakeAsync((async) {
         harness(async);
@@ -638,11 +635,11 @@ void main() {
         }
         stageGoodTick();
         runPass(async);
-        expect(ctrl.currentStep, CaptureStep.leftSide);
+        expect(ctrl.currentStep, CaptureStep.rightTop);
         expect(ctrl.areaTracked, isFalse);
 
-        // Before the fix, the side rect's corner probes sat at x 0.15/0.85 —
-        // outside the visible band — so every probe but the center missed the
+        // Before the fix, the guide's corner probes could sit outside the
+        // visible band — so every probe but the center missed the
         // plane and the lock stalled forever (box gone, capture blocked).
         // Now the probes use the clamped rect and the 500 ms poll re-locks.
         ar.probeHits = List.filled(5, wp(0.5, 0));
@@ -653,6 +650,101 @@ void main() {
         ctrl.dispose();
       });
     });
+  });
+
+  group('ScanSessionController — floor stability', () {
+    test('a settling floor does not lock the area until two polls agree', () {
+      fakeAsync((async) {
+        harness(async);
+        expect(ctrl.areaTracked, isTrue, reason: 'settled floor from harness');
+
+        // Corner probes now read a floor 5 cm higher: the plane is still moving.
+        ar.probeHits = [
+          wp(0.5, 0),
+          wp(0.1, 0.05),
+          wp(0.9, 0.05),
+          wp(0.1, 0.05),
+          wp(0.9, 0.05),
+        ];
+        ctrl.refreshAreaTracking();
+        async.flushMicrotasks();
+        expect(ctrl.areaTracked, isFalse,
+            reason: 'a drifting floor must drop the lock');
+
+        // The floor settles at the new height: two agreeing polls re-lock it.
+        ar.probeHits = [
+          wp(0.5, 0.05),
+          wp(0.1, 0.05),
+          wp(0.9, 0.05),
+          wp(0.1, 0.05),
+          wp(0.9, 0.05),
+        ];
+        ctrl.refreshAreaTracking();
+        async.flushMicrotasks();
+        expect(ctrl.areaTracked, isTrue,
+            reason: 'the settled floor is the new reference');
+        ctrl.dispose();
+      });
+    });
+  });
+
+  group('ScanSessionController — blur gate', () {
+    test('a blurry frame never becomes a sample and asks to hold steady', () {
+      fakeAsync((async) {
+        harness(async);
+        ar.nextFrame = blurredFrame();
+        ctrl.startCapture();
+        async.elapse(Duration(milliseconds: sampleIntervalMs * 3));
+
+        expect(ctrl.passSampleCount, 0,
+            reason: 'blurred frames must not feed the measurement');
+        expect(ctrl.coachHint?.reason, CoachReason.holdSteady);
+        expect(ctrl.coachHint?.tone, CoachTone.warning);
+        ctrl.cancelCapture();
+        ctrl.dispose();
+      });
+    });
+  });
+
+  group('ScanSessionController — one-foot scans', () {
+    for (final mode in ['left', 'right']) {
+      test('$mode-only scan measures just that foot and completes', () {
+        fakeAsync((async) {
+          harness(async, footMode: mode);
+          expect(ctrl.planSteps, hasLength(1));
+          expect(
+            ctrl.currentStep,
+            mode == 'left' ? CaptureStep.leftTop : CaptureStep.rightTop,
+          );
+
+          for (int i = 0; i < 25; i++) {
+            stageGoodTick(side: mode);
+          }
+          stageGoodTick(side: mode);
+          runPass(async);
+
+          expect(ctrl.phase, ScanPhase.complete);
+          final done = caughtEvents.whereType<FootCompletedEvent>().single;
+          expect(done.footSide, mode);
+          final p = caughtEvents.whereType<ScanCompleteEvent>().single.payload;
+          expect(p.sizingFootSide, mode);
+          expect(p.euSize, isNotNull);
+          if (mode == 'left') {
+            expect(p.leftLengthMm, greaterThan(0));
+            expect(p.rightLengthMm, isNull);
+          } else {
+            expect(p.rightLengthMm, greaterThan(0));
+            expect(p.leftLengthMm, isNull);
+          }
+          // Scanning one foot by choice is not a missing-foot warning.
+          expect(
+            p.confidenceFactors.any((f) => f.title.startsWith('Only your')),
+            isFalse,
+          );
+          ctrl.dispose();
+        });
+      });
+    }
   });
 
   group('ScanSessionController — failure paths', () {
@@ -687,9 +779,11 @@ void main() {
         }
         stageGoodTick();
         runPass(async);
-        expect(ctrl.currentStep, CaptureStep.leftSide);
+        expect(ctrl.currentStep, CaptureStep.rightTop);
+        expect(caughtEvents.whereType<FootCompletedEvent>().single.footSide,
+            'left');
 
-        // Pass B (LEFT SIDE): fails completely — no frames at all.
+        // Pass B (RIGHT TOP): fails completely — no frames at all.
         ar.nextFrame = null;
         detector.script.clear();
         ar.sampleHitScript.clear();
@@ -698,10 +792,10 @@ void main() {
         async.elapse(ScanSessionController.kV2ScanDuration);
         async.elapse(const Duration(milliseconds: 900));
         expect(ctrl.phase, ScanPhase.ready);
-        expect(caughtEvents.whereType<FootCompletedEvent>(), isEmpty,
-            reason: 'failed side pass must not finalize the foot');
+        expect(caughtEvents.whereType<FootCompletedEvent>(), hasLength(1),
+            reason: 'failed right pass must not finalize the right foot');
 
-        // Pass C: retry the same step with good data — succeeds cleanly.
+        // Pass C: retry the right top step with good data — succeeds cleanly.
         for (int i = 0; i < 25; i++) {
           stageGoodTick();
         }
@@ -709,12 +803,12 @@ void main() {
         relockArea(async);
         runPass(async);
 
-        // Exactly ONE completion event, from the clean retry only.
+        // Exactly one completion per foot, from the clean retry only.
         final done = caughtEvents.whereType<FootCompletedEvent>().toList();
-        expect(done, hasLength(1));
-        expect(done.single.footSide, 'left');
-        expect(done.single.lengthMm, greaterThan(0));
-        expect(ctrl.currentStep, CaptureStep.rightTop);
+        expect(done, hasLength(2));
+        expect(done.last.footSide, 'right');
+        expect(done.last.lengthMm, greaterThan(0));
+        expect(ctrl.phase, ScanPhase.complete);
         ctrl.dispose();
       });
     });
@@ -759,13 +853,7 @@ void main() {
         }
         stageGoodTick();
         relockArea(async);
-        runPass(async); // LEFT TOP again
-        relockArea(async);
-        for (int i = 0; i < 25; i++) {
-          stageGoodTick();
-        }
-        stageGoodTick();
-        runPass(async); // LEFT SIDE
+        runPass(async); // LEFT TOP again — the clean retry completes the foot
 
         final done = caughtEvents.whereType<FootCompletedEvent>();
         expect(done, hasLength(1));

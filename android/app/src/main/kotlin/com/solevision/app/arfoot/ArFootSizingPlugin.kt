@@ -154,12 +154,14 @@ class ArFootSizingPlugin(private val activity: Activity) {
             "hitTest" -> {
                 val x = (call.argument<Any>("x") as? Number)?.toFloat() ?: 0.5f
                 val y = (call.argument<Any>("y") as? Number)?.toFloat() ?: 0.5f
-                result.success(currentView?.hitTest(x, y))
+                val preferDepth = call.argument<Boolean>("preferDepth") ?: false
+                result.success(currentView?.hitTest(x, y, preferDepth))
             }
             "hitTestBatch" -> {
                 @Suppress("UNCHECKED_CAST")
                 val points = call.argument<List<Map<String, Double>>>("points") ?: emptyList()
-                result.success(currentView?.hitTestBatch(points))
+                val preferDepth = call.argument<Boolean>("preferDepth") ?: false
+                result.success(currentView?.hitTestBatch(points, preferDepth))
             }
             "acquireCameraFrame" -> {
                 val view = currentView

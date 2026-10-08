@@ -638,7 +638,11 @@ class AutoScanController extends ChangeNotifier {
         detection.toePoint!.asOffset,
         ...?detection.widthPoints?.map((p) => p.asOffset),
       ];
-      final worldPoints = await _arCore.hitTestBatch(screenPoints: screenPoints);
+      // V5: measure on the foot's own depth surface (see scan_session_controller).
+      final worldPoints = await _arCore.hitTestBatch(
+        screenPoints: screenPoints,
+        preferDepth: true,
+      );
       final raycastHit = worldPoints.length >= 2 &&
           worldPoints[0] != null &&
           worldPoints[1] != null;

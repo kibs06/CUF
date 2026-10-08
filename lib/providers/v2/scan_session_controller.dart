@@ -7,6 +7,8 @@ import '../../services/ar_core_channel.dart';
 import '../../utils/ar_foot_measurement_pipeline.dart';
 import '../../utils/foot_detector.dart';
 import '../../utils/foot_measurement_utils.dart';
+import '../../utils/floor_tracker.dart';
+import '../../utils/frame_sharpness.dart';
 import '../../utils/mlkit_segmentation_foot_detector.dart';
 import 'scan_phase.dart';
 
@@ -182,6 +184,9 @@ class ScanSessionController extends ChangeNotifier {
   ArTrackingState _trackingState = ArTrackingState.paused;
   bool _planeDetected = false;
   bool _areaTracked = false;
+
+  /// Floor-height stability across area polls: a settling plane must not lock.
+  final FloorTracker _floorTracker = FloorTracker();
   Timer? _areaCheckTimer;
 
   /// View aspect ratio (width / height), reported by the session screen's
@@ -252,18 +257,27 @@ class ScanSessionController extends ChangeNotifier {
 
   Stream<ScanSessionEvent> get events => _eventController.stream;
 
+  /// Which feet this session measures: 'left' | 'right' | 'both'.
+  final String footMode;
+
   ScanSessionController({
     ArCoreChannel? arCore,
     FootDetector Function()? detectorFactory,
     this.footCondition = 'bare',
     this.shoeCategory = 'men',
+    this.footMode = 'both',
   })  : _arCore = arCore ?? ArCoreChannel.instance,
         _detectorFactory =
-            detectorFactory ?? MlKitSegmentationFootDetector.new;
+            detectorFactory ?? MlKitSegmentationFootDetector.new {
+    _currentStep = planSteps.first;
+  }
 
   // ── Read-only render state ──
   ScanPhase get phase => _phase;
   CaptureStep get currentStep => _currentStep;
+
+  /// The capture steps this session runs, in order (one foot or both).
+  List<CaptureStep> get planSteps => stepsForFootMode(footMode);
   CoachHint? get coachHint => _coachHint;
   ArTrackingState get trackingState => _trackingState;
   bool get areaTracked => _areaTracked;
@@ -288,10 +302,7 @@ class ScanSessionController extends ChangeNotifier {
   String? get startFailureMessage => _startFailureMessage;
 
   /// Guide rect (normalized) for the current step.
-  Rect get currentGuideRect =>
-      _currentStep.captureAngle == 'front'
-          ? kFrontCaptureGuideRect
-          : kSideCaptureGuideRect;
+  Rect get currentGuideRect => kFrontCaptureGuideRect;
 
   /// Upright camera-frame aspect (width / height after display rotation).
   /// Falls back to the common 4:3 sensor (3:4 upright) until the first frame
@@ -472,7 +483,14 @@ class ScanSessionController extends ChangeNotifier {
     final hits = await _arCore.hitTestBatch(screenPoints: probePoints);
     if (_disposed) return;
     final onPlane = hits.whereType<ArWorldPoint>().length;
-    final tracked = onPlane >= 3;
+    // Floor height comes from the four CORNER probes only: the centre ray can
+    // sit on the foot itself, and its height would read as the floor.
+    final cornerHeights = [
+      for (final hit in hits.skip(1))
+        if (hit != null) hit.y,
+    ];
+    final floorStable = _floorTracker.observe(cornerHeights);
+    final tracked = onPlane >= 3 && floorStable;
     if (tracked != _areaTracked) {
       _areaTracked = tracked;
       _reconcileIdlePhases();
@@ -620,6 +638,23 @@ class ScanSessionController extends ChangeNotifier {
       _lastFrameHeight = frame.height;
       _lastFrameRotation = frame.rotationDegrees;
 
+      // ── 1b. Blur gate: a smeared frame moves the heel, toe and width points
+      // by pixels, which becomes millimetres. Blurry frames never become samples.
+      final sharpness =
+          frameSharpness(frame.nv21Bytes, frame.width, frame.height);
+      if (sharpness < kMinFrameSharpness) {
+        debugPrint('[ArScanV2] sample=SKIP blurry '
+            '(sharpness=${sharpness.toStringAsFixed(1)})');
+        _lastDetection = null;
+        _clearLiveMeasurement();
+        _coachHint = const CoachHint(
+          reason: CoachReason.holdSteady,
+          tone: CoachTone.warning,
+        );
+        notifyListeners();
+        return;
+      }
+
       // ── 2. On-device foot detection ──
       final detection = await _detector?.detect(
         nv21Bytes: frame.nv21Bytes,
@@ -655,7 +690,12 @@ class ScanSessionController extends ChangeNotifier {
         detection.toePoint!.asOffset,
         ...?detection.widthPoints?.map((p) => p.asOffset),
       ];
-      final worldPoints = await _arCore.hitTestBatch(screenPoints: screenPoints);
+      // V5: measure on the foot's own depth surface (falls back to the floor
+      // plane only on devices without ARCore depth).
+      final worldPoints = await _arCore.hitTestBatch(
+        screenPoints: screenPoints,
+        preferDepth: true,
+      );
       final raycastHit = worldPoints.length >= 2 &&
           worldPoints[0] != null &&
           worldPoints[1] != null;
@@ -726,7 +766,9 @@ class ScanSessionController extends ChangeNotifier {
         trackingQuality: trackingQuality,
         segmentationConfidence: detection.confidence,
         timestamp: DateTime.now(),
-        captureAngle: _currentStep.captureAngle,
+        // Top-down samples measure length AND width (the outline's long axis
+        // and widest span are both visible from above), so tag them 'both'.
+        captureAngle: 'both',
         widthMeasured: widthMeasured,
       ));
 
@@ -812,24 +854,10 @@ class ScanSessionController extends ChangeNotifier {
     _mergePassIntoCurrentFoot();
 
     final side = _currentStep.footSide;
-    final next = _currentStep.next;
+    final next = _nextStep();
 
-    if (_currentStep.captureAngle == 'front') {
-      // Top view done → same foot's side view next.
-      if (next != null) {
-        _currentStep = next;
-      }
-      _areaTracked = false; // New box position must be re-verified
-      _phase = ScanPhase.ready;
-      _coachHint = const CoachHint(
-        reason: CoachReason.positionFoot,
-        tone: CoachTone.active,
-      );
-      notifyListeners();
-      return;
-    }
-
-    // Side done → combine this foot NOW (E13: frozen immediately).
+    // The top view is the whole foot's capture, so combine it NOW (E13: the
+    // result is frozen immediately).
     final result = combineGuidedSamples(_samplesFor(side));
     if (result == null) {
       // Combine failed — clear the foot and restart its TOP step.
@@ -901,6 +929,14 @@ class ScanSessionController extends ChangeNotifier {
   // FINALIZATION (E8)
   // ═════════════════════════════════════════════════════════════════
 
+  /// The step after the current one in this session's plan, or null when the
+  /// current step is the last.
+  CaptureStep? _nextStep() {
+    final steps = planSteps;
+    final i = steps.indexOf(_currentStep);
+    return i >= 0 && i + 1 < steps.length ? steps[i + 1] : null;
+  }
+
   void _finishBothFeet() {
     _phase = ScanPhase.processing;
     notifyListeners();
@@ -913,7 +949,7 @@ class ScanSessionController extends ChangeNotifier {
     if (leftResult == null && rightResult == null) {
       _clearFoot('left');
       _clearFoot('right');
-      _currentStep = CaptureStep.leftTop;
+      _currentStep = planSteps.first;
       _areaTracked = false;
       _phase = ScanPhase.ready;
       _coachHint = const CoachHint(
@@ -948,7 +984,15 @@ class ScanSessionController extends ChangeNotifier {
 
     final leftConf = leftResult?.confidenceScore ?? 0.0;
     final rightConf = rightResult?.confidenceScore ?? 0.0;
-    final overallConf = (leftConf + rightConf) / 2;
+    // Average over the feet that were actually measured (one-foot scans
+    // must not be halved by the missing foot).
+    final measuredConf = [
+      if (leftResult != null) leftConf,
+      if (rightResult != null) rightConf,
+    ];
+    final overallConf = measuredConf.isEmpty
+        ? 0.0
+        : measuredConf.reduce((a, b) => a + b) / measuredConf.length;
     final confLevel = overallConf >= 0.75
         ? 'high'
         : overallConf >= 0.45
@@ -1084,7 +1128,9 @@ class ScanSessionController extends ChangeNotifier {
         detail:
             'Sized on your larger ($sizingSide) foot — the safe choice for fit.',
       ));
-    } else {
+    } else if (footMode == 'both') {
+      // Only a two-foot scan expects both feet, so a one-foot scan is not a
+      // missing-foot warning.
       final done = leftResult != null ? 'left' : 'right';
       factors.add(ConfidenceFactorV2(
         positive: false,

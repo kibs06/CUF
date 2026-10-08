@@ -65,11 +65,16 @@ class ArWorldPoint {
   final double z;
   final double distanceFromCamera; // Euclidean distance in meters
 
+  /// Where the point came from: `'depth'` (the foot's own surface, from ARCore
+  /// depth) or `'plane'` (a floor-plane raycast). Measurements prefer depth.
+  final String source;
+
   const ArWorldPoint({
     required this.x,
     required this.y,
     required this.z,
     required this.distanceFromCamera,
+    this.source = 'plane',
   });
 
   factory ArWorldPoint.fromMap(Map<String, dynamic> map) {
@@ -77,7 +82,14 @@ class ArWorldPoint {
     final y = (map['y'] as num?)?.toDouble() ?? 0;
     final z = (map['z'] as num?)?.toDouble() ?? 0;
     final dist = (map['distance'] as num?)?.toDouble() ?? 0;
-    return ArWorldPoint(x: x, y: y, z: z, distanceFromCamera: dist);
+    final source = map['source']?.toString() ?? 'plane';
+    return ArWorldPoint(
+      x: x,
+      y: y,
+      z: z,
+      distanceFromCamera: dist,
+      source: source,
+    );
   }
 
   /// Compute Euclidean distance to another point.
@@ -455,13 +467,17 @@ class ArCoreChannel {
   ///
   /// Returns the closest hit point in world coordinates, or `null`
   /// if the ray doesn't intersect any detected plane.
-  Future<ArWorldPoint?> hitTest({required double x, required double y}) async {
+  Future<ArWorldPoint?> hitTest({
+    required double x,
+    required double y,
+    bool preferDepth = false,
+  }) async {
     if (!_sessionActive) return null;
 
     try {
       final result = await _methodChannel.invokeMethod<Map<dynamic, dynamic>>(
         'hitTest',
-        {'x': x, 'y': y},
+        {'x': x, 'y': y, 'preferDepth': preferDepth},
       );
       if (result == null) return null;
       return ArWorldPoint.fromMap(Map<String, dynamic>.from(result));
@@ -477,6 +493,7 @@ class ArCoreChannel {
   /// avoids repeated platform channel round-trips.
   Future<List<ArWorldPoint?>> hitTestBatch({
     required List<Offset> screenPoints,
+    bool preferDepth = false,
   }) async {
     if (!_sessionActive) return List.filled(screenPoints.length, null);
 
@@ -487,7 +504,7 @@ class ArCoreChannel {
 
       final result = await _methodChannel.invokeMethod<List<dynamic>>(
         'hitTestBatch',
-        {'points': pointsData},
+        {'points': pointsData, 'preferDepth': preferDepth},
       );
 
       if (result == null) return List.filled(screenPoints.length, null);
