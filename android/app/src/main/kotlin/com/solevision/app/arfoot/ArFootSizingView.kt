@@ -138,6 +138,12 @@ class ArFootSizingView(
     private var floorPlane: Map<String, Any>? = null
     private var floorDistance: Double? = null
 
+    // Night aid. The torch wish is written from the channel thread and applied on
+    // the render thread before the next update(): Session.configure replaces the
+    // whole config, so it is only ever called from the thread that owns the frame.
+    @Volatile private var torchWish = false
+    @Volatile private var torchDirty = false
+
     // Camera texture for ARCore rendering
     private var cameraTextureId = -1
     @Volatile private var hasSetCameraTexture = false
@@ -176,6 +182,34 @@ class ArFootSizingView(
     @Volatile private var cachedFrameHeight = 0
     @Volatile private var cachedFrameRotationDegrees = 0
     private var lastFrameAcquireMs = 0L
+
+    // Set by the channel when Dart asks for a frame; the render thread converts only then.
+    @Volatile private var frameWanted = false
+    @Volatile private var cachedLuma: Double? = null
+
+    /** Asks for a full NV21 frame on the next render tick (capture only). */
+    fun requestCameraFrame() {
+        frameWanted = true
+    }
+
+    /** Mean Y-plane brightness, sampled every 8th row and column. Cheap by design. */
+    private fun sparseLumaOf(image: Image): Double {
+        val plane = image.planes[0]
+        val buffer = plane.buffer
+        var sum = 0L
+        var samples = 0
+        var y = 0
+        while (y < image.height) {
+            var x = 0
+            while (x < image.width) {
+                sum += buffer.get(y * plane.rowStride + x * plane.pixelStride).toInt() and 0xFF
+                samples++
+                x += 8
+            }
+            y += 8
+        }
+        return if (samples > 0) sum.toDouble() / samples else 0.0
+    }
 
     /** Whether a camera frame is currently cached and ready to be read. */
     fun hasCachedCameraFrame(): Boolean = cachedFrameBytes != null
@@ -416,6 +450,7 @@ class ArFootSizingView(
                 updateMode = Config.UpdateMode.LATEST_CAMERA_IMAGE
                 lightEstimationMode = Config.LightEstimationMode.ENVIRONMENTAL_HDR
                 focusMode = Config.FocusMode.AUTO
+                flashMode = if (torchWish) Config.FlashMode.TORCH else Config.FlashMode.OFF
                 if (depthSupported) depthMode = Config.DepthMode.AUTOMATIC
             }
 
@@ -686,6 +721,10 @@ class ArFootSizingView(
         }
 
         try {
+            if (torchDirty) {
+                torchDirty = false
+                applyTorch(arSession)
+            }
             val frame: Frame = arSession.update()
             lastFrame = frame
             val camera = frame.camera
@@ -701,10 +740,18 @@ class ArFootSizingView(
                     val image: Image? = frame.acquireCameraImage()
                     if (image != null) {
                         try {
-                            cachedFrameBytes = yuv420ToNv21(image)
-                            cachedFrameWidth = image.width
-                            cachedFrameHeight = image.height
-                            cachedFrameRotationDegrees = currentDisplayRotationDegrees()
+                            // Every frame: a sparse luma sample, enough for the dark check.
+                            cachedLuma = sparseLumaOf(image)
+                            // Only when Dart asked for a frame: the full NV21 copy. Doing it
+                            // every 150 ms stalled the render thread while the floor was still
+                            // being searched, and ARCore then dropped its frames.
+                            if (frameWanted) {
+                                frameWanted = false
+                                cachedFrameBytes = yuv420ToNv21(image)
+                                cachedFrameWidth = image.width
+                                cachedFrameHeight = image.height
+                                cachedFrameRotationDegrees = currentDisplayRotationDegrees()
+                            }
                         } finally {
                             image.close() // Must always close or the buffer pool exhausts
                         }
@@ -981,6 +1028,35 @@ class ArFootSizingView(
     fun getTrackingState(): String = trackingState
     fun getFloorPlane(): Map<String, Any>? = floorPlane
     fun getFloorDistance(): Double? = floorDistance
+
+    /**
+     * Turns the torch on or off. Takes effect on the render thread at the next
+     * frame; a session created later reads the same wish when it configures.
+     */
+    fun setTorch(enabled: Boolean) {
+        torchWish = enabled
+        torchDirty = true
+    }
+
+    /** Applied on the render thread only. A refused torch keeps the session running. */
+    private fun applyTorch(arSession: Session) {
+        val enabled = torchWish
+        try {
+            arSession.configure(
+                arSession.getConfig().apply {
+                    flashMode = if (enabled) Config.FlashMode.TORCH else Config.FlashMode.OFF
+                },
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "torch reconfigure failed", e)
+        }
+    }
+
+    /**
+     * Mean luma (0–255) of the latest cached camera frame, read from its Y plane
+     * and sampled every 16th pixel. Null until a frame has been cached.
+     */
+    fun getMeanLuma(): Double? = cachedLuma
 }
 
 class ArGLSurfaceView(context: android.content.Context) : GLSurfaceView(context)

@@ -14,6 +14,7 @@ import '../../../utils/ar_foot_measurement_pipeline.dart' show idealSampleCount;
 import '../../../utils/foot_detector.dart' show FootPoint;
 import '../../../utils/ar_core_install.dart';
 import '../../../utils/foot_measurement_utils.dart' show mapNormalizedToView;
+import '../../../widgets/foot_size_v2/floor_search_guide.dart';
 import '../../../widgets/foot_size_v2/foot_trace_overlay.dart';
 import '../../../widgets/foot_size_v2/scan_instruction_overlay.dart';
 import 'foot_scan_results_screen_v2.dart';
@@ -426,6 +427,24 @@ class _FootScanSessionScreenV2State extends State<FootScanSessionScreenV2>
               ),
             ),
 
+          // Floor-search guide while the floor is being found.
+          if (_session.phase == ScanPhase.starting ||
+              _session.phase == ScanPhase.positioning)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: FloorSearchGuide(
+                probeHits: _session.floorProbeHits,
+                steady: _session.floorSteady,
+              ),
+            ),
+
+          // How close the timed capture is to finishing.
+          if (_session.phase == ScanPhase.capturing)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _CaptureProgressPill(progress: _session.captureProgress),
+            ),
+
           // Live cm readout during capture.
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 200),
@@ -523,6 +542,8 @@ class _FootScanSessionScreenV2State extends State<FootScanSessionScreenV2>
     switch (hint.reason) {
       case CoachReason.findFloor:
         return Icons.explore_outlined;
+      case CoachReason.tooDark:
+        return Icons.brightness_low_rounded;
       case CoachReason.moveSlowly:
         return Icons.speed_outlined;
       case CoachReason.holdSteady:
@@ -544,6 +565,10 @@ class _FootScanSessionScreenV2State extends State<FootScanSessionScreenV2>
     switch (hint.reason) {
       case CoachReason.findFloor:
         return 'Move your phone slowly over the floor';
+      case CoachReason.tooDark:
+        return _session.torchOn
+            ? 'Still too dark — move to a brighter spot'
+            : 'Too dark to see the floor — tap the light to turn it on';
       case CoachReason.moveSlowly:
         return 'Keep moving gently — tracking is limited here';
       case CoachReason.holdSteady:
@@ -599,14 +624,34 @@ class _FootScanSessionScreenV2State extends State<FootScanSessionScreenV2>
         action = const SizedBox(height: 56);
     }
 
+    // The torch sits beside the action while the floor is being found, the one
+    // place the night aid is needed. It is not shown during capture.
+    final showTorch = phase == ScanPhase.starting ||
+        phase == ScanPhase.positioning ||
+        phase == ScanPhase.ready;
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 250),
-        child: KeyedSubtree(
-          key: ValueKey(phase),
-          child: SizedBox(width: double.infinity, height: 56, child: action),
-        ),
+      child: Row(
+        children: [
+          if (showTorch) ...[
+            _TorchButton(
+              on: _session.torchOn,
+              highlight: _session.tooDark,
+              onTap: () => _session.setTorch(!_session.torchOn),
+            ),
+            const SizedBox(width: 12),
+          ],
+          Expanded(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 250),
+              child: KeyedSubtree(
+                key: ValueKey(phase),
+                child: SizedBox(width: double.infinity, height: 56, child: action),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -771,6 +816,102 @@ class _FootScanSessionScreenV2State extends State<FootScanSessionScreenV2>
 // ═══════════════════════════════════════════════════════════════════
 // PRIVATE WIDGETS
 // ═══════════════════════════════════════════════════════════════════
+
+/// Torch toggle for the night aid. Lit while the torch is on; ringed while the
+/// room is too dark, so the customer knows it is the thing to try.
+class _TorchButton extends StatelessWidget {
+  final bool on;
+  final bool highlight;
+  final VoidCallback onTap;
+
+  const _TorchButton({
+    required this.on,
+    required this.highlight,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      toggled: on,
+      label: 'Torch',
+      child: Tooltip(
+        message: on ? 'Turn the light off' : 'Turn the light on',
+        child: ClipOval(
+          child: Material(
+            color: on ? Colors.amber.shade600 : Colors.black.withValues(alpha: 0.4),
+            child: InkWell(
+              onTap: onTap,
+              child: Container(
+                width: 56,
+                height: 56,
+                decoration: highlight && !on
+                    ? BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                      )
+                    : null,
+                child: Icon(
+                  on ? Icons.flash_on_rounded : Icons.flash_off_rounded,
+                  color: Colors.white,
+                  size: 24,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Percent-complete pill for the timed capture. The pass ends on its 5 s
+/// timer, so elapsed time is the honest measure of how close it is.
+class _CaptureProgressPill extends StatelessWidget {
+  final double progress;
+
+  const _CaptureProgressPill({required this.progress});
+
+  @override
+  Widget build(BuildContext context) {
+    final clamped = progress.clamp(0.0, 1.0);
+    final percent = (clamped * 100).round();
+    final almost = clamped >= 0.8;
+
+    return GlassCard(
+      tone: almost ? GlassTone.success : GlassTone.active,
+      borderRadius: BorderRadius.circular(16),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            almost ? 'Almost done — keep still' : 'Measuring · $percent%',
+            style: AppConstants.bodyStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 6),
+          SizedBox(
+            width: 180,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: clamped,
+                minHeight: 5,
+                backgroundColor: Colors.white.withValues(alpha: 0.25),
+                color: almost ? AppConstants.success : AppConstants.accent,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _GlassIconButton extends StatelessWidget {
   final IconData icon;

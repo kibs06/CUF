@@ -8,6 +8,7 @@ import '../../utils/ar_foot_measurement_pipeline.dart';
 import '../../utils/foot_detector.dart';
 import '../../utils/foot_measurement_utils.dart';
 import '../../utils/floor_tracker.dart';
+import '../../utils/low_light_tracker.dart';
 import '../../utils/foot_follow_rect.dart';
 import '../../utils/frame_sharpness.dart';
 import '../../utils/mlkit_segmentation_foot_detector.dart';
@@ -189,6 +190,12 @@ class ScanSessionController extends ChangeNotifier {
   /// Floor-height stability across area polls: a settling plane must not lock.
   final FloorTracker _floorTracker = FloorTracker();
 
+  /// Low light from the camera's luma: a dim room keeps ARCore from building the
+  /// floor plane, so the coach names it and the torch is offered. Polled with the
+  /// area check, because the CPU frame is not acquired until capture.
+  final LowLightTracker _lowLight = LowLightTracker();
+  bool _torchOn = false;
+
   /// The guide box following the detected foot (normalised, upright frame), or
   /// null when no foot is detected and the fixed guide applies.
   Rect? _followRect;
@@ -246,6 +253,8 @@ class ScanSessionController extends ChangeNotifier {
   DateTime? _passStartTime;
   bool _sampleInProgress = false;
   double _captureProgress = 0;
+  int _floorProbeHits = 0;
+  bool _floorSteady = false;
 
   // Live readout (per-frame raw world measurements during capture).
   double? _liveLengthMm;
@@ -285,6 +294,12 @@ class ScanSessionController extends ChangeNotifier {
   List<CaptureStep> get planSteps => stepsForFootMode(footMode);
   CoachHint? get coachHint => _coachHint;
   ArTrackingState get trackingState => _trackingState;
+
+  /// Whether the camera view is too dark to find the floor.
+  bool get tooDark => _lowLight.isDark;
+
+  /// Whether the phone's torch is on for this scan.
+  bool get torchOn => _torchOn;
   bool get areaTracked => _areaTracked;
   bool get footDetected => _footDetected;
   FootDetectionResult? get lastDetection => _lastDetection;
@@ -294,6 +309,12 @@ class ScanSessionController extends ChangeNotifier {
 
   /// Progress through the active capture (0.0–1.0).
   double get captureProgress => _captureProgress;
+
+  /// Floor probes (of 5) that hit an upward-facing plane on the last poll.
+  int get floorProbeHits => _floorProbeHits;
+
+  /// Whether the floor height agreed across consecutive polls.
+  bool get floorSteady => _floorSteady;
 
   /// Clean samples recorded in the current (or just-finished) pass — drives
   /// the foot-trace overlay's progressive outline drawing.
@@ -521,6 +542,13 @@ class ScanSessionController extends ChangeNotifier {
     ];
     final hits = await _arCore.hitTestBatch(screenPoints: probePoints);
     if (_disposed) return;
+    final darkBefore = _lowLight.isDark;
+    final darkNow = _lowLight.observe(await _arCore.getMeanLuma());
+    if (_disposed) return;
+    if (darkNow != darkBefore && _phase == ScanPhase.positioning) {
+      _updatePositioningHint();
+    }
+
     final onPlane = hits.whereType<ArWorldPoint>().length;
     // Floor height comes from the four CORNER probes only: the centre ray can
     // sit on the foot itself, and its height would read as the floor.
@@ -529,10 +557,16 @@ class ScanSessionController extends ChangeNotifier {
         if (hit != null) hit.y,
     ];
     final floorStable = _floorTracker.observe(cornerHeights);
+    final probeChanged =
+        onPlane != _floorProbeHits || floorStable != _floorSteady;
+    _floorProbeHits = onPlane;
+    _floorSteady = floorStable;
     final tracked = onPlane >= 3 && floorStable;
     if (tracked != _areaTracked) {
       _areaTracked = tracked;
       _reconcileIdlePhases();
+    } else if (probeChanged) {
+      notifyListeners();
     }
   }
 
@@ -572,6 +606,16 @@ class ScanSessionController extends ChangeNotifier {
   }
 
   void _updatePositioningHint() {
+    // Too dark and not tracking: the floor cannot form, so say the light is the
+    // problem and not that the customer should move.
+    if (_lowLight.isDark && _trackingState != ArTrackingState.tracking) {
+      _coachHint = const CoachHint(
+        reason: CoachReason.tooDark,
+        tone: CoachTone.warning,
+      );
+      notifyListeners();
+      return;
+    }
     if (!_planeDetected || _trackingState == ArTrackingState.paused) {
       _coachHint = const CoachHint(
         reason: CoachReason.findFloor,
@@ -589,6 +633,15 @@ class ScanSessionController extends ChangeNotifier {
   // ═════════════════════════════════════════════════════════════════
   // CAPTURE
   // ═════════════════════════════════════════════════════════════════
+
+  /// Turns the phone's torch on or off for this scan. The torch is the honest
+  /// night aid: boosting the feed only multiplies sensor noise.
+  Future<void> setTorch(bool on) async {
+    if (_disposed) return;
+    _torchOn = on;
+    notifyListeners();
+    await _arCore.setTorch(on);
+  }
 
   /// Begin the current step's capture pass (screen action button).
   void startCapture() {
@@ -739,6 +792,10 @@ class ScanSessionController extends ChangeNotifier {
         screenPoints: screenPoints,
         preferDepth: true,
       );
+      // Share of the measurement points that the surface gave a hit for. The
+      // points are always requested (heel and toe at least), so the divisor is > 0.
+      final pointHitShare =
+          worldPoints.whereType<ArWorldPoint>().length / screenPoints.length;
       final raycastHit = worldPoints.length >= 2 &&
           worldPoints[0] != null &&
           worldPoints[1] != null;
@@ -813,6 +870,7 @@ class ScanSessionController extends ChangeNotifier {
         // and widest span are both visible from above), so tag them 'both'.
         captureAngle: 'both',
         widthMeasured: widthMeasured,
+        pointHitShare: pointHitShare,
       ));
 
       if (!_disposed) notifyListeners();
@@ -901,7 +959,7 @@ class ScanSessionController extends ChangeNotifier {
 
     // The top view is the whole foot's capture, so combine it NOW (E13: the
     // result is frozen immediately).
-    final result = combineGuidedSamples(_samplesFor(side));
+    final result = rescanGate(combineGuidedSamples(_samplesFor(side)));
     if (result == null) {
       // Combine failed — clear the foot and restart its TOP step.
       _clearFoot(side);
@@ -984,8 +1042,10 @@ class ScanSessionController extends ChangeNotifier {
     _phase = ScanPhase.processing;
     notifyListeners();
 
-    final leftResult = _leftResult ?? combineGuidedSamples(_leftSamples);
-    final rightResult = _rightResult ?? combineGuidedSamples(_rightSamples);
+    final leftResult =
+        _leftResult ?? rescanGate(combineGuidedSamples(_leftSamples));
+    final rightResult =
+        _rightResult ?? rescanGate(combineGuidedSamples(_rightSamples));
     _leftResult = leftResult;
     _rightResult = rightResult;
 
@@ -1118,6 +1178,18 @@ class ScanSessionController extends ChangeNotifier {
         positive: false,
         title: 'Very few clean readings ($samples)',
         detail: 'We still got a result, but consider re-scanning for precision.',
+      ));
+    }
+
+    // ── Surface hits (share of measurement points the surface answered) ──
+    final hitShare = sizingResult?.pointHitShare;
+    if (hitShare != null && hitShare < kFullPointHitShare) {
+      factors.add(ConfidenceFactorV2(
+        positive: false,
+        title: 'Some points missed the surface',
+        detail:
+            'The floor was hard to read here — a wet, glossy or plain floor often '
+            'causes it. A dry, textured floor gives steadier points.',
       ));
     }
 

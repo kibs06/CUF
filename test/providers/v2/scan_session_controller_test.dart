@@ -24,6 +24,21 @@ class FakeArCore implements ArCoreChannel {
 
   ArCameraFrame? nextFrame;
 
+  /// Mean luma the fake reports (0–255). Bright by default so existing tests
+  /// never see a dark view.
+  double? meanLuma = 120;
+
+  /// Last torch state the controller asked for.
+  bool? torchRequest;
+
+  @override
+  Future<double?> getMeanLuma() async => meanLuma;
+
+  @override
+  Future<void> setTorch(bool enabled) async {
+    torchRequest = enabled;
+  }
+
   /// Staged sample batches, popped one per non-probe hitTestBatch call so
   /// they stay in lockstep with [FakeDetector.script] (both advance once per
   /// sampling tick).
@@ -720,6 +735,53 @@ void main() {
     });
   });
 
+  group('ScanSessionController — night aid', () {
+    test('a dark view that cannot find the floor says the light is the problem', () {
+      fakeAsync((async) {
+        harness(async);
+        ar.eventSink.add(
+          const ArSessionEvent(type: 'tracking', data: {'state': 'limited'}),
+        );
+        ar.probeHits = const [];
+        ar.meanLuma = 20;
+        async.elapse(const Duration(milliseconds: 600));
+
+        expect(ctrl.tooDark, isTrue);
+        expect(ctrl.phase, ScanPhase.positioning);
+        expect(ctrl.coachHint?.reason, CoachReason.tooDark);
+        expect(ctrl.coachHint?.tone, CoachTone.warning);
+        ctrl.dispose();
+      });
+    });
+
+    test('a dark view with the floor in sight keeps the normal ready state', () {
+      fakeAsync((async) {
+        harness(async);
+        ar.meanLuma = 20;
+        async.elapse(const Duration(milliseconds: 600));
+
+        expect(ctrl.tooDark, isTrue);
+        expect(ctrl.phase, ScanPhase.ready,
+            reason: 'a floor that is found is not blocked by the light');
+        ctrl.dispose();
+      });
+    });
+
+    test('setTorch records the state and tells the channel', () {
+      fakeAsync((async) {
+        harness(async);
+        ctrl.setTorch(true);
+        expect(ctrl.torchOn, isTrue);
+        expect(ar.torchRequest, isTrue);
+
+        ctrl.setTorch(false);
+        expect(ctrl.torchOn, isFalse);
+        expect(ar.torchRequest, isFalse);
+        ctrl.dispose();
+      });
+    });
+  });
+
   group('ScanSessionController — blur gate', () {
     test('a blurry frame never becomes a sample and asks to hold steady', () {
       fakeAsync((async) {
@@ -841,6 +903,16 @@ void main() {
         expect(done.last.footSide, 'right');
         expect(done.last.lengthMm, greaterThan(0));
         expect(ctrl.phase, ScanPhase.complete);
+        ctrl.dispose();
+      });
+    });
+
+    test('floor search exposes probe hits and steadiness for the guide', () {
+      fakeAsync((async) {
+        harness(async);
+        // The harness locks the floor with all five probes hitting and steady.
+        expect(ctrl.floorProbeHits, 5);
+        expect(ctrl.floorSteady, isTrue);
         ctrl.dispose();
       });
     });

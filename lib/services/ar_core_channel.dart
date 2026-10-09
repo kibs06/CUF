@@ -458,6 +458,28 @@ class ArCoreChannel {
     _sessionActive = false;
   }
 
+  /// Mean brightness (0–255) of the camera's latest frame, from its Y plane.
+  /// Null when no frame is cached yet or the session is not running.
+  Future<double?> getMeanLuma() async {
+    if (!_sessionActive) return null;
+    try {
+      return await _methodChannel.invokeMethod<double>('getMeanLuma');
+    } on PlatformException catch (e) {
+      debugPrint('[ArCoreChannel] getMeanLuma error: ${e.message}');
+      return null;
+    }
+  }
+
+  /// Turns the phone's torch on or off for the running session.
+  Future<void> setTorch(bool enabled) async {
+    if (!_sessionActive) return;
+    try {
+      await _methodChannel.invokeMethod<void>('setTorch', {'enabled': enabled});
+    } on PlatformException catch (e) {
+      debugPrint('[ArCoreChannel] setTorch error: ${e.message}');
+    }
+  }
+
   // ── Hit Testing ──
 
   /// Cast a ray from a 2D screen point onto detected AR planes.

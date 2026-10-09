@@ -164,6 +164,7 @@ class ArFootSizingPlugin(private val activity: Activity) {
                 result.success(currentView?.hitTestBatch(points, preferDepth))
             }
             "acquireCameraFrame" -> {
+                currentView?.requestCameraFrame()
                 val view = currentView
                 if (view != null && view.hasCachedCameraFrame()) {
                     result.success(mapOf(
@@ -177,6 +178,11 @@ class ArFootSizingPlugin(private val activity: Activity) {
                 }
             }
             "getTrackingState" -> result.success(currentView?.getTrackingState() ?: "paused")
+            "getMeanLuma" -> result.success(currentView?.getMeanLuma())
+            "setTorch" -> {
+                currentView?.setTorch(call.argument<Boolean>("enabled") ?: false)
+                result.success(null)
+            }
             "getFloorPlane" -> result.success(currentView?.getFloorPlane())
             "getFloorDistance" -> result.success(currentView?.getFloorDistance())
             else -> result.notImplemented()

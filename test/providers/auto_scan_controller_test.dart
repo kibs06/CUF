@@ -17,6 +17,12 @@ import 'package:app/utils/foot_detector.dart';
 /// Scriptable [ArCoreChannel] fake: startSession resolves via a Completer the
 /// test controls; hitTestBatch returns whatever point list was staged.
 class FakeArCore implements ArCoreChannel {
+  @override
+  Future<double?> getMeanLuma() async => null;
+
+  @override
+  Future<void> setTorch(bool enabled) async {}
+
   final Completer<ArSessionStartResult> startCompleter = Completer();
   final StreamController<ArSessionEvent> eventSink =
       StreamController<ArSessionEvent>.broadcast();

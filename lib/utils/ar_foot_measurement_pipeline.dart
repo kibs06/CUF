@@ -52,6 +52,12 @@ class MeasurementSample {
   /// Defaults to `true` so existing call sites keep their behavior.
   final bool widthMeasured;
 
+  /// Share (0.0–1.0) of this sample's measurement points that the surface gave a
+  /// hit for. Low when a wet, glossy or plain floor leaves the points without a
+  /// surface to land on, so the sample is weaker evidence. Defaults to 1.0 so
+  /// samples that predate the field score exactly as they did.
+  final double pointHitShare;
+
   const MeasurementSample({
     required this.lengthMm,
     required this.widthMm,
@@ -60,6 +66,7 @@ class MeasurementSample {
     required this.timestamp,
     this.captureAngle = 'both',
     this.widthMeasured = true,
+    this.pointHitShare = 1.0,
   });
 
   @override
@@ -172,6 +179,9 @@ class MeasurementResult {
   /// Number of samples after outlier removal.
   final int finalSampleCount;
 
+  /// Mean [MeasurementSample.pointHitShare] of the kept samples (0.0–1.0).
+  final double pointHitShare;
+
   const MeasurementResult({
     required this.lengthMm,
     required this.widthMm,
@@ -182,6 +192,7 @@ class MeasurementResult {
     required this.rawSampleCount,
     required this.filteredSampleCount,
     required this.finalSampleCount,
+    this.pointHitShare = 1.0,
   });
 
   @override
@@ -235,12 +246,15 @@ MeasurementResult? combineSamples(List<MeasurementSample> samples) {
   final lengthIqr = _iqr(filteredLengths);
   final widthIqr = _iqr(filteredWidths);
 
+  // Hit share of the kept samples: a surface that gave few hits is weak evidence.
+  final hitShare = _meanPointHitShare(qualitySamples);
   // Step 6: Compute confidence score
   final confidenceScore = _computeConfidence(
     lengthIqr: lengthIqr,
     widthIqr: widthIqr,
     sampleCount: filteredLengths.length,
     medianLength: lengthMedian,
+    pointHitShare: hitShare,
   );
 
   final confidence = _confidenceLabel(confidenceScore);
@@ -255,6 +269,7 @@ MeasurementResult? combineSamples(List<MeasurementSample> samples) {
     rawSampleCount: rawCount,
     filteredSampleCount: qualitySamples.length,
     finalSampleCount: filteredLengths.length,
+    pointHitShare: hitShare,
   );
 }
 
@@ -343,12 +358,15 @@ MeasurementResult? combineGuidedSamples(List<MeasurementSample> samples) {
   final lengthIqr = _iqr(filteredLengths);
   final widthIqr = _iqr(filteredWidths);
 
+  // Hit share of the kept samples (see combineSamples).
+  final hitShare = _meanPointHitShare(qualitySamples);
   // Step 7: Confidence
   final confidenceScore = _computeConfidence(
     lengthIqr: lengthIqr,
     widthIqr: widthIqr,
     sampleCount: filteredLengths.length,
     medianLength: lengthMedian,
+    pointHitShare: hitShare,
   );
 
   final confidence = _confidenceLabel(confidenceScore);
@@ -363,6 +381,7 @@ MeasurementResult? combineGuidedSamples(List<MeasurementSample> samples) {
     rawSampleCount: rawCount,
     filteredSampleCount: qualitySamples.length,
     finalSampleCount: filteredLengths.length,
+    pointHitShare: hitShare,
   );
 }
 
@@ -410,6 +429,7 @@ double _computeConfidence({
   required double widthIqr,
   required int sampleCount,
   required double medianLength,
+  double pointHitShare = 1.0,
 }) {
   // Factor 1: IQR spread (0.0–1.0, higher = tighter = better)
   // IQR < 2mm = excellent, IQR > 12mm = poor
@@ -438,7 +458,52 @@ double _computeConfidence({
   final confidence = (spreadScore * 0.50 + sampleScore * 0.25 + relativeScore * 0.25)
       .clamp(0.0, 1.0);
 
-  return confidence;
+  return (confidence * pointHitShareFactor(pointHitShare)).clamp(0.0, 1.0);
+}
+
+/// Share of measurement points that must hit the surface for full confidence.
+/// Below this, the confidence score is scaled down (see [pointHitShareFactor]).
+const double kFullPointHitShare = 0.9;
+
+/// Share at or below which the factor bottoms out at [kMinPointHitFactor].
+const double kNoPointHitShare = 0.3;
+
+/// Lowest factor a poor hit share can take. The hit share alone never zeroes a
+/// scan; it only keeps the score from reading as confident.
+const double kMinPointHitFactor = 0.2;
+
+/// Confidence below which a foot's scan is not used: the customer is asked to
+/// scan again instead of being given a size. Matches the 'low' label boundary.
+const double kRescanConfidence = 0.45;
+
+/// Multiplier for a confidence score from the share of points that hit.
+///
+/// 1.0 at or above [kFullPointHitShare], falling linearly to
+/// [kMinPointHitFactor] at [kNoPointHitShare]. The thresholds are not yet
+/// calibrated against real scans; tune them from measured feet.
+double pointHitShareFactor(double share) {
+  final span = kFullPointHitShare - kNoPointHitShare;
+  final t = (share - kNoPointHitShare) / span;
+  return t.clamp(kMinPointHitFactor, 1.0);
+}
+
+/// Mean hit share across [samples]; 1.0 when there are none.
+double _meanPointHitShare(List<MeasurementSample> samples) {
+  if (samples.isEmpty) return 1.0;
+  var total = 0.0;
+  for (final s in samples) {
+    total += s.pointHitShare;
+  }
+  return total / samples.length;
+}
+
+/// The scan result when it is confident enough to use, otherwise null.
+///
+/// A null means the foot must be scanned again, the same as a foot with too few
+/// samples. A low score is never turned into a size.
+MeasurementResult? rescanGate(MeasurementResult? result) {
+  if (result == null) return null;
+  return result.confidenceScore < kRescanConfidence ? null : result;
 }
 
 /// Convert a numeric confidence score (0.0–1.0) to a human-readable label.

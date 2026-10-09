@@ -108,6 +108,9 @@ enum CoachReason {
   /// No floor plane yet — move the phone slowly over the floor.
   findFloor,
 
+  /// The camera view is too dark to find the floor — the torch helps.
+  tooDark,
+
   /// Tracking degraded — move slower / improve lighting.
   moveSlowly,
 

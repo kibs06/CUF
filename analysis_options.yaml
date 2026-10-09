@@ -15,6 +15,7 @@ include: package:flutter_lints/flutter.yaml
 analyzer:
   exclude:
     - docs/**
+    - build/**
 
 linter:
   # The lint rules applied to this project can be customized in the

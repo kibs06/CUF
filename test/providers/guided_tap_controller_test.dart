@@ -15,6 +15,12 @@ import 'package:app/utils/foot_detector.dart';
 
 /// Scriptable [ArCoreChannel] fake for the manual flow's per-tap raycasts.
 class FakeArCore implements ArCoreChannel {
+  @override
+  Future<double?> getMeanLuma() async => null;
+
+  @override
+  Future<void> setTorch(bool enabled) async {}
+
   final Completer<ArSessionStartResult> startCompleter = Completer();
   final StreamController<ArSessionEvent> eventSink =
       StreamController<ArSessionEvent>.broadcast();
