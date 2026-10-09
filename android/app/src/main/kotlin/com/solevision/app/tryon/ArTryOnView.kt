@@ -23,6 +23,7 @@ import android.view.Surface
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.TextureView
+import android.view.ViewConfiguration
 import android.widget.FrameLayout
 import com.google.android.filament.Camera
 import com.google.android.filament.ColorGrading
@@ -681,6 +682,31 @@ class ArTryOnView(
         isClickable = mode == Mode.PREVIEW
     }
 
+    private val tapGesture by lazy {
+        TapGesture(slopPx = ViewConfiguration.get(context).scaledTouchSlop.toFloat())
+    }
+
+    /**
+     * AR mode's touch path (V3.4): a tap places the shoe where the finger landed, unless the foot
+     * tracker already owns the placement. A drag is not a tap and does nothing here.
+     */
+    private fun onArTouch(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> tapGesture.onDown(event.x, event.y, SystemClock.uptimeMillis())
+            MotionEvent.ACTION_POINTER_DOWN -> tapGesture.onPointerDown()
+            MotionEvent.ACTION_MOVE -> tapGesture.onMove(event.x, event.y)
+            MotionEvent.ACTION_CANCEL -> tapGesture.cancel()
+            MotionEvent.ACTION_UP -> {
+                val tapped = tapGesture.onUp(event.x, event.y, SystemClock.uptimeMillis())
+                if (tapped && !footTracker.hasAnchor) {
+                    Log.i(TAG, "tap placed the shoe at ${event.x.toInt()}, ${event.y.toInt()}")
+                    placeShoe(event.x.toDouble(), event.y.toDouble())
+                }
+            }
+        }
+        return super.onTouchEvent(event)
+    }
+
     /**
      * Drag to turn, pinch to zoom, in [Mode.PREVIEW] only.
      *
@@ -688,7 +714,7 @@ class ArTryOnView(
      * next frame reads — so a fast drag cannot queue up behind a slow frame.
      */
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (mode != Mode.PREVIEW) return super.onTouchEvent(event)
+        if (mode != Mode.PREVIEW) return onArTouch(event)
         scaleDetector.onTouchEvent(event)
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
