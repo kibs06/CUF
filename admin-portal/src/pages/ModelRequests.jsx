@@ -15,6 +15,7 @@ import {
   useProductModels,
 } from '../hooks/useModelRequests.js'
 import UploadModelModal from '../components/model-requests/UploadModelModal.jsx'
+import ModelViewerDialog from '../components/products/ModelViewerDialog.jsx'
 import { useDeviceGate } from '../hooks/useDeviceGate.js'
 import { describeError } from '../lib/errors.js'
 import { MODEL_UPLOAD_ENABLED, formatDateTime } from '../lib/constants.js'
@@ -70,10 +71,12 @@ const statusVariant = (status) =>
 function Measurement({ label, value, icon: Icon }) {
   if (value == null) return null
   return (
-    <div className="flex items-center gap-2 rounded-xl border border-[#F5F0EB] bg-[#FBF8F5] px-3 py-2">
-      {Icon && <Icon size={13} className="text-[#8B5A2B]" />}
-      <span className="text-[11px] uppercase tracking-wider text-[#6B5C4E]">{label}</span>
-      <span className="text-sm font-semibold text-[#3B2314]">{value}</span>
+    <div className="rounded-xl border border-[#EFE7DF] bg-[#FBF8F5] px-4 py-3">
+      <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#6B5C4E]">
+        {Icon && <Icon size={12} className="text-[#8B5A2B]" />}
+        {label}
+      </div>
+      <p className="mt-1 font-display text-lg font-bold tabular-nums text-[#3B2314]">{value}</p>
     </div>
   )
 }
@@ -188,28 +191,37 @@ export default function ModelRequests() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            onClick={() => setTab(t.key)}
-            className={`rounded-xl px-4 py-2 text-sm font-medium transition-all ${
-              tab === t.key
-                ? 'bg-[#8B5A2B] text-white shadow-sm'
-                : 'border border-[#D9D0C7] bg-white text-[#6B5C4E] hover:bg-[#F5F0EB]'
-            }`}
-          >
-            {t.label}
-            <span
-              className={`ml-2 rounded-full px-1.5 py-0.5 text-xs ${
-                tab === t.key ? 'bg-white/20 text-white' : 'bg-[#F5F0EB] text-[#6B5C4E]'
+      <div
+        role="tablist"
+        aria-label="Request queues"
+        className="inline-flex flex-wrap gap-1 rounded-2xl border border-[#D9D0C7] bg-white p-1"
+      >
+        {TABS.map((t) => {
+          const selected = tab === t.key
+          return (
+            <button
+              key={t.key}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              onClick={() => setTab(t.key)}
+              className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-all ${
+                selected
+                  ? 'bg-[#8B5A2B] text-white shadow-sm'
+                  : 'text-[#6B5C4E] hover:bg-[#F5F0EB] hover:text-[#3B2314]'
               }`}
             >
-              {counts[t.key]}
-            </span>
-          </button>
-        ))}
+              {t.label}
+              <span
+                className={`min-w-[1.5rem] rounded-full px-1.5 py-0.5 text-center text-xs font-semibold tabular-nums ${
+                  selected ? 'bg-white/20 text-white' : 'bg-[#F5F0EB] text-[#6B5C4E]'
+                }`}
+              >
+                {counts[t.key]}
+              </span>
+            </button>
+          )
+        })}
       </div>
 
       {/* Loading */}
@@ -266,7 +278,9 @@ export default function ModelRequests() {
             return (
               <div
                 key={row.id}
-                className="rounded-2xl border border-[#D9D0C7] bg-white p-5 transition-shadow hover:shadow-sm"
+                className={`rounded-2xl border border-[#D9D0C7] bg-white p-5 transition-shadow hover:shadow-md ${
+                  isOpen ? 'border-l-4 border-l-[#E8A020]' : ''
+                }`}
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -288,7 +302,7 @@ export default function ModelRequests() {
                   </div>
 
                   {isOpen && (
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       {/* P2 (V2.11), and the action this queue was missing: without it
                           "Close as done" could only ever point at a model somebody else
                           had already published. Dark by default — see
@@ -343,7 +357,7 @@ export default function ModelRequests() {
                 </div>
 
                 {/* The seller's half: what they measured, with a ruler. */}
-                <div className="mt-4 flex flex-wrap gap-2">
+                <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4">
                   <Measurement
                     label="External length"
                     value={mm(row.external_length_mm)}
@@ -482,6 +496,7 @@ export default function ModelRequests() {
 function FulfilModal({ request, onClose, onConfirm, busy }) {
   const [selected, setSelected] = useState(null)
   const [note, setNote] = useState('')
+  const [viewing, setViewing] = useState(null)
   const { data: models, isLoading, isError, error } = useProductModels(request?.product_id)
   const modelsError = isError
     ? describeError(error, 'Could not read that product’s models.')
@@ -497,6 +512,7 @@ function FulfilModal({ request, onClose, onConfirm, busy }) {
   }
 
   return (
+    <>
     <Modal
       open={!!request}
       onClose={close}
@@ -570,37 +586,62 @@ function FulfilModal({ request, onClose, onConfirm, busy }) {
         </div>
       )}
 
-      {!isLoading && !isError && active.length > 0 && (
+      {/* Every model is listed, so an admin can look at a draft before deciding.
+          Only a live one can be picked: the RPC refuses anything else, and the
+          picker says so rather than hiding the row. */}
+      {!isLoading && !isError && (models ?? []).length > 0 && (
         <div className="space-y-2">
-          {active.map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              onClick={() => setSelected(m.id)}
-              className={`flex w-full items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition-colors ${
-                selected === m.id
-                  ? 'border-[#8B5A2B] bg-[#8B5A2B]/5'
-                  : 'border-[#D9D0C7] bg-white hover:bg-[#F5F0EB]'
-              }`}
-            >
-              <div>
-                <p className="text-sm font-semibold text-[#3B2314]">Version {m.version}</p>
-                <p className="mt-0.5 text-xs text-[#6B5C4E]">
-                  {m.authored_length_mm ? `${Number(m.authored_length_mm).toFixed(1)} mm` : 'No declared length'}
-                  {m.authored_size_eu ? ` · EU ${Number(m.authored_size_eu)}` : ''}
-                </p>
+          {(models ?? []).map((m) => {
+            const live = m.status === 'active'
+            const chosen = selected === m.id
+            return (
+              <div
+                key={m.id}
+                className={`flex items-center gap-3 rounded-xl border px-4 py-3 transition-colors ${
+                  chosen
+                    ? 'border-[#8B5A2B] bg-[#8B5A2B]/5'
+                    : 'border-[#D9D0C7] bg-white'
+                }`}
+              >
+                <button
+                  type="button"
+                  disabled={!live}
+                  aria-pressed={chosen}
+                  onClick={() => setSelected(m.id)}
+                  className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left disabled:cursor-not-allowed"
+                >
+                  <div>
+                    <p className="text-sm font-semibold text-[#3B2314]">Version {m.version}</p>
+                    <p className="mt-0.5 text-xs text-[#6B5C4E]">
+                      {m.authored_length_mm
+                        ? `${Number(m.authored_length_mm).toFixed(1)} mm`
+                        : 'No declared length'}
+                      {m.authored_size_eu ? ` · EU ${Number(m.authored_size_eu)}` : ''}
+                      {!live && ' · cannot close a request'}
+                    </p>
+                  </div>
+                  <Badge label={m.status} variant={m.status} />
+                </button>
+                {m.storage_path && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setViewing({
+                        title: request?.products?.name ?? 'Product',
+                        storagePath: m.storage_path,
+                        status: m.status,
+                        version: m.version,
+                      })
+                    }
+                    className="shrink-0 rounded-lg border border-[#8B5A2B] px-3 py-1.5 text-xs font-semibold text-[#8B5A2B] transition-colors hover:bg-[#8B5A2B]/10"
+                  >
+                    View 3D
+                  </button>
+                )}
               </div>
-              <Badge label={m.status} variant={m.status} />
-            </button>
-          ))}
+            )
+          })}
         </div>
-      )}
-
-      {!isLoading && !isError && drafts.length > 0 && active.length > 0 && (
-        <p className="mt-2 text-xs text-[#6B5C4E]">
-          {drafts.length} unpublished model{drafts.length > 1 ? 's are' : ' is'} hidden here — only
-          a live one can close this request.
-        </p>
       )}
 
       <div className="mt-5">
@@ -621,5 +662,9 @@ function FulfilModal({ request, onClose, onConfirm, busy }) {
         {NOTICE_NOT_READABLE_SENTENCE}
       </p>
     </Modal>
+    {/* Outside the Modal on purpose: the dialog's transform would trap a fixed
+        overlay inside it. */}
+    <ModelViewerDialog target={viewing} onClose={() => setViewing(null)} />
+    </>
   )
 }

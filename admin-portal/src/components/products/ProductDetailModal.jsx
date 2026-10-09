@@ -1,13 +1,20 @@
-import { X, Package } from 'lucide-react'
+import { useState } from 'react'
+import { X, Package, Cuboid } from 'lucide-react'
 import { formatCurrency } from '../../lib/constants'
+import Badge from '../ui/Badge.jsx'
+import ModelViewerDialog from './ModelViewerDialog.jsx'
+import { useProductModels } from '../../hooks/useModelRequests.js'
 
 export default function ProductDetailModal({ product, onClose, onToggleActive, onDelete }) {
+  // Declared before the early return: hooks must run on every render.
+  const [viewing, setViewing] = useState(null)
   if (!product) return null
 
   const images = product.product_images ?? []
   const inventory = product.inventory ?? []
 
   return (
+    <>
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-[#3B2314]/40" onClick={onClose} />
       <div className="relative z-10 flex max-h-[90vh] w-full max-w-2xl flex-col overflow-y-auto rounded-2xl bg-white">
@@ -117,6 +124,14 @@ export default function ProductDetailModal({ product, onClose, onToggleActive, o
             </div>
           )}
 
+          {/* The 3D models — every version and status, drafts included, so the
+              team can see what exists and why a product is still on the fallback. */}
+          <ProductModelsSection
+            productId={product.id}
+            name={product.name}
+            onView={setViewing}
+          />
+
           {/* Action buttons */}
           <div className="flex gap-3 border-t border-[#F5F0EB] pt-4">
             <button
@@ -136,6 +151,70 @@ export default function ProductDetailModal({ product, onClose, onToggleActive, o
           </div>
         </div>
       </div>
+    </div>
+    <ModelViewerDialog target={viewing} onClose={() => setViewing(null)} />
+    </>
+  )
+}
+
+// Every model row a product has, whatever its status. The viewer is handed the
+// row's own file, so a draft can be inspected before anyone publishes it.
+function ProductModelsSection({ productId, name, onView }) {
+  const { data: models, isLoading, isError, error } = useProductModels(productId)
+  const rows = models ?? []
+
+  return (
+    <div className="mb-6">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">
+        3D models
+      </p>
+
+      {isLoading && <div className="h-12 animate-pulse rounded-xl bg-[#F5F0EB]" />}
+
+      {isError && <p className="text-xs text-[#D64545]">{error.message}</p>}
+
+      {!isLoading && !isError && rows.length === 0 && (
+        <p className="text-sm text-[#6B5C4E]">No model has been uploaded for this product.</p>
+      )}
+
+      {rows.length > 0 && (
+        <div className="space-y-2">
+          {rows.map((m) => (
+            <div
+              key={m.id}
+              className="flex items-center gap-3 rounded-xl border border-[#D9D0C7] bg-white px-4 py-3"
+            >
+              <Cuboid size={16} className="shrink-0 text-[#8B5A2B]" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-[#3B2314]">Version {m.version}</p>
+                <p className="mt-0.5 text-xs text-[#6B5C4E]">
+                  {m.authored_length_mm
+                    ? `${Number(m.authored_length_mm).toFixed(1)} mm`
+                    : 'No declared length'}
+                  {m.authored_size_eu ? ` · EU ${Number(m.authored_size_eu)}` : ''}
+                </p>
+              </div>
+              <Badge label={m.status} variant={m.status} />
+              {m.storage_path && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    onView({
+                      title: name ?? 'Product',
+                      storagePath: m.storage_path,
+                      status: m.status,
+                      version: m.version,
+                    })
+                  }
+                  className="shrink-0 rounded-lg border border-[#8B5A2B] px-3 py-1.5 text-xs font-semibold text-[#8B5A2B] transition-colors hover:bg-[#8B5A2B]/10"
+                >
+                  View 3D
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

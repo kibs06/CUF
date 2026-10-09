@@ -87,7 +87,7 @@ export function useProductModels(productId) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('product_models')
-        .select('id, status, version, authored_length_mm, authored_size_eu')
+        .select('id, status, version, authored_length_mm, authored_size_eu, storage_path')
         .eq('product_id', productId)
         .order('version', { ascending: false })
 
