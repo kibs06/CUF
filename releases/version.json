@@ -1,15 +1,11 @@
 {
-  "latest_version": "1.0.49",
-  "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.49/app-release-1.0.49.apk",
+  "latest_version": "1.0.50",
+  "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.50/app-release-1.0.50.apk",
   "released_at": "2026-10-09",
   "notes": [
-    "Measuring your foot is more accurate: the scan reads the depth of the floor under your foot instead of the area behind it, and no longer lets a blurry frame or a still-settling floor skew the length",
-    "The guide box follows your foot now — set it down anywhere in view, instead of sliding it into one fixed spot",
-    "The scan captures the top view only, so one foot or both match what the camera sees",
-    "Based on your size follows the scale your scan set — men's, women's or kids' — instead of every product that happens to match the number",
-    "The See more card on that shelf appears only when the shelf actually holds more than the ten products already on screen",
-    "The 3D shoe viewer now has a Lighting control: brighten a shoe that reads too dark, or turn the shadow off if you want it flatter",
-    "The viewer now says plainly that the shoe you turn is the compressed model, while the photos on the page are the originals",
-    "The team's admin portal can look at a product's 3D models — drafts and rejected versions included — before closing a fitting request"
+    "Floor-search guide with a lock progress bar",
+    "Percent pill while the timed capture runs",
+    "Torch button and dark-room hint for dim rooms",
+    "Scans with low confidence are re-taken instead of returning a size"
   ]
 }

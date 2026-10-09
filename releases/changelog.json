@@ -1,5 +1,16 @@
 [
   {
+    "latest_version": "1.0.50",
+    "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.50/app-release-1.0.50.apk",
+    "released_at": "2026-10-09",
+    "notes": [
+      "Floor-search guide with a lock progress bar",
+      "Percent pill while the timed capture runs",
+      "Torch button and dark-room hint for dim rooms",
+      "Scans with low confidence are re-taken instead of returning a size"
+    ]
+  },
+  {
     "latest_version": "1.0.49",
     "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.49/app-release-1.0.49.apk",
     "released_at": "2026-10-09",
