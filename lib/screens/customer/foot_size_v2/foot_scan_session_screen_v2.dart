@@ -332,7 +332,8 @@ class _FootScanSessionScreenV2State extends State<FootScanSessionScreenV2>
             painter: _GuideBracketPainter(
               // Clamped to the visible crop band — the raw side rect extends
               // past the screen edges on tall phones (box drawn off-screen).
-              guideRect: _session.effectiveGuideRect,
+              // Follows the detected foot; the fixed guide when none is seen.
+              guideRect: _session.drawnGuideRect,
               frameWidth: uprightW,
               frameHeight: uprightH,
               locked: locked,

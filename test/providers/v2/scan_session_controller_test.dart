@@ -688,6 +688,38 @@ void main() {
     });
   });
 
+  group('ScanSessionController — follow box', () {
+    test('the guide box follows the detected foot and returns to fixed when lost',
+        () {
+      fakeAsync((async) {
+        harness(async);
+        final fixed = ctrl.effectiveGuideRect;
+
+        for (int i = 0; i < 3; i++) {
+          stageGoodTick();
+        }
+        ctrl.startCapture();
+        async.elapse(Duration(milliseconds: sampleIntervalMs * 3));
+
+        // The fixture's heel/toe/width give a box around (0.32..0.68, 0.27..0.53).
+        final drawn = ctrl.drawnGuideRect;
+        expect(drawn, isNot(fixed), reason: 'the box moved to the foot');
+        expect(drawn.left, closeTo(0.32, 0.001));
+        expect(drawn.right, closeTo(0.68, 0.001));
+        expect(drawn.top, closeTo(0.27, 0.001));
+        expect(drawn.bottom, closeTo(0.53, 0.001));
+
+        // No foot in frame any more: the box falls back to the fixed guide.
+        ar.nextFrame = null;
+        async.elapse(Duration(milliseconds: sampleIntervalMs * 2));
+        expect(ctrl.drawnGuideRect, fixed,
+            reason: 'a lost foot restores the fixed guide');
+        ctrl.cancelCapture();
+        ctrl.dispose();
+      });
+    });
+  });
+
   group('ScanSessionController — blur gate', () {
     test('a blurry frame never becomes a sample and asks to hold steady', () {
       fakeAsync((async) {

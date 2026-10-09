@@ -8,6 +8,7 @@ import '../../utils/ar_foot_measurement_pipeline.dart';
 import '../../utils/foot_detector.dart';
 import '../../utils/foot_measurement_utils.dart';
 import '../../utils/floor_tracker.dart';
+import '../../utils/foot_follow_rect.dart';
 import '../../utils/frame_sharpness.dart';
 import '../../utils/mlkit_segmentation_foot_detector.dart';
 import 'scan_phase.dart';
@@ -187,6 +188,10 @@ class ScanSessionController extends ChangeNotifier {
 
   /// Floor-height stability across area polls: a settling plane must not lock.
   final FloorTracker _floorTracker = FloorTracker();
+
+  /// The guide box following the detected foot (normalised, upright frame), or
+  /// null when no foot is detected and the fixed guide applies.
+  Rect? _followRect;
   Timer? _areaCheckTimer;
 
   /// View aspect ratio (width / height), reported by the session screen's
@@ -303,6 +308,40 @@ class ScanSessionController extends ChangeNotifier {
 
   /// Guide rect (normalized) for the current step.
   Rect get currentGuideRect => kFrontCaptureGuideRect;
+
+  /// The guide box the customer sees: it follows the detected foot, clamped to the
+  /// visible band, and falls back to the fixed guide when no foot is detected.
+  Rect get drawnGuideRect {
+    final follow = _followRect;
+    if (follow == null) return effectiveGuideRect;
+    final clamped = _visibleBand.intersect(follow);
+    return clamped.width > 0 && clamped.height > 0
+        ? clamped
+        : effectiveGuideRect;
+  }
+
+  /// The guide detection uses: the followed box once a foot is seen, so a foot
+  /// placed off-centre is not rejected for missing the fixed box.
+  Rect get _detectionGuideRect => _followRect ?? currentGuideRect;
+
+  /// Moves the followed box toward the latest detection, smoothed so it tracks
+  /// the foot without jitter.
+  void _updateFollowRect(FootDetectionResult detection) {
+    final points = [
+      detection.heelPoint?.asOffset,
+      detection.toePoint?.asOffset,
+      ...?detection.widthPoints?.map((p) => p.asOffset),
+    ].whereType<Offset>().toList();
+    if (points.length < 2) {
+      _followRect = null;
+      return;
+    }
+    final target = footFollowRect(points);
+    final previous = _followRect;
+    _followRect = previous == null
+        ? target
+        : Rect.lerp(previous, target, kFollowSmoothing) ?? target;
+  }
 
   /// Upright camera-frame aspect (width / height after display rotation).
   /// Falls back to the common 4:3 sensor (3:4 upright) until the first frame
@@ -629,6 +668,7 @@ class ScanSessionController extends ChangeNotifier {
       final frame = await _arCore.acquireCameraFrame();
       if (frame == null || frame.nv21Bytes.isEmpty) {
         _lastDetection = null;
+        _followRect = null;
         _clearLiveMeasurement();
         _setFootDetected(false);
         return;
@@ -662,7 +702,7 @@ class ScanSessionController extends ChangeNotifier {
         height: frame.height,
         rotationDegrees: frame.rotationDegrees,
         preferSide: _currentStep.footSide,
-        guideRect: currentGuideRect,
+        guideRect: _detectionGuideRect,
       );
       if (detection == null) return;
 
@@ -673,6 +713,7 @@ class ScanSessionController extends ChangeNotifier {
       final confirmed = _temporalGate.update(rawValid);
 
       if (!rawValid) {
+        _followRect = null;
         debugPrint('[ArScanV2] No foot (side=${detection.footSide}, '
             'conf=${detection.confidence.toStringAsFixed(2)})');
         _lastDetection = null;
@@ -683,6 +724,8 @@ class ScanSessionController extends ChangeNotifier {
 
       _lastDetection = detection;
       _setFootDetected(confirmed);
+      _updateFollowRect(detection);
+      if (!_disposed) notifyListeners();
 
       // ── 4. 2D points → 3D world via ARCore hitTest ──
       final screenPoints = <Offset>[
