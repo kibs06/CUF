@@ -41,6 +41,11 @@ class FakeArCore implements ArCoreChannel {
   bool sessionActive = false;
   ArTrackingState trackingReply = ArTrackingState.tracking;
 
+  /// Recorded per call so tests can assert the depth preference and that a
+  /// refused tap never reached the native side.
+  int hitTestCalls = 0;
+  bool? lastPreferDepth;
+
   @override
   bool get isSessionActive => sessionActive;
 
@@ -70,6 +75,8 @@ class FakeArCore implements ArCoreChannel {
 
   @override
   Future<ArWorldPoint?> hitTest({required double x, required double y, bool preferDepth = false}) async {
+    hitTestCalls++;
+    lastPreferDepth = preferDepth;
     if (gate != null && !gate!.isCompleted) await gate!.future;
     if (hitScript.isEmpty) return null;
     return hitScript.last;
@@ -80,6 +87,7 @@ class FakeArCore implements ArCoreChannel {
     required List<Offset> screenPoints,
     bool preferDepth = false,
   }) async {
+    lastPreferDepth = preferDepth;
     if (batchHits.length == screenPoints.length) return batchHits;
     return List.filled(screenPoints.length, null);
   }
@@ -89,6 +97,9 @@ class FakeArCore implements ArCoreChannel {
 
   @override
   Future<ArTrackingState> getTrackingState() async => trackingReply;
+
+  @override
+  Future<double?> getCameraTiltDegrees() async => null;
 
   @override
   Future<ArPlane?> getFloorPlane() async => null;
@@ -180,10 +191,10 @@ void main() {
   /// Place one full pair via two taps with the given scripted world points.
   void placePair(FakeAsync async, ArWorldPoint a, ArWorldPoint b) {
     ar.hitScript = [a];
-    ctrl.handleTapAt(const Offset(100, 400), testViewSize);
+    ctrl.handleTap(testViewSize);
     async.elapse(const Duration(milliseconds: tapWindowMs));
     ar.hitScript = [b];
-    ctrl.handleTapAt(const Offset(200, 400), testViewSize);
+    ctrl.handleTap(testViewSize);
     async.elapse(const Duration(milliseconds: tapWindowMs));
   }
 
@@ -224,32 +235,26 @@ void main() {
 
         // ── Left FRONT: width pair 90mm apart ──
         placePair(async, widthInner(), widthOuter());
-        expect(ctrl.pairPhase, 2);
+        expect(ctrl.pairPhase, 0);
         expect(ctrl.currentFoot, 0);
-        expect(ctrl.captureStep, 'front');
-        expect(ctrl.liveDistanceMm, closeTo(90.0, 0.5));
+        expect(ctrl.captureStep, 'side');
 
-        ctrl.confirmPair();
         expect(ctrl.captureStep, 'side');
         expect(ctrl.pairPhase, 0);
         expect(ctrl.guidanceText, 'Width done! Now the SIDE of your left foot');
 
         // ── Left SIDE: heel↔toe 240mm apart ──
         placePair(async, heel(), toeFar());
-        expect(ctrl.liveDistanceMm, closeTo(240.0, 0.5));
-        ctrl.confirmPair();
         expect(ctrl.currentFoot, 1);
         expect(ctrl.captureStep, 'front');
         expect(ctrl.guidanceText, 'Left foot done! Now your right foot');
 
         // ── Right FRONT ──
         placePair(async, widthInner(), widthOuter());
-        ctrl.confirmPair();
         expect(ctrl.captureStep, 'side');
 
         // ── Right SIDE → completed event ──
         placePair(async, heel(), toeFar());
-        ctrl.confirmPair();
         // Broadcast-stream delivery rides a microtask; pump it before
         // asserting on the captured events.
         async.flushMicrotasks();
@@ -276,6 +281,75 @@ void main() {
     });
   });
 
+  group('GuidedTapController — surface hits use the depth surface', () {
+    test('tap placement asks the native side for the depth surface', () {
+      fakeAsync((async) {
+        harness(async);
+        ar.hitScript = [widthInner()];
+        ctrl.handleTap(testViewSize);
+        async.elapse(const Duration(milliseconds: tapWindowMs));
+
+        expect(ctrl.pointA, isNotNull);
+        expect(ar.lastPreferDepth, isTrue);
+      });
+    });
+  });
+
+  group('GuidedTapController — camera frame size unknown', () {
+    test('a tap before the frame size is known is refused, not stretch-mapped',
+        () {
+      fakeAsync((async) {
+        ar = FakeArCore();
+        assist = FakeAssistDetector();
+        ctrl = GuidedTapController(arCore: ar, detectorFactory: () => assist);
+        ar.nextFrame = null; // no frame yet, so the size cannot be read
+        ctrl.initialize();
+        ar.startCompleter.complete(const ArSessionStartResult(started: true));
+        async.flushMicrotasks();
+        ar.eventSink.add(
+            const ArSessionEvent(type: 'tracking', data: {'state': 'tracking'}));
+        async.flushMicrotasks();
+        expect(ctrl.frameWidth, 0);
+
+        ar.hitScript = [widthInner()];
+        ctrl.handleTap(testViewSize);
+        async.flushMicrotasks();
+
+        expect(ar.hitTestCalls, 0, reason: 'a refused tap must not raycast');
+        expect(ctrl.pointA, isNull);
+        expect(ctrl.tapFeedback,
+            'Camera is still starting \u2014 try the tap again');
+      });
+    });
+
+    test('once the frame size arrives, the next tap places the point', () {
+      fakeAsync((async) {
+        ar = FakeArCore();
+        assist = FakeAssistDetector();
+        ctrl = GuidedTapController(arCore: ar, detectorFactory: () => assist);
+        ar.nextFrame = null;
+        ctrl.initialize();
+        ar.startCompleter.complete(const ArSessionStartResult(started: true));
+        async.flushMicrotasks();
+        ar.eventSink.add(
+            const ArSessionEvent(type: 'tracking', data: {'state': 'tracking'}));
+        async.flushMicrotasks();
+
+        ar.hitScript = [widthInner()];
+        ctrl.handleTap(testViewSize);
+        async.flushMicrotasks();
+
+        ar.nextFrame = frame();
+        async.elapse(const Duration(seconds: 2));
+        expect(ctrl.frameWidth, 480);
+
+        ctrl.handleTap(testViewSize);
+        async.elapse(const Duration(milliseconds: tapWindowMs));
+        expect(ctrl.pointA, isNotNull);
+      });
+    });
+  });
+
   group('GuidedTapController — tap rejection & guards', () {
     test('tap while not tracking shows coaching feedback and places nothing',
         () {
@@ -284,7 +358,7 @@ void main() {
         ar.trackingReply = ArTrackingState.limited;
 
         ar.hitScript = [widthInner()];
-        ctrl.handleTapAt(const Offset(100, 400), testViewSize);
+        ctrl.handleTap(testViewSize);
         async.flushMicrotasks();
 
         expect(ctrl.pointA, isNull);
@@ -303,13 +377,13 @@ void main() {
         harness(async);
         ar.hitScript = [null]; // every ray misses
 
-        ctrl.handleTapAt(const Offset(100, 400), testViewSize);
+        ctrl.handleTap(testViewSize);
         async.elapse(const Duration(milliseconds: tapWindowMs));
 
         expect(ctrl.pointA, isNull);
         expect(ctrl.pairPhase, 0);
         expect(ctrl.tapFeedback,
-            "Can't measure there — tap on the tracked floor near your foot");
+            "Can't measure there — aim at the tracked floor near your foot");
       });
     });
 
@@ -320,8 +394,8 @@ void main() {
         ar.gate = Completer<void>(); // first tap's burst hangs
         ar.hitScript = [widthInner()];
 
-        ctrl.handleTapAt(const Offset(100, 400), testViewSize);
-        ctrl.handleTapAt(const Offset(300, 400), testViewSize); // must be dropped
+        ctrl.handleTap(testViewSize);
+        ctrl.handleTap(testViewSize); // must be dropped
         async.flushMicrotasks();
 
         // Release the gated burst and let its remaining delay timers run.
@@ -342,9 +416,8 @@ void main() {
 
         // Pair only 20mm apart — far below kHardRejectMinWidthCm (4.5cm).
         placePair(async, wp(0.10, 0), wp(0.12, 0));
-        expect(ctrl.pairPhase, 2);
-
-        ctrl.confirmPair();
+        expect(ctrl.pairPhase, 0,
+            reason: 'an implausible pair is cleared, not left locked');
         expect(ctrl.tapFeedback, 'That looks off — place the two points again');
         expect(ctrl.captureStep, 'front',
             reason: 'flow must NOT advance on a rejected pair');
@@ -354,46 +427,35 @@ void main() {
     });
   });
 
-  group('GuidedTapController — trash & drag', () {
+  group('GuidedTapController — trash & centre placement', () {
     test('trash resets to phase 0 and re-derives guidance', () {
       fakeAsync((async) {
         harness(async);
-        placePair(async, widthInner(), widthOuter());
-        expect(ctrl.pairPhase, 2);
+        ar.hitScript = [widthInner()];
+        ctrl.handleTap(testViewSize);
+        async.elapse(const Duration(milliseconds: tapWindowMs));
+        expect(ctrl.pairPhase, 1);
 
         ctrl.trashPair();
         expect(ctrl.pointA, isNull);
         expect(ctrl.pointB, isNull);
         expect(ctrl.pairPhase, 0);
         expect(ctrl.liveDistanceMm, isNull);
-        expect(ctrl.dragIndex, isNull);
         // Guidance re-derived from tracking (ready → first-point prompt).
         expect(ctrl.guidanceState, 'ready');
         expect(ctrl.guidanceText, contains('widest point'));
       });
     });
 
-    test('drag updates the dragged point and the live distance from its '
-        'raycast world position', () {
+    test('the point lands on the centre crosshair, not where the user tapped',
+        () {
       fakeAsync((async) {
         harness(async);
-        placePair(async, widthInner(), widthOuter());
-        expect(ctrl.liveDistanceMm, closeTo(90.0, 0.5));
+        ar.hitScript = [widthInner()];
+        ctrl.handleTap(testViewSize);
+        async.elapse(const Duration(milliseconds: tapWindowMs));
 
-        // Grab point A (placed at Offset(100,400)), then drag it somewhere
-        // whose ray lands 120mm away from B's world point.
-        ctrl.onPanStart(const Offset(100, 400));
-        expect(ctrl.dragIndex, 0);
-
-        ar.hitScript = [wp(0.33, 0)]; // |0.33 - 0.21| = 120mm from B
-        ctrl.onPanUpdate(const Offset(150, 420), testViewSize);
-        async.flushMicrotasks();
-
-        expect(ctrl.pointA!.screen, const Offset(150, 420));
-        expect(ctrl.liveDistanceMm, closeTo(120.0, 0.5));
-
-        ctrl.onPanEnd();
-        expect(ctrl.dragIndex, isNull);
+        expect(ctrl.pointA!.screen, testViewSize.center(Offset.zero));
       });
     });
   });
@@ -444,12 +506,11 @@ void main() {
         ctrl.acceptSuggestion();
         async.flushMicrotasks();
 
-        expect(ctrl.pairPhase, 2);
-        expect(ctrl.pointA, isNotNull);
-        expect(ctrl.pointB, isNotNull);
+        // Accepting locks the pair and auto-confirms it, like a second tap.
+        expect(ctrl.pairPhase, 0);
+        expect(ctrl.captureStep, 'side');
         expect(ctrl.suggestion, isNull);
-        expect(ctrl.liveDistanceMm, closeTo(90.0, 0.5));
-        expect(ctrl.guidanceText, 'Drag the points to adjust, then confirm');
+        expect(ctrl.guidanceText, 'Width done! Now the SIDE of your left foot');
       });
     });
 

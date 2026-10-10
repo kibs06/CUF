@@ -173,14 +173,6 @@ class GuidedTapController extends ChangeNotifier {
   double? _liveDistanceMm;
   Timer? _liveCenterTimer;
 
-  /// Which placed point is being dragged: 0 = A, 1 = B.
-  int? _dragIndex;
-
-  /// Guards against overlapping drag raycasts (pan updates fire faster than
-  /// the hitTest channel round-trip, so out-of-order results could jitter the
-  /// dragged point).
-  bool _dragHitInProgress = false;
-
   /// Guards against a rapid double-tap both completing their async hitTest and
   /// placing point B at almost the same spot as point A (the second tap sees
   /// phase already advanced to 1 and places B). The plausibility guard catches
@@ -309,11 +301,14 @@ class GuidedTapController extends ChangeNotifier {
   int get uprightHeight =>
       (_frameRotation % 180) == 90 ? _frameWidth : _frameHeight;
 
+  /// Whether the camera frame size is known. Taps map through the frame's
+  /// center crop, so without it every tap would land in the wrong place.
+  bool get _frameGeometryKnown => _frameWidth > 0 && _frameHeight > 0;
+
   PlacedPoint? get pointA => _pointA;
   PlacedPoint? get pointB => _pointB;
   int get pairPhase => _pairPhase;
   double? get liveDistanceMm => _liveDistanceMm;
-  int? get dragIndex => _dragIndex;
   ({Offset a, Offset b, double confidence})? get suggestion => _suggestion;
   String? get tapFeedback => _tapFeedback;
   int get currentFoot => _currentFoot;
@@ -510,15 +505,24 @@ class GuidedTapController extends ChangeNotifier {
   double _worldDistanceMm(ArWorldPoint a, ArWorldPoint b) =>
       a.distanceTo(b) * 1000;
 
-  /// Handle a tap on the preview. Places point A (phase 0) or point B
-  /// (phase 1); ignores taps that don't hit a tracked surface (§3.3).
+  /// Handle a tap anywhere on the preview, StreetMeasure-style: the point is
+  /// placed at the centre crosshair, not where the user tapped. Places point A
+  /// (phase 0), then point B (phase 1). The second tap locks the pair and
+  /// auto-confirms it. Ignores taps that don't hit a tracked surface (§3.3).
   ///
   /// §2 improvement: fires burst sampling (multiple hitTests at the same
   /// coordinate, ~200ms window) and takes the median for jitter smoothing.
-  Future<void> handleTapAt(Offset local, Size viewSize) async {
+  Future<void> handleTap(Size viewSize) async {
     if (_guidanceState == 'error' || _guidanceState == 'initializing') return;
     if (_pairPhase == 2) return; // Locked — drag or confirm/trash
     if (_placementInProgress) return; // No overlapping placements
+    if (!_frameGeometryKnown) {
+      // Without the frame size the tap would be stretched, not center-cropped,
+      // and land in the wrong place. Refuse it and fetch the size again.
+      _showFeedback('Camera is still starting — try the tap again');
+      _fetchFrameGeometry();
+      return;
+    }
     _placementInProgress = true;
 
     // §2 Tracking-quality gate: reject taps when ARCore isn't tracking.
@@ -530,18 +534,19 @@ class GuidedTapController extends ChangeNotifier {
       return;
     }
 
-    final normalized = mapViewToNormalized(
-      local,
-      viewSize,
-      frameWidth: uprightWidth,
-      frameHeight: uprightHeight,
-    );
+    // Aim is the centre crosshair, the same point the live line measures to.
+    final normalized = const Offset(0.5, 0.5);
+    final centre = viewSize.center(Offset.zero);
 
     // §2 Burst sampling: fire multiple hitTests at the same coordinate
     // across a ~200ms window, then take the median world point.
     final worldPoints = <ArWorldPoint>[];
     for (int i = 0; i < _burstSampleCount; i++) {
-      final hit = await _arCore.hitTest(x: normalized.dx, y: normalized.dy);
+      final hit = await _arCore.hitTest(
+        x: normalized.dx,
+        y: normalized.dy,
+        preferDepth: true,
+      );
       if (hit != null) worldPoints.add(hit);
       // Small delay between samples (except after the last one)
       if (i < _burstSampleCount - 1) {
@@ -553,7 +558,7 @@ class GuidedTapController extends ChangeNotifier {
     if (worldPoints.isEmpty) {
       _placementInProgress = false;
       _showFeedback(
-          "Can't measure there — tap on the tracked floor near your foot");
+          "Can't measure there — aim at the tracked floor near your foot");
       return;
     }
 
@@ -572,7 +577,7 @@ class GuidedTapController extends ChangeNotifier {
     // User chose manual placement — clear any smart-assist suggestion.
     _suggestion = null;
     if (_pairPhase == 0) {
-      _pointA = PlacedPoint(screen: local, world: world);
+      _pointA = PlacedPoint(screen: centre, world: world);
       if (!_loggedFirstPoint) {
         _loggedFirstPoint = true;
         _logFirstPointSummary('manual tap');
@@ -582,11 +587,11 @@ class GuidedTapController extends ChangeNotifier {
       _guidanceState = 'ready';
       _startLiveCenterUpdates();
     } else {
-      _pointB = PlacedPoint(screen: local, world: world);
+      _pointB = PlacedPoint(screen: centre, world: world);
       _pairPhase = 2;
       _liveCenterTimer?.cancel();
       _liveDistanceMm = _worldDistanceMm(_pointA!.world, world);
-      _guidanceText = 'Drag the points to adjust, then confirm';
+      _confirmPair(); // StreetMeasure: the second tap ends the measurement
     }
     notifyListeners();
     _placementInProgress = false;
@@ -632,7 +637,8 @@ class GuidedTapController extends ChangeNotifier {
         _liveCenterTimer?.cancel();
         return;
       }
-      final world = await _arCore.hitTest(x: 0.5, y: 0.5);
+      final world =
+          await _arCore.hitTest(x: 0.5, y: 0.5, preferDepth: true);
       if (_disposed) return;
       if (world != null && _pointA != null) {
         _liveDistanceMm = _worldDistanceMm(_pointA!.world, world);
@@ -659,6 +665,7 @@ class GuidedTapController extends ChangeNotifier {
     if (_trackingState != ArTrackingState.tracking) return;
     final viewSize = _viewSize;
     if (viewSize == null || viewSize.width <= 0 || viewSize.height <= 0) return;
+    if (!_frameGeometryKnown) return;
 
     _assistBusy = true;
     try {
@@ -731,6 +738,7 @@ class GuidedTapController extends ChangeNotifier {
   Future<void> acceptSuggestion() async {
     final suggestion = _suggestion;
     if (suggestion == null || _pairPhase != 0) return;
+    if (!_frameGeometryKnown) return;
     if (_placementInProgress) return;
     final viewSize = _viewSize;
     if (viewSize == null) return;
@@ -755,7 +763,10 @@ class GuidedTapController extends ChangeNotifier {
       // One batch call: a single channel round trip + a consistent snapshot
       // of the same frame (two sequential hitTests could straddle a tracking
       // change). hitTestBatch expects normalized coords, which we have.
-      final hits = await _arCore.hitTestBatch(screenPoints: [aNorm, bNorm]);
+      final hits = await _arCore.hitTestBatch(
+        screenPoints: [aNorm, bNorm],
+        preferDepth: true,
+      );
       if (_disposed) return;
       final aWorld = hits.isNotEmpty ? hits[0] : null;
       final bWorld = hits.length > 1 ? hits[1] : null;
@@ -791,58 +802,11 @@ class GuidedTapController extends ChangeNotifier {
       _pointB = PlacedPoint(screen: suggestion.b, world: bWorld);
       _pairPhase = 2;
       _liveDistanceMm = mm;
-      _guidanceText = 'Drag the points to adjust, then confirm';
       _suggestion = null;
-      notifyListeners();
+      _confirmPair(); // Locks the pair, as a second tap does
     } finally {
       _placementInProgress = false;
     }
-  }
-
-  // ═════════════════════════════════════════════════════════════
-  // POINT DRAGGING (adjust after placement, §2.4)
-  // ═════════════════════════════════════════════════════════════
-
-  void onPanStart(Offset localPosition) {
-    if (_pairPhase != 2) return;
-    const hitRadius = 44.0;
-    if (_pointA != null &&
-        (_pointA!.screen - localPosition).distance < hitRadius) {
-      _dragIndex = 0;
-    } else if (_pointB != null &&
-        (_pointB!.screen - localPosition).distance < hitRadius) {
-      _dragIndex = 1;
-    }
-  }
-
-  Future<void> onPanUpdate(Offset localPosition, Size viewSize) async {
-    if (_dragIndex == null || _pairPhase != 2) return;
-    if (_dragHitInProgress) return; // Drop overlapping drag raycasts
-    _dragHitInProgress = true;
-
-    final normalized = mapViewToNormalized(
-      localPosition,
-      viewSize,
-      frameWidth: uprightWidth,
-      frameHeight: uprightHeight,
-    );
-    final world = await _arCore.hitTest(x: normalized.dx, y: normalized.dy);
-    _dragHitInProgress = false;
-    if (_disposed || world == null) return;
-
-    if (_dragIndex == 0) {
-      _pointA = PlacedPoint(screen: localPosition, world: world);
-    } else {
-      _pointB = PlacedPoint(screen: localPosition, world: world);
-    }
-    if (_pointA != null && _pointB != null) {
-      _liveDistanceMm = _worldDistanceMm(_pointA!.world, _pointB!.world);
-    }
-    notifyListeners();
-  }
-
-  void onPanEnd() {
-    _dragIndex = null;
   }
 
   // ═════════════════════════════════════════════════════════════
@@ -856,8 +820,6 @@ class GuidedTapController extends ChangeNotifier {
     _pointB = null;
     _pairPhase = 0;
     _liveDistanceMm = null;
-    _dragIndex = null;
-    _dragHitInProgress = false;
     _suggestion = null; // Fresh suggestion for the redone pair, if any
     notifyListeners();
     // Let the readiness assessment drive the text/state — if the area dropped
@@ -866,7 +828,7 @@ class GuidedTapController extends ChangeNotifier {
   }
 
   /// Lock the current pair and advance the flow (front → side → next foot).
-  void confirmPair() {
+  void _confirmPair() {
     if (_pairPhase != 2 || _liveDistanceMm == null) return;
 
     final mm = _liveDistanceMm!;
@@ -875,6 +837,7 @@ class GuidedTapController extends ChangeNotifier {
     final minCm = isFront ? _minPlausibleWidthCm : _minPlausibleLengthCm;
     final maxCm = isFront ? _maxPlausibleWidthCm : _maxPlausibleLengthCm;
     if (cm < minCm || cm > maxCm) {
+      trashPair(); // Clear the bad pair so the user can aim again
       _showFeedback('That looks off — place the two points again');
       return;
     }
@@ -926,8 +889,6 @@ class GuidedTapController extends ChangeNotifier {
     _pointB = null;
     _pairPhase = 0;
     _liveDistanceMm = null;
-    _dragIndex = null;
-    _dragHitInProgress = false;
     _placementInProgress = false;
     _suggestion = null; // New step → sampler re-proposes for the new angle
     _guidanceState = 'ready';

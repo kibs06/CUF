@@ -4,6 +4,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../../constants/app_constants.dart';
 import '../../../services/ar_core_channel.dart';
 import '../../../utils/ar_core_install.dart';
+import '../foot_manual_measure_screen.dart';
 import 'foot_scan_session_screen_v2.dart';
 
 /// Entry screen for "Get Your Foot Size 2.0" — the clean-rewrite auto scan.
@@ -33,6 +34,9 @@ class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2>
     with WidgetsBindingObserver {
   /// Shopping preference: men's / women's / kids' sizing.
   String _shoeCategory = 'men';
+
+  /// 'scan' (camera auto scan) or 'tap' (place the points by hand).
+  String _measureMode = 'scan';
 
   /// 'bare' or 'socks' — sock thickness affects compensation.
   String _footCondition = 'bare';
@@ -106,13 +110,16 @@ class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2>
     if (_arScanBlocked) return Icons.view_in_ar_outlined;
     if (_arNeedsInstall) return Icons.download_for_offline_outlined;
     return _cameraGranted
-        ? Icons.view_in_ar_rounded
+        ? (_measureMode == 'tap'
+            ? Icons.touch_app_rounded
+            : Icons.view_in_ar_rounded)
         : Icons.photo_camera_outlined;
   }
 
   String get _ctaLabel {
     if (_arScanBlocked) return 'AR scanning not supported here';
     if (_arNeedsInstall) return 'Install AR support';
+    if (_cameraGranted && _measureMode == 'tap') return 'Start tapping';
     return _cameraGranted ? 'Start scanning' : 'Allow camera access';
   }
 
@@ -144,7 +151,12 @@ class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2>
     if (!mounted) return;
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => FootScanSessionScreenV2(
+        builder: (_) => _measureMode == 'tap'
+            ? FootManualMeasureScreen(
+                footCondition: _footCondition,
+                shoeCategory: _shoeCategory,
+              )
+            : FootScanSessionScreenV2(
           footCondition: _footCondition,
           shoeCategory: _shoeCategory,
           footMode: _scanFeet,
@@ -170,7 +182,11 @@ class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2>
                       children: [
                         _buildHero(),
                         const SizedBox(height: 28),
-                        _buildWhatToExpect(),
+                        _buildMeasureModeSection(),
+                        const SizedBox(height: 28),
+                        _measureMode == 'scan'
+                            ? _buildWhatToExpect()
+                            : _buildTapExpect(),
                         const SizedBox(height: 28),
                         _buildChipSection(
                           title: 'Shopping size',
@@ -184,6 +200,7 @@ class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2>
                           onSelect: (v) => setState(() => _shoeCategory = v),
                         ),
                         const SizedBox(height: 24),
+                        if (_measureMode == 'scan')
                         _buildChipSection(
                           title: 'Which feet',
                           subtitle:
@@ -275,6 +292,52 @@ class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2>
         centerTitle: true,
       ),
       body: body,
+    );
+  }
+
+  /// Chooses how the foot is measured: the camera reads it, or the customer
+  /// taps the points themselves.
+  Widget _buildMeasureModeSection() {
+    return _buildChipSection(
+      title: 'How to measure',
+      subtitle: 'Scan lets the camera read your foot. Tap lets you place the '
+          'points yourself.',
+      options: const [
+        ('scan', 'Camera scan'),
+        ('tap', 'Tap to measure'),
+      ],
+      selected: _measureMode,
+      onSelect: (v) => setState(() => _measureMode = v),
+    );
+  }
+
+  /// What the tap flow asks of the customer, in place of the scan steps.
+  Widget _buildTapExpect() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionLabel('What to expect'),
+        const SizedBox(height: 12),
+        _expectRow(
+          icon: Icons.touch_app_rounded,
+          title: 'Tap the widest points',
+          description:
+              'Tap the inside and then the outside of your foot at its widest point.',
+          delay: 0,
+        ),
+        _expectRow(
+          icon: Icons.straighten_rounded,
+          title: 'Tap heel and toe',
+          description: 'Then tap your heel and the tip of your longest toe.',
+          delay: 80,
+        ),
+        _expectRow(
+          icon: Icons.compare_arrows_rounded,
+          title: 'Both feet',
+          description: 'The guide walks you through each foot in turn.',
+          delay: 160,
+        ),
+      ],
     );
   }
 

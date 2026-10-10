@@ -203,6 +203,33 @@ void main() {
     expect(saved?.euSize, 35.5);
   });
 
+  testWidgets('the disabled save says what is missing, then confirms the pick',
+      (tester) async {
+    await pumpPanel(tester);
+
+    expect(
+      find.text('Choose a shopping size and your size to continue.'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text("Women's"));
+    await tester.pump();
+    // Scale alone still leaves the size missing.
+    expect(
+      find.text('Choose a shopping size and your size to continue.'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('35'));
+    await tester.pump();
+
+    expect(
+      find.text('Choose a shopping size and your size to continue.'),
+      findsNothing,
+    );
+    expect(find.text("EU 35 \u00b7 Regular \u00b7 Women's"), findsOneWidget);
+  });
+
   testWidgets('a save in flight shows a spinner instead of the label',
       (tester) async {
     await pumpPanel(

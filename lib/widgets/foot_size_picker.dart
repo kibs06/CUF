@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../constants/app_constants.dart';
 import '../utils/customer_profile_fields.dart';
@@ -209,7 +210,7 @@ class _FootSizePickerPanelState extends State<FootSizePickerPanel> {
             ],
           ),
           SizedBox(
-            height: 40,
+            height: 48,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: options.length,
@@ -248,6 +249,7 @@ class _FootSizePickerPanelState extends State<FootSizePickerPanel> {
             ],
           ),
           const SizedBox(height: 28),
+          _summaryOrHint(size),
           SolePrimaryButton(
             label: 'Save my size',
             // Disabled until BOTH a size and a shopping scale are picked: a
@@ -255,6 +257,59 @@ class _FootSizePickerPanelState extends State<FootSizePickerPanel> {
             // guessed scale is exactly the mistake this field exists to stop.
             isLoading: widget.isSaving,
             onPressed: size == null || _category == null ? null : _save,
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Confirms what will be saved once both a size and a scale are picked,
+  /// and says what is still missing until then, so the disabled button is
+  /// never a mystery.
+  Widget _summaryOrHint(double? size) {
+    final category = _category;
+    if (size == null || category == null) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 14),
+        child: Text(
+          'Choose a shopping size and your size to continue.',
+          style: AppConstants.bodyStyle(
+            fontSize: 12,
+            color: AppConstants.secondary.withValues(alpha: 0.55),
+          ),
+        ),
+      );
+    }
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppConstants.success.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppConstants.success.withValues(alpha: 0.4),
+          width: 1.5,
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.check_circle_rounded,
+            color: AppConstants.success,
+            size: 18,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'EU ${formatSizeNumber(size)} · $_width · '
+              '${footSizeCategoryLabel(category) ?? category}',
+              style: AppConstants.bodyStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppConstants.secondary,
+              ),
+            ),
           ),
         ],
       ),
@@ -298,9 +353,14 @@ class _FootSizePickerPanelState extends State<FootSizePickerPanel> {
           );
 
     return GestureDetector(
-      onTap: onTap,
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
+        // At least a 44px touch target, the platform minimum.
+        constraints: const BoxConstraints(minHeight: 44),
         padding:
             EdgeInsets.symmetric(horizontal: horizontal, vertical: vertical),
         alignment: Alignment.center,
@@ -314,7 +374,11 @@ class _FootSizePickerPanelState extends State<FootSizePickerPanel> {
             width: 1.5,
           ),
         ),
-        child: Text(label, style: style),
+        child: Semantics(
+          button: true,
+          selected: selected,
+          child: Text(label, style: style),
+        ),
       ),
     );
   }

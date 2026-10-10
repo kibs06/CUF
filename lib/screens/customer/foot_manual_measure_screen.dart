@@ -33,14 +33,11 @@ import 'foot_results_screen.dart';
 /// 4. Right foot: same two pairs
 /// 5. Navigate to results (length/width per foot, recommended size)
 ///
-/// Interaction per pair:
-/// - Tap to place point A. A line then draws from A to the center crosshair
-///   with a live, continuously-updating cm value (matching the reference app's
-///   "Add a point" crosshair pattern).
-/// - Tap again to place point B and lock the measurement for that pair.
-/// - Drag either point to adjust after placement — the distance label updates
-///   live while dragging.
-/// - Trash icon clears/redoes the current pair; Confirm advances the flow.
+/// Interaction per pair (StreetMeasure-style):
+/// - Aim the centre crosshair and tap anywhere to place point A there.
+///   A line then draws from A to the crosshair with a live cm value.
+/// - Aim again and tap to place point B; the second tap locks the pair and
+///   advances the flow. Trash clears the pair while A is placed.
 ////// Taps that don't hit a tracked surface show a brief "can't measure there"
 /// message and don't register a point (§3.3).
 ///
@@ -203,10 +200,7 @@ class _FootManualMeasureScreenState extends State<FootManualMeasureScreen>
               _scan.updateViewSize(size); // Cached for the smart-assist sampler
               return GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onTapUp: (d) => _scan.handleTapAt(d.localPosition, size),
-                onPanStart: (d) => _scan.onPanStart(d.localPosition),
-                onPanUpdate: (d) => _scan.onPanUpdate(d.localPosition, size),
-                onPanEnd: (_) => _scan.onPanEnd(),
+                onTapUp: (_) => _scan.handleTap(size),
                 child: CustomPaint(
                   painter: _ManualPointsPainter(
                     pointA: _scan.pointA?.screen,
@@ -216,7 +210,6 @@ class _FootManualMeasureScreenState extends State<FootManualMeasureScreen>
                     liveDistanceMm: _scan.liveDistanceMm,
                     showCrosshair: _scan.pairPhase < 2,
                     isFront: _scan.captureStep == 'front',
-                    draggingIndex: _scan.dragIndex,
                     suggestionA: _scan.suggestion?.a,
                     suggestionB: _scan.suggestion?.b,
                     suggestionConfidence: _scan.suggestion?.confidence,
@@ -510,9 +503,7 @@ class _FootManualMeasureScreenState extends State<FootManualMeasureScreen>
   }
 
   Widget _buildBottomBar() {
-    final showConfirm = _scan.pairPhase == 2;
-    final showHint =
-        _scan.guidanceState == 'ready' && !showConfirm && _scan.pairPhase < 2;
+    final showHint = _scan.guidanceState == 'ready' && _scan.pairPhase < 2;
 
     return Positioned(
       bottom: MediaQuery.of(context).padding.bottom + 20,
@@ -584,61 +575,7 @@ class _FootManualMeasureScreenState extends State<FootManualMeasureScreen>
           const SizedBox(height: 16),
 
           // Action area
-          if (showConfirm)
-            Row(
-              children: [
-                // Trash / redo pair (§2.4, §2.5)
-                GestureDetector(
-                  onTap: _scan.trashPair,
-                  child: Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.5),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white54, width: 1.5),
-                    ),
-                    child: const Icon(
-                      Icons.delete_outline_rounded,
-                      color: Colors.white,
-                      size: 24,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                // Confirm / next
-                Expanded(
-                  child: GestureDetector(
-                    onTap: _scan.confirmPair,
-                    child: Container(
-                      height: 52,
-                      decoration: BoxDecoration(
-                        color: AppConstants.accent,
-                        borderRadius: BorderRadius.circular(26),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppConstants.accent.withValues(alpha: 0.4),
-                            blurRadius: 16,
-                            spreadRadius: 1,
-                          ),
-                        ],
-                      ),
-                      child: Center(
-                        child: Text(
-                          'Confirm ${_scan.captureStep == 'front' ? 'Width' : 'Length'}',
-                          style: AppConstants.bodyStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: AppConstants.secondary,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            )
-          else if (showHint)
+          if (showHint)
             Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -723,8 +660,8 @@ class _FootManualMeasureScreenState extends State<FootManualMeasureScreen>
                       const SizedBox(width: 8),
                       Text(
                         _scan.pairPhase == 0
-                            ? 'Tap the foot to place the first point'
-                            : 'Aim at the second point — tap to lock it in',
+                            ? 'Aim the crosshair at the first point and tap'
+                            : 'Aim the crosshair at the second point and tap',
                         style: AppConstants.bodyStyle(
                           fontSize: 12,
                           color: Colors.white.withValues(alpha: 0.85),
@@ -824,9 +761,6 @@ class _ManualPointsPainter extends CustomPainter {
   /// Whether the current pair is the FRONT (width) capture — affects labels.
   final bool isFront;
 
-  /// Index of the point currently being dragged (0 = A, 1 = B), if any.
-  final int? draggingIndex;
-
   /// Smart-assist proposed point positions (view pixels, §6) — drawn
   /// dashed/translucent until accepted or ignored.
   final Offset? suggestionA;
@@ -843,7 +777,6 @@ class _ManualPointsPainter extends CustomPainter {
     required this.liveDistanceMm,
     required this.showCrosshair,
     required this.isFront,
-    required this.draggingIndex,
     this.suggestionA,
     this.suggestionB,
     this.suggestionConfidence,
@@ -934,20 +867,17 @@ class _ManualPointsPainter extends CustomPainter {
     if (pointA != null) {
       final label = isFront ? 'W' : 'H';
       final color = isFront ? const Color(0xFF42A5F5) : const Color(0xFF4CAF50);
-      _drawMarker(canvas, pointA!, label, color,
-          dragging: draggingIndex == 0);
+      _drawMarker(canvas, pointA!, label, color);
     }
     if (pointB != null) {
       final label = isFront ? 'W' : 'T';
       final color = isFront ? const Color(0xFF42A5F5) : const Color(0xFFF44336);
-      _drawMarker(canvas, pointB!, label, color,
-          dragging: draggingIndex == 1);
+      _drawMarker(canvas, pointB!, label, color);
     }
   }
 
-  void _drawMarker(Canvas canvas, Offset center, String label, Color color,
-      {bool dragging = false}) {
-    final radius = dragging ? 14.0 : 11.0;
+  void _drawMarker(Canvas canvas, Offset center, String label, Color color) {
+    const radius = 11.0;
     canvas.drawCircle(
       center,
       radius,
@@ -961,17 +891,6 @@ class _ManualPointsPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2.5,
     );
-    if (dragging) {
-      // Outer highlight ring while dragging
-      canvas.drawCircle(
-        center,
-        radius + 6,
-        Paint()
-          ..color = Colors.white.withValues(alpha: 0.5)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2,
-      );
-    }
     final tp = TextPainter(
       text: TextSpan(
         text: label,
@@ -1102,7 +1021,6 @@ class _ManualPointsPainter extends CustomPainter {
         oldDelegate.liveDistanceMm != liveDistanceMm ||
         oldDelegate.showCrosshair != showCrosshair ||
         oldDelegate.isFront != isFront ||
-        oldDelegate.draggingIndex != draggingIndex ||
         oldDelegate.suggestionA != suggestionA ||
         oldDelegate.suggestionB != suggestionB ||
         oldDelegate.suggestionConfidence != suggestionConfidence;

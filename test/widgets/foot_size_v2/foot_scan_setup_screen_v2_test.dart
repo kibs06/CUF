@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:app/screens/customer/foot_size_v2/foot_scan_setup_screen_v2.dart';
 import 'package:app/screens/customer/foot_size_v2/foot_scan_session_screen_v2.dart';
+import 'package:app/screens/customer/foot_manual_measure_screen.dart';
 
 /// The setup screen probes ARCore availability before it opens the camera, so a
 /// phone that cannot run ARCore is told so here — instead of dropping into a
@@ -78,6 +79,44 @@ void main() {
     expect(find.text('Start scanning'), findsOneWidget);
     expect(find.text('AR scanning not supported here'), findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Tap to measure swaps the CTA and drops the feet choice',
+      (tester) async {
+    await pumpSetup(tester);
+
+    // Section titles are rendered uppercased.
+    expect(find.text('WHICH FEET'), findsOneWidget);
+    await tester.tap(find.text('Tap to measure'));
+    await tester.pump();
+
+    expect(find.text('Start tapping'), findsOneWidget);
+    expect(find.text('Start scanning'), findsNothing);
+    // The tap flow measures both feet itself, so the feet choice is hidden.
+    expect(find.text('WHICH FEET'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Tap to measure opens the manual tap flow, not the camera scan',
+      (tester) async {
+    // The manual flow asks for the camera with requestPermissions, which
+    // answers with a map of permission -> status (camera = 0, granted = 1).
+    mockMessenger.setMockMethodCallHandler(permissionsChannel, (call) async {
+      if (call.method == 'requestPermissions') return <int, int>{0: 1};
+      if (call.method == 'checkPermissionStatus') return 1;
+      return null;
+    });
+
+    await pumpSetup(tester);
+
+    await tester.tap(find.text('Tap to measure'));
+    await tester.pump();
+    await tester.tap(find.text('Start tapping'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byType(FootManualMeasureScreen), findsOneWidget);
+    expect(find.byType(FootScanSessionScreenV2), findsNothing);
   });
 
   testWidgets('an unsupported device is told before the camera ever opens',
