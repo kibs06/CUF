@@ -193,6 +193,14 @@ class AppConstants {
   /// Shared seam between product cards in every two-column grid and rail.
   static const double productGridGutter = 8;
 
+  /// The seam between audience columns on the home row (Men's | Women's).
+  ///
+  /// Deliberately wider than [productGridGutter]: inside one audience's 2x2
+  /// grid the tiles sit 8px apart, and at that same gap two neighbouring
+  /// columns read as one block of four-by-two photos rather than two sections.
+  /// 24px is what makes the split visible at a glance.
+  static const double audienceColumnGap = 24;
+
   /// Shared horizontal content margin for product feeds and aligned home chrome.
   static const double feedMargin = 8;
 

@@ -14,7 +14,6 @@ import 'package:app/widgets/audience_section.dart';
 import 'package:app/widgets/product_image_pager.dart';
 import 'package:app/widgets/product_section_header.dart';
 import 'package:app/widgets/sole_product_card.dart';
-import 'package:app/widgets/two_column_masonry.dart';
 
 /// The Men's / Women's / Kids' home sections — the first customer-facing surface
 /// of the product-audience feature, and (since 2026-10-06) one row of them.
@@ -22,9 +21,8 @@ import 'package:app/widgets/two_column_masonry.dart';
 /// The rules pinned here are the ones that would be silent if they broke:
 /// per-section isolation, `unisex` in NO section (the same card three times down
 /// the feed), an unset product staying in the catalog grid while staying out of
-/// the sections, one photo per row inside a narrow column and two inside a wide
-/// one, and the row never leaving a blank column for an audience that has
-/// nothing. The kill switch is ON in production, but the OFF case is still pinned
+/// the sections, the four photos laid as a 2x2 grid, and the row never leaving a
+/// blank column for an audience that has nothing. The kill switch is ON in production, but the OFF case is still pinned
 /// by passing `enabled: false` deliberately — see [AudienceSection.enabled].
 Map<String, dynamic> product({
   required String id,
@@ -136,24 +134,9 @@ List<String> namesInSection(WidgetTester tester, String audience) => tester
 
 const double _gutter = AppConstants.productGridGutter;
 const double _margin = AppConstants.feedMargin;
+const double _columnGap = AppConstants.audienceColumnGap;
 
 void main() {
-  test('the tile-count rule is "two" only when two cards still fit', () {
-    // The breakpoint is the protected minimum doubled, plus the seam between
-    // them — stated that way so the test moves with the number it protects.
-    final twoFit = kAudienceTileMinWidth * 2 + _gutter;
-
-    expect(audienceTileColumnsFor(twoFit), 2);
-    expect(audienceTileColumnsFor(twoFit + 1), 2);
-    expect(audienceTileColumnsFor(twoFit - 0.5), 1,
-        reason: 'half a pixel short is one tile per row, not two squeezed ones');
-    expect(audienceTileColumnsFor(0), 1);
-    expect(audienceTileColumnsFor(119), 1,
-        reason: 'a third of a phone — the audience row on the small screen');
-    expect(audienceTileColumnsFor(374), 2,
-        reason: 'a phone, one audience across the page');
-  });
-
   testWidgets('each section shows only its own audience', (tester) async {
     final provider = ProductProvider.seeded(
       products: [
@@ -453,11 +436,10 @@ void main() {
     );
   });
 
-  // ── The shape of a column: two across, or one ──
+  // ── The shape of a section: a 2x2 grid ──
 
-  testWidgets('a wide column lays its photos two across', (tester) async {
-    useSurface(tester, const Size(800, 600));
-
+  testWidgets('a section is a 2x2 grid of squares whatever the column width',
+      (tester) async {
     final provider = ProductProvider.seeded(
       products: [
         for (var i = 0; i < 4; i++)
@@ -466,51 +448,32 @@ void main() {
       unitsSold: const {},
     );
 
-    await tester.pumpWidget(wrap(provider, audiences: const ['men']));
-    await tester.pump(const Duration(milliseconds: 300));
+    // A third of a phone (the audience row's own column), then a tablet width.
+    for (final size in const [Size(390, 844), Size(800, 600)]) {
+      useSurface(tester, size);
+      await tester.pumpWidget(wrapRow(provider));
+      await tester.pump(const Duration(milliseconds: 300));
 
-    // 784px of column is room for two 150px cards and the seam between them.
-    expect(find.byType(TwoColumnMasonry), findsOneWidget);
+      final rects = tileRects(tester, 'men');
+      expect(rects, hasLength(4), reason: 'at ${size.width}px wide');
 
-    final rects = tileRects(tester, 'men');
-    expect(rects, hasLength(4));
-    expect(rects[1].top, moreOrLessEquals(rects[0].top, epsilon: 0.5),
-        reason: 'the second photo sits beside the first, not under it');
-    expect(rects[1].left, greaterThan(rects[0].right - 1));
-    expect(tester.takeException(), isNull);
-  });
+      // Reading order: top-left, top-right, bottom-left, bottom-right.
+      expect(rects[1].top, moreOrLessEquals(rects[0].top, epsilon: 0.5),
+          reason: 'the second photo sits beside the first');
+      expect(rects[1].left, greaterThan(rects[0].right));
+      expect(rects[2].left, moreOrLessEquals(rects[0].left, epsilon: 0.5),
+          reason: 'the third photo sits under the first');
+      expect(rects[2].top, greaterThan(rects[0].bottom));
+      expect(rects[3].left, moreOrLessEquals(rects[1].left, epsilon: 0.5));
+      expect(rects[3].top, moreOrLessEquals(rects[2].top, epsilon: 0.5));
 
-  testWidgets('a narrow column stacks its photos instead', (tester) async {
-    // A third of a phone: the audience row's own column width.
-    useSurface(tester, const Size(390, 844));
-
-    final provider = ProductProvider.seeded(
-      products: [
-        product(id: 'm0', name: 'Derby', audience: 'men'),
-        product(id: 'w0', name: 'Ballet Flat', audience: 'women'),
-        for (var i = 0; i < 3; i++)
-          product(id: 'm${i + 1}', name: 'Loafer $i', audience: 'men'),
-      ],
-      unitsSold: const {},
-    );
-
-    await tester.pumpWidget(wrapRow(provider));
-    await tester.pump(const Duration(milliseconds: 300));
-
-    // Two cards side by side would be ~55px each here, so the section does not
-    // try: every photo gets the whole column.
-    expect(find.byType(TwoColumnMasonry), findsNothing);
-
-    final rects = tileRects(tester, 'men');
-    expect(rects, hasLength(4));
-    for (final rect in rects) {
-      expect(rect.left, moreOrLessEquals(rects.first.left, epsilon: 0.5),
-          reason: 'one photo per row, all on the same left edge');
-      expect(rect.width, moreOrLessEquals(rects.first.width, epsilon: 0.5));
+      for (final rect in rects) {
+        expect(rect.width, moreOrLessEquals(rects[0].width, epsilon: 0.5));
+        expect(rect.height, moreOrLessEquals(rect.width, epsilon: 1),
+            reason: 'square tiles, so the four line up in a true grid');
+      }
+      expect(tester.takeException(), isNull);
     }
-    expect(rects[1].top, greaterThan(rects[0].bottom),
-        reason: 'stacked, not beside');
-    expect(tester.takeException(), isNull);
   });
 
   // ── The row itself ──
@@ -571,13 +534,15 @@ void main() {
     // The number itself, so a change to the margin, the gutter or the column
     // count cannot pass by being "still equal to each other".
     expect(men.width,
-        moreOrLessEquals((390 - 2 * _margin - 2 * _gutter) / 3, epsilon: 0.5));
+        moreOrLessEquals((390 - 2 * _margin - 2 * _columnGap) / 3, epsilon: 0.5));
 
     // The page margin is the row's, and the seam between two columns is the
-    // grid's own gutter — so the row closes flush with the feed either side.
+    // audience gap — wider than the 2x2 grid's own gutter, so the split between
+    // Men's and Women's reads at a glance rather than as one block of photos.
+    expect(_columnGap, greaterThan(_gutter));
     expect(men.left, moreOrLessEquals(_margin, epsilon: 0.5));
-    expect(women.left - men.right, moreOrLessEquals(_gutter, epsilon: 0.5));
-    expect(kids.left - women.right, moreOrLessEquals(_gutter, epsilon: 0.5));
+    expect(women.left - men.right, moreOrLessEquals(_columnGap, epsilon: 0.5));
+    expect(kids.left - women.right, moreOrLessEquals(_columnGap, epsilon: 0.5));
     expect(kids.right, moreOrLessEquals(390 - _margin, epsilon: 0.5));
   });
 
@@ -635,16 +600,15 @@ void main() {
     // absent column would have taken.
     expect(men.left, moreOrLessEquals(_margin, epsilon: 0.5));
     expect(women.right, moreOrLessEquals(390 - _margin, epsilon: 0.5));
-    expect(women.left - men.right, moreOrLessEquals(_gutter, epsilon: 0.5));
+    expect(women.left - men.right, moreOrLessEquals(_columnGap, epsilon: 0.5));
 
     // Two columns share what three would have split, which is the whole reason
-    // an absent audience leaves nothing behind: 183px here, the width of a
-    // catalog card — and because the column is too narrow to pair tiles, each
-    // photo is that full width rather than half of it.
-    final expected = (390 - 2 * _margin - _gutter) / 2;
+    // an absent audience leaves nothing behind: 183px here.
+    final expected = (390 - 2 * _margin - _columnGap) / 2;
     expect(men.width, moreOrLessEquals(expected, epsilon: 0.5));
+    // Each column is a 2x2 grid, so a photo is half the column less the seam.
     expect(tileRects(tester, 'men').first.width,
-        moreOrLessEquals(expected, epsilon: 1.5));
+        moreOrLessEquals((expected - _gutter) / 2, epsilon: 1.5));
   });
 
   testWidgets('the row is nothing at all when no audience has anything',

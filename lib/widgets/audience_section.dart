@@ -5,10 +5,8 @@ import '../constants/app_constants.dart';
 import '../providers/product_provider.dart';
 import '../screens/customer/audience_listing_screen.dart';
 import '../utils/product_audience.dart';
-import '../utils/product_grid_ratio.dart';
 import 'product_section_header.dart';
 import 'sole_product_card.dart';
-import 'two_column_masonry.dart';
 
 /// How many products an audience section previews.
 ///
@@ -16,34 +14,13 @@ import 'two_column_masonry.dart';
 /// feed's way of saying *this is what we make for men* and then getting out of
 /// the way, where the shelf itself is one tap behind every tile.
 ///
-/// Four is also the one count that fills **every** shape this section can take
-/// without a stump: two clean rows where the column is wide enough for two tiles
-/// side by side, four clean rows where it is not. That matters more here than
-/// anywhere else on the feed, because a block of pictures is read as a *block* —
-/// a short last row makes it look broken rather than merely short.
+/// Four is exactly one 2x2 grid: two rows of two. A block of pictures is read as
+/// a *block*, so a short last row would make it look broken rather than small.
 ///
 /// Deliberately not [kAudienceRailLimit] (12): that number sizes the provider's
 /// own default cap, which other callers and their tests rely on. This is the
 /// home section's editorial count and nothing else reads it.
 const int kAudiencePreviewCount = 4;
-
-/// The narrowest a tile may be before an audience section stops trying to fit
-/// two of them side by side.
-///
-/// The breakpoint is this doubled plus one [AppConstants.productGridGutter], so
-/// the rule is stated in terms of the thing it protects rather than as a bare
-/// number. 150 is roughly where a catalogue card stops reading as a card and
-/// starts reading as a thumbnail — below it, two tiles beside each other are
-/// worse than one tile per row, which is the shape the audience row uses.
-const double kAudienceTileMinWidth = 150;
-
-/// The number of tile columns an audience section fits in [width] pixels.
-///
-/// Two when two tiles of at least [kAudienceTileMinWidth] fit across it, one
-/// otherwise. Exposed as a function so the one rule can be tested directly
-/// rather than only through a rendered box.
-int audienceTileColumnsFor(double width) =>
-    width >= kAudienceTileMinWidth * 2 + AppConstants.productGridGutter ? 2 : 1;
 
 /// One audience section on the customer home — Men's, Women's or Kids': a
 /// heading over **four photos**, every one of them opening that audience's shelf.
@@ -73,13 +50,12 @@ int audienceTileColumnsFor(double width) =>
 /// or three narrower columns with the page gutters between them. A section that
 /// inset itself could not be both.
 ///
-/// **Its tiles take the shape its column can afford.** One photo per row when
-/// the column is narrow (as it is in the audience row on a phone), two when the
-/// column is wide enough for them to still read as cards
-/// ([audienceTileColumnsFor]). That is why this does not simply reuse
-/// `ProductGridSection`: that widget is the feed's own 2-column masonry and
-/// cannot stack a single column, which is exactly what a third of a phone's
-/// width needs.
+/// **Its tiles are a 2x2 grid of squares.** Two rows of two at any column width,
+/// so the same four photos read the same whether the section sits alone on the
+/// feed or in the audience row on a phone. The squares let the grid line up: a
+/// product's own photo shape is cropped to fit rather than letting a tall one
+/// push its row out of line. That is why this does not reuse `ProductGridSection`,
+/// whose masonry staggers the cell heights.
 ///
 /// **This is the first customer-facing pixel of the product-audience feature**,
 /// and it is gated behind [AppConstants.productAudienceEnabled].
@@ -140,7 +116,7 @@ class AudienceSection extends StatelessWidget {
       for (final (index, product) in products.indexed)
         SoleProductCard(
           product: product,
-          imageAspectRatio: productGridRatio(product),
+          imageAspectRatio: 1.0,
           imageOnly: true,
           semanticsLabel:
               'See the $label shelf, ${index + 1} of ${products.length}',
@@ -152,40 +128,35 @@ class AudienceSection extends StatelessWidget {
         ),
     ];
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final columns = audienceTileColumnsFor(constraints.maxWidth);
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    // Two rows of two, the same gutter between the columns as between the rows.
+    final rows = <Widget>[
+      for (var start = 0; start < tiles.length; start += 2) ...[
+        if (start > 0) const SizedBox(height: AppConstants.productGridGutter),
+        Row(
           children: [
-            // Inset 0: the page margin is the caller's (see the class doc).
-            ProductSectionHeader(title: label, sideInset: 0),
-            if (columns == 2)
-              TwoColumnMasonry(
-                margin: 0,
-                gutter: AppConstants.productGridGutter,
-                children: tiles,
-              )
-            else
-              // One photo per row, the same gutter the two-column form uses
-              // between its cells — one seam, whichever shape the column takes.
-              Column(
-                children: [
-                  for (final (index, tile) in tiles.indexed) ...[
-                    if (index > 0)
-                      const SizedBox(height: AppConstants.productGridGutter),
-                    tile,
-                  ],
-                ],
-              ),
-            // Owned here, not by the caller: this section hides itself when it
-            // has nothing to show, and a caller-side spacer would leave a gap
-            // where the tiles are not.
-            const SizedBox(height: 16),
+            Expanded(child: tiles[start]),
+            const SizedBox(width: AppConstants.productGridGutter),
+            Expanded(
+              child: start + 1 < tiles.length
+                  ? tiles[start + 1]
+                  : const SizedBox.shrink(),
+            ),
           ],
-        );
-      },
+        ),
+      ],
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Inset 0: the page margin is the caller's (see the class doc).
+        ProductSectionHeader(title: label, sideInset: 0),
+        ...rows,
+        // Owned here, not by the caller: this section hides itself when it
+        // has nothing to show, and a caller-side spacer would leave a gap
+        // where the tiles are not.
+        const SizedBox(height: 16),
+      ],
     );
   }
 }
@@ -211,10 +182,9 @@ class AudienceSection extends StatelessWidget {
 /// squeezing five audiences into a phone's width; anything past it is dropped
 /// rather than shrunk, because an unreadable column is not a section.
 ///
-/// **Side by side is an arrangement, not a shape.** Each column asks for its own
-/// tile count based on the width it is handed ([audienceTileColumnsFor]), so on a
-/// phone — where a column is roughly a third of the page — each one stacks its
-/// photos, and on a tablet the same widgets lay out two to a row.
+/// **Side by side is an arrangement, not a shape.** Each column is the same 2x2
+/// grid whatever its width, so on a phone the audiences sit side by side as two
+/// small grids.
 class AudienceSections extends StatelessWidget {
   const AudienceSections({
     super.key,
@@ -265,7 +235,7 @@ class AudienceSections extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           for (final (index, audience) in audiences.indexed) ...[
-            if (index > 0) const SizedBox(width: AppConstants.productGridGutter),
+            if (index > 0) const SizedBox(width: AppConstants.audienceColumnGap),
             Expanded(
               child: AudienceSection(audience: audience, enabled: enabled),
             ),

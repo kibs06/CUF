@@ -10,6 +10,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 const String authErrorNetwork =
     "We couldn't reach CUFMAI. Check your connection and try again.";
 
+/// Shown when the request DID reach CUFMAI's auth service and that service
+/// failed (HTTP 5xx). Supabase returns a 500 for things like a broken mail
+/// relay, so the connection is fine and telling the user to check it is wrong.
+const String authErrorServer =
+    "CUFMAI couldn't finish that request. Please try again in a few minutes.";
+
 /// Shared copy for an already-registered email — used by BOTH the code-keyed
 /// mapper (user_already_exists / email_exists) and the register screen's
 /// inline pre-submit duplicate-email check, so the two paths can never drift
@@ -119,7 +125,13 @@ String friendlyAuthErrorMessage(Object error, {StackTrace? stackTrace}) {
     // A gotrue TRANSPORT failure is an AuthException with no code. It must
     // not be read as a rejected credential ("check your typing") when the
     // request never reached the server.
-    if (error is AuthRetryableFetchException) return authErrorNetwork;
+    if (error is AuthRetryableFetchException) {
+      // gotrue throws this type for BOTH a lost connection (no status code) and
+      // an HTTP 5xx from the server (status code set). Only the first means we
+      // never reached it, so only the first gets the connection message.
+      debugPrint('[AuthError] Fetch failed: $error');
+      return error.statusCode == null ? authErrorNetwork : authErrorServer;
+    }
     return friendlyAuthError(error);
   }
   if (error is SocketException || error is TimeoutException) {

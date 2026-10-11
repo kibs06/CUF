@@ -55,6 +55,10 @@ abstract class MfaGateway {
     required String factorId,
     required String code,
   });
+  /// Lost-authenticator recovery: removes the user's verified factors on the
+  /// server. Must be called from an email-code session — see
+  /// `supabase/functions/reset-two-factor`.
+  Future<void> resetTwoFactor();
 }
 
 /// Thin wrapper over Supabase Auth's TOTP MFA API
@@ -148,6 +152,13 @@ class MfaService implements MfaGateway {
     required String code,
   }) async {
     await _auth.mfa.challengeAndVerify(factorId: factorId, code: code);
+  }
+
+  /// Turns 2FA off for the signed-in user after an email-code proof. The
+  /// function logs every session out, so callers must sign out afterwards.
+  @override
+  Future<void> resetTwoFactor() async {
+    await _client.functions.invoke('reset-two-factor');
   }
 
   // ── Internals ─────────────────────────────────────────────────

@@ -125,6 +125,9 @@ class FakeMfa implements MfaGateway {
     required String factorId,
     required String code,
   }) async => throw UnimplementedError();
+
+  @override
+  Future<void> resetTwoFactor() async => throw UnimplementedError();
 }
 
 class FakeOtp implements EmailOtpGateway {

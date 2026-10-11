@@ -174,6 +174,21 @@ void main() {
         expect(message, isNot(contains('reset your password')));
       }
     });
+
+    test('a server 5xx is not reported as a connection problem', () {
+      // gotrue throws AuthRetryableFetchException for HTTP 500 too, with the
+      // status set. The reset-password 500 (a broken mail relay) used to read
+      // "couldn't reach CUFMAI" while the connection was fine.
+      final message = friendlyAuthErrorMessage(
+        AuthRetryableFetchException(
+          message: 'Unable to process request',
+          statusCode: '500',
+        ),
+      );
+      expect(message, authErrorServer);
+      expect(message, isNot(contains('connection')));
+      expect(message, isNot(contains("couldn't reach")));
+    });
   });
 
   group('isCredentialRejection — what may move the lockout counter', () {

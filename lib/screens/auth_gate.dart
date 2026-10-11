@@ -465,6 +465,12 @@ class _MfaGateState extends State<_MfaGate> {
     return MfaVerifyScreen(
       factorId: _factorId ?? '',
       onVerified: _evaluate,
+      // Lets the user leave the code step (wrong account, lost phone) instead
+      // of being held on it. logout() clears the session, so AuthGate rebuilds
+      // to the sign-in flow on its own.
+      onSignOut: () => context.read<AuthProvider>().logout(),
+      // The lost-authenticator path emails its code here.
+      email: Supabase.instance.client.auth.currentUser?.email,
     );
   }
 }
