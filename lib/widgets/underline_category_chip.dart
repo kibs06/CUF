@@ -40,6 +40,43 @@ class UnderlineCategoryChip extends StatelessWidget {
   /// search page's chips already use). Null leaves the indicator unkeyed.
   final Key? indicatorKey;
 
+  /// The size the label is painted at. Named because [heightFor] measures in
+  /// this same style — a second literal here is how the band and the chip it
+  /// holds drift apart.
+  static const double _labelFontSize = 14;
+
+  /// Chrome stacked above and below the label: 6px padding top and bottom, the
+  /// 4px gap, and the 2px underline.
+  static const double _verticalChrome = 18;
+
+  /// The height this chip needs to paint without clipping, at the ambient text
+  /// scale.
+  ///
+  /// A row of these sits in a fixed-height band on the shelf toolbars
+  /// ([heightFor] is what that band asks), and the label is a *word* that may
+  /// not be shrunk: at 1.0x the chip fits a 42px band, and from about 1.3x up it
+  /// does not — which is precisely the OS setting a large-text phone runs at.
+  /// Measured through a [TextPainter] in the style [build] paints, and scaled by
+  /// the same [TextScaler] `Text` applies to the font size, so the number cannot
+  /// drift from the widget it describes.
+  static double heightFor(BuildContext context) {
+    // The AMBIENT style merged with the chip's own — the same merge `Text`
+    // performs and `build` paints with. Measuring the app style alone drops the
+    // ambient line height Material installs (`bodyMedium`'s), which is the couple
+    // of pixels this band was short by. Weight is irrelevant to height, so the
+    // unselected variant is the one measured.
+    final style = DefaultTextStyle.of(context).style.merge(
+      AppConstants.bodyStyle(fontSize: _labelFontSize),
+    );
+    final painter = TextPainter(
+      text: TextSpan(text: 'Ag', style: style),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    final height = painter.height;
+    painter.dispose();
+    return MediaQuery.textScalerOf(context).scale(height) + _verticalChrome;
+  }
+
   @override
   Widget build(BuildContext context) {
     // A Builder, so the ambient style is read from *below* the Scaffold (which
@@ -54,7 +91,7 @@ class UnderlineCategoryChip extends StatelessWidget {
         // measured in exactly the style the label is painted in.
         final labelStyle = DefaultTextStyle.of(context).style.merge(
           AppConstants.bodyStyle(
-            fontSize: 14,
+            fontSize: _labelFontSize,
             fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
             color: selected
                 ? AppConstants.primary

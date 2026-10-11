@@ -550,10 +550,23 @@ class _FootScanSessionScreenV2State extends State<FootScanSessionScreenV2>
         return Icons.blur_on_rounded;
       case CoachReason.positionFoot:
         return Icons.crop_free_rounded;
+      case CoachReason.moveCloser:
+        return Icons.zoom_in_rounded;
+      case CoachReason.moveFarther:
+        return Icons.zoom_out_rounded;
+      case CoachReason.tiltPhone:
+        return Icons.screen_rotation_alt_rounded;
       case CoachReason.holdStill:
         return Icons.center_focus_strong_rounded;
       case CoachReason.havingTrouble:
         return Icons.waving_hand_outlined;
+      // Neither of these is a lighting/floor problem, so neither borrows the
+      // waving-hand "something is wrong out there" icon: a refused reading is a
+      // measurement that did not line up, and a thin pass is a retry.
+      case CoachReason.readingsDisagreed:
+        return Icons.straighten_rounded;
+      case CoachReason.tooFewSamples:
+        return Icons.refresh_rounded;
       case CoachReason.stepDone:
       case CoachReason.footDone:
         return Icons.check_circle_outline_rounded;
@@ -575,10 +588,25 @@ class _FootScanSessionScreenV2State extends State<FootScanSessionScreenV2>
         return 'The image is blurry — hold steady and wipe the lens';
       case CoachReason.positionFoot:
         return 'Position your $stepLabel inside the frame';
+      case CoachReason.moveCloser:
+        return 'Move the phone a little closer to your foot';
+      case CoachReason.moveFarther:
+        return 'Move the phone back a little so the whole foot fits';
+      case CoachReason.tiltPhone:
+        return 'Hold your phone flat, pointing straight down at your foot';
       case CoachReason.holdStill:
         return 'Hold still — measuring…';
       case CoachReason.havingTrouble:
         return 'Having trouble? Good lighting and a textured floor help.';
+      // The reading was refused for reasons the customer can actually act on.
+      // Neither is about lighting or the floor — the foot was seen fine — so
+      // neither borrows that sentence.
+      case CoachReason.readingsDisagreed:
+        return 'The readings didn\'t agree — keep the whole foot in frame and '
+            'hold steady.';
+      case CoachReason.tooFewSamples:
+        return 'That pass didn\'t get enough usable frames — keep the whole '
+            'foot in frame.';
       case CoachReason.stepDone:
         return 'Got it!';
       case CoachReason.footDone:

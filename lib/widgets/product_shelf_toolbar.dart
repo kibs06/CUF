@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../constants/app_constants.dart';
@@ -72,6 +74,24 @@ class ProductShelfToolbar extends StatelessWidget {
   final SortMode sort;
   final ValueChanged<SortMode> onSortSelected;
 
+  /// The size [ProductSortChip] paints its label at — the threshold below is
+  /// expressed against it so the rule stays tied to the label it is about.
+  static const double _sortLabelFontSize = 11;
+
+  /// True when the scaled sort label no longer fits on the chip row beside the
+  /// categories, so the control drops to its own line.
+  ///
+  /// The label is a *word* ('Price: Low to High') and the chip will not shrink
+  /// it without truncating, so the honest accommodation is a second line — the
+  /// rule the audience shelf carried on its own before this bar held the sort
+  /// control. It costs one line of height at large text and leaves the normal
+  /// case byte-for-byte unchanged.
+  bool _stacksAtLargeText(BuildContext context) =>
+      MediaQuery.textScalerOf(context).scale(_sortLabelFontSize) > 15.5;
+
+  Widget _sortChip() =>
+      ProductSortChip(sort: sort, onSelected: onSortSelected);
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -81,14 +101,22 @@ class ProductShelfToolbar extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 2, 16, 2),
           child: _searchField(context),
         ),
-        SizedBox(
-          height: 42,
-          child: Row(
-            children: [
-              // One 'All' chip ahead of the shelf's own — the same shape the
-              // search results page's chips have, off the same provider helper.
-              if (categories.isNotEmpty)
-                Expanded(
+        // No fixed band on the ROW. The chip list needs a bounded height (a
+        // horizontal ListView has no intrinsic cross-axis), but the sort chip
+        // beside it does not: at a large OS text scale its label wraps to two
+        // lines and needs more room than the chips do, and a row pinned to the
+        // chips' height clips it. The row sizes to whichever child is taller.
+        Row(
+          children: [
+            // One 'All' chip ahead of the shelf's own — the same shape the
+            // search results page's chips have, off the same provider helper.
+            if (categories.isNotEmpty)
+              Expanded(
+                child: SizedBox(
+                  // The chips' band follows the text scale, measured off the chip
+                  // itself: a fixed 42 fits the label and its underline at 1.0x
+                  // and clips them from about 1.3x up.
+                  height: math.max(42, UnderlineCategoryChip.heightFor(context)),
                   child: ListView(
                     scrollDirection: Axis.horizontal,
                     // 12 + the chip's own 8 keeps the first label aligned with
@@ -110,16 +138,22 @@ class ProductShelfToolbar extends StatelessWidget {
                         ),
                     ],
                   ),
-                )
-              else
-                const Spacer(),
+                ),
+              )
+            else
+              const Spacer(),
+            if (!_stacksAtLargeText(context))
               Padding(
                 padding: const EdgeInsets.only(right: 16, left: 8),
-                child: ProductSortChip(sort: sort, onSelected: onSortSelected),
+                child: _sortChip(),
               ),
-            ],
-          ),
+          ],
         ),
+        if (_stacksAtLargeText(context))
+          Padding(
+            padding: const EdgeInsets.only(right: 16, top: 2),
+            child: Align(alignment: Alignment.centerRight, child: _sortChip()),
+          ),
       ],
     );
   }

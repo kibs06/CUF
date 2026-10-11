@@ -12,7 +12,8 @@ import '../../providers/auto_scan_controller.dart';
 // TEMP-DEBUG [NAV-DEBUG]: phase 1b diagnosis — remove after fix verified.
 import '../../services/diag_logger.dart' show navDiag;
 import '../../services/ar_core_channel.dart';
-import '../../utils/ar_foot_measurement_pipeline.dart' show scanDuration;
+import '../../utils/ar_foot_measurement_pipeline.dart'
+    show idealSampleCount, maxScanDuration;
 import '../../utils/foot_detector.dart';
 import '../../utils/foot_measurement_utils.dart' show mapNormalizedToView;
 import 'foot_floor_detection_screen.dart' show FloorReference;
@@ -100,8 +101,13 @@ class _FootArScanScreenState extends State<FootArScanScreen>
       vsync: this,
     )..repeat(reverse: true);
 
+    // The ring is DRIVEN BY SAMPLE COUNT, not by this duration: [_onScanChanged]
+    // assigns `_progressController.value` from the samples collected, so the
+    // ring tracks the same target the controller stops the pass on. The
+    // duration is only the controller's required placeholder — set to the pass
+    // cap so it can never imply a 4 s window the pass no longer has.
     _progressController = AnimationController(
-      duration: scanDuration,
+      duration: maxScanDuration,
       vsync: this,
     );
 
@@ -151,12 +157,18 @@ class _FootArScanScreenState extends State<FootArScanScreen>
   void _onScanChanged() {
     if (!mounted) return;
 
-    // Drive the pass progress ring from scanActive edges (previously the
-    // inline `forward(from: 0)` / `stop()` calls in start/endScan).
+    // Drive the pass progress ring from the samples collected. The pass ends
+    // when it has enough samples (see [passHasEnoughSamples]), not after a fixed
+    // window, so a clock-driven ring would finish before the capture did on a
+    // hard foot and sit idle on an easy one.
     final active = _scan.scanActive;
-    if (active && !_prevScanActive) {
-      _progressController.forward(from: 0);
-    } else if (!active && _prevScanActive) {
+    if (active) {
+      final progress =
+          (_scan.currentSampleCount / idealSampleCount).clamp(0.0, 1.0);
+      if (_progressController.value != progress) {
+        _progressController.value = progress;
+      }
+    } else if (_prevScanActive) {
       _progressController.stop();
     }
     _prevScanActive = active;

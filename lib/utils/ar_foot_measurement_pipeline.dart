@@ -621,3 +621,84 @@ double scanProgress(DateTime scanStartTime) {
 bool scanComplete(DateTime scanStartTime) {
   return scanProgress(scanStartTime) >= 1.0;
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// PASS COMPLETION (sample-driven)
+// ═══════════════════════════════════════════════════════════════════
+//
+// A capture pass ends on the evidence it has collected, not on the clock. The
+// timed window above ([scanDuration]) is kept for the legacy progress helpers,
+// but the scan flows no longer end a pass with a wall-clock timer: an easy foot
+// used to wait out the full window for nothing, and a hard one ended mid-read.
+
+/// IQR (mm) at or below which the samples collected so far count as agreeing —
+/// the same "IQR < 2 mm = excellent" spread rule [_computeConfidence] rewards.
+const double kAgreementIqrMm = 2.0;
+
+/// Fewest samples that may end a pass early on agreement. Below this, an IQR
+/// describes the sample count rather than the foot, so the pass keeps
+/// collecting. Not yet calibrated against real scans — tune from measured feet.
+const int minSamplesForEarlyStop = 8;
+
+/// Wall-clock ceiling for one capture pass.
+///
+/// A pass normally ends because [passHasEnoughSamples] is satisfied. This exists
+/// only so a pass that never gets there — no foot in frame, or every frame gated
+/// out as blurry or unsure — cannot run forever. It is a safety net, not the
+/// exit the scan is designed around.
+const Duration maxScanDuration = Duration(seconds: 60);
+
+/// Attempted frames a pass may run while recording NO sample at all before it
+/// gives up (~5s at [sampleIntervalMs] per attempt).
+///
+/// A pass that IS recording samples keeps going to [maxScanDuration], because
+/// more frames can only improve the median. A pass that has recorded nothing is
+/// the opposite case: waiting longer is just the customer standing there. That
+/// is the give-up the old fixed window provided, and removing the window took it
+/// away — a scan that could never succeed started taking a full minute to say so.
+/// Twenty-five attempts is the frame budget the five-second window had.
+///
+/// Deliberately keyed on SAMPLES, not on detections, because a pass records
+/// nothing either way and both are hopeless with more time:
+///  * no foot detected at all (ML Kit never confirms one); or
+///  * a foot IS detected but none of its points ever land on the floor —
+///    `hitTestBatch` misses, which is what a wet, glossy or untextured surface
+///    produces. These frames count as valid detections, so a detection-based
+///    rule would leave this pass running to the cap and then bounce the customer
+///    back to the start having collected nothing.
+const int noSampleGiveUpAttempts = 25;
+
+/// Length spread (IQR in mm) of [samples], under the same quality and outlier
+/// filtering the combination pipeline applies.
+///
+/// Returns `null` — rather than 0.0 — when too few samples survive to measure a
+/// spread at all, so a caller can never mistake "nothing to go on" for "they
+/// agree perfectly".
+double? sampleLengthIqrMm(List<MeasurementSample> samples) {
+  final quality = samples
+      .where((s) =>
+          s.trackingQuality >= minTrackingQuality &&
+          s.segmentationConfidence >= minSegmentationConfidence)
+      .toList();
+  if (quality.length < minSamplesForEarlyStop) return null;
+  final filtered = filterOutliersIqr(quality.map((s) => s.lengthMm).toList());
+  if (filtered.length < 4) return null;
+  return _iqr(filtered);
+}
+
+/// Whether a capture pass has collected enough samples to end.
+///
+/// Two ways to be done:
+///  * [idealSampleCount] samples — the count the confidence score rewards in
+///    full, so a pass that reaches it gains nothing from more; or
+///  * from [minSamplesForEarlyStop] upward, once the samples already agree
+///    ([sampleLengthIqrMm] at or below [kAgreementIqrMm]) — a foot that reads
+///    the same length eight times does not need the rest of the pass.
+///
+/// The pass therefore runs as long as the foot is hard to read and stops early
+/// when it is easy, instead of always running a fixed number of seconds.
+bool passHasEnoughSamples(List<MeasurementSample> samples) {
+  if (samples.length >= idealSampleCount) return true;
+  final iqr = sampleLengthIqrMm(samples);
+  return iqr != null && iqr <= kAgreementIqrMm;
+}

@@ -131,6 +131,16 @@ const double kFootShapeIdealHigh = 4.9;
 /// ~30cm above pointing straight down.
 const Rect kFrontCaptureGuideRect = Rect.fromLTRB(0.30, 0.15, 0.70, 0.70);
 
+/// Largest camera tilt, in degrees from straight down, that a top-down foot
+/// capture is accepted at. Not yet calibrated against real scans; tune it from
+/// measured feet.
+const double kMaxFootScanTiltDeg = 20;
+
+/// Whether the phone is held level enough for a top-down capture. An unknown
+/// tilt (null, not yet reported) counts as level so it never blocks a scan.
+bool isPhoneLevel(double? tiltDeg) =>
+    tiltDeg == null || tiltDeg <= kMaxFootScanTiltDeg;
+
 /// Guide box for the SIDE / profile capture (primary measurement: length).
 /// A wider, shorter box — the foot's profile fills it when the phone is held
 /// to the side.

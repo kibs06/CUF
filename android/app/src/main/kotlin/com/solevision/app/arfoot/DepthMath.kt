@@ -38,12 +38,82 @@ fun medianPlausibleDepthMm(values: List<Int>): Int? {
 }
 
 /**
+ * Distance to the NEAREST plausible surface in the neighbourhood, in mm.
+ *
+ * The foot's measurement points sit on the silhouette edge, and a DEPTH16 pixel
+ * straddling that edge holds a blend of the foot's own surface and whatever lies
+ * beyond it — usually the floor, which is farther away. A median takes the
+ * majority of the window, so at an edge it returns the surface *behind* the
+ * foot: the point then unprojects past the foot, and both the measured length
+ * and width come out proportionally too large.
+ *
+ * The surface worth measuring is the near one, because at a silhouette edge the
+ * foot is in front of whatever shows around it. A low percentile (not the raw
+ * minimum) keeps that while still ignoring a single wild pixel.
+ */
+fun nearestPlausibleDepthMm(values: List<Int>): Int? {
+    val valid = values.filter { it in MIN_FOOT_DEPTH_MM..MAX_FOOT_DEPTH_MM }.sorted()
+    if (valid.size < MIN_DEPTH_NEIGHBOURS) return null
+    return valid[(valid.size - 1) / 4]
+}
+
+/**
  * Unprojects an image pixel with depth [depthM] (metres along the optical axis)
  * into ARCore camera space: +X right, +Y up, looking down -Z.
  *
  * Image pixels have their origin at the top-left with +Y downward, so the
  * vertical axis is negated.
  */
+/**
+ * How far below the floor plane a depth point may sit before it is rejected, in
+ * metres. The floor plane itself carries a few cm of error, so a point must sit
+ * clearly beneath it, not just at it.
+ */
+const val FLOOR_TOLERANCE_M = 0.01f
+
+/**
+ * True when a depth point lies below the floor by more than [toleranceM]. A
+ * point under the floor cannot be on the foot: the depth read past the foot to
+ * the surface behind it, and that point inflates the measured length.
+ */
+fun isBelowFloor(pointY: Float, floorY: Float, toleranceM: Float = FLOOR_TOLERANCE_M): Boolean =
+    pointY < floorY - toleranceM
+
+/**
+ * Height above the floor of the foot's measured edge points, in metres. Used by
+ * the no-depth fallback, which lifts a floor hit to this height. It is an
+ * estimate: calibrate it against a foot of known length.
+ */
+const val FOOT_SILHOUETTE_HEIGHT_M = 0.03f
+
+/**
+ * Moves a floor hit along its camera ray to [heightM] above the floor.
+ *
+ * A ray through the foot's edge pixel strikes the floor [floorPoint] behind the
+ * foot. Its true point lies on the same ray, [heightM] up, so the floor hit is
+ * too far from the camera by the factor H / (H - heightM), where H is the
+ * camera's height above the floor. Lifting the hit onto the foot-height plane
+ * removes that factor using the real camera height and tilt, so it stays right
+ * as the phone moves.
+ *
+ * Returns null when the camera is not above [heightM] (no valid ray to lift).
+ */
+fun liftAlongRayToHeight(
+    camera: FloatArray,
+    floorPoint: FloatArray,
+    heightM: Float,
+): FloatArray? {
+    val cameraHeight = camera[1] - floorPoint[1]
+    if (cameraHeight <= heightM) return null
+    // Fraction of the way from the camera to the floor hit where the foot-height plane lies.
+    val t = (cameraHeight - heightM) / cameraHeight
+    return floatArrayOf(
+        camera[0] + (floorPoint[0] - camera[0]) * t,
+        camera[1] + (floorPoint[1] - camera[1]) * t,
+        camera[2] + (floorPoint[2] - camera[2]) * t,
+    )
+}
+
 fun unprojectToCameraSpace(
     imageX: Float,
     imageY: Float,

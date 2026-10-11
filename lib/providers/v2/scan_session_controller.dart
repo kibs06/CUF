@@ -12,6 +12,7 @@ import '../../utils/low_light_tracker.dart';
 import '../../utils/foot_follow_rect.dart';
 import '../../utils/frame_sharpness.dart';
 import '../../utils/mlkit_segmentation_foot_detector.dart';
+import '../../utils/try_on_coach.dart';
 import 'scan_phase.dart';
 
 // ═══════════════════════════════════════════════════════════════════
@@ -160,11 +161,6 @@ class ScanSessionController extends ChangeNotifier {
   // The frozen v1 flow keeps the shared pipeline defaults; these tighter
   // gates apply to this controller only.
   //
-  /// Longer per-pass window than v1's 4 s ([scanDuration]) → ~25% more
-  /// samples per pass, which tightens the median and IQR the sizing math
-  /// consumes. Costs one extra second per capture step.
-  static const Duration kV2ScanDuration = Duration(seconds: 5);
-
   /// Detections below this segmentation confidence are shown live but never
   /// recorded as samples — weak frames only blur the statistics.
   static const double kV2MinSampleConfidence = 0.50;
@@ -173,6 +169,17 @@ class ScanSessionController extends ChangeNotifier {
   /// hitTest pair (e.g. one point missed the floor), not real anatomy.
   static const double kV2MinWidthRatio = 0.20;
   static const double kV2MaxWidthRatio = 0.60;
+
+  /// A frame whose mask shape or guide-box containment falls below these caught
+  /// something other than the foot, so its heel, toe and width points are on the
+  /// wrong region. Not yet calibrated against real scans; tune from measured feet.
+  static const double kV2MinSampleShape = 0.5;
+  static const double kV2MinSampleContainment = 0.5;
+
+  /// After this many swapped frames in a row, the kept axis is treated as the
+  /// wrong one and the next frame re-seeds it. Without this, one bad first frame
+  /// locks out every correct frame of the pass (seen on device: 64 of 98).
+  static const int kV2AxisReseedFlips = 3;
 
   final ArCoreChannel _arCore;
   final FootDetector Function() _detectorFactory;
@@ -184,6 +191,10 @@ class ScanSessionController extends ChangeNotifier {
 
   // ── ARCore state ──
   ArTrackingState _trackingState = ArTrackingState.paused;
+
+  /// Whether the phone is held level enough for a top-down capture (see
+  /// [isPhoneLevel]). Refreshed on the area-check poll.
+  bool _phoneLevel = true;
   bool _planeDetected = false;
   bool _areaTracked = false;
 
@@ -244,15 +255,23 @@ class ScanSessionController extends ChangeNotifier {
   // pass succeeds. Cleared at the start of every pass and on retry.
   final List<MeasurementSample> _passSamples = [];
 
+  /// Heel→toe axis (image space) of the last sample this pass kept. Used by the
+  /// heel/toe flip gate; reset at the start of every pass.
+  Offset? _lastAcceptedAxis;
+  int _consecutiveAxisFlips = 0;
+
   /// Successfully combined per-foot results. Frozen once set — later passes
   /// never retroactively alter them (fixes v1's short-second-pass failure).
   MeasurementResult? _leftResult;
   MeasurementResult? _rightResult;
 
   Timer? _sampleTimer;
+
+  /// Safety net only — see [maxScanDuration]. The pass normally ends when
+  /// [passHasEnoughSamples] is satisfied, well before this fires.
+  Timer? _passCapTimer;
   DateTime? _passStartTime;
   bool _sampleInProgress = false;
-  double _captureProgress = 0;
   int _floorProbeHits = 0;
   bool _floorSteady = false;
 
@@ -308,7 +327,13 @@ class ScanSessionController extends ChangeNotifier {
   int get lastFrameRotation => _lastFrameRotation;
 
   /// Progress through the active capture (0.0–1.0).
-  double get captureProgress => _captureProgress;
+  ///
+  /// Count-based, not clock-based: [idealSampleCount] is the target the pass
+  /// actually stops on, so the ring/stepper can no longer read half-full when
+  /// the capture ends. `passSampleCount / idealSampleCount` also drives the
+  /// foot-trace overlay, so both indicators now agree.
+  double get captureProgress =>
+      (_passSamples.length / idealSampleCount).clamp(0.0, 1.0);
 
   /// Floor probes (of 5) that hit an upward-facing plane on the last poll.
   int get floorProbeHits => _floorProbeHits;
@@ -549,6 +574,11 @@ class ScanSessionController extends ChangeNotifier {
       _updatePositioningHint();
     }
 
+    final levelNow = isPhoneLevel(await _arCore.getCameraTiltDegrees());
+    if (_disposed) return;
+    final levelChanged = levelNow != _phoneLevel;
+    _phoneLevel = levelNow;
+
     final onPlane = hits.whereType<ArWorldPoint>().length;
     // Floor height comes from the four CORNER probes only: the centre ray can
     // sit on the foot itself, and its height would read as the floor.
@@ -565,6 +595,8 @@ class ScanSessionController extends ChangeNotifier {
     if (tracked != _areaTracked) {
       _areaTracked = tracked;
       _reconcileIdlePhases();
+    } else if (levelChanged) {
+      _reconcileIdlePhases();
     } else if (probeChanged) {
       notifyListeners();
     }
@@ -575,7 +607,8 @@ class ScanSessionController extends ChangeNotifier {
   void _reconcileIdlePhases() {
     if (_disposed || _phase == ScanPhase.capturing) return;
 
-    final trackingOk = _areaTracked && _trackingState == ArTrackingState.tracking;
+    final trackingOk =
+        _areaTracked && _trackingState == ArTrackingState.tracking && _phoneLevel;
 
     switch (_phase) {
       case ScanPhase.positioning:
@@ -616,6 +649,14 @@ class ScanSessionController extends ChangeNotifier {
       notifyListeners();
       return;
     }
+    if (!_phoneLevel) {
+      _coachHint = const CoachHint(
+        reason: CoachReason.tiltPhone,
+        tone: CoachTone.warning,
+      );
+      notifyListeners();
+      return;
+    }
     if (!_planeDetected || _trackingState == ArTrackingState.paused) {
       _coachHint = const CoachHint(
         reason: CoachReason.findFloor,
@@ -646,6 +687,11 @@ class ScanSessionController extends ChangeNotifier {
   /// Begin the current step's capture pass (screen action button).
   void startCapture() {
     if (_disposed || _phase == ScanPhase.capturing) return;
+    if (!_phoneLevel) {
+      _phase = ScanPhase.positioning;
+      _updatePositioningHint();
+      return;
+    }
     if (!_areaTracked || _trackingState != ArTrackingState.tracking) {
       // Coach instead of silently no-oping (post-step transition the new box
       // position may not be mapped yet).
@@ -660,6 +706,9 @@ class ScanSessionController extends ChangeNotifier {
 
     // E13: fresh buffer per pass — nothing from a previous attempt survives.
     _passSamples.clear();
+    _passRejects.clear();
+    _lastAcceptedAxis = null;
+    _consecutiveAxisFlips = 0;
     _validDetectionsThisPass = 0;
     _footDetected = false;
     _lastDetection = null;
@@ -667,7 +716,6 @@ class ScanSessionController extends ChangeNotifier {
     _liveWidthMm = null;
     _attemptsThisPass = 0;
     _stallPromptShown = false;
-    _captureProgress = 0;
     _temporalGate.reset();
     _passStartTime = DateTime.now();
 
@@ -683,7 +731,11 @@ class ScanSessionController extends ChangeNotifier {
       (_) => _collectSample(),
     );
 
-    Timer(kV2ScanDuration, () {
+    // The pass no longer ends on a fixed window. It ends when it has collected
+    // enough samples to size the foot (see [passHasEnoughSamples]); this timer
+    // only stops a pass that never gets there from running forever.
+    _passCapTimer?.cancel();
+    _passCapTimer = Timer(maxScanDuration, () {
       if (!_disposed && _phase == ScanPhase.capturing) {
         _endPass();
       }
@@ -694,6 +746,7 @@ class ScanSessionController extends ChangeNotifier {
   void cancelCapture() {
     if (_phase != ScanPhase.capturing) return;
     _sampleTimer?.cancel();
+    _passCapTimer?.cancel();
     _passSamples.clear(); // E13: partial pass never blends into results
     _phase = ScanPhase.ready;
     _reconcileIdlePhases();
@@ -712,14 +765,10 @@ class ScanSessionController extends ChangeNotifier {
               ? 0.5
               : 0.0;
 
-      _captureProgress = DateTime.now()
-          .difference(_passStartTime!)
-          .inMilliseconds /
-          kV2ScanDuration.inMilliseconds;
-
       // ── 1. Acquire the cached NV21 CPU frame from ARCore ──
       final frame = await _arCore.acquireCameraFrame();
       if (frame == null || frame.nv21Bytes.isEmpty) {
+        _reject('no-frame');
         _lastDetection = null;
         _followRect = null;
         _clearLiveMeasurement();
@@ -736,6 +785,7 @@ class ScanSessionController extends ChangeNotifier {
       final sharpness =
           frameSharpness(frame.nv21Bytes, frame.width, frame.height);
       if (sharpness < kMinFrameSharpness) {
+        _reject('blurry');
         debugPrint('[ArScanV2] sample=SKIP blurry '
             '(sharpness=${sharpness.toStringAsFixed(1)})');
         _lastDetection = null;
@@ -757,7 +807,10 @@ class ScanSessionController extends ChangeNotifier {
         preferSide: _currentStep.footSide,
         guideRect: _detectionGuideRect,
       );
-      if (detection == null) return;
+      if (detection == null) {
+        _reject('no-detector-result');
+        return;
+      }
 
       // ── 3. Score-based acceptance + temporal gate ──
       final rawValid = detection.footDetected &&
@@ -766,6 +819,7 @@ class ScanSessionController extends ChangeNotifier {
       final confirmed = _temporalGate.update(rawValid);
 
       if (!rawValid) {
+        _reject('no-foot');
         _followRect = null;
         debugPrint('[ArScanV2] No foot (side=${detection.footSide}, '
             'conf=${detection.confidence.toStringAsFixed(2)})');
@@ -777,6 +831,7 @@ class ScanSessionController extends ChangeNotifier {
 
       _lastDetection = detection;
       _setFootDetected(confirmed);
+      _updateFramingHint(detection);
       _updateFollowRect(detection);
       if (!_disposed) notifyListeners();
 
@@ -826,11 +881,19 @@ class ScanSessionController extends ChangeNotifier {
       } else {
         _clearLiveMeasurement();
         final nonNullHits = worldPoints.whereType<ArWorldPoint>().length;
+        _reject('raycast');
         debugPrint('[ArScanV2] raycast=REJECT ($nonNullHits/'
             '${screenPoints.length} points hit the plane)');
       }
 
-      if (!confirmed) return; // Wait for consecutive positive frames
+      if (!confirmed) {
+        // TEMP-DIAG: this used to return silently. A frame that detected the
+        // foot AND hit the floor for heel+toe, then threw the measurement away
+        // without a word, is exactly the kind of loss this scan had no way to
+        // show.
+        _reject('not-confirmed');
+        return; // Wait for consecutive positive frames
+      }
       _validDetectionsThisPass++;
       if (!raycastHit) return;
 
@@ -841,12 +904,21 @@ class ScanSessionController extends ChangeNotifier {
           lengthMm > 500 ||
           widthMm <= 0 ||
           widthMm > 200) {
+        // TEMP-DIAG: silent before this. Log what was actually measured — if
+        // the depth-unprojected points are landing in the wrong place, this is
+        // where it shows up as a length in the hundreds of mm.
+        _reject('out-of-bounds');
+        debugPrint('[ArScanV2] sample=SKIP out-of-bounds '
+            '(len=${lengthMm?.toStringAsFixed(1) ?? 'null'}mm '
+            'width=${widthMm?.toStringAsFixed(1) ?? 'null'}mm '
+            'share=${pointHitShare.toStringAsFixed(2)})');
         return;
       }
 
       // V2 precision gates (see the class constants above): weak detections
       // and anatomically implausible measured widths never become samples.
       if (detection.confidence < kV2MinSampleConfidence) {
+        _reject('low-confidence');
         debugPrint('[ArScanV2] sample=SKIP low-confidence '
             '(${detection.confidence.toStringAsFixed(2)})');
         return;
@@ -855,10 +927,40 @@ class ScanSessionController extends ChangeNotifier {
       if (widthMeasured &&
           (widthMm < lengthMm * kV2MinWidthRatio ||
               widthMm > lengthMm * kV2MaxWidthRatio)) {
+        _reject('implausible-width');
         debugPrint('[ArScanV2] sample=SKIP implausible width '
             '(${widthMm.toStringAsFixed(1)}mm vs ${lengthMm.toStringAsFixed(1)}mm len)');
         return;
       }
+
+      // Shape and containment gates: a low score means the mask caught something
+      // other than the foot, so the heel, toe and width points are unreliable.
+      if (detection.shapeScore < kV2MinSampleShape ||
+          detection.containmentScore < kV2MinSampleContainment) {
+        _reject('low-shape-or-containment');
+        debugPrint('[ArScanV2] sample=SKIP shape/containment '
+            '(shape=${detection.shapeScore.toStringAsFixed(2)} '
+            'cont=${detection.containmentScore.toStringAsFixed(2)})');
+        return;
+      }
+      // Heel and toe can swap between frames, turning the heel→toe axis by about
+      // 180°. A frame whose axis points against the last kept sample's axis is
+      // that swap, so it is dropped rather than averaged in.
+      final axis = detection.toePoint!.asOffset - detection.heelPoint!.asOffset;
+      final lastAxis = _lastAcceptedAxis;
+      if (lastAxis != null &&
+          axis.dx * lastAxis.dx + axis.dy * lastAxis.dy < 0) {
+        _consecutiveAxisFlips++;
+        if (_consecutiveAxisFlips >= kV2AxisReseedFlips) {
+          // The kept axis is probably the wrong one: re-seed from the next frame.
+          _lastAcceptedAxis = null;
+          _consecutiveAxisFlips = 0;
+        }
+        _reject('axis-flip');
+        debugPrint('[ArScanV2] sample=SKIP heel/toe flipped');
+        return;
+      }
+      _consecutiveAxisFlips = 0;
 
       _passSamples.add(MeasurementSample(
         lengthMm: lengthMm,
@@ -872,15 +974,87 @@ class ScanSessionController extends ChangeNotifier {
         widthMeasured: widthMeasured,
         pointHitShare: pointHitShare,
       ));
+      _lastAcceptedAxis = axis;
 
       if (!_disposed) notifyListeners();
+
+      // The pass ends on evidence, not on the clock: either the sample count
+      // the confidence score rewards in full, or fewer samples that already
+      // agree closely. The cap scheduled at [startCapture] is only a net.
+      if (passHasEnoughSamples(_passSamples)) {
+        _endPass();
+      }
     } catch (e) {
       debugPrint('[ArScanV2] Sample collection error: $e');
     } finally {
       _sampleInProgress = false;
       _attemptsThisPass++;
       _maybeCoachStall();
+      _maybeGiveUpWithNoSamples();
     }
+  }
+
+  /// Tell the customer which way to move the phone when the foot is too small or
+  /// too large in frame. This is advice only: the frame is still sampled, so the
+  /// scan's result does not depend on the hint being followed.
+  void _updateFramingHint(FootDetectionResult detection) {
+    if (_phase != ScanPhase.capturing) return;
+    final framing = footFramingFromDetection(detection);
+    switch (framing) {
+      case TryOnFootFraming.tooFar:
+        _coachHint = const CoachHint(
+          reason: CoachReason.moveCloser,
+          tone: CoachTone.active,
+        );
+      case TryOnFootFraming.tooClose:
+        _coachHint = const CoachHint(
+          reason: CoachReason.moveFarther,
+          tone: CoachTone.active,
+        );
+      case TryOnFootFraming.ok:
+      case TryOnFootFraming.unknown:
+        // Clear a stale distance hint once the framing is fine again.
+        final reason = _coachHint?.reason;
+        if (reason == CoachReason.moveCloser ||
+            reason == CoachReason.moveFarther) {
+          _coachHint = const CoachHint(
+            reason: CoachReason.holdStill,
+            tone: CoachTone.active,
+          );
+        }
+    }
+  }
+
+  /// Per-pass tally of WHY frames were thrown away, keyed by reason.
+  ///
+  /// TEMP-DIAG (zero-sample diagnosis): before this, the two exits that
+  /// actually account for most discarded frames — "not confirmed" and "measured
+  /// length out of range" — logged nothing at all, so a scan that measured
+  /// 0 usable samples was indistinguishable from a scan that never saw a foot.
+  /// Print [_passRejects] at pass end; remove once the yield is fixed.
+  final Map<String, int> _passRejects = {};
+
+  void _reject(String reason) {
+    _passRejects[reason] = (_passRejects[reason] ?? 0) + 1;
+  }
+
+  /// End the pass when it has recorded no sample at all for
+  /// [noSampleGiveUpAttempts] frames — a separate, shorter bound than
+  /// [maxScanDuration]; see that constant for why.
+  ///
+  /// A pass that has recorded ANY sample is untouched: it keeps collecting until
+  /// it has its samples or hits the cap.
+  void _maybeGiveUpWithNoSamples() {
+    if (_disposed ||
+        _phase != ScanPhase.capturing ||
+        _passSamples.isNotEmpty ||
+        _attemptsThisPass < noSampleGiveUpAttempts) {
+      return;
+    }
+    debugPrint('[ArScanV2] pass gave up after $noSampleGiveUpAttempts frames '
+        'with no sample recorded '
+        '(detections=$_validDetectionsThisPass)');
+    _endPass();
   }
 
   /// §8 stall coaching: enough attempted frames with zero confirmed
@@ -916,10 +1090,26 @@ class ScanSessionController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Pass timer elapsed — advance the state machine.
+  /// The pass is done (enough samples, or the safety cap) — advance the state
+  /// machine.
   void _endPass() {
     _sampleTimer?.cancel();
-    _captureProgress = 1;
+    _passCapTimer?.cancel();
+
+    // TEMP-DIAG: one line that says how the pass went and where every frame
+    // went. Without it, "the scan failed" and "the scan measured nothing"
+    // produce the same log.
+    debugPrint('[ArScanV2] pass end: attempts=$_attemptsThisPass '
+        'detections=$_validDetectionsThisPass samples=${_passSamples.length} '
+        'rejects=$_passRejects');
+    // TEMP-DIAG: the measured samples themselves, as len×width, width tagged
+    // 'm' when measured from width points and 'p' when a proportional estimate.
+    // This is the distribution the median and IQR are computed from.
+    if (_passSamples.isNotEmpty) {
+      debugPrint('[ArScanV2] pass samples: '
+          '${_passSamples.map((s) => '${s.lengthMm.toStringAsFixed(0)}x'
+              '${s.widthMm.toStringAsFixed(0)}${s.widthMeasured ? 'm' : 'p'}').join(', ')}');
+    }
 
     // No confirmed detections this pass → fail explicitly (v1 §4), discard
     // the pass buffer (E13) and coach a retry.
@@ -959,15 +1149,29 @@ class ScanSessionController extends ChangeNotifier {
 
     // The top view is the whole foot's capture, so combine it NOW (E13: the
     // result is frozen immediately).
-    final result = rescanGate(combineGuidedSamples(_samplesFor(side)));
+    // TEMP-DIAG: the last gate before a customer sees a size. Logs the pooled
+    // sample count, the combined result (length, IQR, confidence, sample
+    // counts) and whether the rescan gate kept it.
+    final combined = combineGuidedSamples(_samplesFor(side));
+    final result = rescanGate(combined);
+    debugPrint('[ArScanV2] advance: foot=$side pooled=${_samplesFor(side).length} '
+        'combine=${combined ?? 'null (fewer than minValidSamples usable)'} '
+        'gate=${result == null ? 'REJECT (below kRescanConfidence)' : 'PASS'}');
     if (result == null) {
       // Combine failed — clear the foot and restart its TOP step.
       _clearFoot(side);
       _currentStep = side == 'left' ? CaptureStep.leftTop : CaptureStep.rightTop;
       _areaTracked = false;
       _phase = ScanPhase.ready;
-      _coachHint = const CoachHint(
-        reason: CoachReason.havingTrouble,
+      _coachHint = CoachHint(
+        // Two quite different failures used to share one sentence about
+        // lighting and floor texture, which is only ever true of one of them
+        // (the stall, below). Either the pass never pooled enough usable
+        // samples, or it pooled plenty and they disagreed with each other —
+        // and a customer can act on that difference.
+        reason: combined == null
+            ? CoachReason.tooFewSamples
+            : CoachReason.readingsDisagreed,
         tone: CoachTone.warning,
       );
       notifyListeners();
@@ -1159,12 +1363,27 @@ class ScanSessionController extends ChangeNotifier {
 
     // ── Sample volume on the sizing foot ──
     final samples = sizingResult?.finalSampleCount ?? 0;
+    final sampleIqr = sizingResult?.lengthIqrMm;
+    // Agreement can stand in for volume. The pass is allowed to stop early once
+    // its readings already agree ([passHasEnoughSamples]), so a scan that ended
+    // that way must not then be reported as a shortfall — stopping was the
+    // scan's own decision, and it is positive evidence, not a lack of it.
+    final agreedEnough = sampleIqr != null &&
+        sampleIqr <= kAgreementIqrMm &&
+        samples >= minSamplesForEarlyStop;
     if (samples >= idealSampleCount) {
       factors.add(ConfidenceFactorV2(
         positive: true,
         title: 'Plenty of clean readings',
         detail:
             '$samples samples kept — stray frames were discarded automatically.',
+      ));
+    } else if (agreedEnough) {
+      factors.add(ConfidenceFactorV2(
+        positive: true,
+        title: 'Enough agreeing readings ($samples)',
+        detail: 'The scan stopped early because your readings already agreed '
+            'within ${sampleIqr.toStringAsFixed(1)}mm ($samples samples kept).',
       ));
     } else if (samples >= minValidSamples) {
       factors.add(ConfidenceFactorV2(
@@ -1283,6 +1502,7 @@ class ScanSessionController extends ChangeNotifier {
     _disposed = true;
     _eventSubscription?.cancel();
     _sampleTimer?.cancel();
+    _passCapTimer?.cancel();
     _areaCheckTimer?.cancel();
     _detector?.dispose();
     // D1 rule carried over: NO Dart-initiated stopSession — native teardown

@@ -467,6 +467,60 @@ void main() {
   // EDGE CASES
   // ═══════════════════════════════════════════════════════════════
 
+  // ═══════════════════════════════════════════════════════════════
+  // PASS COMPLETION (sample-driven)
+  // ═══════════════════════════════════════════════════════════════
+
+  group('passHasEnoughSamples', () {
+    MeasurementSample s(double length,
+            {double quality = 1.0, double conf = 0.9}) =>
+        MeasurementSample(
+          lengthMm: length,
+          widthMm: 100,
+          trackingQuality: quality,
+          segmentationConfidence: conf,
+          timestamp: DateTime(2026, 10, 10),
+          captureAngle: 'both',
+        );
+
+    test('too few samples is never enough, however well they agree', () {
+      final samples = List.generate(minSamplesForEarlyStop - 1, (_) => s(265));
+      expect(sampleLengthIqrMm(samples), isNull,
+          reason: 'the spread of a handful of points says nothing');
+      expect(passHasEnoughSamples(samples), isFalse);
+    });
+
+    test('agreement at the floor is enough', () {
+      final samples = List.generate(minSamplesForEarlyStop, (_) => s(265));
+      expect(sampleLengthIqrMm(samples), 0.0);
+      expect(passHasEnoughSamples(samples), isTrue);
+    });
+
+    test('the floor with a wide spread is NOT enough', () {
+      // Alternating 220/300mm → an IQR far above the agreement bound.
+      final samples =
+          List.generate(minSamplesForEarlyStop, (i) => s(i.isEven ? 220 : 300));
+      expect(sampleLengthIqrMm(samples)!, greaterThan(kAgreementIqrMm));
+      expect(passHasEnoughSamples(samples), isFalse);
+    });
+
+    test('the full target is enough even when the samples disagree', () {
+      final samples =
+          List.generate(idealSampleCount, (i) => s(i.isEven ? 220 : 300));
+      expect(passHasEnoughSamples(samples), isTrue,
+          reason: 'a pass that reached the target must still end');
+    });
+
+    test('low-quality samples neither count nor read as agreement', () {
+      // Identical lengths, but every sample fails the tracking-quality gate:
+      // the pass must keep collecting, not mistake this for agreement.
+      final samples =
+          List.generate(minSamplesForEarlyStop, (_) => s(265, quality: 0.2));
+      expect(sampleLengthIqrMm(samples), isNull);
+      expect(passHasEnoughSamples(samples), isFalse);
+    });
+  });
+
   group('edge cases', () {
     test('combineSamples with all low-quality samples returns null', () {
       final samples = List.generate(20, (i) => MeasurementSample(

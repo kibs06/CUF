@@ -8,7 +8,7 @@ import '../../constants/app_palette.dart';
 import '../../providers/product_provider.dart';
 import '../../utils/product_audience.dart';
 import '../../utils/product_grid_ratio.dart';
-import '../../widgets/product_sort_chip.dart';
+import '../../widgets/product_shelf_toolbar.dart';
 import '../../widgets/sole_product_card.dart';
 import 'product_detail_screen.dart';
 
@@ -26,12 +26,22 @@ import 'product_detail_screen.dart';
 ///
 /// What it owns:
 ///
-///  * its **own sort** ([SortMode.featured] to start), held locally and passed
-///    into [ProductProvider.productsInAudience] — opening this page can never
+///  * its **own search, category filter and sort** ([_query], [_category],
+///    [_sort], all local), so opening this page can never narrow, re-filter or
 ///    re-sort the Home feed underneath it;
 ///  * the **whole** list for that audience — uncapped, unlike the 12-card rail;
 ///  * its empty state, because an audience can lose its last product while the
 ///    page is open (a reload) and a blank page would read as a bug.
+///
+/// **It searches, filters and sorts *itself*, and never its rule.** A shelf of
+/// forty pairs is a list a customer wants to narrow — by a word, by a category,
+/// by price — but searching here must keep "sellers tagged this Men's" intact.
+/// The state is local and the work is the provider's
+/// ([ProductProvider.shelfProducts], which reuses the catalog's own
+/// [matchesSearchQuery] and sort), so this page cannot invent a second meaning
+/// for "search" — and it is the same toolbar the size and sale shelves put up
+/// ([ProductShelfToolbar]), so the three controls a customer learns on one
+/// shelf are the three they meet on the next.
 ///
 /// It reads the catalog already in memory — no query, no network — and only
 /// `unisex`/`men`/`women`/`kids` are valid here; an unrecognised value renders
@@ -52,7 +62,36 @@ class AudienceListingScreen extends StatefulWidget {
 }
 
 class _AudienceListingScreenState extends State<AudienceListingScreen> {
+  final TextEditingController _searchController = TextEditingController();
+
+  /// What the customer typed into the shelf's own field. Empty = the whole
+  /// shelf.
+  String _query = '';
+
+  /// The category filter in force, or null for every category. Local, like the
+  /// search page's — see the class doc.
+  String? _category;
+
+  /// The order this page is using. Starts at the shelf's own ranking, so the
+  /// list a customer tapped is the list they get until they ask otherwise.
   SortMode _sort = SortMode.featured;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  /// Back to the whole shelf — what the no-matches state offers, since the
+  /// shelf itself (which has products in it) is one tap away and its own empty
+  /// state is a different thing entirely.
+  void _clearFilters() {
+    _searchController.clear();
+    setState(() {
+      _query = '';
+      _category = null;
+    });
+  }
 
   /// Clay as INK, rather than [AppConstants.primary] as a fill.
   ///
@@ -66,9 +105,29 @@ class _AudienceListingScreenState extends State<AudienceListingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<ProductProvider>();
+    final provider = context.read<ProductProvider>();
     final label = productAudienceLabel(widget.audience) ?? 'Shelf';
-    final products = provider.productsInAudience(widget.audience, sort: _sort);
+
+    final shelf = context.select<ProductProvider, List<Map<String, dynamic>>>(
+      (p) => p.productsInAudience(widget.audience),
+    );
+
+    // The chips are the categories this *shelf* holds — not the catalog's
+    // vocabulary, which would offer filters that lead to an empty grid. A
+    // category the shelf no longer holds stops being a chip, so it must stop
+    // being the filter too: computed rather than assigned, so no build has to
+    // mutate state to stay consistent.
+    final categories = provider.shelfCategories(shelf);
+    final selectedCategory = _category != null && categories.contains(_category)
+        ? _category
+        : null;
+
+    final products = provider.shelfProducts(
+      shelf,
+      query: _query,
+      category: selectedCategory,
+      sort: _sort,
+    );
 
     return Scaffold(
       backgroundColor: AppConstants.surfaceLight,
@@ -80,11 +139,27 @@ class _AudienceListingScreenState extends State<AudienceListingScreen> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildTopBar(label, products.length),
+                _buildTopBar(label, products.length, shelf.length),
+                // No toolbar over an empty shelf: there is nothing to search,
+                // filter or sort, and the empty state says what to do instead.
+                if (shelf.isNotEmpty)
+                  ProductShelfToolbar(
+                    controller: _searchController,
+                    hintText: 'Search in $label…',
+                    categories: categories,
+                    selectedCategory: selectedCategory,
+                    onCategorySelected: (category) =>
+                        setState(() => _category = category),
+                    onQueryChanged: (query) => setState(() => _query = query),
+                    sort: _sort,
+                    onSortSelected: (mode) => setState(() => _sort = mode),
+                  ),
                 Expanded(
-                  child: products.isEmpty
+                  child: shelf.isEmpty
                       ? _buildEmptyState(label)
-                      : _buildGrid(products),
+                      : products.isEmpty
+                          ? _buildNoMatchesState(label, shelf.length)
+                          : _buildGrid(products),
                 ),
               ],
             ),
@@ -94,83 +169,45 @@ class _AudienceListingScreenState extends State<AudienceListingScreen> {
     );
   }
 
-  // ── Top bar: back + the shelf's name and size + its own sort ──
+  // ── Top bar: back + the shelf's name and its count ──
   //
-  // The sort control drops to its own line once the text is large enough that
-  // it no longer fits beside the title on a narrow phone. There is no honest
-  // way to squeeze it instead: the label is a *word* ('Price: Low to High'), so
-  // shrinking it means either ellipsising it ("Price: Lo…", which is what a
-  // sort sheet's option is — not decoration) or truncating a control the
-  // customer needs to read. Stacking keeps both readable, costs one line of
-  // height, and leaves the normal case byte-for-byte unchanged.
-  static const double _sortLabelFontSize = 11;
-
-  /// True when the scaled label no longer fits the header's spare width — the
-  /// threshold is expressed in scaled pixels rather than a raw scale factor so
-  /// it stays tied to the label it is about.
-  bool _stacksAtLargeText(BuildContext context) {
-    final scaled = MediaQuery.textScalerOf(context).scale(_sortLabelFontSize);
-    return scaled > 15.5;
-  }
-
-  Widget _buildTopBar(String label, int count) {
-    final title = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(label, style: AppConstants.headlineStyle(fontSize: 20)),
-        const SizedBox(height: 2),
-        Text(
-          count == 1 ? '1 pair' : '$count pairs',
-          style: AppConstants.bodyStyle(
-            fontSize: 12,
-            color: AppConstants.secondary.withValues(alpha: 0.55),
-          ),
-        ),
-      ],
-    );
-
-    final back = IconButton(
-      icon: Icon(Icons.arrow_back, color: AppConstants.secondary),
-      onPressed: () => Navigator.of(context).pop(),
-    );
-
+  // The count follows the GRID, not the shelf, once a search or a filter is
+  // narrowing it (`3 of 10 pairs`) — a heading that counts products the
+  // customer cannot see would be a lie. The sort control is not here any more;
+  // it lives in the toolbar with the search field and the chips, which is where
+  // the other shelf pages have it.
+  Widget _buildTopBar(String label, int shown, int total) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 6, 16, 10),
-      child: _stacksAtLargeText(context)
-          ? Column(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          IconButton(
+            icon: Icon(Icons.arrow_back, color: AppConstants.secondary),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Row(
-                  children: [
-                    back,
-                    const SizedBox(width: 4),
-                    Expanded(child: title),
-                  ],
+                Text(label, style: AppConstants.headlineStyle(fontSize: 20)),
+                const SizedBox(height: 2),
+                Text(
+                  shelfCountLabel(shown: shown, total: total),
+                  style: AppConstants.bodyStyle(
+                    fontSize: 12,
+                    color: AppConstants.secondary.withValues(alpha: 0.55),
+                  ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.only(left: 6, top: 4),
-                  child: _sortChip(),
-                ),
-              ],
-            )
-          : Row(
-              children: [
-                back,
-                const SizedBox(width: 4),
-                Expanded(child: title),
-                _sortChip(),
               ],
             ),
+          ),
+        ],
+      ),
     );
   }
-
-  /// The shared chip: the sheet is one sheet and the control above it is one
-  /// control, so an audience shelf cannot offer a fifth set of orders.
-  Widget _sortChip() => ProductSortChip(
-    sort: _sort,
-    onSelected: (mode) => setState(() => _sort = mode),
-  );
 
   // ── The shelf ──
 
@@ -267,6 +304,90 @@ class _AudienceListingScreenState extends State<AudienceListingScreen> {
                   Flexible(
                     child: Text(
                       'Browse All Styles',
+                      style: AppConstants.bodyStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: _accentInk,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Shown when the shelf has products but the search or the category filter
+  /// left none of them. Deliberately *not* the shelf's empty state: nothing is
+  /// wrong with the shelf, and the fix is to widen the question rather than to
+  /// leave the page — so the action is "Clear filters", the only way back to
+  /// the full list besides retyping.
+  Widget _buildNoMatchesState(String label, int shelfSize) {
+    final query = _query.trim();
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 40, 20, 32),
+      child: Column(
+        children: [
+          Container(
+            width: 84,
+            height: 84,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppConstants.primary.withValues(alpha: 0.07),
+              border: Border.all(
+                color: AppConstants.primary.withValues(alpha: 0.18),
+                width: 1.5,
+              ),
+            ),
+            child: Icon(
+              Icons.search_off,
+              size: 34,
+              color: _accentInk.withValues(alpha: 0.75),
+            ),
+          ),
+          const SizedBox(height: 18),
+          Text(
+            query.isEmpty
+                ? 'Nothing in this category'
+                : 'Nothing in $label matches "$query"',
+            textAlign: TextAlign.center,
+            style: AppConstants.headlineStyle(fontSize: 16),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'The shelf still has '
+            '${shelfSize == 1 ? '1 pair' : '$shelfSize pairs'} in it — clear '
+            'the filters to see them.',
+            textAlign: TextAlign.center,
+            style: AppConstants.bodyStyle(
+              fontSize: 13,
+              color: AppConstants.secondary.withValues(alpha: 0.55),
+            ),
+          ),
+          const SizedBox(height: 16),
+          GestureDetector(
+            onTap: _clearFilters,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppConstants.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: AppConstants.primary.withValues(alpha: 0.2),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.filter_alt_off_outlined,
+                      size: 15, color: _accentInk),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      'Clear filters',
                       style: AppConstants.bodyStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.bold,

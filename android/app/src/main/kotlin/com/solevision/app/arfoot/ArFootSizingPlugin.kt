@@ -185,6 +185,7 @@ class ArFootSizingPlugin(private val activity: Activity) {
             }
             "getFloorPlane" -> result.success(currentView?.getFloorPlane())
             "getFloorDistance" -> result.success(currentView?.getFloorDistance())
+            "getCameraTiltDegrees" -> result.success(currentView?.getCameraTiltDegrees())
             else -> result.notImplemented()
         }
     }

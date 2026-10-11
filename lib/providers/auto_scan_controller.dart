@@ -211,6 +211,15 @@ class AutoScanController extends ChangeNotifier {
   Timer? _sampleTimer;
   int _currentSampleCount = 0;
 
+  /// Samples recorded in the CURRENT pass only. [_leftSamples]/[_rightSamples]
+  /// accumulate across both angles of a foot; this is the pass-scoped buffer
+  /// the completion rule reads (see [passHasEnoughSamples]).
+  final List<MeasurementSample> _passSamples = [];
+
+  /// Safety net only — see [maxScanDuration]. The pass normally ends on
+  /// [passHasEnoughSamples], well before this fires.
+  Timer? _scanCapTimer;
+
   // ── Live Measurement Preview data ──
   // Per-frame real-world measurements computed during capture; the screen
   // formats them into the live cm readout near the guide box. Doubles as a
@@ -490,6 +499,7 @@ class AutoScanController extends ChangeNotifier {
     _scanActive = true;
     _scanStartTime = DateTime.now();
     _currentSampleCount = 0;
+    _passSamples.clear();
     _validDetectionsThisPass = 0;
     _footDetected = false;
     _lastDetection = null; // Clear stale overlay points from prior scan/foot
@@ -510,8 +520,11 @@ class AutoScanController extends ChangeNotifier {
       (_) => _collectSample(),
     );
 
-    // End scan after the configured duration
-    Timer(scanDuration, () {
+    // The pass no longer ends on a fixed window. It ends when it has collected
+    // enough samples to size the foot (see [passHasEnoughSamples]); this timer
+    // only stops a pass that never gets there from running forever.
+    _scanCapTimer?.cancel();
+    _scanCapTimer = Timer(maxScanDuration, () {
       if (!_disposed && _scanActive) {
         _endScan();
       }
@@ -728,11 +741,19 @@ class AutoScanController extends ChangeNotifier {
       } else {
         _rightSamples.add(sample);
       }
+      _passSamples.add(sample);
 
       _sampleDebug('sample=RECORDED total=${_leftSamples.length + _rightSamples.length}');
       if (!_disposed) {
         _currentSampleCount++;
         notifyListeners();
+      }
+
+      // The pass ends on evidence, not on the clock: either the sample count
+      // the confidence score rewards in full, or fewer samples that already
+      // agree closely. The cap scheduled at [startScan] is only a net.
+      if (!_disposed && _scanActive && passHasEnoughSamples(_passSamples)) {
+        _endScan();
       }
     } catch (e) {
       debugPrint('[ArScan] Sample collection error: $e');
@@ -743,7 +764,27 @@ class AutoScanController extends ChangeNotifier {
       // through [_collectSample] feeds the stall check exactly once.
       _attemptsThisPass++;
       _maybeShowStallPrompt();
+      _maybeGiveUpWithNoSamples();
     }
+  }
+
+  /// End the pass when it has recorded no sample at all for
+  /// [noSampleGiveUpAttempts] frames — a separate, shorter bound than
+  /// [maxScanDuration]; see that constant for why.
+  ///
+  /// A pass that has recorded ANY sample is untouched: it keeps collecting until
+  /// it has its samples or hits the cap.
+  void _maybeGiveUpWithNoSamples() {
+    if (_disposed ||
+        !_scanActive ||
+        _passSamples.isNotEmpty ||
+        _attemptsThisPass < noSampleGiveUpAttempts) {
+      return;
+    }
+    debugPrint('[ArScan] scan gave up after $noSampleGiveUpAttempts frames '
+        'with no sample recorded '
+        '(detections=$_validDetectionsThisPass)');
+    _endScan();
   }
 
   /// §8 stall fallback: once enough frames have been ATTEMPTED this pass with
@@ -811,6 +852,7 @@ class AutoScanController extends ChangeNotifier {
 
   void _endScan() {
     _sampleTimer?.cancel();
+    _scanCapTimer?.cancel();
 
     // ── §4/§1.3: If NO frame in this capture pass produced a shape-validated
     // AND temporally confirmed foot detection, fail explicitly instead of
@@ -983,6 +1025,7 @@ class AutoScanController extends ChangeNotifier {
     _disposed = true;
     _eventSubscription?.cancel();
     _sampleTimer?.cancel();
+    _scanCapTimer?.cancel();
     _areaCheckTimer?.cancel();
     _detector?.dispose();
     // D1 fix: no explicit session teardown here — native teardown is

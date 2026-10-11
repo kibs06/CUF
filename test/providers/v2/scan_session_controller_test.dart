@@ -9,7 +9,12 @@ import 'package:app/providers/v2/scan_phase.dart';
 import 'package:app/providers/v2/scan_session_controller.dart';
 import 'package:app/services/ar_core_channel.dart';
 import 'package:app/utils/ar_foot_measurement_pipeline.dart'
-    show sampleIntervalMs;
+    show
+        idealSampleCount,
+        maxScanDuration,
+        minSamplesForEarlyStop,
+        noSampleGiveUpAttempts,
+        sampleIntervalMs;
 import 'package:app/utils/foot_detector.dart';
 import 'package:app/utils/foot_measurement_utils.dart' show kSockLengthOffsetMm;
 
@@ -30,6 +35,10 @@ class FakeArCore implements ArCoreChannel {
 
   /// Last torch state the controller asked for.
   bool? torchRequest;
+
+  /// Camera tilt from straight down the fake reports (degrees). Null = unknown,
+  /// which the controller treats as level.
+  double? tiltReply;
 
   @override
   Future<double?> getMeanLuma() async => meanLuma;
@@ -144,6 +153,9 @@ class FakeArCore implements ArCoreChannel {
   Future<ArTrackingState> getTrackingState() async => ArTrackingState.paused;
 
   @override
+  Future<double?> getCameraTiltDegrees() async => tiltReply;
+
+  @override
   Future<ArPlane?> getFloorPlane() async => null;
 
   @override
@@ -186,6 +198,8 @@ FootDetectionResult detectedWithWidth({String side = 'left'}) =>
       confidence: 0.9,
       footSide: side,
       qualityScore: 0.9,
+      shapeScore: 1.0,
+      containmentScore: 1.0,
       heelPoint: const FootPoint(x: 0.40, y: 0.45, likelihood: 0.95),
       toePoint: const FootPoint(x: 0.60, y: 0.45, likelihood: 0.95),
       widthPoints: const [
@@ -202,6 +216,8 @@ FootDetectionResult detectedNoWidth({String side = 'left'}) =>
       confidence: 0.9,
       footSide: side,
       qualityScore: 0.9,
+      shapeScore: 1.0,
+      containmentScore: 1.0,
       heelPoint: const FootPoint(x: 0.40, y: 0.45, likelihood: 0.95),
       toePoint: const FootPoint(x: 0.60, y: 0.45, likelihood: 0.95),
     );
@@ -299,12 +315,23 @@ void main() {
         withWidth ? detectedWithWidth(side: side) : detectedNoWidth(side: side));
   }
 
-  /// Run one capture pass to completion (v2: 5s) plus the 900ms success beat.
+  /// Run one capture pass to completion, plus the 900ms success beat.
   /// Caller must have staged ticks already.
+  ///
+  /// The pass is sample-driven, so it is stepped a tick at a time and stops
+  /// exactly when it has its samples. Elapsing a fixed block instead would leave
+  /// idle poll time after the state machine advances, and the 500ms area poll
+  /// would re-lock the floor before the caller could assert on it.
   void runPass(FakeAsync async) {
     ctrl.startCapture();
     expect(ctrl.phase, ScanPhase.capturing);
-    async.elapse(ScanSessionController.kV2ScanDuration);
+    var ticks = 0;
+    while (ctrl.phase == ScanPhase.capturing && ticks < 300) {
+      async.elapse(const Duration(milliseconds: sampleIntervalMs));
+      ticks++;
+    }
+    expect(ctrl.phase, ScanPhase.stepComplete,
+        reason: 'the staged detections must carry the pass to completion');
     // Success-beat timer before the state machine advances.
     async.elapse(const Duration(milliseconds: 900));
   }
@@ -317,6 +344,52 @@ void main() {
     async.flushMicrotasks();
     assert(ctrl.areaTracked);
   }
+
+  group('ScanSessionController — phone tilt gate', () {
+    test('a phone tilted past the limit is not ready and is told to level it',
+        () {
+      fakeAsync((async) {
+        harness(async);
+        ar.tiltReply = 45;
+        relockArea(async);
+        expect(ctrl.phase, ScanPhase.positioning);
+        expect(ctrl.coachHint?.reason, CoachReason.tiltPhone);
+      });
+    });
+
+    test('levelling the phone again returns the scan to ready', () {
+      fakeAsync((async) {
+        harness(async);
+        ar.tiltReply = 45;
+        relockArea(async);
+        ar.tiltReply = 5;
+        relockArea(async);
+        expect(ctrl.phase, ScanPhase.ready);
+      });
+    });
+
+    test('a tilted phone cannot start a capture pass', () {
+      fakeAsync((async) {
+        harness(async);
+        ar.tiltReply = 45;
+        relockArea(async);
+        ctrl.startCapture();
+        expect(ctrl.phase, ScanPhase.positioning);
+        expect(ctrl.coachHint?.reason, CoachReason.tiltPhone);
+      });
+    });
+
+    test('an unknown tilt never blocks the scan', () {
+      fakeAsync((async) {
+        harness(async);
+        ar.tiltReply = 45;
+        relockArea(async);
+        ar.tiltReply = null;
+        relockArea(async);
+        expect(ctrl.phase, ScanPhase.ready);
+      });
+    });
+  });
 
   group('ScanSessionController — session init', () {
     test('failed start surfaces typed startFailed state with reason', () {
@@ -598,7 +671,174 @@ void main() {
       });
     });
 
-    test('v2 capture window is 5 seconds (longer than v1)', () {
+    test('a frame whose mask shape is poor never becomes a sample', () {
+      fakeAsync((async) {
+        harness(async);
+
+        for (int i = 0; i < 30; i++) {
+          ar.nextFrame = frame();
+          ar.sampleHitScript
+              .add([wp(0.30, 0), wp(0.06, 0), wp(0.13, 0), wp(0.19, 0)]);
+          detector.script.add(const FootDetectionResult(
+            footDetected: true,
+            confidence: 0.9,
+            footSide: 'left',
+            qualityScore: 0.9,
+            shapeScore: 0.2,
+            containmentScore: 1.0,
+            heelPoint: FootPoint(x: 0.40, y: 0.45, likelihood: 0.95),
+            toePoint: FootPoint(x: 0.60, y: 0.45, likelihood: 0.95),
+          ));
+        }
+        stageGoodTick();
+
+        ctrl.startCapture();
+        async.elapse(const Duration(seconds: 3));
+        expect(ctrl.passSampleCount, 0,
+            reason: 'shape 0.2 is below the v2 bar (0.5): the mask caught '
+                'something other than the foot');
+
+        ctrl.cancelCapture();
+        ctrl.dispose();
+      });
+    });
+
+    test('a heel/toe swap against the kept axis is never a sample', () {
+      fakeAsync((async) {
+        harness(async);
+
+        // Same foot, heel and toe swapped: the axis turns by about 180°.
+        // The temporal gate drops the first two frames as not-confirmed, so the
+        // first three are normal: the third is the first kept frame and sets the
+        // axis. The swapped frames after it are a run shorter than the re-seed
+        // length, and the window below ends before that run could re-seed.
+        const flipped = FootDetectionResult(
+          footDetected: true,
+          confidence: 0.9,
+          footSide: 'left',
+          qualityScore: 0.9,
+          shapeScore: 1.0,
+          containmentScore: 1.0,
+          heelPoint: FootPoint(x: 0.60, y: 0.45, likelihood: 0.95),
+          toePoint: FootPoint(x: 0.40, y: 0.45, likelihood: 0.95),
+        );
+        for (int i = 0; i < 30; i++) {
+          ar.nextFrame = frame();
+          ar.sampleHitScript
+              .add([wp(0.30, 0), wp(0.06, 0), wp(0.13, 0), wp(0.19, 0)]);
+          detector.script.add(i < 3 ? detectedWithWidth() : flipped);
+        }
+        stageGoodTick();
+
+        ctrl.startCapture();
+        async.elapse(const Duration(seconds: 1)); // ~5 ticks, before a re-seed
+        expect(ctrl.passSampleCount, 1,
+            reason: 'only the first frame sets the kept axis; the swapped '
+                'frames point against it and must not be recorded');
+
+        ctrl.cancelCapture();
+        ctrl.dispose();
+      });
+    });
+
+    test('a run of swapped frames re-seeds the axis instead of locking the pass',
+        () {
+      fakeAsync((async) {
+        harness(async);
+
+        // The first kept frame is an outlier: every later frame reads the foot
+        // the other way round. Without a re-seed, the outlier axis locks out the
+        // rest of the pass.
+        const flipped = FootDetectionResult(
+          footDetected: true,
+          confidence: 0.9,
+          footSide: 'left',
+          qualityScore: 0.9,
+          shapeScore: 1.0,
+          containmentScore: 1.0,
+          heelPoint: FootPoint(x: 0.60, y: 0.45, likelihood: 0.95),
+          toePoint: FootPoint(x: 0.40, y: 0.45, likelihood: 0.95),
+        );
+        for (int i = 0; i < 30; i++) {
+          ar.nextFrame = frame();
+          ar.sampleHitScript
+              .add([wp(0.30, 0), wp(0.06, 0), wp(0.13, 0), wp(0.19, 0)]);
+          detector.script.add(i < 3 ? detectedWithWidth() : flipped);
+        }
+        stageGoodTick();
+
+        ctrl.startCapture();
+        // Track the largest count seen: the pass ends (and clears its buffer)
+        // once the kept samples agree, so the final count is not the signal.
+        var maxCount = 0;
+        for (int t = 0; t < 15; t++) {
+          async.elapse(const Duration(milliseconds: 200));
+          if (ctrl.passSampleCount > maxCount) maxCount = ctrl.passSampleCount;
+        }
+        expect(maxCount, greaterThan(1),
+            reason: 'after three swapped frames the next frame must re-seed '
+                'the axis, so later correct frames are kept');
+
+        ctrl.cancelCapture();
+        ctrl.dispose();
+      });
+    });
+
+    test('a foot too small in frame asks the customer to move closer', () {
+      fakeAsync((async) {
+        harness(async);
+
+        // Heel↔toe span 0.20 in normalized space: below the too-far line (0.30).
+        for (int i = 0; i < 30; i++) {
+          ar.nextFrame = frame();
+          ar.sampleHitScript
+              .add([wp(0.30, 0), wp(0.06, 0), wp(0.13, 0), wp(0.19, 0)]);
+          detector.script.add(detectedWithWidth());
+        }
+        stageGoodTick();
+
+        ctrl.startCapture();
+        async.elapse(const Duration(seconds: 1));
+        expect(ctrl.coachHint?.reason, CoachReason.moveCloser);
+
+        ctrl.cancelCapture();
+        ctrl.dispose();
+      });
+    });
+
+    test('a foot filling the frame asks the customer to move back', () {
+      fakeAsync((async) {
+        harness(async);
+
+        // Heel↔toe span 0.96 in normalized space: above the too-close line (0.92).
+        const huge = FootDetectionResult(
+          footDetected: true,
+          confidence: 0.9,
+          footSide: 'left',
+          qualityScore: 0.9,
+          shapeScore: 1.0,
+          containmentScore: 1.0,
+          heelPoint: FootPoint(x: 0.02, y: 0.50, likelihood: 0.95),
+          toePoint: FootPoint(x: 0.98, y: 0.50, likelihood: 0.95),
+        );
+        for (int i = 0; i < 30; i++) {
+          ar.nextFrame = frame();
+          ar.sampleHitScript
+              .add([wp(0.30, 0), wp(0.06, 0), wp(0.13, 0), wp(0.19, 0)]);
+          detector.script.add(huge);
+        }
+        stageGoodTick();
+
+        ctrl.startCapture();
+        async.elapse(const Duration(seconds: 1));
+        expect(ctrl.coachHint?.reason, CoachReason.moveFarther);
+
+        ctrl.cancelCapture();
+        ctrl.dispose();
+      });
+    });
+
+    test('the pass ends on collected samples, not on a fixed window', () {
       fakeAsync((async) {
         harness(async);
 
@@ -608,11 +848,97 @@ void main() {
         stageGoodTick();
 
         ctrl.startCapture();
-        async.elapse(const Duration(seconds: 4));
-        expect(ctrl.phase, ScanPhase.capturing,
-            reason: 'v2 deliberately samples one second longer than v1');
-        async.elapse(const Duration(seconds: 1));
+        expect(ctrl.phase, ScanPhase.capturing);
+
+        // Step a tick at a time so the pass stops where it really stops.
+        var ticks = 0;
+        while (ctrl.phase == ScanPhase.capturing && ticks < 300) {
+          async.elapse(const Duration(milliseconds: sampleIntervalMs));
+          ticks++;
+        }
+
         expect(ctrl.phase, ScanPhase.stepComplete);
+        expect(ticks * sampleIntervalMs < maxScanDuration.inMilliseconds, isTrue,
+            reason: 'it stopped on evidence, not on the safety cap');
+        expect(ctrl.passSampleCount,
+            greaterThanOrEqualTo(minSamplesForEarlyStop));
+        ctrl.dispose();
+      });
+    });
+
+    test('readings that already agree end the pass before the full target', () {
+      fakeAsync((async) {
+        harness(async);
+
+        // Every staged frame reports the same heel↔toe length, so the IQR is 0
+        // and the agreement clause applies well before [idealSampleCount].
+        for (int i = 0; i < 40; i++) {
+          stageGoodTick(withWidth: false);
+        }
+        stageGoodTick();
+
+        ctrl.startCapture();
+        var ticks = 0;
+        while (ctrl.phase == ScanPhase.capturing && ticks < 300) {
+          async.elapse(const Duration(milliseconds: sampleIntervalMs));
+          ticks++;
+        }
+
+        expect(ctrl.passSampleCount, lessThan(idealSampleCount),
+            reason: 'tight agreement stands in for the full sample target');
+        expect(ctrl.passSampleCount,
+            greaterThanOrEqualTo(minSamplesForEarlyStop));
+        ctrl.dispose();
+      });
+    });
+
+    test('a pass that records no sample gives up in seconds, not in a minute',
+        () {
+      fakeAsync((async) {
+        harness(async);
+
+        ar.nextFrame = null; // nothing detectable at all
+        ctrl.startCapture();
+
+        async.elapse(Duration(
+            milliseconds: sampleIntervalMs * (noSampleGiveUpAttempts - 2)));
+        expect(ctrl.phase, ScanPhase.capturing,
+            reason: 'an attempt or two short of the budget is not a failure');
+
+        // The give-up, not the cap: a pass that never records anything must not
+        // keep the customer standing there for a minute to reach the same dead
+        // end the old five-second window reached.
+        async.elapse(const Duration(seconds: 20));
+        expect(ctrl.phase, ScanPhase.ready);
+        expect(ctrl.coachHint?.reason, CoachReason.havingTrouble);
+        ctrl.dispose();
+      });
+    });
+
+    test('a detected foot whose points never land on the floor gives up too',
+        () {
+      fakeAsync((async) {
+        harness(async);
+
+        // The detector is happy every tick, but hitTestBatch finds no floor
+        // plane — the wet/glossy-surface case. Detections accumulate; samples
+        // never do. A give-up keyed on DETECTIONS would miss this entirely and
+        // run the full cap.
+        ar.nextFrame = frame();
+        ar.sampleHitScript.add(const []);
+        detector.script.add(detectedWithWidth());
+
+        ctrl.startCapture();
+
+        async.elapse(Duration(
+            milliseconds: sampleIntervalMs * (noSampleGiveUpAttempts - 2)));
+        expect(ctrl.phase, ScanPhase.capturing);
+        expect(ctrl.passSampleCount, 0,
+            reason: 'a detection without a floor hit is not a sample');
+
+        async.elapse(const Duration(seconds: 20));
+        expect(ctrl.phase, isNot(ScanPhase.capturing),
+            reason: 'the bounce back to the start must not wait out the cap');
         ctrl.dispose();
       });
     });
@@ -849,7 +1175,7 @@ void main() {
 
         ar.nextFrame = null; // nothing detectable all pass
         ctrl.startCapture();
-        async.elapse(ScanSessionController.kV2ScanDuration);
+        async.elapse(maxScanDuration);
         async.elapse(const Duration(milliseconds: 900));
 
         expect(ctrl.phase, ScanPhase.ready,
@@ -858,6 +1184,49 @@ void main() {
         expect(ctrl.coachHint?.reason, CoachReason.havingTrouble);
         expect(ctrl.coachHint?.tone, CoachTone.warning);
         expect(caughtEvents, isEmpty);
+        expect(ctrl.currentStep, CaptureStep.leftTop);
+        ctrl.dispose();
+      });
+    });
+
+    test(
+        'a pass that pooled disagreeing samples says so, not "check the '
+        'lighting"', () {
+      fakeAsync((async) {
+        harness(async);
+
+        ar.nextFrame = frame();
+        ctrl.startCapture();
+        // Alternate a 240mm foot with a 320mm one. The pass collects more than
+        // enough samples (so this is not a "foot never seen" failure), but they
+        // scatter far past the agreement threshold, so the combine produces a
+        // reading the rescan gate refuses.
+        for (int i = 0; i < 30; i++) {
+          final long = i.isEven;
+          ar.sampleHitScript.add(long
+              ? [wp(0.34, 0), wp(0.02, 0), wp(0.16, 0), wp(0.24, 0)]
+              : [wp(0.30, 0), wp(0.06, 0), wp(0.13, 0), wp(0.19, 0)]);
+          detector.script.add(detectedWithWidth());
+        }
+        async.elapse(maxScanDuration);
+        async.elapse(const Duration(milliseconds: 900));
+
+        expect(ctrl.phase, ScanPhase.ready,
+            reason: 'the reading is refused, not shown as a size');
+        expect(
+          ctrl.coachHint?.reason,
+          CoachReason.readingsDisagreed,
+          reason: 'the foot was measured fine and the numbers disagreed — '
+              'blaming lighting and floor texture would send the customer to '
+              'fix something that was never wrong',
+        );
+        expect(ctrl.coachHint?.tone, CoachTone.warning);
+        // The pass itself completed (so the step event fires), but no foot was
+        // completed and no size left the controller: the reading was refused.
+        expect(caughtEvents.whereType<StepCompletedEvent>(), hasLength(1));
+        expect(caughtEvents.whereType<FootCompletedEvent>(), isEmpty,
+            reason: 'a refused reading must never complete the foot');
+        expect(caughtEvents.whereType<ScanCompleteEvent>(), isEmpty);
         expect(ctrl.currentStep, CaptureStep.leftTop);
         ctrl.dispose();
       });
@@ -883,7 +1252,7 @@ void main() {
         ar.sampleHitScript.clear();
         relockArea(async);
         ctrl.startCapture();
-        async.elapse(ScanSessionController.kV2ScanDuration);
+        async.elapse(maxScanDuration);
         async.elapse(const Duration(milliseconds: 900));
         expect(ctrl.phase, ScanPhase.ready);
         expect(caughtEvents.whereType<FootCompletedEvent>(), hasLength(1),
@@ -931,7 +1300,7 @@ void main() {
         expect(ctrl.phase, ScanPhase.capturing,
             reason: 'stall coaching is non-destructive');
 
-        async.elapse(ScanSessionController.kV2ScanDuration);
+        async.elapse(maxScanDuration);
         expect(ctrl.phase, ScanPhase.ready);
         ctrl.dispose();
       });

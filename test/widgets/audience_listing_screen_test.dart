@@ -237,6 +237,140 @@ void main() {
     expect(find.byType(SoleProductCard), findsNothing);
   });
 
+  // ═══════════════════════════════════════════════════════════════
+  // SEARCH & FILTERS — the shelf narrows itself, never its rule
+  // ═══════════════════════════════════════════════════════════════
+
+  testWidgets('the search field names the shelf it narrows', (tester) async {
+    final provider = ProductProvider.seeded(
+      products: [product(id: 'm', name: 'Derby', audience: 'men')],
+      unitsSold: const {},
+    );
+
+    await tester.pumpWidget(wrap(provider));
+    await tester.pump();
+
+    expect(find.byType(TextField), findsOneWidget);
+    // The hint is the shelf's own words, so the field can never be mistaken for
+    // the app-wide search page (which searches the whole catalog).
+    expect(find.text("Search in Men's…"), findsOneWidget);
+  });
+
+  testWidgets("the Women's shelf searches itself and stays a Women's shelf",
+      (tester) async {
+    final provider = ProductProvider.seeded(
+      products: [
+        product(id: 'w', name: 'Ballet Flat', audience: 'women'),
+        product(id: 'w2', name: 'Heeled Boot', audience: 'women'),
+        // Matches the query word, but is on the Men's shelf — searching the
+        // Women's shelf must not reach across for it.
+        product(id: 'm', name: 'Ballet Derby', audience: 'men'),
+      ],
+      unitsSold: const {},
+    );
+
+    await tester.pumpWidget(wrap(provider, audience: 'women'));
+    await tester.pump();
+
+    expect(find.text("Search in Women's…"), findsOneWidget);
+    expect(gridNames(tester), containsAll(['Ballet Flat', 'Heeled Boot']));
+
+    await tester.enterText(find.byType(TextField), 'ballet');
+    await tester.pump();
+
+    expect(gridNames(tester), ['Ballet Flat']);
+    expect(gridNames(tester), isNot(contains('Ballet Derby')));
+    expect(find.text('1 of 2 pairs'), findsOneWidget);
+  });
+
+  testWidgets('searching narrows the shelf and the count follows the grid',
+      (tester) async {
+    final provider = ProductProvider.seeded(
+      products: [
+        product(id: 'm', name: 'Derby', audience: 'men'),
+        product(id: 'm2', name: 'Oxford Boot', audience: 'men'),
+        // A Women's product that WOULD match the query — it must stay out: a
+        // shelf search narrows the shelf, it never widens it past its rule.
+        product(id: 'w', name: 'Oxford Flat', audience: 'women'),
+      ],
+      unitsSold: const {},
+    );
+
+    await tester.pumpWidget(wrap(provider));
+    await tester.pump();
+    expect(gridNames(tester), containsAll(['Derby', 'Oxford Boot']));
+
+    await tester.enterText(find.byType(TextField), 'oxford');
+    await tester.pump();
+
+    expect(gridNames(tester), ['Oxford Boot']);
+    expect(gridNames(tester), isNot(contains('Oxford Flat')));
+    // The heading counts what the grid shows, not what the shelf holds.
+    expect(find.text('1 of 2 pairs'), findsOneWidget);
+  });
+
+  testWidgets('a query matching nothing invites a clear, not a dead end',
+      (tester) async {
+    final provider = ProductProvider.seeded(
+      products: [
+        product(id: 'm', name: 'Derby', audience: 'men'),
+        product(id: 'm2', name: 'Oxford', audience: 'men'),
+      ],
+      unitsSold: const {},
+    );
+
+    await tester.pumpWidget(wrap(provider));
+    await tester.pump();
+
+    await tester.enterText(find.byType(TextField), 'zzz');
+    await tester.pump();
+
+    expect(find.byType(SoleProductCard), findsNothing);
+    expect(find.text('Nothing in Men\'s matches "zzz"'), findsOneWidget);
+    // NOT the shelf's own empty state: the shelf is not empty, the question is.
+    expect(find.text("Nothing in Men's yet"), findsNothing);
+    expect(find.text('Clear filters'), findsOneWidget);
+
+    await tester.tap(find.text('Clear filters'));
+    await tester.pump();
+
+    expect(gridNames(tester), containsAll(['Derby', 'Oxford']));
+    expect(find.text('2 pairs'), findsOneWidget);
+  });
+
+  testWidgets('the chips are the shelf\'s own categories, and they narrow it',
+      (tester) async {
+    final provider = ProductProvider.seeded(
+      products: [
+        product(id: 'm', name: 'Derby', audience: 'men', category: 'Sneakers'),
+        product(id: 'm2', name: 'Trail', audience: 'men', category: 'Boots'),
+        // Boots again, but on the Women's shelf — the chip list must come from
+        // THIS shelf, so its presence changes nothing here.
+        product(id: 'w', name: 'Hiker', audience: 'women', category: 'Boots'),
+        // A category only the Women's shelf holds: it must not be offered.
+        product(id: 'w2', name: 'Slide', audience: 'women', category: 'Sandals'),
+      ],
+      unitsSold: const {},
+    );
+
+    await tester.pumpWidget(wrap(provider));
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('shelf-underline-Sneakers')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('shelf-underline-Boots')), findsOneWidget);
+    expect(find.byKey(const ValueKey('shelf-underline-Sandals')), findsNothing,
+        reason: 'a category this shelf does not hold must not be offered');
+
+    await tester.tap(find.byKey(const ValueKey('shelf-underline-Boots')));
+    await tester.pump();
+
+    expect(gridNames(tester), contains('Trail'));
+    expect(gridNames(tester), isNot(contains('Derby')));
+    expect(gridNames(tester), isNot(contains('Hiker')));
+    expect(find.text('1 of 2 pairs'), findsOneWidget);
+  });
+
   /// The page paints from theme tokens, so both modes have to be measured —
   /// and the accent ink is the one token with a trap in it (see below).
   group('dual-brightness check', () {

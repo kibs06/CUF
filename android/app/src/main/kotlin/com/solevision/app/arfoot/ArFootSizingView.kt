@@ -104,6 +104,13 @@ class ArFootSizingView(
     // foot's depth surface (preferred) or the floor-plane raycast (fallback).
     @Volatile private var depthAvailable = false
 
+    // Angle of the camera's optical axis from straight down, in degrees (0 = flat
+    // over the floor). Refreshed every frame; null until the first tracked frame.
+    @Volatile private var cameraTiltDeg: Double? = null
+
+    /** TEMP-DIAG: identifies one hit-test batch so its points can be grouped. */
+    private val batchCounter = java.util.concurrent.atomic.AtomicInteger(0)
+
     /** Whether the ARCore session has actually reached "created + resumed". */
     fun isSessionStarted(): Boolean = sessionStarted
 
@@ -783,6 +790,10 @@ class ArFootSizingView(
                 else -> "limited"
             }
 
+            cameraTiltDeg = tiltFromDownDegrees(
+                camera.pose.qx(), camera.pose.qy(), camera.pose.qz(), camera.pose.qw()
+            )
+
             if (newState != trackingState) {
                 trackingState = newState
                 plugin.sendEvent("tracking", mapOf("state" to trackingState))
@@ -835,7 +846,13 @@ class ArFootSizingView(
     // PUBLIC API (called from platform channel)
     // ═══════════════════════════════════════════════════════════════
 
-    fun hitTest(x: Float, y: Float, preferDepth: Boolean = false): Map<String, Any>? {
+    fun hitTest(
+        x: Float,
+        y: Float,
+        preferDepth: Boolean = false,
+        batch: Int = -1,
+        index: Int = -1,
+    ): Map<String, Any>? {
         val arSession = session ?: return null
         val frame = lastFrame ?: return null
 
@@ -878,7 +895,48 @@ class ArFootSizingView(
             // sample is rejected) rather than falling back to the floor, which
             // would reintroduce the projection error this path removes.
             if (preferDepth && depthAvailable) {
-                return depthHitTest(frame, px, py)
+                val depthPoint = depthHitTest(frame, px, py)
+
+                // TEMP-DIAG (is the scan biased or just noisy?): intersect the
+                // SAME view ray with the floor plane and log both world points,
+                // so the foot-surface distance (what the scan uses, V5) and the
+                // floor projection (what it used before V5, and the length a
+                // Brannock device measures) can be compared on one frame.
+                //
+                // Log-only: the return value is unchanged, so a scan behaves
+                // exactly as it does today and nothing here can change a size.
+                var planeWorld = "none"
+                for (hit in frame.hitTest(px, py)) {
+                    val plane = hit.trackable
+                    if (plane !is Plane) continue
+                    if (plane.type != Plane.Type.HORIZONTAL_UPWARD_FACING) continue
+                    if (!plane.isPoseInPolygon(hit.hitPose)) continue
+                    val pose = hit.hitPose
+                    planeWorld = String.format(
+                        "%.4f,%.4f,%.4f",
+                        pose.tx(),
+                        pose.ty(),
+                        pose.tz(),
+                    )
+                    break
+                }
+                val depthWorld = if (depthPoint == null) {
+                    "none"
+                } else {
+                    String.format(
+                        "%.4f,%.4f,%.4f",
+                        depthPoint["x"] as Double,
+                        depthPoint["y"] as Double,
+                        depthPoint["z"] as Double,
+                    )
+                }
+                Log.d(
+                    TAG,
+                    "abCompare batch=$batch idx=$index view=($px,$py) " +
+                        "depthWorld=$depthWorld planeWorld=$planeWorld",
+                )
+
+                return depthPoint
             }
 
             val hitResults = frame.hitTest(px, py)
@@ -904,11 +962,24 @@ class ArFootSizingView(
                 if (!trackable.isPoseInPolygon(hit.hitPose)) continue
 
                 val pose = hit.hitPose
-                return worldPointMap(
-                    floatArrayOf(pose.tx(), pose.ty(), pose.tz()),
-                    frame.camera.pose,
-                    "plane",
-                )
+                val floorPoint = floatArrayOf(pose.tx(), pose.ty(), pose.tz())
+                // Measurement points (preferDepth) are lifted from the floor to the
+                // foot's edge height. The floor hit lies behind the foot, so an
+                // unlifted point inflates every length by H / (H - foot height).
+                // Area-tracking probes (preferDepth = false) keep the raw floor hit.
+                val world = if (preferDepth) {
+                    val cameraPos = floatArrayOf(
+                        frame.camera.pose.tx(),
+                        frame.camera.pose.ty(),
+                        frame.camera.pose.tz(),
+                    )
+                    // Null when the camera is too low to lift: reject the point rather than guess.
+                    liftAlongRayToHeight(cameraPos, floorPoint, FOOT_SILHOUETTE_HEIGHT_M)
+                        ?: return null
+                } else {
+                    floorPoint
+                }
+                return worldPointMap(world, frame.camera.pose, "plane")
             }
             // Reaching here means every hit was rejected by the floor filter.
             // Distinguishable in logcat from "ray never touched any plane".
@@ -943,11 +1014,28 @@ class ArFootSizingView(
             frame.acquireDepthImage16Bits()
         } catch (e: Exception) {
             // Depth is not ready yet (NotYetAvailableException) or unsupported.
+            Log.d(TAG, "depthHitTest: no depth image (${e.javaClass.simpleName})")
             return null
         }
         try {
             val depthMm = sampleDepthMm(depthImage, texturePoint[0], texturePoint[1])
-                ?: return null
+            if (depthMm == null) {
+                // TEMP-DIAG: the manual depth sample found no plausible pixel at
+                // this measurement point. Record the coordinates it looked in
+                // and what ARCore's own hit test sees at the same view pixel, so
+                // a narrower depth-image FOV (or a wrong unit/space) is read off
+                // the log instead of inferred.
+                val arcoreHits = frame.hitTest(px, py).joinToString(",") {
+                    it.trackable?.javaClass?.simpleName ?: "null"
+                }
+                Log.d(
+                    TAG,
+                    "depthHitTest=null uv=(${texturePoint[0]},${texturePoint[1]}) " +
+                        "depthImage=${depthImage.width}x${depthImage.height} " +
+                        "view=($px,$py) arcoreHits=[$arcoreHits]",
+                )
+                return null
+            }
 
             val intrinsics = camera.imageIntrinsics
             val focal = intrinsics.focalLength
@@ -965,10 +1053,38 @@ class ArFootSizingView(
                 principal[1],
             )
             val world = camera.pose.transformPoint(cameraPoint)
+            // Reject a depth point that reads beyond the floor: it cannot be on the foot
+            // and it inflates the length. With no floor hit at this pixel, nothing to check against.
+            val floorY = floorHitY(frame, px, py)
+            if (floorY != null && isBelowFloor(world[1], floorY)) {
+                Log.d(TAG, "depthHitTest=belowFloor depthY=${world[1]} floorY=$floorY view=($px,$py)")
+                return null
+            }
+            // TEMP-DIAG: the depth actually read at this measurement pixel, and
+            // the world point it unprojects to. A depth far from the ~0.5 m
+            // the foot sits at means the sample is landing in the wrong place.
+            Log.d(
+                TAG,
+                "depthHitTest=ok uv=(${texturePoint[0]},${texturePoint[1]}) " +
+                    "depthMm=$depthMm view=($px,$py) " +
+                    "world=(${world[0]},${world[1]},${world[2]})",
+            )
             return worldPointMap(world, camera.pose, "depth")
         } finally {
             depthImage.close()
         }
+    }
+
+    /** Height (world y) of the upward-facing floor plane hit at a view pixel, or null when the ray misses the floor. */
+    private fun floorHitY(frame: Frame, px: Float, py: Float): Float? {
+        for (hit in frame.hitTest(px, py)) {
+            val plane = hit.trackable
+            if (plane !is Plane) continue
+            if (plane.type != Plane.Type.HORIZONTAL_UPWARD_FACING) continue
+            if (!plane.isPoseInPolygon(hit.hitPose)) continue
+            return hit.hitPose.ty()
+        }
+        return null
     }
 
     /**
@@ -996,7 +1112,18 @@ class ArFootSizingView(
                 neighbours.add(depthMmFromRaw16(raw))
             }
         }
-        return medianPlausibleDepthMm(neighbours)?.toFloat()
+        // Measurement points sit on the silhouette edge, where a depth pixel
+        // straddles the foot and the floor behind it. The median therefore
+        // returns the surface BEHIND the foot and the point unprojects past it,
+        // inflating length and width together; the near surface is the foot.
+        // Both readings are logged so the size of that edge bias stays
+        // measurable, and the scan uses the near one.
+        val median = medianPlausibleDepthMm(neighbours)
+        val nearest = nearestPlausibleDepthMm(neighbours)
+        if (median != null && nearest != null && median != nearest) {
+            Log.d(TAG, "depthEdge medianMm=$median nearestMm=$nearest n=${neighbours.size}")
+        }
+        return (nearest ?: median)?.toFloat()
     }
 
     /**
@@ -1020,14 +1147,28 @@ class ArFootSizingView(
         points: List<Map<String, Double>>,
         preferDepth: Boolean = false,
     ): List<Map<String, Any>?> {
-        return points.map { point ->
-            hitTest(point["x"]?.toFloat() ?: 0f, point["y"]?.toFloat() ?: 0f, preferDepth)
+        // TEMP-DIAG: a batch id and an in-batch index, so the log can be grouped
+        // without guessing. Points arrive in the order heel, toe, width-1,
+        // width-2; a point that returns no world position simply produces no
+        // line, which used to make every later group of four straddle frames.
+        val batch = batchCounter.incrementAndGet()
+        return points.mapIndexed { index, point ->
+            hitTest(
+                point["x"]?.toFloat() ?: 0f,
+                point["y"]?.toFloat() ?: 0f,
+                preferDepth,
+                batch,
+                index,
+            )
         }
     }
 
     fun getTrackingState(): String = trackingState
     fun getFloorPlane(): Map<String, Any>? = floorPlane
     fun getFloorDistance(): Double? = floorDistance
+
+    /** Camera tilt from straight down in degrees, or null before the first frame. */
+    fun getCameraTiltDegrees(): Double? = cameraTiltDeg
 
     /**
      * Turns the torch on or off. Takes effect on the render thread at the next

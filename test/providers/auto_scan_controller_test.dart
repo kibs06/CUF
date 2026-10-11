@@ -7,7 +7,8 @@ import 'package:fake_async/fake_async.dart';
 
 import 'package:app/providers/auto_scan_controller.dart';
 import 'package:app/services/ar_core_channel.dart';
-import 'package:app/utils/ar_foot_measurement_pipeline.dart' show scanDuration, sampleIntervalMs;
+import 'package:app/utils/ar_foot_measurement_pipeline.dart'
+    show maxScanDuration, sampleIntervalMs;
 import 'package:app/utils/foot_detector.dart';
 
 // ═══════════════════════════════════════════════════════════════
@@ -84,6 +85,9 @@ class FakeArCore implements ArCoreChannel {
 
   @override
   Future<ArTrackingState> getTrackingState() async => ArTrackingState.paused;
+
+  @override
+  Future<double?> getCameraTiltDegrees() async => null;
 
   @override
   Future<ArPlane?> getFloorPlane() async => null;
@@ -247,13 +251,15 @@ void main() {
         ar.nextHits = [wp(0.30, 0), wp(0.06, 0), wp(0.13, 0), wp(0.22, 0)];
         detector.script.add(validDetection()); // sticky from here on
 
-        // Pass 1: left FRONT (4s). First 2 ticks confirm the temporal gate
+        // Pass 1: left FRONT. The pass is sample-driven now: it ends once it
+        // has enough agreeing samples, so the ticking stops well before the
+        // 60s safety cap. First 2 ticks confirm the temporal gate
         // (confirmAfter=3), sampling starts on tick 3.
         ctrl.startScan();
         expect(ctrl.scanActive, isTrue);
         expect(ctrl.captureStep, 'front');
         expect(ctrl.currentFoot, 0);
-        async.elapse(scanDuration);
+        async.elapse(maxScanDuration);
 
         expect(ctrl.scanActive, isFalse);
         expect(ctrl.currentSampleCount, greaterThan(0));
@@ -266,7 +272,7 @@ void main() {
         // Pass 2: left SIDE → finalize left foot → auto-advance to right.
         relockArea(async);
         ctrl.startScan();
-        async.elapse(scanDuration);
+        async.elapse(maxScanDuration);
 
         expect(ctrl.currentFoot, 1);
         expect(ctrl.captureStep, 'front');
@@ -278,14 +284,14 @@ void main() {
         // Pass 3: right FRONT.
         relockArea(async);
         ctrl.startScan();
-        async.elapse(scanDuration);
+        async.elapse(maxScanDuration);
         expect(ctrl.captureStep, 'side');
         expect(caughtEvents.whereType<LeftFootDoneEvent>(), hasLength(1));
 
         // Pass 4: right SIDE → both done → ScanCompletedEvent.
         relockArea(async);
         ctrl.startScan();
-        async.elapse(scanDuration);
+        async.elapse(maxScanDuration);
 
         final completed = caughtEvents.whereType<ScanCompletedEvent>().toList();
         expect(completed, hasLength(1));
@@ -313,7 +319,7 @@ void main() {
         // No-frame ticks: acquireCameraFrame returns null every time.
         ar.nextFrame = null;
         ctrl.startScan();
-        async.elapse(scanDuration);
+        async.elapse(maxScanDuration);
 
         expect(ctrl.scanActive, isFalse);
         expect(ctrl.noFootFailure, isTrue);
@@ -333,7 +339,8 @@ void main() {
         ctrl.startScan();
         expect(ctrl.stallPromptShown, isFalse);
 
-        // 10 attempts × 200ms ≈ 2s — inside the 4s pass window.
+        // 10 attempts × 200ms ≈ 2s — well inside a pass that now runs until
+        // it has samples (or hits the 60s cap).
         async.elapse(Duration(milliseconds: sampleIntervalMs * 11));
         expect(ctrl.stallPromptShown, isTrue,
             reason: 'stall coaching must be reachable before the pass ends');
@@ -341,8 +348,9 @@ void main() {
             reason: 'prompt is non-destructive: pass keeps running');
         expect(ctrl.guidanceText, contains('Guided Tap'));
 
-        // Pass still ends normally at 4s with the explicit failure.
-        async.elapse(scanDuration);
+        // Pass still ends — at the cap, since it never collected a sample —
+        // with the explicit failure.
+        async.elapse(maxScanDuration);
         expect(ctrl.noFootFailure, isTrue);
         expect(ctrl.guidanceState, 'error');
       });
@@ -365,7 +373,7 @@ void main() {
         ar.nextHits = const [];
         detector.script.add(validDetection());
         ctrl.startScan();
-        async.elapse(scanDuration);
+        async.elapse(maxScanDuration);
         expect(ctrl.captureStep, 'side');
         expect(ctrl.leftSampleCount, 0);
         expect(ctrl.noFootFailure, isFalse);
@@ -383,7 +391,7 @@ void main() {
         ar.nextHits = const [];
         detector.script.add(validDetection());
         ctrl.startScan();
-        async.elapse(scanDuration);
+        async.elapse(maxScanDuration);
 
         expect(caughtEvents.whereType<SideCombineFailedEvent>(), hasLength(1));
         expect(ctrl.guidanceState, 'ready');
@@ -415,7 +423,7 @@ void main() {
         ar.nextHits = [wp(0.30, 0), wp(0.06, 0), wp(0.13, 0), wp(0.22, 0)];
         detector.script.add(validDetection());
         ctrl.startScan();
-        async.elapse(scanDuration);
+        async.elapse(maxScanDuration);
         final samplesAfterPass1 = ctrl.leftSampleCount;
         expect(samplesAfterPass1, greaterThan(0));
         expect(ctrl.captureStep, 'side');
@@ -424,7 +432,7 @@ void main() {
         relockArea(async);
         ar.nextFrame = null;
         ctrl.startScan();
-        async.elapse(scanDuration);
+        async.elapse(maxScanDuration);
         expect(ctrl.noFootFailure, isTrue);
 
         // Retry: current code restarts the side pass WITHOUT clearing
@@ -439,7 +447,7 @@ void main() {
         ar.nextFrame = frame();
         ar.nextHits = [wp(0.30, 0), wp(0.06, 0), wp(0.13, 0), wp(0.22, 0)];
         detector.script.add(validDetection());
-        async.elapse(scanDuration);
+        async.elapse(maxScanDuration);
 
         expect(ctrl.leftSampleCount, greaterThan(samplesAfterPass1),
             reason: 'current behavior: retried-pass samples append to the '
@@ -467,7 +475,7 @@ void main() {
         detector.script.add(validDetection());
 
         ctrl.startScan();
-        async.elapse(scanDuration);
+        async.elapse(maxScanDuration);
 
         // validDetectionsThisPass counts confirmations regardless of raycast…
         expect(ctrl.validDetectionsThisPass, greaterThan(0));

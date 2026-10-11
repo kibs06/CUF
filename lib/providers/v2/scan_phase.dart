@@ -120,12 +120,38 @@ enum CoachReason {
   /// Floor ready — position your foot inside the guide frame.
   positionFoot,
 
+  /// The foot is too small in frame: the phone is held too far away — move it
+  /// closer. Advice only; the frame is still sampled.
+  moveCloser,
+
+  /// The foot fills the frame: the phone is too close — move it back so the
+  /// whole foot fits. Advice only; the frame is still sampled.
+  moveFarther,
+
+  /// The phone is tilted too far from straight down for a top-down capture —
+  /// hold it flat over the foot.
+  tiltPhone,
+
   /// Foot detected and locked — hold still while we measure.
   holdStill,
 
   /// Detection struggling for several attempts (stall coaching). Amber tone;
   /// screen offers the tips sheet instead of v1's dead-end fallback button.
   havingTrouble,
+
+  /// A pass pooled samples and produced a reading, but the samples disagreed
+  /// with each other too much to size the foot, so it was refused.
+  ///
+  /// Deliberately NOT [havingTrouble]: that message sends the customer to fix
+  /// lighting and floor texture, and on a scan that measured the foot perfectly
+  /// well and simply got inconsistent numbers, both are already fine. Saying so
+  /// is the difference between a fixable retry and a wasted one.
+  readingsDisagreed,
+
+  /// A pass ended without enough usable samples to size the foot — frames were
+  /// dropped (blur, no depth at a measurement point, unstable outline) rather
+  /// than the foot never being seen.
+  tooFewSamples,
 
   /// A step just finished successfully — celebratory tone.
   stepDone,

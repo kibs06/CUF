@@ -614,6 +614,20 @@ class ArCoreChannel {
     }
   }
 
+  /// Angle in degrees between the camera's optical axis and straight down:
+  /// 0 = the phone is held flat over the floor, 90 = held level. Null when the
+  /// session is not active or the platform cannot report it, so an unknown
+  /// tilt never blocks a scan.
+  Future<double?> getCameraTiltDegrees() async {
+    if (!_sessionActive) return null;
+
+    try {
+      return await _methodChannel.invokeMethod<double>('getCameraTiltDegrees');
+    } on PlatformException {
+      return null;
+    }
+  }
+
   // ── Internal ──
 
   void _startListening() {
