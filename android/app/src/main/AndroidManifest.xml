@@ -96,6 +96,27 @@
             </intent-filter>
             -->
         </activity>
+        <!-- Seller home-screen widget.
+
+             `android:name` must stay in step with
+             `SellerWidgetService.androidWidgetName` (Dart) — home_widget resolves
+             the provider as <package>.<name> when the app pushes a redraw, and a
+             mismatch fails at runtime with PlatformException(-8) rather than at
+             build time.
+
+             exported="false": the AppWidgetManager addresses this receiver
+             explicitly, so nothing outside the app needs to reach it. -->
+        <receiver
+            android:name=".SellerWidgetProvider"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/seller_widget_info" />
+        </receiver>
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

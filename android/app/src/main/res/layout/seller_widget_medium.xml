@@ -1,0 +1,214 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The seller widget at medium size — wide but short, roughly 4×2 cells.
+
+  ⚠️ RemoteViews rules apply: only allowlisted classes, and
+  `RemoteViewsSafetyTest` scans this file too.
+
+  ── What fits, and what had to go ────────────────────────────────────────
+
+  There is width here (a 4-wide tile) but not much height, so the full layout's
+  two metric rows cannot both fit without the hero being squeezed. The
+  compromise is **breadth over depth**: one row of three cells instead of two,
+  holding the three metrics a seller can still act on from a home screen.
+
+    1. **orders** — a customer is waiting.
+    2. **low stock** — the shelf is running out.
+    3. **unread** — someone is trying to reach the store.
+
+  Dropped from the full layout: `custom`, `holds` and `requests`. They are real
+  work, but they are *narrower* work — you deal with them when you open the app
+  anyway — and the first three are the ones that go wrong invisibly. All three
+  dropped metrics are still counted in `attentionCount`, which the 2×2 shows, and
+  the full layout shows them individually; nothing is silently lost, only
+  deferred to a size that can draw it.
+
+  The three ids here (`widget_orders`, `widget_low_stock`, `widget_unread`) are
+  reused from the full layout on purpose: same cell, same label, same colour
+  rule, so a user resizing between the two does not see a number change meaning.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/seller_widget_bg"
+    android:orientation="vertical"
+    android:padding="14dp">
+
+    <!-- ══ Populated ══ -->
+    <LinearLayout
+        android:id="@+id/widget_content"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <FrameLayout
+                android:layout_width="3dp"
+                android:layout_height="18dp"
+                android:background="@drawable/seller_widget_accent_bar" />
+
+            <TextView
+                android:id="@+id/widget_store_name"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="@string/seller_widget_placeholder_store"
+                android:textColor="@color/seller_widget_title"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_updated"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:maxLines="1"
+                android:text="@string/seller_widget_placeholder_updated"
+                android:textColor="@color/seller_widget_label"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/widget_revenue_caption"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:letterSpacing="0.12"
+            android:text="@string/seller_widget_today"
+            android:textAllCaps="true"
+            android:textColor="@color/seller_widget_label"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/widget_revenue"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:maxLines="1"
+            android:text="@string/seller_widget_placeholder_value"
+            android:textColor="@color/seller_widget_revenue"
+            android:textSize="28sp"
+            android:textStyle="bold" />
+
+        <!-- weight=1 with bottom-centring: absorbs whatever height the launcher
+             grants beyond the content's floor, instead of leaving a gap below. -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_marginTop="8dp"
+            android:layout_weight="1"
+            android:gravity="bottom"
+            android:orientation="horizontal">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_margin="3dp"
+                android:layout_weight="1"
+                android:background="@drawable/seller_widget_pill"
+                android:orientation="vertical"
+                android:padding="8dp">
+
+                <TextView
+                    android:id="@+id/widget_orders"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:maxLines="1"
+                    android:text="@string/seller_widget_placeholder_value"
+                    android:textColor="@color/seller_widget_muted"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:maxLines="1"
+                    android:text="@string/seller_widget_orders"
+                    android:textColor="@color/seller_widget_label"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_margin="3dp"
+                android:layout_weight="1"
+                android:background="@drawable/seller_widget_pill"
+                android:orientation="vertical"
+                android:padding="8dp">
+
+                <TextView
+                    android:id="@+id/widget_low_stock"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:maxLines="1"
+                    android:text="@string/seller_widget_placeholder_value"
+                    android:textColor="@color/seller_widget_muted"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:maxLines="1"
+                    android:text="@string/seller_widget_low_stock"
+                    android:textColor="@color/seller_widget_label"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_margin="3dp"
+                android:layout_weight="1"
+                android:background="@drawable/seller_widget_pill"
+                android:orientation="vertical"
+                android:padding="8dp">
+
+                <TextView
+                    android:id="@+id/widget_unread"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:maxLines="1"
+                    android:text="@string/seller_widget_placeholder_value"
+                    android:textColor="@color/seller_widget_muted"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:maxLines="1"
+                    android:text="@string/seller_widget_unread"
+                    android:textColor="@color/seller_widget_label"
+                    android:textSize="12sp" />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- ══ Empty ══ -->
+    <LinearLayout
+        android:id="@+id/widget_empty"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="@string/seller_widget_empty_body_short"
+            android:textColor="@color/seller_widget_muted"
+            android:textSize="12sp" />
+    </LinearLayout>
+</LinearLayout>

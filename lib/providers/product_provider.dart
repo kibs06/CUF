@@ -4,6 +4,7 @@ import '../services/product_service.dart';
 import '../services/supabase_service.dart';
 import '../utils/nav_perf.dart';
 import '../utils/product_audience.dart';
+import '../utils/product_shelf.dart';
 import '../utils/product_search.dart';
 import '../utils/sale_price.dart';
 import '../utils/size_match.dart';
@@ -264,11 +265,21 @@ class ProductProvider extends ChangeNotifier {
   /// Products the customer can actually buy right now in [euSize] — the
   /// "Based on your size" grid's source.
   ///
-  /// The inclusion rule lives in `size_match.dart` ([stocksMySize]), so this
-  /// shelf and any later size surface (chip, badge, product-page pre-select)
-  /// can never disagree about whether a product has the customer's size. It
-  /// reuses the `inventory` data the catalog already fetched — no second
-  /// query, no schema change.
+  /// **The rule itself now lives in `product_shelf.dart` ([productsInMySize]),
+  /// and this is a delegate.** It moved because the rule has a second caller
+  /// that cannot share a provider: the customer widget's background worker, a
+  /// cold isolate with a fresh query and no `ProductProvider`. A launcher tile
+  /// that suggested a pair this grid would not show is the shop contradicting
+  /// itself about the customer's own feet, so the filter is one function with
+  /// two callers rather than two copies that can drift. What stays here is the
+  /// provider's half of the contract — which catalog it reads, and the order it
+  /// hands back — not the inclusion rules.
+  ///
+  /// The inclusion rule it delegates to is built from `size_match.dart`
+  /// ([stocksMySize]), so this shelf and any later size surface (chip, badge,
+  /// product-page pre-select) can never disagree about whether a product has the
+  /// customer's size. It reuses the `inventory` data the catalog already fetched
+  /// — no second query, no schema change.
   ///
   /// [euSize] null (signed out, or a customer who never gave a size) returns
   /// EMPTY, never a guess or a fallback size: every size surface is
@@ -292,31 +303,13 @@ class ProductProvider extends ChangeNotifier {
     double? euSize, {
     String? category,
     int limit = 0,
-  }) {
-    if (euSize == null) return const [];
-
-    // The customer's stated scale narrows the shelf to products stated for it —
-    // plus `unisex`, which is a real answer here: this is a personal shelf, not
-    // a curated rail, and a unisex product in the customer's size IS in their
-    // size. (The rails skip it only because it would be listed three times.)
-    // A product with NO stated audience is excluded when a scale IS stated —
-    // the stated-data-only rule the audience rails already follow, never
-    // inferred from the size band. With no stated scale the shelf stays
-    // size-only: a guessed scale is what the absence-safe rule forbids, and
-    // emptying the section for a customer who never picked one would hide the
-    // one surface that reads their size at all.
-    final wanted = productAudienceFrom(category);
-    final matches = _products.where((p) {
-      if (!stocksMySize(p, euSize)) return false;
-      if (wanted == null || wanted == kUnisexAudience) return true;
-      final audience = productAudienceFrom(p['audience']?.toString());
-      return audience == wanted || audience == kUnisexAudience;
-    }).toList();
-
-    return limit > 0 && matches.length > limit
-        ? matches.sublist(0, limit)
-        : matches;
-  }
+  }) =>
+      productsInMySize(
+        _products,
+        euSize: euSize,
+        category: category,
+        limit: limit,
+      );
 
   /// Products a seller stated as being for [audience], most-sold first — the
   /// Men's / Women's / Kids' home rails' source.

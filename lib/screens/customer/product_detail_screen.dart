@@ -47,6 +47,26 @@ import 'widgets/pickup_reservation_sheet.dart';
 class ProductDetailScreen extends StatefulWidget {
   final Map<String, dynamic> product;
 
+  /// The list this product was opened **from**, when the screen that pushed it
+  /// has one — the Home feed, a listing, search results, or the shelf a launcher
+  /// card came from — and the index of [product] inside it.
+  ///
+  /// Two or more entries turn the page into a horizontal pager: swiping left and
+  /// right moves through that same list, in its own order, so "back" is where you
+  /// came from and "next" is the next card the customer was looking at. With no
+  /// list (or a single product) this is exactly the page it has always been —
+  /// which matters, because most pushes in this app pass one product and nothing
+  /// else, and a page that invented a list to swipe through would be a worse
+  /// answer than no swipe at all.
+  ///
+  /// **The list is the caller's, not a fresh query.** Re-deriving it here would
+  /// give a different order (the catalog is shuffled per load), so a swipe would
+  /// "next" onto a product the customer never saw behind them.
+  final List<Map<String, dynamic>>? browseList;
+
+  /// Where [product] sits in [browseList]. Out-of-range values are clamped.
+  final int browseIndex;
+
   /// Test seam for the V2.6 model prefetch.
   ///
   /// Production builds the real one (the `virtualFitEnabled`-style switch is
@@ -58,11 +78,96 @@ class ProductDetailScreen extends StatefulWidget {
   const ProductDetailScreen({
     super.key,
     required this.product,
+    this.browseList,
+    this.browseIndex = 0,
     this.tryOnPrefetch,
   });
 
   @override
   State<ProductDetailScreen> createState() => _ProductDetailScreenState();
+}
+
+/// The single-product page — everything this screen rendered before it could be
+/// swiped, and still exactly what it renders when the caller passes no list.
+///
+/// Split out as its own widget rather than kept as the pager's only child so that
+/// each product on a swipe has its OWN state: colour, size and quantity live in
+/// [_ProductDetailViewState], and reusing one state across pages would carry a
+/// size picked on one product into the next one — which is the one thing a
+/// per-product page must never do.
+class _ProductDetailView extends StatefulWidget {
+  const _ProductDetailView({
+    super.key,
+    required this.product,
+    this.tryOnPrefetch,
+    this.browsePosition,
+  });
+
+  final Map<String, dynamic> product;
+  final TryOnPrefetch? tryOnPrefetch;
+
+  /// `3 / 12` when the page is one of a swiped list, else null. Shown in the app
+  /// bar so the swipe is discoverable rather than something a customer has to
+  /// find by dragging the screen sideways. Null renders nothing at all: a lone
+  /// product has no position to report, and a "1 / 1" chip would advertise a
+  /// swipe that does not exist.
+  final String? browsePosition;
+
+  @override
+  State<_ProductDetailView> createState() => _ProductDetailViewState();
+}
+
+/// The pager: one [_ProductDetailView] per product in the caller's list.
+class _ProductDetailScreenState extends State<ProductDetailScreen> {
+  late final List<Map<String, dynamic>>? _browseList;
+  late final PageController _controller;
+  late int _index;
+
+  /// Whether this page is a pager at all — one product, or no list, is not.
+  bool get _browsing => (_browseList?.length ?? 0) > 1;
+
+  @override
+  void initState() {
+    super.initState();
+    _browseList = widget.browseList;
+    final count = _browseList?.length ?? 0;
+    // Clamped rather than trusted: an index from a list that changed underneath
+    // the tap (a refresh between the grid painting and the tap landing) would
+    // otherwise assert inside `PageController` and take the screen down.
+    _index = count == 0 ? 0 : widget.browseIndex.clamp(0, count - 1);
+    _controller = PageController(initialPage: _index);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final list = _browseList;
+    if (!_browsing || list == null) {
+      return _ProductDetailView(
+        product: widget.product,
+        tryOnPrefetch: widget.tryOnPrefetch,
+      );
+    }
+
+    return PageView.builder(
+      controller: _controller,
+      itemCount: list.length,
+      onPageChanged: (index) => setState(() => _index = index),
+      // Keyed by product id, so a page is rebuilt for a DIFFERENT product rather
+      // than reused with the previous one's state when the list is reordered.
+      itemBuilder: (_, index) => _ProductDetailView(
+        key: ValueKey(list[index]['id']?.toString() ?? '$index'),
+        product: list[index],
+        tryOnPrefetch: widget.tryOnPrefetch,
+        browsePosition: '${index + 1} / ${list.length}',
+      ),
+    );
+  }
 }
 
 /// Reviews section for the product detail screen.
@@ -505,7 +610,7 @@ class _StoreProductCard extends StatelessWidget {
   }
 }
 
-class _ProductDetailScreenState extends State<ProductDetailScreen>
+class _ProductDetailViewState extends State<_ProductDetailView>
     with SingleTickerProviderStateMixin {
   String? _selectedSize;
 
@@ -1752,6 +1857,28 @@ class _ProductDetailScreenState extends State<ProductDetailScreen>
                   ),
                 ),
                 actions: [
+                  // Only on a swiped page: `3 / 12` says there are products either
+                  // side of this one, which is the whole discoverability story for
+                  // a gesture that is otherwise invisible.
+                  if (widget.browsePosition != null)
+                    Center(
+                      child: Container(
+                        margin: const EdgeInsets.only(right: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.3),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          widget.browsePosition!,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
                   // Share button
                   IconButton(
                     icon: Container(

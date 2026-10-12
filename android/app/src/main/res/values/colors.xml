@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Colours for the seller home-screen widget — all four size tiers share this
+  palette (res/layout/seller_widget_small.xml · _tall.xml · _medium.xml ·
+  _full.xml).
+
+  A widget is drawn by the launcher, not by Flutter, so it cannot read
+  AppConstants or SellerTheme — these hex values are the native mirror of
+  lib/constants/seller_theme_constants.dart, and they are duplicated on purpose
+  rather than generated:
+
+    espressoDark   SellerTheme.espressoDark   0xFF3A2415
+    espressoMid    SellerTheme.espressoMid    0xFF6B4A32
+    rustDeep       SellerTheme.rustDeep       0xFF9C4E22
+    amberDark      SellerTheme.amberDark      0xFF8A5D14
+    cream          (the seller surface tint)  0xFFFBF7F1
+
+  ── Why the accent colours are the DARK variants ──────────────────────────
+  Every colour below that is used for small text clears 4.5:1 against
+  `seller_widget_bg`, which is the accessibility floor for body-size text. The
+  lighter brand tones do not: `rust` #B5622E on cream is 4.07:1. So the tiles
+  use `rustDeep` #9C4E22 (5.5:1), `amberDark` #8A5D14 (5.2:1) and a darkened
+  blue #3F5A7A (6.6:1). The brand hue is unchanged to the eye; only the value is
+  tuned for legibility at 12–20sp.
+
+  The dark equivalents live in res/values-night/colors.xml. Both files define
+  the same names, so a colour is never missing in either theme.
+-->
+<resources>
+    <!-- The card itself. -->
+    <color name="seller_widget_bg">#FFFBF7F1</color>
+
+    <!-- Type, in descending visual weight. -->
+    <color name="seller_widget_title">#FF3A2415</color>
+    <color name="seller_widget_revenue">#FF3A2415</color>
+    <color name="seller_widget_label">#FF6B4A32</color>
+    <color name="seller_widget_muted">#FF6B4A32</color>
+
+    <!-- Semantic count colours. Each pairs with a written label, so meaning is
+         never carried by hue alone (a colour-blind seller loses nothing). -->
+    <color name="seller_widget_accent">#FF9C4E22</color>
+    <color name="seller_widget_amber">#FF8A5D14</color>
+    <color name="seller_widget_blue">#FF3F5A7A</color>
+
+    <!-- Surfaces and rules. -->
+    <color name="seller_widget_pill">#0F3A2415</color>
+    <color name="seller_widget_divider">#403A2415</color>
+
+    <!-- Legacy names, kept because the empty state still references them. -->
+    <color name="seller_widget_ok">#FF3E5836</color>
+    <color name="seller_widget_alert">#FF9C4E22</color>
+
+    <!-- ── The customer half of the tile ────────────────────────────────────
+         The same ramp, under a name that says whose layout is using it. The tile
+         began as a seller-only surface, so `seller_widget_*` is where these values
+         live; the customer layouts should not read as if they borrowed the
+         seller's palette by accident.
+
+         Aliases, not copies: one definition of each tone, and they resolve
+         through `values-night/colors.xml` with the seller names they point at, so
+         there is nothing to keep in step in the dark theme either. -->
+    <color name="customer_widget_bg">@color/seller_widget_bg</color>
+    <color name="customer_widget_title">@color/seller_widget_title</color>
+    <color name="customer_widget_label">@color/seller_widget_label</color>
+    <color name="customer_widget_muted">@color/seller_widget_muted</color>
+    <color name="customer_widget_price">@color/seller_widget_revenue</color>
+    <color name="customer_widget_pill">@color/seller_widget_pill</color>
+    <!-- The badge is a live discount, so it takes the one colour the tile uses for
+         "worth acting on" rather than a hue of its own: fewer colours on a small
+         surface, and the same meaning every other tile gives that tone. -->
+    <color name="customer_widget_badge">@color/seller_widget_accent</color>
+</resources>

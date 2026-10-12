@@ -84,6 +84,45 @@ class DeepLinkService {
   /// Whether [uri] is a product share link (see [productIdFromLink]).
   static bool isProductLink(Uri uri) => productIdFromLink(uri) != null;
 
+  /// The host of the app's OWN product link — `solvision://product/{id}`.
+  ///
+  /// The customer widget's product rows are the only producer. A widget cannot
+  /// push a screen: it attaches a `PendingIntent` per row, and the only thing that
+  /// can carry across that boundary is a URI this app already knows how to open.
+  /// So each row carries this, and the tap lands on the product the row showed.
+  ///
+  /// ⚠️ A contract with Kotlin. `SellerWidgetProvider` builds the string itself
+  /// (a widget row is drawn with no Dart running), so the scheme and this host are
+  /// spelled in two languages and `seller_widget_contract_test.dart` pins them
+  /// against each other — a rename on one side alone opens the app on a product
+  /// screen it never reaches, silently.
+  static const String productHost = 'product';
+
+  /// The link a widget row carries for [productId].
+  static String productAppLink(String productId) =>
+      'solvision://$productHost/$productId';
+
+  /// The product ID when [uri] is the app's own product link, else null.
+  ///
+  /// Deliberately separate from [productIdFromLink], which matches the *shared*
+  /// https link a customer sends to someone else. Two different links with the
+  /// same destination, because they come from two different places: one is opened
+  /// by another app, the other by our own launcher tile. Merging them would mean
+  /// the share handler had to accept a scheme it was never meant to see.
+  ///
+  /// The ID is validated to the same shape a product id has (alphanumeric +
+  /// dashes, ≤ 64 chars) and anything else is null — the fetch is the real
+  /// authority, and a malformed link must not reach it.
+  static String? productIdFromAppLink(Uri uri) {
+    if (uri.scheme != 'solvision' || uri.host != productHost) return null;
+    final segments = uri.pathSegments.where((s) => s.isNotEmpty).toList();
+    if (segments.length != 1) return null;
+    final id = segments.first;
+    if (id.isEmpty || id.length > 64) return null;
+    if (!RegExp(r'^[A-Za-z0-9-]+$').hasMatch(id)) return null;
+    return id;
+  }
+
   /// Live stream of in-app deep links (broadcast — multiple listeners OK).
   Stream<Uri> get uriStream => _appLinks.uriLinkStream;
 

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The rounded panel behind each metric cell.
+
+  Why a pill and not just text: six bare numbers in a grid read as a table, and a
+  table on a home screen is work. A tinted container per metric groups each
+  count with its own label so the eye can skip between them, which is the whole
+  job of a widget — answering "anything on fire?" in well under a second.
+
+  The fill is a low-alpha TINT (@color/seller_widget_pill) rather than a solid
+  colour, so it adapts to whatever the launcher puts behind the card and stays
+  subtle in both themes. A solid fill would also blunt the count colours drawn
+  on top of it, which are the part that has to carry meaning.
+
+  `radius` 14dp: soft enough to read as a deliberate chip at widget scale
+  without the pill-in-pill look that a larger radius gives at this cell size.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/seller_widget_pill" />
+    <corners android:radius="14dp" />
+</shape>

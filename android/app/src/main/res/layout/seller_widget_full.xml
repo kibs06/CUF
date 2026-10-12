@@ -1,0 +1,381 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The seller home-screen widget — "morning briefing" card.
+
+  ══════════════════════════════════════════════════════════════════════════
+  ⚠️  RemoteViews rules apply here, and they are much stricter than a normal
+      Android layout. This tree is inflated by the LAUNCHER's process, so it
+      may only use views from a fixed allowlist: LinearLayout, FrameLayout,
+      RelativeLayout, GridLayout, TextView, ImageView, Button, ProgressBar,
+      Chronometer. A ConstraintLayout here compiles, installs, and then shows
+      "Problem loading widget" on the user's home screen with the only clue in
+      logcat. That is not hypothetical — a plain <View> divider did exactly
+      that in this feature's first build. `RemoteViewsSafetyTest` now fails the
+      build's test suite if any element here is off that list, so add the
+      element only if the test allows it.
+  ══════════════════════════════════════════════════════════════════════════
+
+  ── The design, and the four problems it fixes ──────────────────────────
+
+  Measured against the first working version on a real P30 Pro launcher:
+
+  1. **Ragged columns.** The counters were two rows of DIFFERENT cell counts
+     (three then two), each cell weighted equally — so "0 custom" and "4 unread"
+     started at unrelated x positions and the block read as broken alignment.
+     Now it is six cells in a strict 3 × 2 grid: every column lines up because
+     every cell has the same weight and the same pill geometry.
+
+  2. **~40% dead space.** Content was top-stacked in a `match_parent` card, so a
+     launcher that granted more height than the content needed left a void at
+     the bottom. The grid now carries `layout_weight="1"` with vertical centring,
+     so it absorbs exactly the leftover height at any tile size and the footer
+     is the last thing, not a floating line in the middle.
+
+  3. **Emphasis pointing the wrong way.** Every count was bold rust — including
+     the zeros, so a quiet store shouted. Counts are now coloured by the Kotlin
+     provider from their own value: zeros take the muted tone, and only a
+     non-zero queue takes its semantic colour. The number that matters is the
+     only one that is loud.
+
+  4. **Type with no scale.** Sizes were 9/11/13/26sp — arbitrary, and the 9sp
+     labels were below the 12sp readability floor. The scale is now
+     **12 / 16 / 20 / 32**: one step per role (label, heading, stat, hero), so
+     hierarchy is legible rather than merely present.
+
+  ── Two things deliberately NOT here ─────────────────────────────────────
+
+  * **No icons.** Compound drawables with vector resources are legal in
+    RemoteViews, but an icon must then be authored per metric in both themes
+    and cannot be verified from a desk. Coloured counts over written labels
+    carry the same meaning with less to go wrong — and per the skill's own
+    Color-Only rule, a colour must never be the *sole* signal, so the label is
+    required regardless.
+  * **No `android:alpha` on text.** Alpha tints the text toward whatever is
+    behind it, which defeats the contrast ratios the colours were chosen for.
+    Every tone here is a value chosen to clear 4.5:1, not a transparency.
+
+  All strings are @string resources (placeholders here, overwritten by
+  SellerWidgetProvider.kt) because RemoteViews cannot format or pluralise.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/seller_widget_bg"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <!-- ══ Populated: a signed-in seller with a store ══ -->
+    <LinearLayout
+        android:id="@+id/widget_content"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <!-- ── Header: identity left, freshness right ── -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <!-- 3dp rust bar — the app's mark, and the header's left edge.
+                 A FrameLayout, never a <View>: see the header note. -->
+            <FrameLayout
+                android:layout_width="3dp"
+                android:layout_height="20dp"
+                android:background="@drawable/seller_widget_accent_bar" />
+
+            <TextView
+                android:id="@+id/widget_store_name"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="@string/seller_widget_placeholder_store"
+                android:textColor="@color/seller_widget_title"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <!-- The clock is formatted in Dart and read verbatim — RemoteViews
+                 cannot format, and the payload already carries the string. -->
+            <TextView
+                android:id="@+id/widget_updated"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:maxLines="1"
+                android:text="@string/seller_widget_placeholder_updated"
+                android:textColor="@color/seller_widget_label"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <!-- ── Hero: today's takings, the number the tile exists for ── -->
+        <TextView
+            android:id="@+id/widget_revenue_caption"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:letterSpacing="0.12"
+            android:text="@string/seller_widget_today"
+            android:textAllCaps="true"
+            android:textColor="@color/seller_widget_label"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/widget_revenue"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:maxLines="1"
+            android:text="@string/seller_widget_placeholder_value"
+            android:textColor="@color/seller_widget_revenue"
+            android:textSize="32sp"
+            android:textStyle="bold" />
+
+        <!-- ── The grid. weight=1 so it absorbs the tile's leftover height at
+             ANY size the launcher grants, instead of leaving a void below. ── -->
+        <LinearLayout
+            android:id="@+id/widget_grid"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_marginTop="12dp"
+            android:layout_weight="1"
+            android:gravity="center_vertical"
+            android:orientation="vertical">
+
+            <!-- Row 1 — the three queues that need the seller's hands. -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <!-- Cell: count over label, inside a tinted pill. Each of the
+                     six is identical in weight and padding — that uniformity is
+                     what makes the columns align. -->
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="3dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/seller_widget_pill"
+                    android:orientation="vertical"
+                    android:padding="10dp">
+
+                    <TextView
+                        android:id="@+id/widget_orders"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:maxLines="1"
+                        android:text="@string/seller_widget_placeholder_value"
+                        android:textColor="@color/seller_widget_muted"
+                        android:textSize="20sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:maxLines="1"
+                        android:text="@string/seller_widget_orders"
+                        android:textColor="@color/seller_widget_label"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="3dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/seller_widget_pill"
+                    android:orientation="vertical"
+                    android:padding="10dp">
+
+                    <TextView
+                        android:id="@+id/widget_customs"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:maxLines="1"
+                        android:text="@string/seller_widget_placeholder_value"
+                        android:textColor="@color/seller_widget_muted"
+                        android:textSize="20sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:maxLines="1"
+                        android:text="@string/seller_widget_custom"
+                        android:textColor="@color/seller_widget_label"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="3dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/seller_widget_pill"
+                    android:orientation="vertical"
+                    android:padding="10dp">
+
+                    <TextView
+                        android:id="@+id/widget_holdings"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:maxLines="1"
+                        android:text="@string/seller_widget_placeholder_value"
+                        android:textColor="@color/seller_widget_muted"
+                        android:textSize="20sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:maxLines="1"
+                        android:text="@string/seller_widget_holds"
+                        android:textColor="@color/seller_widget_label"
+                        android:textSize="12sp" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- Row 2 — requests, restock, unread. Same three cells as row 1, so
+                 the columns align; the first version's two-cell row is exactly
+                 what made it look broken. -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:orientation="horizontal">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="3dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/seller_widget_pill"
+                    android:orientation="vertical"
+                    android:padding="10dp">
+
+                    <!-- Previously written by Dart and never displayed: the
+                         payload has carried `pendingReservations` since the
+                         first build, and the layout had no cell for it. -->
+                    <TextView
+                        android:id="@+id/widget_requests"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:maxLines="1"
+                        android:text="@string/seller_widget_placeholder_value"
+                        android:textColor="@color/seller_widget_muted"
+                        android:textSize="20sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:maxLines="1"
+                        android:text="@string/seller_widget_requests"
+                        android:textColor="@color/seller_widget_label"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="3dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/seller_widget_pill"
+                    android:orientation="vertical"
+                    android:padding="10dp">
+
+                    <TextView
+                        android:id="@+id/widget_low_stock"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:maxLines="1"
+                        android:text="@string/seller_widget_placeholder_value"
+                        android:textColor="@color/seller_widget_muted"
+                        android:textSize="20sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:maxLines="1"
+                        android:text="@string/seller_widget_low_stock"
+                        android:textColor="@color/seller_widget_label"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="3dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/seller_widget_pill"
+                    android:orientation="vertical"
+                    android:padding="10dp">
+
+                    <TextView
+                        android:id="@+id/widget_unread"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:maxLines="1"
+                        android:text="@string/seller_widget_placeholder_value"
+                        android:textColor="@color/seller_widget_muted"
+                        android:textSize="20sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:maxLines="1"
+                        android:text="@string/seller_widget_unread"
+                        android:textColor="@color/seller_widget_label"
+                        android:textSize="12sp" />
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- ══ Empty: no seller signed in on this device, or no store yet ══ -->
+    <LinearLayout
+        android:id="@+id/widget_empty"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <FrameLayout
+                android:layout_width="3dp"
+                android:layout_height="20dp"
+                android:background="@drawable/seller_widget_accent_bar" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="@string/seller_widget_empty_title"
+                android:textColor="@color/seller_widget_title"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center"
+            android:text="@string/seller_widget_empty_body"
+            android:textColor="@color/seller_widget_muted"
+            android:textSize="12sp" />
+    </LinearLayout>
+</LinearLayout>

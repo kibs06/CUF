@@ -242,7 +242,14 @@ class _SizeListingScreenState extends State<SizeListingScreen> {
           onTap: () {
             Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (_) => ProductDetailScreen(product: prod),
+                builder: (_) => ProductDetailScreen(
+                  product: prod,
+                  // Swiping walks THIS listing, in its own order — the list the
+                  // customer tapped in — rather than a re-query that would shuffle
+                  // underneath them.
+                  browseList: products,
+                  browseIndex: index,
+                ),
               ),
             );
           },

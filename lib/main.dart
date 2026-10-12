@@ -41,6 +41,7 @@ import 'services/deep_link_service.dart';
 import 'services/supabase_service.dart';
 import 'services/gcash_payment_service.dart';
 import 'services/push_notification_service.dart';
+import 'services/seller_widget_service.dart';
 import 'services/webview_composition.dart';
 import 'widgets/connectivity_banner.dart';
 
@@ -141,6 +142,14 @@ Future<void> main() async {
       if (kDebugMode) debugPrint('Firebase init failed (push notifications disabled): $e');
     }
 
+    // Seller home-screen widget. Both calls are best-effort and deliberately
+    // not awaited into `runApp`: a widget that fails to schedule must not delay
+    // or block the first frame. The scheduled worker is what keeps the tile
+    // fresh, and a sync here only means a seller who just opened the app sees
+    // their own numbers rather than the last session's.
+    unawaited(SellerWidgetService.instance.registerBackgroundRefresh());
+    unawaited(SellerWidgetService.instance.syncForCurrentUser());
+
     runApp(CUFMAIApp(initialThemeMode: initialThemeMode));
   } else {
     runApp(_SupabaseErrorApp());
@@ -167,6 +176,16 @@ class _CUFMAIAppState extends State<CUFMAIApp> with WidgetsBindingObserver {
 
   late Brightness _platformBrightness;
 
+  /// Keeps the seller home-screen widget in step with who is signed in.
+  ///
+  /// Two triggers, because the widget has two ways to go wrong: an **account
+  /// change** must rewrite it immediately (a logout that left the previous
+  /// seller's takings on the home screen would be a data leak on a shared
+  /// phone), and a **return to the foreground** is when the numbers are most
+  /// likely to be worth re-reading. Both funnel into one call that re-derives
+  /// the whole payload, so neither can leave the tile half-updated.
+  StreamSubscription<AuthState>? _authSub;
+
   @override
   void initState() {
     super.initState();
@@ -175,6 +194,17 @@ class _CUFMAIAppState extends State<CUFMAIApp> with WidgetsBindingObserver {
         WidgetsBinding.instance.platformDispatcher.platformBrightness;
     _themeProvider = ThemeProvider(initialMode: widget.initialThemeMode)
       ..addListener(_onThemeChanged);
+
+    _authSub = Supabase.instance.client.auth.onAuthStateChange.listen((_) {
+      unawaited(SellerWidgetService.instance.syncForCurrentUser());
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(SellerWidgetService.instance.syncForCurrentUser());
+    }
   }
 
   /// The user picked a different appearance — rebuild the app in it.
@@ -196,6 +226,7 @@ class _CUFMAIAppState extends State<CUFMAIApp> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _authSub?.cancel();
     _themeProvider
       ..removeListener(_onThemeChanged)
       ..dispose();
@@ -321,7 +352,14 @@ class _DeepLinkHostState extends State<DeepLinkHost> {
     // Shared product links (edge-function URL or future /p/{id}) open the
     // product detail screen directly. Handled before GCash so product URLs
     // never fall through to the payment flow.
-    final productId = DeepLinkService.productIdFromLink(uri);
+    //
+    // The home-screen widget's product rows arrive through this same door, as
+    // `solvision://product/{id}`: a widget row can only carry a URI, and its
+    // destination is the same screen a shared link opens. Checked alongside the
+    // share link rather than in a branch of its own, because the two differ in who
+    // produced the link, not in where it should land.
+    final productId = DeepLinkService.productIdFromLink(uri) ??
+        DeepLinkService.productIdFromAppLink(uri);
     if (productId != null) {
       await _openSharedProduct(productId);
       return;
@@ -360,10 +398,14 @@ class _DeepLinkHostState extends State<DeepLinkHost> {
     }
   }
 
-  /// Opens a shared product link: fetches the product and pushes its detail
-  /// screen. Best-effort — a missing/inactive product or a fetch failure
-  /// shows a SnackBar instead of navigating (mirrors the OG endpoint's
-  /// "no longer available" fallback).
+  /// Opens a product link — shared or from the widget — by fetching the product
+  /// and pushing its detail screen. Best-effort — a missing/inactive product or a
+  /// fetch failure shows a SnackBar instead of navigating (mirrors the OG
+  /// endpoint's "no longer available" fallback).
+  ///
+  /// The widget hands over nothing but an id, on purpose: a tile is a snapshot of
+  /// a product's name and price from up to half an hour ago, and the detail screen
+  /// must show the live row rather than a frozen copy of what the tile drew.
   Future<void> _openSharedProduct(String productId) async {
     // Dedupe: a repeated tap of the same link (before the first push lands)
     // must not push the detail screen twice.

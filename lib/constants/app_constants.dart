@@ -1207,6 +1207,36 @@ class AppConstants {
     return size.toString().trim().isNotEmpty;
   }
 
+  // --- SELLER HOME-SCREEN WIDGET ---
+  /// Gates the seller home-screen widget: whether the app writes the seller's
+  /// numbers out and schedules the background refresh that keeps them moving.
+  ///
+  /// **ON by default**, and the switch exists because this surface is new and
+  /// unmeasured. Off, the app simply never writes the widget payload and never
+  /// registers the periodic worker — a phone that already has the widget placed
+  /// keeps showing whatever was last written (the OS owns the widget, not us),
+  /// and the correct cleanup for that is to clear it on sign-out, which
+  /// [SellerWidgetService.clear] does regardless of this flag.
+  ///
+  /// **How it is turned off:** `--dart-define=SELLER_WIDGET=false`. That is the
+  /// whole rollback — no native code is removed by it, so the widget tile stays
+  /// on the launcher and goes to its own empty state rather than crashing.
+  static const bool sellerWidgetEnabled =
+      bool.fromEnvironment('SELLER_WIDGET', defaultValue: true);
+
+  /// Gates the CUSTOMER half of the same widget: whether a phone signed in as a
+  /// customer gets a rotating feed of products instead of an empty tile.
+  ///
+  /// A switch of its own rather than reusing [sellerWidgetEnabled], because the
+  /// two halves fail differently and are read by different people: the seller
+  /// payload is a handful of counters, and this half downloads photographs in the
+  /// background. Off, the customer tile goes back to exactly the empty state it
+  /// had before this existed — no second design is invented by the rollback.
+  ///
+  /// **How it is turned off:** `--dart-define=CUSTOMER_WIDGET=false`.
+  static const bool customerWidgetEnabled =
+      bool.fromEnvironment('CUSTOMER_WIDGET', defaultValue: true);
+
   // --- PRIVATE VERIFICATION STORAGE ---
   /// Private bucket for ID photos, selfies, barangay proofs and Tier 2
   /// business docs. Owner-only + admin read (see migration

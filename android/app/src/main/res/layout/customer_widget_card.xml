@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+The CUSTOMER half of the seller widget: ONE product, as a card.
+
+⚠️ RemoteViews rules apply — only allowlisted classes (`LinearLayout`,
+`FrameLayout`, `ImageView`, `TextView`), and `remote_views_safety_test.dart`
+scans this file. Note that the drawables are named `seller_widget_*`: the tile
+began as a seller-only surface and the card's fill, hairline, pill and accent bar
+are literally the same resources rather than renamed copies that could drift.
+The colour names this layout uses are aliases (`customer_widget_*`) so it does
+not read as if it borrowed the seller's palette by accident.
+
+── What this draws ───────────────────────────────────────────────────────
+
+A 3×3 tile showing a single product: a photograph, its name and its price and —
+when a sale is live — the discount tag. The shelf is named in the header (New
+arrivals / In your size / On sale, plus the size when the shelf is the size one),
+and **which** product is on the card changes on every refresh: the pick is random
+within the shelf, on the Dart side (`CustomerWidgetService`).
+
+── The two sizing decisions, both made against distortion ────────────────
+
+* **The photograph never gets a shape of its own (`scaleType="fitCenter"`).** A
+  launcher's tile is a portrait box — measured at 624×942 px, i.e. 208×314dp, on
+  the phone this was verified against — and the previous three-product version
+  shipped a fault that only that box could reveal: cells 154×740 px with each
+  photograph a 106×563 strip, because `centerCrop` fills whatever box it is given
+  by *cutting the picture down to* it. `fitCenter` cannot do that: the whole
+  product is drawn inside the box at its own aspect ratio, letterboxed against the
+  card's pale pill, whatever the tile's shape turns out to be.
+* **The photograph absorbs the slack** (`0dp` + `layout_weight="1"`), the same
+  rule the seller's tiles follow: a launcher that grants extra height gives it to
+  the picture rather than to a void under the card, and the name and price stay
+  pinned above the footer at every size. The card itself fills the tile for the
+  same reason — with one product there is nothing to centre *against*, and a
+  `wrap_content` card would pool the slack at the bottom.
+
+The provider fills `customer_product_1` / `customer_image_1` / `customer_name_1` /
+`customer_price_1` / `customer_badge_1` — slot 1 of the payload, which is the only
+slot there is (`kCustomerWidgetProductSlots`). The keys stay slot-indexed so the
+wire format and the provider's arrays do not change shape with the count.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/seller_widget_bg"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <LinearLayout
+        android:id="@+id/widget_content"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <!-- ── Header: which shelf, and — for the size shelf — the size it was
+             built on. The accent bar is a FrameLayout, not a View: RemoteViews
+             inflates from an allowlist and a plain View is not on it. ── -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <FrameLayout
+                android:layout_width="3dp"
+                android:layout_height="14dp"
+                android:background="@drawable/seller_widget_accent_bar" />
+
+            <TextView
+                android:id="@+id/customer_group_label"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="@string/customer_widget_placeholder_group"
+                android:textColor="@color/customer_widget_title"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/customer_size_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:maxLines="1"
+                android:text="@string/customer_widget_size_prefix"
+                android:textColor="@color/customer_widget_label"
+                android:textSize="11sp"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <!-- ── The card: the whole middle of the tile, one product in it. ── -->
+        <LinearLayout
+            android:id="@+id/customer_product_1"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_marginTop="8dp"
+            android:layout_weight="1"
+            android:background="@drawable/seller_widget_pill"
+            android:orientation="vertical"
+            android:padding="10dp">
+
+            <ImageView
+                android:id="@+id/customer_image_1"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:contentDescription="@string/customer_widget_placeholder_name"
+                android:scaleType="fitCenter"
+                android:src="@drawable/seller_widget_pill" />
+
+            <TextView
+                android:id="@+id/customer_name_1"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="@string/customer_widget_placeholder_name"
+                android:textColor="@color/customer_widget_title"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/customer_price_1"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:maxLines="1"
+                    android:text="@string/customer_widget_placeholder_price"
+                    android:textColor="@color/customer_widget_price"
+                    android:textSize="19sp"
+                    android:textStyle="bold" />
+
+                <!-- A live discount, or blank: the provider hides the view when
+                     the payload's badge is empty, which is two of the three
+                     shelves. -->
+                <TextView
+                    android:id="@+id/customer_badge_1"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:maxLines="1"
+                    android:textColor="@color/customer_widget_badge"
+                    android:textSize="12sp"
+                    android:textStyle="bold"
+                    android:visibility="gone" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- ── Footer: freshness, the last line at every height. An absolute
+             clock, because the tile has no timer and a frozen "5m ago" would
+             become a lie the longer it sat there. ── -->
+        <TextView
+            android:id="@+id/customer_updated"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:maxLines="1"
+            android:text="@string/customer_widget_placeholder_updated"
+            android:textColor="@color/customer_widget_label"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <!-- ══ Empty: signed in as a customer with nothing to show ══ -->
+    <LinearLayout
+        android:id="@+id/widget_empty"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="@string/customer_widget_empty_body"
+            android:textColor="@color/customer_widget_muted"
+            android:textSize="12sp" />
+    </LinearLayout>
+</LinearLayout>

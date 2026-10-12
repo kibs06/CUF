@@ -470,6 +470,13 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                                           builder: (context) =>
                                               ProductDetailScreen(
                                                 product: prod,
+                                                // The On-sale rail, in the rail's
+                                                // own order, with the index the
+                                                // card was built from — so swiping
+                                                // walks the shelf behind the tap.
+                                                browseList: saleProducts,
+                                                browseIndex: index -
+                                                    (maxDiscount == null ? 0 : 1),
                                               ),
                                         ),
                                       );
@@ -592,7 +599,13 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                                     Navigator.of(context).push(
                                       MaterialPageRoute(
                                         builder: (context) =>
-                                            ProductDetailScreen(product: prod),
+                                            ProductDetailScreen(
+                                              product: prod,
+                                              // The home feed's own grid — the list
+                                              // the customer was scrolling.
+                                              browseList: filteredProducts,
+                                              browseIndex: index - 1,
+                                            ),
                                       ),
                                     );
                                   },

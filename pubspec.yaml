@@ -97,6 +97,8 @@ dependencies:
   # pins no new version.
   webview_flutter_android: ^4.14.1
   webview_flutter_platform_interface: ^2.15.1
+  home_widget: ^0.10.0
+  workmanager: ^0.10.10
 dev_dependencies:
   flutter_test:
     sdk: flutter

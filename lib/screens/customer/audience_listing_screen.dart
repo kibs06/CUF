@@ -232,7 +232,11 @@ class _AudienceListingScreenState extends State<AudienceListingScreen> {
           onTap: () {
             Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (_) => ProductDetailScreen(product: prod),
+                builder: (_) => ProductDetailScreen(
+                  product: prod,
+                  browseList: products,
+                  browseIndex: index,
+                ),
               ),
             );
           },

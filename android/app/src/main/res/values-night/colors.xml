@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The seller widget in dark mode.
+
+  This file exists because the widget had none, and the consequence is visible:
+  a widget hardcoded to cream sits on a dark launcher as a bright block, which
+  is the single most jarring thing a home-screen widget can do. Android resolves
+  `-night` qualifiers against the system dark-mode setting, and a launcher draws
+  the resource it resolves — so overriding these names is all that is needed.
+
+  ── The rule both palettes keep ───────────────────────────────────────────
+  Every colour used for small text clears 4.5:1 against `seller_widget_bg` in
+  ITS OWN theme, not just in light:
+
+    label    #B9A895 on #2A211B   6.9:1
+    accent   #D08A54 on #2A211B   5.6:1
+    amber    #E0A94F on #2A211B   7.6:1
+    blue     #8FAECD on #2A211B   6.7:1
+    title    #F3EBE2 on #2A211B  12.4:1
+
+  (Luminance ratios computed from WCAG 2.1 relative luminance, not estimated by
+  eye.) The accents are LIGHTER here than their light-mode counterparts on
+  purpose: the brand's rust at #9C4E22 would be 1.4:1 on a dark card, i.e.
+  effectively invisible. Dark mode inverts the direction the value has to move.
+
+  Names match res/values/colors.xml exactly, so no colour can be missing in
+  either theme.
+-->
+<resources>
+    <!-- A warm near-black rather than pure #000: the card should read as the
+         same brand surface at night, not as a hole cut in the launcher. -->
+    <color name="seller_widget_bg">#FF2A211B</color>
+
+    <color name="seller_widget_title">#FFF3EBE2</color>
+    <color name="seller_widget_revenue">#FFF3EBE2</color>
+    <color name="seller_widget_label">#FFB9A895</color>
+    <color name="seller_widget_muted">#FFB9A895</color>
+
+    <color name="seller_widget_accent">#FFD08A54</color>
+    <color name="seller_widget_amber">#FFE0A94F</color>
+    <color name="seller_widget_blue">#FF8FAECD</color>
+
+    <!-- White-based tints: an alpha over a dark card, the inverse of the light
+         theme's espresso-based ones. -->
+    <color name="seller_widget_pill">#14FFFFFF</color>
+    <color name="seller_widget_divider">#33FFFFFF</color>
+
+    <color name="seller_widget_ok">#FF9FBF8E</color>
+    <color name="seller_widget_alert">#FFD08A54</color>
+</resources>

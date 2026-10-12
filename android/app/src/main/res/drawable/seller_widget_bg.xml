@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The card the seller widget draws itself on.
+
+  A RemoteViews host draws with a small subset of Android — a plain background
+  colour has square corners — so this shape is what gives the tile the same soft
+  corners as the seller cards inside the app. It is not decoration: a widget with
+  square corners on a launcher full of rounded ones reads as broken rather than
+  as simple.
+
+  `radius` 22dp: matches the app's card radius at widget scale. The default
+  theme's radius does not reach a widget, which is drawn outside Flutter's
+  Material tree entirely.
+
+  The fill is @color/seller_widget_bg, which res/values-night/colors.xml
+  overrides — so this one drawable is correct in both themes with no
+  `-night` copy. That is the reason the colour is not inlined here.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/seller_widget_bg" />
+    <corners android:radius="22dp" />
+</shape>

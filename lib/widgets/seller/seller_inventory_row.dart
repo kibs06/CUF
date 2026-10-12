@@ -11,6 +11,18 @@ import '../../constants/seller_theme_constants.dart';
 /// the inline field, and the sheet all agree.
 const int kMaxStockPerSize = 99;
 
+/// What "low stock" means, app-wide: a size at or below this many units.
+///
+/// A top-level constant (like [kMaxStockPerSize] above) rather than a private
+/// static, because more than one surface has to agree on it: the stock sheet's
+/// amber state, the Manage Products "Low Stock" filter,
+/// `ProductService._syncInventoryFromVariants`, and the seller home-screen
+/// widget's low-stock count. It was previously spelled `5` in each of those
+/// places *and* as a private `lowStockThreshold` here — the private one is kept
+/// below as an alias so this file keeps reading naturally, but the value lives
+/// once, here.
+const int kLowStockThreshold = 5;
+
 /// Per-size stock stepper row inside the Adjust Stock bottom sheet.
 ///
 /// REDESIGN NOTES (Aug 2026):
@@ -58,9 +70,9 @@ class SellerInventoryRow extends StatefulWidget {
 
 class _SellerInventoryRowState extends State<SellerInventoryRow>
     with SingleTickerProviderStateMixin {
-  /// Matches the low-stock threshold used by the Manage Products "Low Stock"
-  /// filter and `ProductService._syncInventoryFromVariants` (stock ≤ 5).
-  static const int lowStockThreshold = 5;
+  /// The app-wide low-stock threshold — see [kLowStockThreshold], which is the
+  /// one definition of the value.
+  static const int lowStockThreshold = kLowStockThreshold;
 
   late int _stock;
 

@@ -330,7 +330,13 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
           onTap: () {
             Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (_) => ProductDetailScreen(product: prod),
+                builder: (_) => ProductDetailScreen(
+                  product: prod,
+                  // The results list as it stands — swiping moves through the
+                  // search the customer is looking at, not the whole catalog.
+                  browseList: results,
+                  browseIndex: index,
+                ),
               ),
             );
           },

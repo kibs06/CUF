@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The seller widget at its smallest — roughly 2×2 cells, the square tile.
+
+  ⚠️ RemoteViews rules apply: only allowlisted classes (LinearLayout,
+  FrameLayout, TextView, ImageView, …). `RemoteViewsSafetyTest` scans this file
+  too; a plain <View> here shows "Problem loading widget" on the launcher.
+
+  ── What survives at this size, and why ──────────────────────────────────
+
+  A square tile asks one question — *"is anything wrong?"* — so four lines, in
+  order of who wins the space:
+
+    1. **Whose store** (identity — otherwise a small tile is an unlabelled ₱).
+    2. **Today's takings**, under a `TODAY` caption.
+    3. **Whether anything needs doing** — the payload's own `attentionCount`
+       (orders + custom + holds + requests), as "3 to do" or "All clear".
+
+  What is deliberately NOT here: the six-cell grid and the "Updated" clock. The
+  grid cannot fit three columns at this width (each would be ~30dp), and the
+  clock is the least valuable line when there are only four. **The freshness
+  trade is real and is the cost of this size**: a 2×2 tile can be read as
+  current when it is up to 30 minutes old. The taller tiers all carry the
+  timestamp, and a seller who drags the tile bigger gets it back.
+
+  ── Two corrections against what this file used to do ────────────────────
+
+  * **The `TODAY` caption was missing, and its absence was the worse fault.**
+    With the store name directly above the figure, "₱0" read as a *balance* —
+    the tile's one number had no unit and no period. The caption costs ~16dp and
+    is the smallest way to say what the number means.
+
+  * **The content used to be pinned to the top with `match_parent` and a single
+    vertical centre, so any height the launcher granted beyond four lines became
+    a hole under the text.** On a real tile that was most of the tile. The hero
+    block now carries `layout_weight="1"` and centres *itself* in the leftover,
+    which spreads the slack around the figure instead of leaving it in one lump
+    at the bottom — and does it at any height, not the one size it was designed
+    against. The identity stays first and the to-do line stays last.
+
+  The `attention` line is why `seller_attention_count` exists in the payload:
+  Dart writes it, and this tier is the only reader — the extra numbers here are
+  summarised, not listed, which is the point of a glance-size tile.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/seller_widget_bg"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <!-- ══ Populated ══ -->
+    <LinearLayout
+        android:id="@+id/widget_content"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <!-- ── Header: identity, at the top and never moved by extra height. ── -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <FrameLayout
+                android:layout_width="3dp"
+                android:layout_height="14dp"
+                android:background="@drawable/seller_widget_accent_bar" />
+
+            <TextView
+                android:id="@+id/widget_store_name"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="@string/seller_widget_placeholder_store"
+                android:textColor="@color/seller_widget_title"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- ── Hero, centred in the leftover height. `0dp` + weight makes this
+             container exactly the slack the four lines did not use, and
+             `center_vertical` puts the caption and figure in the middle of it
+             rather than leaving the slack as one hole below them. ── -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:gravity="center_vertical"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/widget_revenue_caption"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:letterSpacing="0.12"
+                android:text="@string/seller_widget_today"
+                android:textAllCaps="true"
+                android:textColor="@color/seller_widget_label"
+                android:textSize="11sp" />
+
+            <TextView
+                android:id="@+id/widget_revenue"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:maxLines="1"
+                android:text="@string/seller_widget_placeholder_value"
+                android:textColor="@color/seller_widget_revenue"
+                android:textSize="30sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- "3 to do" / "All clear" — coloured by the provider from its own
+             value, so a quiet store reads calmly and a busy one is visible
+             without reading the words. The words are still there: colour is
+             never the only signal. -->
+        <TextView
+            android:id="@+id/widget_attention"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="@string/seller_widget_attention_none"
+            android:textColor="@color/seller_widget_muted"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <!-- ══ Empty: no seller signed in on this device, or no store yet ══ -->
+    <LinearLayout
+        android:id="@+id/widget_empty"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="@string/seller_widget_empty_body_short"
+            android:textColor="@color/seller_widget_muted"
+            android:textSize="12sp" />
+    </LinearLayout>
+</LinearLayout>

@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Strings used by the seller home-screen widget.
+
+  The placeholder_ values never reach a user's eyes — the provider overwrites
+  every one of them in onUpdate — but a RemoteViews layout has to declare *some*
+  text for each TextView, and the preview the launcher renders when a widget is
+  being picked is built before any data is written, so these are what the
+  gallery shows.
+
+  ── Why the metric labels are plural, always ──────────────────────────────
+  Each cell is a count stacked over its label ("4 / unread"), so the label never
+  has to agree with the number and can never render as "1 orders". This is also
+  why the provider no longer builds "3 orders" strings: a stat tile reads as two
+  registers, and a label that changes width between refreshes makes the whole
+  grid twitch.
+-->
+<resources>
+    <!-- Widget picker (the gallery shown when long-pressing the home screen). -->
+    <string name="seller_widget_label">Seller briefing</string>
+    <string name="seller_widget_description">Your store at a glance: today\u2019s sales, orders to action, holds, low stock and unread messages.</string>
+
+    <string name="seller_widget_today">Today</string>
+
+    <!-- Metric labels, one per grid cell. -->
+    <string name="seller_widget_orders">orders</string>
+    <string name="seller_widget_custom">custom</string>
+    <string name="seller_widget_holds">holds</string>
+    <string name="seller_widget_requests">requests</string>
+    <string name="seller_widget_low_stock">low stock</string>
+    <string name="seller_widget_unread">unread</string>
+
+    <!-- The 2x2 tile's third line. `attentionCount` is every queue that needs
+         the seller (orders + custom + holds + requests), so this is the one
+         summary that stays true at any size. "All clear" rather than "0" because
+         at 2x2 there is no room for a label explaining what the zero counts. -->
+    <string name="seller_widget_attention_none">All clear</string>
+    <string name="seller_widget_attention_count">%1$d to do</string>
+
+    <!-- Empty state: no seller signed in on this device. -->
+    <string name="seller_widget_empty_title">Seller briefing</string>
+    <string name="seller_widget_empty_body">Sign in to a seller account\nto see your store here.</string>
+    <!-- Shorter body for the 2x2 and medium tiles, which are wide-short or
+         square: the two-line version wraps awkwardly in both. -->
+    <string name="seller_widget_empty_body_short">Sign in as a seller.</string>
+
+    <!-- "Updated 3:07 PM" — the clock itself is formatted in Dart, not here;
+         RemoteViews cannot format, and the payload carries the string. -->
+    <string name="seller_widget_updated_at">Updated %1$s</string>
+
+    <!-- One spoken sentence for the whole tile.
+
+         Set as the content description of the ROOT layout rather than letting
+         TalkBack walk the eleven TextViews, which would read a seller their own
+         widget as "Janella, Today, zero, orders, zero, custom, …" — numbers
+         detached from what they count. Naming the container collapses it into a
+         single node with this sentence. -->
+    <string name="seller_widget_a11y_summary">Today %1$s. %2$d orders, %3$d custom requests, %4$d pickup holds, %5$d reservation requests, %6$d low stock, %7$d unread messages. Updated %8$s.</string>
+
+    <!-- The medium tile shows three cells, so its sentence names exactly those
+         three. Reading out a metric the tile does not draw would be worse than
+         reading nothing: the seller would go looking for it. -->
+    <string name="seller_widget_a11y_summary_medium">Today %1$s. %2$d orders, %3$d low stock, %4$d unread messages. Updated %5$s.</string>
+
+    <!-- The 2x2 tile names only what it draws: the revenue and the to-do line.
+         %2$s is that same line, so the spoken and visible text cannot diverge. -->
+    <string name="seller_widget_a11y_summary_small">Today %1$s. %2$s.</string>
+
+    <!-- Preview/placeholder text, always replaced by the provider. -->
+    <string name="seller_widget_placeholder_store">Your store</string>
+    <string name="seller_widget_placeholder_value">\u2014</string>
+    <string name="seller_widget_placeholder_updated">Updated \u2014</string>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         The CUSTOMER half of the same tile.
+
+         One group of products at a time, rotating between the three below — the
+         tile has room for a photograph and a price, not for three shelves with
+         their own headings.
+
+         These labels are the reason the payload carries the group's WIRE VALUE
+         ("new" / "suggested" / "sale") and not its name: a group's name is static
+         copy, so it lives here with the rest of the widget's words, and Kotlin
+         picks it. The three values are pinned against the Dart enum by
+         `seller_widget_contract_test.dart`, because a renamed one does not fail a
+         build — it prints a placeholder on the tile.
+         ══════════════════════════════════════════════════════════════════════ -->
+    <string name="customer_widget_group_new">New arrivals</string>
+    <string name="customer_widget_group_suggested">In your size</string>
+    <string name="customer_widget_group_sale">On sale</string>
+    <!-- A group value this build does not recognise — a payload written by a newer
+         or older version, which the launcher keeps drawing because it owns the tile.
+         Neutral rather than the first group's name: naming a real shelf wrong is
+         worse than naming it vaguely. -->
+    <string name="customer_widget_group_other">Picks for you</string>
+
+    <!-- "Updated 3:07 PM" — the clock is formatted in Dart, as on the seller
+         side, because RemoteViews cannot format and the payload carries it. -->
+    <string name="customer_widget_updated">Updated %1$s</string>
+
+    <!-- A customer with a size on file does not need the unit spelled out twice
+         ("EU" over "42"); the value carries it, e.g. "EU 42". -->
+    <string name="customer_widget_size_prefix">%1$s</string>
+
+    <!-- Signed in as a customer and there is nothing to show: an empty catalog,
+         or a refresh whose queries failed. Deliberately not the seller layouts'
+         "sign in" line — this customer IS signed in, and telling them otherwise
+         would send them looking for a problem that is not theirs. -->
+    <string name="customer_widget_empty_body">Nothing to show right now.</string>
+
+    <!-- Preview/placeholder text, always replaced by the provider. -->
+    <string name="customer_widget_placeholder_group">New arrivals</string>
+    <string name="customer_widget_placeholder_name">Product name</string>
+    <string name="customer_widget_placeholder_price">\u20b10</string>
+    <string name="customer_widget_placeholder_updated">Updated \u2014</string>
+</resources>

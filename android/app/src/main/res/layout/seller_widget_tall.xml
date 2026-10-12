@@ -1,0 +1,260 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The seller widget at TALL size — narrow and deep, roughly 2×3 cells.
+
+  ⚠️ RemoteViews rules apply: only allowlisted classes, and
+  `RemoteViewsSafetyTest` scans this file too.
+
+  ── Why this tier exists ─────────────────────────────────────────────────
+
+  Measured on the seller's own launcher (a P30 Pro, EMUI grid), a two-column
+  tile dragged taller kept drawing the 2×2 layout: the old rule only asked
+  whether the tile was WIDE enough for three columns, so extra HEIGHT bought
+  nothing and a 2×3 was a pixel-for-pixel copy of a 2×2 with a hole under it.
+  That is the fault this file fixes — the tile had height to spend and no tier
+  that spent it.
+
+  Height is what a two-column tile can actually grow, so this tier spends it on
+  the three numbers the medium tier shows side by side, stacked instead:
+
+      ▍Janella
+      TODAY
+      ₱0
+      ┌───┬──────────────┐
+      │ 0 │ orders       │
+      │ 2 │ low stock    │
+      │ 4 │ unread       │
+      └───┴──────────────┘
+      Updated 3:07 PM
+
+  ── The three choices in it ──────────────────────────────────────────────
+
+  * **The same three metrics as `seller_widget_medium.xml`, not more.** A tall
+    tile is still narrow, so a second column is not available; the alternative
+    to three rows would be six cramped ones. Keeping the medium tier's trio —
+    orders, low stock, unread — means a number never changes MEANING when the
+    user drags between the two shapes. The three that are missing (`custom`,
+    `holds`, `requests`) are still folded into the 2×2's "to do" line, so
+    nothing is lost, only deferred to a size that can draw it.
+
+  * **A fixed-width lead column for the counts (34dp) rather than a weighted
+    one.** The counts are 1–2 digits; weighting them would let a two-digit count
+    shove its label sideways and the three labels would stop sharing a left
+    edge — the same ragged-column fault the full tier documents at length.
+
+  * **A row-per-metric pill instead of a bare line.** A full-width tinted band
+    reads as one blocked group rather than three floating numbers, and it is the
+    pill vocabulary the medium and full tiers already use at this size.
+
+  ── The band that absorbs the height ─────────────────────────────────────
+
+  The three rows sit in a `layout_height="0dp" / layout_weight="1"` container
+  with vertical centring, so on a tile dragged taller than this content the rows
+  are centred in the leftover instead of piling at the top with a void beneath.
+  The `Updated` line stays last, under the band, at every height.
+
+  `widget_store_name`, `widget_revenue`, `widget_orders`, `widget_low_stock` and
+  `widget_unread` are the same ids the other tiers use: one id means one thing at
+  every size, so the provider fills them with the same rule and the same colours.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/seller_widget_bg"
+    android:orientation="vertical"
+    android:padding="14dp">
+
+    <!-- ══ Populated ══ -->
+    <LinearLayout
+        android:id="@+id/widget_content"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <!-- ── Header: identity. The clock cannot share this line: at two
+             columns wide, "Janella" plus "Updated 3:07 PM" would ellipsize one
+             of them, so freshness moves to the footer. ── -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <FrameLayout
+                android:layout_width="3dp"
+                android:layout_height="18dp"
+                android:background="@drawable/seller_widget_accent_bar" />
+
+            <TextView
+                android:id="@+id/widget_store_name"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="@string/seller_widget_placeholder_store"
+                android:textColor="@color/seller_widget_title"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- ── Hero: today's takings. The caption is here because the revenue
+             sits below a store name, not below a tile edge — on a narrow tier
+             an unlabelled ₱ reads as a balance rather than today's sales. ── -->
+        <TextView
+            android:id="@+id/widget_revenue_caption"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:letterSpacing="0.12"
+            android:text="@string/seller_widget_today"
+            android:textAllCaps="true"
+            android:textColor="@color/seller_widget_label"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/widget_revenue"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:maxLines="1"
+            android:text="@string/seller_widget_placeholder_value"
+            android:textColor="@color/seller_widget_revenue"
+            android:textSize="28sp"
+            android:textStyle="bold" />
+
+        <!-- ── The band: three stacked metric rows, centred in whatever height
+             the launcher grants beyond the content's floor. ── -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_marginTop="8dp"
+            android:layout_weight="1"
+            android:gravity="center_vertical"
+            android:orientation="vertical">
+
+            <!-- Row: orders — a customer is waiting. -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:background="@drawable/seller_widget_pill"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:padding="8dp">
+
+                <TextView
+                    android:id="@+id/widget_orders"
+                    android:layout_width="34dp"
+                    android:layout_height="wrap_content"
+                    android:maxLines="1"
+                    android:text="@string/seller_widget_placeholder_value"
+                    android:textColor="@color/seller_widget_muted"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:maxLines="1"
+                    android:text="@string/seller_widget_orders"
+                    android:textColor="@color/seller_widget_label"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <!-- Row: low stock — the shelf is running out. Amber, like every
+                 other tier: restock warns about the future, where the queues
+                 above are work waiting now. -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:background="@drawable/seller_widget_pill"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:padding="8dp">
+
+                <TextView
+                    android:id="@+id/widget_low_stock"
+                    android:layout_width="34dp"
+                    android:layout_height="wrap_content"
+                    android:maxLines="1"
+                    android:text="@string/seller_widget_placeholder_value"
+                    android:textColor="@color/seller_widget_muted"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:maxLines="1"
+                    android:text="@string/seller_widget_low_stock"
+                    android:textColor="@color/seller_widget_label"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <!-- Row: unread — someone is trying to reach the store. -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:background="@drawable/seller_widget_pill"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:padding="8dp">
+
+                <TextView
+                    android:id="@+id/widget_unread"
+                    android:layout_width="34dp"
+                    android:layout_height="wrap_content"
+                    android:maxLines="1"
+                    android:text="@string/seller_widget_placeholder_value"
+                    android:textColor="@color/seller_widget_muted"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:maxLines="1"
+                    android:text="@string/seller_widget_unread"
+                    android:textColor="@color/seller_widget_label"
+                    android:textSize="12sp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- ── Footer: freshness. Last line at every height, so it can never be
+             pushed off the bottom by the band above it. ── -->
+        <TextView
+            android:id="@+id/widget_updated"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:maxLines="1"
+            android:text="@string/seller_widget_placeholder_updated"
+            android:textColor="@color/seller_widget_label"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <!-- ══ Empty: no seller signed in on this device, or no store yet ══ -->
+    <LinearLayout
+        android:id="@+id/widget_empty"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="@string/seller_widget_empty_body_short"
+            android:textColor="@color/seller_widget_muted"
+            android:textSize="12sp" />
+    </LinearLayout>
+</LinearLayout>

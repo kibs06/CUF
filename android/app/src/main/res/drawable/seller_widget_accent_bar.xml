@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The short vertical bar left of the store name.
+
+  It does three jobs at once, which is why it is worth a whole drawable:
+
+    * **Identity.** It is the app's rust against the cream card, so the tile is
+      recognisable as SoleVision at a glance among a launcher full of widgets.
+    * **Anchor.** It top-aligns the store name visually and gives the header a
+      left edge, so the name and the "Updated" time stop floating.
+    * **Legibility.** Nothing else marks where the header ends and the figures
+      begin — a divider there would add another line to a surface that already
+      had too many.
+
+  Drawn as a shape rather than a <View>: RemoteViews inflates only an allowlist
+  of classes and plain android.view.View is not on it. See
+  test/services/remote_views_safety_test.dart.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/seller_widget_accent" />
+    <corners android:radius="2dp" />
+</shape>

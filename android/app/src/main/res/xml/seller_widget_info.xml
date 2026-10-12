@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Metadata for the seller home-screen widget.
+
+  `updatePeriodMillis` is 0 — **the system will not poll us, and that is
+  intentional.** A value here would have Android wake the process on its own
+  schedule to call onUpdate, which can only re-read whatever the Flutter side
+  last wrote; it cannot fetch anything (the widget has no Supabase session of its
+  own). The real refresh is the WorkManager job in SellerWidgetService, which
+  DOES fetch and then pushes a redraw. Leaving this non-zero as well would mean
+  two clocks redrawing the same data, one of them uselessly.
+
+  ── The size range: 2×2 up to full ────────────────────────────────────────
+  The widget is resizable across the whole range, and **draws a different layout
+  at each tier** rather than stretching one:
+
+    2×2       seller_widget_small.xml   store · today's takings · "3 to do" / "All clear"
+    2×3+      seller_widget_tall.xml    + orders / low stock / unread, stacked
+    4×2       seller_widget_medium.xml  + those three side by side, plus the clock
+    4×3+      seller_widget_full.xml    + all six metrics, two aligned rows
+
+  SellerWidgetProvider picks the tier from each instance's own size (the
+  `OPTION_APPWIDGET_*` bundle) on every update AND on every resize, via
+  `onAppWidgetOptionsChanged`. So the choice follows the widget the user
+  actually has, not the one that was originally placed. The tall tier exists
+  because height is what a two-column tile can actually grow, and the first
+  version of this range had no tier that spent it.
+
+  ⚠️ Those thresholds are tested against the launcher's REPORTED numbers, which
+  are not the drawn size: on the device this was measured on, a full-width tile
+  measuring 408dp on screen reported 304. See `WIDE_MIN_WIDTH_DP` in
+  SellerWidgetProvider.kt before changing any number here.
+
+  `minWidth`/`minHeight` are the 2×2 floor (~110dp is Android's own estimate for
+  two cells) and `minResizeWidth`/`minResizeHeight` match it — otherwise the
+  launcher would offer a resize handle that snaps back. There is deliberately no
+  maximum: "full size" is unbounded, and the full layout's grid carries
+  `layout_weight="1"`, so extra height goes to spacing rather than to a void.
+
+  `targetCell*` stays 4×3 — the size the widget is *placed* at, which is the one
+  that shows the complete design. A user who wants the glance-only tile drags it
+  smaller once; that choice then persists.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/seller_widget_description"
+    android:initialLayout="@layout/seller_widget_full"
+    android:minHeight="110dp"
+    android:minResizeHeight="110dp"
+    android:minResizeWidth="110dp"
+    android:minWidth="110dp"
+    android:previewLayout="@layout/seller_widget_full"
+    android:resizeMode="horizontal|vertical"
+    android:targetCellHeight="3"
+    android:targetCellWidth="4"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen" />

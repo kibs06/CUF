@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Entitlements for the SellerWidget extension target.
+
+  The App Group is the ONLY storage an app and its widget extension can share —
+  separate processes, separate sandboxes — so without this entry the widget can
+  never see the payload `SellerWidgetService` writes, and renders its empty state
+  forever with no error anywhere.
+
+  ⚠️ This must match, character for character:
+
+    * `kAppGroupId` in SellerWidget.swift
+    * `SellerWidgetService.iOSAppGroupId` in lib/services/seller_widget_service.dart
+    * the same key in the RUNNER target's entitlements (the app is the writer)
+
+  The Runner half is NOT included here because `Runner/Runner.entitlements`
+  already exists for Universal Links and is itself not yet wired into the Xcode
+  project (see the note in that file). Both halves are added in Xcode — see
+  ios/README_SELLER_WIDGET.md.
+-->
+<plist version="1.0">
+<dict>
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.solevision.app</string>
+	</array>
+</dict>
+</plist>
