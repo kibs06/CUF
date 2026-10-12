@@ -192,6 +192,9 @@ project's Site URL fallback — and Supabase hosts no reset UI of its own.
 - "Reset password" button shown when account is locked (5+ failed attempts)
 - Uses the email that triggered the lockout
 - Account remains locked until reset or 30-minute timer expires
+- Shows **where the attempts came from** — the place the attempt's IP resolves
+to, its coordinate pair and the network that owns the address (see
+[Where the attempt came from](#where-the-attempt-came-from))
 
 ---
 
@@ -289,7 +292,9 @@ than restating copy of its own.
 | File | Purpose |
 |------|---------|
 | `lib/screens/auth/account_entry_screen.dart` | Login screen with forgot password link |
-| `lib/widgets/lockout_overlay.dart` | Lockout overlay with reset button |
+| `lib/widgets/lockout_overlay.dart` | Lockout overlay with reset button, the attempt's device/IP **and its approximate location** |
+| `lib/services/ip_geolocation_service.dart` | `IpLocation` + `IpGeolocationService` — the city-level lookup behind every location the lockout shows |
+| `test/services/ip_geolocation_service_test.dart`, `test/widgets/lockout_overlay_test.dart` | The contracts: parsing/formatting against a real measured `ipwho.is` body, the HTTPS host, every failure path returning null, and the overlay showing the place, the caveat, and nothing at all when there is no location |
 | `lib/providers/auth_provider.dart` | `resetPassword()`, plus the recovery link's state machine (`pendingPasswordRecovery`, `completePasswordRecoveryFromEmailLink`, `applyRecoveredPassword`, `cancelPasswordRecovery`) |
 | `lib/services/auth_service.dart` | Supabase `resetPasswordForEmail()` call and `updatePassword()` |
 | `lib/services/deep_link_service.dart` | `authRecoveryRedirect` (`solvision://auth/recovery`) + its routing predicate |
@@ -299,6 +304,55 @@ than restating copy of its own.
 | `lib/utils/auth_error_messages.dart` | Error message mapping (`weak_password`, `same_password`) |
 | `tool/apply_live_auth_mail.dart` | Writes the live Site URL + allow list (`--check` reads them back) |
 | `test/services/deep_link_service_test.dart`, `test/services/password_reset_redirect_test.dart`, `test/screens/reset_password_screen_test.dart` | The contracts: the constants against `AndroidManifest.xml`, the tool and the runbook; and the screen's own form |
+
+---
+
+## Where the attempt came from
+
+A lockout records two things about the other end: the device and the IP
+address. Neither answers the first question an owner asks — *where was this?* —
+so the app resolves the address to an approximate location and shows it on
+**all three** surfaces the lockout already reaches: the overlay, the e-mail to
+the account owner, and the admin's intruder view.
+
+| Piece | Where |
+|-------|-------|
+| `IpGeolocationService` + `IpLocation` | `lib/services/ip_geolocation_service.dart` — one keyless HTTPS GET to `ipwho.is` (1,000/day per client IP, commercial use allowed on the free endpoint) |
+| Collected | `AuthProvider._collectDeviceInfo()` — device → IP → location, in that order, every step best-effort |
+| Owner surfaces | `lib/widgets/lockout_overlay.dart` (place, coordinates, network, plus the caveat) and `supabase/functions/send-lockout-email/index.ts` (same three fields in the mail, and in the admin push + the "this wasn't me" report text) |
+| Admin surfaces | `lib/screens/admin/intruder_suspicious_login_screen.dart` (the chip under the IP) and `lib/screens/admin/admin_account_security_screen.dart` (the lockout card), fed by the `failed_logins` columns |
+| Persisted | `failed_logins.location` / `.latitude` / `.longitude` — `supabase/migrations/20261012120000_add_location_to_failed_logins.sql` |
+
+**⚠️ It is city-level, and every surface says so.** An IP address identifies a
+network, not a person. The lookup resolves to the city the address block is
+registered in; for a mobile pool that is the carrier's hub, which can be a
+different city — sometimes a different region — from the one the device is
+physically in. The coordinates are that city's centroid, not a device position.
+The overlay carries the sentence *"Location comes from the IP address, so it is
+city-level — not a street address"*, the mail says *approximate, city-level*,
+the admin card labels the place *(approximate)*, and the diagnostics RPC's
+`cannot_answer` block repeats it where an admin is most likely to misread a city
+as an address. **Nothing may render any of this as an address.**
+
+**Nothing here can fail a lockout.** No network, a rate limit, a malformed body
+and a timeout all return null, and the geo fields are dropped from the write when
+the database does not have the columns yet (`advanceFailedCounter` retries the
+same row without them — see that migration's status row). The lockout decision
+does not read any of it.
+
+**How the row is written, and why it is not an upsert.** `advanceFailedCounter`
+reads the account's newest `failed_logins` row (id included) and then either
+**updates it by primary key** or **inserts** one — an explicit choice rather than
+`upsert(..., onConflict: 'user_id')`. Postgres refuses that conflict target here
+because the only unique index on `user_id` is partial, so the upsert answered
+`42P10` and, with the caller treating the write as best-effort, every lockout
+went unrecorded. The measured details, and the schema fix that would let an
+upsert work again, are in `supabase/MIGRATIONS_LIVE_STATUS.md`.
+
+**Also resolved server-side.** The e-mail function looks the address up itself
+when the caller sent no location, so an installed build that predates these
+fields still produces a location in the mail the owner receives, and the server
+truth does not depend on which APK happens to be on the other end.
 
 ---
 

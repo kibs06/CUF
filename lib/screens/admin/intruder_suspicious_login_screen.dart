@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../constants/app_constants.dart';
 import '../../services/auth_service.dart';
+import '../../services/ip_geolocation_service.dart';
 
 /// Screen showing suspicious/intruder login attempts for admin review.
 /// Fetches real data from the failed_logins table joined with profiles.
@@ -277,6 +278,13 @@ class _AdminIntruderSuspiciousLoginScreenState
     final lockedUntil = row['locked_until'] as String?;
     final failedAt = row['failed_at'] as String?;
     final ipAddress = row['ip_address'] as String?;
+    // Where the attempts came from — city-level, from the address above. Null
+    // on every row written before the location columns were added.
+    final location = row['location'] as String?;
+    final coordinates = IpLocation.formatCoordinates(
+      (row['latitude'] as num?)?.toDouble(),
+      (row['longitude'] as num?)?.toDouble(),
+    );
 
     final isLocked = status == 'locked';
     DateTime? lockedUntilDt;
@@ -378,6 +386,45 @@ class _AdminIntruderSuspiciousLoginScreenState
                 ),
             ],
           ),
+          if (location != null && location.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.place_outlined,
+                  size: 14,
+                  color: AppConstants.secondary,
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        location,
+                        style: TextStyle(
+                          color: AppConstants.secondary,
+                          fontSize: 12,
+                        ),
+                      ),
+                      if (coordinates.isNotEmpty)
+                        Text(
+                          coordinates,
+                          style: TextStyle(
+                            color: AppConstants.secondary.withValues(
+                              alpha: 0.7,
+                            ),
+                            fontSize: 11,
+                            fontFamily: 'monospace',
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
           if (isLocked && lockedUntilDt != null) ...[
             const SizedBox(height: 8),
             Row(

@@ -2,7 +2,9 @@
 -- Admin account-security diagnostics (pgTAP) — run by CI via
 -- `supabase test db` (workflow: supabase-migrations.yml)
 --
--- Covers migration 20260915160000_add_admin_account_security.sql:
+-- Covers migration 20260915160000_add_admin_account_security.sql, and the
+-- location fields added to the lockout block by
+-- 20261012120000_add_location_to_failed_logins.sql:
 --
 --   1. Access: granted to `authenticated` only, and the function itself
 --      refuses a non-admin / unauthenticated caller (42501) and an
@@ -29,7 +31,7 @@
 -- ══════════════════════════════════════════════════════════════════
 
 begin;
-select plan(31);
+select plan(33);
 
 -- ── helpers ───────────────────────────────────────────────────────
 create or replace function public.tmp_claims(p_user uuid)
@@ -70,8 +72,10 @@ insert into public.device_secrets (user_id, device_id, secret_hash, minted_at)
 values ('a1000000-0000-0000-0000-00000000000b', 'old-phone-0001',
         extensions.digest(repeat('a', 64), 'sha256'), now() - interval '30 days');
 
-insert into public.failed_logins (user_id, ip_address, user_agent, failed_at, locked_until, status, attempt_count)
+insert into public.failed_logins (user_id, ip_address, user_agent, location, latitude, longitude,
+                                  failed_at, locked_until, status, attempt_count)
 values ('a1000000-0000-0000-0000-00000000000b', '203.0.113.9', 'CUFMAI/1.0 (Android 15)',
+        'Manila, National Capital Region, Philippines', 14.6042, 120.9822,
         now() - interval '10 minutes', now() + interval '20 minutes', 'locked', 5);
 
 -- GoTrue's own event stream, in the three shapes it actually uses.
@@ -274,13 +278,28 @@ select is(
   '5'::jsonb,
   '26: …and the attempt count'
 );
+select is(
+  public.admin_account_security_overview('a1000000-0000-0000-0000-00000000000b')
+    -> 'lockouts' -> 0 ->> 'location',
+  'Manila, National Capital Region, Philippines',
+  '27: …and the approximate place the attempt''s address resolves to'
+);
+-- Read as text: the pair is a double precision converted to jsonb, and the
+-- point of the assertion is that the resolved city coordinate survives the
+-- round trip, not how the numeric is spelled.
+select is(
+  public.admin_account_security_overview('a1000000-0000-0000-0000-00000000000b')
+    -> 'lockouts' -> 0 ->> 'latitude',
+  '14.6042',
+  '28: …with the latitude of that city centroid'
+);
 
 -- ══ 6. The enforcement switch ════════════════════════════════════
 select is(
   public.admin_account_security_overview('a1000000-0000-0000-0000-00000000000b')
     -> 'enforcement' -> 'enabled',
   'false'::jsonb,
-  '27: an admin can tell whether the gate is even switched on'
+  '29: an admin can tell whether the gate is even switched on'
 );
 
 -- ══ 7. Hygiene ═══════════════════════════════════════════════════
@@ -288,20 +307,20 @@ select is(
   jsonb_array_length(
     public.admin_account_security_overview('a1000000-0000-0000-0000-00000000000b') -> 'cannot_answer'
   )::int,
-  3,
-  '28: the payload states what it cannot know (3 caveats)'
+  4,
+  '30: the payload states what it cannot know (4 caveats)'
 );
 select ok(
   position('secret_hash' in
     public.admin_account_security_overview('a1000000-0000-0000-0000-00000000000b')::text) = 0,
-  '29: no secret hash FIELD is exposed'
+  '31: no secret hash FIELD is exposed'
 );
 select ok(
   position(
     encode(extensions.digest(repeat('a', 64), 'sha256'), 'hex') in
     public.admin_account_security_overview('a1000000-0000-0000-0000-00000000000b')::text
   ) = 0,
-  '30: the stored digest VALUE is never returned'
+  '32: the stored digest VALUE is never returned'
 );
 reset role;
 
@@ -329,7 +348,7 @@ select is(
        )
   ),
   '',
-  '31: every RLS table is either device-gated or explicitly exempt'
+  '33: every RLS table is either device-gated or explicitly exempt'
 );
 
 select * from finish();

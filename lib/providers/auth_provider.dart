@@ -12,6 +12,7 @@ import '../services/auth_service.dart';
 import '../services/biometric_service.dart';
 import '../services/device_trust_service.dart';
 import '../services/email_otp_service.dart';
+import '../services/ip_geolocation_service.dart';
 import '../services/login_challenge_service.dart';
 import '../services/supabase_service.dart';
 import '../utils/auth_error_messages.dart';
@@ -242,9 +243,14 @@ class AuthProvider extends ChangeNotifier {
   }
 
   // ── Device info collection ────────────────────────────────────
-  /// Collects device model, OS version, and public IP address.
-  /// Returns a map with 'userAgent' and 'ipAddress' keys.
-  Future<Map<String, String>> _collectDeviceInfo() async {
+  /// Collects device model, OS version, public IP address and the city-level
+  /// location that address resolves to.
+  ///
+  /// Returns a map with 'userAgent', 'ipAddress', 'location', 'coordinates',
+  /// 'network', 'latitude' and 'longitude' keys. The location keys are empty
+  /// strings and nulls when the lookup could not answer — this whole method is
+  /// best-effort and must never fail a lockout.
+  Future<Map<String, dynamic>> _collectDeviceInfo() async {
     String deviceModel = 'Unknown';
     String osInfo = '';
 
@@ -283,7 +289,27 @@ class AuthProvider extends ChangeNotifier {
       // IP lookup is best-effort
     }
 
-    return {'userAgent': userAgent, 'ipAddress': ipAddress};
+    // ── Where that address roughly is (best-effort) ──────────────
+    // City-level at best, and the reason it is asked for the address we just
+    // resolved instead of "where am I": a lookup with no address would answer
+    // with the position of whatever host ran it. Skipped entirely when the IP
+    // lookup failed.
+    IpLocation? location;
+    if (ipAddress.isNotEmpty) {
+      location = await IpGeolocationService.instance.lookup(ipAddress);
+    }
+
+    return {
+      'userAgent': userAgent,
+      'ipAddress': ipAddress,
+      'location': location?.place ?? '',
+      'coordinates': location?.coordinates ?? '',
+      'network': location?.network ?? '',
+      // The numbers, not the formatted pair, so `failed_logins` can hold
+      // them in its numeric columns.
+      'latitude': location?.latitude,
+      'longitude': location?.longitude,
+    };
   }
 
   // Login (UC002)
@@ -313,6 +339,9 @@ class AuthProvider extends ChangeNotifier {
           'remainingMinutes': mins,
           'device': deviceInfo['userAgent'] ?? '',
           'ipAddress': deviceInfo['ipAddress'] ?? '',
+          'location': deviceInfo['location'] ?? '',
+          'coordinates': deviceInfo['coordinates'] ?? '',
+          'network': deviceInfo['network'] ?? '',
         };
         notifyListeners();
         return false;
@@ -461,6 +490,9 @@ class AuthProvider extends ChangeNotifier {
           'remainingMinutes': mins,
           'device': deviceInfo['userAgent'] ?? '',
           'ipAddress': deviceInfo['ipAddress'] ?? '',
+          'location': deviceInfo['location'] ?? '',
+          'coordinates': deviceInfo['coordinates'] ?? '',
+          'network': deviceInfo['network'] ?? '',
         };
         // ── Fire-and-forget: email + push notification + server tracking ──
         try {
@@ -475,6 +507,15 @@ class AuthProvider extends ChangeNotifier {
                 'email': trimmedEmail,
                 'device': deviceInfo['userAgent'],
                 'ip': deviceInfo['ipAddress'],
+                // Where the attempt came from, as this device resolved it.
+                // The function also resolves the address itself when these
+                // are absent, so a build that predates them still gets a
+                // location in the mail.
+                'location': deviceInfo['location'],
+                'coordinates': deviceInfo['coordinates'],
+                'isp': deviceInfo['network'],
+                'latitude': deviceInfo['latitude'],
+                'longitude': deviceInfo['longitude'],
               },
             );
           } catch (_) {
@@ -505,6 +546,9 @@ class AuthProvider extends ChangeNotifier {
                 userId: userId,
                 ipAddress: deviceInfo['ipAddress'] ?? '',
                 userAgent: deviceInfo['userAgent'] ?? '',
+                location: deviceInfo['location'] as String?,
+                latitude: deviceInfo['latitude'] as double?,
+                longitude: deviceInfo['longitude'] as double?,
               );
             } catch (_) {
               // Best-effort

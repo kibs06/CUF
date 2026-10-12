@@ -227,6 +227,9 @@ class _AccountEntryScreenState extends State<AccountEntryScreen>
             remainingMinutes: lockout['remainingMinutes'] as int,
             device: lockout['device'] as String?,
             ipAddress: lockout['ipAddress'] as String?,
+            location: lockout['location'] as String?,
+            coordinates: lockout['coordinates'] as String?,
+            network: lockout['network'] as String?,
             onResetPassword: (email) async {
               final success = await auth.resetPassword(email);
               if (success && mounted) {

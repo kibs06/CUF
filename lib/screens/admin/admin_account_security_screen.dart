@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../constants/app_constants.dart';
 import '../../models/account_security_overview.dart';
 import '../../services/account_security_service.dart';
+import '../../services/ip_geolocation_service.dart';
 import 'admin_helpers.dart';
 
 /// Admin view of ONE account's sign-in security: trusted devices and whether
@@ -519,6 +520,24 @@ class _AdminAccountSecurityScreenState
                           valueColor: lock.isActiveAt(_now) ? AppConstants.error : null,
                         ),
                         if (lock.userAgent != null) _kv('From', lock.userAgent!),
+                        // Where the attempt came from, when the row carries
+                        // it: city-level and from the IP address, so it is
+                        // labelled as such rather than left to read as an
+                        // address. Null on rows written before the columns
+                        // existed.
+                        if (lock.location != null)
+                          _kv('Location', '${lock.location!} (approximate)'),
+                        if (IpLocation.formatCoordinates(
+                          lock.latitude,
+                          lock.longitude,
+                        ).isNotEmpty)
+                          _kv(
+                            'Coordinates',
+                            IpLocation.formatCoordinates(
+                              lock.latitude,
+                              lock.longitude,
+                            ),
+                          ),
                       ],
                     ),
                   ),

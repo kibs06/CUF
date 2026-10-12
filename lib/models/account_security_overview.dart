@@ -158,6 +158,17 @@ class LoginLockout {
   final int? attemptCount;
   final DateTime? lockedUntil;
 
+  /// The approximate place the attempt's address resolves to, e.g.
+  /// `Manila, National Capital Region, Philippines`, and the centroid of that
+  /// city in [latitude]/[longitude].
+  ///
+  /// ⚠️ City-level only — an IP address identifies a network, not a person,
+  /// and a mobile pool can resolve to a different city than the device is in.
+  /// Null on any row written before the columns existed.
+  final String? location;
+  final double? latitude;
+  final double? longitude;
+
   const LoginLockout({
     required this.failedAt,
     required this.ipAddress,
@@ -165,6 +176,9 @@ class LoginLockout {
     required this.status,
     required this.attemptCount,
     required this.lockedUntil,
+    this.location,
+    this.latitude,
+    this.longitude,
   });
 
   factory LoginLockout.fromJson(Map<String, dynamic> json) => LoginLockout(
@@ -174,6 +188,9 @@ class LoginLockout {
     status: _nullableString(json['status']),
     attemptCount: _parseInt(json['attempt_count']),
     lockedUntil: _parseTime(json['locked_until']),
+    location: _nullableString(json['location']),
+    latitude: _parseDouble(json['latitude']),
+    longitude: _parseDouble(json['longitude']),
   );
 
   /// Whether the lockout is still in force at [now].
@@ -519,6 +536,15 @@ DateTime? _parseTime(dynamic value) {
   if (value is DateTime) return value.toLocal();
   if (value is String) return DateTime.tryParse(value)?.toLocal();
   return null;
+}
+
+/// A coordinate. Tolerates a number or a numeric string, because PostgREST
+/// returns `double precision` as a JSON number but a value that has been
+/// through `::text` somewhere upstream arrives as a string.
+double? _parseDouble(dynamic value) {
+  if (value == null) return null;
+  if (value is num) return value.toDouble();
+  return double.tryParse(value.toString());
 }
 
 List<T> _list<T>(dynamic value, T Function(Map<String, dynamic>) parse) {

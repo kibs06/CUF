@@ -595,19 +595,34 @@ class AuthService {
 
   /// Advance the failed-attempt counter. On the 5th consecutive failure,
   /// lock the account for [_lockoutMinutes] minutes.
+  ///
+  /// [location], [latitude] and [longitude] are the city-level place the
+  /// attempt's address resolves to (see `IpGeolocationService`), stored for the
+  /// admin's intruder view. They are evidence ABOUT the lockout, never an input
+  /// to it: every one of them is optional and the lockout decision does not
+  /// read them.
   Future<Map<String, dynamic>> advanceFailedCounter({
     required String userId,
     required String ipAddress,
     required String userAgent,
+    String? location,
+    double? latitude,
+    double? longitude,
   }) async {
     final client = _client;
     final now = DateTime.now().toUtc();
 
-    // First, check if there's an existing row
+    // First, check if there's an existing row. `id` comes along because the
+    // write below is an UPDATE of this row when it exists (see
+    // [_writeFailedLoginRow] for why it is not an upsert), and the newest row
+    // wins if a database somehow holds more than one for this account —
+    // `.maybeSingle()` would throw on that rather than pick.
     final existing = await client
         .from('failed_logins')
-        .select('attempt_count, locked_until, status')
+        .select('id, attempt_count, locked_until, status')
         .eq('user_id', userId)
+        .order('failed_at', ascending: false)
+        .limit(1)
         .maybeSingle();
 
     int attemptCount = 1;
@@ -650,23 +665,134 @@ class AuthService {
       newLockedUntil = now.add(Duration(minutes: _lockoutMinutes));
     }
 
-    final data = await client
-        .from('failed_logins')
-        .upsert({
-          'user_id': userId,
-          'attempt_count': attemptCount,
-          'status': newStatus,
-          'locked_until': newLockedUntil?.toIso8601String(),
-          'ip_address': ipAddress,
-          'user_agent': userAgent,
-          'failed_at': now.toIso8601String(),
-        },
-        onConflict: 'user_id')
-        .select()
-        .single();
+    final row = <String, dynamic>{
+      'user_id': userId,
+      'attempt_count': attemptCount,
+      'status': newStatus,
+      'locked_until': newLockedUntil?.toIso8601String(),
+      'ip_address': ipAddress,
+      'user_agent': userAgent,
+      'failed_at': now.toIso8601String(),
+    };
 
+    final hasLocation =
+        (location != null && location.trim().isNotEmpty) ||
+        latitude != null ||
+        longitude != null;
+    if (hasLocation) {
+      row['location'] = location;
+      row['latitude'] = latitude;
+      row['longitude'] = longitude;
+    }
+
+    final existingId = existing?['id'] as String?;
+
+    try {
+      return await _writeFailedLoginRow(
+        client: client,
+        values: row,
+        existingId: existingId,
+      );
+    } on PostgrestException catch (e) {
+      // The three location columns arrive in
+      // `20261012120000_add_location_to_failed_logins.sql`. Until that is
+      // applied the server refuses the WHOLE row — which would silently stop
+      // the device/IP forensics that already work, the exact opposite of what
+      // this change is for. So the geo fields are dropped and the write
+      // retried: the lockout keeps the evidence it has always had and simply
+      // has no location. Measured answer (local PostgREST, 2026-10-12):
+      // `PGRST204 — Could not find the 'latitude' column of 'failed_logins'
+      // in the schema cache`, naming whichever of the three the server meets
+      // first — which is why `isUnknownLocationColumn` matches all three.
+      if (!hasLocation || !isUnknownLocationColumn(e)) rethrow;
+      debugPrint(
+        '[AuthService] failed_logins has no location column yet — recording '
+        'the device and IP only. Apply '
+        '20261012120000_add_location_to_failed_logins.sql to store the '
+        'attacker location too.',
+      );
+      row.remove('location');
+      row.remove('latitude');
+      row.remove('longitude');
+      return _writeFailedLoginRow(
+        client: client,
+        values: row,
+        existingId: existingId,
+      );
+    }
+  }
+
+  /// Writes one lockout row — an UPDATE of the account's existing row when
+  /// [existingId] is known, an INSERT when it is not.
+  ///
+  /// ⚠️ **This deliberately replaces `upsert(..., onConflict: 'user_id')`, and
+  /// the reason is measured rather than stylistic.** The only unique index on
+  /// `user_id` is **partial** — `uq_user_active_failed … WHERE status IN
+  /// ('active','locked')` — and Postgres refuses an `ON CONFLICT (user_id)`
+  /// that does not repeat that predicate, answering `42P10` ("there is no
+  /// unique or exclusion constraint matching the ON CONFLICT specification").
+  /// PostgREST does not emit the predicate, so **every** lockout write failed;
+  /// and because the caller treats this write as best-effort, the failure was
+  /// silent — the device, the IP and the location were never recorded, and the
+  /// admin's intruder view stayed empty. Measured against a local PostgREST on
+  /// 2026-10-12, both with and without this change's own columns.
+  ///
+  /// The alternative fix is a schema change: an unconditional unique index on
+  /// `user_id`, which is what the table's own header describes ("Single row per
+  /// user (upsert on each attempt)"). That is the cleaner end state and is
+  /// noted in `supabase/MIGRATIONS_LIVE_STATUS.md`; it is not done here because
+  /// it must first be checked against the rows the hosted project actually
+  /// holds, and this path needs no such assumption.
+  Future<Map<String, dynamic>> _writeFailedLoginRow({
+    required SupabaseClient client,
+    required Map<String, dynamic> values,
+    required String? existingId,
+  }) async {
+    final builder = existingId == null
+        ? client.from('failed_logins').insert(values)
+        : client.from('failed_logins').update(values).eq('id', existingId);
+    final data = await builder.select().single();
     return Map<String, dynamic>.from(data);
   }
+
+  /// True when [e] is the server saying the location columns do not exist yet
+  /// (this migration has not been applied).
+  ///
+  /// Narrow on purpose: only an unknown-column answer that NAMES one of the
+  /// three columns is treated as "the migration is missing". Anything else —
+  /// RLS, a network fault, a constraint — is rethrown and handled as the real
+  /// failure it is. Public so the rule can be pinned by a test: too narrow and
+  /// a lockout loses the device/IP evidence it has always had, too broad and
+  /// a real failure is retried into a confusing second error.
+  ///
+  /// **All three names are checked, and that is measured rather than tidy.**
+  /// PostgREST reports the FIRST unknown key it meets, so with the columns
+  /// absent the real answer for a payload carrying `location`, `latitude` and
+  /// `longitude` is:
+  ///
+  ///   `PGRST204 — Could not find the 'latitude' column of 'failed_logins' in
+  ///   the schema cache`
+  ///
+  /// — a message that does not contain the string `location` at all. Matching
+  /// on `location` alone (which is what this did until the live answer was
+  /// measured against a local stack on 2026-10-12) would have let the write
+  /// fail, and with it the device and IP the lockout has always recorded.
+  @visibleForTesting
+  static bool isUnknownLocationColumn(PostgrestException e) {
+    final message = e.message.toLowerCase();
+    final namesAGeoColumn = _locationColumns.any(message.contains);
+    if (!namesAGeoColumn) return false;
+    // PGRST204: unknown column in the payload. 42703: undefined_column.
+    return e.code == 'PGRST204' ||
+        e.code == '42703' ||
+        message.contains('schema cache') ||
+        message.contains('does not exist');
+  }
+
+  /// The columns added by
+  /// `20261012120000_add_location_to_failed_logins.sql`. Not columns of any
+  /// other table this row touches, so naming one is unambiguous.
+  static const _locationColumns = ['location', 'latitude', 'longitude'];
 
   /// Reset the failed-attempt counter on successful login.
   Future<void> resetFailedCounter(String userId) async {

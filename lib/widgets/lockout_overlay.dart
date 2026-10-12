@@ -7,7 +7,9 @@ import '../constants/app_constants.dart';
   /// A non-dismissable security alert dialog shown when the user's account
   /// is locked due to too many failed login attempts.
   ///
-  /// Shows device details (if provided) and offers three actions:
+  /// Shows where the attempts came from (the location the attempt's IP
+  /// resolves to, its coordinates, the network that owns it) and the device
+  /// details, if provided, then offers three actions:
   /// - Reset password (primary)
   /// - This wasn't me (secondary danger)
   /// - Wait X minutes instead (tertiary)
@@ -29,6 +31,13 @@ class LockoutOverlay {
     required int remainingMinutes,
     String? device,
     String? ipAddress,
+    /// Where the attempts came from: `Manila, National Capital Region,
+    /// Philippines`, its coordinate pair, and the network that owns the
+    /// address. **City-level only** — see [IpGeolocationService]; the card
+    /// says so to the customer rather than implying a street address.
+    String? location,
+    String? coordinates,
+    String? network,
     Future<bool> Function(String email)? onResetPassword,
     Future<bool> Function(String email)? onReportIntrusion,
   }) {
@@ -57,6 +66,9 @@ class LockoutOverlay {
         remainingMinutes: remainingMinutes,
         device: device,
         ipAddress: ipAddress,
+        location: location,
+        coordinates: coordinates,
+        network: network,
         onResetPassword: onResetPassword,
         onReportIntrusion: onReportIntrusion,
       ),
@@ -73,6 +85,9 @@ class _LockoutOverlayDialog extends StatefulWidget {
     required this.remainingMinutes,
     this.device,
     this.ipAddress,
+    this.location,
+    this.coordinates,
+    this.network,
     this.onResetPassword,
     this.onReportIntrusion,
   });
@@ -81,6 +96,9 @@ class _LockoutOverlayDialog extends StatefulWidget {
   final int remainingMinutes;
   final String? device;
   final String? ipAddress;
+  final String? location;
+  final String? coordinates;
+  final String? network;
   final Future<bool> Function(String email)? onResetPassword;
   final Future<bool> Function(String email)? onReportIntrusion;
 
@@ -176,9 +194,21 @@ class _LockoutOverlayDialogState extends State<_LockoutOverlayDialog> {
     Navigator.of(context).pop(action);
   }
 
+  bool get _hasLocation => _place.isNotEmpty;
+
+  String get _place => widget.location?.trim() ?? '';
+
+  /// `14.6042° N, 120.9822° E · Globe Telecom Inc. (AS132199)`, or ''.
+  String get _locationDetail => [
+    widget.coordinates ?? '',
+    widget.network ?? '',
+  ].where((part) => part.trim().isNotEmpty).join(' · ');
+
   late final bool _hasDeviceDetails =
+      _hasLocation ||
+      _locationDetail.isNotEmpty ||
       (widget.device != null && widget.device!.isNotEmpty) ||
-          (widget.ipAddress != null && widget.ipAddress!.isNotEmpty);
+      (widget.ipAddress != null && widget.ipAddress!.isNotEmpty);
 
   @override
   void initState() {
@@ -212,8 +242,6 @@ class _LockoutOverlayDialogState extends State<_LockoutOverlayDialog> {
   @override
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
-    (widget.device != null && widget.device!.isNotEmpty) ||
-        (widget.ipAddress != null && widget.ipAddress!.isNotEmpty);
 
     final mins = widget.remainingMinutes <= 0 ? 1 : widget.remainingMinutes;
 
@@ -480,6 +508,51 @@ class _LockoutOverlayDialogState extends State<_LockoutOverlayDialog> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // The location leads: it is the answer to "where was this?", and
+            // it is the one line an owner with a stolen password reads first.
+            if (_hasLocation || _locationDetail.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.place_outlined,
+                      size: 14,
+                      color: AppConstants.secondary.withValues(alpha: 0.5),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (_hasLocation)
+                            Text(
+                              _place,
+                              style: AppConstants.bodyStyle(
+                                fontSize: 12,
+                                color: AppConstants.secondary,
+                              ),
+                            ),
+                          if (_locationDetail.isNotEmpty)
+                            Padding(
+                              padding: EdgeInsets.only(top: _hasLocation ? 2 : 0),
+                              child: Text(
+                                _locationDetail,
+                                style: AppConstants.bodyStyle(
+                                  fontSize: 11,
+                                  color: AppConstants.secondary.withValues(
+                                    alpha: 0.6,
+                                  ),
+                                ).copyWith(fontFamily: 'monospace'),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             if (widget.device != null && widget.device!.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
@@ -521,6 +594,22 @@ class _LockoutOverlayDialogState extends State<_LockoutOverlayDialog> {
                       ),
                   ),
                 ],
+              ),
+            // Said out loud, on the card, because "we know where they are" is
+            // the one thing this data cannot support. It is a city centroid
+            // from an IP block, not a device position.
+            if (_hasLocation || _locationDetail.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  'Location comes from the IP address, so it is city-level — '
+                  'not a street address.',
+                  style: AppConstants.bodyStyle(
+                    fontSize: 10,
+                    color: AppConstants.secondary.withValues(alpha: 0.5),
+                    height: 1.4,
+                  ),
+                ),
               ),
           ],
         ),
