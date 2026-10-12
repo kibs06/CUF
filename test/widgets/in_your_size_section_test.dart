@@ -58,7 +58,7 @@ Map<String, dynamic> product({
     'category': 'Sneakers',
     'price': price,
     'images': <String>[],
-    ?audience: audience,
+    'audience': ?audience,
     'inventory': [
       for (final (size, units) in stock) {'size': size, 'stock': units},
     ],

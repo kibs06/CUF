@@ -302,7 +302,7 @@ class _FootSizePickerPanelState extends State<FootSizePickerPanel> {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'EU ${formatSizeNumber(size)} · $_width · '
+              '${formatSize(formatSizeNumber(size))} · $_width · '
               '${footSizeCategoryLabel(category) ?? category}',
               style: AppConstants.bodyStyle(
                 fontSize: 13,
