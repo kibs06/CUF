@@ -1,5 +1,15 @@
 [
   {
+    "latest_version": "1.0.52",
+    "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.52/app-release-1.0.52.apk",
+    "released_at": "2026-10-12",
+    "notes": [
+      "Foot sizing: choose camera scan or tap-to-measure",
+      "AR foot scan is easier to get right and coaches phone distance",
+      "Recover a lost authenticator or skip the 2FA code step"
+    ]
+  },
+  {
     "latest_version": "1.0.51",
     "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.51/app-release-1.0.51.apk",
     "released_at": "2026-10-09",
