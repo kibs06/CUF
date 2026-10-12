@@ -1,5 +1,16 @@
 [
   {
+    "latest_version": "1.0.53",
+    "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.53/app-release-1.0.53.apk",
+    "released_at": "2026-10-12",
+    "notes": [
+      "Password reset happens in the app: the e-mail link opens CUFMAI and asks for a new password",
+      "A reset link that expired or was already used says so",
+      "The home-screen tile holds one card",
+      "A product page opened from a list swipes through that list"
+    ]
+  },
+  {
     "latest_version": "1.0.52",
     "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.52/app-release-1.0.52.apk",
     "released_at": "2026-10-12",
