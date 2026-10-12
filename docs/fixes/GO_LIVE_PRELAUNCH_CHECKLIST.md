@@ -28,7 +28,7 @@
 5. **Seller re-apply regression (T3):** the Sep 1 status guard blocks a rejected seller's re-submission (`rejected → pending` raises `Cannot change your own seller_status.`). Real rejected applicants cannot re-apply until fixed.
 6. **Stale `awaiting_payment` orders are never expired.** The test order from Aug 19 sat in `awaiting_payment` for 2 weeks (no expiry sweep ran for PayMongo checkout sessions). Ensure the expiry/cancel cron is applied before launch so abandoned checkouts auto-cancel and stock is never held.
 7. **Admin account hygiene:** the admin login (keithabalo03@gmail.com) was shared in plaintext during this session — change the password before launch.
-8. **Auth e-mail delivery is unconfigured for the verify screens — this one blocks new sign-ups outright.** `enable_confirmations` is ON, so a user who never receives the code cannot finish creating an account (and the new-device step-up cannot complete either). GoTrue is still on its **built-in mailer**: `[auth.email.smtp]` in `supabase/config.toml` is commented out and no dashboard SMTP is set, which is a hard refusal for every address outside the Supabase organization and caps sending at 2 messages per hour. Fix: run the **📧 R8 runbook** at the end of this file — either the dashboard (**Authentication → SMTP Settings** → the app's own Gmail (`smtp.gmail.com:465`, `GMAIL_SENDER` + `GMAIL_APP_PASSWORD`, the same account `send-approval-email` already sends from), then `{{ .Token }}` in the **Confirm signup** and **Magic link** templates) or the one-command route, `dart run tool/apply_live_auth_mail.dart`, which does all of it and then re-reads every field. GoTrue must remain the sender — an app-owned sender leaves the session at `amr: ["password"]` and breaks the mint gate in `session_proves_possession()`, locking every device out of the gated tables. See `docs/AI/EMAIL_OTP_AND_DEVICE_TRUST_ARCHITECTURE.md` §5.1.
+8. **Auth e-mail delivery is broken for the verify screens — this one blocks new sign-ups outright.** `enable_confirmations` is ON, so a user who never receives the code cannot finish creating an account (and the new-device step-up cannot complete either). ⚠️ **Re-measured Oct 12, 2026 — this is no longer the built-in-mailer state, and the fix is a rotation, not a first-time setup.** Custom SMTP **is** configured on the hosted project and the send fails because Gmail refuses its credentials: the auth log for `POST /recover` says `535 "5.7.8 Username and Password not accepted … BadCredentials … - gsmtp"`. Only custom SMTP authenticating to Gmail can answer with a `- gsmtp` code, so the **App Password is stale** (Google revokes one when the account password changes or 2-Step Verification is toggled). Create a fresh App Password and re-run `dart run tool/apply_live_auth_mail.dart` — the same path §R8's rotation note below already describes. The old evidence for the built-in-mailer claim was `[auth.email.smtp]` being commented out in `supabase/config.toml`, but that file only ever described the local stack and was never evidence about the hosted project. Fix: run the **📧 R8 runbook** at the end of this file — either the dashboard (**Authentication → SMTP Settings** → the app's own Gmail (`smtp.gmail.com:465`, `GMAIL_SENDER` + `GMAIL_APP_PASSWORD`, the same account `send-approval-email` already sends from), then `{{ .Token }}` in the **Confirm signup** and **Magic link** templates) or the one-command route, `dart run tool/apply_live_auth_mail.dart`, which does all of it and then re-reads every field. GoTrue must remain the sender — an app-owned sender leaves the session at `amr: ["password"]` and breaks the mint gate in `session_proves_possession()`, locking every device out of the gated tables. See `docs/AI/EMAIL_OTP_AND_DEVICE_TRUST_ARCHITECTURE.md` §5.1.
 
 ---
 
@@ -52,15 +52,32 @@ gate intact.
    headed "Your sign-in link", containing a `Sign in` button and **no 6-digit
    code anywhere**. The verify screen therefore has nothing to accept, however
    good delivery is. Fix = Step 3 below, and it comes first.
-2. **Custom SMTP is still unconfigured** (`From: noreply@mail.app.supabase.io`),
-   so GoTrue is on its built-in mailer: a ceiling of **2 messages/hour** on a
-   best-effort service with no SLA, and — per
-   https://supabase.com/docs/guides/auth/auth-smtp — delivery restricted to
-   addresses inside the Supabase organization. That allowlist **did not bite**
-   in the Sep 17 observation (a consumer Gmail received the mail), so treat it as
-   documented behaviour to re-check rather than as the reason a code is missing.
-   Steps 1–2 are about sender identity, branding and capacity; Step 3 is what
-   makes a code exist at all.
+2. ⚠️ **Superseded Oct 12, 2026: custom SMTP IS configured — and Gmail is
+   refusing its password.** The auth log for `POST /recover` reads
+   `535 "5.7.8 Username and Password not accepted … BadCredentials … - gsmtp"`.
+   A built-in-mailer send never reaches Gmail's SMTP, so only configured custom
+   SMTP can produce a `- gsmtp` reply: the settings are saved and the **App
+   Password is stale**. That is the rotation edge at the end of this file, not a
+   first-time setup — create a fresh App Password and re-run the tool below.
+   **This also means Step 3's templates were probably applied too**, so item 1
+   above (the stock link-only Magic-link template) must be *re-checked* rather
+   than assumed still broken: `dart run tool/apply_live_auth_mail.dart --check`
+   reads every field back and writes nothing. What the built-in-mailer
+   paragraph used to describe (2 messages/hour, an org-only allowlist) is the
+   state *before* this runbook was applied. Step 3 is what makes a code exist at
+   all.
+3. ⚠️ **Added Oct 12, 2026 — the password-reset LINK is a second, independent
+   defect that fixing the mailer does not touch.** The reset mail now arrives
+   (Gmail accepted the fresh App Password), but the button in it opens
+   `http://localhost:3000` — the project's shipped **Site URL** — i.e.
+   `ERR_CONNECTION_REFUSED` on the customer's phone; the redirect allow list was
+   **empty**, so no explicit redirect could be honoured either. Both fields are
+   in the same `PATCH` as everything else now: the Site URL is set to the
+   deployed customer portal, and the list is merged with the app's two deep
+   links (`solvision://auth/confirm`, `solvision://auth/recovery`) plus that
+   portal's `/account` page — the destinations that finish a reset
+   (**Step 5**). The app now owns the reset SCREEN, but no app change could
+   have worked around this: the destination is server config.
 
 > **Who applies this, and with what.** The project owner applies it (decided
 > Sep 17, 2026), by either route below. Auth's SMTP settings are **not
@@ -101,10 +118,14 @@ What it sets, all in one `PATCH /v1/projects/{ref}/config/auth`: custom SMTP
 (`smtp.gmail.com`, port `465` **as a string**, sender + envelope sender =
 `GMAIL_SENDER`, sender name `CUFMAI`), `rate_limit_email_sent` **(100/h)**, the
 confirmations/OTP numbers (`mailer_autoconfirm: false`, `mailer_otp_length: 6`,
-`mailer_otp_exp: 3600`), both templates' bodies **and** subjects, and the
-redirect allow list with `solvision://auth/confirm` **appended to whatever is
-already there** (a PATCH replaces that field, so the tool reads it first —
-copy-pasting a hand-built list would silently drop the existing entries).
+`mailer_otp_exp: 3600`), both templates' bodies **and** subjects, the redirect
+allow list with `solvision://auth/confirm`, `solvision://auth/recovery`, the
+portal's `/account` page and the portal's dev origin **appended to whatever is
+already there** (a PATCH replaces
+that field, so the tool reads it first — copy-pasting a hand-built list would
+silently drop the existing entries), and the **Site URL** (`--site-url`, default
+the deployed customer portal) that a reset call with no `redirectTo` falls back
+to.
 
 It refuses to send a template that has lost `{{ .Token }}`, and it strips the
 authoring `<!-- … -->` note from both files, so neither mistake can reach a
@@ -204,9 +225,10 @@ lands on the Site URL — a browser the app cannot use — and the account keeps
 its deferred `profiles` row.
 
 ⚠️ **Do not retype the list.** This field replaces wholesale, so the tool
-READS the current `uri_allow_list` first and appends to it (keeping `site_url`
-in the list, which is where password-reset links resolve). Clearing what is
-already configured is how a sign-in fix breaks password recovery instead.
+READS the current `uri_allow_list` first and appends to it. Clearing what is
+already configured is how a sign-in fix breaks password recovery instead — and
+password recovery is the one link in this runbook that a CUSTOMER has to click,
+so it is the one that can be checked end to end (**Step 5**).
 
 No template edit is needed for this part: the link is already in the e-mail.
 The **Magic-link** template deliberately has NO link — the new-device step-up is
@@ -225,7 +247,7 @@ pins that agreement so a rename cannot silently break it.
 | The code is accepted | Enter it on the verify screen | Lands in CustomerShell; `auth.users.email_confirmed_at` set (SQL below) |
 | The step-up completes | Turn the gate ON first (`select public.set_device_enforcement(true);`), then sign out, clear app data (new device id) and sign in with the password | "Verify this device" → Gmail code → shell. ⚠️ With enforcement **off there is no device screen at all**: the app asks `device_gate_open()` before mailing a code, so a fresh sign-in goes straight to the shell (architecture doc §3.1/§3.9). Leave the switch on for launch, or re-run this step after the flip |
 | GoTrue switched mailers | Dashboard → Logs → Auth: the `mail.send` rows | `mail_from` is `GMAIL_SENDER`; the earlier `429 over_email_send_rate_limit` rows stop |
-| Config read back | `dart run tool/apply_live_auth_mail.dart --check` | 12 ✅ lines and exit 0: sender, port, raised limit, confirmations ON, 6/3600, and `{{ .Token }}` present in both templates. A field that did not stick prints ❌ and exits 1 |
+| Config read back | `dart run tool/apply_live_auth_mail.dart --check` | 15 ✅ lines and exit 0: sender, port, raised limit, confirmations ON, 6/3600, `{{ .Token }}` present in both templates, `site_url` = the portal, and both e-mail deep links plus the portal's account page allow-listed. A field that did not stick prints ❌ and exits 1 |
 | Config read back, raw | `curl -s -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/$PROJECT_REF/config/auth"` (pipe to `python -c` if `jq` is unavailable — `jq` is **not** installed on every machine this repo is built on) | `smtp_host: smtp.gmail.com`, `smtp_port: "465"`, your sender, the raised limit |
 
 ```sql
@@ -233,6 +255,48 @@ pins that agreement so a rename cannot silently break it.
 select email, email_confirmed_at is not null as confirmed, last_sign_in_at
 from auth.users order by created_at desc limit 10;
 ```
+
+### Step 5 — the reset link must land on a page that can set a password
+
+**Measured Oct 12, 2026: it did not.** The mail arrived and its button opened
+`http://localhost:3000/?error=…` — the project's shipped Site URL — so the
+customer's tap met `ERR_CONNECTION_REFUSED`. The reset mail is the only auth
+mail whose link a customer MUST open, and where it goes is decided server-side.
+The app's reset button sends `redirectTo: solvision://auth/recovery`, so the tap
+opens CUFMAI and `ResetPasswordScreen` finishes the reset in-process; a reset
+STARTED ON THE WEBSITE returns to the portal's `/account` instead. GoTrue
+**ignores any redirect it has not been told about** and falls back to the Site
+URL, so all three destinations live on one screen:
+
+| Authentication → URL Configuration | Value |
+|---|---|
+| **Site URL** | `https://cufmai-portal.vercel.app` — the deployed customer portal (`customer-portal/` in this repo, Vercel project `cufmai-portal`): the web half of the reset, and what a redirect-less call falls back to. While it stayed on `localhost:3000` the link was dead **even though `/recover` answered `200`** |
+| **Redirect URLs** | `solvision://auth/recovery` (the app's reset button — **this is the one that makes the button open the app**) and `solvision://auth/confirm` (Step 3b), plus `https://cufmai-portal.vercel.app/account` and its wildcard `https://cufmai-portal.vercel.app/**` — **and everything already there**: this field replaces wholesale, so nothing may be dropped |
+
+The tool writes all of it in the same call (`--site-url` overrides the first),
+and `--check` prints `site_url` / `uri_allow_list` followed by three rows of its
+own: *`site_url is the reset destination`*, *`reset link returns to the app`*
+and *`reset link can reach the portal account page`*.
+
+**Why the wildcard.** GoTrue compiles these entries with `/` as a separator, so
+`*` never crosses a path segment and `**` does — one `…/**` entry covers
+`/account`, `/auth/confirm` and every route the portal grows later.
+
+**Prove it by clicking, not by sending.** A `200` from `POST /auth/v1/recover`
+says the mail left and nothing about where the button goes.
+
+| Check | How | Pass looks like |
+|---|---|---|
+| The button opens the APP (the main route) | Sign-in screen → **Forgot password?** → open the mail **on the phone that has the app** and tap the button | CUFMAI opens on **Choose a new password**, naming the account the link is for — NOT a browser page, not the play store, not the shell with the reset unfinished |
+| The new password works, and the customer is now signed in | Set one there | The screen is replaced by the customer's shell (the reset session IS a sign-in); signing out and back in needs the NEW password, and the old one is refused |
+| A link opened in a DESKTOP browser | Open the same kind of link on a computer | Dead end by design: a browser cannot open `solvision://`, and GoTrue has already spent the token on the click — request a fresh link. Reset from the WEBSITE instead (the portal's own "Forgot password") to exercise the `/account` route |
+| A STALE link (tapped twice, or older than its hour) | Tap an old reset mail | The app opens and says *"That reset link has expired or was already used. Request a new one from “Forgot password?”."* — this arrives as the same link with `error_code=otp_expired` instead of a session, and silence here is what reads as a broken button |
+| The portal route still works | `cufmai-portal.vercel.app` → **Sign in** → "Forgot password" → tap the link | The portal's account page loads with the banner *"You followed a password reset link. Choose a new password below."* |
+| The lockout route lands in the same place | Lock an account (5 failed attempts) → the overlay's **Reset password** | The same in-app **Choose a new password** screen — that button is a second call site (`AuthService.sendLockoutNotificationEmail`), hence a second place to forget the redirect |
+
+⚠️ **A reset link is single-use and short-lived.** An older mail from before
+these fields were saved fails as `otp_expired` ("Email link is invalid or has
+expired"), which proves nothing about the config — request a fresh one.
 
 ### Ongoing, and the sharp edges
 
@@ -245,6 +309,30 @@ from auth.users order by created_at desc limit 10;
   Rotate both stores together — Edge Function secret *and* `GMAIL_APP_PASSWORD`
   for `dart run tool/apply_live_auth_mail.dart`, which is the re-run that
   updates GoTrue's copy in one command — then re-run Step 4.
+
+  **Read this before trusting a `--check` run.** `--check` is READ-ONLY (it
+  writes nothing), so its ❌ rows are the project's current state and will read
+  identically on every re-run until the command is run *without* `--check`.
+  And no `--check` can see `smtp_pass` — a READ returns a 64-character opaque
+  digest rather than the 16-character App Password (measured Oct 12, 2026), so
+  it can be neither compared nor safely PATCHed back — so the five
+  SMTP rows can all be ✅ while every send still fails; a wrong or rotated App
+  Password appears only in the auth log as Gmail's own
+  `535 "5.7.8 Username and Password not accepted … - gsmtp"`. If 2-Step
+  Verification is off on the sending Gmail, no App Password can authenticate
+  at all, which produces that same 535 — and the App Password must be created
+  while signed in as the account named as the SMTP user.
+
+  **Order matters while "Confirm email" is OFF, and that is the live state.**
+  Read back from the project on Oct 12, 2026: `mailer_autoconfirm: true`
+  (confirmations OFF) with stock templates and `rate_limit_email_sent: 30`.
+  That combination is what lets sign-up work *today with no mailer at all* —
+  GoTrue auto-confirms, so `signUp` returns a session and sends nothing. The
+  one-shot command flips `mailer_autoconfirm` to `false` in the SAME PATCH as
+  the new App Password, so a password that is still wrong converts a working
+  sign-up into a blocked one. When confirmations are off and the job is only
+  to repair the credential, PATCH `smtp_pass` on its own first, prove a real
+  send (Step 4), and apply the rest afterwards.
 - Gmail's own ceiling is ~500 recipients/day on a free account (~2000 on
   Workspace), with burst throttling — well above this feature's rate, but it is
   the next wall if sign-ups spike.

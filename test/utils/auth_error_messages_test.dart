@@ -60,6 +60,20 @@ void main() {
       );
     });
 
+    test('same_password names the real problem (recovery screen)', () {
+      // Reachable from ResetPasswordScreen: GoTrue refuses a "new" password
+      // that matches the current one. "Too weak" would be the wrong story, and
+      // a generic failure leaves the customer with no idea what to change.
+      const e = AuthException(
+        'New password should be different from the old password.',
+        code: 'same_password',
+      );
+      expect(
+        friendlyAuthError(e),
+        'That is already your password — choose a different one.',
+      );
+    });
+
     test('AuthWeakPasswordException (SDK subtype) maps the same way', () {
       final e = AuthWeakPasswordException(
         message: 'Password should be at least 6 characters',
@@ -188,6 +202,64 @@ void main() {
       expect(message, authErrorServer);
       expect(message, isNot(contains('connection')));
       expect(message, isNot(contains("couldn't reach")));
+    });
+
+    test('a 5xx body keeps its own error_code — it is not flattened', () {
+      // gotrue's `_handleError` turns EVERY status >= 500 into an
+      // AuthRetryableFetchException and never reads the body's `error_code`,
+      // so before this the mapper's code-keyed branches were unreachable for
+      // the failures this project actually hits. Measured on the live project
+      // (Oct 12, 2026), `POST /auth/v1/recover` answers exactly:
+      //   500 {"code":500,"error_code":"unexpected_failure",
+      //        "msg":"Error sending recovery email"}
+      final message = friendlyAuthErrorMessage(
+        AuthRetryableFetchException(
+          message: '{"code":500,"error_code":"unexpected_failure",'
+              '"msg":"Error sending recovery email",'
+              '"error_id":"01a12f97-68f6-7eb2-8b0e-7f214a2d9c5a"}',
+          statusCode: '500',
+        ),
+      );
+      expect(message, authErrorMailNotSent);
+      // The wrong advice for a mailer that cannot send: retrying is the one
+      // thing that cannot work, so the copy must not offer it.
+      expect(message, isNot(contains('try again')));
+      expect(message, isNot(contains('connection')));
+      // ...and none of the server's own text reaches the user.
+      expect(message, isNot(contains('unexpected_failure')));
+      expect(message, isNot(contains('Error sending recovery email')));
+      expect(message, isNot(contains('01a12f97')));
+    });
+
+    test('a rate limit carried in a 5xx body still reads as a rate limit', () {
+      final message = friendlyAuthErrorMessage(
+        AuthRetryableFetchException(
+          message:
+              '{"code":500,"error_code":"over_email_send_rate_limit",'
+              '"msg":"email rate limit exceeded"}',
+          statusCode: '500',
+        ),
+      );
+      expect(message, 'Too many attempts. Try again in about a minute.');
+    });
+
+    test('a 5xx body that is not JSON falls back to the server copy', () {
+      // An HTML error page from a proxy, a truncated body, an empty one: there
+      // is no code to read, so the generic server message still applies.
+      for (final body in <String?>[
+        '<html><body>502 Bad Gateway</body></html>',
+        '{"code":500,',
+        '',
+        null,
+      ]) {
+        final message = friendlyAuthErrorMessage(
+          AuthRetryableFetchException(
+            message: body ?? 'AuthRetryableFetchException',
+            statusCode: '502',
+          ),
+        );
+        expect(message, authErrorServer, reason: '$body');
+      }
     });
   });
 

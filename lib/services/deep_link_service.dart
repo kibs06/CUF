@@ -36,6 +36,27 @@ class DeepLinkService {
   /// `test/services/deep_link_service_test.dart` pins 1 against 2.
   static const String authConfirmRedirect = 'solvision://auth/confirm';
 
+  /// Where a PASSWORD-RESET e-mail sends the customer back to.
+  ///
+  /// The same mechanism as [authConfirmRedirect], for the same reason and with
+  /// the same three-place contract: the mail's button is an
+  /// `https://…/auth/v1/verify` link that 302s to the `redirect_to` it was
+  /// given, so `resetPasswordForEmail(..., redirectTo: authRecoveryRedirect)`
+  /// lands the customer IN the app rather than on a web page. The recovery
+  /// session rides in the URI fragment (`#access_token=…&type=recovery`),
+  /// supabase_flutter's own observer stores it, and the only thing left to do
+  /// is choose a new password — see `ResetPasswordScreen`.
+  ///
+  /// ⚠️ Three places must agree, exactly as for the confirmation link:
+  ///  1. this constant,
+  ///  2. the `solvision`/`auth` intent-filter in `AndroidManifest.xml` (iOS
+  ///     matches the `solvision` scheme alone),
+  ///  3. the LIVE project's Authentication → URL Configuration → **Redirect
+  ///     URLs** allow-list, which `tool/apply_live_auth_mail.dart` writes.
+  /// `test/services/deep_link_service_test.dart` and
+  /// `test/services/password_reset_redirect_test.dart` pin the three.
+  static const String authRecoveryRedirect = 'solvision://auth/recovery';
+
   /// Whether a link is one of our GCash return links.
   static bool isGcashReturn(Uri uri) =>
       uri.scheme == 'solvision' &&
@@ -52,6 +73,36 @@ class DeepLinkService {
     return uri.scheme == expected.scheme &&
         uri.host == expected.host &&
         uri.path.startsWith(expected.path);
+  }
+
+  /// Whether [uri] is the return from a password-reset e-mail (see
+  /// [authRecoveryRedirect]).
+  ///
+  /// Matched on scheme + host + PATH, not merely the scheme: this link and
+  /// [authConfirmRedirect] share a host and differ only in that path, and
+  /// routing a reset into the sign-up completion (or the reverse) is the
+  /// silent failure — the app opens, and acts on the wrong thing.
+  static bool isAuthRecoveryLink(Uri uri) {
+    final expected = Uri.parse(authRecoveryRedirect);
+    return uri.scheme == expected.scheme &&
+        uri.host == expected.host &&
+        uri.path.startsWith(expected.path);
+  }
+
+  /// The reason GoTrue itself refused a recovery link — `otp_expired` for one
+  /// that was already used or sat in the inbox past its hour — else null.
+  ///
+  /// A refusal arrives on the SAME link with a query instead of a fragment
+  /// (`…solvision://auth/recovery?error=access_denied&error_code=otp_expired`),
+  /// and it carries no session, so the recovery handler has nothing to open.
+  /// Read here rather than in the handler because it is a property of the LINK,
+  /// and because a silent nothing is what makes a customer report "the button
+  /// in the e-mail is broken".
+  static String? recoveryLinkRefusal(Uri uri) {
+    if (!isAuthRecoveryLink(uri)) return null;
+    return uri.queryParameters['error_code'] ??
+        uri.queryParameters['error_description'] ??
+        uri.queryParameters['error'];
   }
 
   /// The product ID when [uri] is a product share link, else null.

@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../constants/app_constants.dart';
 import '../exceptions/stock_unavailable_exception.dart';
+import 'deep_link_service.dart';
 import '../utils/cart_helpers.dart';
 import '../utils/nav_perf.dart';
 import '../utils/product_stock.dart';
@@ -164,8 +165,19 @@ class SupabaseService {
     return Map<String, dynamic>.from(data);
   }
 
+  /// Send the password-reset e-mail.
+  ///
+  /// This is the one `AuthProvider.resetPassword` calls (and the lockout
+  /// overlay's route with it), so the `redirectTo` here is the link a
+  /// customer's "Forgot password?" actually mails. It sends the customer back
+  /// into the APP (`DeepLinkService.authRecoveryRedirect`), for the reason in
+  /// `AuthService.resetPassword` — and it is pinned, with the other call
+  /// sites, by `test/services/password_reset_redirect_test.dart`.
   Future<void> resetPassword(String email) async {
-    await _client.auth.resetPasswordForEmail(email.trim());
+    await _client.auth.resetPasswordForEmail(
+      email.trim(),
+      redirectTo: DeepLinkService.authRecoveryRedirect,
+    );
   }
 
   Future<Map<String, dynamic>?> getProfileByEmail(String email) async {

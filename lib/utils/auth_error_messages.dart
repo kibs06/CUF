@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -11,10 +12,31 @@ const String authErrorNetwork =
     "We couldn't reach CUFMAI. Check your connection and try again.";
 
 /// Shown when the request DID reach CUFMAI's auth service and that service
-/// failed (HTTP 5xx). Supabase returns a 500 for things like a broken mail
-/// relay, so the connection is fine and telling the user to check it is wrong.
+/// failed (HTTP 5xx) in a way whose reason we could not read.
+///
+/// The connection is fine, so telling the user to check it is wrong — but this
+/// is the FALLBACK, not the 5xx message: a 5xx body that names its
+/// `error_code` is answered by that code instead ([friendlyAuthErrorMessage]),
+/// which is what keeps a mailer refusal from reading as "try again in a few
+/// minutes".
 const String authErrorServer =
     "CUFMAI couldn't finish that request. Please try again in a few minutes.";
+
+/// Shared copy for a message OUR mailer could not deliver, whatever GoTrue
+/// calls it. Two codes reach it on this project:
+///
+///  * `email_address_not_authorized` — the built-in mailer refusing a
+///    recipient outside the Supabase organization;
+///  * `unexpected_failure` — GoTrue's catch-all for a 5xx it raised itself,
+///    measured here as `"Error sending recovery email"` (see the case below).
+///
+/// One constant for both, because both are server-side and unfixable by the
+/// user: the wording must never blame their address, and it must never promise
+/// that trying again helps. Deliberately "that email" rather than "to that
+/// address" — the recipient is not what went wrong in either case.
+const String authErrorMailNotSent =
+    "We couldn't deliver that email — that one is on us. Contact support and we "
+    'will sort it out.';
 
 /// Shared copy for an already-registered email — used by BOTH the code-keyed
 /// mapper (user_already_exists / email_exists) and the register screen's
@@ -50,6 +72,12 @@ String friendlyAuthError(AuthException e) {
       return authErrorEmailExists;
     case 'weak_password':
       return "That password's too weak. Use at least 6 characters.";
+    case 'same_password':
+      // Reachable from the recovery screen: GoTrue refuses a "new" password
+      // that matches the current one. "Too weak" would be the wrong story —
+      // the password is fine, it is just not NEW — and the customer has no way
+      // to guess that from a generic failure, so the copy names it.
+      return 'That is already your password — choose a different one.';
     case 'email_address_invalid':
       // Server-side rejection, NOT necessarily a typo: GoTrue returned this for
       // a well-formed Gmail address on the live project (Sep 16, 2026, see
@@ -63,8 +91,31 @@ String friendlyAuthError(AuthException e) {
       // caused this, and no amount of retrying fixes it — so say so instead of
       // blaming the address. Both codes here are server-side only: the Dart
       // SDK's ErrorCode enum does not list them, hence the raw strings.
-      return "We couldn't deliver email to that address — that one is on us. "
-          'Contact support and we will sort it out.';
+      return authErrorMailNotSent;
+    case 'unexpected_failure':
+      // GoTrue's catch-all for a 5xx it raised itself, and on this project the
+      // reachable cause is the mailer. Measured on the live project (Oct 12,
+      // 2026), the exact call "Forgot password?" makes:
+      //
+      //   POST /auth/v1/recover  {"email":"<an existing account>"}
+      //   → 500 {"code":500,"error_code":"unexpected_failure",
+      //          "msg":"Error sending recovery email"}
+      //
+      // while an address with no account answers 200 (GoTrue short-circuits
+      // and mails nothing), so the 500 is a SEND failure, not a bad address.
+      //
+      // The auth log holds the reason the client never sees — the SMTP
+      // handshake itself was refused:
+      //
+      //   error: 535 "5.7.8 Username and Password not accepted … - gsmtp"
+      //
+      // i.e. a stale Gmail App Password on the project's configured SMTP (see
+      // docs/AI/FORGOT_PASSWORD_ARCHITECTURE.md for the full log row).
+      //
+      // This must not read as "try again in a few minutes": retrying is the
+      // one thing that cannot work while the mailer cannot send, and it is
+      // what makes the app look broken instead of unset-up.
+      return authErrorMailNotSent;
     case 'over_email_send_rate_limit':
       // Reached by the email-OTP resend button too — Supabase rate-limits
       // per address AND per IP, so this must never fail silently.
@@ -114,6 +165,27 @@ bool isCredentialRejection(Object error) {
   return error.code == 'invalid_credentials' || error.code == 'user_not_found';
 }
 
+/// The `error_code` inside a gotrue error BODY, or null when the body carries
+/// none to read.
+///
+/// Only needed for 5xx — see [friendlyAuthErrorMessage], which is the single
+/// caller. A body that is not the expected JSON object (an HTML error page
+/// from a proxy, a truncated response, an empty body) answers null rather than
+/// throwing, so the caller keeps its generic fallback.
+String? _errorCodeFromBody(String? body) {
+  if (body == null || body.isEmpty) return null;
+  try {
+    final decoded = jsonDecode(body);
+    if (decoded is Map) {
+      final code = decoded['error_code'];
+      if (code is String && code.isNotEmpty) return code;
+    }
+  } on FormatException {
+    // Not JSON. Nothing to read — not an error in itself.
+  }
+  return null;
+}
+
 /// Maps ANY error thrown from an auth call to a user-safe string.
 ///
 /// [AuthException]s are translated by code via [friendlyAuthError]; anything
@@ -130,7 +202,24 @@ String friendlyAuthErrorMessage(Object error, {StackTrace? stackTrace}) {
       // an HTTP 5xx from the server (status code set). Only the first means we
       // never reached it, so only the first gets the connection message.
       debugPrint('[AuthError] Fetch failed: $error');
-      return error.statusCode == null ? authErrorNetwork : authErrorServer;
+      if (error.statusCode == null) return authErrorNetwork;
+      // A 5xx DID reach us — but gotrue's `GotrueFetch._handleError` turns
+      // EVERY status >= 500 into this same exception type and never reads the
+      // body's `error_code`, so the code-keyed branches above are unreachable
+      // for exactly the failures this project hits (a mailer that cannot
+      // send). The body survives on the exception (`message: response.body`),
+      // so recover the code from it and let the shared mapper answer.
+      final code = _errorCodeFromBody(error.message);
+      if (code != null) {
+        return friendlyAuthError(
+          AuthApiException(
+            error.message,
+            statusCode: error.statusCode,
+            code: code,
+          ),
+        );
+      }
+      return authErrorServer;
     }
     return friendlyAuthError(error);
   }

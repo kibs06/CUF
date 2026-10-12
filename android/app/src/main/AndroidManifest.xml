@@ -61,17 +61,24 @@
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data android:scheme="solvision" android:host="checkout" android:pathPrefix="/gcash"/>
             </intent-filter>
-            <!-- Deep link: return from the sign-up confirmation e-mail
-                 (solvision://auth/confirm). The path/host here must match
-                 DeepLinkService.authConfirmRedirect exactly — a mismatch means
-                 the e-mail button opens a browser instead of the app. Also
-                 allow-listed in the LIVE project (Authentication → URL
-                 Configuration → Redirect URLs). -->
+            <!-- Deep links: the two e-mail returns, both on solvision://auth.
+                 The confirmation button (solvision://auth/confirm) and the
+                 password-reset button (solvision://auth/recovery) share this
+                 one filter because Android matches a cross-product of the
+                 <data> elements below — two paths, one declaration.
+
+                 Each path must match its Dart constant EXACTLY
+                 (DeepLinkService.authConfirmRedirect /
+                 authRecoveryRedirect) or that e-mail button opens a browser
+                 instead of the app. Both are also allow-listed in the LIVE
+                 project (Authentication → URL Configuration → Redirect URLs),
+                 written by tool/apply_live_auth_mail.dart. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data android:scheme="solvision" android:host="auth" android:pathPrefix="/confirm"/>
+                <data android:scheme="solvision" android:host="auth" android:pathPrefix="/recovery"/>
             </intent-filter>
             <!-- App Links for product shares (Phase B — DISABLED until a
                  custom domain exists). Shared product links open the app

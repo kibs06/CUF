@@ -377,6 +377,30 @@ class _DeepLinkHostState extends State<DeepLinkHost> {
       return;
     }
 
+    // Return from a password-RESET e-mail. Same trick as the confirmation
+    // link (GoTrue hands the app a short-lived session in the fragment) and
+    // the same division of labour: supabase_flutter's own observer stores that
+    // session, and this tells the gate which screen the session is for — the
+    // set-new-password one — instead of letting it route to the shell with the
+    // reset unfinished.
+    if (DeepLinkService.isAuthRecoveryLink(uri)) {
+      if (!mounted) return;
+      final handled = await context
+          .read<AuthProvider>()
+          .completePasswordRecoveryFromEmailLink();
+      // A link GoTrue REFUSED still arrives here — same URL, `error_code`
+      // instead of a session (an expired or already-used token) — and the
+      // handler correctly opens nothing. Say so: a tap that does nothing at all
+      // is what turns a stale mail into "the reset button is broken".
+      if (!handled && DeepLinkService.recoveryLinkRefusal(uri) != null) {
+        _showLinkNotice(
+          'That reset link has expired or was already used. Request a new one '
+          'from “Forgot password?”.',
+        );
+      }
+      return;
+    }
+
     if (!DeepLinkService.isGcashReturn(uri)) return;
     // Warm return: the payment screen is open and polling — skip.
     if (GcashPaymentScreen.isOpen) return;

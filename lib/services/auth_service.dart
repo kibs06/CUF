@@ -483,8 +483,27 @@ class AuthService {
     );
   }
 
+  /// Send the password-reset e-mail (the sign-in screen's "Forgot password?"
+  /// and the lockout overlay's "Reset password").
+  ///
+  /// `redirectTo` is what makes the mailed link usable, and it points at the
+  /// APP: GoTrue's button is an `https://…/auth/v1/verify` link that 302s to
+  /// the redirect it was given, so the customer lands in CUFMAI with a
+  /// short-lived recovery session (`#access_token=…&type=recovery`) instead of
+  /// on a web page. With no redirect at all GoTrue resolves the link to the
+  /// project's **Site URL** — a dashboard value the app cannot see — and while
+  /// that was the shipped `localhost:3000` default, tapping the link opened a
+  /// dead page (`ERR_CONNECTION_REFUSED`) even after the mailer was repaired.
+  ///
+  /// ⚠️ GoTrue only honours a redirect it has been told about, so this value
+  /// must be in the live project's allow list — written, together with the
+  /// site URL, by `tool/apply_live_auth_mail.dart`. See
+  /// `DeepLinkService.authRecoveryRedirect` for the three places that agree.
   Future<void> resetPassword(String email) async {
-    await _client.auth.resetPasswordForEmail(email.trim());
+    await _client.auth.resetPasswordForEmail(
+      email.trim(),
+      redirectTo: DeepLinkService.authRecoveryRedirect,
+    );
   }
 
 
@@ -682,14 +701,35 @@ class AuthService {
         .neq('status', 'active');
   }
 
+  /// Set a new password for the CURRENT session — the last step of the
+  /// recovery flow (`AuthProvider.applyRecoveredPassword`), and the same call
+  /// any change-password screen makes.
+  ///
+  /// Throws when GoTrue refuses the password: the project enforces
+  /// `password_min_length` (live value 6), and answers `weak_password` — or
+  /// `same_password` when the new one matches the old. Both are mapped in
+  /// `friendlyAuthErrorMessage`. The session is AAL1-with-recovery-token at
+  /// this point, and the live project does not require re-authentication for a
+  /// password update (`security_update_password_require_reauthentication` =
+  /// false); if that is ever turned on, THIS call starts failing with
+  /// `reauthentication_needed` instead of silently doing nothing.
+  Future<void> updatePassword(String newPassword) async {
+    await _client.auth.updateUser(UserAttributes(password: newPassword));
+  }
+
   /// Send account lockout notification email to the account owner.
   /// Uses the existing email-sending function (Supabase resetPasswordForEmail)
   /// which sends a password reset link. The reset form will check for
   /// pending lockout/intruder state and present the two confirmation options.
   /// On successful reset or confirmation, the lockout is lifted.
   Future<void> sendLockoutNotificationEmail(String email) async {
-    // Reuse the existing email-sending function
-    await _client.auth.resetPasswordForEmail(email.trim());
+    // Reuse the existing email-sending function, with the same `redirectTo`
+    // as [resetPassword]: one reset destination, so a lockout mail can never
+    // send the customer somewhere the new-password form is not.
+    await _client.auth.resetPasswordForEmail(
+      email.trim(),
+      redirectTo: DeepLinkService.authRecoveryRedirect,
+    );
     debugPrint(
         '[Auth] Lockout notification email sent to: $email (Supabase reset password)');
   }

@@ -4,8 +4,9 @@ import 'package:app/services/deep_link_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Cover for the app's deep links, and the cross-artifact CONTRACT behind the
-/// newest one: the return from the sign-up confirmation e-mail
-/// (`solvision://auth/confirm`).
+/// two e-mail returns: sign-up confirmation (`solvision://auth/confirm`) and
+/// password recovery (`solvision://auth/recovery`) — the same mechanism, two
+/// paths that must never be mistaken for each other.
 ///
 /// Incoming links all look alike to the OS, so a link is routed by matching
 /// scheme + host + path. Getting that predicate wrong is silent in the worst
@@ -72,9 +73,81 @@ void main() {
       expect(DeepLinkService.isGcashReturn(uri('solvision://auth/confirm')),
           isFalse);
     });
+
+    test('the auth recovery link is only the auth/recovery path', () {
+      expect(
+        DeepLinkService.isAuthRecoveryLink(uri('solvision://auth/recovery')),
+        isTrue,
+      );
+      // The recovery session rides in the fragment exactly as the
+      // confirmation one does, and a trailing slash is what a hand-edited
+      // link tends to look like — both must still match.
+      expect(
+        DeepLinkService.isAuthRecoveryLink(
+          uri('solvision://auth/recovery#access_token=t&type=recovery'),
+        ),
+        isTrue,
+      );
+      expect(
+        DeepLinkService.isAuthRecoveryLink(uri('solvision://auth/recovery/')),
+        isTrue,
+      );
+    });
+
+    test('a refused recovery link carries its reason', () {
+      // What a customer gets for tapping the same mail twice, or one that sat in
+      // the inbox past its hour: the link, with `error_code` and no session.
+      expect(
+        DeepLinkService.recoveryLinkRefusal(
+          uri('solvision://auth/recovery?error=access_denied'
+              '&error_code=otp_expired&error_description=Email+link+is+invalid'),
+        ),
+        'otp_expired',
+      );
+      // A working link has nothing to report, and neither does anything that
+      // is not a recovery link at all.
+      expect(
+        DeepLinkService.recoveryLinkRefusal(
+          uri('solvision://auth/recovery#access_token=t&type=recovery'),
+        ),
+        isNull,
+      );
+      expect(
+        DeepLinkService.recoveryLinkRefusal(uri('solvision://auth/confirm')),
+        isNull,
+      );
+    });
+
+    test('the two auth e-mail links never match each other', () {
+      // Same scheme, same host, different path — so a predicate that matched on
+      // the scheme (or on the host alone) would send a reset into the sign-up
+      // completion, which is silent: the app opens and does the wrong thing.
+      expect(
+        DeepLinkService.isAuthRecoveryLink(uri('solvision://auth/confirm')),
+        isFalse,
+      );
+      expect(
+        DeepLinkService.isAuthConfirmLink(uri('solvision://auth/recovery')),
+        isFalse,
+      );
+      expect(
+        DeepLinkService.isAuthRecoveryLink(uri('solvision://checkout/gcash')),
+        isFalse,
+      );
+      expect(
+        DeepLinkService.isAuthRecoveryLink(
+          uri('https://example.com/auth/recovery'),
+        ),
+        isFalse,
+      );
+      expect(
+        DeepLinkService.isGcashReturn(uri('solvision://auth/recovery')),
+        isFalse,
+      );
+    });
   });
 
-  group('authConfirmRedirect agreement', () {
+  group('the e-mail returns agree with the Android manifest', () {
     late String manifest;
     late String plist;
     late String authService;
@@ -111,6 +184,38 @@ void main() {
         ),
         reason: 'AndroidManifest must declare the redirect the app signs up '
             'with, or the e-mail button opens a browser instead of the app',
+      );
+    });
+
+    test('the RECOVERY constant is the scheme/host/path Android declares', () {
+      final redirect = uri(DeepLinkService.authRecoveryRedirect);
+      expect(redirect.scheme, 'solvision');
+      expect(redirect.host, 'auth');
+      expect(redirect.path, '/recovery');
+
+      // The intent-filter Android needs for the reset button to open the app.
+      // Both paths sit in ONE filter, because Android matches a cross-product
+      // of its <data> elements.
+      expect(
+        manifest,
+        contains(
+          'android:scheme="${redirect.scheme}" '
+          'android:host="${redirect.host}" '
+          'android:pathPrefix="${redirect.path}"',
+        ),
+        reason: 'without this path the reset mail opens a browser, which cannot '
+            'follow solvision:// and cannot set the password',
+      );
+    });
+
+    test('a reset asks GoTrue to come back to the app', () {
+      // The app-side half of the contract; the tool, the runbook and the
+      // portal are pinned in password_reset_redirect_test.dart.
+      expect(
+        authService,
+        contains('redirectTo: DeepLinkService.authRecoveryRedirect'),
+        reason: 'without a redirect the mailed link carries the Site URL and '
+            'the app never sees the tap',
       );
     });
 

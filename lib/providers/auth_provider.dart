@@ -47,6 +47,13 @@ class AuthProvider extends ChangeNotifier {
   Map<String, dynamic>? _pendingDeviceChallenge;
   Map<String, dynamic>? get pendingDeviceChallenge => _pendingDeviceChallenge;
 
+  /// Non-null while a password-RESET e-mail link has been opened and the new
+  /// password has not been set yet. Holds `{'email'}`. AuthGate renders
+  /// `ResetPasswordScreen` for as long as this is set — the session the link
+  /// carried is already live behind it.
+  Map<String, dynamic>? _pendingPasswordRecovery;
+  Map<String, dynamic>? get pendingPasswordRecovery => _pendingPasswordRecovery;
+
   /// Owns the trusted-device decision + the step-up round trip. Injectable
   /// so tests can drive [login] with fake gateways.
   final LoginChallengeService _challenge;
@@ -854,6 +861,108 @@ class AuthProvider extends ChangeNotifier {
     } catch (_) {
       // Best-effort, as everywhere else.
     }
+  }
+
+  // ── Password recovery by e-mail link ────────────────────────────
+
+  /// Handles the return from a password-reset e-mail
+  /// (`DeepLinkService.authRecoveryRedirect`): adopts the session the link
+  /// carried and parks the app on the set-new-password screen.
+  ///
+  /// The session itself needs no help — supabase_flutter's deep-link observer
+  /// parses the `#access_token=…&type=recovery` fragment and stores it, which
+  /// is also what makes AuthGate's stream emit. What that observer cannot know
+  /// is that this session's ONLY purpose is a password change, so holding it
+  /// must not drop the customer into the shell (or, on a brand-new install,
+  /// into onboarding). That is what [pendingPasswordRecovery] is for, and
+  /// AuthGate renders the screen ahead of every profile-based route.
+  ///
+  /// The profile read below is best-effort on purpose: the server-side device
+  /// gate can legitimately deny it before this install holds a device secret,
+  /// and nothing about setting a password needs it. It is there so the gate
+  /// has something to route on the moment the reset finishes — and so a cancel
+  /// lands in the app rather than on the profile-error screen.
+  Future<bool> completePasswordRecoveryFromEmailLink() async {
+    final user = await _waitForLinkSession();
+    if (user == null) {
+      debugPrint('[AuthProvider] recovery link arrived with no session');
+      return false;
+    }
+
+    _currentUser = {'id': user.id, 'email': user.email};
+    _profile = null;
+    _pendingPasswordRecovery = {'email': user.email ?? ''};
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      _profile = await _db.getProfile(user.id);
+      notifyListeners();
+    } catch (e) {
+      debugPrint('[AuthProvider] recovery link: profile not read yet: $e');
+    }
+    return true;
+  }
+
+  /// Sets the new password on the session the recovery link established and
+  /// ends the recovery. On failure it sets [_errorMessage] and RETHROWS, so
+  /// the screen can render the mapped copy — the same contract as
+  /// [verifyDeviceChallenge].
+  ///
+  /// The follow-ups mirror [_finishSignupSession], for the same reason: this
+  /// is the one moment the account is proven to be the customer's (they opened
+  /// the mail), so the install is recorded as a trusted device — a recovery
+  /// session with no device secret would find every device-gated table
+  /// silently empty once the gate is enforced — and the account is saved for
+  /// quick switching.
+  Future<bool> applyRecoveredPassword(String newPassword) async {
+    if (_pendingPasswordRecovery == null) return false;
+
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      await _auth.updatePassword(newPassword);
+
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId != null) {
+        await _recordCurrentDeviceTrusted(userId);
+        if (_profile == null) {
+          try {
+            _profile = await _db.getProfile(userId);
+          } catch (e) {
+            debugPrint('[AuthProvider] recovery: profile still unread: $e');
+          }
+        }
+      }
+
+      _pendingPasswordRecovery = null;
+      if (userId != null) {
+        try {
+          await AccountManager.instance.saveCurrentSession(profile: _profile);
+        } catch (_) {
+          // Best-effort, as everywhere else.
+        }
+      }
+      return true;
+    } catch (e, st) {
+      _errorMessage = friendlyAuthErrorMessage(e, stackTrace: st);
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Leaves the recovery without setting a password. The session is KEPT: the
+  /// customer did prove they own the mailbox, so they are simply signed in
+  /// with their existing password, and can change it later from Account
+  /// security.
+  void cancelPasswordRecovery() {
+    _pendingPasswordRecovery = null;
+    _errorMessage = null;
+    notifyListeners();
   }
 
   // ── Email OTP: new-device step-up (ANQUI item 16, Part B) ────────

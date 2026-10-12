@@ -39,6 +39,18 @@
 /// dart run tool/apply_live_auth_mail.dart              # apply it, then verify
 /// ```
 ///
+/// ## Trying it without touching the live project
+///
+/// `--api-base` points the whole tool at anything that speaks the same two
+/// endpoints, so the apply path can be exercised locally: serve `GET` and
+/// `PATCH` on `/v1/projects/{ref}/config/auth` from a throwaway mock seeded
+/// with a real config read, then run the apply against it with the mock's
+/// values for the three credentials. Verified that way on Oct 12, 2026 — a
+/// `--check` against the broken values printed both ❌ destination rows and
+/// exited 1; the apply run printed 14 ✅ and exited 0; and a mock answering
+/// `403 {"message":"Missing required permission(s): auth_config_write,
+/// project_admin_write"}` produced the scope advice below verbatim.
+///
 /// ## Credentials
 ///
 /// Read from the environment when present, otherwise prompted for (the App
@@ -52,6 +64,22 @@
 ///   (`send-approval-email` / `send-lockout-email`).
 /// * `GMAIL_APP_PASSWORD` — its 16-character App Password (2FA → App
 ///   passwords). NOT the account password, which Gmail refuses here.
+///
+/// ## The reset link is part of this config
+///
+/// A recovery e-mail is the one auth mail whose LINK the customer has to
+/// open, so its destination is written here too: `site_url` plus the
+/// allow-list entries. Measured Oct 12, 2026 — the mailer was fixed and every
+/// reset link STILL resolved to the project's shipped `http://localhost:3000`
+/// default, i.e. `ERR_CONNECTION_REFUSED` on the customer's phone, with an
+/// empty allow list meaning no explicit redirect could be honoured either.
+///
+/// The app's three reset call sites now send
+/// `redirectTo: solvision://auth/recovery`, so the button opens CUFMAI and the
+/// set-new-password screen finishes the reset in-process; the deployed
+/// portal's `/account` page stays allow-listed (and stays the Site URL) so a
+/// reset started on the WEBSITE — or one whose app redirect GoTrue will not
+/// honour — still lands on a page that can set a password.
 ///
 /// ## What it does NOT do
 ///
@@ -98,6 +126,32 @@ const int defaultEmailRateLimit = 100;
 /// (`DeepLinkService.authConfirmRedirect` — three places must agree on this).
 const String authConfirmRedirect = 'solvision://auth/confirm';
 
+/// Where the app's PASSWORD-RESET button comes back to
+/// (`DeepLinkService.authRecoveryRedirect`) — the same contract as the
+/// confirmation link above, and the entry that must be present for a reset
+/// mail to open the app at all instead of a browser.
+const String authRecoveryRedirect = 'solvision://auth/recovery';
+
+/// The deployed customer portal (`customer-portal/` in this repo).
+///
+/// ⚠️ Must match `AppConstants.customerPortalUrl` in the app — that constant
+/// is what the reset calls send as `redirectTo`, and this is what gets
+/// allow-listed. The contract test
+/// `test/services/password_reset_redirect_test.dart` pins the two together.
+const String customerPortalOrigin = 'https://cufmai-portal.vercel.app';
+
+/// Where a reset e-mail must land: the portal's account page, whose
+/// "Change password" form finishes the reset (the link signs the customer in
+/// with a short-lived session, so the only thing left to do is set a new
+/// password — and that page announces itself as the arrival point).
+const String customerPortalResetRedirect = '$customerPortalOrigin/account';
+
+/// The portal's own `npm run dev` origin (`customer-portal/vite.config.js`
+/// keeps it off the admin portal's 5173). Allow-listed so a reset started
+/// against a LOCAL portal can be tested end to end; without it GoTrue drops
+/// the redirect and every local test lands on the deployed site instead.
+const String customerPortalDevOrigin = 'http://localhost:5174';
+
 /// The `/auth/v1/...` path this tool writes. Kept as one string so the READ
 /// and the PATCH can never drift onto different endpoints.
 const String configPathTemplate = '/v1/projects/{ref}/config/auth';
@@ -130,7 +184,17 @@ Future<void> main(List<String> argv) async {
       'Supabase access token (Dashboard -> Account -> Access Tokens): ',
       secret: true,
     );
-    exit(await _verify(url, token, sender) ? 0 : 1);
+    // Said BEFORE the list, because the list alone is misread: five ✅ rows
+    // next to a broken mailer, and a ❌ row that reappears on every run, both
+    // look like a stuck write when nothing was ever written.
+    print(
+      '\n── READ-ONLY check (--check): nothing will be written ──',
+    );
+    exit(
+      await _verify(url, token, sender, readOnly: true, siteUrl: args.siteUrl)
+          ? 0
+          : 1,
+    );
   }
 
   final String appPassword = _credential(
@@ -156,16 +220,17 @@ Future<void> main(List<String> argv) async {
   );
   final Map<String, dynamic> current = await _getConfig(url, token);
   final String currentList = '${current['uri_allow_list'] ?? ''}';
-  final String siteUrl = '${current['site_url'] ?? ''}';
+  final String currentSiteUrl = '${current['site_url'] ?? ''}';
   print('Current uri_allow_list: '
       '${currentList.isEmpty ? '(empty)' : currentList}');
-  print('Current site_url:       ${siteUrl.isEmpty ? '(unset)' : siteUrl}');
+  print('Current site_url:       '
+      '${currentSiteUrl.isEmpty ? '(unset)' : currentSiteUrl}');
 
   final Map<String, dynamic> payload = _buildPayload(
     args,
     sender: sender,
     appPassword: appPassword,
-    allowList: _mergeAllowList(currentList, siteUrl),
+    allowList: _mergeAllowList(currentList, args.siteUrl),
   );
 
   if (args.dryRun) {
@@ -187,19 +252,33 @@ Future<void> main(List<String> argv) async {
   if (response.statusCode != 200) {
     _fail(
       'The PATCH was rejected (HTTP ${response.statusCode}):\n${response.body}\n\n'
-      'A 401/403 means the token lacks `auth:write`; a 400 usually names the '
-      'offending field above.',
+      // Name the scopes the API itself asks for. Measured Oct 12, 2026: a
+      // fine-grained token that read the config fine was refused the write
+      // with `{"message":"Missing required permission(s): auth_config_write,
+      // project_admin_write"}`, so "lacks `auth:write`" sent its owner looking
+      // for a permission that does not exist under that name. The wording here
+      // must match the dashboard's own scope names.
+      'A 401/403 means the token lacks the auth-config write scope — the API '
+      'names what it wanted in `missing_permissions` above (normally '
+      '`auth_config_write`, or the broader `project_admin_write`), and the '
+      'token has to be CREATED with it; re-running cannot add it. A 400 '
+      'usually names the offending field above.',
     );
   }
 
   print('\n✅ Applied.');
-  final bool ok = await _verify(url, token, sender);
+  final bool ok = await _verify(url, token, sender, siteUrl: args.siteUrl);
   print(
     '\nNext: send yourself one real code (sign up with a fresh address, or '
     'turn the device gate on and sign in from a cleared install) and check the '
     'mail: heading "Confirm it\'s you", a 6-digit number, and a From: of '
     '$sender — never `noreply@mail.app.supabase.io`. Full check list: '
-    'docs/fixes/GO_LIVE_PRELAUNCH_CHECKLIST.md §R8 Step 4.',
+    'docs/fixes/GO_LIVE_PRELAUNCH_CHECKLIST.md §R8 Step 4.'
+    '\nThen click one reset link END TO END — sign-in screen → "Forgot '
+    'password?" → the button in the mail must open the portal\'s account page '
+    'with the "You followed a password reset link" banner, and a new password '
+    'set there must sign in. That click is the only proof: /recover answering '
+    '200 says nothing about where the link goes (§R8 Step 5).',
   );
   exit(ok ? 0 : 1);
 }
@@ -241,7 +320,15 @@ Map<String, dynamic> _buildPayload(
     'mailer_subjects_magic_link': subjectMagicLink,
     'mailer_templates_magic_link_content': _readTemplate('magic_link.html'),
 
-    // ── Where the confirmation BUTTON returns (Step 3b) ────────────────
+    // ── Where every e-mail link lands (Step 3b) ────────────────────────
+    // The Site URL is GoTrue's DEFAULT redirect — what a reset call with no
+    // `redirectTo` resolves to (an older app build, or any future call site
+    // that forgets it), so it must not stay on the `http://localhost:3000`
+    // placeholder the project ships with. `uri_allow_list` is a separate
+    // switch: GoTrue ignores an explicit redirect it has not been told about
+    // and falls back to the site URL, so an entry here is what makes the
+    // app's `redirectTo` work at all.
+    'site_url': args.siteUrl,
     'uri_allow_list': allowList,
   };
 }
@@ -275,24 +362,85 @@ String _readTemplate(String name) {
   return body;
 }
 
-/// Append what the app needs, keeping every entry already configured.
+/// Append every link destination the app mails, keeping the entries already
+/// configured.
 ///
-/// `site_url` is kept in the list on purpose: the app sends no `redirectTo`
-/// for password resets, so those links resolve to the site URL, and a
-/// non-empty allow list is what decides whether that redirect is honoured.
+/// A PATCH replaces this field wholesale, so anything already there has to be
+/// carried over by hand — that is why the config is READ first. (The previous
+/// SITE URL is deliberately not carried over, unlike everything else: the
+/// payload repoints `site_url` itself, so an entry for the old value would only
+/// keep a dead destination — this project's default `http://localhost:3000` —
+/// allow-listed forever.)
+///
+/// Each entry added is one link, and each link is a different failure when it
+/// is missing:
+///   • the Site URL this payload writes, plus its wildcard — the fallback for
+///     a reset call that carries no `redirectTo`;
+///   • [customerPortalResetRedirect] — what the app's own reset calls send
+///     (all three call sites), i.e. the link the customer actually clicks;
+///   • [authConfirmRedirect] — the sign-up confirmation button, which comes
+///     back to the APP (`DeepLinkService.authConfirmRedirect`);
+///   • [authRecoveryRedirect] — the password-reset button, also back to the
+///     APP (`DeepLinkService.authRecoveryRedirect`), where the set-new-
+///     password screen finishes the reset;
+///   • [customerPortalDevOrigin] and its wildcard — the local portal, so the
+///     same flow can be tested against a dev server.
 String _mergeAllowList(String current, String siteUrl) {
   final List<String> entries = current
       .split(',')
       .map((String e) => e.trim())
       .where((String e) => e.isNotEmpty)
       .toList();
-  for (final String candidate in <String>[siteUrl, authConfirmRedirect]) {
+
+  void add(String candidate) {
     if (candidate.isNotEmpty && !entries.contains(candidate)) {
       entries.add(candidate);
     }
   }
+
+  add(siteUrl);
+  add(_wildcard(siteUrl));
+  add(customerPortalResetRedirect);
+  add(_wildcard(customerPortalOrigin));
+  add(authConfirmRedirect);
+  add(authRecoveryRedirect);
+  add(customerPortalDevOrigin);
+  add(_wildcard(customerPortalDevOrigin));
   return entries.join(',');
 }
+
+/// `<origin>/**` — the documented wildcard form, and the only one that helps
+/// here: GoTrue compiles these entries with `/` and `.` as separators, so a
+/// single `*` never crosses a `/` and `**` does. One entry therefore covers
+/// every client-side route of the portal (`/account`, `/auth/confirm`, …).
+String _wildcard(String origin) {
+  final String trimmed = origin.replaceAll(RegExp(r'/+$'), '');
+  return trimmed.isEmpty ? '' : '$trimmed/**';
+}
+
+/// Whether [list] (GoTrue's comma-separated allow list) already holds an entry
+/// covering [url].
+///
+/// Two shapes count, and both are checked because either is enough to make the
+/// link work: the URL itself, and the wildcard form above. A plain substring
+/// test would read the wildcard as a miss and report a missing entry that is
+/// sitting right there in the list.
+bool _allowListCovers(String list, String url) {
+  for (final String raw in list.split(',')) {
+    final String entry = raw.trim();
+    if (entry.isEmpty) continue;
+    if (entry == url) return true;
+    if (entry.endsWith('/**') &&
+        url.startsWith(entry.substring(0, entry.length - 2))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/// Trailing slashes are not meaningful for either compare below, and the
+/// dashboard has been known to store the site URL with one.
+String _trimSlashes(String value) => value.replaceAll(RegExp(r'/+$'), '');
 
 Map<String, dynamic> _masked(Map<String, dynamic> payload) => <String, dynamic>{
       for (final MapEntry<String, dynamic> e in payload.entries)
@@ -319,12 +467,35 @@ String _preview(Map<String, dynamic> payload) {
 // ── verification ─────────────────────────────────────────────────────────────
 
 /// Read the config back and assert every field the app depends on.
-Future<bool> _verify(String url, String token, String sender) async {
+///
+/// [readOnly] says which mode called us, because the two need opposite advice
+/// for the same ❌ row: an APPLY run whose fields did not stick points at a
+/// rejected PATCH or a dashboard-managed field, while a `--check` run that
+/// reports the same ❌ never wrote anything at all — so "re-run it" (the apply
+/// advice) is nonsense there, and repeating it is exactly what makes a healthy
+/// read-only check look like an error that will not go away.
+Future<bool> _verify(
+  String url,
+  String token,
+  String sender, {
+  bool readOnly = false,
+  required String siteUrl,
+}) async {
   final Map<String, dynamic> config = await _getConfig(url, token);
 
   bool has(String field, String needle) =>
       '${config[field] ?? ''}'.contains(needle);
   int asInt(String field) => int.tryParse('${config[field] ?? ''}') ?? 0;
+
+  // The two fields that decide where a mailed LINK lands, printed rather than
+  // merely asserted: a ❌ row below says the destination is wrong, and these
+  // are the values it is wrong about.
+  final String allowList = '${config['uri_allow_list'] ?? ''}';
+  final String liveSiteUrl = '${config['site_url'] ?? ''}';
+  print('\nVerification (read back from the project):');
+  print('  site_url:       '
+      '${liveSiteUrl.isEmpty ? '(unset)' : liveSiteUrl}');
+  print('  uri_allow_list: ${allowList.isEmpty ? '(empty)' : allowList}');
 
   final Map<String, bool> checks = <String, bool>{
     'custom SMTP is on Gmail': config['smtp_host'] == smtpHost,
@@ -343,24 +514,55 @@ Future<bool> _verify(String url, String token, String sender) async {
         has('mailer_templates_magic_link_content', '{{ .Token }}'),
     'confirmation button returns to the app':
         has('uri_allow_list', authConfirmRedirect),
+    'reset link returns to the app':
+        has('uri_allow_list', authRecoveryRedirect),
+    'site_url is the reset destination':
+        _trimSlashes(liveSiteUrl) == _trimSlashes(siteUrl),
+    'reset link can reach the portal account page':
+        _allowListCovers(allowList, customerPortalResetRedirect),
   };
 
-  print('\nVerification (read back from the project):');
   checks.forEach((String name, bool ok) {
     print('  ${ok ? '✅' : '❌'} $name');
   });
 
-  // `smtp_pass` is deliberately not asserted: the API does not return the
-  // secret, so a wrong App Password shows up as a failed SEND, not here.
+  _printPasswordNote();
+
   if (checks.values.any((bool ok) => !ok)) {
-    print(
-      '\n⚠️  Some fields did not read back as expected. Re-run, and if it '
-      'persists check the dashboard\'s Authentication → SMTP Settings / Emails '
-      'screens — the PATCH may have been rejected field-by-field.',
-    );
+    print(readOnly
+        ? '\n⚠️  Read-only check: the ❌ rows above are the project\'s CURRENT '
+            'values — nothing was written, so they will read exactly like this '
+            'on every re-run until you run this command WITHOUT --check.'
+        : '\n⚠️  Some fields did not read back as expected. Re-run, and if it '
+            'persists check the dashboard\'s Authentication → SMTP Settings / '
+            'Emails screens — the PATCH may have been rejected field-by-field.');
     return false;
   }
   return true;
+}
+
+/// The one check this tool can never make, said out loud on EVERY run.
+///
+/// A READ does return a `smtp_pass` field — as a **64-character opaque digest**,
+/// measured Oct 12, 2026, where Gmail's App Password is 16 characters. So it can
+/// be neither compared with the real password nor re-sent: PATCHing that digest
+/// back would store the digest AS the password and break every send. It follows
+/// that a wrong or rotated App Password leaves all five SMTP rows reading ✅
+/// while every send still fails — a green check next to a dead mailer, the
+/// single most misleading output this tool can produce. The only place the real
+/// reason appears is the auth log, as Gmail's own SMTP reply. Measured Oct 12,
+/// 2026 (legacy Gmail App Password `535 5.7.8`,
+/// `docs/AI/FORGOT_PASSWORD_ARCHITECTURE.md`).
+void _printPasswordNote() {
+  print(
+    '\nNote: `smtp_pass` is not readable — a READ returns a 64-character '
+    'opaque digest, never the 16-character App Password — so these SMTP rows '
+    'can all be ✅ while every send still fails. (Never PATCH that digest back; '
+    'it would be stored as the password.) A wrong or rotated App Password shows '
+    'up ONLY in the auth log (Dashboard → Logs → Auth), as'
+    '\n  535 "5.7.8 Username and Password not accepted … - gsmtp"'
+    '\non the request itself.',
+  );
 }
 
 // ── curl mode ────────────────────────────────────────────────────────────────
@@ -475,6 +677,7 @@ class _Args {
   final String projectRef;
   final String apiBase;
   final int rateLimit;
+  final String siteUrl;
 
   const _Args({
     required this.check,
@@ -483,6 +686,7 @@ class _Args {
     required this.projectRef,
     required this.apiBase,
     required this.rateLimit,
+    required this.siteUrl,
   });
 
   static _Args parse(List<String> argv) {
@@ -495,6 +699,8 @@ class _Args {
     int rateLimit =
         int.tryParse(Platform.environment['EMAIL_RATE_LIMIT'] ?? '') ??
             defaultEmailRateLimit;
+    String siteUrl =
+        Platform.environment['PORTAL_SITE_URL'] ?? customerPortalOrigin;
 
     for (int i = 0; i < argv.length; i++) {
       switch (argv[i]) {
@@ -511,6 +717,8 @@ class _Args {
         case '--rate-limit':
           rateLimit = int.tryParse(_value(argv, ++i, '--rate-limit')) ??
               defaultEmailRateLimit;
+        case '--site-url':
+          siteUrl = _value(argv, ++i, '--site-url');
         case '--help':
         case '-h':
           print(_usageText());
@@ -526,6 +734,7 @@ class _Args {
       projectRef: projectRef,
       apiBase: apiBase,
       rateLimit: rateLimit,
+      siteUrl: siteUrl,
     );
   }
 
@@ -545,6 +754,12 @@ Apply the live project's auth e-mail config (ANQUI item 16, §R8).
   --project-ref <ref>  default $defaultProjectRef
   --api-base <url>     default $defaultApiBase (or the SUPABASE_API_BASE env var)
   --rate-limit <n>     rate_limit_email_sent, default $defaultEmailRateLimit/hour
+  --site-url <url>     Site URL — where a link with no explicit redirect lands,
+                       default $customerPortalOrigin (or the
+                       PORTAL_SITE_URL env var). The allow list is merged with
+                       the app's two deep links (confirmation + password
+                       reset), the portal's /account and the portal's dev
+                       origin whatever this is set to.
   -h, --help           this text
 
 Credentials come from the environment, or are prompted for:

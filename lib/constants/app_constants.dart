@@ -11,6 +11,29 @@ class AppConstants {
   static const String publishableKey =
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBzY3p2YmZveWJxaGplcXNzaW13Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3NjU2NDIsImV4cCI6MjA5NzM0MTY0Mn0.31zMQ2VbrcMLYBENzozBht5O7PFwV0JDWH1UQ2ba7W8';
 
+  // --- CUSTOMER PORTAL (the web build of the customer flows) ---
+  //
+  // Deployed to Vercel from `customer-portal/` in this repo (that README has
+  // the deploy notes). An app-initiated password reset no longer comes here —
+  // it returns to the APP (`DeepLinkService.authRecoveryRedirect`), which has
+  // its own set-new-password screen. This origin still matters, for two
+  // reasons, and both are about a reset not dead-ending:
+  //
+  //   1. it is the LIVE project's **Site URL** — where GoTrue sends a reset
+  //      link whose app redirect it cannot honour, and where a reset STARTED
+  //      ON THE WEBSITE returns (`…/account`, whose form calls
+  //      `supabase.auth.updateUser`);
+  //   2. so the origin must be in the **Redirect URLs** allow list alongside
+  //      `solvision://auth/recovery` and `solvision://auth/confirm`.
+  //
+  // `tool/apply_live_auth_mail.dart` writes the Site URL and the whole allow
+  // list from this literal, and `test/services/password_reset_redirect_test.dart`
+  // pins the two together. The manual route is Authentication → URL
+  // Configuration → Site URL + Redirect URLs, so the same value lives in
+  // three places no compiler compares: here, the tool, and §R8 Step 5 of
+  // `docs/fixes/GO_LIVE_PRELAUNCH_CHECKLIST.md`.
+  static const String customerPortalUrl = 'https://cufmai-portal.vercel.app';
+
   // --- PRODUCT SHARING (rich link previews) ---
   // Server-rendered Open Graph endpoint (Supabase Edge Function
   // `product-preview`, see supabase/functions/product-preview/index.ts).

@@ -21,6 +21,7 @@ import 'auth/account_entry_screen.dart';
 import 'auth/foot_profile_onboarding_screen.dart';
 import 'auth/onboarding_screen.dart';
 import 'auth/pending_approval_screen.dart';
+import 'auth/reset_password_screen.dart';
 import 'auth/seller_approved_celebration_screen.dart';
 import 'customer/customer_shell.dart';
 import 'seller/seller_shell.dart';
@@ -162,6 +163,17 @@ class _AuthGateState extends State<AuthGate> {
       (a) => a.pendingDeviceChallenge,
     );
     if (pendingDevice != null) return _deviceChallengeGate(pendingDevice);
+
+    // ── Password-recovery link (has a session, unlike the two above) ──
+    // The reset mail's button signed the customer in with a short-lived
+    // session, and the one thing that session is FOR is the new password. It
+    // is resolved HERE, ahead of every profile-based route, because otherwise
+    // the very next build would drop them into the shell (or, on a fresh
+    // install, into onboarding) with the reset unfinished.
+    final pendingRecovery = context.select<AuthProvider, Map<String, dynamic>?>(
+      (a) => a.pendingPasswordRecovery,
+    );
+    if (pendingRecovery != null) return _passwordRecoveryGate(pendingRecovery);
 
     // Watch the provider's snapshot of the profile, because it can become
     // available AFTER this gate's own fetch resolved null: a sign-up confirmed
@@ -320,6 +332,19 @@ class _AuthGateState extends State<AuthGate> {
       onSend: auth.resendDeviceChallenge,
       onCancel: auth.cancelDeviceChallenge,
       onVerify: (code) => auth.verifyDeviceChallenge(code),
+    );
+  }
+
+  /// The return from a password-reset e-mail: one screen, one job. The session
+  /// is already live (the link carried it), so this gate owns the screen until
+  /// the new password is set; `applyRecoveredPassword` clears the pending state
+  /// — and therefore this screen — on success.
+  Widget _passwordRecoveryGate(Map<String, dynamic> pending) {
+    final auth = context.read<AuthProvider>();
+    return ResetPasswordScreen(
+      email: (pending['email'] as String?) ?? '',
+      onSubmit: auth.applyRecoveredPassword,
+      onCancel: auth.cancelPasswordRecovery,
     );
   }
 
