@@ -1,11 +1,9 @@
 {
-  "latest_version": "1.0.53",
-  "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.53/app-release-1.0.53.apk",
-  "released_at": "2026-10-12",
+  "latest_version": "1.0.54",
+  "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.54/app-release-1.0.54.apk",
+  "released_at": "2026-10-13",
   "notes": [
-    "Password reset happens in the app: the e-mail link opens CUFMAI and asks for a new password",
-    "A reset link that expired or was already used says so",
-    "The home-screen tile holds one card",
-    "A product page opened from a list swipes through that list"
+    "A lockout now says WHERE the sign-in attempts came from: city-level, from the IP address, and labelled as approximate",
+    "A development build now says why it cannot install an update instead of downloading one that would fail (not visible to customers)"
   ]
 }
