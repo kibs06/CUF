@@ -9,6 +9,7 @@ import '../../models/update_info.dart';
 import '../../providers/update_provider.dart';
 import '../../services/apk_installer_service.dart';
 import '../../services/update_checker.dart';
+import '../../utils/in_app_update_eligibility.dart';
 import '../../widgets/empty_state_widget.dart';
 import '../../widgets/error_retry_widget.dart';
 import '../../widgets/release_note_card.dart';
@@ -169,9 +170,11 @@ class _WhatsNewScreenState extends State<WhatsNewScreen> {
             else if (updateProvider.latestUpdate != null)
               _UpdateBanner(
                 update: updateProvider.latestUpdate!,
-                // Emulators: show the release info but never push the APK
-                // download — dev builds are updated via `flutter run`.
-                showDownload: !updateProvider.isEmulator,
+                // The release info always shows here; the download actions do
+                // not when they could only fail on this build or device — on a
+                // development build the release APK cannot be installed over
+                // the running copy at all. See `inAppUpdateBlocker`.
+                isEmulator: updateProvider.isEmulator,
                 installer: _installer,
                 onDownloadInApp: () =>
                     _downloadInApp(updateProvider.latestUpdate!),
@@ -313,7 +316,7 @@ class _UpdateBanner extends StatelessWidget {
     required this.onDownloadViaBrowser,
     required this.onCancelDownload,
     required this.installer,
-    this.showDownload = true,
+    this.isEmulator = false,
   });
 
   final UpdateInfo update;
@@ -322,12 +325,17 @@ class _UpdateBanner extends StatelessWidget {
   final VoidCallback onCancelDownload;
   final ApkInstallerService installer;
 
-  /// False on emulators: the release info stays visible, but the download
-  /// CTA is replaced by a passive note (dev builds update via `flutter run`).
-  final bool showDownload;
+  /// Whether this device is an emulator — one half of `inAppUpdateBlocker`,
+  /// whose other half is the compile-time build mode. When it names a reason,
+  /// the release info stays visible and the download actions are replaced by
+  /// that reason: a build signed with the debug keystore can never be updated
+  /// in place, so offering the download would only spend ~220 MB to fail.
+  final bool isEmulator;
 
   @override
   Widget build(BuildContext context) {
+    final blocker = inAppUpdateBlocker(isEmulator: isEmulator);
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
@@ -402,19 +410,22 @@ class _UpdateBanner extends StatelessWidget {
                 ),
               ),
             )
-          else if (!showDownload)
+          else if (blocker != null)
+            // No download button and no browser fallback: both fetch the same
+            // signed APK, and neither can install over this copy.
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.12),
                 borderRadius: AppConstants.buttonRadius,
               ),
               child: Text(
-                'Emulator detected — update via flutter run. No download needed.',
+                inAppUpdateBlockerMessage(blocker),
                 textAlign: TextAlign.center,
                 style: AppConstants.bodyStyle(
                   fontSize: 12,
+                  height: 1.4,
                   color: const Color(0xFFF5EDE4),
                 ),
               ),

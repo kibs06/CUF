@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../constants/app_constants.dart';
 import '../models/update_info.dart';
+import '../utils/in_app_update_eligibility.dart';
 
 /// A full-screen overlay that appears when a newer app version is available.
 ///
@@ -315,12 +316,24 @@ class _UpdateOverlayDialogState extends State<_UpdateOverlayDialog>
   }
 
   Widget _buildActions(UpdateInfo update, bool isAndroid) {
+    // The only reason that can apply here is a development build:
+    // `UpdateProvider.shouldShowUpdateOverlay` already withholds this overlay
+    // on emulators, so there is no emulator to report.
+    final blocker = inAppUpdateBlocker(isEmulator: false);
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
       child: Column(
         children: [
-          // Download / Update button
-          if (isAndroid)
+          // Download / Update button — or, when no download this app could
+          // hand over would install, the reason instead of a dead end.
+          if (!isAndroid)
+            const _PassiveNote('Open the App Store to update')
+          else if (blocker != null)
+            // Deliberately no button AND no browser link: both fetch the same
+            // signed APK, and neither can be installed over this copy.
+            _PassiveNote(inAppUpdateBlockerMessage(blocker))
+          else
             SizedBox(
               width: double.infinity,
               height: 52,
@@ -351,24 +364,6 @@ class _UpdateOverlayDialogState extends State<_UpdateOverlayDialog>
                       ),
                     ),
                   ],
-                ),
-              ),
-            )
-          else
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              decoration: BoxDecoration(
-                color: AppConstants.primary.withValues(alpha: 0.08),
-                borderRadius: AppConstants.buttonRadius,
-              ),
-              child: Text(
-                'Open the App Store to update',
-                textAlign: TextAlign.center,
-                style: AppConstants.bodyStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: AppConstants.primary,
                 ),
               ),
             ),
@@ -408,5 +403,39 @@ class _UpdateOverlayDialogState extends State<_UpdateOverlayDialog>
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
     ];
     return '${months[date.month - 1]} ${date.day}, ${date.year}';
+  }
+}
+
+/// A passive stand-in for the primary action: the same shape and placement as
+/// the button it replaces, so the card does not jump, but nothing tappable.
+///
+/// Both of its cases are "there is no download this app is allowed to offer":
+/// iOS installs from the App Store, and a development build is signed with a key
+/// no release APK carries. Its text is the whole message, so it wraps.
+class _PassiveNote extends StatelessWidget {
+  const _PassiveNote(this.message);
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      decoration: BoxDecoration(
+        color: AppConstants.primary.withValues(alpha: 0.08),
+        borderRadius: AppConstants.buttonRadius,
+      ),
+      child: Text(
+        message,
+        textAlign: TextAlign.center,
+        style: AppConstants.bodyStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+          height: 1.4,
+          color: AppConstants.primary,
+        ),
+      ),
+    );
   }
 }
