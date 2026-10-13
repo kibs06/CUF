@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/product_provider.dart';
@@ -112,6 +113,10 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen>
 
   /// Whether this screen built [_tryOn] and must therefore dispose it.
   bool _ownsTryOn = false;
+
+  /// Whether the camera request and the AR start have been made for this screen.
+  /// Set once, so a second view creation or a phase change does not ask again.
+  bool _cameraRequested = false;
 
   /// **V4.8's rotation lock.** While this screen is open the app is pinned to
   /// portrait: the AR surface, the camera projection and the coaching column are
@@ -320,7 +325,29 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen>
     // `tryOnViewBuilder` (tests only) the injected widget *is* the view, and
     // `onPlatformViewCreated` never fires for it.
     if (!_tryOnViewCreated && widget.tryOnViewBuilder == null) return;
-    unawaited(controller.startAr(arViewReady: true));
+    if (_cameraRequested) return;
+    _cameraRequested = true;
+    unawaited(_requestCameraThenStart(controller));
+  }
+
+  /// **The camera grant the AR session needs, asked for on this path.**
+  ///
+  /// The native plugin refuses `startSession` with `camera_permission_denied` unless the app
+  /// already holds `CAMERA` (`ArTryOnPlugin.handleStartSession`), and nothing on the try-on path
+  /// asked for it — so the session never started and the camera stayed black (QA, 2026-10-13:
+  /// `startSession: camera permission not granted`). The foot scan asks the same way
+  /// (`Permission.camera.request()`). The request is answered before the start, and the start
+  /// is still made when it is denied, so the native refusal degrades the session to the
+  /// simulated feed instead of leaving the view blank.
+  ///
+  /// Skipped under the `tryOnViewBuilder` seam: that is a test, where no native view exists
+  /// and the permission plugin has no platform side.
+  Future<void> _requestCameraThenStart(TryOnSessionController controller) async {
+    if (widget.tryOnViewBuilder == null) {
+      await Permission.camera.request();
+    }
+    if (!mounted) return;
+    await controller.startAr(arViewReady: true);
   }
 
   /// The real renderer, or null so [ARViewPlaceholder] keeps its simulated feed.

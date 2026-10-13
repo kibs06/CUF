@@ -103,6 +103,15 @@ internal class ArCameraFeed(private val context: Context) {
 
     private var ready = false
 
+    /** Whether the quad is currently drawn. Tracked so [setVisible] is not called every frame. */
+    private var revealed = false
+
+    /** Frames since the last texture re-registration while ARCore names a different texture. */
+    private var framesSinceRebind = 0
+
+    /** How many re-registrations this feed has attempted, for the log line that reports each one. */
+    private var rebindAttempts = 0
+
     /**
      * **Why the feed could not be built, or null when it was.** Carried into the view's diagnostic
      * line rather than only logged: the phone this feature is developed against has no readable
@@ -327,12 +336,27 @@ internal class ArCameraFeed(private val context: Context) {
             if (failureReason == null) failureReason = "texture_not_created"
             return null
         }
+        return registerTexture(session, id)
+    }
+
+    /**
+     * **The registration that ARCore actually honours, and the device evidence for why.**
+     *
+     * The singular `setCameraTextureName` was called before `resume()` and reported no error, yet
+     * every frame of the 2026-10-06 session still named texture 0 (`ARCore is writing texture 0,
+     * this feed owns 1`): the room was drawn from a texture nothing wrote into, which is the black
+     * camera. ARCore's own `hello_ar_java` sample registers the names with the plural
+     * `setCameraTextureNames` from the render thread, after the session is running, and that is the
+     * form used here. The frame contract is that `Frame.getCameraTextureName` is one of the names
+     * previously set — so a mismatch is checked for every frame rather than assumed away.
+     */
+    private fun registerTexture(session: Session, id: Int): Int? {
         return runCatching {
-            session.setCameraTextureName(id)
+            session.setCameraTextureNames(intArrayOf(id))
             id
         }.onFailure { t ->
             failureReason = "set_camera_texture_failed: ${t.message}"
-            Log.w(TAG, "camera feed: setCameraTextureName failed", t)
+            Log.w(TAG, "camera feed: setCameraTextureNames failed", t)
         }.getOrNull()
     }
 
@@ -348,12 +372,21 @@ internal class ArCameraFeed(private val context: Context) {
         // ARCore owns the texture's contents; `getCameraTextureName` is the id it actually used,
         // and it is compared rather than assumed because a second session in the same process can
         // legitimately choose a different one.
-        if (frame.cameraTextureName != cameraTextureId) {
-            Log.w(
-                TAG,
-                "camera feed: ARCore is writing texture ${frame.cameraTextureName}, " +
-                    "this feed owns $cameraTextureId",
-            )
+        val written = frame.cameraTextureName == cameraTextureId
+        if (!written) {
+            // Not our texture yet: re-register it from the render thread, every
+            // [REBIND_EVERY_FRAMES] frames so a stuck session is retried without spamming the log.
+            framesSinceRebind++
+            if (framesSinceRebind >= REBIND_EVERY_FRAMES) {
+                framesSinceRebind = 0
+                rebindAttempts++
+                Log.w(
+                    TAG,
+                    "camera feed: ARCore is writing texture ${frame.cameraTextureName}, " +
+                        "this feed owns $cameraTextureId — re-registering (attempt $rebindAttempts)",
+                )
+                registerTexture(session, cameraTextureId)
+            }
         }
         instance.setParameter("cameraTexture", texture, EXTERNAL_SAMPLER)
 
@@ -384,9 +417,15 @@ internal class ArCameraFeed(private val context: Context) {
             vertexBuffer?.setBufferAt(engine, 1, target)
         }
 
-        // First frame with real pixels: reveal the feed. Until this runs the quad is hidden, so a
-        // session that never produces a frame keeps the clear colour instead of a black rectangle.
-        setVisible(engine, true)
+        // Reveal the feed only while ARCore is writing into it. A quad sampling a texture nothing
+        // writes is black, so while the names disagree it stays hidden and the clear colour shows.
+        if (written != revealed) {
+            setVisible(engine, written)
+            revealed = written
+        }
+        if (written) {
+            framesSinceRebind = 0
+        }
     }
 
     /** The one-line state a device log is read from: is the room being drawn, and if not, why. */
@@ -397,7 +436,10 @@ internal class ArCameraFeed(private val context: Context) {
 
     /** Called when the session stops tracking badly enough that the last frame is stale. */
     fun hide(engine: Engine) {
-        if (ready) setVisible(engine, false)
+        if (ready) {
+            setVisible(engine, false)
+            revealed = false
+        }
     }
 
     /** Render-thread teardown, in the reverse order of [attach]. */
@@ -422,6 +464,8 @@ internal class ArCameraFeed(private val context: Context) {
         cameraTexture = null
         material = null
         ready = false
+        revealed = false
+        framesSinceRebind = 0
         destroyEglContext()
         if (cameraTextureId != 0) {
             // The texture was created in a context that is now gone; GL handles are per-context, so
@@ -584,6 +628,9 @@ internal class ArCameraFeed(private val context: Context) {
          * priority the full-screen quad draws over the shoe and the room hides the model.
          */
         const val CAMERA_PRIORITY = 7
+
+        /** Frames between texture re-registrations while ARCore names another texture (~1 s at 30 fps). */
+        const val REBIND_EVERY_FRAMES = 30
 
         const val VERTEX_STRIDE = 3 * 4
         const val UV_STRIDE = 2 * 4

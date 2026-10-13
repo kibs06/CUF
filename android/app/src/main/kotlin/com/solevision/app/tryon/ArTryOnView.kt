@@ -45,6 +45,7 @@ import com.google.android.filament.gltfio.ResourceLoader
 import com.google.android.filament.gltfio.UbershaderProvider
 import com.google.ar.core.CameraConfig
 import com.google.ar.core.CameraConfigFilter
+import com.google.ar.core.Coordinates2d
 import com.google.ar.core.Config
 import com.google.ar.core.Frame
 import com.google.ar.core.Plane
@@ -53,6 +54,9 @@ import com.google.ar.core.Session
 import com.google.ar.core.TrackingState
 import com.google.ar.core.exceptions.CameraNotAvailableException
 import com.solevision.app.arfoot.DiagRelay
+import com.solevision.app.arfoot.depthMmFromRaw16
+import com.solevision.app.arfoot.nearestPlausibleDepthMm
+import com.solevision.app.arfoot.unprojectToCameraSpace
 import com.google.ar.core.exceptions.UnavailableApkTooOldException
 import com.google.ar.core.exceptions.UnavailableArcoreNotInstalledException
 import com.google.ar.core.exceptions.UnavailableDeviceNotCompatibleException
@@ -261,6 +265,7 @@ class ArTryOnView(
      */
     private val previewSurfaceListener = object : TextureView.SurfaceTextureListener {
         override fun onSurfaceTextureAvailable(texture: SurfaceTexture, width: Int, height: Int) {
+            previewTexture = texture
             surface = Surface(texture)
             surfaceWidth = width
             surfaceHeight = height
@@ -300,11 +305,18 @@ class ArTryOnView(
             // `true`: this view has no other consumer of the texture, so the texture itself may be
             // released with it. The `Surface` wrapper above is ours to drop, and it is dropped.
             surface = null
+            previewTexture = null
             return true
         }
 
         override fun onSurfaceTextureUpdated(texture: SurfaceTexture) = Unit
     }
+
+    /**
+     * The preview's `SurfaceTexture`, kept so a stalled swap chain can be rebuilt on a fresh
+     * `Surface` wrapper. Null outside the preview's live surface.
+     */
+    private var previewTexture: SurfaceTexture? = null
 
     /** The preview's surface. Null in [Mode.AR]. */
     private val textureView: TextureView? = if (mode == Mode.PREVIEW) {
@@ -545,6 +557,31 @@ class ArTryOnView(
     // but its extent estimate lags the foot, which is session-youngness, not a bad floor.
     private var hitTestsInPolygon = 0
     private var hitTestsOnEdge = 0
+
+    /** Heel/toe pairs placed from the depth surface instead of the floor (V4.10). */
+    private var depthSamplesAccepted = 0
+
+    /** Accepted foot samples, for the diagnostic readout in [sampleFoot]. */
+    private var footSampleLogs = 0
+
+    /**
+     * Carry-over state (V4.11): the last heel and toe the detector placed, in camera-image pixels,
+     * and the previous frame's tracking pyramid they are followed through.
+     */
+    private var flowHeel: FloatArray? = null
+    private var flowToe: FloatArray? = null
+    private var flowPrev: List<GrayImage>? = null
+    private var flowSide: String? = null
+    private var flowConfidence = 0.0
+    private var flowDetectedMs = 0L
+    private var flowCarries = 0
+
+    /** Last accepted heel, for the jump gate in [sampleFoot]; and how many jumps were refused in a row. */
+    private var lastAcceptedHeel: FloatArray? = null
+    private var jumpRejectStreak = 0
+
+    /** When the camera sharpness was last logged (V4.12). */
+    private var lastSharpnessMs = 0L
 
     /** Whether poses drive placement: true by default, false while QA forces `floor` mode. */
     private var footModeRequested = true
@@ -1156,6 +1193,15 @@ class ArTryOnView(
                         // wish, because configure replaces the whole config.
                         flashMode =
                             if (torchEnabled) Config.FlashMode.TORCH else Config.FlashMode.OFF
+                        // Depth gives the foot's own surface, so the foot can be placed without a
+                        // floor (see [depthWorldPoint]). Only when the foot is being tracked and the
+                        // device supports it; otherwise DISABLED and the floor path is used.
+                        depthMode =
+                            if (footModeRequested && created.isDepthModeSupported(Config.DepthMode.AUTOMATIC)) {
+                                Config.DepthMode.AUTOMATIC
+                            } else {
+                                Config.DepthMode.DISABLED
+                            }
                     },
                 )
                 // V4.9: **ARCore's viewport.** The surface callbacks above ran before this session
@@ -2267,6 +2313,13 @@ class ArTryOnView(
                     "beginFrame refused $MAX_BEGIN_FRAME_FAILURES frames in a row — rebuilding the " +
                         "swap chain ($swapChainRebuilds/$MAX_SWAP_CHAIN_REBUILDS)",
                 )
+                // The chain is only as good as the `Surface` it was built on. A plain rebuild reuses
+                // the same wrapper, so if that wrapper outlived its buffer queue every rebuild fails
+                // the same way; a fresh wrapper from the live texture is the repair that differs.
+                previewTexture?.let { texture ->
+                    surface?.release()
+                    surface = Surface(texture)
+                }
                 runCatching { createSwapChain() }
             } else if (beginFrameFailStreak != 0 &&
                 beginFrameFailStreak % REFUSAL_MILESTONE_FRAMES == 0
@@ -2805,10 +2858,29 @@ class ArTryOnView(
         if (mode != Mode.AR || !footModeRequested) return
 
         val observation = pendingFootPose
-        if (observation != null) {
-            pendingFootPose = null
-            sampleFoot(frame, observation)?.let { emitFootLock(it) }
+        if (observation != null) pendingFootPose = null
+        // V4.11: between detector frames, the heel and toe are followed through the camera image, so
+        // the shoe moves with the foot instead of waiting for the next detection.
+        val carrying = flowHeel != null
+        val pyramid = if (observation != null || carrying) acquireFlowPyramid(frame) else null
+        if (pyramid != null) {
+            val nowMs = SystemClock.elapsedRealtime()
+            if (nowMs - lastSharpnessMs >= SHARPNESS_INTERVAL_MS) {
+                lastSharpnessMs = nowMs
+                relay("camera sharpness=%.0f (%dx%d)".format(
+                    FootFlow.sharpness(pyramid[0]),
+                    pyramid[0].width,
+                    pyramid[0].height,
+                ))
+            }
         }
+        if (observation != null) {
+            sampleFoot(frame, observation)?.let { emitFootLock(it) }
+            rememberFlowAnchor(frame, observation)
+        } else if (carrying) {
+            carryFoot(frame, pyramid)
+        }
+        if (observation != null || carrying) flowPrev = pyramid
         footTracker.onFrame(SystemClock.elapsedRealtime())?.let { emitFootLock(it) }
 
         // Draw from the eased anchor. Note what is *not* checked: the lock. The lock is a
@@ -2907,29 +2979,77 @@ class ArTryOnView(
         frame: Frame,
         observation: FootPoseTracker.Observation,
     ): FootPoseTracker.LockChange? {
-        val heel =
-            hitTestFloorPoint(frame, observation.heelU, observation.heelV)
-                ?: run { rejectPose("no heel plane") ; return null }
-        val toe =
-            hitTestFloorPoint(frame, observation.toeU, observation.toeV)
-                ?: run { rejectPose("no toe plane") ; return null }
+        // Depth first: the foot's own surface, with no floor needed. Both endpoints must come from
+        // depth, or neither — a mix would put the heel and toe at different heights.
+        val surfaceHeel = depthWorldPoint(frame, observation.heelU, observation.heelV)
+        val surfaceToe = depthWorldPoint(frame, observation.toeU, observation.toeV)
+        val heelPos: FloatArray
+        val toePos: FloatArray
+        if (surfaceHeel != null && surfaceToe != null) {
+            // The depth point is on the foot's own surface, so its height is used as-is: there is no
+            // floor to measure from. Vertical placement is unverified on a device until a fit is run.
+            heelPos = surfaceHeel
+            toePos = surfaceToe
+            if (++depthSamplesAccepted == 1) relay("foot: depth surface in use (no floor needed)")
+        } else {
+            val heel =
+                hitTestFloorPoint(frame, observation.heelU, observation.heelV)
+                    ?: run { rejectPose("no heel plane") ; return null }
+            val toe =
+                hitTestFloorPoint(frame, observation.toeU, observation.toeV)
+                    ?: run { rejectPose("no toe plane") ; return null }
+            heelPos = floatArrayOf(heel.tx(), heel.ty(), heel.tz())
+            toePos = floatArrayOf(toe.tx(), toe.ty(), toe.tz())
+        }
         val forward = doubleArrayOf(
-            (toe.tx() - heel.tx()).toDouble(),
+            (toePos[0] - heelPos[0]).toDouble(),
             0.0,
-            (toe.tz() - heel.tz()).toDouble(),
+            (toePos[2] - heelPos[2]).toDouble(),
         )
         val axis = sqrt(forward[0] * forward[0] + forward[2] * forward[2])
         if (axis < MIN_FOOT_AXIS_METERS) {
             rejectPose("axis %.0fmm < min".format(axis * 1000))
             return null
         }
+        // V4.12: the sample gate. A length that is not a foot, or a heel that jumped further than a
+        // foot moves between samples, is a bad read, and it must not reach the shoe's size or position.
+        if (axis < MIN_PLAUSIBLE_FOOT_M || axis > MAX_PLAUSIBLE_FOOT_M) {
+            rejectPose("length %.0fmm outside the foot range".format(axis * 1000))
+            return null
+        }
+        val previousHeel = lastAcceptedHeel
+        if (previousHeel != null) {
+            val dx = heelPos[0] - previousHeel[0]
+            val dy = heelPos[1] - previousHeel[1]
+            val dz = heelPos[2] - previousHeel[2]
+            val jump = sqrt(dx * dx + dy * dy + dz * dz)
+            if (jump > MAX_HEEL_JUMP_M && jumpRejectStreak < MAX_JUMP_REJECTS) {
+                jumpRejectStreak++
+                rejectPose("heel jumped %.0fmm".format(jump * 1000))
+                return null
+            }
+        }
+        jumpRejectStreak = 0
+        lastAcceptedHeel = heelPos
+
+        // Per-sample readout for the diagnostic log: the first few, then one every 30, so the file
+        // shows where the heel and toe were placed and how long the foot measured.
+        if (footSampleLogs < 3 || footSampleLogs % 30 == 0) {
+            relay(
+                "foot sample #$footSampleLogs src=" +
+                    (if (surfaceHeel != null && surfaceToe != null) "depth" else "floor") +
+                    " heel=(" + "%.3f,%.3f,%.3f".format(heelPos[0], heelPos[1], heelPos[2]) + ")m" +
+                    " len=" + "%.0f".format(axis * 1000) + "mm",
+            )
+        }
+        footSampleLogs++
         poseRejectsAccepted++
         return footTracker.observe(
             FootPoseTracker.Sample(
                 heel = doubleArrayOf(
-                    heel.tx().toDouble(),
-                    heel.ty().toDouble(),
-                    heel.tz().toDouble(),
+                    heelPos[0].toDouble(),
+                    heelPos[1].toDouble(),
+                    heelPos[2].toDouble(),
                 ),
                 forward = forward,
                 lengthMeters = axis,
@@ -3020,6 +3140,231 @@ class ArTryOnView(
         out[0] = ((u * uprightW - offsetX) * scale).toFloat()
         out[1] = ((v * uprightH - offsetY) * scale).toFloat()
         return true
+    }
+
+    /**
+     * **A world point on the foot's own surface, from ARCore depth — no floor needed (V4.10).**
+     *
+     * Why this exists: the floor hit-test needs a tracked floor under the foot, so a foot on a bed,
+     * a sofa, or a shoe box has no plane and gets rejected. Depth measures the distance to whatever
+     * surface the pixel shows, so the point is found on the foot itself.
+     *
+     * Returns null when depth is unavailable for this frame or the pixel has no plausible depth;
+     * the caller then falls back to the floor path.
+     */
+    private fun depthWorldPoint(frame: Frame, u: Double, v: Double): FloatArray? {
+        if (!uprightImageUvToPixels(u, v, uvScratch)) return null
+        val camera = frame.camera
+        if (camera.trackingState != TrackingState.TRACKING) return null
+        // Upright pixels → normalized texture coordinates, the space the depth image is indexed in.
+        val viewPoint = floatArrayOf(uvScratch[0], uvScratch[1])
+        val texturePoint = FloatArray(2)
+        frame.transformCoordinates2d(
+            Coordinates2d.VIEW,
+            viewPoint,
+            Coordinates2d.TEXTURE_NORMALIZED,
+            texturePoint,
+        )
+        val depthImage = runCatching { frame.acquireDepthImage16Bits() }.getOrNull() ?: return null
+        val depthMm =
+            try {
+                nearestDepthMm(depthImage, texturePoint[0], texturePoint[1])
+            } finally {
+                depthImage.close()
+            }
+        if (depthMm == null) return null
+        val intrinsics = camera.imageIntrinsics
+        val focal = intrinsics.focalLength
+        val principal = intrinsics.principalPoint
+        val dims = intrinsics.imageDimensions
+        val cameraPoint =
+            unprojectToCameraSpace(
+                texturePoint[0] * dims[0],
+                texturePoint[1] * dims[1],
+                depthMm / 1000f,
+                focal[0],
+                focal[1],
+                principal[0],
+                principal[1],
+            )
+        return camera.pose.transformPoint(cameraPoint)
+    }
+
+    /**
+     * The nearest plausible depth (mm) in a 3×3 window around a normalized texture point, or null.
+     * Reads the DEPTH16 plane directly; the window and the nearest-surface rule are in DepthMath.kt.
+     */
+    private fun nearestDepthMm(image: Image, u: Float, v: Float): Float? {
+        val plane = image.planes[0]
+        val buffer = plane.buffer.duplicate().order(ByteOrder.LITTLE_ENDIAN)
+        val width = image.width
+        val height = image.height
+        val cx = (u * width).toInt().coerceIn(0, width - 1)
+        val cy = (v * height).toInt().coerceIn(0, height - 1)
+        val neighbours = ArrayList<Int>(9)
+        for (dy in -1..1) {
+            for (dx in -1..1) {
+                val x = cx + dx
+                val y = cy + dy
+                if (x !in 0 until width || y !in 0 until height) continue
+                val offset = y * plane.rowStride + x * plane.pixelStride
+                val raw = buffer.getShort(offset).toInt() and 0xFFFF
+                neighbours.add(depthMmFromRaw16(raw))
+            }
+        }
+        return nearestPlausibleDepthMm(neighbours)?.toFloat()
+    }
+
+    /**
+     * The camera image as a tracking pyramid (V4.11), or null when the image is not ready yet.
+     *
+     * The image is closed on every path: an ARCore image that is never closed stalls the camera.
+     */
+    private fun acquireFlowPyramid(frame: Frame): List<GrayImage>? {
+        // `acquireCameraImage` throws until ARCore has the image ready; that is "not yet", not an error.
+        val image = runCatching { frame.acquireCameraImage() }.getOrNull() ?: return null
+        return try {
+            val plane = image.planes[0]
+            val base = FootFlow.decimate(
+                plane.buffer,
+                image.width,
+                image.height,
+                plane.rowStride,
+                plane.pixelStride,
+                FLOW_DECIMATE,
+            )
+            FootFlow.pyramid(base)
+        } catch (t: Throwable) {
+            Log.w(TAG, "flow pyramid failed", t)
+            null
+        } finally {
+            image.close()
+        }
+    }
+
+    /** Stores the heel and toe the detector just placed, in camera-image pixels, for carrying. */
+    private fun rememberFlowAnchor(frame: Frame, observation: FootPoseTracker.Observation) {
+        val heel = uprightUvToImagePixels(frame, observation.heelU, observation.heelV)
+        val toe = uprightUvToImagePixels(frame, observation.toeU, observation.toeV)
+        if (heel == null || toe == null) {
+            clearFlow()
+            return
+        }
+        flowHeel = heel
+        flowToe = toe
+        flowSide = observation.side
+        flowConfidence = observation.confidence
+        flowDetectedMs = SystemClock.elapsedRealtime()
+    }
+
+    /**
+     * Moves the shoe with the foot between detector frames (V4.11): tracks the last heel and toe
+     * through the camera image, then feeds the result to the same pose path a detection uses.
+     *
+     * Bounded: the carry stops [FLOW_WINDOW_MS] after the last detection, or as soon as either point
+     * cannot be followed. Confidence decays each carried frame, so the lock lapses the way it would
+     * for a detector that has gone quiet.
+     */
+    private fun carryFoot(frame: Frame, current: List<GrayImage>?) {
+        val prev = flowPrev
+        val heel = flowHeel
+        val toe = flowToe
+        val nowMs = SystemClock.elapsedRealtime()
+        if (current == null || prev == null || heel == null || toe == null ||
+            nowMs - flowDetectedMs > FLOW_WINDOW_MS
+        ) {
+            clearFlow()
+            return
+        }
+        val trackedHeel = FootFlow.track(prev, current, heel[0] / FLOW_DECIMATE, heel[1] / FLOW_DECIMATE)
+        val trackedToe = FootFlow.track(prev, current, toe[0] / FLOW_DECIMATE, toe[1] / FLOW_DECIMATE)
+        if (trackedHeel == null || trackedToe == null) {
+            clearFlow()
+            return
+        }
+        val heelPx = floatArrayOf(
+            trackedHeel.first * FLOW_DECIMATE,
+            trackedHeel.second * FLOW_DECIMATE,
+        )
+        val toePx = floatArrayOf(
+            trackedToe.first * FLOW_DECIMATE,
+            trackedToe.second * FLOW_DECIMATE,
+        )
+        val heelUv = imagePixelsToUprightUv(frame, heelPx)
+        val toeUv = imagePixelsToUprightUv(frame, toePx)
+        if (heelUv == null || toeUv == null) {
+            clearFlow()
+            return
+        }
+        flowHeel = heelPx
+        flowToe = toePx
+        flowConfidence *= FLOW_CONFIDENCE_DECAY
+        flowCarries++
+        sampleFoot(
+            frame,
+            FootPoseTracker.Observation(
+                heelUv[0],
+                heelUv[1],
+                toeUv[0],
+                toeUv[1],
+                flowConfidence,
+                flowSide,
+            ),
+        )?.let { emitFootLock(it) }
+    }
+
+    /** Ends the carry and forgets the tracked points. Logs how long it ran, if it did. */
+    private fun clearFlow() {
+        if (flowCarries > 0) relay("flow carry ended after $flowCarries frames")
+        flowCarries = 0
+        flowHeel = null
+        flowToe = null
+        flowPrev = null
+        flowSide = null
+    }
+
+    /** An upright-image UV → camera-image pixels, through the view. Null when not mappable yet. */
+    private fun uprightUvToImagePixels(frame: Frame, u: Double, v: Double): FloatArray? {
+        if (!uprightImageUvToPixels(u, v, uvScratch)) return null
+        val view = floatArrayOf(uvScratch[0], uvScratch[1])
+        val image = FloatArray(2)
+        return runCatching {
+            frame.transformCoordinates2d(Coordinates2d.VIEW, view, Coordinates2d.IMAGE_PIXELS, image)
+            image
+        }.getOrNull()
+    }
+
+    /** Camera-image pixels → an upright-image UV, the inverse of [uprightUvToImagePixels]. */
+    private fun imagePixelsToUprightUv(frame: Frame, imagePx: FloatArray): DoubleArray? {
+        val view = FloatArray(2)
+        return runCatching {
+            frame.transformCoordinates2d(Coordinates2d.IMAGE_PIXELS, imagePx, Coordinates2d.VIEW, view)
+            viewPixelsToUprightUv(view[0], view[1])
+        }.getOrNull()
+    }
+
+    /**
+     * View pixels → upright-image UV: the exact inverse of [uprightImageUvToPixels], so a point that
+     * is tracked and mapped back lands where it was drawn.
+     */
+    private fun viewPixelsToUprightUv(vx: Float, vy: Float): DoubleArray? {
+        if (surfaceWidth <= 0 || surfaceHeight <= 0) return null
+        val uprightW =
+            if (cachedFrameRotationDegrees % 180 == 90) cachedFrameHeight else cachedFrameWidth
+        val uprightH =
+            if (cachedFrameRotationDegrees % 180 == 90) cachedFrameWidth else cachedFrameHeight
+        if (uprightW <= 0 || uprightH <= 0) return null
+        val viewW = surfaceWidth.toFloat()
+        val viewH = surfaceHeight.toFloat()
+        val scale = Math.max(viewW / uprightW, viewH / uprightH)
+        val drawnW = viewW / scale
+        val drawnH = viewH / scale
+        val offsetX = (uprightW - drawnW) / 2f
+        val offsetY = (uprightH - drawnH) / 2f
+        return doubleArrayOf(
+            ((vx / scale + offsetX) / uprightW).toDouble(),
+            ((vy / scale + offsetY) / uprightH).toDouble(),
+        )
     }
 
     /**
@@ -3637,6 +3982,33 @@ class ArTryOnView(
          */
         const val REFUSAL_MILESTONE_FRAMES = 1200
         const val MAX_SWAP_CHAIN_RETRIES = 3
+
+        /** Camera-image decimation for the carry-over tracker (see [FootFlow]). */
+        const val FLOW_DECIMATE = 4
+
+        /** How long the shoe is carried on tracked points after the detector last placed the foot. */
+        const val FLOW_WINDOW_MS = 1500L
+
+        /** Confidence kept per carried frame, so the lock lapses if the detector stays silent. */
+        const val FLOW_CONFIDENCE_DECAY = 0.9
+
+        /**
+         * Foot-length gate, in metres. A horizontal heel-to-toe length outside this range is not a foot:
+         * the floor fallback read about 1.2 m on the device, and that is what made the shoe too big.
+         */
+        const val MIN_PLAUSIBLE_FOOT_M = 0.20
+        const val MAX_PLAUSIBLE_FOOT_M = 0.34
+
+        /**
+         * Largest heel move between accepted samples, in metres. Real movement at the sample rate stays
+         * well under this; a bigger jump is a bad depth read. A jump that persists for
+         * [MAX_JUMP_REJECTS] samples in a row is taken as a real move, so the shoe cannot freeze.
+         */
+        const val MAX_HEEL_JUMP_M = 0.15
+        const val MAX_JUMP_REJECTS = 3
+
+        /** How often the camera sharpness is logged. */
+        const val SHARPNESS_INTERVAL_MS = 2000L
 
         /**
          * How many refused `beginFrame` calls in a row mean the chain is alive but dead, and how
