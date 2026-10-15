@@ -244,6 +244,42 @@ export async function completeSellerApplication({
   return profile ?? profileData
 }
 
+/**
+ * localStorage key for the in-progress draft (text only — never the password).
+ *
+ * Separate from the post-signup pending key below: this one exists so an
+ * applicant who leaves mid-application finds their typed answers waiting,
+ * Etsy/Stripe-style. Files cannot be kept (a photo has nowhere to live before
+ * the account exists), so the restore copy always says to re-attach them.
+ */
+export const SELLER_DRAFT_KEY = 'cufmai_seller_draft'
+
+export function saveSellerDraft(draft) {
+  try {
+    window.localStorage.setItem(SELLER_DRAFT_KEY, JSON.stringify(draft))
+  } catch {
+    // Private mode / quota: the draft is a convenience, not the flow.
+  }
+}
+
+export function loadSellerDraft() {
+  try {
+    const raw = window.localStorage.getItem(SELLER_DRAFT_KEY)
+    if (!raw) return null
+    return JSON.parse(raw)
+  } catch {
+    return null
+  }
+}
+
+export function clearSellerDraft() {
+  try {
+    window.localStorage.removeItem(SELLER_DRAFT_KEY)
+  } catch {
+    // Best-effort.
+  }
+}
+
 /** localStorage key for the text-only pending application (no files). */
 export const PENDING_SELLER_KEY = 'cufmai_pending_seller_application'
 

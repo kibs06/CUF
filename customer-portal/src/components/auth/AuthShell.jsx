@@ -37,18 +37,25 @@ const ASSURANCES = [
  * for is this one, and going wider only bought the card a longer line of empty
  * input to read across.
  */
-export default function AuthShell({ title, subtitle, children, footer }) {
+export default function AuthShell({ title, subtitle, children, footer, story }) {
+  const copy = {
+    eyebrow: 'Carcar City, Cebu · Est. 2004',
+    heading: 'One account, whichever device you shop on.',
+    body: 'Your cart and your orders belong to the account, not to the browser — so a pair you add here on the web is waiting in the CUFMAI app on your phone, and the other way round.',
+    points: ASSURANCES,
+    browseTo: '/shop',
+    browseLabel: 'Keep browsing without an account',
+    ...story,
+  }
   return (
     <div className="mx-auto grid max-w-7xl gap-10 px-4 py-14 sm:px-6 lg:grid-cols-[1fr_26rem] lg:items-center lg:gap-16 lg:px-8 lg:py-20">
       <Reveal className="order-2 lg:order-1">
-        <p className="overline">Carcar City, Cebu · Est. 2004</p>
+        <p className="overline">{copy.eyebrow}</p>
         <h2 className="mt-3 max-w-lg font-display text-3xl font-semibold leading-tight text-ink sm:text-4xl">
-          One account, whichever device you shop on.
+          {copy.heading}
         </h2>
         <p className="mt-5 max-w-lg text-sm leading-relaxed text-muted">
-          Your cart and your orders belong to the account, not to the browser —
-          so a pair you add here on the web is waiting in the CUFMAI app on your
-          phone, and the other way round.
+          {copy.body}
         </p>
 
         {/*
@@ -58,7 +65,7 @@ export default function AuthShell({ title, subtitle, children, footer }) {
           turning a reassurance list into a checklist with boxes to tick.
         */}
         <ul className="mt-8 max-w-lg space-y-3.5 text-sm text-muted-strong">
-          {ASSURANCES.map((line) => (
+          {copy.points.map((line) => (
             <li key={line} className="flex items-start gap-3">
               <span
                 aria-hidden="true"
@@ -72,10 +79,10 @@ export default function AuthShell({ title, subtitle, children, footer }) {
         </ul>
 
         <Link
-          to="/shop"
+          to={copy.browseTo}
           className="group mt-8 inline-flex items-center gap-1.5 text-sm font-semibold text-clay-ink underline-offset-4 hover:underline"
         >
-          Keep browsing without an account
+          {copy.browseLabel}
           <ArrowRight
             className="h-4 w-4 transition-transform duration-200 ease-out-cubic group-hover:translate-x-0.5"
             aria-hidden="true"

@@ -1,20 +1,27 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { Check, Clock3 } from 'lucide-react'
 
+import AuthErrorSummary from '../components/auth/AuthErrorSummary'
 import AuthShell from '../components/auth/AuthShell'
+import DocPicker from '../components/auth/DocPicker'
+import StepIndicator from '../components/auth/StepIndicator'
 import TagPicker from '../components/seller/TagPicker'
 import Field from '../components/ui/Field'
+import PasswordField from '../components/ui/PasswordField'
 import { serializeTags } from '../lib/productTags.js'
 import { GENDER_OPTIONS } from '../lib/signupRules.js'
 import {
   GOV_ID_TYPES,
   MINIMUM_PASSWORD_LENGTH,
   REQUIRED_PRODUCT_PHOTOS,
-  SELLER_SIGNUP_ROUTE,
   clearPendingSellerApplication,
+  clearSellerDraft,
   completeSellerApplication,
   loadPendingSellerApplication,
+  loadSellerDraft,
   savePendingSellerApplication,
+  saveSellerDraft,
   sellerEmailExists,
   signUpSellerAccount,
   uploadSellerDocuments,
@@ -28,9 +35,48 @@ import {
 } from '../lib/sellerApplication.js'
 import { supabase } from '../lib/supabase'
 
-void SELLER_SIGNUP_ROUTE
-
 const STEPS = ['Account', 'Identity', 'Community', 'Business', 'Storefront']
+
+/** Error key → element id, per step, for the summary's field links. */
+const STEP_LINKS = [
+  {
+    fullName: 'seller-fullName',
+    email: 'seller-email',
+    phone: 'seller-phone',
+    birthday: 'seller-birthday',
+    gender: 'seller-gender',
+    password: 'seller-password',
+    confirm: 'seller-confirm',
+    terms: 'seller-terms',
+  },
+  { idType: 'seller-idType', idFile: 'seller-idFile', selfieFile: 'seller-selfie' },
+  {
+    memberId: 'seller-memberId',
+    barangayFile: 'seller-barangay',
+    storeLocation: 'seller-location',
+  },
+  { dtiFile: 'seller-dti', birFile: 'seller-bir', permitFile: 'seller-permit' },
+  {
+    storeName: 'seller-storeName',
+    storeDescription: 'seller-storeDesc',
+    tags: 'seller-tags',
+    storefrontFile: 'seller-storefront',
+    productFiles: 'seller-products',
+  },
+]
+
+const SELLER_STORY = {
+  eyebrow: 'Sell on CUFMAI · Carcar City, Cebu',
+  heading: 'Your craft, in front of every shopper.',
+  body: 'One application, reviewed by an admin — the same review whether you apply here or in the CUFMAI app. Approval usually takes a few days, and the store-front photo you add below becomes your banner.',
+  points: [
+    'The same application and review as the CUFMAI app',
+    'Every document verified before approval',
+    'Sell here and in the app with one account',
+  ],
+  browseTo: '/',
+  browseLabel: 'Back to the storefront',
+}
 
 const SUBMIT_PROGRESS = {
   account: 'Creating your account…',
@@ -94,6 +140,7 @@ export default function SellerSignUp() {
   const [productFiles, setProductFiles] = useState([])
 
   const [errors, setErrors] = useState({})
+  const [attempt, setAttempt] = useState(0)
   const [formError, setFormError] = useState(null)
   const [checkingEmail, setCheckingEmail] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -101,6 +148,9 @@ export default function SellerSignUp() {
   const [awaitingEmail, setAwaitingEmail] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [resumed, setResumed] = useState(false)
+  const [started, setStarted] = useState(false)
+  const [draftAvailable, setDraftAvailable] = useState(false)
+  const [draftNotice, setDraftNotice] = useState(false)
 
   // Resume after an email confirmation: AuthConfirm routes the fresh session
   // back here (`?resume=1`) and the text half is restored from localStorage.
@@ -137,6 +187,8 @@ export default function SellerSignUp() {
       setStoreName(storefront.storeName ?? '')
       setStoreDescription(storefront.storeDescription ?? '')
       setResumed(true)
+      setStarted(true)
+      setDraftAvailable(false)
       // Files are gone with the old page — start where they are re-attached.
       setStep(sessionEmail ? 1 : 0)
     }
@@ -146,16 +198,62 @@ export default function SellerSignUp() {
     }
   }, [searchParams])
 
+  // A draft the applicant left behind (a closed tab, a dead battery) is
+  // offered back — typed answers only, never the password, and photos must
+  // be re-attached. The post-confirmation resume above takes precedence.
+  useEffect(() => {
+    if (searchParams.get('resume') === '1') return
+    if (loadSellerDraft()) setDraftAvailable(true)
+  }, [searchParams])
+
+  // Autosave typed answers as they go (Etsy/Stripe-style save-and-continue).
+  // Files are deliberately excluded — a photo has nowhere to live before the
+  // account exists — and so is the password.
+  useEffect(() => {
+    if (!started || submitted || awaitingEmail) return
+    saveSellerDraft({
+      step,
+      email,
+      account: { fullName, phone, birthday, gender, genderText },
+      identity: { idType },
+      community: { isMember, memberId, storeLocation },
+      storefront: { storeName, storeDescription },
+      savedAt: new Date().toISOString(),
+    })
+  }, [started, submitted, awaitingEmail, step, email, fullName, phone, birthday, gender, genderText, idType, isMember, memberId, storeLocation, storeName, storeDescription])
+
+  const restoreDraft = (draft) => {
+    const account = draft.account ?? {}
+    const community = draft.community ?? {}
+    const storefront = draft.storefront ?? {}
+    setFullName(account.fullName ?? '')
+    setEmail(draft.email ?? '')
+    setPhone(account.phone ?? '')
+    setBirthday(account.birthday ?? '')
+    setGender(account.gender ?? '')
+    setGenderText(account.genderText ?? '')
+    setIsMember(community.isMember ?? true)
+    setMemberId(community.memberId ?? '')
+    setStoreLocation(community.storeLocation ?? '')
+    setIdType(draft.identity?.idType ?? '')
+    setStoreName(storefront.storeName ?? '')
+    setStoreDescription(storefront.storeDescription ?? '')
+    // Photos cannot be restored — resume where they are re-attached.
+    setStep(Math.min(draft.step ?? 0, 1))
+    setDraftAvailable(false)
+    setDraftNotice(true)
+    setStarted(true)
+  }
+
   const fail = (next) => {
+    const ok = Object.keys(next).length === 0
     setErrors(next)
-    const first = Object.values(next)[0]
-    if (first) setFormError(first)
-    else setFormError(null)
-    return Object.keys(next).length === 0
+    // Re-mount the summary so it takes focus on every failed attempt.
+    if (!ok) setAttempt((count) => count + 1)
+    return ok
   }
 
   const goNext = async () => {
-    setFormError(null)
     if (step === 0) {
       if (
         !fail(
@@ -182,8 +280,7 @@ export default function SellerSignUp() {
         if (email.trim().toLowerCase() !== ownEmail) {
           const exists = await sellerEmailExists(email)
           if (exists) {
-            setErrors({ email: 'This email is already registered. Try signing in instead.' })
-            setFormError('This email is already registered. Try signing in instead.')
+            fail({ email: 'This email is already registered. Try signing in instead.' })
             return
           }
         }
@@ -222,10 +319,10 @@ export default function SellerSignUp() {
     }
   }
 
-  const goBack = () => {
+  const goBack = (target) => {
     setErrors({})
     setFormError(null)
-    setStep((current) => Math.max(0, current - 1))
+    setStep(typeof target === 'number' ? target : (current) => Math.max(0, current - 1))
   }
 
   const onSubmit = async (event) => {
@@ -282,6 +379,7 @@ export default function SellerSignUp() {
           savedAt: new Date().toISOString(),
         })
         setAwaitingEmail(true)
+        clearSellerDraft()
         return
       }
 
@@ -321,6 +419,7 @@ export default function SellerSignUp() {
         },
       })
       clearPendingSellerApplication()
+      clearSellerDraft()
       setSubmitted(true)
     } catch (error) {
       setFormError(
@@ -332,11 +431,83 @@ export default function SellerSignUp() {
     }
   }
 
+  // The whole job, stated upfront (the Amazon pattern): what to prepare,
+  // how long it takes, and what happens after — so step 1 never feels like
+  // the first page of a surprise novel.
+  if (!started) {
+    return (
+      <AuthShell
+        title="Apply to sell"
+        subtitle="Five short steps, about 10 minutes, one review."
+        story={SELLER_STORY}
+        footer={
+          <>
+            Already have an account?{' '}
+            <Link
+              to="/signin"
+              className="font-semibold text-clay-ink underline-offset-4 hover:underline"
+            >
+              Sign in
+            </Link>
+          </>
+        }
+      >
+        <p className="flex items-center gap-2 text-sm font-semibold text-ink">
+          <Clock3 className="h-4 w-4 text-clay-ink" aria-hidden="true" />
+          What you will need
+        </p>
+        <ul className="mt-3 space-y-2.5 text-sm text-muted-strong">
+          {[
+            'Your details — name, birthday, store address',
+            'A government ID photo plus a selfie holding it',
+            'Business papers — DTI certificate, BIR COR, permit',
+            'A store-front photo plus 5 product photos',
+          ].map((line) => (
+            <li key={line} className="flex items-start gap-2.5">
+              <span
+                aria-hidden="true"
+                className="mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-olive/15 text-olive"
+              >
+                <Check className="h-3 w-3" strokeWidth={3} />
+              </span>
+              <span className="leading-snug">{line}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-4 text-xs leading-relaxed text-muted">
+          Your typed answers save on this device as you go. An admin reviews
+          everything after you submit — approval usually takes a few days.
+        </p>
+        <button
+          type="button"
+          onClick={() => setStarted(true)}
+          className="btn btn-primary mt-5 w-full"
+        >
+          Start my application
+        </button>
+        {draftAvailable && (
+          <button
+            type="button"
+            onClick={() => {
+              const draft = loadSellerDraft()
+              if (draft) restoreDraft(draft)
+              else setStarted(true)
+            }}
+            className="mt-2.5 w-full cursor-pointer text-xs font-semibold text-muted underline-offset-4 transition-colors duration-200 ease-out-cubic hover:text-clay-ink hover:underline"
+          >
+            Pick up where you left off
+          </button>
+        )}
+      </AuthShell>
+    )
+  }
+
   if (submitted) {
     return (
       <AuthShell
         title="Application received"
         subtitle="An admin is looking at it now."
+        story={SELLER_STORY}
         footer={
           <>
             Back to{' '}
@@ -349,13 +520,20 @@ export default function SellerSignUp() {
           </>
         }
       >
-        <p className="text-sm leading-relaxed text-muted">
-          Your seller application for{' '}
-          <span className="font-semibold text-ink">{storeName.trim()}</span> is
-          now <span className="font-semibold text-ink">pending review</span>.
-          You will be able to list products and take orders here as soon as it
-          is approved — the CUFMAI app will let you know when that happens.
-        </p>
+        <div
+          role="status"
+          className="rounded-field border border-olive/30 bg-olive/[0.07] px-4 py-3"
+        >
+          <p className="text-sm font-semibold text-ink">
+            {storeName.trim()} is in the review queue
+          </p>
+          <p className="mt-1 text-sm leading-relaxed text-muted">
+            Your application is now{' '}
+            <span className="font-semibold text-ink">pending review</span>. You
+            will be able to list products and take orders here as soon as it is
+            approved — the CUFMAI app will let you know when that happens.
+          </p>
+        </div>
         <p className="mt-4 text-xs text-muted">
           Your account can already shop the storefront while you wait.
         </p>
@@ -368,6 +546,7 @@ export default function SellerSignUp() {
       <AuthShell
         title="Check your email"
         subtitle="Confirm your address to finish your application."
+        story={SELLER_STORY}
         footer={
           <>
             Wrong address?{' '}
@@ -397,7 +576,8 @@ export default function SellerSignUp() {
   return (
     <AuthShell
       title="Apply to sell"
-      subtitle={`Step ${step + 1} of ${STEPS.length} — ${STEPS[step]}. Same application as the CUFMAI app.`}
+      subtitle={`Step ${step + 1} of ${STEPS.length} · ${STEPS[step]} · ${Math.round(((step + 1) / STEPS.length) * 100)}%`}
+      story={SELLER_STORY}
       footer={
         <>
           Already have an account?{' '}
@@ -410,12 +590,34 @@ export default function SellerSignUp() {
         </>
       }
     >
-      <StepDots steps={STEPS} current={step} />
+      <StepIndicator steps={STEPS} current={step} onSelect={goBack} />
 
       {resumed && (
-        <div className="mb-5 rounded-field border border-olive/30 bg-olive/[0.07] px-4 py-3 text-sm leading-relaxed text-ink">
+        <div
+          role="status"
+          className="mb-5 rounded-field border border-olive/30 bg-olive/[0.07] px-4 py-3 text-sm leading-relaxed text-ink"
+        >
           Email confirmed — welcome back. Your details are restored; re-attach
           your photos below to finish.
+        </div>
+      )}
+      {draftNotice && !resumed && (
+        <div
+          role="status"
+          className="mb-5 rounded-field border border-olive/30 bg-olive/[0.07] px-4 py-3 text-sm leading-relaxed text-ink"
+        >
+          Welcome back — your typed answers are restored. Re-attach your photos
+          to continue (photos cannot be saved until your account exists).
+        </div>
+      )}
+
+      {Object.keys(errors).length > 0 && (
+        <div className="mb-5">
+          <AuthErrorSummary
+            key={`${step}-${attempt}`}
+            errors={errors}
+            links={STEP_LINKS[step]}
+          />
         </div>
       )}
 
@@ -490,10 +692,9 @@ export default function SellerSignUp() {
               placeholder="Your words"
             />
           )}
-          <Field
+          <PasswordField
             id="seller-password"
             label="Password"
-            type="password"
             value={password}
             onChange={setPassword}
             error={errors.password}
@@ -501,31 +702,40 @@ export default function SellerSignUp() {
             required
             hint={`At least ${MINIMUM_PASSWORD_LENGTH} characters.`}
           />
-          <Field
+          <PasswordField
             id="seller-confirm"
             label="Confirm password"
-            type="password"
             value={confirm}
             onChange={setConfirm}
             error={errors.confirm}
             autoComplete="new-password"
             required
           />
-          <label className="flex cursor-pointer items-start gap-3 text-sm text-muted">
-            <input
-              type="checkbox"
-              checked={termsAccepted}
-              onChange={(event) => setTermsAccepted(event.target.checked)}
-              className="mt-1 h-4 w-4 accent-clay-ink"
-            />
-            <span>
-              I agree to the CUFMAI Terms &amp; Privacy Policy and to an admin
-              reviewing my documents.
-            </span>
-          </label>
-          {errors.terms && (
-            <p className="text-xs font-medium text-crimson">{errors.terms}</p>
-          )}
+          <div>
+            <label
+              htmlFor="seller-terms"
+              className="flex cursor-pointer items-start gap-3 text-sm text-muted"
+            >
+              <input
+                id="seller-terms"
+                type="checkbox"
+                checked={termsAccepted}
+                onChange={(event) => setTermsAccepted(event.target.checked)}
+                aria-invalid={errors.terms ? 'true' : undefined}
+                aria-describedby={errors.terms ? 'seller-terms-error' : undefined}
+                className="mt-1 h-4 w-4 shrink-0 cursor-pointer accent-clay-ink"
+              />
+              <span>
+                I agree to the CUFMAI Terms &amp; Privacy Policy and to an admin
+                reviewing my documents.
+              </span>
+            </label>
+            {errors.terms && (
+              <p id="seller-terms-error" className="mt-1.5 text-xs font-medium text-crimson">
+                {errors.terms}
+              </p>
+            )}
+          </div>
         </div>
       )}
 
@@ -549,7 +759,7 @@ export default function SellerSignUp() {
           <DocPicker
             id="seller-idFile"
             label="ID photo"
-            hint="A clear photo of the ID above."
+            hint="Show all four corners, in color — no screenshots."
             file={idFile}
             error={errors.idFile}
             onChange={setIdFile}
@@ -570,14 +780,18 @@ export default function SellerSignUp() {
       {step === 2 && (
         <div className="space-y-5">
           <div>
-            <p className="block text-xs font-semibold uppercase tracking-[0.08em] text-muted">
+            <p
+              id="seller-membership-label"
+              className="block text-xs font-semibold uppercase tracking-[0.08em] text-muted"
+            >
               CUFMAI membership
             </p>
-            <div className="mt-2 grid grid-cols-2 gap-2">
+            <div className="mt-2 grid grid-cols-2 gap-2" role="group" aria-labelledby="seller-membership-label">
               <button
                 type="button"
                 onClick={() => setIsMember(true)}
-                className={`h-11 rounded-field border text-sm font-semibold transition-colors ${
+                aria-pressed={isMember}
+                className={`h-11 cursor-pointer rounded-field border text-sm font-semibold transition-colors duration-200 ease-out-cubic focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-clay/60 ${
                   isMember
                     ? 'border-clay bg-clay/10 text-clay-ink'
                     : 'border-hairline bg-raised text-muted hover:border-card-edge'
@@ -588,7 +802,8 @@ export default function SellerSignUp() {
               <button
                 type="button"
                 onClick={() => setIsMember(false)}
-                className={`h-11 rounded-field border text-sm font-semibold transition-colors ${
+                aria-pressed={!isMember}
+                className={`h-11 cursor-pointer rounded-field border text-sm font-semibold transition-colors duration-200 ease-out-cubic focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-clay/60 ${
                   !isMember
                     ? 'border-clay bg-clay/10 text-clay-ink'
                     : 'border-hairline bg-raised text-muted hover:border-card-edge'
@@ -641,6 +856,7 @@ export default function SellerSignUp() {
           <DocPicker
             id="seller-dti"
             label="DTI certificate"
+            hint="A clear photo or scan — every line readable."
             file={dtiFile}
             error={errors.dtiFile}
             onChange={setDtiFile}
@@ -649,6 +865,7 @@ export default function SellerSignUp() {
           <DocPicker
             id="seller-bir"
             label="BIR certificate of registration"
+            hint="A clear photo or scan — every line readable."
             file={birFile}
             error={errors.birFile}
             onChange={setBirFile}
@@ -657,6 +874,7 @@ export default function SellerSignUp() {
           <DocPicker
             id="seller-permit"
             label="Mayor's or barangay permit"
+            hint="A clear photo or scan — every line readable."
             file={permitFile}
             error={errors.permitFile}
             onChange={setPermitFile}
@@ -691,10 +909,12 @@ export default function SellerSignUp() {
               onChange={(event) => setStoreDescription(event.target.value)}
               rows={3}
               placeholder="What you make, and what makes it yours"
+              aria-invalid={errors.storeDescription ? 'true' : undefined}
+              aria-describedby={errors.storeDescription ? 'seller-storeDesc-error' : undefined}
               className="mt-2 w-full rounded-field border border-hairline bg-raised px-4 py-3 text-sm text-ink transition-colors duration-200 ease-out-cubic placeholder:text-muted/60 hover:border-card-edge focus:border-clay"
             />
           </Field>
-          <div>
+          <div id="seller-tags">
             <p className="block text-xs font-semibold uppercase tracking-[0.08em] text-muted">
               Store tags
             </p>
@@ -721,11 +941,13 @@ export default function SellerSignUp() {
                 {productFiles.length} of {REQUIRED_PRODUCT_PHOTOS} — required
               </span>
             </p>
+            <p className="mt-1.5 text-xs text-muted">Clear photos of what you actually sell — they are reviewed.</p>
             <input
               id="seller-products"
               type="file"
               accept="image/jpeg,image/png"
               multiple
+              aria-describedby={errors.productFiles ? 'seller-products-error' : undefined}
               onChange={(event) => {
                 const picked = Array.from(event.target.files ?? []).filter(
                   (file) => !validateDocFile(file),
@@ -735,15 +957,15 @@ export default function SellerSignUp() {
                 )
                 event.target.value = ''
               }}
-              className="mt-2 block w-full text-sm text-muted file:mr-3 file:rounded-field file:border file:border-hairline file:bg-raised file:px-4 file:py-2 file:text-sm file:font-semibold file:text-ink hover:file:border-card-edge"
+              className="mt-2 block w-full cursor-pointer text-sm text-muted file:mr-3 file:cursor-pointer file:rounded-field file:border file:border-hairline file:bg-raised file:px-4 file:py-2 file:text-sm file:font-semibold file:text-ink hover:file:border-card-edge"
             />
             {productFiles.length > 0 && (
-              <div className="mt-3 grid grid-cols-5 gap-2">
+              <ul className="mt-3 grid grid-cols-5 gap-2">
                 {productFiles.map((file, index) => (
-                  <div key={`${file.name}-${index}`} className="relative">
+                  <li key={`${file.name}-${index}`} className="relative">
                     <img
                       src={URL.createObjectURL(file)}
-                      alt={`Product ${index + 1}`}
+                      alt={`Product photo ${index + 1}`}
                       className="h-16 w-full rounded-field border border-hairline object-cover"
                     />
                     <button
@@ -754,16 +976,16 @@ export default function SellerSignUp() {
                           current.filter((_, position) => position !== index),
                         )
                       }
-                      className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-crimson text-[11px] font-bold text-white"
+                      className="absolute -right-1.5 -top-1.5 flex h-5 w-5 cursor-pointer items-center justify-center rounded-full bg-crimson text-[11px] font-bold text-white transition-transform duration-200 ease-out-cubic hover:scale-110"
                     >
-                      ×
+                      <span aria-hidden="true">×</span>
                     </button>
-                  </div>
+                  </li>
                 ))}
-              </div>
+              </ul>
             )}
             {errors.productFiles && (
-              <p className="mt-1.5 text-xs font-medium text-crimson">
+              <p id="seller-products-error" className="mt-1.5 text-xs font-medium text-crimson">
                 {errors.productFiles}
               </p>
             )}
@@ -778,7 +1000,12 @@ export default function SellerSignUp() {
             </div>
           )}
 
-          <button type="submit" disabled={submitting} className="btn btn-primary w-full">
+          <button
+            type="submit"
+            disabled={submitting}
+            aria-busy={submitting}
+            className="btn btn-primary w-full"
+          >
             {submitting && progress
               ? SUBMIT_PROGRESS[progress]
               : submitting
@@ -787,9 +1014,9 @@ export default function SellerSignUp() {
           </button>
           <button
             type="button"
-            onClick={goBack}
+            onClick={() => goBack(3)}
             disabled={submitting}
-            className="w-full text-xs font-semibold text-muted underline-offset-4 transition-colors duration-200 ease-out-cubic hover:text-clay-ink hover:underline"
+            className="w-full cursor-pointer text-xs font-semibold text-muted underline-offset-4 transition-colors duration-200 ease-out-cubic hover:text-clay-ink hover:underline disabled:cursor-default disabled:opacity-60"
           >
             Back to business documents
           </button>
@@ -798,14 +1025,6 @@ export default function SellerSignUp() {
 
       {step < 4 && (
         <div className="mt-7 space-y-3">
-          {formError && (
-            <div
-              role="alert"
-              className="rounded-field border border-crimson/30 bg-crimson/[0.07] px-4 py-3 text-sm text-ink"
-            >
-              {formError}
-            </div>
-          )}
           <button
             type="button"
             onClick={goNext}
@@ -817,8 +1036,8 @@ export default function SellerSignUp() {
           {step > 0 && (
             <button
               type="button"
-              onClick={goBack}
-              className="w-full text-xs font-semibold text-muted underline-offset-4 transition-colors duration-200 ease-out-cubic hover:text-clay-ink hover:underline"
+              onClick={() => goBack()}
+              className="w-full cursor-pointer text-xs font-semibold text-muted underline-offset-4 transition-colors duration-200 ease-out-cubic hover:text-clay-ink hover:underline"
             >
               Back
             </button>
@@ -826,91 +1045,5 @@ export default function SellerSignUp() {
         </div>
       )}
     </AuthShell>
-  )
-}
-
-function StepDots({ steps, current }) {
-  return (
-    <ol className="mb-6 flex items-center gap-1.5" aria-label="Application progress">
-      {steps.map((label, index) => (
-        <li key={label} className="flex flex-1 items-center gap-1.5">
-          <span
-            aria-current={index === current ? 'step' : undefined}
-            title={label}
-            className={`h-1.5 flex-1 rounded-full transition-colors ${
-              index <= current ? 'bg-clay-ink' : 'bg-hairline'
-            }`}
-          />
-        </li>
-      ))}
-    </ol>
-  )
-}
-
-function DocPicker({ id, label, hint, file, error, onChange, required = false }) {
-  const [localError, setLocalError] = useState(null)
-  const shown = error ?? localError
-
-  return (
-    <div>
-      <p className="block text-xs font-semibold uppercase tracking-[0.08em] text-muted">
-        {label}
-        {!required && (
-          <span className="ml-2 font-normal normal-case tracking-normal text-muted/70">
-            optional
-          </span>
-        )}
-      </p>
-      <div className="mt-2 flex items-center gap-3">
-        {file ? (
-          <img
-            src={URL.createObjectURL(file)}
-            alt={`${label} preview`}
-            className="h-16 w-16 rounded-field border border-hairline object-cover"
-          />
-        ) : (
-          <span
-            aria-hidden="true"
-            className="flex h-16 w-16 items-center justify-center rounded-field border border-dashed border-card-edge text-xs text-muted"
-          >
-            JPG/PNG
-          </span>
-        )}
-        <div className="min-w-0 flex-1">
-          <input
-            id={id}
-            type="file"
-            accept="image/jpeg,image/png"
-            onChange={(event) => {
-              const picked = event.target.files?.[0] ?? null
-              if (!picked) return
-              const problem = validateDocFile(picked)
-              if (problem) {
-                setLocalError(problem)
-                event.target.value = ''
-                return
-              }
-              setLocalError(null)
-              onChange(picked)
-              event.target.value = ''
-            }}
-            className="block w-full truncate text-sm text-muted file:mr-3 file:rounded-field file:border file:border-hairline file:bg-raised file:px-4 file:py-2 file:text-sm file:font-semibold file:text-ink hover:file:border-card-edge"
-          />
-          {file && (
-            <button
-              type="button"
-              onClick={() => onChange(null)}
-              className="mt-1 text-xs font-semibold text-crimson underline-offset-4 hover:underline"
-            >
-              Remove {file.name}
-            </button>
-          )}
-        </div>
-      </div>
-      {hint && !shown && <p className="mt-1.5 text-xs text-muted">{hint}</p>}
-      {shown && (
-        <p className="mt-1.5 text-xs font-medium text-crimson">{shown}</p>
-      )}
-    </div>
   )
 }
