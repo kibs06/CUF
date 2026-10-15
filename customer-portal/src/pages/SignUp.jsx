@@ -249,8 +249,14 @@ export default function SignUp() {
         </button>
 
         <p className="text-center text-xs leading-relaxed text-muted">
-          Seller accounts are created in the CUFMAI app — this storefront is for
-          shopping.
+          A shoemaker or artisan?{' '}
+          <Link
+            to="/signup/seller"
+            className="font-semibold text-clay-ink underline-offset-4 hover:underline"
+          >
+            Apply to sell
+          </Link>{' '}
+          — the same application as the CUFMAI app.
         </p>
       </form>
     </AuthShell>

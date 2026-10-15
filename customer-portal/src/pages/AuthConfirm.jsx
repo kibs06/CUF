@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 
 import AuthShell from '../components/auth/AuthShell'
 import { useAuth } from '../hooks/useAuth.jsx'
+import { loadPendingSellerApplication } from '../lib/sellerApplication.js'
 import { supabase } from '../lib/supabase'
 
 const WAIT_STEPS = 24
@@ -54,6 +55,20 @@ export default function AuthConfirm() {
             // the row on the next read.
           }
           if (cancelled) return
+          // A seller applicant confirming mid-application resumes the form
+          // instead of landing on an account page with no application: the
+          // text half is in localStorage, and the form asks for the photos
+          // back (they cannot be kept across the confirmation).
+          const pending = loadPendingSellerApplication()
+          const confirmedEmail = data.session.user?.email ?? ''
+          if (
+            pending?.email &&
+            confirmedEmail &&
+            String(pending.email).toLowerCase() === confirmedEmail.toLowerCase()
+          ) {
+            navigate('/signup/seller?resume=1', { replace: true })
+            return
+          }
           navigate('/account', { replace: true })
           return
         }

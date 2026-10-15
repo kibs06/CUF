@@ -27,6 +27,7 @@ import SettingsSecurity from './pages/SettingsSecurity.jsx'
 import Shop from './pages/Shop.jsx'
 import SignIn from './pages/SignIn.jsx'
 import SignUp from './pages/SignUp.jsx'
+import SellerSignUp from './pages/SellerSignUp.jsx'
 import StoreDetail from './pages/StoreDetail.jsx'
 import Stores from './pages/Stores.jsx'
 
@@ -103,6 +104,13 @@ export default function App() {
 
         <Route path="signin" element={<SignIn />} />
         <Route path="signup" element={<SignUp />} />
+        {/*
+          The seller application — the portal twin of the app's
+          `SellerApplicationFlow`. A public sibling of `/signup`, NOT inside
+          `RequireSeller`: the applicant has no approved store yet, and gating
+          it would make applying impossible.
+        */}
+        <Route path="signup/seller" element={<SellerSignUp />} />
         <Route path="auth/confirm" element={<AuthConfirm />} />
 
         <Route element={<RequireAuth />}>
