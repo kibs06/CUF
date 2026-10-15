@@ -37,6 +37,15 @@ import { supabase } from '../lib/supabase'
 
 const STEPS = ['Account', 'Identity', 'Community', 'Business', 'Storefront']
 
+/** One orienting sentence per stage — the step's job, not its field list. */
+const STEP_SUBTITLES = [
+  'Who is applying — the account belongs to you.',
+  'Prove it is you — one ID and a selfie.',
+  'Your place in the shoemaking community.',
+  'Papers that prove the store is real.',
+  'The store customers will meet.',
+]
+
 /** Error key → element id, per step, for the summary's field links. */
 const STEP_LINKS = [
   {
@@ -576,8 +585,9 @@ export default function SellerSignUp() {
   return (
     <AuthShell
       title="Apply to sell"
-      subtitle={`Step ${step + 1} of ${STEPS.length} · ${STEPS[step]} · ${Math.round(((step + 1) / STEPS.length) * 100)}%`}
+      subtitle={STEP_SUBTITLES[step]}
       story={SELLER_STORY}
+      wide
       footer={
         <>
           Already have an account?{' '}

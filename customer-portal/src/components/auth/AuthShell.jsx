@@ -37,7 +37,7 @@ const ASSURANCES = [
  * for is this one, and going wider only bought the card a longer line of empty
  * input to read across.
  */
-export default function AuthShell({ title, subtitle, children, footer, story }) {
+export default function AuthShell({ title, subtitle, children, footer, story, wide = false }) {
   const copy = {
     eyebrow: 'Carcar City, Cebu · Est. 2004',
     heading: 'One account, whichever device you shop on.',
@@ -48,7 +48,11 @@ export default function AuthShell({ title, subtitle, children, footer, story }) 
     ...story,
   }
   return (
-    <div className="mx-auto grid max-w-7xl gap-10 px-4 py-14 sm:px-6 lg:grid-cols-[1fr_26rem] lg:items-center lg:gap-16 lg:px-8 lg:py-20">
+    <div
+      className={`mx-auto grid max-w-7xl gap-10 px-4 py-14 sm:px-6 lg:items-center lg:gap-16 lg:px-8 lg:py-20 ${
+        wide ? 'lg:grid-cols-[1fr_34rem]' : 'lg:grid-cols-[1fr_26rem]'
+      }`}
+    >
       <Reveal className="order-2 lg:order-1">
         <p className="overline">{copy.eyebrow}</p>
         <h2 className="mt-3 max-w-lg font-display text-3xl font-semibold leading-tight text-ink sm:text-4xl">
@@ -92,7 +96,13 @@ export default function AuthShell({ title, subtitle, children, footer, story }) 
 
       <div className="order-1 lg:order-2">
         <div className="overflow-hidden rounded-premium border border-hairline bg-raised shadow-premium">
-          <div className="p-6 sm:p-8">
+          {wide && (
+            <div
+              aria-hidden="true"
+              className="h-1 bg-gradient-to-r from-clay via-rust to-celadon"
+            />
+          )}
+          <div className={wide ? 'p-6 sm:p-10 sm:pb-8' : 'p-6 sm:p-8'}>
             <Link
               to="/"
               className="inline-flex items-center gap-2.5"
@@ -113,7 +123,11 @@ export default function AuthShell({ title, subtitle, children, footer, story }) 
             )}
           </div>
 
-          <div className="border-t border-hairline-soft p-6 sm:p-8">{children}</div>
+          <div
+            className={`border-t border-hairline-soft ${wide ? 'p-6 sm:p-10 sm:pt-8' : 'p-6 sm:p-8'}`}
+          >
+            {children}
+          </div>
 
           {footer && (
             <div className="border-t border-hairline-soft bg-subtle/60 px-6 py-4 text-sm text-muted sm:px-8">
