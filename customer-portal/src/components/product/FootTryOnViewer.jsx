@@ -74,11 +74,6 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
   // "Place it manually" drops the shoe mid-frame and dragging moves it;
   // auto-tracking takes over the moment a real foot is found.
   const [manual, setManual] = useState(false)
-  // Anchor points: heel + toe taps the shoe sizes itself to. Same unit
-  // axis as auto-track — the model is unit length heel→toe — so the shoe
-  // matches the points exactly; dragging either point re-fits live.
-  const [anchors, setAnchors] = useState(null)
-  const [anchorMode, setAnchorMode] = useState(false)
   const closeRef = useRef(null)
   const videoRef = useRef(null)
 
@@ -123,10 +118,7 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
     setRearCams([])
     setCamIdx(0)
     setManual(false)
-    setAnchors(null)
-    setAnchorMode(false)
     track.manual = false
-    track.anchors = null
     track.placeManual = null
     track.nudgeManual = null
     track.camTrack = null
@@ -447,39 +439,7 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
         if (!t.manual || !t.heel || !t.toe) return
         t.heel = { x: t.heel.x + dxPx, y: t.heel.y + dyPx }
         t.toe = { x: t.toe.x + dxPx, y: t.toe.y + dyPx }
-        if (t.anchors) {
-          t.anchors = {
-            heel: { ...t.heel },
-            toe: { ...t.toe },
-          }
-          if (!cancelled) setAnchors(t.anchors)
-        }
         drawManual()
-      }
-      // Re-draw after render-side anchor edits mutate the same fields.
-      track.drawPlaced = drawManual
-      // Fit the shoe to an explicit heel→toe pair (video pixels).
-      track.fitAnchors = (heel, toe) => {
-        const t = trackRef.current
-        const dx = toe.x - heel.x
-        const dy = toe.y - heel.y
-        const len = Math.hypot(dx, dy)
-        if (!(len > 1)) return
-        t.heel = { ...heel }
-        t.toe = { ...toe }
-        t.angle = Math.atan2(dy, dx)
-        t.length = len
-        t.lastSeen = NaN
-        t.side = null
-        t.showing = true
-        t.manual = true
-        t.anchors = { heel: { ...heel }, toe: { ...toe } }
-        drawManual()
-        if (!cancelled) {
-          setManual(true)
-          setHasFoot(true)
-          setAnchors(t.anchors)
-        }
       }
 
       track.phase = 'foot tracker'
@@ -516,15 +476,10 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
         const foot = pickFoot(msg.feet ?? [], t.side)
         const now = performance.now()
         // A hand-placed shoe survives empty frames; a found foot retires it.
-        if (!foot && (t.manual || t.anchors)) return
-        if (foot && (t.manual || t.anchors)) {
+        if (!foot && t.manual) return
+        if (foot && t.manual) {
           t.manual = false
-          t.anchors = null
-          if (!cancelled) {
-            setManual(false)
-            setAnchors(null)
-            setAnchorMode(false)
-          }
+          if (!cancelled) setManual(false)
         }
         if (foot) {
           t.side = foot.side
@@ -538,28 +493,6 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
                 ? place.lengthPx
                 : t.length + 0.4 * (place.lengthPx - t.length)
             t.lastSeen = now
-            // Automatic anchors: mirror the detected heel→toe into the
-            // same H/T markers the hand flow uses, so the points are
-            // always the detection — no taps needed when it can see.
-            // Epsilon-gated: re-rendering the dialog at detector rate
-            // would be wasteful; only move the dots past ~1% of frame.
-            const uh = t.heel.x / vw
-            const vh_ = t.heel.y / vh
-            const ut = t.toe.x / vw
-            const vt = t.toe.y / vh
-            const prev = t.autoAnchors
-            const moved = !prev
-              || Math.abs(prev.heel.u - uh) > 0.01
-              || Math.abs(prev.heel.v - vh_) > 0.01
-              || Math.abs(prev.toe.u - ut) > 0.01
-              || Math.abs(prev.toe.v - vt) > 0.01
-            if (moved) {
-              t.autoAnchors = {
-                heel: { u: uh, v: vh_ },
-                toe: { u: ut, v: vt },
-              }
-              if (!cancelled && !t.manual) setAnchors(t.autoAnchors)
-            }
           }
         }
         const draw = shouldDrawShoe({
@@ -759,42 +692,9 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
               <div
                 data-tryon-stage
                 className="absolute inset-0"
-                style={manual || anchorMode ? { touchAction: 'none' } : undefined}
+                style={manual ? { touchAction: 'none' } : undefined}
                 onPointerDown={(event) => {
                   const t = trackRef.current
-                  // Anchor mode: taps become heel→toe points, not drags.
-                  if (anchorMode) {
-                    const rect =
-                      event.currentTarget.getBoundingClientRect()
-                    const v = videoRef.current
-                    const vw = v?.videoWidth ?? 0
-                    const vh = v?.videoHeight ?? 0
-                    if (!vw || !vh || !rect.width || !rect.height) return
-                    const u =
-                      (event.clientX - rect.left) / rect.width
-                    const vv =
-                      (event.clientY - rect.top) / rect.height
-                    const clamped = {
-                      u: Math.min(1, Math.max(0, u)),
-                      v: Math.min(1, Math.max(0, vv)),
-                    }
-                    if (!anchors?.heel) {
-                      setAnchors({ heel: clamped, toe: null })
-                    } else if (!anchors?.toe) {
-                      t.fitAnchors?.(
-                        {
-                          x: anchors.heel.u * vw,
-                          y: anchors.heel.v * vh,
-                        },
-                        { x: clamped.u * vw, y: clamped.v * vh },
-                      )
-                      setAnchorMode(false)
-                    } else {
-                      // Third tap restarts the pair at the new heel.
-                      setAnchors({ heel: clamped, toe: null })
-                    }
-                    return
-                  }
                   if (!manual || !t.manual) return
                   t.dragFrom = { x: event.clientX, y: event.clientY }
                   event.currentTarget.setPointerCapture?.(event.pointerId)
@@ -821,114 +721,7 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
                   trackRef.current.dragFrom = null
                 }}
               />
-              {/* Anchor markers — automatic while tracking (display-only),
-                  draggable while hand-placed. Hidden with the shoe. */}
-              {(hasFoot || manual) && anchors?.heel && (
-                <button
-                  type="button"
-                  aria-label="Drag heel anchor"
-                  onPointerDown={(event) => {
-                    if (!trackRef.current.manual) return
-                    event.stopPropagation()
-                    trackRef.current.anchorDrag = 'heel'
-                    event.currentTarget.setPointerCapture?.(event.pointerId)
-                  }}
-                  onPointerMove={(event) => {
-                    if (trackRef.current.anchorDrag !== 'heel') return
-                    const stage = event.currentTarget.parentElement
-                    const rect = stage?.getBoundingClientRect()
-                    const v = videoRef.current
-                    const vw = v?.videoWidth ?? 0
-                    const vh = v?.videoHeight ?? 0
-                    if (!rect?.width || !vw || !vh) return
-                    const u = Math.min(
-                      1,
-                      Math.max(0, (event.clientX - rect.left) / rect.width),
-                    )
-                    const vv = Math.min(
-                      1,
-                      Math.max(0, (event.clientY - rect.top) / rect.height),
-                    )
-                    const next = {
-                      heel: { u, v: vv },
-                      toe: anchors.toe,
-                    }
-                    setAnchors(next)
-                    if (next.toe) {
-                      trackRef.current.fitAnchors?.(
-                        { x: u * vw, y: vv * vh },
-                        { x: next.toe.u * vw, y: next.toe.v * vh },
-                      )
-                    }
-                  }}
-                  onPointerUp={() => {
-                    trackRef.current.anchorDrag = null
-                  }}
-                  onPointerCancel={() => {
-                    trackRef.current.anchorDrag = null
-                  }}
-                  className="absolute z-10 grid h-7 w-7 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 border-white bg-clay-ink text-[11px] font-bold text-white shadow"
-                  style={{
-                    left: `${anchors.heel.u * 100}%`,
-                    top: `${anchors.heel.v * 100}%`,
-                  }}
-                >
-                  H
-                </button>
-              )}
-              {(hasFoot || manual) && anchors?.toe && (
-                <button
-                  type="button"
-                  aria-label="Drag toe anchor"
-                  onPointerDown={(event) => {
-                    if (!trackRef.current.manual) return
-                    event.stopPropagation()
-                    trackRef.current.anchorDrag = 'toe'
-                    event.currentTarget.setPointerCapture?.(event.pointerId)
-                  }}
-                  onPointerMove={(event) => {
-                    if (trackRef.current.anchorDrag !== 'toe') return
-                    const stage = event.currentTarget.parentElement
-                    const rect = stage?.getBoundingClientRect()
-                    const v = videoRef.current
-                    const vw = v?.videoWidth ?? 0
-                    const vh = v?.videoHeight ?? 0
-                    if (!rect?.width || !vw || !vh) return
-                    const u = Math.min(
-                      1,
-                      Math.max(0, (event.clientX - rect.left) / rect.width),
-                    )
-                    const vv = Math.min(
-                      1,
-                      Math.max(0, (event.clientY - rect.top) / rect.height),
-                    )
-                    const next = {
-                      heel: anchors.heel,
-                      toe: { u, v: vv },
-                    }
-                    setAnchors(next)
-                    if (next.heel) {
-                      trackRef.current.fitAnchors?.(
-                        { x: next.heel.u * vw, y: next.heel.v * vh },
-                        { x: u * vw, y: vv * vh },
-                      )
-                    }
-                  }}
-                  onPointerUp={() => {
-                    trackRef.current.anchorDrag = null
-                  }}
-                  onPointerCancel={() => {
-                    trackRef.current.anchorDrag = null
-                  }}
-                  className="absolute z-10 grid h-7 w-7 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 border-white bg-clay-ink text-[11px] font-bold text-white shadow"
-                  style={{
-                    left: `${anchors.toe.u * 100}%`,
-                    top: `${anchors.toe.v * 100}%`,
-                  }}
-                >
-                  T
-                </button>
-              )}
+
 
               {status === 'loading' && (
                 <div className="absolute inset-0 grid place-items-center bg-black/40 p-6 text-center">
@@ -949,69 +742,24 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
                 </div>
               )}
 
-              {status === 'live' && !hasFoot && !anchorMode && (
+              {status === 'live' && !hasFoot && (
                 <div className="absolute left-1/2 top-4 flex -translate-x-1/2 flex-col items-center gap-2">
                   <p className="rounded-full bg-black/60 px-4 py-2 text-center text-xs font-medium text-white">
                     Step back so ankle and toes show, hold still
                   </p>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => trackRef.current.placeManual?.()}
-                      className="rounded-full border border-white/50 bg-black/60 px-4 py-1.5 text-xs font-semibold text-white backdrop-blur-sm transition-colors duration-200 hover:bg-white/20"
-                    >
-                      Place it manually
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAnchors(null)
-                        setAnchorMode(true)
-                      }}
-                      className="rounded-full border border-white/50 bg-black/60 px-4 py-1.5 text-xs font-semibold text-white backdrop-blur-sm transition-colors duration-200 hover:bg-white/20"
-                    >
-                      Set heel &amp; toe
-                    </button>
-                  </div>
-                </div>
-              )}
-              {status === 'live' && anchorMode && (
-                <div className="absolute left-1/2 top-4 flex -translate-x-1/2 flex-col items-center gap-2">
-                  <p className="rounded-full bg-black/60 px-4 py-2 text-center text-xs font-medium text-white">
-                    {anchors?.heel
-                      ? 'Now tap your longest toe'
-                      : 'Tap your heel'}
-                  </p>
                   <button
                     type="button"
-                    onClick={() => {
-                      setAnchorMode(false)
-                      setAnchors(null)
-                    }}
+                    onClick={() => trackRef.current.placeManual?.()}
                     className="rounded-full border border-white/50 bg-black/60 px-4 py-1.5 text-xs font-semibold text-white backdrop-blur-sm transition-colors duration-200 hover:bg-white/20"
                   >
-                    Cancel
+                    Place it manually
                   </button>
                 </div>
               )}
-              {status === 'live' && manual && hasFoot && !anchorMode && (
-                <div className="absolute left-1/2 top-4 flex -translate-x-1/2 flex-col items-center gap-2">
-                  <p className="rounded-full bg-black/60 px-4 py-2 text-center text-xs font-medium text-white">
-                    Drag H / T to fit — auto-takeover when your foot is found
-                  </p>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAnchors(null)
-                        setAnchorMode(true)
-                      }}
-                      className="rounded-full border border-white/50 bg-black/60 px-4 py-1.5 text-xs font-semibold text-white backdrop-blur-sm transition-colors duration-200 hover:bg-white/20"
-                    >
-                      Reset points
-                    </button>
-                  </div>
-                </div>
+              {status === 'live' && manual && hasFoot && (
+                <p className="absolute left-1/2 top-4 -translate-x-1/2 rounded-full bg-black/60 px-4 py-2 text-center text-xs font-medium text-white">
+                  Drag to fit — auto-takeover when your foot is found
+                </p>
               )}
 
               {/* Camera zoom, only where the hardware offers it: a slider
