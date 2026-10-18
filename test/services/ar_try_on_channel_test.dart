@@ -1,4 +1,5 @@
 import 'package:app/services/ar_try_on_channel.dart';
+import 'package:app/utils/shoe_model_resolver.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -120,6 +121,7 @@ void main() {
         sha256: hex64('a'),
         authoredLengthMm: 278,
         alignmentJson: {'heelOffsetMm': 3.0},
+        shoeSide: 'left',
       ));
 
       expect(calls.single.method, 'setModel');
@@ -129,7 +131,26 @@ void main() {
         'sha256': hex64('a'),
         'authoredLengthMm': 278,
         'alignmentJson': {'heelOffsetMm': 3.0},
+        'shoeSide': 'left',
       });
+    });
+
+    test('the handover carries the authored side, so the renderer can mirror it',
+        () {
+      // V4.18. Native compares this against the detected foot; a field the
+      // factory drops is a shoe that is the right way round on the product page
+      // and the wrong way round on a left foot — for every model that carries it.
+      const spec = ShoeModelSpec(
+        id: 7,
+        storagePath: '7_v2_abc.glb',
+        sha256: 'abc',
+        shoeSide: 'left',
+      );
+
+      final wire = TryOnModelSpec.fromModel(spec, path: '/tmp/7.glb');
+
+      expect(wire.shoeSide, 'left');
+      expect(wire.toMap()['shoeSide'], 'left');
     });
 
     test('setModel sends nulls rather than omitting the keys', () async {
@@ -148,6 +169,8 @@ void main() {
       expect(arguments.containsKey('alignmentJson'), isTrue);
       expect(arguments['authoredLengthMm'], isNull);
       expect(arguments['alignmentJson'], isNull);
+      expect(arguments.containsKey('shoeSide'), isTrue);
+      expect(arguments['shoeSide'], isNull);
     });
 
     test('setSize sends the size, the reference size and the last length',
@@ -221,6 +244,17 @@ void main() {
 
       await channel.setDiagnostics(false);
       expect(calls.last.arguments, <String, Object?>{'enabled': false});
+    });
+
+    test('setCameraZoom sends the zoom as one named double', () async {
+      respond(null);
+
+      await channel.setCameraZoom(0.7);
+      expect(calls.single.method, 'setCameraZoom');
+      expect(calls.single.arguments, <String, Object?>{'zoom': 0.7});
+
+      await channel.setCameraZoom(2.0);
+      expect(calls.last.arguments, <String, Object?>{'zoom': 2.0});
     });
 
     test('stopSession is callable but is not part of teardown', () async {
@@ -405,6 +439,23 @@ void main() {
       expect(measure.quality, 0.82);
     });
 
+    test('a footSnapshot carries the captured yaw, tilt and length', () {
+      final event = ArTryOnEvent.fromMap(<Object?, Object?>{
+        'type': 'footSnapshot',
+        'data': <Object?, Object?>{
+          'yawDeg': -41.5,
+          'pitchDeg': 6.2,
+          'lengthMm': 262.0,
+        },
+      });
+
+      expect(event, isA<TryOnFootSnapshotEvent>());
+      final snapshot = event as TryOnFootSnapshotEvent;
+      expect(snapshot.yawDeg, -41.5);
+      expect(snapshot.pitchDeg, 6.2);
+      expect(snapshot.lengthMm, 262.0);
+    });
+
     test('a malformed footMeasure degrades to zeros the controller refuses',
         () {
       final event = ArTryOnEvent.fromMap(<Object?, Object?>{
@@ -504,6 +555,35 @@ void main() {
       expect(args['bytes'], mask);
       expect(args['confidence'], 0.77);
       expect(args.keys.toSet(), <String>{'bytes', 'confidence'});
+    });
+
+    test('setFootPresence sends the focus and a confidence, nothing else',
+        () async {
+      respond(true);
+
+      await channel.setFootPresence(
+        const FootPresenceFrame(
+          focusUv: Offset(0.45, 0.62),
+          confidence: 0.81,
+        ),
+      );
+
+      expect(calls.single.method, 'setFootPresence');
+      final args = calls.single.arguments as Map<Object?, Object?>;
+      final focus = args['focusUv'] as Map<Object?, Object?>;
+      expect(focus['x'], 0.45);
+      expect(focus['y'], 0.62);
+      expect(args['confidence'], 0.81);
+      expect(args.keys.toSet(), <String>{'focusUv', 'confidence'});
+    });
+
+    test('clearFootPresence sends no payload', () async {
+      respond(true);
+
+      await channel.clearFootPresence();
+
+      expect(calls.single.method, 'clearFootPresence');
+      expect(calls.single.arguments, isNull);
     });
 
     test('acquireCameraFrame parses the scan frame shape', () async {

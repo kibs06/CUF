@@ -9,6 +9,7 @@ import '../constants/app_constants.dart';
 import '../constants/app_palette.dart';
 import '../services/ar_try_on_channel.dart';
 import '../services/diag_logger.dart';
+import '../utils/shoe_fit_view.dart';
 
 /// **The 3D box drawn by a WebView instead of the native Filament view** — the
 /// alternative engine behind `AppConstants.shoePreviewWebViewEnabled`.
@@ -89,6 +90,7 @@ class ShoePreviewWebView extends StatefulWidget {
     required this.model,
     this.onStatus,
     this.diagnostics = AppConstants.shoePreviewDiagnosticsEnabled,
+    this.fit,
   });
 
   /// The verified local model — the same payload the native engine is handed.
@@ -109,6 +111,12 @@ class ShoePreviewWebView extends StatefulWidget {
   /// Whether the engine narrates itself at all. Off in every customer build, the
   /// same rule the native engine's heartbeat follows.
   final bool diagnostics;
+
+  /// The fit the customer captured in AR, or null for the default front-on view.
+  ///
+  /// When set, the shoe is oriented to the captured foot direction, the camera looks straight
+  /// down the shoe, and the shoe is scaled to the measured foot length. See [ShoeFitView].
+  final ShoeFitView? fit;
 
   @override
   State<ShoePreviewWebView> createState() => _ShoePreviewWebViewState();
@@ -315,7 +323,8 @@ customElements.whenDefined('model-viewer').then(() => {
       // keeps a drag from paying it per tick.
       key: ValueKey<String>(
         '${widget.model.path}#${AppBrightness.current.name}'
-        '#e${_exposure.toStringAsFixed(2)}#s${_shadow.toStringAsFixed(2)}',
+        '#e${_exposure.toStringAsFixed(2)}#s${_shadow.toStringAsFixed(2)}'
+        '#f${widget.fit?.orientation}|${widget.fit?.cameraOrbit}|${widget.fit?.scale}',
       ),
       // The package turns this into the loopback URL `/model` and reads the file
       // itself; `file://` is the documented way to hand it a path on disk.
@@ -328,10 +337,14 @@ customElements.whenDefined('model-viewer').then(() => {
       // Matches the native preview's opening pose so the two engines are the same
       // product: `INITIAL_YAW_DEG = 60`, and `INITIAL_PITCH_DEG = 18` from the
       // horizontal is model-viewer's phi of 90 − 18 = 72.
-      cameraOrbit: '60deg 72deg 105%',
+      // A captured fit replaces it with the top-down camera for that foot ([ShoeFitView]).
+      cameraOrbit: widget.fit?.cameraOrbit ?? '60deg 72deg 105%',
+      orientation: widget.fit?.orientation,
+      scale: widget.fit?.scale,
       // The same idle spin the native preview runs (2.5 s, 20°/s), so a customer
       // who does not touch the box still sees that it is a 3D object.
-      autoRotate: true,
+      // A top-down fit is held still: the idle spin would turn the captured view away from the foot.
+      autoRotate: widget.fit == null,
       autoRotateDelay: 2500,
       rotationPerSecond: '20deg',
       // The page header already says "Drag to rotate"; model-viewer's animated

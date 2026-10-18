@@ -18,6 +18,7 @@
 library;
 
 import 'dart:typed_data';
+import 'dart:ui' show Offset;
 
 /// The foot mask's on-the-wire side — §2.10's "~32×32".
 ///
@@ -26,6 +27,51 @@ import 'dart:typed_data';
 /// is 1 KB per accepted frame at ≥5 Hz, and it is more than a silhouette needs:
 /// the Android side dilates and upsamples before it becomes geometry.
 const int kFootMaskSize = 32;
+
+/// The focus of a foot mask: the centroid of its confident pixels, in normalized
+/// upright-image coordinates (0–1, top-left origin) — the same space the mask
+/// itself lives in.
+///
+/// **Presence without measurement (V4.15).** When the detector sees a foot but
+/// cannot supply a heel/toe axis, this is the "where" the presence ring is
+/// drawn at: no lengths, no angles, no shoe — just the middle of the confident
+/// blob. A centroid alone would be weak evidence *of* a foot, but this runs
+/// downstream of `footDetected` (shape + elongation + quality already cleared),
+/// so by the time it is asked the only question left is position.
+///
+/// Returns null when fewer than [kFocusMinPixels] pixels clear
+/// [kFocusThreshold]: a sliver of confident pixels is noise, and a presence
+/// indicator for noise is worse than none. Pure and total like everything else
+/// in this file: empty or short input is null, never a throw.
+Offset? maskFocusUv(Uint8List bytes32x32) {
+  if (bytes32x32.length < kFootMaskSize * kFootMaskSize) return null;
+  var sumX = 0;
+  var sumY = 0;
+  var count = 0;
+  for (var y = 0; y < kFootMaskSize; y++) {
+    for (var x = 0; x < kFootMaskSize; x++) {
+      if (bytes32x32[y * kFootMaskSize + x] >= kFocusThreshold) {
+        sumX += x;
+        sumY += y;
+        count++;
+      }
+    }
+  }
+  if (count < kFocusMinPixels) return null;
+  // Cell centres, not corners: (x + 0.5) / size maps the middle of the middle
+  // cell to 0.5, which is where a centred foot's middle belongs.
+  return Offset(
+    (sumX / count + 0.5) / kFootMaskSize,
+    (sumY / count + 0.5) / kFootMaskSize,
+  );
+}
+
+/// Per-pixel confidence floor for [maskFocusUv]: 0.5, the midpoint of the
+/// byte range and the research starting point for presence gating.
+const int kFocusThreshold = 128;
+
+/// Minimum confident pixels for [maskFocusUv]: ~1% of the 32×32 field.
+const int kFocusMinPixels = 10;
 
 /// Box-averages a segmentation mask into a [size]×[size] byte mask
 /// (0–255, `round(mean × 255)`).

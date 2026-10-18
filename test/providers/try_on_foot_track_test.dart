@@ -23,9 +23,9 @@ import 'package:flutter_test/flutter_test.dart';
 ///   1. **The loop is a permission, not a consequence.** With the flag off, or
 ///      with a session that degraded, no frame is requested and no detector is
 ///      even constructed (F19's rule extended to V4's half).
-///   2. **The cadence is §2.11's 5 Hz** — one observation per 200 ms tick, and
-///      the temporal gate's first three ticks are the price of calling anything
-///      a foot.
+///   2. **The cadence is 10 Hz** — one observation per 100 ms tick, and the
+///      temporal gate's first two ticks are the price of calling anything
+///      a foot (V4.14 fast detection: confirmAfter=2).
 ///   3. **Failure is bounded.** Five consecutive failures stop the loop with a
 ///      logged reason instead of an exception per tick, which is what a build
 ///      without V4.2's native frame source would otherwise do forever.
@@ -73,7 +73,7 @@ void main() {
   });
 
   group('the cadence', () {
-    test('one pose per 200 ms tick after the gate confirms (≥5 Hz)', () {
+    test('one pose per 100 ms tick after the gate confirms (≥10 Hz)', () {
       fakeAsync((async) {
         final channel = _FakeChannel();
         final detector = _FakeDetector()..result = _positive();
@@ -81,16 +81,16 @@ void main() {
         _startRealSession(controller, async);
         expect(controller.footTrackingActive, isTrue);
 
-        // 5 ticks in the first second; the gate needs three consecutive
-        // positives before the first pose, so 3 are published.
+        // 10 ticks in the first second; the gate needs two consecutive
+        // positives before the first pose, so 9 are published.
         async.elapse(const Duration(seconds: 1));
-        expect(channel.poses, hasLength(3));
+        expect(channel.poses, hasLength(9));
 
-        // Steady state is one per tick: 5 more in the next second.
+        // Steady state is one per tick: 10 more in the next second.
         async.elapse(const Duration(seconds: 1));
-        expect(channel.poses, hasLength(8));
-        expect(detector.detectCalls, 10);
-        expect(controller.footPoseCount, 8);
+        expect(channel.poses, hasLength(19));
+        expect(detector.detectCalls, 20);
+        expect(controller.footPoseCount, 19);
         controller.dispose();
       });
     });
@@ -103,9 +103,10 @@ void main() {
         _startRealSession(controller, async);
 
         // One lucky frame, then nothing: the positive streak resets, so no
-        // pose is ever published.
+        // pose is ever published. Exactly one 100 ms tick sees the positive —
+        // with confirmAfter=2 a second tick would already confirm it.
         detector.result = _positive();
-        async.elapse(const Duration(milliseconds: 200));
+        async.elapse(const Duration(milliseconds: 100));
         detector.result = const FootDetectionResult.negative();
         async.elapse(const Duration(seconds: 1));
 
@@ -161,6 +162,124 @@ void main() {
     });
   });
 
+  group('V4.15: presence without measurement', () {
+    FootDetectionResult poseless() => FootDetectionResult(
+          footDetected: true,
+          confidence: 0.85,
+          qualityScore: 0.85,
+          footSide: 'right',
+          mask: _mask(),
+        );
+
+    test('a confirmed detection without heel/toe publishes presence, not a pose',
+        () {
+      fakeAsync((async) {
+        final channel = _FakeChannel();
+        final controller = _controller(
+          channel: channel,
+          detector: _FakeDetector()..result = poseless(),
+        );
+        _startRealSession(controller, async);
+
+        // Gate confirms on the second 100 ms tick; the pose converter has no
+        // axis, so the ring — not a shoe — is published, exactly once.
+        async.elapse(const Duration(seconds: 1));
+        expect(channel.poses, isEmpty);
+        expect(channel.presence, hasLength(1));
+        expect(channel.presence.single.focusUv.dx, closeTo(0.5, 1e-9));
+        expect(channel.presence.single.focusUv.dy, closeTo(0.5, 1e-9));
+        expect(channel.presence.single.confidence, 0.85);
+        controller.dispose();
+      });
+    });
+
+    test('a measurable pose supersedes presence with a clear', () {
+      fakeAsync((async) {
+        final channel = _FakeChannel();
+        final detector = _FakeDetector()..result = poseless();
+        final controller = _controller(channel: channel, detector: detector);
+        _startRealSession(controller, async);
+
+        async.elapse(const Duration(milliseconds: 500));
+        expect(channel.presence, hasLength(1));
+
+        // The foot becomes measurable: poses flow and the ring is cleared once.
+        detector.result = _positive();
+        async.elapse(const Duration(milliseconds: 300));
+        expect(channel.poses, isNotEmpty);
+        expect(channel.presenceClears, 1);
+        expect(channel.presence, hasLength(1),
+            reason: 'no refresh after the clear — presence stays off while '
+                'poses flow');
+        controller.dispose();
+      });
+    });
+
+    test('losing the foot clears a shown ring', () {
+      fakeAsync((async) {
+        final channel = _FakeChannel();
+        final detector = _FakeDetector()..result = poseless();
+        final controller = _controller(channel: channel, detector: detector);
+        _startRealSession(controller, async);
+
+        async.elapse(const Duration(milliseconds: 500));
+        expect(channel.presence, hasLength(1));
+
+        detector.result = const FootDetectionResult.negative();
+        async.elapse(const Duration(seconds: 1));
+        expect(channel.presenceClears, 1);
+        expect(channel.poses, isEmpty);
+        controller.dispose();
+      });
+    });
+
+    test('one negative frame does not clear the ring — the gate needs three', () {
+      fakeAsync((async) {
+        final channel = _FakeChannel();
+        final detector = _FakeDetector()..result = poseless();
+        final controller = _controller(channel: channel, detector: detector);
+        _startRealSession(controller, async);
+
+        async.elapse(const Duration(milliseconds: 500));
+        expect(channel.presence, hasLength(1));
+
+        // V4.17: a single frame that says "no foot" is a blink, not a loss —
+        // `TemporalFootGate` needs three consecutive negatives before it stops
+        // confirming, and the ring follows the gate rather than the frame.
+        detector.result = const FootDetectionResult.negative();
+        async.elapse(const Duration(milliseconds: 100));
+        expect(channel.presenceClears, 0,
+            reason: 'the gate is the authority; one miss is not a loss');
+
+        // The foot is back on the next tick, and the ring is still alive and still
+        // refreshing — nothing about it had to be re-established.
+        detector.result = poseless();
+        async.elapse(const Duration(milliseconds: 1200));
+        expect(channel.presenceClears, 0);
+        expect(channel.presence.length, greaterThan(1),
+            reason: 'the same ring keeps refreshing through the miss');
+        controller.dispose();
+      });
+    });
+
+    test('presence refreshes about once a second while it persists', () {
+      fakeAsync((async) {
+        final channel = _FakeChannel();
+        final controller = _controller(
+          channel: channel,
+          detector: _FakeDetector()..result = poseless(),
+        );
+        _startRealSession(controller, async);
+
+        // Edge on tick 2, refresh every 10 ticks: 3 sends in 2.2 seconds.
+        async.elapse(const Duration(milliseconds: 2200));
+        expect(channel.presence, hasLength(3));
+        expect(channel.poses, isEmpty);
+        controller.dispose();
+      });
+    });
+  });
+
   group("V4.4: the mask rides the accepted pose", () {
     test('every published pose carries its mask, byte-identical', () {
       fakeAsync((async) {
@@ -172,8 +291,8 @@ void main() {
 
         async.elapse(const Duration(seconds: 1));
 
-        expect(channel.poses, hasLength(3));
-        expect(channel.masks, hasLength(3),
+        expect(channel.poses, hasLength(9));
+        expect(channel.masks, hasLength(9),
             reason: 'a published pose is the frame the mask belongs to');
         expect(channel.masks.first.bytes, same(result.mask),
             reason: 'the mask crosses exactly as the detector built it — no '
@@ -193,7 +312,7 @@ void main() {
 
         async.elapse(const Duration(seconds: 1));
 
-        expect(channel.poses, hasLength(3),
+        expect(channel.poses, hasLength(9),
             reason: 'a null mask is not an error — V4.0/V4.1 detectors have '
                 'none, and the pose loop must still work');
         expect(channel.masks, isEmpty);
@@ -210,7 +329,7 @@ void main() {
         _startRealSession(controller, async);
 
         async.elapse(const Duration(seconds: 1));
-        expect(channel.poses, hasLength(3), reason: 'the pose still crossed');
+        expect(channel.poses, hasLength(9), reason: 'the pose still crossed');
         expect(channel.masks, isEmpty, reason: 'and the mask did not');
 
         // Well past kFootTrackFailureLimit ticks: an auxiliary failure must not
@@ -272,7 +391,7 @@ void main() {
         );
         _startRealSession(controller, async);
 
-        // Three consecutive positives confirm the gate (~600 ms).
+        // Two consecutive positives confirm the gate (~200 ms, V4.14).
         async.elapse(const Duration(seconds: 1));
 
         expect(controller.coachCue.value, TryOnCoachCue.holdStill,
@@ -393,6 +512,47 @@ void main() {
         expect(live.locked, isFalse,
             reason: 'the measurement does not imply a lock — that is the '
                 "tracker's edge to send");
+        controller.dispose();
+      });
+    });
+
+    test('a footSnapshot publishes the captured pose', () {
+      fakeAsync((async) {
+        final channel = _FakeChannel();
+        final controller =
+            _controller(channel: channel, detector: _FakeDetector());
+        _startRealSession(controller, async);
+
+        expect(controller.footSnapshot.value, isNull);
+        channel.emit(const TryOnFootSnapshotEvent(
+          yawDeg: -41.5,
+          pitchDeg: 6.2,
+          lengthMm: 262,
+        ));
+        async.flushMicrotasks();
+
+        final snapshot = controller.footSnapshot.value;
+        expect(snapshot?.yawDeg, -41.5);
+        expect(snapshot?.pitchDeg, 6.2);
+        expect(snapshot?.lengthMm, 262);
+        controller.dispose();
+      });
+    });
+
+    test('a footSnapshot with no usable length or angle is refused', () {
+      fakeAsync((async) {
+        final channel = _FakeChannel();
+        final controller =
+            _controller(channel: channel, detector: _FakeDetector());
+        _startRealSession(controller, async);
+
+        channel.emit(const TryOnFootSnapshotEvent(
+            yawDeg: 0, pitchDeg: 0, lengthMm: 0));
+        channel.emit(const TryOnFootSnapshotEvent(
+            yawDeg: double.nan, pitchDeg: 0, lengthMm: 260));
+        async.flushMicrotasks();
+
+        expect(controller.footSnapshot.value, isNull);
         controller.dispose();
       });
     });
@@ -1010,6 +1170,21 @@ class _FakeChannel extends ArTryOnChannel {
   Future<void> setFootPose(FootPoseFrame frame) async {
     calls.add('setFootPose');
     poses.add(frame);
+  }
+
+  final List<FootPresenceFrame> presence = <FootPresenceFrame>[];
+  int presenceClears = 0;
+
+  @override
+  Future<void> setFootPresence(FootPresenceFrame frame) async {
+    calls.add('setFootPresence');
+    presence.add(frame);
+  }
+
+  @override
+  Future<void> clearFootPresence() async {
+    calls.add('clearFootPresence');
+    presenceClears++;
   }
 
   final List<({Uint8List bytes, double confidence})> masks =

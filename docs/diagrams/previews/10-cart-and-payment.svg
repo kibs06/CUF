@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="1639" viewBox="0 0 1100 1639">
+<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L8,3 L0,6 z" fill="#000000"/></marker></defs>
+<rect x="4" y="4" width="1092" height="1631" fill="none" stroke="#000000" stroke-width="1"/>
+<text font-family="Helvetica, Arial, sans-serif" font-size="22" font-weight="bold" fill="#000000" text-anchor="start"><tspan x="60" y="57.0">10 · Cart and payment</tspan></text>
+<text font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#000000" text-anchor="start"><tspan x="60" y="88.0">SoleVision — what the customer does · page 10 of 14</tspan></text>
+<polyline points="565.0,222.0 565.0,264.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,348.0 565.0,390.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="720.0,465.0 825.0,465.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="945.0,507.0 945.0,549.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,540.0 565.0,582.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,666.0 565.0,708.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="410.0,783.0 280.0,783.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="155.0,825.0 155.0,867.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,858.0 565.0,900.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="410.0,975.0 280.0,975.0 280.0,1008.5" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,1050.0 565.0,1092.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,1176.0 565.0,1218.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="155.0,1060.0 155.0,1244.9 420.0,1244.9" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,1302.0 565.0,1344.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="825.0,306.0 710.0,306.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="280.0,624.0 420.0,624.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000" text-anchor="middle"><tspan x="565" y="373.0">Yes</tspan></text>
+<text font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000" text-anchor="middle"><tspan x="772.5" y="469.0">No</tspan></text>
+<text font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000" text-anchor="middle"><tspan x="565" y="691.0">Yes</tspan></text>
+<text font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000" text-anchor="middle"><tspan x="345" y="787.0">No</tspan></text>
+<text font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000" text-anchor="middle"><tspan x="565" y="883.0">Cash on pickup</tspan></text>
+<text font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000" text-anchor="middle"><tspan x="328.25" y="979.0">GCash</tspan></text>
+<polygon points="420,130 710,130 710,198.07999999999998 565,222 420,198.07999999999998" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="12" font-weight="bold" fill="#000000" text-anchor="middle"><tspan x="565" y="159.5">From pages 6, 7, 8 or 9</tspan><tspan x="565" y="176.5">they opened the Cart</tspan></text>
+<rect x="420" y="264" width="290" height="84" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="297.0">The Cart lists what they picked:</tspan><tspan x="565" y="315.0">the item, the size and how many.</tspan></text>
+<polygon points="565,390 720,465 565,540 410,465" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="465.0">Is everything right?</tspan></text>
+<rect x="825" y="423" width="240" height="84" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="945" y="456.0">Change the size or the number,</tspan><tspan x="945" y="474.0">or remove an item.</tspan></text>
+<circle cx="945" cy="573" r="24" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="945" y="573.0">A</tspan></text>
+<rect x="420" y="582" width="290" height="84" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="615.0">Tap Check Out — review the order</tspan><tspan x="565" y="633.0">and choose where it goes.</tspan></text>
+<polygon points="565,708 720,783 565,858 410,783" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="774.0">Do they have an</tspan><tspan x="565" y="792.0">address saved?</tspan></text>
+<rect x="30" y="741" width="250" height="84" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="155" y="774.0">Add their address, then come</tspan><tspan x="155" y="792.0">back to check out.</tspan></text>
+<circle cx="155" cy="891" r="24" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="155" y="891.0">B</tspan></text>
+<polygon points="565,900 720,975 565,1050 410,975" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="975.0">How do they pay?</tspan></text>
+<rect x="30" y="957" width="250" height="103" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="155" y="990.5">GCash — the app opens GCash</tspan><tspan x="155" y="1008.5">to pay. The order waits until</tspan><tspan x="155" y="1026.5">the payment is confirmed.</tspan></text>
+<rect x="420" y="1092" width="290" height="84" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="1125.0">Cash on pickup — they pay at the shop</tspan><tspan x="565" y="1143.0">when they collect it.</tspan></text>
+<rect x="420" y="1218" width="290" height="84" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="1251.0">The order is placed — the shop sees it</tspan><tspan x="565" y="1269.0">right away.</tspan></text>
+<polygon points="420,1344 710,1344 710,1412.08 565,1436 420,1412.08" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="12" font-weight="bold" fill="#000000" text-anchor="middle"><tspan x="565" y="1373.5">Continue on page 11</tspan><tspan x="565" y="1390.5">Track the order</tspan></text>
+<rect x="825" y="1345" width="240" height="91" rx="0" fill="none" stroke="#000000" stroke-width="1.5" stroke-dasharray="5 5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="945" y="1372.5">The delivery fee and the</tspan><tspan x="945" y="1390.5">GCash fee are shown before</tspan><tspan x="945" y="1408.5">they confirm.</tspan></text>
+<rect x="825" y="1478" width="240" height="91" rx="0" fill="none" stroke="#000000" stroke-width="1.5" stroke-dasharray="5 5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="945" y="1505.5">If a GCash payment fails or</tspan><tspan x="945" y="1523.5">runs out of time, the order is</tspan><tspan x="945" y="1541.5">not placed — they can try again.</tspan></text>
+<circle cx="849" cy="306" r="24" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="849" y="306.0">A</tspan></text>
+<circle cx="256" cy="624" r="24" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="256" y="624.0">B</tspan></text>
+</svg>

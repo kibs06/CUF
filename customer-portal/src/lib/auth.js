@@ -135,11 +135,35 @@ export function accessDeniedReason(profile) {
 }
 
 /**
+ * Best-effort session logging for the admin "Seller sessions" trail.
+ *
+ * Sign-ins touch no public table (GoTrue owns them), so the admin log only
+ * exists if the clients write it. This must never block or break auth: a
+ * logging failure is swallowed, and callers log sign-out BEFORE dropping the
+ * session (afterwards there is no authenticated user left to write with).
+ */
+async function logSessionEvent(userId, event, role) {
+  if (!userId) return
+  try {
+    await supabase.from('account_session_log').insert({
+      user_id: userId,
+      event,
+      role: role ?? null,
+      source: 'customer-portal',
+      user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+    })
+  } catch {
+    // Session history is analytics, not auth — never fail the sign-in/out.
+  }
+}
+
+/**
  * Sign in.
  *
  * Any existing session is dropped first, exactly as the app does: a lingering
  * session from another account can otherwise block the new sign-in silently,
- * which reads to the customer as "my password is wrong".
+ * which reads to the customer as "my password is wrong". (That replacement
+ * sign-out is not logged — only explicit sign-outs are.)
  */
 export async function signIn({ email, password }) {
   const { data: existing } = await supabase.auth.getSession()
@@ -160,6 +184,7 @@ export async function signIn({ email, password }) {
     throw new Error(accessDeniedReason(profile))
   }
 
+  await logSessionEvent(user.id, 'sign_in', profile?.role)
   return profile
 }
 
@@ -210,6 +235,23 @@ export async function signUp({
 }
 
 export async function signOut() {
+  // Logged before the session is dropped — afterwards this client is
+  // anonymous and the INSERT policy (auth.uid() = user_id) rejects it.
+  try {
+    const { data } = await supabase.auth.getUser()
+    const uid = data?.user?.id
+    if (uid) {
+      const { data: row } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', uid)
+        .maybeSingle()
+      await logSessionEvent(uid, 'sign_out', row?.role)
+    }
+  } catch {
+    // Best-effort — a logging failure must not trap the user signed in.
+  }
+
   const { error } = await supabase.auth.signOut()
   if (error) throw error
 }

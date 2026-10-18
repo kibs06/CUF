@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import '../../constants/app_constants.dart';
 import '../../services/ar_try_on_channel.dart';
 import '../../services/shoe_preview_channel.dart';
+import '../../services/space_view_service.dart';
 import '../../services/try_on_prefetch.dart';
+import '../../utils/shoe_fit_view.dart';
 import '../../widgets/shoe_preview_3d.dart';
 import '../../widgets/sole_ar_pill.dart';
 import '../customer/ar_fitting_screen.dart';
@@ -96,6 +98,7 @@ class ShoePreviewScreen extends StatefulWidget {
     this.channel,
     this.viewBuilder,
     this.events,
+    this.storagePath,
   }) : productId = null;
 
   /// The seller door: nothing is resolved yet, so this screen resolves it.
@@ -115,7 +118,8 @@ class ShoePreviewScreen extends StatefulWidget {
     this.viewBuilder,
     this.events,
   })  : model = null,
-        modelAvailable = false;
+        modelAvailable = false,
+        storagePath = null;
 
   /// The verified local model, in the same payload the AR path hands over.
   /// Null on the seller door, where [productId] is given instead.
@@ -161,6 +165,13 @@ class ShoePreviewScreen extends StatefulWidget {
   /// Test seam: the preview's native event stream, instead of the channel's own.
   final Stream<Map<String, dynamic>>? events;
 
+  /// The bucket path of the live model (`product_models.storage_path`), so
+  /// the space view can point Scene Viewer at the same public file the
+  /// portal draws. Handed over on the customer door, where the page already
+  /// resolved it; derived from the resolve on the seller door. Null draws
+  /// no space entry — a button that opens nothing is worse than none.
+  final String? storagePath;
+
   @override
   State<ShoePreviewScreen> createState() => _ShoePreviewScreenState();
 }
@@ -190,6 +201,9 @@ class _ShoePreviewScreenState extends State<ShoePreviewScreen> {
   /// the GPU and two Filament engines for one customer is a frame-rate argument
   /// nobody wins.
   bool _arTryOnOpen = false;
+
+  /// The fit the customer captured in AR. Null until a capture, which leaves the default view.
+  ShoeFitView? _footFit;
 
   /// The model to draw: handed over on the customer door, resolved on the
   /// seller's.
@@ -250,13 +264,54 @@ class _ShoePreviewScreenState extends State<ShoePreviewScreen> {
   }
 
   Future<void> _openArTryOn() async {
+    await _openAr();
+  }
+
+  /// The bucket path Scene Viewer should fetch: handed over on the customer
+  /// door, resolved on the seller door. Null while the seller resolve is in
+  /// flight, and the entry stays hidden until it lands.
+  String? get _spaceViewPath =>
+      widget.storagePath ?? _resolution?.spec?.storagePath;
+
+  /// **"View in your space"** — the portal's space-AR door, kept alongside
+  /// the foot-tracking screen rather than in place of it. The floor is where
+  /// a customer decides; the foot is where they fit. A refused launch is a
+  /// sentence, never a throw (see `space_view_service.dart` rule 2).
+  Future<void> _openSpaceView() async {
+    final ok = await launchSpaceView(_spaceViewPath);
+    if (!mounted || ok) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Could not open the AR view on this phone. Try the Try On in AR fitting instead.',
+        ),
+      ),
+    );
+  }
+
+  /// **"Capture to fit": the AR screen, closed by the foot's first capture.** The pose it hands back
+  /// sets the viewer's orientation, top-down camera and size. A capture with no usable pose leaves
+  /// the viewer on its current fit.
+  Future<void> _captureFit() async {
+    final pose = await _openAr(captureFit: true);
+    if (!mounted || pose == null) return;
+    final fit = shoeFitViewFor(
+      yawDeg: pose.yawDeg,
+      lengthMm: pose.lengthMm,
+      authoredLengthMm: _model?.authoredLengthMm,
+    );
+    if (fit != null) setState(() => _footFit = fit);
+  }
+
+  Future<TryOnFootSnapshotEvent?> _openAr({bool captureFit = false}) async {
     setState(() => _arTryOnOpen = true);
     try {
-      await Navigator.of(context).push(
+      return await Navigator.of(context).push<TryOnFootSnapshotEvent>(
         MaterialPageRoute(
           builder: (context) => ARVirtualFitScreen(
             preselectedProduct: widget.product,
             modelAvailable: widget.modelAvailable,
+            captureFit: captureFit,
           ),
         ),
       );
@@ -342,6 +397,7 @@ class _ShoePreviewScreenState extends State<ShoePreviewScreen> {
                             channel: widget.channel,
                             viewBuilder: widget.viewBuilder,
                             events: widget.events,
+                            footFit: _footFit,
                           )
                         else if (_resolving)
                           _ResolvingBox(height: boxHeight)
@@ -413,7 +469,62 @@ class _ShoePreviewScreenState extends State<ShoePreviewScreen> {
                             ),
                           ),
                         ),
-                        SoleARPill(onPressed: _openArTryOn),
+                        // Space view first: the portal's door — the same public
+                        // file on the customer's floor through Scene Viewer —
+                        // kept alongside the foot fit below rather than in
+                        // place of it. Hidden until a bucket path exists, so
+                        // an unsupported phone or a missing file draws no
+                        // button that opens nothing.
+                        if (hasSpaceView(_spaceViewPath))
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: _openSpaceView,
+                                icon: const Icon(
+                                  Icons.view_in_ar_outlined,
+                                  size: 18,
+                                ),
+                                label: const Text('View in your space'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: AppConstants.inkInverse,
+                                  side: BorderSide(
+                                    color: AppConstants.inkInverse.withValues(
+                                      alpha: 0.4,
+                                    ),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 14,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(30),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        // Side by side: the two actions are alternatives on the
+                        // same fit, so they share a row. The 2:3 flex gives
+                        // "Try On in AR" the larger slot.
+                        Row(
+                          children: [
+                            Expanded(
+                              flex: 2,
+                              child: SoleARPill(
+                                onPressed: _captureFit,
+                                label: 'Capture to fit',
+                                background: AppConstants.primary,
+                                foreground: AppConstants.inkInverse,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              flex: 3,
+                              child: SoleARPill(onPressed: _openArTryOn),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                   ),

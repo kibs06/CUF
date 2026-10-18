@@ -34,14 +34,17 @@
 
 > What am I working on right now? Update this daily so the next session (human or AI) picks up where you left off.
 
-- **Current focus:** Obsidian vault audit & refresh (MOCs, Code Map, tasks)
-- **Last session:** v1.0.15 release (logout fix), banner system, home hero, account management
-- **Blockers:** —
-- **Version:** 1.0.15+17 (Aug 22, 2026)
+- **Current focus:** AR try-on projection probe — 30-sec on-device retest, then Step 1 fix (mapping-direction vs session-geometry)
+- **Last session:** AR try-on V4.13–V4.21 batch (detection dots, presence ring, detection-driven shoe, shared hold rule, side mirroring, held-carry, still-capture "Capture to fit", V4.20/V4.21 TEMP-DIAG probes) + V4 changelog filed under `docs/3D fitting/`
+- **Blockers:** on-device retest needs hands on the phone while the probe build is installed
+- **Version:** 1.0.55 (Oct 2026)
 
 ## 🗂️ Reference
 
 - [[docs/SoleVision_Complete_Documentation|📘 Master documentation]] (22 sections)
+- [[obsidian/Release Checklist|✅ Release Checklist]] — run before stamping any version
+- [[obsidian/Decision Log|📜 Decision Log]] — why the code is the way it is
+- [[obsidian/Glossary|📖 Glossary]] — project-specific terms in one place
 - [[docs/PROJECT_HANDOFF|📄 Project handoff v1.1.0]]
 - [[docs/CHANGELOG|📝 Changelog]]
 - [[docs/RoadMap/SOLEVISION_ROADMAP|🧭 Roadmap]]

@@ -8,6 +8,7 @@ import '../../providers/update_provider.dart';
 import '../../services/supabase_service.dart';
 import '../../utils/customer_profile_fields.dart';
 import '../../utils/dev_mode.dart';
+import '../../widgets/auth/dev_mode_swipe_detector.dart';
 import '../../widgets/auth/dismiss_on_signin.dart';
 import '../auth/account_entry_screen.dart';
 import '../customer/address_book_screen.dart';
@@ -62,7 +63,10 @@ class SettingsScreen extends StatelessWidget {
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
-      body: SingleChildScrollView(
+      // Swipe 2 up, 2 down, 2 right, 2 left anywhere on this screen to switch
+      // developer mode on or off, the same code as the account screen.
+      body: DevModeSwipeDetector(
+        child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -294,6 +298,7 @@ class SettingsScreen extends StatelessWidget {
             const SizedBox(height: 24),
           ],
         ),
+      ),
       ),
     );
   }

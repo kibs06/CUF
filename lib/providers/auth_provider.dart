@@ -434,6 +434,10 @@ class AuthProvider extends ChangeNotifier {
         }
       }
 
+      // Best-effort sign-in row for the admin "Seller sessions" trail.
+      final loginUid = _currentUser?['id'] as String?;
+      if (loginUid != null) await _logSessionEvent(loginUid, 'sign_in');
+
       return true;
     } catch (e, st) {
       // ── Never-confirmed account (ANQUI item 16 pre-rollout path) ──
@@ -1213,10 +1217,32 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  /// Best-effort session logging for the admin "Seller sessions" trail.
+  ///
+  /// Sign-ins touch no public table (GoTrue owns them), so the trail only
+  /// exists if the clients write it. Swallowed on failure — history is
+  /// analytics, never auth — and logout logs BEFORE the session is dropped.
+  Future<void> _logSessionEvent(String userId, String event) async {
+    try {
+      await Supabase.instance.client.from('account_session_log').insert({
+        'user_id': userId,
+        'event': event,
+        'role': _profile?['role'],
+        'source': 'app',
+      });
+    } catch (_) {
+      // Never block auth on analytics.
+    }
+  }
+
   // Logout (UC029)
   Future<void> logout() async {
     // Capture userId before clearing state
     final userId = _currentUser?['id'] as String?;
+
+    // Logged while the session is still valid: after signOut this client is
+    // anonymous and the INSERT policy (auth.uid() = user_id) rejects it.
+    if (userId != null) await _logSessionEvent(userId, 'sign_out');
 
     // Clear all state BEFORE calling signOut to prevent stale data
     // from being visible during the sign-out / redirect flow.

@@ -127,3 +127,13 @@ fun unprojectToCameraSpace(
     -(imageY - cy) / fy * depthM,
     -depthM,
 )
+
+/**
+ * The foot's length in metres, measured in the floor plane: heel to toe with the vertical
+ * component left out. A depth-based heel and toe pair is checked with this before it is trusted.
+ */
+fun planarFootAxisMeters(heel: FloatArray, toe: FloatArray): Double {
+    val dx = (toe[0] - heel[0]).toDouble()
+    val dz = (toe[2] - heel[2]).toDouble()
+    return kotlin.math.sqrt(dx * dx + dz * dz)
+}

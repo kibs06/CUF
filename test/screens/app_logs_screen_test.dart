@@ -189,6 +189,13 @@ void main() {
     });
   });
 
+  test('developer mode is unlocked by the swipe code, not a toggle', () {
+    // Settings uses the same swipe detector as the account screen. A toggle
+    // here would give a second, different way to switch dev mode on.
+    expect(settingsScreen, contains('DevModeSwipeDetector('));
+    expect(settingsScreen, isNot(contains('Switch(')));
+  });
+
   testWidgets('the harness itself renders', (tester) async {
     // Guards the harness above: if `AppLogsScreen` ever needs a provider this
     // test fails here rather than inside every other test in the file.

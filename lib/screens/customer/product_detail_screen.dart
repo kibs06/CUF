@@ -1138,6 +1138,7 @@ class _ProductDetailViewState extends State<_ProductDetailView>
           model: model,
           product: widget.product,
           modelAvailable: _tryOnModelAvailable,
+          storagePath: _tryOnPrefetchResult?.spec?.storagePath,
         ),
       ),
     );

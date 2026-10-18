@@ -336,4 +336,119 @@ class FootPoseTrackerTest {
 
         assertNull(tracker.measure())
     }
+
+    // ── V4.18: which foot is on screen ────────────────────────────────────────
+
+    /**
+     * The side drives which shoe the customer *sees* (the view mirrors the mesh when the confirmed
+     * foot differs from the model's authored side), so it is worth the same care as the lock: the
+     * first opinion is taken at once, and a change has to be insisted on. Each streak below is
+     * driven one observation at a time, because the off-by-one is the bug — a shoe that flips two
+     * frames early flickers between feet on every partial frame.
+     */
+    @Test
+    fun theFirstSideIsTakenAtOnceButAChangeHasToBeInsistedOn() {
+        val tracker = FootPoseTracker()
+        var now = 1_000L
+        tracker.observe(sample(0.0, 0.0, 0.0, 0.9, side = "right"), now)
+        assertEquals("nothing to contradict yet", "right", tracker.side)
+
+        repeat(FootPoseTracker.SIDE_CHANGE_CONFIRM - 1) {
+            now += 100L
+            tracker.observe(sample(0.0, 0.0, 0.0, 0.9, side = "left"), now)
+            assertEquals("one or two frames is not a different foot", "right", tracker.side)
+        }
+
+        now += 100L
+        tracker.observe(sample(0.0, 0.0, 0.0, 0.9, side = "left"), now)
+        assertEquals("the confirmed change lands", "left", tracker.side)
+    }
+
+    @Test
+    fun agreeingFramesResetTheStreakSoItCannotAccumulateFromNowhere() {
+        val tracker = FootPoseTracker()
+        var now = 1_000L
+        tracker.observe(sample(0.0, 0.0, 0.0, 0.9, side = "right"), now)
+
+        // Two votes to change, then agreement, then two more: never three *consecutive*.
+        repeat(2) {
+            now += 100L
+            tracker.observe(sample(0.0, 0.0, 0.0, 0.9, side = "left"), now)
+        }
+        now += 100L
+        tracker.observe(sample(0.0, 0.0, 0.0, 0.9, side = "right"), now)
+        repeat(2) {
+            now += 100L
+            tracker.observe(sample(0.0, 0.0, 0.0, 0.9, side = "left"), now)
+        }
+
+        assertEquals("votes must be consecutive, not merely cumulative", "right", tracker.side)
+    }
+
+    @Test
+    fun anUnsureFrameIsNotAnOpinion() {
+        val tracker = FootPoseTracker()
+        var now = 1_000L
+        // A whole run of nulls: nobody has said which foot it is.
+        repeat(4) {
+            tracker.observe(sample(0.0, 0.0, 0.0, 0.9), now)
+            now += 100L
+        }
+        assertNull("unsure must not be read as 'the other one'", tracker.side)
+
+        tracker.observe(sample(0.0, 0.0, 0.0, 0.9, side = "left"), now)
+        assertEquals("left", tracker.side)
+
+        // And nulls afterwards cannot un-set it, however many arrive.
+        repeat(5) {
+            now += 100L
+            tracker.observe(sample(0.0, 0.0, 0.0, 0.9), now)
+        }
+        assertEquals("left", tracker.side)
+    }
+
+    @Test
+    fun theSideIsKnownEvenWhenNoSampleIsEverAccepted() {
+        // The detection-placed shoe runs on exactly the observations the placement gates reject, so
+        // the side cannot wait for an anchor: the tracker has none here, and still answers.
+        val tracker = FootPoseTracker()
+        assertFalse(tracker.hasAnchor)
+
+        tracker.observeSide("left")
+
+        assertEquals("left", tracker.side)
+        assertNull("knowing the foot is not placing it", tracker.anchor())
+    }
+
+    @Test
+    fun resetForgetsTheSideWithEverythingElse() {
+        val tracker = FootPoseTracker()
+        tracker.observe(sample(0.0, 0.0, 0.0, 0.9, side = "right"), 1_000L)
+
+        tracker.reset()
+
+        assertNull(tracker.side)
+    }
+
+    @Test
+    fun theConfirmedSideIsWhatTheLockEventCarries() {
+        val tracker = FootPoseTracker()
+        // Unlock by quality, then change feet, then lock again: the event that reaches Dart must
+        // name the side actually being drawn at that moment, not the one it started with.
+        tracker.observe(sample(0.0, 0.0, 0.0, 0.9, side = "right"), 1_000L)
+        var now = 1_100L
+        repeat(6) {
+            tracker.observe(sample(0.0, 0.0, 0.0, 0.2, side = "left"), now)
+            now += 100L
+        }
+        var relock: FootPoseTracker.LockChange? = null
+        repeat(6) {
+            tracker.observe(sample(0.0, 0.0, 0.0, 0.9, side = "left"), now)?.let { relock = it }
+            now += 100L
+        }
+
+        assertNotNull(relock)
+        assertTrue(relock!!.locked)
+        assertEquals("left", relock.side)
+    }
 }

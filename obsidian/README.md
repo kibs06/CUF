@@ -38,3 +38,14 @@ This folder turns the entire SoleVision repo into an Obsidian knowledge base. Ob
 2. Create a daily note from the template (`obsidian/Templates/Daily Note.md`).
 3. Track tasks in `obsidian/Tasks.md` (or in the daily note with `- [ ]`).
 4. Friday: run the weekly review template.
+
+## 5. Session-end rule (keeps the vault from rotting)
+
+At the end of a work session (human or agent), update these four places — it takes two minutes and it is what keeps MOCs trustworthy:
+
+1. **`obsidian/Home.md` → Active context**: current focus, last session, blockers, version (from `releases/version.json`).
+2. **`obsidian/Tasks.md`**: move finished work In Progress → Done (with area tag), add newly discovered work to Backlog.
+3. **`obsidian/MOCs/08 - Roadmap, Logs & History.md` → Releases**: one line per shipped release (version, date, what changed); source of truth is `releases/changelog.json`.
+4. **The relevant area MOC**: if behavior changed, update the row/section; if a new doc landed under `docs/`, link it there so it is discoverable.
+
+A doc that describes behavior the code no longer has is worse than no doc — when in doubt, delete or flag it `⚠️ stale` rather than leaving it to mislead.

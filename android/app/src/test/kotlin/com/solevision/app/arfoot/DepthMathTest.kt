@@ -12,6 +12,14 @@ import org.junit.Test
 class DepthMathTest {
 
     @Test
+    fun planarAxisIgnoresHeightAndMeasuresTheFloorRun() {
+        // A 3-4-5 run on the floor is 0.5 m, whatever the height of either end.
+        val heel = floatArrayOf(0f, 0f, 0f)
+        assertEquals(0.5, planarFootAxisMeters(heel, floatArrayOf(0.3f, 0f, 0.4f)), 1e-6)
+        assertEquals(0.5, planarFootAxisMeters(heel, floatArrayOf(0.3f, 0.5f, 0.4f)), 1e-6)
+    }
+
+    @Test
     fun lowerThirteenBitsAreTheDepthInMillimetres() {
         // 0b101_0000001100100 = confidence bits 5, depth 100 mm.
         val raw = (5 shl 13) or 100

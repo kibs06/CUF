@@ -162,4 +162,65 @@ void main() {
       expect(out, <int>[0, 255, 0, 255]);
     });
   });
+
+  group('maskFocusUv — V4.15 presence focus', () {
+    test('a centred blob focuses at the centre', () {
+      final mask = Uint8List(kFootMaskSize * kFootMaskSize);
+      // Rows 12–19, cols 12–19 confident: centre cell (15.5, 15.5).
+      for (var y = 12; y < 20; y++) {
+        for (var x = 12; x < 20; x++) {
+          mask[y * kFootMaskSize + x] = 200;
+        }
+      }
+      final focus = maskFocusUv(mask)!;
+      expect(focus.dx, closeTo(16 / 32, 1e-9));
+      expect(focus.dy, closeTo(16 / 32, 1e-9));
+    });
+
+    test('focus follows the blob, not the frame', () {
+      final mask = Uint8List(kFootMaskSize * kFootMaskSize);
+      // Confident block in the lower-left: focus must sit there, proving the
+      // ring would land on the foot rather than the frame centre.
+      for (var y = 20; y < 28; y++) {
+        for (var x = 4; x < 12; x++) {
+          mask[y * kFootMaskSize + x] = 255;
+        }
+      }
+      final focus = maskFocusUv(mask)!;
+      expect(focus.dx, closeTo(8 / 32, 1e-9));
+      expect(focus.dy, closeTo(24 / 32, 1e-9));
+    });
+
+    test('sub-threshold pixels do not move the focus', () {
+      final mask = Uint8List(kFootMaskSize * kFootMaskSize);
+      for (var y = 12; y < 20; y++) {
+        for (var x = 12; x < 20; x++) {
+          mask[y * kFootMaskSize + x] = 200;
+        }
+      }
+      // A larger but uncertain region elsewhere must not pull the centroid.
+      for (var i = 0; i < mask.length; i++) {
+        if (mask[i] == 0) mask[i] = 100;
+      }
+      final focus = maskFocusUv(mask)!;
+      expect(focus.dx, closeTo(16 / 32, 1e-9));
+      expect(focus.dy, closeTo(16 / 32, 1e-9));
+    });
+
+    test('a sliver of confidence is null, not a focus', () {
+      final mask = Uint8List(kFootMaskSize * kFootMaskSize);
+      for (var i = 0; i < kFocusMinPixels - 1; i++) {
+        mask[i] = 255;
+      }
+      expect(maskFocusUv(mask), isNull,
+          reason: 'noise must never become a ring');
+    });
+
+    test('empty and truncated input is null, never a throw', () {
+      expect(maskFocusUv(Uint8List(0)), isNull);
+      expect(maskFocusUv(Uint8List(10)), isNull);
+      expect(maskFocusUv(Uint8List(kFootMaskSize * kFootMaskSize)), isNull,
+          reason: 'all zeros is no foot anywhere');
+    });
+  });
 }

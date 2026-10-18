@@ -143,12 +143,24 @@ class TryOnModelSpec {
   /// Optional `{heelOffsetMm, yawOffsetDeg}` (§2.5.1's alignment block).
   final Map<String, dynamic>? alignmentJson;
 
+  /// **Which foot the mesh was authored for** — `'left'` or `'right'`, from
+  /// `product_models.shoe_side`.
+  ///
+  /// The renderer needs it to know whether the shoe on screen is the one that
+  /// was authored or a mirror of it: the customer's detected foot is the
+  /// authority on which shoe belongs on screen, and a product usually ships
+  /// one side's asset. Null means "not stated" and is drawn as authored —
+  /// never guessed, because mirroring the wrong foot silently puts a side-specific
+  /// panel, logo or closure on the wrong shoe.
+  final String? shoeSide;
+
   const TryOnModelSpec({
     required this.path,
     required this.modelId,
     required this.sha256,
     this.authoredLengthMm,
     this.alignmentJson,
+    this.shoeSide,
   });
 
   /// The handover for a model the resolver has already made local.
@@ -165,6 +177,7 @@ class TryOnModelSpec {
         sha256: spec.sha256,
         authoredLengthMm: spec.authoredLengthMm,
         alignmentJson: spec.alignmentJson,
+        shoeSide: spec.shoeSide,
       );
 
   Map<String, Object?> toMap() => <String, Object?>{
@@ -173,6 +186,7 @@ class TryOnModelSpec {
         'sha256': sha256,
         'authoredLengthMm': authoredLengthMm,
         'alignmentJson': alignmentJson,
+        'shoeSide': shoeSide,
       };
 
   @override
@@ -268,6 +282,34 @@ class FootPoseFrame {
       'side: ${footSide ?? '-'})';
 }
 
+/// Presence without measurement (V4.15): "a foot is here", with no heel/toe
+/// axis, no length, and no shoe behind it.
+///
+/// Sent when the gate confirms a detection the pose converter cannot use —
+/// missing heel or toe, or (later) an implausible axis. The native side draws
+/// a ring at [focusUv] (the mask centroid) through the same depth-then-ray
+/// projection the white dots use, and hides it the moment a real pose arrives:
+/// presence is the waiting room, never a second anchor.
+class FootPresenceFrame {
+  /// The mask centroid in upright-image normalized coordinates (0–1).
+  final Offset focusUv;
+
+  /// The sample's combined quality score, for parity with [FootPoseFrame].
+  final double confidence;
+
+  const FootPresenceFrame({required this.focusUv, required this.confidence});
+
+  /// The wire shape: the tracker's table gains one row, `setFootPresence`.
+  Map<String, Object?> toMap() => <String, Object?>{
+        'focusUv': <String, double>{'x': focusUv.dx, 'y': focusUv.dy},
+        'confidence': confidence,
+      };
+
+  @override
+  String toString() => 'FootPresenceFrame(focus: $focusUv, '
+      'conf: ${confidence.toStringAsFixed(2)})';
+}
+
 /// One message from the native renderer.
 sealed class ArTryOnEvent {
   const ArTryOnEvent();
@@ -304,6 +346,11 @@ sealed class ArTryOnEvent {
           locked: data['locked'] == true,
           quality: _asDouble(data['quality']),
           side: data['side']?.toString(),
+        ),
+      'footSnapshot' => TryOnFootSnapshotEvent(
+          yawDeg: _asDouble(data['yawDeg']),
+          pitchDeg: _asDouble(data['pitchDeg']),
+          lengthMm: _asDouble(data['lengthMm']),
         ),
       'footMeasure' => TryOnFootMeasureEvent(
           lengthMm: _asDouble(data['lengthMm']),
@@ -386,6 +433,24 @@ class TryOnFootMeasureEvent extends ArTryOnEvent {
   final double quality;
 
   const TryOnFootMeasureEvent({required this.lengthMm, required this.quality});
+}
+
+/// **The still-capture pose (the viewer's "Capture to fit").** Sent once per AR session, when the
+/// native side has seen the foot hold still for several agreeing frames.
+///
+/// [yawDeg] turns the shoe's forward axis onto the foot's floor-plane direction. [pitchDeg] is the
+/// foot's tilt, positive when the toe is higher than the heel. [lengthMm] is heel to toe. All three
+/// come from one accepted reading, so they describe the same frame.
+class TryOnFootSnapshotEvent extends ArTryOnEvent {
+  final double yawDeg;
+  final double pitchDeg;
+  final double lengthMm;
+
+  const TryOnFootSnapshotEvent({
+    required this.yawDeg,
+    required this.pitchDeg,
+    required this.lengthMm,
+  });
 }
 
 /// **The renderer's own heartbeat (V4.9)** — one line a second while
@@ -525,6 +590,18 @@ class ArTryOnChannel {
   Future<void> setFootPose(FootPoseFrame frame) =>
       _methods.invokeMethod<void>('setFootPose', frame.toMap());
 
+  /// Publishes foot presence without a measurable axis (V4.15's caller).
+  ///
+  /// Edge-triggered by the loop, not per-tick: one call when presence appears,
+  /// a ~1 Hz refresh while it persists, and [clearFootPresence] when it ends.
+  /// A dropped call costs the ring for one frame, never the loop.
+  Future<void> setFootPresence(FootPresenceFrame frame) =>
+      _methods.invokeMethod<void>('setFootPresence', frame.toMap());
+
+  /// Ends presence (V4.15): the gate went negative, or a real pose superseded it.
+  Future<void> clearFootPresence() =>
+      _methods.invokeMethod<void>('clearFootPresence');
+
   /// Sends the downsampled foot mask for stencil occlusion (§2.10). V4.4's
   /// caller — **nothing calls this yet**, and the shape is here so the native
   /// side can be written against a pinned payload rather than a guess: 32×32
@@ -598,5 +675,17 @@ class ArTryOnChannel {
       _methods.invokeMethod<void>(
         'setTorch',
         <String, Object?>{'enabled': enabled},
+      );
+
+  /// **V4.22: camera zoom** — the fitting screen's zoom slider, passed straight
+  /// to the native view. View-only by construction: the background quad and the
+  /// render projection narrow together while detection, tracking, hit-tests and
+  /// depth stay in unzoomed world space, so the shoe never drifts off the foot.
+  /// Fire-and-forget like the torch: the slider's next tick retries a loss, and
+  /// the native side coerces garbage to 1x rather than throwing.
+  Future<void> setCameraZoom(double zoom) =>
+      _methods.invokeMethod<void>(
+        'setCameraZoom',
+        <String, Object?>{'zoom': zoom},
       );
 }

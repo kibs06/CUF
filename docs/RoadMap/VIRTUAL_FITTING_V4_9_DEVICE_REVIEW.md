@@ -112,6 +112,17 @@ capability gate promises.
 that the try-on entry degrades to the simulated screen on every product — a fallback is a success case, never a dead
 end.
 
+> **⚠️ 2026-10-18 recurrence — a defineless local build hides the 3D icon (second time).** A plain
+> `flutter build apk --debug` with no `--dart-define` ships every switch at its production default
+> (`SHOE_PREVIEW` off, `TRY_ON_V3` off, `TRY_ON_PLACEHOLDER_MODEL` off), so `resolveShoePreview`
+> answers `featureOff`/`noModel` on every product and the hero shows no 3D icon — it reads as "the
+> icon is gone again" when nothing regressed. The Oct 5 warning above was the same shape (all try-on
+> defines, no `SHOE_PREVIEW`). **Rule: never hand-test a defineless build — always use one of the two
+> local-build commands above.** If the icon is missing, check two things before anything else: (1) the
+> APK was built with the defines (logcat shows `[shoe-preview] hidden: featureOff` when it was not),
+> (2) the product has an active `product_models` row — currently only JBC Crown Leather Sandals (row 5)
+> and HABÍ Woven Slides (row 6); every other product is `noModel` by catalogue honesty, not by fault.
+
 > **None of these switches may ever appear in a customer build.** The CI artifact is flagged "not a release" for
 > exactly this reason; delete the switches (and this doc's build block) when V4 closes.
 
@@ -202,6 +213,55 @@ camera branch nor the preview branch of `renderFrame` runs, so the room quad was
 whether that is the cause is **not** known. Tombstone: `build/qa/crash_renderloop_21h00.log`. Every capture that opens
 the AR screen should check for a repeat (`logcat | grep "F DEBUG"`, or the crash buffer), and a repeat is V4.10's
 reproduction rather than a re-run.
+
+**Repeat, 2026-10-18 12:47:30+0800 — same signature, still unexplained.** `SIGSEGV, SEGV_MAPERR, fault addr 0x4`
+inside `libfilament-jni.so` (`Java_com_google_android_filament_Renderer_nRender+24`) ← `Renderer.render` ←
+`ArTryOnView.renderFrame` ← `frameCallback.doFrame`, on the `solevision-tryo` render thread (VOG-L29, QA-defines
+debug build 1.0.55 with the foot-gated shoe). Tombstone: `build/qa/crash_renderloop_20261018_1247.log`. The
+pre-crash app lines had already been evicted from the 6k-line ring, so the crashed session's mode and last relay
+are unknown — but the foot-gating change is **not** the introduction: the Oct 5 crash predates it by 13 days and
+faults in `Renderer.nRender`, never in a transform write. The restarted session (pid 8547) ran healthy: dots live
+from depth (`heel (-0.08,-0.49,-0.12)`, `toe (-0.18,-0.37,-0.25)`, both on-screen 1080x2340), presence hold working,
+tracker at `lost 0.34` with `len=209mm`, feed `ready (texture=1)`, clean teardown (`presented=28`), detector
+rejecting at quality 0.59 (shape 0.00). One new suspicion from that session's status line: `beginFail=637` with
+`rebuild=5` — the frozen-box refusal pattern recurring alongside the crash. Per the rule above, this repeat is
+V4.10's reproduction: run the AR screen against a large logcat ring (`adb logcat -G 16M` first) so the crashed
+session's own lines survive, and capture whether the fault follows a `beginFrame`-refusal streak.
+
+**User correlation, same day (~13:05 report-back).** The tester confirmed: 3D icon present; shoe visible only in
+the product viewer (correct — foot-gating applies to the AR screen, not the viewer); coach says "locking onto
+your foot" but nothing locks; the app *vanishes* on the 3rd Try On AR attempt. The vanish matches this tombstone
+(the only process death in the window, right build, AR render thread), so the 12:47:30 capture *is* the user's
+3rd attempt. Two gaps this exposes: (1) the coach's "locking" cue speaks from a lower bar than the tracker's
+0.7 lock-enter — detector rejections seen live (`shape 0.00`, quality 0.59 vs gate; tracker `lost 0.34`) mean the
+cue promises what the tracker will not deliver; (2) no AR-session lines survived for attempts 1–2, so whether
+those sessions also burned the `beginFrame` rebuild budget before dying is unknown — the large-ring rule above
+stands.
+
+**Third occurrence, 2026-10-18 13:16:04+0800 — identical signature, with the session that led to it.**
+`SIGSEGV/SEGV_MAPERR 0x4`, `Renderer_nRender+24` ← `renderFrame`, `solevision-tryo` (same filament BuildId
+`fb0440f7…`); `am_crash … Native crash, Segmentation fault`, pid 14674 → 15730. Tombstone:
+`build/qa/crash_renderloop_20261018_1316.log`; session capture: `build/qa/session_20261018_1314_ar.log`
+(2,197 relay lines). The crashed session ran 90 s and rules out two hypotheses: the lock *works*
+(`locked=true` at 0.78–0.96, repeatedly — the pipeline fires end to end), and foot-gating behaves
+(`hidden (load)` → `detection-placed` → `shown`, hiding again on `lost`). What does not work: (1) every
+dots-check in the session reports `PROJECTION-MISMATCH` (err 413–2061 px, `rotation=90`); heel/toe worlds land
+off-screen while the foot is centered, and measured lengths run 246–338 mm — the placement geometry is
+systematically wrong, likely the rotation-90 UV mapping the stretch-fix round touched; (2) locks never hold —
+quality collapses 0.9 → 0.16 in seconds with hundreds of pose rejects (`pose=1/373`), and the shoe flickers
+shown/hidden. So "shoe on foot: no" has two stacked causes — misplacement *and* instability — before the crash
+even enters. Next: fix the rotation-90 projection mapping first (it poisons every world the tracker eats), then
+re-ask whether the fault still follows.
+
+**V4.23 fix, 2026-10-18 — cause found, QA APK 1.0.56+64 installed.** The rotation-90 was not in the
+UV mapping but in the *ray* mapping: all three unprojection paths paired TEXTURE_NORMALIZED coords
+(rotated vs the view — the V4.20 probe proved it) with CPU-image intrinsics
+(`ArTryOnView.rayPointAtDistance`, `ArTryOnView.depthWorldPoint`, and the scan's
+`ArFootSizingView.depthHitTest`). Fix: VIEW → IMAGE_PIXELS via `transformCoordinates2d`, fed
+straight to the intrinsics; depth-image *sampling* keeps texture space. Compile clean, 135 JVM tests
+green. If the crash was degenerate-world input to the renderer, it may vanish with correct geometry —
+the verification session re-asks both questions together: `projection-ok` + tape-true `len=` + lock
+past 10 s, and whether the segfault still follows.
 
 `qa_capture.sh --tryon` computes P1's metric from these two markers:
 

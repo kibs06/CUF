@@ -1,0 +1,9 @@
+# Raw uploads, built splits, and downloaded public sets stay out of git —
+# images are large and some show identifiable people. Keep data.yaml and
+# docs; move the set to shared storage when it outgrows this folder.
+datasets/raw/
+datasets/foot/
+datasets/public/
+runs/
+*.pt
+*.onnx

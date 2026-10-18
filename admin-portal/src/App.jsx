@@ -10,6 +10,7 @@ import Products from './pages/Products.jsx'
 import ModelRequests from './pages/ModelRequests.jsx'
 import Orders from './pages/Orders.jsx'
 import Transactions from './pages/Transactions.jsx'
+import AuditLogs from './pages/AuditLogs.jsx'
 import Reports from './pages/Reports.jsx'
 import Analytics from './pages/Analytics.jsx'
 import Settings from './pages/Settings.jsx'
@@ -30,6 +31,7 @@ export default function App() {
           <Route path="model-requests" element={<ModelRequests />} />
           <Route path="orders" element={<Orders />} />
           <Route path="transactions" element={<Transactions />} />
+          <Route path="audit-logs" element={<AuditLogs />} />
           <Route path="reports" element={<Reports />} />
           <Route path="analytics" element={<Analytics />} />
           <Route path="banners" element={<Banners />} />

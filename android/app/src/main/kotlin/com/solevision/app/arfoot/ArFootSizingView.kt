@@ -1037,15 +1037,25 @@ class ArFootSizingView(
                 return null
             }
 
+            // V4.23: unproject through IMAGE_PIXELS — the CPU-image space the intrinsics are
+            // expressed in — not TEXTURE_NORMALIZED × dims (that pairing is rotated ~90° on this
+            // phone; same fix as ArTryOnView.rayPointAtDistance/depthWorldPoint). The depth sample
+            // above keeps texture space: both textures span the same sensor frame.
+            val imagePoint = FloatArray(2)
+            runCatching {
+                frame.transformCoordinates2d(
+                    Coordinates2d.VIEW,
+                    viewPoint,
+                    Coordinates2d.IMAGE_PIXELS,
+                    imagePoint,
+                )
+            }.onFailure { return null }
             val intrinsics = camera.imageIntrinsics
             val focal = intrinsics.focalLength
             val principal = intrinsics.principalPoint
-            val dims = intrinsics.imageDimensions
-            val imageX = texturePoint[0] * dims[0]
-            val imageY = texturePoint[1] * dims[1]
             val cameraPoint = unprojectToCameraSpace(
-                imageX,
-                imageY,
+                imagePoint[0],
+                imagePoint[1],
                 depthMm / 1000f,
                 focal[0],
                 focal[1],

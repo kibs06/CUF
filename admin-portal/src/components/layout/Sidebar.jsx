@@ -13,6 +13,7 @@ import {
   ShoppingCart,
   Wallet,
   Flag,
+  ScrollText,
   BarChart2,
   Settings,
   LogOut,
@@ -29,6 +30,7 @@ const NAV_ITEMS = [
   { to: '/orders', label: 'Orders', icon: ShoppingCart },
   { to: '/transactions', label: 'Transactions', icon: Wallet },
   { to: '/reports', label: 'Reports', icon: Flag },
+  { to: '/audit-logs', label: 'Audit Logs', icon: ScrollText },
   { to: '/analytics', label: 'Analytics', icon: BarChart2 },
   { to: '/banners', label: 'Banners', icon: Image },
   // A component surface rather than a data one: it reads nothing from Supabase

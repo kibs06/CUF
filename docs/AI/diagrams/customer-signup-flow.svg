@@ -1,0 +1,760 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.0//EN" "http://www.w3.org/TR/2001/PR-SVG-20010719/DTD/svg10.dtd">
+<svg width="167cm" height="97cm" viewBox="-391 0 3323 1932" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <g>
+    <ellipse style="fill: #ffffff" cx="300" cy="40" rx="153.137" ry="38.2843"/>
+    <ellipse style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" cx="300" cy="40" rx="153.137" ry="38.2843"/>
+    <text font-size="11.2" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="300" y="44.2">
+      <tspan x="300" y="44.2">App launch — SplashScreen (2 s, silent update check)</tspan>
+    </text>
+  </g>
+  <g>
+    <polygon style="fill: #ffffff" points="300,86.4833 394.55,118 300,149.517 205.45,118 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" points="300,86.4833 394.55,118 300,149.517 205.45,118 "/>
+    <text font-size="11.2" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="300" y="115.2">
+      <tspan x="300" y="115.2">Existing</tspan>
+      <tspan x="300" y="129.2">session?</tspan>
+    </text>
+  </g>
+  <g>
+    <rect style="fill: #ffffff" x="710" y="84" width="260" height="55.74"/>
+    <rect style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" x="710" y="84" width="260" height="55.74"/>
+    <text font-size="8.8" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="840" y="104.17">
+      <tspan x="840" y="104.17">Returning user</tspan>
+      <tspan x="840" y="115.17">(session / sign-in path —</tspan>
+      <tspan x="840" y="126.17">see the sign-in flowchart)</tspan>
+    </text>
+  </g>
+  <g>
+    <rect style="fill: #ffffff" x="160" y="180" width="280" height="48.64"/>
+    <rect style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" x="160" y="180" width="280" height="48.64"/>
+    <text font-size="11.2" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="300" y="201.52">
+      <tspan x="300" y="201.52">OnboardingScreen — 3 slides, Skip / Get Started</tspan>
+      <tspan x="300" y="215.52">(sets has_seen_onboarding = true)</tspan>
+    </text>
+  </g>
+  <g>
+    <rect style="fill: #ffffff" x="160" y="236" width="280" height="48.64"/>
+    <rect style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" x="160" y="236" width="280" height="48.64"/>
+    <text font-size="11.2" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="300" y="257.52">
+      <tspan x="300" y="257.52">AccountEntryScreen (mode = create)</tspan>
+      <tspan x="300" y="271.52">"Shop as customer?"  ·  "Apply to sell"  ·  "Sign in"</tspan>
+    </text>
+  </g>
+  <g>
+    <rect style="fill: #ffffff" x="720" y="286" width="240" height="42.76"/>
+    <rect style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" x="720" y="286" width="240" height="42.76"/>
+    <text font-size="8.8" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="840" y="305.18">
+      <tspan x="840" y="305.18">SellerApplicationFlow</tspan>
+      <tspan x="840" y="316.18">(out of scope — seller side)</tspan>
+    </text>
+  </g>
+  <g>
+    <rect style="fill: #ffffff" x="-380" y="286" width="240" height="42.76"/>
+    <rect style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" x="-380" y="286" width="240" height="42.76"/>
+    <text font-size="8.8" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="-260" y="305.18">
+      <tspan x="-260" y="305.18">Sign-in mode switches</tspan>
+      <tspan x="-260" y="316.18">IN PLACE (returning user)</tspan>
+    </text>
+  </g>
+  <g>
+    <rect style="fill: #ffffff" x="110" y="352" width="380" height="65.16"/>
+    <rect style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" x="110" y="352" width="380" height="65.16"/>
+    <text font-size="11.2" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="300" y="374.78">
+      <tspan x="300" y="374.78">CustomerRegisterScreen</tspan>
+      <tspan x="300" y="388.78">full name · email · phone (optional) · birthday (13+, required)</tspan>
+      <tspan x="300" y="402.78">gender (optional) · password + confirm password · Terms</tspan>
+    </text>
+  </g>
+  <g>
+    <polygon style="fill: #ffffff" points="300,438.497 427.587,474 300,509.503 172.413,474 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" points="300,438.497 427.587,474 300,509.503 172.413,474 "/>
+    <text font-size="11.2" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="300" y="471.2">
+      <tspan x="300" y="471.2">Form valid AND</tspan>
+      <tspan x="300" y="485.2">terms accepted?</tspan>
+    </text>
+  </g>
+  <g>
+    <rect style="fill: #ffffff" x="-370" y="446" width="220" height="42.76"/>
+    <rect style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" x="-370" y="446" width="220" height="42.76"/>
+    <text font-size="8.8" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="-260" y="465.18">
+      <tspan x="-260" y="465.18">Inline validation errors</tspan>
+      <tspan x="-260" y="476.18">(stay on the form)</tspan>
+    </text>
+  </g>
+  <g>
+    <polygon style="fill: #ffffff" points="300,528.55 420.212,562 300,595.45 179.788,562 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" points="300,528.55 420.212,562 300,595.45 179.788,562 "/>
+    <text font-size="11.2" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="300" y="559.2">
+      <tspan x="300" y="559.2">Email already</tspan>
+      <tspan x="300" y="573.2">registered?</tspan>
+    </text>
+  </g>
+  <g>
+    <rect style="fill: #ffffff" x="720" y="534" width="240" height="42.76"/>
+    <rect style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" x="720" y="534" width="240" height="42.76"/>
+    <text font-size="8.8" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="840" y="553.18">
+      <tspan x="840" y="553.18">Inline field error</tspan>
+      <tspan x="840" y="564.18">(authErrorEmailExists)</tspan>
+    </text>
+  </g>
+  <g>
+    <rect style="fill: #ffffff" x="160" y="618" width="280" height="48.64"/>
+    <rect style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" x="160" y="618" width="280" height="48.64"/>
+    <text font-size="11.2" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="300" y="639.52">
+      <tspan x="300" y="639.52">AuthProvider.signUpCustomer()</tspan>
+      <tspan x="300" y="653.52">role = customer · seller_status = none</tspan>
+    </text>
+  </g>
+  <g>
+    <rect style="fill: #ffffff" x="110" y="680" width="380" height="65.16"/>
+    <rect style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" x="110" y="680" width="380" height="65.16"/>
+    <text font-size="11.2" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="300" y="702.78">
+      <tspan x="300" y="702.78">AuthService.signUp()</tspan>
+      <tspan x="300" y="716.78">supabase.auth.signUp + emailRedirectTo deep link</tspan>
+      <tspan x="300" y="730.78">(profile fields stashed in user metadata)</tspan>
+    </text>
+  </g>
+  <g>
+    <polygon style="fill: #ffffff" points="300,752.742 450.964,800 300,847.258 149.036,800 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" points="300,752.742 450.964,800 300,847.258 149.036,800 "/>
+    <text font-size="11.2" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="300" y="790.2">
+      <tspan x="300" y="790.2">Session returned?</tspan>
+      <tspan x="300" y="804.2">("Confirm email" ON</tspan>
+      <tspan x="300" y="818.2">by default)</tspan>
+    </text>
+  </g>
+  <g>
+    <rect style="fill: #ffffff" x="690" y="756" width="300" height="48.64"/>
+    <rect style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" x="690" y="756" width="300" height="48.64"/>
+    <text font-size="11.2" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="840" y="777.52">
+      <tspan x="840" y="777.52">writeProfileFromMetadata()</tspan>
+      <tspan x="840" y="791.52">profiles row upserted immediately</tspan>
+    </text>
+  </g>
+  <g>
+    <rect style="fill: #ffffff" x="160" y="856" width="280" height="48.64"/>
+    <rect style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" x="160" y="856" width="280" height="48.64"/>
+    <text font-size="11.2" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="300" y="877.52">
+      <tspan x="300" y="877.52">pendingSignupVerification set</tspan>
+      <tspan x="300" y="891.52">no session · no profiles row yet</tspan>
+    </text>
+  </g>
+  <g>
+    <rect style="fill: #ffffff" x="110" y="916" width="380" height="48.64"/>
+    <rect style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" x="110" y="916" width="380" height="48.64"/>
+    <text font-size="11.2" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="300" y="937.52">
+      <tspan x="300" y="937.52">AuthGate swaps to EmailOtpScreen</tspan>
+      <tspan x="300" y="951.52">6-digit code already e-mailed (owns the screen)</tspan>
+    </text>
+  </g>
+  <g>
+    <polygon style="fill: #ffffff" points="300,1000 415,1032 300,1064 185,1032 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" points="300,1000 415,1032 300,1064 185,1032 "/>
+    <text font-size="11.2" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="300" y="1029.2">
+      <tspan x="300" y="1029.2">How is it</tspan>
+      <tspan x="300" y="1043.2">confirmed?</tspan>
+    </text>
+  </g>
+  <g>
+    <rect style="fill: #ffffff" x="690" y="992" width="300" height="48.64"/>
+    <rect style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" x="690" y="992" width="300" height="48.64"/>
+    <text font-size="11.2" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="840" y="1013.52">
+      <tspan x="840" y="1013.52">verifySignupEmail(code)</tspan>
+      <tspan x="840" y="1027.52">otp.verifySignupCode → session</tspan>
+    </text>
+  </g>
+  <g>
+    <rect style="fill: #ffffff" x="690" y="1060" width="300" height="48.64"/>
+    <rect style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" x="690" y="1060" width="300" height="48.64"/>
+    <text font-size="11.2" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="840" y="1081.52">
+      <tspan x="840" y="1081.52">completeSignupFromEmailLink()</tspan>
+      <tspan x="840" y="1095.52">link solvision://auth/confirm</tspan>
+    </text>
+  </g>
+  <g>
+    <rect style="fill: #ffffff" x="690" y="1126" width="300" height="42.76"/>
+    <rect style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" x="690" y="1126" width="300" height="42.76"/>
+    <text font-size="8.8" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="840" y="1145.18">
+      <tspan x="840" y="1145.18">Mapped code error + Resend</tspan>
+      <tspan x="840" y="1156.18">(60 s cooldown, rate limits shown)</tspan>
+    </text>
+  </g>
+  <g>
+    <rect style="fill: #ffffff" x="-390" y="1000" width="260" height="42.76"/>
+    <rect style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" x="-390" y="1000" width="260" height="42.76"/>
+    <text font-size="8.8" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="-260" y="1019.18">
+      <tspan x="-260" y="1019.18">cancelSignupVerification()</tspan>
+      <tspan x="-260" y="1030.18">back to AccountEntryScreen</tspan>
+    </text>
+  </g>
+  <g>
+    <rect style="fill: #ffffff" x="110" y="1186" width="380" height="48.64"/>
+    <rect style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" x="110" y="1186" width="380" height="48.64"/>
+    <text font-size="11.2" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="300" y="1207.52">
+      <tspan x="300" y="1207.52">writeProfileFromMetadata()</tspan>
+      <tspan x="300" y="1221.52">profiles row INSERT  ·  RLS: auth.uid() = id</tspan>
+    </text>
+  </g>
+  <g>
+    <rect style="fill: #ffffff" x="110" y="1260" width="380" height="65.16"/>
+    <rect style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" x="110" y="1260" width="380" height="65.16"/>
+    <text font-size="11.2" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="300" y="1282.78">
+      <tspan x="300" y="1282.78">_finishSignupSession()</tspan>
+      <tspan x="300" y="1296.78">clear pending · set user + profile · login hook</tspan>
+      <tspan x="300" y="1310.78">record device trusted · save session</tspan>
+    </text>
+  </g>
+  <g>
+    <rect style="fill: #ffffff" x="110" y="1324" width="380" height="32.12"/>
+    <rect style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" x="110" y="1324" width="380" height="32.12"/>
+    <text font-size="11.2" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="300" y="1344.26">
+      <tspan x="300" y="1344.26">FootProfileOnboardingScreen — always skippable</tspan>
+    </text>
+  </g>
+  <g>
+    <polygon style="fill: #ffffff" points="300,1379.88 415.438,1412 300,1444.12 184.563,1412 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" points="300,1379.88 415.438,1412 300,1444.12 184.563,1412 "/>
+    <text font-size="11.2" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="300" y="1409.2">
+      <tspan x="300" y="1409.2">Foot-profile</tspan>
+      <tspan x="300" y="1423.2">path?</tspan>
+    </text>
+  </g>
+  <g>
+    <rect style="fill: #ffffff" x="690" y="1372" width="300" height="48.64"/>
+    <rect style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" x="690" y="1372" width="300" height="48.64"/>
+    <text font-size="11.2" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="840" y="1393.52">
+      <tspan x="840" y="1393.52">AR scan → foot_measurements</tspan>
+      <tspan x="840" y="1407.52">foot_profile_source = "ar_scan"</tspan>
+    </text>
+  </g>
+  <g>
+    <rect style="fill: #ffffff" x="690" y="1434" width="300" height="48.64"/>
+    <rect style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" x="690" y="1434" width="300" height="48.64"/>
+    <text font-size="11.2" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="840" y="1455.52">
+      <tspan x="840" y="1455.52">EU size + width picker</tspan>
+      <tspan x="840" y="1469.52">foot_profile_source = "manual"</tspan>
+    </text>
+  </g>
+  <g>
+    <rect style="fill: #ffffff" x="-390" y="1380" width="260" height="42.76"/>
+    <rect style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" x="-390" y="1380" width="260" height="42.76"/>
+    <text font-size="8.8" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="-260" y="1399.18">
+      <tspan x="-260" y="1399.18">Skip for now</tspan>
+      <tspan x="-260" y="1410.18">foot_profile_source = "skipped"</tspan>
+    </text>
+  </g>
+  <g>
+    <rect style="fill: #ffffff" x="110" y="1474" width="380" height="48.64"/>
+    <rect style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" x="110" y="1474" width="380" height="48.64"/>
+    <text font-size="11.2" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="300" y="1495.52">
+      <tspan x="300" y="1495.52">AuthGate StreamBuilder → AuthService.getProfile(user.id)</tspan>
+      <tspan x="300" y="1509.52">12 s timeout, cached per user id</tspan>
+    </text>
+  </g>
+  <g>
+    <polygon style="fill: #ffffff" points="300,1544 405,1574 300,1604 195,1574 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" points="300,1544 405,1574 300,1604 195,1574 "/>
+    <text font-size="11.2" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="300" y="1571.2">
+      <tspan x="300" y="1571.2">Profile</tspan>
+      <tspan x="300" y="1585.2">loaded?</tspan>
+    </text>
+  </g>
+  <g>
+    <rect style="fill: #ffffff" x="690" y="1538" width="300" height="55.74"/>
+    <rect style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" x="690" y="1538" width="300" height="55.74"/>
+    <text font-size="8.8" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="840" y="1558.17">
+      <tspan x="840" y="1558.17">_ProfileErrorView</tspan>
+      <tspan x="840" y="1569.17">Retry  ·  Sign out</tspan>
+      <tspan x="840" y="1580.17">(a late provider profile can still rescue it)</tspan>
+    </text>
+  </g>
+  <g>
+    <polygon style="fill: #ffffff" points="300,1632.61 419.988,1666 300,1699.39 180.013,1666 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" points="300,1632.61 419.988,1666 300,1699.39 180.013,1666 "/>
+    <text font-size="11.2" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="300" y="1663.2">
+      <tspan x="300" y="1663.2">_routeByRole</tspan>
+      <tspan x="300" y="1677.2">(profile)</tspan>
+    </text>
+  </g>
+  <g>
+    <rect style="fill: #ffffff" x="690" y="1634" width="300" height="42.76"/>
+    <rect style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" x="690" y="1634" width="300" height="42.76"/>
+    <text font-size="8.8" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="840" y="1653.18">
+      <tspan x="840" y="1653.18">suspended = true</tspan>
+      <tspan x="840" y="1664.18">→ SuspendedAccountScreen</tspan>
+    </text>
+  </g>
+  <g>
+    <rect style="fill: #ffffff" x="700" y="1708" width="280" height="29.78"/>
+    <rect style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" x="700" y="1708" width="280" height="29.78"/>
+    <text font-size="8.8" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="840" y="1726.19">
+      <tspan x="840" y="1726.19">role = admin → AdminShell</tspan>
+    </text>
+  </g>
+  <g>
+    <rect style="fill: #ffffff" x="690" y="1760" width="300" height="42.76"/>
+    <rect style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" x="690" y="1760" width="300" height="42.76"/>
+    <text font-size="8.8" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="840" y="1779.18">
+      <tspan x="840" y="1779.18">seller + approved →</tspan>
+      <tspan x="840" y="1790.18">SellerApprovedCelebration / SellerShell</tspan>
+    </text>
+  </g>
+  <g>
+    <rect style="fill: #ffffff" x="690" y="1820" width="300" height="42.76"/>
+    <rect style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" x="690" y="1820" width="300" height="42.76"/>
+    <text font-size="8.8" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="840" y="1839.18">
+      <tspan x="840" y="1839.18">seller_status = pending →</tspan>
+      <tspan x="840" y="1850.18">PendingApprovalScreen</tspan>
+    </text>
+  </g>
+  <g>
+    <polygon style="fill: #ffffff" points="300,1724.26 433.861,1765 300,1805.74 166.139,1765 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" points="300,1724.26 433.861,1765 300,1805.74 166.139,1765 "/>
+    <text font-size="11.2" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="300" y="1762.2">
+      <tspan x="300" y="1762.2">MFA step-up?</tspan>
+      <tspan x="300" y="1776.2">AAL1 + verified TOTP</tspan>
+    </text>
+  </g>
+  <g>
+    <rect style="fill: #ffffff" x="700" y="1888" width="280" height="42.76"/>
+    <rect style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" x="700" y="1888" width="280" height="42.76"/>
+    <text font-size="8.8" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="840" y="1907.18">
+      <tspan x="840" y="1907.18">MfaVerifyScreen → AAL2</tspan>
+      <tspan x="840" y="1918.18">+ ensureDeviceTrusted()</tspan>
+    </text>
+  </g>
+  <g>
+    <ellipse style="fill: #ffffff" cx="300" cy="1863" rx="153.344" ry="38.3359"/>
+    <ellipse style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" cx="300" cy="1863" rx="153.344" ry="38.3359"/>
+    <text font-size="11.2" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="300" y="1867.2">
+      <tspan x="300" y="1867.2">CustomerShell — Home · Store · Notifications · Profile</tspan>
+    </text>
+  </g>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="300" y1="60" x2="300" y2="78.82"/>
+    <polygon style="fill: #000000" points="296.8,78.82 300,87.82 303.2,78.82 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="296.8,78.82 300,87.82 303.2,78.82 "/>
+  </g>
+  <text font-size="8.8" style="fill: #5b4636;text-anchor:start;font-family:sans-serif;font-style:normal;font-weight:normal" x="311" y="74">
+    <tspan x="311" y="74">no session</tspan>
+  </text>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="390" y1="118" x2="700.822" y2="112.046"/>
+    <polygon style="fill: #000000" points="700.883,115.245 709.82,111.873 700.76,108.846 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="700.883,115.245 709.82,111.873 700.76,108.846 "/>
+  </g>
+  <text font-size="8.8" style="fill: #5b4636;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="550" y="114.936">
+    <tspan x="550" y="114.936">has session</tspan>
+  </text>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="300" y1="148" x2="300" y2="170.82"/>
+    <polygon style="fill: #000000" points="296.8,170.82 300,179.82 303.2,170.82 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="296.8,170.82 300,179.82 303.2,170.82 "/>
+  </g>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="300" y1="228.64" x2="300" y2="226.82"/>
+    <polygon style="fill: #000000" points="296.8,226.82 300,235.82 303.2,226.82 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="296.8,226.82 300,235.82 303.2,226.82 "/>
+  </g>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="440" y1="260.32" x2="710.947" y2="305.858"/>
+    <polygon style="fill: #000000" points="710.417,309.014 719.822,307.35 711.477,302.703 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="710.417,309.014 719.822,307.35 711.477,302.703 "/>
+  </g>
+  <text font-size="8.8" style="fill: #5b4636;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="580" y="283.85">
+    <tspan x="580" y="283.85">Apply to sell</tspan>
+  </text>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="160" y1="260.32" x2="-130.931" y2="305.957"/>
+    <polygon style="fill: #000000" points="-131.427,302.796 -139.822,307.352 -130.435,309.119 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="-131.427,302.796 -139.822,307.352 -130.435,309.119 "/>
+  </g>
+  <text font-size="8.8" style="fill: #5b4636;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="10" y="283.85">
+    <tspan x="10" y="283.85">Sign in</tspan>
+  </text>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="300" y1="284.64" x2="300" y2="342.82"/>
+    <polygon style="fill: #000000" points="296.8,342.82 300,351.82 303.2,342.82 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="296.8,342.82 300,351.82 303.2,342.82 "/>
+  </g>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="300" y1="417.16" x2="300" y2="432.82"/>
+    <polygon style="fill: #000000" points="296.8,432.82 300,441.82 303.2,432.82 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="296.8,432.82 300,441.82 303.2,432.82 "/>
+  </g>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="185" y1="474" x2="-140.822" y2="467.561"/>
+    <polygon style="fill: #000000" points="-140.759,464.362 -149.82,467.384 -140.885,470.761 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="-140.759,464.362 -149.82,467.384 -140.885,470.761 "/>
+  </g>
+  <text font-size="8.8" style="fill: #5b4636;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="17.5" y="470.69">
+    <tspan x="17.5" y="470.69">no</tspan>
+  </text>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="300" y1="506" x2="300" y2="520.82"/>
+    <polygon style="fill: #000000" points="296.8,520.82 300,529.82 303.2,520.82 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="296.8,520.82 300,529.82 303.2,520.82 "/>
+  </g>
+  <text font-size="8.8" style="fill: #5b4636;text-anchor:start;font-family:sans-serif;font-style:normal;font-weight:normal" x="311" y="522">
+    <tspan x="311" y="522">yes</tspan>
+  </text>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="415" y1="562" x2="710.822" y2="555.579"/>
+    <polygon style="fill: #000000" points="710.892,558.778 719.82,555.384 710.753,552.38 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="710.892,558.778 719.82,555.384 710.753,552.38 "/>
+  </g>
+  <text font-size="8.8" style="fill: #5b4636;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="567.5" y="558.69">
+    <tspan x="567.5" y="558.69">yes</tspan>
+  </text>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="300" y1="594" x2="300" y2="608.82"/>
+    <polygon style="fill: #000000" points="296.8,608.82 300,617.82 303.2,608.82 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="296.8,608.82 300,617.82 303.2,608.82 "/>
+  </g>
+  <text font-size="8.8" style="fill: #5b4636;text-anchor:start;font-family:sans-serif;font-style:normal;font-weight:normal" x="311" y="610">
+    <tspan x="311" y="610">no</tspan>
+  </text>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="300" y1="666.64" x2="300" y2="670.82"/>
+    <polygon style="fill: #000000" points="296.8,670.82 300,679.82 303.2,670.82 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="296.8,670.82 300,679.82 303.2,670.82 "/>
+  </g>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="300" y1="745.16" x2="300" y2="754.82"/>
+    <polygon style="fill: #000000" points="296.8,754.82 300,763.82 303.2,754.82 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="296.8,754.82 300,763.82 303.2,754.82 "/>
+  </g>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="415" y1="800" x2="680.843" y2="780.975"/>
+    <polygon style="fill: #000000" points="681.072,784.167 689.82,780.333 680.615,777.783 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="681.072,784.167 689.82,780.333 680.615,777.783 "/>
+  </g>
+  <text font-size="8.8" style="fill: #5b4636;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="552.5" y="790.16">
+    <tspan x="552.5" y="790.16">yes — confirmation OFF</tspan>
+  </text>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="300" y1="836" x2="300" y2="846.82"/>
+    <polygon style="fill: #000000" points="296.8,846.82 300,855.82 303.2,846.82 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="296.8,846.82 300,855.82 303.2,846.82 "/>
+  </g>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="300" y1="904.64" x2="300" y2="906.82"/>
+    <polygon style="fill: #000000" points="296.8,906.82 300,915.82 303.2,906.82 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="296.8,906.82 300,915.82 303.2,906.82 "/>
+  </g>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="300" y1="964.64" x2="300" y2="990.82"/>
+    <polygon style="fill: #000000" points="296.8,990.82 300,999.82 303.2,990.82 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="296.8,990.82 300,999.82 303.2,990.82 "/>
+  </g>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="415" y1="1032" x2="680.835" y2="1016.84"/>
+    <polygon style="fill: #000000" points="681.017,1020.04 689.82,1016.33 680.653,1013.65 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="681.017,1020.04 689.82,1016.33 680.653,1013.65 "/>
+  </g>
+  <text font-size="8.8" style="fill: #5b4636;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="552.5" y="1024.16">
+    <tspan x="552.5" y="1024.16">types the 6-digit code</tspan>
+  </text>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="415" y1="1032" x2="680.982" y2="1082.6"/>
+    <polygon style="fill: #000000" points="680.384,1085.75 689.823,1084.29 681.58,1079.46 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="680.384,1085.75 689.823,1084.29 681.58,1079.46 "/>
+  </g>
+  <text font-size="8.8" style="fill: #5b4636;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="552.5" y="1058.16">
+    <tspan x="552.5" y="1058.16">taps the e-mail button</tspan>
+  </text>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="415" y1="1032" x2="681.535" y2="1143.83"/>
+    <polygon style="fill: #000000" points="680.297,1146.78 689.834,1147.31 682.773,1140.88 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="680.297,1146.78 689.834,1147.31 682.773,1140.88 "/>
+  </g>
+  <text font-size="8.8" style="fill: #5b4636;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="552.5" y="1089.69">
+    <tspan x="552.5" y="1089.69">wrong / expired code</tspan>
+  </text>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="185" y1="1032" x2="-120.825" y2="1021.69"/>
+    <polygon style="fill: #000000" points="-120.717,1018.49 -129.82,1021.39 -120.933,1024.89 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="-120.717,1018.49 -129.82,1021.39 -120.933,1024.89 "/>
+  </g>
+  <text font-size="8.8" style="fill: #5b4636;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="27.5" y="1026.69">
+    <tspan x="27.5" y="1026.69">"Back to sign in"</tspan>
+  </text>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="300" y1="1325.16" x2="300" y2="1333.18"/>
+    <polygon style="fill: #000000" points="303.2,1333.18 300,1324.18 296.8,1333.18 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="303.2,1333.18 300,1324.18 296.8,1333.18 "/>
+  </g>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="300" y1="1356.12" x2="300" y2="1370.82"/>
+    <polygon style="fill: #000000" points="296.8,1370.82 300,1379.82 303.2,1370.82 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="296.8,1370.82 300,1379.82 303.2,1370.82 "/>
+  </g>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="415" y1="1412" x2="680.835" y2="1396.84"/>
+    <polygon style="fill: #000000" points="681.017,1400.04 689.82,1396.33 680.653,1393.65 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="681.017,1400.04 689.82,1396.33 680.653,1393.65 "/>
+  </g>
+  <text font-size="8.8" style="fill: #5b4636;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="552.5" y="1404.16">
+    <tspan x="552.5" y="1404.16">scan with AR (recommended)</tspan>
+  </text>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="415" y1="1412" x2="680.948" y2="1456.8"/>
+    <polygon style="fill: #000000" points="680.416,1459.95 689.823,1458.29 681.479,1453.64 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="680.416,1459.95 689.823,1458.29 681.479,1453.64 "/>
+  </g>
+  <text font-size="8.8" style="fill: #5b4636;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="552.5" y="1435.16">
+    <tspan x="552.5" y="1435.16">enter size manually</tspan>
+  </text>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="185" y1="1412" x2="-120.825" y2="1401.69"/>
+    <polygon style="fill: #000000" points="-120.717,1398.49 -129.82,1401.39 -120.933,1404.89 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="-120.717,1398.49 -129.82,1401.39 -120.933,1404.89 "/>
+  </g>
+  <text font-size="8.8" style="fill: #5b4636;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="27.5" y="1406.69">
+    <tspan x="27.5" y="1406.69">skip</tspan>
+  </text>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="-260" y1="1422.76" x2="101.006" y2="1496.48"/>
+    <polygon style="fill: #000000" points="100.365,1499.62 109.824,1498.28 101.646,1493.35 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="100.365,1499.62 109.824,1498.28 101.646,1493.35 "/>
+  </g>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="300" y1="1234.64" x2="300" y2="1250.82"/>
+    <polygon style="fill: #000000" points="296.8,1250.82 300,1259.82 303.2,1250.82 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="296.8,1250.82 300,1259.82 303.2,1250.82 "/>
+  </g>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="300" y1="1522.64" x2="300" y2="1534.82"/>
+    <polygon style="fill: #000000" points="296.8,1534.82 300,1543.82 303.2,1534.82 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="296.8,1534.82 300,1543.82 303.2,1534.82 "/>
+  </g>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="405" y1="1574" x2="680.824" y2="1566.13"/>
+    <polygon style="fill: #000000" points="680.915,1569.33 689.82,1565.88 680.732,1562.93 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="680.915,1569.33 689.82,1565.88 680.732,1562.93 "/>
+  </g>
+  <text font-size="8.8" style="fill: #5b4636;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="547.5" y="1569.94">
+    <tspan x="547.5" y="1569.94">no — error / null</tspan>
+  </text>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="300" y1="1604" x2="300" y2="1624.82"/>
+    <polygon style="fill: #000000" points="296.8,1624.82 300,1633.82 303.2,1624.82 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="296.8,1624.82 300,1633.82 303.2,1624.82 "/>
+  </g>
+  <text font-size="8.8" style="fill: #5b4636;text-anchor:start;font-family:sans-serif;font-style:normal;font-weight:normal" x="311" y="1619">
+    <tspan x="311" y="1619">yes</tspan>
+  </text>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="415" y1="1666" x2="680.827" y2="1655.73"/>
+    <polygon style="fill: #000000" points="680.95,1658.93 689.82,1655.39 680.703,1652.54 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="680.95,1658.93 689.82,1655.39 680.703,1652.54 "/>
+  </g>
+  <text font-size="8.8" style="fill: #5b4636;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="552.5" y="1660.69">
+    <tspan x="552.5" y="1660.69">other roles (checked first)</tspan>
+  </text>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="840" y1="1676.76" x2="840" y2="1698.82"/>
+    <polygon style="fill: #000000" points="836.8,1698.82 840,1707.82 843.2,1698.82 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="836.8,1698.82 840,1707.82 843.2,1698.82 "/>
+  </g>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="840" y1="1737.78" x2="840" y2="1750.82"/>
+    <polygon style="fill: #000000" points="836.8,1750.82 840,1759.82 843.2,1750.82 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="836.8,1750.82 840,1759.82 843.2,1750.82 "/>
+  </g>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="840" y1="1802.76" x2="840" y2="1810.82"/>
+    <polygon style="fill: #000000" points="836.8,1810.82 840,1819.82 843.2,1810.82 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="836.8,1810.82 840,1819.82 843.2,1810.82 "/>
+  </g>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="300" y1="1698" x2="300" y2="1720.82"/>
+    <polygon style="fill: #000000" points="296.8,1720.82 300,1729.82 303.2,1720.82 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="296.8,1720.82 300,1729.82 303.2,1720.82 "/>
+  </g>
+  <text font-size="8.8" style="fill: #5b4636;text-anchor:start;font-family:sans-serif;font-style:normal;font-weight:normal" x="311" y="1714">
+    <tspan x="311" y="1714">role = customer (else branch)</tspan>
+  </text>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="415" y1="1765" x2="691.811" y2="1905.23"/>
+    <polygon style="fill: #000000" points="690.365,1908.09 699.839,1909.3 693.257,1902.38 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="690.365,1908.09 699.839,1909.3 693.257,1902.38 "/>
+  </g>
+  <text font-size="8.8" style="fill: #5b4636;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="557.5" y="1837.19">
+    <tspan x="557.5" y="1837.19">yes</tspan>
+  </text>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="300" y1="1800" x2="300" y2="1832.82"/>
+    <polygon style="fill: #000000" points="296.8,1832.82 300,1841.82 303.2,1832.82 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="296.8,1832.82 300,1841.82 303.2,1832.82 "/>
+  </g>
+  <text font-size="8.8" style="fill: #5b4636;text-anchor:start;font-family:sans-serif;font-style:normal;font-weight:normal" x="311" y="1821">
+    <tspan x="311" y="1821">no — the normal case</tspan>
+  </text>
+  <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="-150" y1="467.38" x2="-44" y2="467.38"/>
+  <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="-44" y1="467.38" x2="-44" y2="384.58"/>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="-44" y1="384.58" x2="480.82" y2="384.58"/>
+    <polygon style="fill: #000000" points="480.82,387.78 489.82,384.58 480.82,381.38 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="480.82,387.78 489.82,384.58 480.82,381.38 "/>
+  </g>
+  <text font-size="8.8" style="fill: #5b4636;text-anchor:start;font-family:sans-serif;font-style:normal;font-weight:normal" x="-86" y="449.38">
+    <tspan x="-86" y="449.38">correct + re-submit</tspan>
+  </text>
+  <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="720" y1="555.38" x2="544" y2="555.38"/>
+  <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="544" y1="555.38" x2="544" y2="384.58"/>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="544" y1="384.58" x2="499.18" y2="384.58"/>
+    <polygon style="fill: #000000" points="499.18,381.38 490.18,384.58 499.18,387.78 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="499.18,381.38 490.18,384.58 499.18,387.78 "/>
+  </g>
+  <text font-size="8.8" style="fill: #5b4636;text-anchor:end;font-family:sans-serif;font-style:normal;font-weight:normal" x="621" y="537.38">
+    <tspan x="621" y="537.38">correct + re-submit</tspan>
+  </text>
+  <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="690" y1="1147.38" x2="600" y2="1147.38"/>
+  <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="600" y1="1147.38" x2="600" y2="940.32"/>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="600" y1="940.32" x2="499.18" y2="940.32"/>
+    <polygon style="fill: #000000" points="499.18,937.12 490.18,940.32 499.18,943.52 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="499.18,937.12 490.18,940.32 499.18,943.52 "/>
+  </g>
+  <text font-size="8.8" style="fill: #5b4636;text-anchor:end;font-family:sans-serif;font-style:normal;font-weight:normal" x="634" y="1147.38">
+    <tspan x="634" y="1147.38">retry the code</tspan>
+  </text>
+  <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="690" y1="1565.87" x2="648" y2="1565.87"/>
+  <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="648" y1="1565.87" x2="648" y2="1498.32"/>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="648" y1="1498.32" x2="499.18" y2="1498.32"/>
+    <polygon style="fill: #000000" points="499.18,1495.12 490.18,1498.32 499.18,1501.52 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="499.18,1495.12 490.18,1498.32 499.18,1501.52 "/>
+  </g>
+  <text font-size="8.8" style="fill: #5b4636;text-anchor:end;font-family:sans-serif;font-style:normal;font-weight:normal" x="658" y="1565.87">
+    <tspan x="658" y="1565.87">retry</tspan>
+  </text>
+  <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="-130" y1="1021.38" x2="-92" y2="1021.38"/>
+  <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="-92" y1="1021.38" x2="-92" y2="260.32"/>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="-92" y1="260.32" x2="430.82" y2="260.32"/>
+    <polygon style="fill: #000000" points="430.82,263.52 439.82,260.32 430.82,257.12 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="430.82,263.52 439.82,260.32 430.82,257.12 "/>
+  </g>
+  <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="690" y1="1016.32" x2="508" y2="1016.32"/>
+  <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="508" y1="1016.32" x2="508" y2="1210.32"/>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="508" y1="1210.32" x2="499.18" y2="1210.32"/>
+    <polygon style="fill: #000000" points="499.18,1207.12 490.18,1210.32 499.18,1213.52 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="499.18,1207.12 490.18,1210.32 499.18,1213.52 "/>
+  </g>
+  <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="690" y1="1084.32" x2="528" y2="1084.32"/>
+  <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="528" y1="1084.32" x2="528" y2="1210.32"/>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="528" y1="1210.32" x2="499.18" y2="1210.32"/>
+    <polygon style="fill: #000000" points="499.18,1207.12 490.18,1210.32 499.18,1213.52 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="499.18,1207.12 490.18,1210.32 499.18,1213.52 "/>
+  </g>
+  <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="690" y1="1458.32" x2="568" y2="1458.32"/>
+  <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="568" y1="1458.32" x2="568" y2="1498.32"/>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="568" y1="1498.32" x2="499.18" y2="1498.32"/>
+    <polygon style="fill: #000000" points="499.18,1495.12 490.18,1498.32 499.18,1501.52 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="499.18,1495.12 490.18,1498.32 499.18,1501.52 "/>
+  </g>
+  <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="690" y1="1396.32" x2="620" y2="1396.32"/>
+  <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="620" y1="1396.32" x2="620" y2="1498.32"/>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="620" y1="1498.32" x2="499.18" y2="1498.32"/>
+    <polygon style="fill: #000000" points="499.18,1495.12 490.18,1498.32 499.18,1501.52 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="499.18,1495.12 490.18,1498.32 499.18,1501.52 "/>
+  </g>
+  <g>
+    <rect style="fill: #ffffff" x="1700" y="20" width="600" height="54.64"/>
+    <rect style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" x="1700" y="20" width="600" height="54.64"/>
+    <text font-size="11.2" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="2000" y="44.52">
+      <tspan x="2000" y="44.52">CustomerShell — PageView + KeepAlivePage + SoleBottomNav</tspan>
+      <tspan x="2000" y="58.52">ActiveTab publishes the visible tab index</tspan>
+    </text>
+  </g>
+  <g>
+    <rect style="fill: #ffffff" x="1070" y="192" width="420" height="81.68"/>
+    <rect style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" x="1070" y="192" width="420" height="81.68"/>
+    <text font-size="11.2" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="1280" y="216.04">
+      <tspan x="1280" y="216.04">Tab 0 — CustomerHomeScreen</tspan>
+      <tspan x="1280" y="230.04">(no AppBar · full-bleed hero)</tspan>
+      <tspan x="1280" y="244.04">product detail · search · on-sale</tspan>
+      <tspan x="1280" y="258.04">size listings · cart · AR try-on</tspan>
+    </text>
+  </g>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="2000" y1="74.64" x2="1289.06" y2="190.523"/>
+    <polygon style="fill: #000000" points="1288.55,187.365 1280.18,191.971 1289.58,193.681 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="1288.55,187.365 1280.18,191.971 1289.58,193.681 "/>
+  </g>
+  <text font-size="11.2" style="fill: #3b2a20;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="1280" y="175">
+    <tspan x="1280" y="175">Home tab</tspan>
+  </text>
+  <g>
+    <rect style="fill: #ffffff" x="1550" y="192" width="420" height="81.68"/>
+    <rect style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" x="1550" y="192" width="420" height="81.68"/>
+    <text font-size="11.2" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="1760" y="216.04">
+      <tspan x="1760" y="216.04">Tab 1 — StoreScreen</tspan>
+      <tspan x="1760" y="230.04">(AppBar "Stores" + cart icon)</tspan>
+      <tspan x="1760" y="244.04">store profile · collection</tspan>
+      <tspan x="1760" y="258.04">rate store</tspan>
+    </text>
+  </g>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="2000" y1="74.64" x2="1768.25" y2="187.967"/>
+    <polygon style="fill: #000000" points="1766.84,185.093 1760.16,191.921 1769.65,190.842 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="1766.84,185.093 1760.16,191.921 1769.65,190.842 "/>
+  </g>
+  <text font-size="11.2" style="fill: #3b2a20;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="1760" y="175">
+    <tspan x="1760" y="175">Store tab</tspan>
+  </text>
+  <g>
+    <rect style="fill: #ffffff" x="2030" y="192" width="420" height="81.68"/>
+    <rect style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" x="2030" y="192" width="420" height="81.68"/>
+    <text font-size="11.2" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="2240" y="216.04">
+      <tspan x="2240" y="216.04">Tab 2 — NotificationsScreen</tspan>
+      <tspan x="2240" y="230.04">(AppBar "Notifications" +</tspan>
+      <tspan x="2240" y="244.04">"Mark all read", unread badge)</tspan>
+      <tspan x="2240" y="258.04">tap → the relevant screen</tspan>
+    </text>
+  </g>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="2000" y1="74.64" x2="2231.75" y2="187.967"/>
+    <polygon style="fill: #000000" points="2230.35,190.842 2239.84,191.921 2233.16,185.093 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="2230.35,190.842 2239.84,191.921 2233.16,185.093 "/>
+  </g>
+  <text font-size="11.2" style="fill: #3b2a20;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="2240" y="175">
+    <tspan x="2240" y="175">Notifications tab</tspan>
+  </text>
+  <g>
+    <rect style="fill: #ffffff" x="2510" y="192" width="420" height="81.68"/>
+    <rect style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" x="2510" y="192" width="420" height="81.68"/>
+    <text font-size="11.2" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="2720" y="216.04">
+      <tspan x="2720" y="216.04">Tab 3 — ProfileScreen</tspan>
+      <tspan x="2720" y="230.04">(AppBar "My Profile" + Settings)</tspan>
+      <tspan x="2720" y="244.04">my orders · addresses · reviews</tspan>
+      <tspan x="2720" y="258.04">reservations · inbox</tspan>
+    </text>
+  </g>
+  <g>
+    <line style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" x1="2000" y1="74.64" x2="2710.94" y2="190.523"/>
+    <polygon style="fill: #000000" points="2710.42,193.681 2719.82,191.971 2711.45,187.365 "/>
+    <polygon style="fill: none; fill-opacity:0; stroke-width: 0.36; stroke: #000000" points="2710.42,193.681 2719.82,191.971 2711.45,187.365 "/>
+  </g>
+  <text font-size="11.2" style="fill: #3b2a20;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="2720" y="175">
+    <tspan x="2720" y="175">Profile tab</tspan>
+  </text>
+  <g>
+    <rect style="fill: #ffffff" x="1260" y="352" width="1480" height="68.72"/>
+    <rect style="fill: none; fill-opacity:0; stroke-width: 2; stroke: #000000" x="1260" y="352" width="1480" height="68.72"/>
+    <text font-size="8.8" style="fill: #000000;text-anchor:middle;font-family:sans-serif;font-style:normal;font-weight:normal" x="2000" y="373.16">
+      <tspan x="2000" y="373.16">Labels in SoleBottomNav for roleCustomer: Home · Store · Notifications · Profile.</tspan>
+      <tspan x="2000" y="384.16">A brand-new customer signup skips every gate in layer 1: no MFA factor is enrolled yet, the device</tspan>
+      <tspan x="2000" y="395.16">was recorded as trusted by _finishSignupSession(), and role = customer falls through to the final</tspan>
+      <tspan x="2000" y="406.16">else branch of _routeByRole — so it lands straight on this shell.</tspan>
+    </text>
+  </g>
+</svg>

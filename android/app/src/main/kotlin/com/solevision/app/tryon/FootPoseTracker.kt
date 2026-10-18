@@ -147,13 +147,25 @@ internal class FootPoseTracker {
     private var lastSampleMs = 0L
     private var lastStepMs = 0L
 
-    /** Locked state, its authoritative quality, and the last side the detector was sure of. */
+    /**
+     * Locked state, its authoritative quality, and **which foot is on screen** (V4.18).
+     *
+     * [side] is the *confirmed* side, not the last one observed: the first side a detector is sure
+     * of is taken at once (there is nothing to contradict yet), and a change needs
+     * [SIDE_CHANGE_CONFIRM] consecutive observations saying so — because flipping the drawn shoe
+     * between feet is the loudest glitch this screen has, and a partial foot, a sock or two feet in
+     * frame makes a single frame's opinion cheap. Null means "nobody has said yet", which the
+     * renderer draws as authored rather than guessing.
+     */
     var locked = false
         private set
     var lockQuality = 0.0
         private set
     var side: String? = null
         private set
+
+    /** Consecutive observations disagreeing with [side] — the side change's own streak. */
+    private var sideStreak = 0
 
     /** True once a sample has been accepted: there is somewhere to draw the shoe. */
     val hasAnchor: Boolean get() = seeded
@@ -220,7 +232,7 @@ internal class FootPoseTracker {
 
         lastSampleMs = nowMs
         lockQuality = q
-        sample.side?.let { side = it }
+        applySide(sample.side)
         return applyHysteresis(q)
     }
 
@@ -294,6 +306,7 @@ internal class FootPoseTracker {
         lockQuality = 0.0
         locked = false
         side = null
+        sideStreak = 0
         return wasLocked
     }
 
@@ -321,6 +334,48 @@ internal class FootPoseTracker {
         displayed[2] = target[2]
         displayedYawDeg = targetYawDeg
         displayedLengthM = targetLengthM
+    }
+
+    /**
+     * **V4.18: the side from an observation that may never become a sample.**
+     *
+     * Which foot it is is a property of the *detection*, not of the placement. A foot the floor or
+     * depth gates reject — the whole reason the detection-placed shoe exists — is still
+     * unambiguously a left or a right foot, and a shoe that only mirrors once the tracker locks
+     * would be the wrong shoe for as long as the tracker is unhappy (on the screens this exists
+     * for, the entire session). [observe] applies the same rule to the sides carried by accepted
+     * samples; both funnel into [applySide], so there is one streak and one rule.
+     */
+    fun observeSide(observed: String?) = applySide(observed)
+
+    /**
+     * **V4.18's side hysteresis: the first opinion wins immediately, a change has to be insisted
+     * on.**
+     *
+     * The asymmetry is the point. Before any side is known there is nothing to contradict, so
+     * waiting would only delay the right shoe; once one is drawn, a flip changes *which shoe the
+     * customer sees*, and the detector's side is least reliable exactly where frames are worst (a
+     * partial foot, a foot at an angle, both feet in shot). A null observation is not an opinion at
+     * all: it neither sets a side nor counts toward changing one, because "not sure" must never be
+     * read as "the other one".
+     */
+    private fun applySide(observed: String?) {
+        if (observed == null) return
+        val current = side
+        when {
+            current == null -> {
+                side = observed
+                sideStreak = 0
+            }
+            observed.equals(current, ignoreCase = true) -> sideStreak = 0
+            else -> {
+                sideStreak++
+                if (sideStreak >= SIDE_CHANGE_CONFIRM) {
+                    side = observed
+                    sideStreak = 0
+                }
+            }
+        }
     }
 
     /**
@@ -445,6 +500,15 @@ internal class FootPoseTracker {
 
         /** Below this, heel and toe hit the same floor point and there is no axis to build. */
         const val MIN_FORWARD_LENGTH = 1e-4
+
+        /**
+         * Consecutive observations that must disagree before the drawn foot changes (V4.18).
+         *
+         * Three at Dart's 100 ms tick is ~300 ms behind a real change of foot — long enough that a
+         * blink cannot flip the shoe, short enough that a customer who swaps feet sees it settle
+         * almost at once.
+         */
+        const val SIDE_CHANGE_CONFIRM = 3
 
         /** One-euro parameters: slow cutoff for stillness, small beta for a foot's speeds. */
         const val MIN_CUTOFF = 1.0

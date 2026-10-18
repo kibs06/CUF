@@ -6,6 +6,7 @@ import android.content.pm.ApplicationInfo
 import android.graphics.Bitmap
 import android.graphics.PixelFormat
 import android.graphics.SurfaceTexture
+import android.graphics.drawable.GradientDrawable
 import android.media.Image
 import android.opengl.Matrix
 import android.os.Build
@@ -56,6 +57,7 @@ import com.google.ar.core.exceptions.CameraNotAvailableException
 import com.solevision.app.arfoot.DiagRelay
 import com.solevision.app.arfoot.depthMmFromRaw16
 import com.solevision.app.arfoot.nearestPlausibleDepthMm
+import com.solevision.app.arfoot.planarFootAxisMeters
 import com.solevision.app.arfoot.unprojectToCameraSpace
 import com.google.ar.core.exceptions.UnavailableApkTooOldException
 import com.google.ar.core.exceptions.UnavailableArcoreNotInstalledException
@@ -227,6 +229,15 @@ class ArTryOnView(
          * [allowUnsupportedRenderer] it is the experiment — can a level-1 renderer draw a shoe?
          */
         val lowerEngineToLevel1: Boolean = false,
+
+        /**
+         * **V4.18: which foot the mesh was authored for** — `"left"`, `"right"`, or null when the
+         * handover did not say. The customer's detected foot decides which shoe belongs on screen,
+         * and this is the other half of that comparison: equal means draw as authored, different
+         * means mirror (see [updateMirroring]). Null is *not* rendered as a mirror — an unknown
+         * side must not silently put a side-specific panel, logo or closure on the wrong shoe.
+         */
+        val shoeSide: String? = null,
     )
 
     /** `setSize` input, mirroring `lastLengthMm(size)` in `lib/utils/fit_engine.dart`. */
@@ -372,6 +383,65 @@ class ArTryOnView(
      * engine it was built against. Null in [Mode.PREVIEW], which has no camera to show.
      */
     private var cameraFeed: ArCameraFeed? = null
+    private var feedFailureNoted = false
+
+    /**
+     * **V4.13's detection dots — the white heel/toe anchors, AR mode only.**
+     *
+     * Two small overlay views owned by the UI thread (created in [init]), driven from the render
+     * thread's per-frame [updateDetectionDots]. They show on every accepted detector observation —
+     * before any lock, floor plane, or shoe — so "is it seeing my foot" has an answer that is not
+     * the shoe. Plain Android views rather than Filament geometry on purpose: a dot needs no
+     * material, so it cannot trip the ubershader mismatch abort (F16).
+     */
+    private var heelDotView: android.view.View? = null
+    private var toeDotView: android.view.View? = null
+
+    /**
+     * The last detector fix the dots are drawn from, in upright-image UV — refreshed by every
+     * observation, so the dots persist across the ~200 ms between detections. Render-thread state.
+     */
+    private var dotHeelU = 0.0
+    private var dotHeelV = 0.0
+    private var dotToeU = 0.0
+    private var dotToeV = 0.0
+    private var dotHasFix = false
+    /** Last heel/toe worlds the dots were drawn from — the detection placement reuses them. */
+    private var dotHeelWorld: FloatArray? = null
+    private var dotToeWorld: FloatArray? = null
+    /** Rising-edge latch for the detection-placed relay line. */
+    private var detectionPlacedLatched = false
+    private var dotLastObsMs = 0L
+    private var dotLastComputeMs = 0L
+    private var dotLastRelayMs = 0L
+    private var dotLastCheckMs = 0L
+    @Volatile private var dotsVisible = false
+
+    /**
+     * **V4.17's live/hold/lost bit for the detection anchors.**
+     *
+     * Written on the render thread only, read (never written) by the UI thread's heartbeat — an
+     * enum reference, so the read cannot tear. The dots *and* the detection-placed shoe follow it,
+     * which is the point: one rule ([DetectionDots.holdState]) decides when a fix stops being a
+     * measurement, so a hold cannot begin for the shoe and end for the dots.
+     */
+    @Volatile private var dotFix = DetectionDots.Fix.LOST
+
+    /**
+     * **V4.15's presence ring — "a foot is here", no measurement behind it.**
+     *
+     * One overlay view (a ring, visually distinct from the solid anchor dots), driven by
+     * `setFootPresence` observations carrying the mask centroid. Shown only while the pose
+     * dots are *not* visible — a real measurement supersedes presence — and hidden on the same
+     * staleness rule. Never feeds the tracker, scale, or snapshot: indicator only.
+     */
+    private var presenceRingView: android.view.View? = null
+    private var presenceU = 0.0
+    private var presenceV = 0.0
+    private var presenceHasFix = false
+    private var presenceLastMsgMs = 0L
+    private var presenceLastComputeMs = 0L
+    @Volatile private var presenceVisible = false
 
     /**
      * **V4.4's occlusion draw** — mask-shaped geometry with the camera feed's own material, painted
@@ -520,6 +590,21 @@ class ArTryOnView(
     private var placed = false
     private var placedYawDeg = 0f
 
+    // ── V4.18: the shoe's own side ────────────────────────────────────────────────────────
+
+    /** The authored side of the loaded model (`"left"`/`"right"`), or null when it was not said. */
+    private var modelSide: String? = null
+
+    /**
+     * **Whether the shoe on screen is a mirror of the authored mesh**, written on the render thread
+     * and read (never written) by the UI thread's heartbeat.
+     *
+     * The customer's foot is the authority: a product usually ships one side's asset, and a right
+     * shoe is what a left foot has to see — mirrored — because the alternative is no shoe at all or
+     * the wrong one. See [updateMirroring] for what actually decides it.
+     */
+    @Volatile private var shoeMirrored = false
+
     // ── V4.2: the CPU frame source and the foot tracker ─────────────────────────────────────
     //
     // Dart's detection loop (V4.1) asks for one throttled NV21 frame per tick over
@@ -575,10 +660,35 @@ class ArTryOnView(
     private var flowConfidence = 0.0
     private var flowDetectedMs = 0L
     private var flowCarries = 0
+    /**
+     * **V4.19's held-carry clock and its one relay latch.**
+     *
+     * [lastHeldCarryMs] throttles the depth re-read that moves held anchors (see
+     * [DetectionDots.heldCarryDue]); [heldCarryRelayed] keeps the "carrying held anchors" line
+     * to one per carry episode. Neither touches [dotLastObsMs] — the hold still expires on the
+     * detection clock, so a tracked patch can move the shoe but never extend its life.
+     */
+    private var lastHeldCarryMs = 0L
+    private var heldCarryRelayed = false
 
     /** Last accepted heel, for the jump gate in [sampleFoot]; and how many jumps were refused in a row. */
     private var lastAcceptedHeel: FloatArray? = null
     private var jumpRejectStreak = 0
+
+    /** Still-capture stability: consecutive agreeing samples before a capture is accepted. */
+    private val snapshotStabilizer = FootSnapshotStabilizer()
+
+    /** Whether this session has already reported its still-capture pose: one `footSnapshot` per session. */
+    private var snapshotDelivered = false
+
+    /** The camera timestamp the carry-over tracker last read, so a repeated image is not re-tracked. */
+    private var lastFlowTimestampNs = -1L
+
+    /** Where a frame's time goes, summed over one perf window (ns), and the refusals in it. */
+    private var perfArNs = 0L
+    private var perfBeginNs = 0L
+    private var perfRenderNs = 0L
+    private var perfRefused = 0
 
     /** When the camera sharpness was last logged (V4.12). */
     private var lastSharpnessMs = 0L
@@ -689,6 +799,19 @@ class ArTryOnView(
     @Volatile private var orbitYawDeg = INITIAL_YAW_DEG
     @Volatile private var orbitPitchDeg = INITIAL_PITCH_DEG
     @Volatile private var orbitZoom = 1.0f
+
+    /**
+     * **Camera zoom, view-only (V4.22).**
+     *
+     * Written by [setCameraZoom] on the render thread, read by the frame loop: the background
+     * quad ([ArCameraFeed.zoom]) and every render projection narrow by the same factor, so the
+     * shoe, the dots, the ring and the mask stay glued to the foot at any zoom. Detection,
+     * tracking, hit-tests and depth never see it — zoom changes the viewing, never the geometry.
+     */
+    private var cameraZoom = 1.0f
+
+    /** Last zoom carried to the diagnostic log — the slider chatters, the file must not. */
+    private var lastRelayedZoom = 1.0f
     @Volatile private var interacting = false
     @Volatile private var lastInteractionMs = 0L
 
@@ -714,6 +837,22 @@ class ArTryOnView(
         if (content != null) {
             addView(content, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         }
+        // V4.13: the detection dots ride on top of the AR surface — plain views, created once on
+        // the UI thread (this init runs there), positioned per frame by [placeDetectionDots].
+        if (mode == Mode.AR) {
+            val dotPx = (12 * resources.displayMetrics.density).toInt()
+            heelDotView = makeDetectionDot(dotPx).also {
+                addView(it, LayoutParams(dotPx, dotPx))
+            }
+            toeDotView = makeDetectionDot(dotPx).also {
+                addView(it, LayoutParams(dotPx, dotPx))
+            }
+            // V4.15: the presence ring — larger than the dots, a ring rather than a disc.
+            val ringPx = (28 * resources.displayMetrics.density).toInt()
+            presenceRingView = makePresenceRing(ringPx).also {
+                addView(it, LayoutParams(ringPx, ringPx))
+            }
+        }
         // The preview is turned with a finger; the AR view takes its taps through Flutter's
         // gesture arena (`EagerGestureRecognizer` on the Dart side), which is the same handover.
         isClickable = mode == Mode.PREVIEW
@@ -735,7 +874,7 @@ class ArTryOnView(
             MotionEvent.ACTION_CANCEL -> tapGesture.cancel()
             MotionEvent.ACTION_UP -> {
                 val tapped = tapGesture.onUp(event.x, event.y, SystemClock.uptimeMillis())
-                if (tapped && !footTracker.hasAnchor) {
+                if (tapped && !footTracker.hasAnchor && !footModeRequested) {
                     Log.i(TAG, "tap placed the shoe at ${event.x.toInt()}, ${event.y.toInt()}")
                     placeShoe(event.x.toDouble(), event.y.toDouble())
                 }
@@ -865,6 +1004,27 @@ class ArTryOnView(
             } else {
                 relay("torch: $enabled FAILED: ${outcome.exceptionOrNull()?.message}")
                 Log.w(TAG, "torch reconfigure failed", outcome.exceptionOrNull())
+            }
+        }
+    }
+
+    /**
+     * **Camera zoom from the fitting screen's slider (V4.22).**
+     *
+     * Coerced to [DetectionDots.MIN_CAMERA_ZOOM]..[DetectionDots.MAX_CAMERA_ZOOM] (garbage
+     * answers 1x, never throws) and applied on the render thread, where the feed and the frame
+     * loop both live: the feed re-crops or letterboxes on its next rebuild, and the render
+     * projection narrows from the next frame. Relayed per tenth, not per slider tick — the
+     * relay fsyncs every line, and a drag would push out the lifecycle lines around it.
+     */
+    fun setCameraZoom(zoom: Float) {
+        val z = DetectionDots.coerceCameraZoom(zoom)
+        renderHandler.post {
+            cameraZoom = z
+            cameraFeed?.let { it.zoom = z }
+            if (kotlin.math.abs(z - lastRelayedZoom) >= 0.05f) {
+                lastRelayedZoom = z
+                relay("camera zoom: %.1fx".format(z))
             }
         }
     }
@@ -1126,10 +1286,22 @@ class ArTryOnView(
             footModeRequested = mode != "floor"
             if (wasRequested && !footModeRequested) {
                 pendingFootPose = null
+                // V4.13: the dots belong to foot mode; floor mode hides them.
+                dotHasFix = false
+                // V4.17: and the hold goes with them, so a later foot mode does not resume
+                // mid-coast on a fix from the previous mode.
+                dotFix = DetectionDots.Fix.LOST
+                mainHandler.post { hideDetectionDots() }
+                // V4.15: the ring goes with the dots.
+                presenceHasFix = false
+                mainHandler.post { hidePresenceRing() }
                 // V4.4: the mask goes with the tracker. Leaving it up would draw a foot-shaped
                 // hole over a shoe that has stopped following anything.
                 pendingFootMask = null
                 engine?.let { created -> footMaskOverlay?.hide(created) }
+                snapshotStabilizer.reset()
+                // Foot-gating latch belongs to foot mode; floor mode shows the shoe normally.
+                shoeHiddenForNoFoot = false
                 val wasLocked = footTracker.reset()
                 if (wasLocked) {
                     listener.onEvent(
@@ -1149,6 +1321,8 @@ class ArTryOnView(
      * need an `Activity` and a main thread; this needs neither.
      */
     fun startSession(onResult: (StartOutcome) -> Unit) {
+        // A new session may report its own capture, so the one-per-session flag starts clear.
+        snapshotDelivered = false
         // ⚠️ Answered without touching ARCore, not merely refused later: constructing a `Session`
         // here would put ARCore's install prompt and camera permission in front of a customer who
         // only scrolled past a product page.
@@ -1219,6 +1393,13 @@ class ArTryOnView(
                 cameraFeed?.bindToSession(created)
                 created.resume()
                 sessionResumed = true
+                // Fix: ARCore only honours the texture names registered while the session is
+                // running on this thread (hello_ar_java pattern). The pre-resume bind above is
+                // kept so no first frame is missed, but without this post-resume registration
+                // the 2026-10-06 session kept writing texture 0 while the feed owned 1 — black
+                // camera, reveal never fired, beginFrame refused downstream.
+                runCatching { cameraFeed?.bindToSession(created) }
+                    .onFailure { Log.w(TAG, "post-resume camera texture bind failed", it) }
                 // V4.8: an explicit start supersedes any surface-detach pause that was pending.
                 pausedForSurfaceDetach = false
                 Log.i(TAG, "session resumed")
@@ -1534,7 +1715,10 @@ class ArTryOnView(
         // the preview has no camera. A context that cannot be created is reported and the engine
         // still comes up: the shoe must render even when the room cannot.
         if (mode == Mode.AR) {
-            val feed = cameraFeed ?: ArCameraFeed(context).also { cameraFeed = it }
+            val feed = cameraFeed ?: ArCameraFeed(context).also {
+                cameraFeed = it
+                it.report = { line -> relay(line) }
+            }
             val shared = feed.prepareSharedContext()
             if (shared != null) {
                 engineBuilder.sharedContext(shared)
@@ -1587,6 +1771,9 @@ class ArTryOnView(
         // shoe is the point of this screen, and it must render with or without the room.
         if (mode == Mode.AR) {
             cameraFeed?.attach(created, createdScene)
+            // V4.22: a zoom the slider sent before the feed existed is not lost — the view kept
+            // it, and the fresh feed picks it up here (its own default is 1x).
+            cameraFeed?.let { it.zoom = cameraZoom }
             relay("camera feed: ${cameraFeed?.describe() ?: "off"}")
             // V4.4: the overlay draws with the feed's own texture (see [FootMaskOverlay.attach]),
             // so it attaches *after* the feed — and only when the feed is ready, because an
@@ -2088,6 +2275,27 @@ class ArTryOnView(
             // `ready (no mask yet)` when it did and Dart has not sent one — the distinction a
             // "the shoe is not occluded" report turns on.
             append(" mask=").append(footMaskOverlay?.describe() ?: "off")
+            // V4.18: which foot was confirmed, which side the mesh was authored for, and whether
+            // what is on screen is a mirror of it — the three facts a "the shoe is the wrong way
+            // round" report needs, in the order they matter.
+            append(" footSide=").append(footTracker.side ?: "-")
+            append(" modelSide=").append(modelSide ?: "-")
+            append(" mirror=").append(if (shoeMirrored) "on" else "off")
+            // V4.13/V4.17: whether the heel/toe anchors are currently drawn, and whether the fix
+            // behind them is a live measurement or a hold — the distinction a "the shoe froze mid
+            // session" report turns on.
+            // V4.22: the zoom behind the background crop/letterbox and the render projection —
+            // the one number a "the shoe drifted while zoomed" report turns on.
+            append(" zoom=").append("%.1f".format(cameraZoom))
+            append(" dots=").append(
+                when (dotFix) {
+                    DetectionDots.Fix.LIVE -> if (dotsVisible) "on" else "on(no-world)"
+                    DetectionDots.Fix.COAST -> "held"
+                    DetectionDots.Fix.LOST -> "off"
+                },
+            )
+            // V4.15: whether the presence ring is currently drawn.
+            append(" presence=").append(if (presenceVisible) "on" else "off")
             append(" r=").append((previewRadiusM * 1000.0).roundToInt()).append("mm")
             append(" yaw=").append(orbitYawDeg.roundToInt())
             append(" touch=").append(touchDowns).append('/').append(touchMoves)
@@ -2239,6 +2447,7 @@ class ArTryOnView(
                 .coerceIn(0f, MAX_FRAME_DELTA_SECONDS)
         lastFrameNanos = frameTimeNanos
 
+        val arStartNs = System.nanoTime()
         val activeSession = session
         if (activeSession != null && sessionResumed) {
             // V4.9: the context the session was built in, current for the whole AR block —
@@ -2252,7 +2461,22 @@ class ArTryOnView(
                 // V4.2: the CPU frame the Dart loop will ask for next tick, then the tracker —
                 // poses before the frame so the anchor is current when it is drawn.
                 captureFrameForDetection(frame)
+                // V4.13: the detection dots read the pending observation *before* the tracker
+                // consumes it — they must show even when the sample is rejected (no plane, bad
+                // length), which is exactly when the customer asks "is it seeing my foot".
+                updateDetectionDots(frame)
+                updatePresenceDot(frame)
                 applyFootTracking(frame)
+                // V4.18: which foot the detector confirms decides whether the shoe is drawn as
+                // authored or mirrored. After the tracker (which is what updates the side) and
+                // before the transform writes below, so this frame's shoe uses this frame's side.
+                updateMirroring()
+                // V4.16: the shoe from the detection fix when the tracker has no anchor —
+                // heel/toe-matched placement with no floor, lock, or measurement required.
+                // Runs after the tracker so a real anchor always wins; sets `placed` so the
+                // screen-centre auto-placement below stands down once a foot is seen.
+                applyDetectionPlacement()
+                hideShoeIfNoFoot()
                 // V4.4: the mask over the shoe, from the same frame the pose above was sampled
                 // from, and before the auto-placement fallback so the draw sees this frame's
                 // viewport state rather than the next frame's.
@@ -2263,7 +2487,13 @@ class ArTryOnView(
                 // Wrapped so a feed failure costs the backdrop rather than the frame: the pose
                 // above is already applied, and a black room must not become a stopped loop.
                 runCatching { cameraFeed?.update(created, activeSession, frame) }
-                    .onFailure { Log.w(TAG, "camera feed update failed", it) }
+                    .onFailure {
+                        Log.w(TAG, "camera feed update failed", it)
+                        if (!feedFailureNoted) {
+                            feedFailureNoted = true
+                            relay("camera feed update failed: ${it.javaClass.simpleName}: ${it.message}")
+                        }
+                    }
             } catch (t: Throwable) {
                 Log.w(TAG, "session.update threw; keeping the last pose", t)
                 if (!arUpdateFailureNoted) {
@@ -2273,13 +2503,18 @@ class ArTryOnView(
             } finally {
                 if (contextBound) feed.releaseArContext()
             }
+            perfArNs += System.nanoTime() - arStartNs
         } else if (mode == Mode.PREVIEW) {
             // No session is the *normal* case here rather than a degraded one: this branch is what
             // "a preview is a camera" means, and it is the only difference from the AR path.
             applyPreviewCamera(deltaSeconds)
         }
 
-        if (!activeRenderer.beginFrame(chain, frameTimeNanos)) {
+        val beginStartNs = System.nanoTime()
+        val beginOk = activeRenderer.beginFrame(chain, frameTimeNanos)
+        perfBeginNs += System.nanoTime() - beginStartNs
+        if (!beginOk) {
+            perfRefused++
             // ⚠️ **The frozen box, as measured on a real P30 Pro (2026-10-01).** The QA readout
             // from that run is the whole diagnosis: `loop=on`, 61 iterations a second, `chain=ok`
             // (non-null, built once), `surface=ok`, `asset=ok`, touches arriving, the orbit state
@@ -2299,10 +2534,29 @@ class ArTryOnView(
             // the start of a streak, the repair, and a slow milestone reach the file: a flood here
             // would push out the lifecycle lines that say what led to it.
             if (beginFrameFailStreak == 1) {
+                val surfaceState = when {
+                    surface == null -> "surface=NULL"
+                    surface?.isValid != true -> "surface=INVALID"
+                    else -> "surface=ok"
+                }
+                val unrec = if (created.hasUnrecoverableFailure()) " unrec=1" else ""
                 relay(
                     "beginFrame refused the frame — chain=" +
-                        (if (swapChain != null) "ok" else "NULL") + ", rebuilds=$swapChainRebuilds",
+                        (if (swapChain != null) "ok" else "NULL") + ", rebuilds=$swapChainRebuilds" +
+                        ", $surfaceState$unrec",
                 )
+            }
+            // A dead surface can never present: wait for surfaceCreated instead of burning the
+            // bounded rebuild budget on a chain built against the same dead wrapper.
+            if (surface == null || surface?.isValid != true) {
+                Thread.sleep(16L)
+                return
+            }
+            if (created.hasUnrecoverableFailure()) {
+                // No chain rebuild clears a backend failure; report once per streak start (above)
+                // and back off rather than spinning.
+                Thread.sleep(16L)
+                return
             }
             if (beginFrameFailStreak >= MAX_BEGIN_FRAME_FAILURES &&
                 swapChainRebuilds < MAX_SWAP_CHAIN_REBUILDS
@@ -2334,8 +2588,18 @@ class ArTryOnView(
             return
         }
         beginFrameFailStreak = 0
+        if (swapChainRebuilds > 0) {
+            // The repair worked — frames present again — so the bounded budget restores.
+            // Without this, five transient failures anywhere in a session spend the repair
+            // budget for the rest of it (seen live 2026-10-18: rebuild=5 with beginFail still
+            // climbing), and every later refusal spins unrecovered. Consecutive, not lifetime.
+            swapChainRebuilds = 0
+            relay("swap chain healthy again — rebuild budget restored")
+        }
+        val renderStartNs = System.nanoTime()
         activeRenderer.render(activeView)
         activeRenderer.endFrame()
+        perfRenderNs += System.nanoTime() - renderStartNs
         presentedFrames++
         countFrame(frameTimeNanos)
         // Bound so the unused-variable warning cannot bite if the flow above changes.
@@ -2361,6 +2625,10 @@ class ArTryOnView(
                     FAR_METERS.toFloat(),
                 )
             }.onFailure { t -> Log.w(TAG, "getProjectionMatrix failed", t) }
+            // V4.22: the zoom narrows the render projection by the same factor the feed
+            // crops/letterboxes by — the shoe is world-anchored, so this is what keeps it
+            // glued while zoomed. World geometry (tracking, hit-tests, depth) never sees it.
+            DetectionDots.applyZoomToProjection(projection, cameraZoom)
             activeCamera.setCustomProjection(toDoubleArray(projection), NEAR_METERS, FAR_METERS)
         }
         // `Pose.toMatrix` is out-param only too, and produces the camera→world matrix in
@@ -2395,14 +2663,66 @@ class ArTryOnView(
         manager.setColor(keyLight, colour[0], colour[1], colour[2])
     }
 
+    // ── Foot-gated shoe visibility: the model appears only with a foot in frame ─────────────
     /**
-     * Puts the shoe in front of the viewer the first frame after it loads.
+     * Whether a foot can currently carry the shoe: a tracked anchor, or a live/held
+     * detection fix with worlds to stand on. Presence alone (mask centroid, no heel/toe)
+     * cannot place a shoe, so it does not count — the ring is the answer there.
+     */
+    private fun hasPlaceableFoot(): Boolean {
+        if (footTracker.anchor() != null) return true
+        if (dotFix != DetectionDots.Fix.LOST && dotHeelWorld != null && dotToeWorld != null) return true
+        return false
+    }
+
+    /** Edge latch so the hidden/shown relay lines print once per transition, not per frame. */
+    private var shoeHiddenForNoFoot = false
+
+    /**
+     * Park the model at zero scale: invisible, but still loaded, so the first foot fix only
+     * needs a transform write to appear — no reload, no pop-in at the wrong size.
+     */
+    private fun parkShoeHidden(created: Engine, why: String) {
+        val matrix = FloatArray(16).also { Matrix.setIdentityM(it, 0) }
+        Matrix.scaleM(matrix, 0, 0f, 0f, 0f)
+        runCatching { writeModelTransform(created, matrix) }
+        if (!shoeHiddenForNoFoot) {
+            shoeHiddenForNoFoot = true
+            relay("shoe: hidden — no foot in frame ($why)")
+        }
+    }
+
+    /**
+     * Hide the shoe when the foot leaves. Runs after the tracker and the detection placement
+     * each frame: either of them having a foot wins (and clears the latch so the next hide
+     * relays again); only anchor-less + LOST parks the model. Without this the last placement
+     * lingers on an empty floor after the foot walks out.
+     */
+    private fun hideShoeIfNoFoot() {
+        if (mode != Mode.AR || !footModeRequested || tearingDown) return
+        if (modelRoot == 0 || asset == null) return
+        if (hasPlaceableFoot()) {
+            if (shoeHiddenForNoFoot) {
+                shoeHiddenForNoFoot = false
+                relay("shoe: shown — foot in frame")
+            }
+            return
+        }
+        engine?.let { parkShoeHidden(it, "lost") }
+    }
+
+    /**
+     * Puts the shoe in front of the viewer the first frame after it loads (floor/QA mode only).
      *
      * Without this the model sits at ARCore's world origin — where the device started, i.e. behind
      * or under the camera — and the screen looks empty until the customer taps. A tap still
      * re-places it ([placeShoe]); this is only the initial answer.
      */
     private fun autoPlaceIfNeeded(frame: Frame) {
+        // Foot mode: the shoe belongs on the foot, never at the screen centre. Centre
+        // auto-placement is the floor-mode (QA) answer only — in foot mode a shoe on an
+        // empty floor is the bug, so stand down even before the tracker locks.
+        if (footModeRequested) return
         // A tracked shoe is already placed where it belongs: auto-placement is the answer for the
         // seconds *before* the tracker has seen a foot, and fighting it afterwards would teleport
         // the shoe back to the screen centre on every frame.
@@ -2432,6 +2752,19 @@ class ArTryOnView(
         frameWindowStartNanos = frameTimeNanos
         // The type Dart parses is `perf`; anything else would arrive as an unknown event and only
         // add log noise.
+        relay(
+            "perf window: fps=%.1f arMs=%.0f beginMs=%.0f renderMs=%.0f refused=%d".format(
+                fps,
+                perfArNs / 1_000_000.0,
+                perfBeginNs / 1_000_000.0,
+                perfRenderNs / 1_000_000.0,
+                perfRefused,
+            ),
+        )
+        perfArNs = 0L
+        perfBeginNs = 0L
+        perfRenderNs = 0L
+        perfRefused = 0
         listener.onEvent("perf", mapOf("avgFps" to fps, "frameMs" to frameMs))
     }
 
@@ -2618,6 +2951,10 @@ class ArTryOnView(
 
         pendingAuthoredLengthMm = spec.authoredLengthMm
         yawOffsetDeg = spec.yawOffsetDeg ?: 0.0
+        modelSide = spec.shoeSide
+        // The drawn side is re-derived from the *new* mesh on the next frame — carrying the
+        // previous model's mirror across a swap is how a shoe flips inside out for one frame.
+        shoeMirrored = false
         sizeScale = 1.0f
         // A new asset invalidates the grade with it: the next `setSize` re-establishes both, and
         // until then the frame-scale correction has no baseline and must answer ×1 (V4.3).
@@ -2658,7 +2995,7 @@ class ArTryOnView(
      * column's entire purpose (§2.5.1). The correction is a *ratio* against the asset's own
      * bounding box, not an assumption about units: a glTF is metres by spec, but V0's block-out was
      * authored in millimetres, and both must render at the right size. **Since V4.3 there is a
-     * third factor** — the foot measured in the frame — and it is read from [effectiveScale] here
+     * third factor** — the foot measured in the frame — and it is read from [effectiveScaleFor] here
      * *and* by the tracker's per-frame path, for the same reason [authoredLengthCorrection] is one
      * function: two places that compute a scale eventually disagree about the shoe's size.
      */
@@ -2666,12 +3003,19 @@ class ArTryOnView(
         val created = engine ?: return
         if (modelRoot == 0) return
 
-        val scale = effectiveScale(footTracker.anchor())
+        val anchorNow = footTracker.anchor()
+        // Foot mode: a freshly loaded model must not appear at the world origin / screen
+        // centre before any foot is seen — park it at zero scale until the first fix.
+        if (mode == Mode.AR && footModeRequested && anchorNow == null && !hasPlaceableFoot()) {
+            parkShoeHidden(created, "load")
+            return
+        }
+        val scale = effectiveScaleFor(anchorNow?.lengthMeters)
         val matrix = FloatArray(16)
         Matrix.setIdentityM(matrix, 0)
         Matrix.translateM(matrix, 0, placement[12], placement[13], placement[14])
-        if (placed) Matrix.rotateM(matrix, 0, placedYawDeg + yawOffsetDeg.toFloat(), 0f, 1f, 0f)
-        Matrix.scaleM(matrix, 0, scale, scale, scale)
+        if (placed) Matrix.rotateM(matrix, 0, placedYawDeg + drawnYawOffsetDeg(), 0f, 1f, 0f)
+        Matrix.scaleM(matrix, 0, scale * mirrorSign(), scale, scale)
         runCatching { writeModelTransform(created, matrix) }
             .onFailure { t -> Log.w(TAG, "setTransform failed", t) }
         // ⚠️ **The load's last window, split at its midpoint (measured, 2026-10-02).** Twice on the
@@ -2697,7 +3041,7 @@ class ArTryOnView(
         if (box != null) {
             val centre = box.center
             val half = box.halfExtent
-            previewCentre[0] = placement[12] + centre[0] * scale
+            previewCentre[0] = placement[12] + centre[0] * scale * mirrorSign()
             previewCentre[1] = placement[13] + centre[1] * scale
             previewCentre[2] = placement[14] + centre[2] * scale
             // The sphere that CONTAINS the box: `hypot` of the half-extents, not the largest of
@@ -2788,6 +3132,7 @@ class ArTryOnView(
     private fun fmt(value: Double): String = String.format(java.util.Locale.US, "%.3f", value)
 
     private fun applyPlacement(pose: Pose, yawDeg: Float) {
+        shoeHiddenForNoFoot = false
         Matrix.setIdentityM(placement, 0)
         Matrix.translateM(placement, 0, pose.tx(), pose.ty(), pose.tz())
         placedYawDeg = yawDeg
@@ -2854,15 +3199,578 @@ class ArTryOnView(
      * orient a shoe. Dart's loop keeps publishing through all of them, and the tracker's staleness
      * decay is what turns a long run into `footLock {locked=false}` rather than a silent freeze.
      */
+    /** One white dot: 12 dp circle, pinned white on any backdrop, hidden until placed. */
+    private fun makeDetectionDot(sizePx: Int): android.view.View =
+        android.view.View(context).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(android.graphics.Color.WHITE)
+                setStroke((1.5f * resources.displayMetrics.density).toInt(), android.graphics.Color.DKGRAY)
+            }
+            // Centre the dot on its position: layout at 0,0, move with translation.
+            x = -sizePx.toFloat()
+            y = -sizePx.toFloat()
+            visibility = android.view.View.GONE
+            // Never steal touches: the dots sit above the surface that takes taps.
+            isClickable = false
+            isFocusable = false
+        }
+
+    /**
+     * UI-thread placement for one dot, called from [updateDetectionDots] via [mainHandler].
+     *
+     * [held] dims both dots to [DetectionDots.HELD_ALPHA] — "I remember where it was" — so a held
+     * anchor cannot be read as a live measurement. Assigned only on change: this runs at the
+     * projection throttle.
+     */
+    private fun placeDetectionDots(
+        heelX: Float,
+        heelY: Float,
+        toeX: Float,
+        toeY: Float,
+        held: Boolean,
+    ) {
+        val heel = heelDotView
+        val toe = toeDotView
+        if (heel == null || toe == null) return
+        val half = heel.layoutParams.width / 2f
+        heel.x = heelX - half
+        heel.y = heelY - half
+        toe.x = toeX - half
+        toe.y = toeY - half
+        val alpha = if (held) DetectionDots.HELD_ALPHA else 1f
+        if (heel.alpha != alpha) heel.alpha = alpha
+        if (toe.alpha != alpha) toe.alpha = alpha
+        if (heel.visibility != android.view.View.VISIBLE) heel.visibility = android.view.View.VISIBLE
+        if (toe.visibility != android.view.View.VISIBLE) toe.visibility = android.view.View.VISIBLE
+        dotsVisible = true
+    }
+
+    /** One presence ring: white outline, transparent centre, hidden until placed. */
+    private fun makePresenceRing(sizePx: Int): android.view.View =
+        android.view.View(context).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(android.graphics.Color.TRANSPARENT)
+                setStroke(
+                    (3f * resources.displayMetrics.density).toInt(),
+                    android.graphics.Color.WHITE,
+                )
+            }
+            x = -sizePx.toFloat()
+            y = -sizePx.toFloat()
+            visibility = android.view.View.GONE
+            isClickable = false
+            isFocusable = false
+        }
+
+    /**
+     * Presence observation from Dart's gate-confirmed but unmeasurable detections.
+     * Posted to the render thread like [setFootPose]; only the latest is kept.
+     */
+    internal fun setFootPresence(u: Double, v: Double, confidence: Double) {
+        if (mode != Mode.AR) return
+        if (!u.isFinite() || !v.isFinite() || !confidence.isFinite()) return
+        renderHandler.post {
+            presenceU = u
+            presenceV = v
+            presenceHasFix = true
+            presenceLastMsgMs = SystemClock.elapsedRealtime()
+        }
+    }
+
+    /** Ends presence: the gate went negative or a real pose superseded it. */
+    internal fun clearFootPresence() {
+        renderHandler.post {
+            presenceHasFix = false
+            mainHandler.post { hidePresenceRing() }
+        }
+    }
+
+    /** UI-thread hide for the presence ring. */
+    private fun hidePresenceRing() {
+        presenceRingView?.visibility = android.view.View.GONE
+        presenceVisible = false
+    }
+
+    /**
+     * **V4.15's presence draw: the ring at the mask centroid, depth-then-ray projected.**
+     *
+     * The same 3D path as the anchor dots and the same no-floor guarantee — but hidden
+     * whenever the pose dots are visible, because a measurement supersedes a sighting.
+     */
+    private fun updatePresenceDot(frame: Frame) {
+        if (mode != Mode.AR || !footModeRequested || tearingDown) return
+        if (surfaceWidth <= 0 || surfaceHeight <= 0) return
+        // A real pose owns the screen: presence steps aside rather than doubling the draws.
+        if (dotsVisible) {
+            if (presenceVisible) mainHandler.post { hidePresenceRing() }
+            return
+        }
+        if (!presenceHasFix) return
+        val nowMs = SystemClock.elapsedRealtime()
+        if (nowMs - presenceLastMsgMs > DetectionDots.PRESENCE_STALE_MS) {
+            presenceHasFix = false
+            mainHandler.post { hidePresenceRing() }
+            return
+        }
+        if (nowMs - presenceLastComputeMs < DetectionDots.RECOMPUTE_MS) return
+        presenceLastComputeMs = nowMs
+        val world = depthWorldPoint(frame, presenceU, presenceV)
+            ?: rayPointAtDistance(frame, presenceU, presenceV, DetectionDots.FALLBACK_DISTANCE_M)
+            ?: return
+        val proj = FloatArray(16)
+        runCatching {
+            frame.camera.getProjectionMatrix(proj, 0, NEAR_METERS.toFloat(), FAR_METERS.toFloat())
+        }.onFailure { return }
+        // V4.22: the ring is an overlay on the zoomed background, so it projects through the
+        // zoomed projection — the same narrowing the shoe renders through.
+        DetectionDots.applyZoomToProjection(proj, cameraZoom)
+        val cameraMatrix = FloatArray(16)
+        frame.camera.pose.toMatrix(cameraMatrix, 0)
+        val view = DetectionDots.invert4(cameraMatrix) ?: return
+        val px = DetectionDots.projectToPixels(
+            world,
+            DetectionDots.mul4(proj, view),
+            surfaceWidth,
+            surfaceHeight,
+        ) ?: return
+        mainHandler.post {
+            val ring = presenceRingView ?: return@post
+            val half = ring.layoutParams.width / 2f
+            ring.x = px.first - half
+            ring.y = px.second - half
+            if (ring.visibility != android.view.View.VISIBLE) {
+                ring.visibility = android.view.View.VISIBLE
+            }
+            presenceVisible = true
+        }
+    }
+
+    /** UI-thread hide for both dots. */
+    private fun hideDetectionDots() {
+        heelDotView?.visibility = android.view.View.GONE
+        toeDotView?.visibility = android.view.View.GONE
+        dotsVisible = false
+    }
+
+    /**
+     * **V4.13's detection dots: heel/toe anchors with no floor, lock, or shoe required.**
+     *
+     * Runs on the render thread, before [applyFootTracking] consumes the pending observation.
+     * The 3D position is depth-first ([depthWorldPoint] measures the foot's own surface) with a
+     * camera-ray fallback at [DetectionDots.FALLBACK_DISTANCE_M] — the floor hit-test is never
+     * consulted, so dots show on beds, boxes, and plane-less sessions alike. Re-projection is
+     * throttled to [DetectionDots.RECOMPUTE_MS] (depth images are ~30 Hz).
+     *
+     * **Held, not dropped (V4.17).** A gap in the pose stream is not the foot leaving: the
+     * detector runs a few times a second and its gate needs consecutive frames to change its mind,
+     * so a miss must not take the anchors down. [DetectionDots.holdState] decides: a current pose is
+     * `LIVE` (depth re-read, full alpha), a brief gap while the foot is still being seen is `COAST`
+     * (dots held at the last measured world point — moved by the flow carry while it is alive,
+     * dimmed), and only a real loss is `LOST`.
+     *
+     * **A hold without a track does not re-read depth.** A UV the foot has already left measures
+     * whatever is behind it — usually the floor — which is how a hold turns into a jump away from
+     * the foot. With the V4.19 carry alive ([carryHeldAnchors]), the held UVs are the tracked ones,
+     * so the re-read measures the foot again; without it the held world points stay fixed in the
+     * world — the dots still follow the camera correctly, only the foot's own movement during the
+     * gap is unrepresented, which is exactly what a hold is.
+     */
+    private fun updateDetectionDots(frame: Frame) {
+        if (mode != Mode.AR || !footModeRequested || tearingDown) return
+        if (surfaceWidth <= 0 || surfaceHeight <= 0) return
+        val nowMs = SystemClock.elapsedRealtime()
+        // Peek only — consuming is applyFootTracking's job below.
+        val fresh = pendingFootPose
+        if (fresh != null) {
+            dotHeelU = fresh.heelU
+            dotHeelV = fresh.heelV
+            dotToeU = fresh.toeU
+            dotToeV = fresh.toeV
+            dotHasFix = true
+            dotLastObsMs = nowMs
+        }
+        val fix = DetectionDots.holdState(nowMs, dotLastObsMs, presenceLastMsgMs, dotHasFix)
+        if (fix != dotFix) {
+            // One line per transition. "The shoe held through it" and "it let go" are the two
+            // readings a device session needs, and neither is visible in a screenshot.
+            if (fix == DetectionDots.Fix.COAST) {
+                val footWord =
+                    if (nowMs - presenceLastMsgMs <= DetectionDots.PRESENCE_STALE_MS) {
+                        "still seen (presence)"
+                    } else {
+                        "not seen at all"
+                    }
+                relay("dots: holding — no pose for ${nowMs - dotLastObsMs}ms, foot $footWord")
+            } else if (dotFix == DetectionDots.Fix.COAST) {
+                relay(if (fix == DetectionDots.Fix.LIVE) "dots: live again" else "dots: let go")
+            }
+            dotFix = fix
+        }
+        if (fix == DetectionDots.Fix.LOST) {
+            if (dotHasFix) {
+                dotHasFix = false
+                mainHandler.post { hideDetectionDots() }
+            }
+            return
+        }
+        val heelWorld: FloatArray
+        val toeWorld: FloatArray
+        val heelSrc: String
+        val toeSrc: String
+        if (fix == DetectionDots.Fix.LIVE) {
+            if (nowMs - dotLastComputeMs < DetectionDots.RECOMPUTE_MS) return
+            dotLastComputeMs = nowMs
+            val heelDepth = depthWorldPoint(frame, dotHeelU, dotHeelV)
+            heelWorld = heelDepth
+                ?: rayPointAtDistance(frame, dotHeelU, dotHeelV, DetectionDots.FALLBACK_DISTANCE_M)
+                ?: run {
+                    if (nowMs - dotLastRelayMs >= 1_000L) {
+                        dotLastRelayMs = nowMs
+                        relay("dots: no 3D heel (depth + ray both null) — nothing to draw")
+                    }
+                    return
+                }
+            val toeDepth = depthWorldPoint(frame, dotToeU, dotToeV)
+            toeWorld = toeDepth
+                ?: rayPointAtDistance(frame, dotToeU, dotToeV, DetectionDots.FALLBACK_DISTANCE_M)
+                ?: run {
+                    if (nowMs - dotLastRelayMs >= 1_000L) {
+                        dotLastRelayMs = nowMs
+                        relay("dots: no 3D toe (depth + ray both null) — nothing to draw")
+                    }
+                    return
+                }
+            heelSrc = if (heelDepth != null) "depth" else "ray"
+            toeSrc = if (toeDepth != null) "depth" else "ray"
+            dotHeelWorld = heelWorld.copyOf()
+            dotToeWorld = toeWorld.copyOf()
+        } else {
+            val heldHeel = dotHeelWorld
+            val heldToe = dotToeWorld
+            if (heldHeel == null || heldToe == null) return
+            heelWorld = heldHeel
+            toeWorld = heldToe
+            heelSrc = "held"
+            toeSrc = "held"
+        }
+        val proj = FloatArray(16)
+        runCatching {
+            frame.camera.getProjectionMatrix(proj, 0, NEAR_METERS.toFloat(), FAR_METERS.toFloat())
+        }.onFailure { return }
+        // V4.22: dots and the placement readout project through the zoomed projection, matching
+        // the zoomed background pixel-for-pixel. World positions are unzoomed as ever.
+        DetectionDots.applyZoomToProjection(proj, cameraZoom)
+        val cameraMatrix = FloatArray(16)
+        frame.camera.pose.toMatrix(cameraMatrix, 0)
+        val view = DetectionDots.invert4(cameraMatrix) ?: return
+        val viewProj = DetectionDots.mul4(proj, view)
+        // Projection self-check (throttled): a ray point MUST project back onto the view pixel
+        // its ray was cast through — same frame, same pose, same matrix. A mismatch beyond a
+        // few pixels means the ray's pixel space disagrees with the projection matrix (V4.23:
+        // TEXTURE_NORMALIZED × dims vs IMAGE_PIXELS — rotated ~90° apart), which misplaces
+        // every world-anchored draw: dots and shoe.
+        if (nowMs - dotLastCheckMs >= 5_000L) {
+            dotLastCheckMs = nowMs
+            val heelView = FloatArray(2)
+            val heelViewOk = uprightImageUvToPixels(dotHeelU, dotHeelV, heelView)
+            val checkHeel = rayPointAtDistance(frame, dotHeelU, dotHeelV, DetectionDots.FALLBACK_DISTANCE_M)
+            val checkPx = checkHeel?.let { DetectionDots.projectToPixels(it, viewProj, surfaceWidth, surfaceHeight) }
+            // V4.22: `checkPx` is zoomed-screen space (zoomed projection above) while `heelView`
+            // is unzoomed view pixels — map the reference into zoomed space before comparing, so
+            // the self-check stays meaningful off 1x. (The V4.20/V4.21 raw texture/image values
+            // either side of this are read at 1x assumptions; TEMP-DIAG goes before release.)
+            val heelZoomed = if (heelViewOk) {
+                DetectionDots.zoomScreenPoint(heelView[0], heelView[1], surfaceWidth, surfaceHeight, cameraZoom)
+            } else {
+                null
+            }
+            val errPx = if (heelZoomed != null && checkPx != null) {
+                kotlin.math.sqrt(
+                    (checkPx.first - heelZoomed.first) * (checkPx.first - heelZoomed.first) +
+                        (checkPx.second - heelZoomed.second) * (checkPx.second - heelZoomed.second),
+                )
+            } else {
+                -1f
+            }
+            val ratio = if (proj[5] != 0f) proj[0] / proj[5] else Float.NaN
+            // V4.20 probe (TEMP-DIAG): the check above failed every session on this phone
+            // (err 300–2000px, never projection-ok). V4.23 names the cause: the ray was cast
+            // through TEXTURE_NORMALIZED × dims while the intrinsics describe IMAGE_PIXELS —
+            // two spaces rotated ~90° apart — so the error was in our pairing, not ARCore's
+            // round trip. Log each stage's intermediates so the desk can verify
+            // them by hand: screen-centre must map near texture-centre, and the ray through
+            // it must come back. Same 5 s throttle as the check it explains.
+            val probeTex = FloatArray(2)
+            val probeTexOk = heelViewOk && runCatching {
+                frame.transformCoordinates2d(
+                    Coordinates2d.VIEW,
+                    heelView,
+                    Coordinates2d.TEXTURE_NORMALIZED,
+                    probeTex,
+                )
+                true
+            }.getOrDefault(false)
+            // V4.21 probe (TEMP-DIAG): the texture stage is verified clean (a uniform
+            // rotate-crop, exact to 3 decimals), yet the check still fails — so close the
+            // loop on the *CPU image* side instead. IMAGE_PIXELS needs no intrinsics
+            // and no pose: it says which sensor pixel ARCore believes sits under this
+            // view pixel, and the desk compares it against the detector's own pixel
+            // (mask-space heel × CPU dims) under both rotation-direction hypotheses.
+            // A match names the convention; a miss names the transform.
+            val probeImg = FloatArray(2)
+            val probeImgOk = heelViewOk && runCatching {
+                frame.transformCoordinates2d(
+                    Coordinates2d.VIEW,
+                    heelView,
+                    Coordinates2d.IMAGE_PIXELS,
+                    probeImg,
+                )
+                true
+            }.getOrDefault(false)
+            val probeIntrin = frame.camera.imageIntrinsics
+            val probeFocal = probeIntrin.focalLength
+            val probePrincipal = probeIntrin.principalPoint
+            val probeDims = probeIntrin.imageDimensions
+            val probePoseT = FloatArray(3)
+            runCatching { frame.camera.pose.getTranslation(probePoseT, 0) }
+            val probeHits = if (heelViewOk) {
+                runCatching { frame.hitTest(heelView[0], heelView[1]).size }.getOrNull() ?: -1
+            } else {
+                -2
+            }
+            relay(
+                "dots-probe: view-px=" + (if (heelViewOk) "%.0f,%.0f".format(heelView[0], heelView[1]) else "n/a") +
+                    " tex=" + (if (probeTexOk) "%.3f,%.3f".format(probeTex[0], probeTex[1]) else "n/a") +
+                    " imgpx=" + (if (probeImgOk) "%.1f,%.1f".format(probeImg[0], probeImg[1]) else "n/a") +
+                    " uv=%.3f,%.3f".format(dotHeelU, dotHeelV) +
+                    " img=%dx%d f=%.0f,%.0f c=%.0f,%.0f".format(
+                        probeDims[0], probeDims[1], probeFocal[0], probeFocal[1],
+                        probePrincipal[0], probePrincipal[1],
+                    ) + " campos=(%.2f,%.2f,%.2f)".format(probePoseT[0], probePoseT[1], probePoseT[2]) +
+                    " track=${frame.camera.trackingState} hits=$probeHits",
+            )
+            relay(
+                "dots-check: rotation=${currentDisplayRotationDegrees()} surface=${surfaceWidth}x$surfaceHeight " +
+                    "proj00=%.3f proj11=%.3f ratio=%.3f (portrait expects ~%.3f)".format(
+                        proj[0], proj[5], ratio, surfaceHeight.toFloat() / surfaceWidth.toFloat(),
+                    ) + " view-px=" + (if (heelViewOk) "%.0f,%.0f".format(heelView[0], heelView[1]) else "n/a") +
+                    " reproj=" + (checkPx?.let { "%.0f,%.0f".format(it.first, it.second) } ?: "n/a") +
+                    " err=%.0fpx %s".format(errPx, if (errPx >= 0 && errPx > 30) "PROJECTION-MISMATCH" else "projection-ok"),
+            )
+        }
+        val heelPx = DetectionDots.projectToPixels(heelWorld, viewProj, surfaceWidth, surfaceHeight)
+        val toePx = DetectionDots.projectToPixels(toeWorld, viewProj, surfaceWidth, surfaceHeight)
+        // Throttled placement readout: the one line that says whether the dots are on the foot,
+        // off-screen, or behind the camera — the distinction "dots=on but nothing seen" turns on.
+        if (nowMs - dotLastRelayMs >= 1_000L) {
+            dotLastRelayMs = nowMs
+            fun fmt(w: FloatArray, p: Pair<Float, Float>?, src: String): String {
+                val onScreen = p != null && p.first in 0f..surfaceWidth.toFloat() &&
+                    p.second in 0f..surfaceHeight.toFloat()
+                return "$src world=(%.2f,%.2f,%.2f)".format(w[0], w[1], w[2]) + " px=" +
+                    (p?.let { "%.0f,%.0f".format(it.first, it.second) } ?: "behind-camera") +
+                    (if (onScreen) " on-screen" else " OFF-SCREEN") +
+                    " (surface=${surfaceWidth}x$surfaceHeight)"
+            }
+            relay("dots: heel " + fmt(heelWorld, heelPx, heelSrc) +
+                " | toe " + fmt(toeWorld, toePx, toeSrc))
+        }
+        if (heelPx == null) return
+        val held = fix == DetectionDots.Fix.COAST
+        // One anchor is better than none: a toe behind the camera must not take the heel dot down.
+        mainHandler.post {
+            if (toePx != null) {
+                placeDetectionDots(heelPx.first, heelPx.second, toePx.first, toePx.second, held)
+            } else {
+                // Toe unprojectable: park it off-screen, keep the heel.
+                placeDetectionDots(heelPx.first, heelPx.second, -100f, -100f, held)
+            }
+        }
+    }
+
+    /**
+     * **Camera-ray fallback for the dots: a world point at [distM] along the ray through (u, v).**
+     *
+     * The direction is exact (IMAGE_PIXELS + intrinsics, the pairing shared with [depthWorldPoint]);
+     * only the distance is assumed. Indicator-grade, never measurement-grade: it is never fed to the
+     * tracker, the scale correction, or the snapshot.
+     */
+    private fun rayPointAtDistance(frame: Frame, u: Double, v: Double, distM: Float): FloatArray? {
+        if (!uprightImageUvToPixels(u, v, uvScratch)) return null
+        if (frame.camera.trackingState != TrackingState.TRACKING) return null
+        // V4.23: the unprojection pixel is IMAGE_PIXELS, never TEXTURE_NORMALIZED × dims.
+        // The texture space is rotated relative to the CPU image (V4.20 probe: tex.u tracks
+        // the view's y, not its x), while imageIntrinsics are expressed in CPU-image pixels —
+        // pairing texture-space coords with CPU-image intrinsics rotated every ray ~90°, the
+        // 400–2100px dots-check mismatch and the inflated foot lengths. IMAGE_PIXELS is ARCore's
+        // own answer for "which sensor pixel sits under this view pixel": the same space the
+        // intrinsics describe, so no rotation hypothesis is needed.
+        val viewPoint = floatArrayOf(uvScratch[0], uvScratch[1])
+        val imagePoint = FloatArray(2)
+        runCatching {
+            frame.transformCoordinates2d(
+                Coordinates2d.VIEW,
+                viewPoint,
+                Coordinates2d.IMAGE_PIXELS,
+                imagePoint,
+            )
+        }.onFailure { return null }
+        val intrinsics = frame.camera.imageIntrinsics
+        val focal = intrinsics.focalLength
+        val principal = intrinsics.principalPoint
+        val dir = DetectionDots.rayDirection(
+            imagePoint[0],
+            imagePoint[1],
+            focal[0],
+            focal[1],
+            principal[0],
+            principal[1],
+        )
+        val cameraPoint = DetectionDots.pointAlongRay(dir, distM)
+        return runCatching { frame.camera.pose.transformPoint(cameraPoint) }.getOrNull()
+    }
+
+    /**
+     * **V4.16's detection-driven shoe: heel/toe-matched placement, no floor or lock.**
+     *
+     * Runs when the tracker has no anchor: the last dots fix (depth-first, ray fallback —
+     * the same worlds the dots draw) becomes the shoe's heel position and yaw via
+     * [DetectionDots.detectionPlacement], and its heel→toe axis is sized through
+     * [effectiveScaleFor] — **the same pipeline the tracked anchor uses**, so the shoe does not
+     * change size when the tracker takes over. A tracked anchor always wins (early return), and
+     * `placed` is set so the screen-centre auto-placement stands down once a foot is seen.
+     *
+     * **A held fix keeps placing (V4.17).** The same [DetectionDots.holdState] the dots follow gates
+     * this: during a `COAST` the shoe keeps being written at the held world placement, so the
+     * camera moving does not leave a shoe stuck to a screen pixel and a four-second detector gap is
+     * not a four-second freeze. Only `LOST` releases the placement — and even then `placed` stays
+     * true, because a shoe the customer has already seen must not be teleported back to the screen
+     * centre; the coach card's own offer is what takes over.
+     * Pure render-thread state; the placement math is JVM-pinned in [DetectionDotsTest].
+     */
+    /**
+     * **V4.18: does the shoe on screen need to be the mirror of the authored mesh?**
+     *
+     * The customer's detected foot is the authority — a product usually ships one side's asset, and
+     * the alternative to mirroring is no shoe at all or the wrong one — so this compares the
+     * tracker's *confirmed* side against [modelSide] and flips when they differ. Both halves are
+     * guarded: a null on either side draws as authored, and the tracker's own hysteresis
+     * (`SIDE_CHANGE_CONFIRM` consecutive observations, in `FootPoseTracker`) is what keeps a
+     * partial or a two-footed frame from flipping the shoe back and forth.
+     *
+     * Runs once per frame, before the transform writes that read [mirrorSign], and relays on change
+     * only: a shoe that flips is the loudest thing this screen can do, so a log that does not say
+     * so is a session nobody can diagnose.
+     */
+    private fun updateMirroring() {
+        val foot = footTracker.side
+        val model = modelSide
+        val want = foot != null && model != null && !foot.equals(model, ignoreCase = true)
+        if (want == shoeMirrored) return
+        shoeMirrored = want
+        relay(
+            "shoe: drawn " + (if (want) "mirrored" else "as authored") +
+                " — foot=${foot ?: "-"} model=${model ?: "-"}",
+        )
+    }
+
+    /**
+     * The X sign every transform write uses: −1 while the shoe on screen is a mirror.
+     *
+     * Negating one axis flips the model's handedness, which flips triangle winding with it. Filament
+     * handles that: it reverses face winding for a negative-determinant transform, the same rule
+     * glTF's own specification states, so a mirrored shoe is drawn with its outside out and **no**
+     * culling change is needed. If a device ever shows the shoe's interior, the fix is
+     * `MaterialInstance.setCullingMode(Material.CullingMode.NONE)` on the asset's instances — not
+     * dropping the mirror, which would put a right shoe on a left foot.
+     */
+    private fun mirrorSign(): Float = if (shoeMirrored) -1f else 1f
+
+    /**
+     * The authored alignment yaw, **negated while mirrored**.
+     *
+     * Not a fudge: the mirror reaches the mesh before the yaw (the transform is
+     * `T · R(yaw + offset) · S(±1, 1, 1)`), and a reflection about X conjugates a Y rotation into its
+     * inverse — `M · R(θ) · M⁻¹ = R(−θ)`. So a mesh that needed +12° to line its toe up with the foot
+     * needs −12° once mirrored, or the same shoe points 24° off the foot.
+     */
+    private fun drawnYawOffsetDeg(): Float =
+        yawOffsetDeg.toFloat() * (if (shoeMirrored) -1f else 1f)
+
+    private fun applyDetectionPlacement() {
+        if (mode != Mode.AR || !footModeRequested || tearingDown) return
+        val created = engine ?: return
+        if (modelRoot == 0 || asset == null) return
+        if (footTracker.anchor() != null) {
+            detectionPlacedLatched = false
+            return
+        }
+        val fix = DetectionDots.holdState(
+            SystemClock.elapsedRealtime(),
+            dotLastObsMs,
+            presenceLastMsgMs,
+            dotHasFix,
+        )
+        if (fix == DetectionDots.Fix.LOST) {
+            // The hold is over: a later fix announces itself again. `placed` deliberately stays
+            // true — see the note above on why a seen shoe is never teleported back.
+            detectionPlacedLatched = false
+            return
+        }
+        val heel = dotHeelWorld ?: return
+        val toe = dotToeWorld ?: return
+        val placement = DetectionDots.detectionPlacement(heel, toe) ?: return
+        Matrix.setIdentityM(this.placement, 0)
+        Matrix.translateM(this.placement, 0, heel[0], heel[1], heel[2])
+        placedYawDeg = placement.yawDeg.toFloat()
+        placed = true
+        val scale = effectiveScaleFor(placement.axisMeters)
+        val matrix = FloatArray(16)
+        Matrix.setIdentityM(matrix, 0)
+        Matrix.translateM(matrix, 0, heel[0], heel[1], heel[2])
+        Matrix.rotateM(matrix, 0, placedYawDeg + drawnYawOffsetDeg(), 0f, 1f, 0f)
+        Matrix.scaleM(matrix, 0, scale * mirrorSign(), scale, scale)
+        runCatching { writeModelTransform(created, matrix) }
+            .onFailure { t -> Log.w(TAG, "detection placement setTransform failed", t) }
+        // One line per (re)acquisition, and no line while the same fix is merely held: the dots'
+        // own hold/let-go lines carry that state, so the two do not double-report one gap.
+        if (fix == DetectionDots.Fix.LIVE) {
+            if (!detectionPlacedLatched) {
+                detectionPlacedLatched = true
+                relay(
+                    "shoe detection-placed len=%.0fmm yaw=%.1f scale=%.3f".format(
+                        placement.axisMeters * 1000.0,
+                        placement.yawDeg,
+                        scale,
+                    ),
+                )
+            }
+        } else {
+            detectionPlacedLatched = false
+        }
+    }
+
     private fun applyFootTracking(frame: Frame) {
         if (mode != Mode.AR || !footModeRequested) return
 
         val observation = pendingFootPose
         if (observation != null) pendingFootPose = null
+        // V4.18: the side is learned from *every* observation, not only from the ones the floor and
+        // depth gates accept — the detection-placed shoe runs on exactly the frames those gates
+        // reject, and it still has to be the right foot's shoe. See
+        // [FootPoseTracker.observeSide].
+        observation?.let { footTracker.observeSide(it.side) }
         // V4.11: between detector frames, the heel and toe are followed through the camera image, so
         // the shoe moves with the foot instead of waiting for the next detection.
         val carrying = flowHeel != null
-        val pyramid = if (observation != null || carrying) acquireFlowPyramid(frame) else null
+        // ARCore returns the last camera image again between camera frames. Reading it again tracks
+        // zero motion and spends the carry's decay, so the pyramid is built once per new image.
+        val newImage = frame.timestamp != lastFlowTimestampNs
+        val tracking = observation != null || (carrying && newImage)
+        val pyramid = if (tracking) acquireFlowPyramid(frame) else null
+        if (pyramid != null) lastFlowTimestampNs = frame.timestamp
         if (pyramid != null) {
             val nowMs = SystemClock.elapsedRealtime()
             if (nowMs - lastSharpnessMs >= SHARPNESS_INTERVAL_MS) {
@@ -2877,10 +3785,10 @@ class ArTryOnView(
         if (observation != null) {
             sampleFoot(frame, observation)?.let { emitFootLock(it) }
             rememberFlowAnchor(frame, observation)
-        } else if (carrying) {
+        } else if (carrying && newImage) {
             carryFoot(frame, pyramid)
         }
-        if (observation != null || carrying) flowPrev = pyramid
+        if (tracking) flowPrev = pyramid
         footTracker.onFrame(SystemClock.elapsedRealtime())?.let { emitFootLock(it) }
 
         // Draw from the eased anchor. Note what is *not* checked: the lock. The lock is a
@@ -2955,6 +3863,8 @@ class ArTryOnView(
      * a light/texture problem, not a detection one.
      */
     private fun rejectPose(reason: String) {
+        // A refused reading breaks the stability streak: a capture needs consecutive samples.
+        snapshotStabilizer.reset()
         poseRejects++
         lastPoseRejectReason = reason
         val now = SystemClock.elapsedRealtime()
@@ -2980,24 +3890,39 @@ class ArTryOnView(
         observation: FootPoseTracker.Observation,
     ): FootPoseTracker.LockChange? {
         // Depth first: the foot's own surface, with no floor needed. Both endpoints must come from
-        // depth, or neither — a mix would put the heel and toe at different heights.
+        // depth, or neither — a mix would put the heel and toe at different heights. A depth pair whose
+        // length is outside the foot range is not trusted (depth can return a point on the floor or the
+        // background), so the floor under the foot is tried before the sample is refused.
         val surfaceHeel = depthWorldPoint(frame, observation.heelU, observation.heelV)
         val surfaceToe = depthWorldPoint(frame, observation.toeU, observation.toeV)
+        val depthPair: Pair<FloatArray, FloatArray>? =
+            surfaceHeel?.let { heel -> surfaceToe?.let { toe -> heel to toe } }
+                ?.takeIf { (heel, toe) ->
+                    planarFootAxisMeters(heel, toe) in MIN_PLAUSIBLE_FOOT_M..MAX_PLAUSIBLE_FOOT_M
+                }
         val heelPos: FloatArray
         val toePos: FloatArray
-        if (surfaceHeel != null && surfaceToe != null) {
+        if (depthPair != null) {
             // The depth point is on the foot's own surface, so its height is used as-is: there is no
             // floor to measure from. Vertical placement is unverified on a device until a fit is run.
-            heelPos = surfaceHeel
-            toePos = surfaceToe
+            heelPos = depthPair.first
+            toePos = depthPair.second
             if (++depthSamplesAccepted == 1) relay("foot: depth surface in use (no floor needed)")
         } else {
+            // The floor path: the measurement from the plane under the foot, used when depth is missing
+            // or its length is implausible. The depth length is named in the reason when there was one.
+            val depthNote =
+                if (surfaceHeel != null && surfaceToe != null) {
+                    " (depth %.0fmm)".format(planarFootAxisMeters(surfaceHeel, surfaceToe) * 1000)
+                } else {
+                    ""
+                }
             val heel =
                 hitTestFloorPoint(frame, observation.heelU, observation.heelV)
-                    ?: run { rejectPose("no heel plane") ; return null }
+                    ?: run { rejectPose("no heel plane$depthNote") ; return null }
             val toe =
                 hitTestFloorPoint(frame, observation.toeU, observation.toeV)
-                    ?: run { rejectPose("no toe plane") ; return null }
+                    ?: run { rejectPose("no toe plane$depthNote") ; return null }
             heelPos = floatArrayOf(heel.tx(), heel.ty(), heel.tz())
             toePos = floatArrayOf(toe.tx(), toe.ty(), toe.tz())
         }
@@ -3031,16 +3956,28 @@ class ArTryOnView(
         }
         jumpRejectStreak = 0
         lastAcceptedHeel = heelPos
+        val snapshotReading = snapshotStabilizer.offer(
+            DoubleArray(3) { heelPos[it].toDouble() },
+            DoubleArray(3) { toePos[it].toDouble() },
+        )
 
         // Per-sample readout for the diagnostic log: the first few, then one every 30, so the file
         // shows where the heel and toe were placed and how long the foot measured.
         if (footSampleLogs < 3 || footSampleLogs % 30 == 0) {
             relay(
                 "foot sample #$footSampleLogs src=" +
-                    (if (surfaceHeel != null && surfaceToe != null) "depth" else "floor") +
+                    (if (depthPair != null) "depth" else "floor") +
                     " heel=(" + "%.3f,%.3f,%.3f".format(heelPos[0], heelPos[1], heelPos[2]) + ")m" +
-                    " len=" + "%.0f".format(axis * 1000) + "mm",
+                    " len=" + "%.0f".format(axis * 1000) + "mm" + (FootSnapshot.pose(DoubleArray(3) { heelPos[it].toDouble() }, DoubleArray(3) { toePos[it].toDouble() })?.let { " pitch=%.1f yaw=%.1f snap=%.0fmm".format(it.pitchDeg, it.yawDeg, it.lengthMeters * 1000) } ?: " snap=refused") + " stable=${snapshotReading.count}/${FootSnapshot.REQUIRED_SAMPLES}" + (if (snapshotReading.pose != null) " ACCEPTED" else ""),
             )
+        }
+        // The first accepted still-capture pose of the session, reported once. The stabilizer keeps
+        // answering with a pose for every later agreeing sample, so the flag is what makes this one event.
+        snapshotReading.pose?.let { pose ->
+            if (!snapshotDelivered) {
+                snapshotDelivered = true
+                emitFootSnapshot(pose)
+            }
         }
         footSampleLogs++
         poseRejectsAccepted++
@@ -3157,6 +4094,9 @@ class ArTryOnView(
         val camera = frame.camera
         if (camera.trackingState != TrackingState.TRACKING) return null
         // Upright pixels → normalized texture coordinates, the space the depth image is indexed in.
+        // (V4.23: texture space is correct for *sampling the depth image* — both textures span the
+        // same sensor frame — but it is rotated vs the CPU image, so it must never reach the
+        // intrinsics below. The unprojection pixel comes from IMAGE_PIXELS instead.)
         val viewPoint = floatArrayOf(uvScratch[0], uvScratch[1])
         val texturePoint = FloatArray(2)
         frame.transformCoordinates2d(
@@ -3165,6 +4105,15 @@ class ArTryOnView(
             Coordinates2d.TEXTURE_NORMALIZED,
             texturePoint,
         )
+        val imagePoint = FloatArray(2)
+        runCatching {
+            frame.transformCoordinates2d(
+                Coordinates2d.VIEW,
+                viewPoint,
+                Coordinates2d.IMAGE_PIXELS,
+                imagePoint,
+            )
+        }.onFailure { return null }
         val depthImage = runCatching { frame.acquireDepthImage16Bits() }.getOrNull() ?: return null
         val depthMm =
             try {
@@ -3176,11 +4125,10 @@ class ArTryOnView(
         val intrinsics = camera.imageIntrinsics
         val focal = intrinsics.focalLength
         val principal = intrinsics.principalPoint
-        val dims = intrinsics.imageDimensions
         val cameraPoint =
             unprojectToCameraSpace(
-                texturePoint[0] * dims[0],
-                texturePoint[1] * dims[1],
+                imagePoint[0],
+                imagePoint[1],
                 depthMm / 1000f,
                 focal[0],
                 focal[1],
@@ -3255,6 +4203,7 @@ class ArTryOnView(
         flowSide = observation.side
         flowConfidence = observation.confidence
         flowDetectedMs = SystemClock.elapsedRealtime()
+        heldCarryRelayed = false
     }
 
     /**
@@ -3298,6 +4247,10 @@ class ArTryOnView(
         }
         flowHeel = heelPx
         flowToe = toePx
+        // V4.19: the held detection anchors ride these tracked points — see [carryHeldAnchors].
+        // The tracker feed below is untouched: the anchor follows while the gates pass, the held
+        // worlds follow while the hold lasts, and each expires on its own clock.
+        carryHeldAnchors(frame, heelUv, toeUv, nowMs)
         flowConfidence *= FLOW_CONFIDENCE_DECAY
         flowCarries++
         sampleFoot(
@@ -3313,6 +4266,45 @@ class ArTryOnView(
         )?.let { emitFootLock(it) }
     }
 
+    /**
+     * **V4.19: the held detection anchors ride the optical-flow track through a dropout.**
+     *
+     * The problem this closes: during a `COAST` the dots and the detection-placed shoe were drawn
+     * from world points measured before the gap, so a foot that kept moving left a shoe holding
+     * still — fixed in the world, following the camera but not the foot. The tracked UVs from this
+     * frame are the foot's current position in the image, so re-measuring depth (ray fallback, like
+     * the LIVE branch) at them moves the held worlds with the foot instead.
+     *
+     * What it deliberately does not do:
+     *
+     *  • **Never extends the hold.** [dotLastObsMs] is untouched — [DetectionDots.heldCarryDue]
+     *    only answers true inside a `COAST` the hold rule already granted, so a patch tracked onto
+     *    the background moves the shoe but cannot keep it alive past the hold's own expiry.
+     *  • **Never half-moves.** Both endpoints must re-measure or neither does: one fresh world and
+     *    one stale one is a foot-length glitch the detection placement would then size from.
+     *  • **Never fights LIVE.** The LIVE branch owns its own re-measure; this runs only for a held
+     *    fix, so there is one writer per state.
+     */
+    private fun carryHeldAnchors(frame: Frame, heelUv: DoubleArray, toeUv: DoubleArray, nowMs: Long) {
+        if (!DetectionDots.heldCarryDue(nowMs, lastHeldCarryMs, dotFix, dotHasFix)) return
+        lastHeldCarryMs = nowMs
+        val heelWorld = depthWorldPoint(frame, heelUv[0], heelUv[1])
+            ?: rayPointAtDistance(frame, heelUv[0], heelUv[1], DetectionDots.FALLBACK_DISTANCE_M)
+        val toeWorld = depthWorldPoint(frame, toeUv[0], toeUv[1])
+            ?: rayPointAtDistance(frame, toeUv[0], toeUv[1], DetectionDots.FALLBACK_DISTANCE_M)
+        if (heelWorld == null || toeWorld == null) return
+        dotHeelU = heelUv[0]
+        dotHeelV = heelUv[1]
+        dotToeU = toeUv[0]
+        dotToeV = toeUv[1]
+        dotHeelWorld = heelWorld
+        dotToeWorld = toeWorld
+        if (!heldCarryRelayed) {
+            heldCarryRelayed = true
+            relay("flow: carrying held anchors through the gap")
+        }
+    }
+
     /** Ends the carry and forgets the tracked points. Logs how long it ran, if it did. */
     private fun clearFlow() {
         if (flowCarries > 0) relay("flow carry ended after $flowCarries frames")
@@ -3321,6 +4313,7 @@ class ArTryOnView(
         flowToe = null
         flowPrev = null
         flowSide = null
+        heldCarryRelayed = false
     }
 
     /** An upright-image UV → camera-image pixels, through the view. Null when not mappable yet. */
@@ -3382,32 +4375,35 @@ class ArTryOnView(
         Matrix.translateM(placement, 0, anchor.x.toFloat(), anchor.y.toFloat(), anchor.z.toFloat())
         placedYawDeg = anchor.yawDeg.toFloat()
         placed = true
-        val scale = effectiveScale(anchor)
+        val scale = effectiveScaleFor(anchor.lengthMeters)
         val matrix = FloatArray(16)
         Matrix.setIdentityM(matrix, 0)
         Matrix.translateM(matrix, 0, placement[12], placement[13], placement[14])
-        Matrix.rotateM(matrix, 0, placedYawDeg + yawOffsetDeg.toFloat(), 0f, 1f, 0f)
-        Matrix.scaleM(matrix, 0, scale, scale, scale)
+        Matrix.rotateM(matrix, 0, placedYawDeg + drawnYawOffsetDeg(), 0f, 1f, 0f)
+        Matrix.scaleM(matrix, 0, scale * mirrorSign(), scale, scale)
         runCatching { writeModelTransform(created, matrix) }
             .onFailure { t -> Log.w(TAG, "foot setTransform failed", t) }
     }
 
     /**
-     * **V4.3's ×N, in one place for both transform paths.**
+     * **V4.3's ×N, in one place for all three transform paths.**
      *
      * Two factors already existed here — the selected size and the authored length — and the foot
      * measurement is the third. The multiplication lives in this function rather than at each
-     * call site for the reason [authoredLengthCorrection] is a function: the load's transform and
-     * the tracker's per-frame transform must agree, and a shoe that changes size the first time
-     * the tracker takes over is the one thing an anchor swap must not do.
+     * call site for the reason [authoredLengthCorrection] is a function: the load's transform, the
+     * tracker's per-frame transform and V4.16's detection placement must agree, and a shoe that
+     * changes size the first time the tracker takes over is the one thing an anchor swap must not
+     * do.
      *
-     * The anchor is passed in rather than read from the tracker so the per-frame path pays one
-     * lookup and cannot be scaled for an anchor other than the one it is drawing. A null anchor —
-     * preview mode, or the seconds before the first accepted pose — is the size chart's answer,
-     * untouched ([FootScaleCorrection.factor] answers ×1).
+     * The length is passed in rather than read from the tracker so the per-frame path pays one
+     * lookup and cannot be scaled for a foot other than the one it is drawing — and so the
+     * detection path, which has no anchor, can be sized by the same pipeline from its own heel→toe
+     * axis (`applyDetectionPlacement`). A null length — preview mode, or the seconds before the
+     * first accepted pose — is the size chart's answer, untouched ([FootScaleCorrection.factor]
+     * answers ×1).
      */
-    private fun effectiveScale(footAnchor: FootPoseTracker.Anchor?): Float {
-        val frame = FootScaleCorrection.factor(footAnchor?.lengthMeters, renderedLastMm)
+    private fun effectiveScaleFor(lengthMeters: Double?): Float {
+        val frame = FootScaleCorrection.factor(lengthMeters, renderedLastMm)
         return (sizeScale * authoredLengthCorrection() * frame).toFloat()
     }
 
@@ -3438,6 +4434,30 @@ class ArTryOnView(
             mapOf(
                 "lengthMm" to measure.lengthMeters * 1000.0,
                 "quality" to measure.quality,
+            ),
+        )
+    }
+
+    /**
+     * One `footSnapshot` event: the still-capture pose the viewer fits its shoe to (see
+     * [FootSnapshot.Pose]). The length is the same heel→toe measurement `footMeasure` carries, read from
+     * the accepted capture instead of the live reading.
+     */
+    private fun emitFootSnapshot(pose: FootSnapshot.Pose) {
+        Log.i(
+            TAG,
+            "footSnapshot yaw=%.1f pitch=%.1f len=%.0fmm".format(
+                pose.yawDeg,
+                pose.pitchDeg,
+                pose.lengthMeters * 1000.0,
+            ),
+        )
+        listener.onEvent(
+            "footSnapshot",
+            mapOf(
+                "yawDeg" to pose.yawDeg,
+                "pitchDeg" to pose.pitchDeg,
+                "lengthMm" to pose.lengthMeters * 1000.0,
             ),
         )
     }
@@ -3585,6 +4605,9 @@ class ArTryOnView(
             Log.w(TAG, "rayToFloor: no projection matrix yet", t)
             return null
         }
+        // V4.22: tap/auto-place rays leave from zoomed screen pixels, so they travel through the
+        // zoomed projection — the same narrowing as everything else on screen.
+        DetectionDots.applyZoomToProjection(projection, cameraZoom)
         // For a standard GL perspective matrix the first and sixth entries are 1/tanHalfFov.
         val p00 = projection[0].toDouble()
         val p11 = projection[5].toDouble()
@@ -3758,6 +4781,12 @@ class ArTryOnView(
         modelRoot = 0
         pendingFootPose = null
         pendingFootMask = null
+        // V4.13: the loop is stopped, so no fresh fix will hide stale dots — hide them now.
+        dotHasFix = false
+        dotFix = DetectionDots.Fix.LOST
+        mainHandler.post { hideDetectionDots() }
+        presenceHasFix = false
+        mainHandler.post { hidePresenceRing() }
         cachedFrameBytes = null
         footTracker.reset()
         runCatching { session?.close() }
@@ -3912,11 +4941,11 @@ class ArTryOnView(
         /**
          * How often the render loop converts a camera image to NV21 for the Dart detector.
          *
-         * 150 ms, the scan plugin's own value: Dart reads at 5 Hz, so every tick finds a frame
-         * that is at most ~150 ms old while the conversion is paid at two-thirds of the render
-         * rate at most.
+         * 75 ms: Dart reads at 10 Hz, so every tick finds a frame that is at most ~75 ms old
+         * while the conversion stays far below the render rate. Raised with the V4.14 fast-
+         * detection pass — a stale cached frame would eat the whole gain of the faster tick.
          */
-        const val CAMERA_FRAME_INTERVAL_MS = 150L
+        const val CAMERA_FRAME_INTERVAL_MS = 75L
 
         /**
          * How often the tracker's live measurement is published to Dart (V4.6).
@@ -3986,8 +5015,14 @@ class ArTryOnView(
         /** Camera-image decimation for the carry-over tracker (see [FootFlow]). */
         const val FLOW_DECIMATE = 4
 
-        /** How long the shoe is carried on tracked points after the detector last placed the foot. */
-        const val FLOW_WINDOW_MS = 1500L
+        /**
+         * How long the shoe is carried on tracked points after the detector last placed the foot.
+         *
+         * Matches [DetectionDots.COAST_MS] on purpose: the carry is what moves held anchors through
+         * the gap (V4.19), so a window shorter than the hold would carry the tracker for half the
+         * hold and leave the dots and the detection-placed shoe holding still for the rest of it.
+         */
+        const val FLOW_WINDOW_MS = 3000L
 
         /** Confidence kept per carried frame, so the lock lapses if the detector stays silent. */
         const val FLOW_CONFIDENCE_DECAY = 0.9

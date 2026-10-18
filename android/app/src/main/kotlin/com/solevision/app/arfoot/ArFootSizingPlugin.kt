@@ -126,6 +126,28 @@ class ArFootSizingPlugin(private val activity: Activity) {
         currentView = null
     }
 
+    /**
+     * The app's own logcat, read back from the device's ring buffer and returned as text. A
+     * process may always read the lines it wrote itself, so no permission is needed. Runs off the
+     * main thread; the reply is posted back on it, as MethodChannel.Result requires.
+     */
+    private fun handleDumpLogcat(result: MethodChannel.Result) {
+        Thread {
+            val text = try {
+                val pid = android.os.Process.myPid()
+                val proc = Runtime.getRuntime().exec(
+                    arrayOf("logcat", "-d", "-v", "threadtime", "--pid=$pid"),
+                )
+                val out = proc.inputStream.bufferedReader().use { it.readText() }
+                proc.waitFor()
+                out
+            } catch (e: Exception) {
+                "logcat unavailable: ${e.message}"
+            }
+            mainHandler.post { result.success(text) }
+        }.start()
+    }
+
     private fun handleMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             // TEMPORARY (Phase 1b diagnostics): Dart hands over the nav log
@@ -135,6 +157,9 @@ class ArFootSizingPlugin(private val activity: Activity) {
                 DiagRelay.setFile(call.argument<String>("path"))
                 result.success(null)
             }
+            // TEMPORARY (Phase 1b diagnostics): this app's own logcat, for the
+            // share export. Remove with DiagRelay.kt.
+            "dumpLogcat" -> handleDumpLogcat(result)
             "startSession" -> handleStartSession(result)
             "retrySession" -> handleRetrySession(result)
             "checkAvailability" -> handleCheckAvailability(result)

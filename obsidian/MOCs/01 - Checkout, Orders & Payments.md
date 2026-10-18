@@ -93,6 +93,10 @@ Seller taps GCash → `_createPendingOrder()` (`status='received'`, `payment_sta
 - `payment_fee_config` — singleton (id=1): `rate_bps` seeded 223 (2.23%), `vat_bps` 1200 (12%), editable only via `set_payment_fee_config` admin RPC.
 - Legacy (#5): `gcash_payment_proofs` (ref 12–13 digits, platform-unique), `order_payment_events` (append-only), `payment-proofs` private bucket.
 
+## 🎟️ Vouchers (v1.0.26)
+
+- Coupon code entered at checkout, discount applied to the order. `lib/services/voucher_service.dart` (+ `test/services/voucher_service_test.dart`), seller-side management in `lib/screens/seller/vouchers_screen.dart`.
+
 ## 💰 Fee model (Model B — surcharge to customer)
 
 `charged = ceil_to_cent(total / (1 − r_total))`, `r_total = (rate_bps/10000) * (1 + vat_bps/10000)`. Fee is **disclosed as its own line item**, recomputed server-side at intent creation, re-verified by the webhook, snapshotted per order so seller revenue on `total_amount` stays honest.

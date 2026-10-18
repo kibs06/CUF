@@ -50,6 +50,7 @@ import 'package:flutter/foundation.dart';
 import '../../services/ar_try_on_channel.dart';
 import '../../services/shoe_model_service.dart';
 import '../../utils/foot_detector.dart';
+import '../../utils/foot_mask.dart';
 import '../../utils/foot_pose.dart';
 import '../../utils/mlkit_segmentation_foot_detector.dart';
 import '../../utils/shoe_model_resolver.dart';
@@ -58,12 +59,19 @@ import '../../utils/try_on_fit.dart';
 import 'try_on_mode.dart';
 import 'try_on_phase.dart';
 
-/// §2.11's detector cadence: one observation every 200 ms (5 Hz).
+/// The detector cadence: one observation every 100 ms (10 Hz).
 ///
-/// The same number the scan samples at, so the try-on cannot be the reason a
-/// phone's battery or thermals behave differently from the flow already in
-/// customers' hands.
-const Duration kFootTrackInterval = Duration(milliseconds: 200);
+/// Twice the scan's rate on purpose. The try-on's first job is *fast* feedback
+/// (dots on the foot within a few hundred ms of it entering frame), and the
+/// scan's 200 ms number was chosen for battery/thermal parity with a flow that
+/// records samples — this loop publishes reversible observations the native
+/// lock hysteresis re-judges, so a faster tick costs CPU, never correctness.
+/// The overlap guard drops ticks the detector cannot keep up with, so a slow
+/// phone degrades to its own sustainable rate rather than queueing stale poses.
+const Duration kFootTrackInterval = Duration(milliseconds: 100);
+
+/// Ticks between presence refreshes while the ring persists (~1 s).
+const int kPresenceRefreshTicks = 10;
 
 /// How many consecutive loop failures stop the loop.
 ///
@@ -169,9 +177,13 @@ class TryOnSessionController extends ChangeNotifier {
   final ValueNotifier<String?> nativeStatusLine =
       ValueNotifier<String?>(null);
 
-  /// The same temporal gate the scan uses, at the same defaults: "a foot" must
-  /// mean one thing in this app.
-  final TemporalFootGate _footGate = TemporalFootGate();
+  /// The scan's temporal gate with a faster confirmation: two consecutive
+  /// positives instead of three. One lucky frame is still never a foot, but the
+  /// first pose leaves after ~200 ms rather than ~600 ms — and a false positive
+  /// costs nothing here: observations are reversible, the native lock hysteresis
+  /// (§2.9's 0.7/0.45) stays the only authority that can declare a lock, and
+  /// the dots simply hide again after [DetectionDots.STALE_MS] without follow-up.
+  final TemporalFootGate _footGate = TemporalFootGate(confirmAfter: 2);
 
   bool _footLocked = false;
   double _footQuality = 0;
@@ -181,6 +193,13 @@ class TryOnSessionController extends ChangeNotifier {
   /// pose: whether a foot was seen at all, and how it sits in the frame.
   bool _footSeen = false;
   TryOnFootFraming _footFraming = TryOnFootFraming.unknown;
+
+  /// V4.15 presence state: whether native currently draws the ring, and how
+  /// many ticks since its last refresh. Edge-triggered with a ~1 s refresh
+  /// (10 ticks at the 100 ms cadence) so presence costs one channel call per
+  /// appearance, not one per tick.
+  bool _presenceShown = false;
+  int _presenceTicksSinceRefresh = 0;
 
   /// Ticks elapsed without a lock — **a counted duration, not a wall clock.**
   /// The loop's own cadence is the clock (exact under `fakeAsync`, where
@@ -274,6 +293,13 @@ class TryOnSessionController extends ChangeNotifier {
   /// wakes exactly the card that draws it instead of the whole tree.
   final ValueNotifier<TryOnLiveFoot> liveFoot =
       ValueNotifier<TryOnLiveFoot>(const TryOnLiveFoot());
+
+  /// The session's first still-capture pose, or null until the native side reports one.
+  ///
+  /// Set once per session. The AR screen in capture mode listens here and hands the pose back to
+  /// the viewer, which fits its shoe to it.
+  final ValueNotifier<TryOnFootSnapshotEvent?> footSnapshot =
+      ValueNotifier<TryOnFootSnapshotEvent?>(null);
 
   /// **V4.5: the customer accepted the manual-placement offer.** The card stops
   /// offering and says where to tap instead; the tap itself is V3.4's native
@@ -534,6 +560,20 @@ class TryOnSessionController extends ChangeNotifier {
     }
   }
 
+  /// **V4.22: camera zoom** — the fitting screen's slider, forwarded to the
+  /// native view. Same contract as [setTorch]: only a real session has a feed
+  /// to zoom, so the simulated feed keeps zero channel traffic, and a failed
+  /// tick is retried by the slider's next tick rather than surfaced.
+  Future<void> setCameraZoom(double zoom) async {
+    if (_mode != TryOnMode.real) return;
+    if (_disposed) return;
+    try {
+      await _channel.setCameraZoom(zoom);
+    } catch (e) {
+      debugPrint('[TryOn] camera zoom request failed: $e');
+    }
+  }
+
   // ═════════════════════════════════════════════════════════════════
   // 3. FOOT TRACKING LOOP (V4)
   // ═════════════════════════════════════════════════════════════════
@@ -564,6 +604,8 @@ class TryOnSessionController extends ChangeNotifier {
   void _stopFootTracking() {
     _footTimer?.cancel();
     _footTimer = null;
+    // V4.15: a stopped loop must not leave the ring latched on.
+    unawaited(_clearPresence());
     // V4.5: a stopped loop is the offer, not a silence — see `_refreshCoachCue`.
     _refreshCoachCue();
     // V4.6: a stopped loop has no live reading. Whatever number is in the
@@ -638,7 +680,14 @@ class TryOnSessionController extends ChangeNotifier {
           ? TryOnFootFraming.unknown
           : footFramingFromDetection(detection);
       _refreshCoachCue();
-      if (pose == null) return;
+      if (pose == null) {
+        // V4.15: presence without measurement — the gate sees a foot the pose
+        // converter cannot use (no heel/toe axis yet). Publish the mask focus
+        // so native draws the ring; a pose later supersedes it.
+        await _publishPresence(detection, confirmed);
+        return;
+      }
+      await _clearPresence();
 
       await _channel.setFootPose(pose);
       if (_disposed) return;
@@ -683,6 +732,71 @@ class TryOnSessionController extends ChangeNotifier {
     } finally {
       _footTickInProgress = false;
     }
+  }
+
+  /// Publishes presence-without-measurement for a confirmed detection the pose
+  /// converter cannot use, or clears a stale ring.
+  ///
+  /// Auxiliary like the mask send: its own try/catch, never the loop's failure
+  /// counter — a ring that fails to draw must not stop the poses behind it.
+  Future<void> _publishPresence(
+    FootDetectionResult detection,
+    bool confirmed,
+  ) async {
+    // V4.17: **the gate is the authority, not one frame.** A single
+    // `footDetected == false` sample used to clear the ring outright — the very
+    // one-frame flicker `TemporalFootGate` exists to prevent, since it requires
+    // `clearAfter` consecutive negatives before it stops confirming a foot.
+    // Clearing only on `!confirmed` is what the note below has always claimed, and
+    // it is what lets a brief miss leave the ring — and natively the held
+    // detection placement — standing instead of blinking out.
+    if (!confirmed) {
+      await _clearPresence();
+      return;
+    }
+    final mask = detection.mask;
+    final focus = mask == null ? null : maskFocusUv(mask);
+    if (focus == null) return;
+    // Keep the last shown focus alive without re-deciding: a null on a later
+    // tick is a thin frame, not proof the foot left — the gate's negatives
+    // (via `confirmed == false`) are what clear the ring.
+    _presenceTicksSinceRefresh++;
+    if (_presenceShown && _presenceTicksSinceRefresh < kPresenceRefreshTicks) {
+      return;
+    }
+    try {
+      await _channel.setFootPresence(
+        FootPresenceFrame(focusUv: focus, confidence: detection.qualityScore),
+      );
+      _presenceShown = true;
+      _presenceTicksSinceRefresh = 0;
+    } catch (e) {
+      debugPrint('[TryOn] foot presence send failed — no ring this frame: $e');
+    }
+  }
+
+  /// Clears a shown ring: the gate went negative or a real pose superseded it.
+  Future<void> _clearPresence() async {
+    _presenceTicksSinceRefresh = 0;
+    if (!_presenceShown) return;
+    _presenceShown = false;
+    try {
+      await _channel.clearFootPresence();
+    } catch (e) {
+      debugPrint('[TryOn] foot presence clear failed: $e');
+    }
+  }
+
+  /// Publishes the session's still-capture pose (see [footSnapshot]).
+  ///
+  /// A pose with a non-finite or non-positive length is dropped rather than published, the same
+  /// refusal [_applyFootMeasure] makes, so a listener never acts on a pose it cannot use.
+  void _applyFootSnapshot(TryOnFootSnapshotEvent event) {
+    if (_disposed) return;
+    if (_mode != TryOnMode.real) return;
+    if (!event.lengthMm.isFinite || event.lengthMm <= 0) return;
+    if (!event.yawDeg.isFinite || !event.pitchDeg.isFinite) return;
+    footSnapshot.value = event;
   }
 
   /// Applies one native `footMeasure` to the live reading (V4.6).
@@ -812,6 +926,9 @@ class TryOnSessionController extends ChangeNotifier {
           notifyListeners();
         }
 
+      case final TryOnFootSnapshotEvent snapshot:
+        _applyFootSnapshot(snapshot);
+
       case TryOnScreenshotEvent():
       case ArTryOnUnknownEvent():
         // Screenshots normally return on the `captureScreenshot` call (V3.7);
@@ -879,6 +996,7 @@ class TryOnSessionController extends ChangeNotifier {
     // under the same contract as the event stream below.
     coachCue.dispose();
     liveFoot.dispose();
+    footSnapshot.dispose();
     nativeStatusLine.dispose();
     _eventSubscription?.cancel();
     // D1: no Dart-initiated stopSession — the platform view owns native teardown.

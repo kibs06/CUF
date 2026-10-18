@@ -57,6 +57,11 @@ class ARVirtualFitScreen extends StatefulWidget {
   /// *side effects*, not just what is painted.
   final bool tryOnEnabled;
 
+  /// **Capture mode (the viewer's "Capture to fit").** When true, the screen closes itself once the
+  /// session reports its first still-capture pose, and hands that pose back as the route's result.
+  /// A session that never reports one leaves the customer to close the screen, as before.
+  final bool captureFit;
+
   /// Test seam: a session controller to drive instead of building one.
   final TryOnSessionController? tryOnSessionController;
 
@@ -74,6 +79,7 @@ class ARVirtualFitScreen extends StatefulWidget {
     this.tryOnEnabled = AppConstants.tryOnV3Enabled,
     this.tryOnSessionController,
     this.tryOnViewBuilder,
+    this.captureFit = false,
   });
 
   @override
@@ -88,6 +94,9 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen>
   
   late ValueNotifier<bool> _isTracking;
   bool _showTutorial = true;
+
+  /// Set once the capture has been handed back, so a second snapshot cannot pop the route twice.
+  bool _captured = false;
   bool _isAddingToCart = false;
 
   /// The V3 session. Present only when the switch is on **and** the entry says a
@@ -141,6 +150,12 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen>
     /// only honest brightener is more light: this drives the phone's flash through
     /// the session (`ArTryOnView.setTorch`), and the chip lights up while it is on.
   bool _torchOn = false;
+
+  /// **V4.22: camera zoom.** The AR feed centre-crops the wide sensor into the
+  /// tall screen (~2x look, blurry at 1x); the slider answers with a wider
+  /// letterboxed 0.7x or a 2x punch-in. View-only on the native side, so the
+  /// shoe stays glued at any zoom. Reset to 1x whenever the view goes away.
+  double _cameraZoom = 1.0;
   
   late AnimationController _pulseController;
   late AnimationController _particleController;
@@ -216,6 +231,7 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen>
       _tryOn!.addListener(_onTryOnChanged);
       _tryOn!.prepareModel();
     }
+    if (widget.captureFit) _tryOn?.footSnapshot.addListener(_onFootSnapshot);
 
     // Simulated tracking lock on after 2.5 seconds, in a timer this screen can
     // cancel: V4.8's 20-open/close rule is exactly about what a `Future.delayed`
@@ -254,6 +270,7 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen>
     // not disposed here (its owner still holds it), so it must not keep a dead
     // state listening across the 20 open/close cycles this screen has to survive.
     _tryOn?.removeListener(_onTryOnChanged);
+    _tryOn?.footSnapshot.removeListener(_onFootSnapshot);
     if (_ownsTryOn) _tryOn?.dispose();
     _isTracking.dispose();
     super.dispose();
@@ -277,6 +294,14 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen>
   /// that the page a customer came from has already paid for.
   bool get _tryOnWanted => widget.tryOnEnabled && widget.modelAvailable;
 
+  /// Capture mode's exit: hands the first still-capture pose back to the viewer and closes.
+  void _onFootSnapshot() {
+    final pose = _tryOn?.footSnapshot.value;
+    if (pose == null || !mounted || _captured) return;
+    _captured = true;
+    Navigator.of(context).pop(pose);
+  }
+
   /// Rebuilds on the session's own events, and **falls back rather than sticking**.
   void _onTryOnChanged() {
     final controller = _tryOn;
@@ -290,7 +315,12 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen>
     // here, so a product without a model can never be shown a session.
     final desired = _tryOnWanted && !degraded;
     if (desired != _tryOnShowingView) {
-      setState(() => _tryOnShowingView = desired);
+      setState(() {
+        _tryOnShowingView = desired;
+        // V4.22: the native view dies with the old session and a fresh view starts
+        // at 1x — reset the slider with it so the two never disagree on reopen.
+        if (!desired) _cameraZoom = 1.0;
+      });
     }
     if (_tryOnShowingView && controller.phase == TryOnPhase.searching) {
       // Real ARCore tracking replaces the simulated 2.5 s lock-on.
@@ -641,6 +671,62 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen>
               ),
             ),
 
+          // V4.22: camera zoom — a camera-app zoom bar above the bottom panel. The feed
+          // arrives looking ~2x (ARCore centre-crops the wide sensor into the tall
+          // screen), and a blurry crop at 1x reads as a broken camera: 0.7x letterboxes
+          // wider with thin bars, 2x punches in, and the shoe stays glued either way
+          // (zoom is view-only on the native side). Shown exactly when the real view
+          // is on screen: the simulated feed has no camera to zoom.
+          if (_tryOnShowingView)
+            Positioned(
+              left: 20,
+              right: 20,
+              bottom: 232,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                  child: Container(
+                    color: Colors.black.withValues(alpha: 0.4),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.zoom_out,
+                          color: AppConstants.surfaceLight,
+                          size: 18,
+                        ),
+                        Expanded(
+                          child: Slider(
+                            value: _cameraZoom,
+                            min: 0.7,
+                            max: 2.0,
+                            divisions: 13,
+                            label: '${_cameraZoom.toStringAsFixed(1)}x',
+                            onChanged: (v) {
+                              setState(() => _cameraZoom = v);
+                              _tryOn?.setCameraZoom(v);
+                            },
+                          ),
+                        ),
+                        SizedBox(
+                          width: 36,
+                          child: Text(
+                            '${_cameraZoom.toStringAsFixed(1)}x',
+                            style: AppConstants.bodyStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: AppConstants.inkInverse,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
           // V4.5/V4.6/V4.7: the coaching column — the saved-size suggestion
           // above the live fit verdict above the coach card, over the camera.
           // Gated twice on purpose: the real view has to be the one on screen
@@ -657,7 +743,8 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen>
             Positioned(
               left: 20,
               right: 20,
-              bottom: 246,
+              // V4.22: lifted to clear the zoom bar (232 + pill height).
+              bottom: 292,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [

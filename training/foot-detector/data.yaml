@@ -1,0 +1,18 @@
+# Ultralytics YOLO-pose dataset config: portal foot detector.
+# One class (foot) with two keypoints (heel, toe). Paths are relative to
+# this file's directory.
+
+path: datasets/foot
+train: images/train
+val: images/val
+
+names:
+  0: foot
+
+# [num_keypoints, dims]; dims=3 means x, y, visibility per point.
+kpt_shape: [2, 3]
+
+# No horizontal-flip keypoint swap: with a single symmetric schema
+# (heel, toe) a mirror needs no relabeling. If left/right foot classes
+# are added later, define flip_idx here.
+flip_idx: [0, 1]

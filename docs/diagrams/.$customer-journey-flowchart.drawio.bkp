@@ -1,0 +1,1618 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" agent="SoleVision journey generator" version="24.7.17">
+    <diagram id="page-1" name="1 Open the app">
+      <mxGraphModel dx="0" dy="0" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="1497" math="0" shadow="0">
+        <root>
+          <mxCell id="0" />
+          <mxCell id="1" parent="0" />
+        <mxCell id="p1-start" value="START" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=14;fontStyle=1;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="450" y="130" width="230" height="88" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-open" value="The customer opens the app&lt;br&gt;on their phone." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="260" width="290" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-load" value="A short loading screen&lt;br&gt;checks for updates." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="386" width="290" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-signed" value="Are they already&lt;br&gt;signed in?" style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;perimeter=rhombusPerimeter;" vertex="1" parent="1">
+          <mxGeometry x="410" y="512" width="310" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-exit-6-right" value="Continue on page 6&lt;br&gt;Home" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=12;fontStyle=1;fontColor=#000000;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="845" y="541" width="200" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-firsttime" value="First time&lt;br&gt;opening it?" style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;perimeter=rhombusPerimeter;" vertex="1" parent="1">
+          <mxGeometry x="410" y="704" width="310" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-slides" value="Show the three welcome&lt;br&gt;slides — they can skip them." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="825" y="737" width="240" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-c-A-out" value="A" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=15;fontStyle=1;fontColor=#000000;aspect=fixed;perimeter=ellipsePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="921" y="863" width="48" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-screen" value="Show the Sign up and Sign in&lt;br&gt;screen. One screen — the video&lt;br&gt;keeps playing." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="896" width="290" height="103" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-whichtap" value="What do they tap?" style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;perimeter=rhombusPerimeter;" vertex="1" parent="1">
+          <mxGeometry x="410" y="1041" width="310" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-exit-2-right" value="Continue on page 2&lt;br&gt;Create an account" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=12;fontStyle=1;fontColor=#000000;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="845" y="1070" width="200" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-exit-5-left" value="Continue on page 5&lt;br&gt;Sign in" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=12;fontStyle=1;fontColor=#000000;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="50" y="1070" width="210" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-note1" value="Shop owners tap Apply to sell&lt;br&gt;and fill in a different form." style="rounded=0;whiteSpace=wrap;html=1;dashed=1;dashPattern=4 4;fillColor=none;strokeColor=#000000;fontSize=12;fontColor=#000000;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=10;" vertex="1" parent="1">
+          <mxGeometry x="30" y="1204" width="250" height="72" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-note2" value="Sign in is a switch on the&lt;br&gt;same screen — the video&lt;br&gt;never restarts." style="rounded=0;whiteSpace=wrap;html=1;dashed=1;dashPattern=4 4;fillColor=none;strokeColor=#000000;fontSize=12;fontColor=#000000;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=10;" vertex="1" parent="1">
+          <mxGeometry x="825" y="1204" width="240" height="91" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-legend" value="How to read this chart:&lt;br&gt;oval = the start or the end  ·  rectangle = a step  ·  diamond = a question&lt;br&gt;pentagon = the story continues on the page written inside it&lt;br&gt;small circle with a letter = the flow jumps back to the same letter" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;dashPattern=4 4;fillColor=none;strokeColor=#000000;fontSize=12;fontColor=#000000;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=10;" vertex="1" parent="1">
+          <mxGeometry x="50" y="1321" width="1000" height="106" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-c-A-in" value="A" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=15;fontStyle=1;fontColor=#000000;aspect=fixed;perimeter=ellipsePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="825" y="924" width="48" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-title" value="1 · Open the app" style="text;html=1;fontSize=22;fontStyle=1;align=left;verticalAlign=middle;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="60" y="42" width="700" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-subtitle" value="SoleVision — what the customer does · page 1 of 14" style="text;html=1;fontSize=12;align=left;verticalAlign=middle;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="60" y="76" width="700" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="e1-1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p1-start" target="p1-open">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e1-2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p1-open" target="p1-load">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e1-3" value="No" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p1-load" target="p1-signed">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e1-4" value="Yes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p1-signed" target="p1-exit-6-right">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e1-5" value="No" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p1-signed" target="p1-firsttime">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e1-6" value="Yes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p1-firsttime" target="p1-slides">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e1-7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p1-slides" target="p1-c-A-out">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e1-8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p1-firsttime" target="p1-screen">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e1-9" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p1-screen" target="p1-whichtap">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e1-10" value="Sign up" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p1-whichtap" target="p1-exit-2-right">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e1-11" value="Sign in" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0;exitY=0.5;exitPerimeter=0;entryX=1;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p1-whichtap" target="p1-exit-5-left">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e1-12" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0;exitY=0.5;exitPerimeter=0;entryX=1;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p1-c-A-in" target="p1-screen">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        </root>
+      </mxGraphModel>
+    </diagram>
+    <diagram id="page-2" name="2 Create an account">
+      <mxGraphModel dx="0" dy="0" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="1391" math="0" shadow="0">
+        <root>
+          <mxCell id="0" />
+          <mxCell id="1" parent="0" />
+        <mxCell id="p2-entry-1" value="From page 1&lt;br&gt;they tapped Sign up" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=12;fontStyle=1;fontColor=#000000;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="420" y="130" width="290" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-form" value="They fill in the Create Account form:&lt;br&gt;name · email · phone if they like,&lt;br&gt;birthday by picking a date —&lt;br&gt;must be 13 or older,&lt;br&gt;gender if they like,&lt;br&gt;password plus confirm,&lt;br&gt;a strength hint as they type,&lt;br&gt;and accept the Terms." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="264" width="290" height="198" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-filled" value="Is every box filled&lt;br&gt;in right, Terms accepted?" style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;perimeter=rhombusPerimeter;" vertex="1" parent="1">
+          <mxGeometry x="410" y="504" width="310" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-fixbox" value="Show a message on the box&lt;br&gt;that needs fixing." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="825" y="537" width="240" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-c-A-out" value="A" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=15;fontStyle=1;fontColor=#000000;aspect=fixed;perimeter=ellipsePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="921" y="663" width="48" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-emailused" value="Is this email&lt;br&gt;already registered?" style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;perimeter=rhombusPerimeter;" vertex="1" parent="1">
+          <mxGeometry x="410" y="696" width="310" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-used" value="Tell them the email is already&lt;br&gt;in use — they can sign in or&lt;br&gt;use another one." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="825" y="753" width="240" height="103" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-c-B-out" value="B" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=15;fontStyle=1;fontColor=#000000;aspect=fixed;perimeter=ellipsePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="921" y="898" width="48" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-create" value="Create the account." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="888" width="290" height="65" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-confirmneed" value="Must the email&lt;br&gt;be confirmed? Usual is yes." style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;perimeter=rhombusPerimeter;" vertex="1" parent="1">
+          <mxGeometry x="410" y="995" width="310" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-exit-4-right" value="Continue on page 4&lt;br&gt;Add their foot size" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=12;fontStyle=1;fontColor=#000000;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="845" y="1024" width="200" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-exit-3" value="Continue on page 3&lt;br&gt;Confirm the email" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=12;fontStyle=1;fontColor=#000000;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="420" y="1187" width="290" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-note1" value="The new account cannot be used&lt;br&gt;yet — the email must&lt;br&gt;be confirmed first." style="rounded=0;whiteSpace=wrap;html=1;dashed=1;dashPattern=4 4;fillColor=none;strokeColor=#000000;fontSize=12;fontColor=#000000;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=10;" vertex="1" parent="1">
+          <mxGeometry x="30" y="1188" width="250" height="91" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-note2" value="When no confirm is needed,&lt;br&gt;they skip the code and&lt;br&gt;go straight to foot size." style="rounded=0;whiteSpace=wrap;html=1;dashed=1;dashPattern=4 4;fillColor=none;strokeColor=#000000;fontSize=12;fontColor=#000000;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=10;" vertex="1" parent="1">
+          <mxGeometry x="825" y="1188" width="240" height="91" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-c-A-in" value="A" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=15;fontStyle=1;fontColor=#000000;aspect=fixed;perimeter=ellipsePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="825" y="295" width="48" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-c-B-in" value="B" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=15;fontStyle=1;fontColor=#000000;aspect=fixed;perimeter=ellipsePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="825" y="394" width="48" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-title" value="2 · Create an account" style="text;html=1;fontSize=22;fontStyle=1;align=left;verticalAlign=middle;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="60" y="42" width="700" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-subtitle" value="SoleVision — what the customer does · page 2 of 14" style="text;html=1;fontSize=12;align=left;verticalAlign=middle;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="60" y="76" width="700" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="e2-1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p2-entry-1" target="p2-form">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2-2" value="Yes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p2-form" target="p2-filled">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2-3" value="No" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p2-filled" target="p2-fixbox">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2-4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p2-fixbox" target="p2-c-A-out">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2-5" value="No" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p2-filled" target="p2-emailused">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2-6" value="Yes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p2-emailused" target="p2-used">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2-7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p2-used" target="p2-c-B-out">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2-8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p2-emailused" target="p2-create">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2-9" value="Yes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p2-create" target="p2-confirmneed">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2-10" value="No" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p2-confirmneed" target="p2-exit-4-right">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2-11" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p2-confirmneed" target="p2-exit-3">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2-12" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0;exitY=0.5;exitPerimeter=0;entryX=1;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p2-c-A-in" target="p2-form">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2-13" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0;exitY=0.5;exitPerimeter=0;entryX=1;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p2-c-B-in" target="p2-form">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        </root>
+      </mxGraphModel>
+    </diagram>
+    <diagram id="page-3" name="3 Confirm the email">
+      <mxGraphModel dx="0" dy="0" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="1273" math="0" shadow="0">
+        <root>
+          <mxCell id="0" />
+          <mxCell id="1" parent="0" />
+        <mxCell id="p3-entry-2" value="From page 2&lt;br&gt;the account was created" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=12;fontStyle=1;fontColor=#000000;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="420" y="130" width="290" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-send" value="We email a 6-digit code&lt;br&gt;plus a Confirm button.&lt;br&gt;The code shows a countdown." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="264" width="290" height="103" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-howconfirm" value="How do they&lt;br&gt;confirm it?" style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;perimeter=rhombusPerimeter;" vertex="1" parent="1">
+          <mxGeometry x="410" y="409" width="310" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-button" value="They tap the button in the&lt;br&gt;email — it opens the app&lt;br&gt;and confirms the account." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="30" y="433" width="250" height="103" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-exit-5-right" value="Continue on page 5&lt;br&gt;Sign in" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=12;fontStyle=1;fontColor=#000000;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="845" y="438" width="200" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-typecode" value="They type the 6-digit code&lt;br&gt;in the app." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="601" width="290" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-correct" value="Is the code right&lt;br&gt;and still valid?" style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;perimeter=rhombusPerimeter;" vertex="1" parent="1">
+          <mxGeometry x="410" y="727" width="310" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-wrong" value="Show an error message." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="825" y="770" width="240" height="65" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-resend" value="They can ask for a new code —&lt;br&gt;a minute has to pass first.&lt;br&gt;Too many tries are flagged." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="825" y="877" width="240" height="103" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-c-A-out" value="A" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=15;fontStyle=1;fontColor=#000000;aspect=fixed;perimeter=ellipsePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="921" y="1022" width="48" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-done" value="Account confirmed —&lt;br&gt;they are signed in." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="919" width="290" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-exit-4" value="Continue on page 4&lt;br&gt;Add their foot size" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=12;fontStyle=1;fontColor=#000000;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="420" y="1045" width="290" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-note1" value="They can close the app and&lt;br&gt;confirm later — it is asked&lt;br&gt;again next time." style="rounded=0;whiteSpace=wrap;html=1;dashed=1;dashPattern=4 4;fillColor=none;strokeColor=#000000;fontSize=12;fontColor=#000000;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=10;" vertex="1" parent="1">
+          <mxGeometry x="30" y="1046" width="250" height="91" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-note2" value="Back to sign in stops here —&lt;br&gt;the account stays unconfirmed&lt;br&gt;until they confirm." style="rounded=0;whiteSpace=wrap;html=1;dashed=1;dashPattern=4 4;fillColor=none;strokeColor=#000000;fontSize=12;fontColor=#000000;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=10;" vertex="1" parent="1">
+          <mxGeometry x="825" y="1112" width="240" height="91" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-c-A-in" value="A" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=15;fontStyle=1;fontColor=#000000;aspect=fixed;perimeter=ellipsePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="825" y="619" width="48" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-title" value="3 · Confirm the email" style="text;html=1;fontSize=22;fontStyle=1;align=left;verticalAlign=middle;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="60" y="42" width="700" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-subtitle" value="SoleVision — what the customer does · page 3 of 14" style="text;html=1;fontSize=12;align=left;verticalAlign=middle;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="60" y="76" width="700" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="e3-1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p3-entry-2" target="p3-send">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e3-2" value="Type the code" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p3-send" target="p3-howconfirm">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e3-3" value="The email" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0;exitY=0.5;exitPerimeter=0;entryX=1;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p3-howconfirm" target="p3-button">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e3-4" value="Back to sign in" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p3-howconfirm" target="p3-exit-5-right">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e3-5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p3-howconfirm" target="p3-typecode">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e3-6" value="Yes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p3-typecode" target="p3-correct">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e3-7" value="No" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p3-correct" target="p3-wrong">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e3-8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p3-wrong" target="p3-resend">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e3-9" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p3-resend" target="p3-c-A-out">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e3-10" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p3-correct" target="p3-done">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e3-11" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p3-button" target="p3-done">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="155" y="961" />
+            </Array>
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e3-12" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p3-done" target="p3-exit-4">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e3-13" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0;exitY=0.5;exitPerimeter=0;entryX=1;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p3-c-A-in" target="p3-typecode">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        </root>
+      </mxGraphModel>
+    </diagram>
+    <diagram id="page-4" name="4 Add their foot size">
+      <mxGraphModel dx="0" dy="0" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="1100" math="0" shadow="0">
+        <root>
+          <mxCell id="0" />
+          <mxCell id="1" parent="0" />
+        <mxCell id="p4-entry-3-2" value="From pages 3 or 2&lt;br&gt;account ready — code&lt;br&gt;done or no code needed" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=12;fontStyle=1;fontColor=#000000;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="420" y="130" width="290" height="111" as="geometry" />
+        </mxCell>
+        <mxCell id="p4-ask" value="Ask them to add foot size.&lt;br&gt;Shown once. Never blocks —&lt;br&gt;the account already exists." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="283" width="290" height="103" as="geometry" />
+        </mxCell>
+        <mxCell id="p4-choose" value="What do they&lt;br&gt;choose?" style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;perimeter=rhombusPerimeter;" vertex="1" parent="1">
+          <mxGeometry x="410" y="428" width="310" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="p4-scan" value="Scan feet with the phone&lt;br&gt;camera. Best pick.&lt;br&gt;If it fails or access is denied,&lt;br&gt;they land back here." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="30" y="442" width="250" height="122" as="geometry" />
+        </mxCell>
+        <mxCell id="p4-manual" value="Type size and width&lt;br&gt;themselves. Must pick&lt;br&gt;a size first or it asks again." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="825" y="452" width="240" height="103" as="geometry" />
+        </mxCell>
+        <mxCell id="p4-skip" value="Or skip for now. Instant —&lt;br&gt;we remind them on Home later." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="620" width="290" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p4-saved" value="Size saved — or we remind&lt;br&gt;them on the Home screen later." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="746" width="290" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p4-exit-6" value="Continue on page 6&lt;br&gt;Home" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=12;fontStyle=1;fontColor=#000000;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="420" y="872" width="290" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="p4-note1" value="The scan opens on top,&lt;br&gt;so backing out lands&lt;br&gt;exactly back here." style="rounded=0;whiteSpace=wrap;html=1;dashed=1;dashPattern=4 4;fillColor=none;strokeColor=#000000;fontSize=12;fontColor=#000000;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=10;" vertex="1" parent="1">
+          <mxGeometry x="825" y="873" width="240" height="91" as="geometry" />
+        </mxCell>
+        <mxCell id="p4-title" value="4 · Add their foot size" style="text;html=1;fontSize=22;fontStyle=1;align=left;verticalAlign=middle;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="60" y="42" width="700" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="p4-subtitle" value="SoleVision — what the customer does · page 4 of 14" style="text;html=1;fontSize=12;align=left;verticalAlign=middle;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="60" y="76" width="700" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="e4-1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p4-entry-3-2" target="p4-ask">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e4-2" value="Skip for now" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p4-ask" target="p4-choose">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e4-3" value="Scan" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0;exitY=0.5;exitPerimeter=0;entryX=1;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p4-choose" target="p4-scan">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e4-4" value="Type it in" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p4-choose" target="p4-manual">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e4-5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p4-choose" target="p4-skip">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e4-6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p4-skip" target="p4-saved">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e4-7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p4-scan" target="p4-saved">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="155" y="773" />
+            </Array>
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e4-8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=1;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p4-manual" target="p4-saved">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="945" y="803" />
+            </Array>
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e4-9" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p4-saved" target="p4-exit-6">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        </root>
+      </mxGraphModel>
+    </diagram>
+    <diagram id="page-5" name="5 Sign in">
+      <mxGraphModel dx="0" dy="0" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="2017" math="0" shadow="0">
+        <root>
+          <mxCell id="0" />
+          <mxCell id="1" parent="0" />
+        <mxCell id="p5-entry-1-3" value="From pages 1 or 3&lt;br&gt;they want to sign in" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=12;fontStyle=1;fontColor=#000000;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="420" y="130" width="290" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-creds" value="They type email and password.&lt;br&gt;Empty boxes or a short password&lt;br&gt;are flagged first." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="264" width="290" height="103" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-forgot" value="Forgot password&lt;br&gt;tapped?" style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;perimeter=rhombusPerimeter;" vertex="1" parent="1">
+          <mxGeometry x="410" y="409" width="310" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-resetlink" value="We email a link to set&lt;br&gt;a new one." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="825" y="442" width="240" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-resetdone" value="They open the link on the phone,&lt;br&gt;set a new password —&lt;br&gt;they are signed in." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="825" y="568" width="240" height="103" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-c-C-out" value="C" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=15;fontStyle=1;fontColor=#000000;aspect=fixed;perimeter=ellipsePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="921" y="713" width="48" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-password" value="Is the password&lt;br&gt;correct?" style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;perimeter=rhombusPerimeter;" vertex="1" parent="1">
+          <mxGeometry x="410" y="601" width="310" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-error" value="Show the same error for a wrong&lt;br&gt;email or password —&lt;br&gt;they can try again." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="825" y="803" width="240" height="103" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-c-A-out" value="A" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=15;fontStyle=1;fontColor=#000000;aspect=fixed;perimeter=ellipsePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="921" y="948" width="48" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-newdevice" value="Is this a phone the&lt;br&gt;app already knows?" style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;perimeter=rhombusPerimeter;" vertex="1" parent="1">
+          <mxGeometry x="410" y="793" width="310" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-code" value="We email a 6-digit code.&lt;br&gt;They type it to prove it is&lt;br&gt;really them. If the mail fails,&lt;br&gt;the reason shows on the&lt;br&gt;same screen." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="30" y="798" width="250" height="141" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-signedin" value="They are signed in.&lt;br&gt;Checks below still apply —&lt;br&gt;new accounts skip them." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="985" width="290" height="103" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-blocked" value="Is the account&lt;br&gt;suspended?" style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;perimeter=rhombusPerimeter;" vertex="1" parent="1">
+          <mxGeometry x="410" y="1130" width="310" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-stopped" value="They see why it is closed.&lt;br&gt;Signing out leaves the screen." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="825" y="1163" width="240" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-profile" value="Does the profile&lt;br&gt;load?" style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;perimeter=rhombusPerimeter;" vertex="1" parent="1">
+          <mxGeometry x="410" y="1322" width="310" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-retry" value="Show Retry. They can try&lt;br&gt;again or sign out." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="825" y="1355" width="240" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-c-B-out" value="B" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=15;fontStyle=1;fontColor=#000000;aspect=fixed;perimeter=ellipsePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="921" y="1481" width="48" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-mfa" value="Is an extra code&lt;br&gt;needed? New accounts skip." style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;perimeter=rhombusPerimeter;" vertex="1" parent="1">
+          <mxGeometry x="410" y="1514" width="310" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-mfacode" value="They type the code from their&lt;br&gt;authenticator app. A lost phone&lt;br&gt;can mail a code. They can&lt;br&gt;also sign out." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="30" y="1528" width="250" height="122" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-home" value="They see the Home screen." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="1706" width="290" height="65" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-exit-6" value="Continue on page 6&lt;br&gt;Home" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=12;fontStyle=1;fontColor=#000000;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="420" y="1813" width="290" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-note1" value="Too many wrong tries locks&lt;br&gt;the screen for a while." style="rounded=0;whiteSpace=wrap;html=1;dashed=1;dashPattern=4 4;fillColor=none;strokeColor=#000000;fontSize=12;fontColor=#000000;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=10;" vertex="1" parent="1">
+          <mxGeometry x="30" y="1833" width="250" height="72" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-note2" value="On their own phone they can sign&lt;br&gt;in with a fingerprint next time.&lt;br&gt;First sign in offers&lt;br&gt;to turn it on." style="rounded=0;whiteSpace=wrap;html=1;dashed=1;dashPattern=4 4;fillColor=none;strokeColor=#000000;fontSize=12;fontColor=#000000;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=10;" vertex="1" parent="1">
+          <mxGeometry x="825" y="1795" width="240" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-c-C-in" value="C" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=15;fontStyle=1;fontColor=#000000;aspect=fixed;perimeter=ellipsePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="825" y="982" width="48" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-c-A-in" value="A" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=15;fontStyle=1;fontColor=#000000;aspect=fixed;perimeter=ellipsePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="825" y="292" width="48" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-c-B-in" value="B" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=15;fontStyle=1;fontColor=#000000;aspect=fixed;perimeter=ellipsePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="825" y="1043" width="48" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-title" value="5 · Sign in" style="text;html=1;fontSize=22;fontStyle=1;align=left;verticalAlign=middle;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="60" y="42" width="700" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-subtitle" value="SoleVision — what the customer does · page 5 of 14" style="text;html=1;fontSize=12;align=left;verticalAlign=middle;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="60" y="76" width="700" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="e5-1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p5-entry-1-3" target="p5-creds">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5-2" value="No" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p5-creds" target="p5-forgot">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5-3" value="Yes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p5-forgot" target="p5-resetlink">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5-4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p5-resetlink" target="p5-resetdone">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5-5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p5-resetdone" target="p5-c-C-out">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5-6" value="Yes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p5-forgot" target="p5-password">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5-7" value="No" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p5-password" target="p5-error">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5-8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p5-error" target="p5-c-A-out">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5-9" value="Yes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p5-password" target="p5-newdevice">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5-10" value="No" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0;exitY=0.5;exitPerimeter=0;entryX=1;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p5-newdevice" target="p5-code">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5-11" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p5-newdevice" target="p5-signedin">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5-12" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p5-code" target="p5-signedin">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="155" y="1037" />
+            </Array>
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5-13" value="No" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p5-signedin" target="p5-blocked">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5-14" value="Yes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p5-blocked" target="p5-stopped">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5-15" value="Yes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p5-blocked" target="p5-profile">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5-16" value="No" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p5-profile" target="p5-retry">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5-17" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p5-retry" target="p5-c-B-out">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5-18" value="No" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p5-profile" target="p5-mfa">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5-19" value="Yes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0;exitY=0.5;exitPerimeter=0;entryX=1;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p5-mfa" target="p5-mfacode">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5-20" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p5-mfa" target="p5-home">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5-21" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p5-mfacode" target="p5-home">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="155" y="1739" />
+            </Array>
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5-22" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p5-home" target="p5-exit-6">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5-23" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0;exitY=0.5;exitPerimeter=0;entryX=1;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p5-c-C-in" target="p5-signedin">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5-24" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0;exitY=0.5;exitPerimeter=0;entryX=1;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p5-c-A-in" target="p5-creds">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5-25" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0;exitY=0.5;exitPerimeter=0;entryX=1;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p5-c-B-in" target="p5-signedin">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        </root>
+      </mxGraphModel>
+    </diagram>
+    <diagram id="page-6" name="6 Home">
+      <mxGraphModel dx="0" dy="0" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="1100" math="0" shadow="0">
+        <root>
+          <mxCell id="0" />
+          <mxCell id="1" parent="0" />
+        <mxCell id="p6-entry-1" value="From page 1&lt;br&gt;already signed in" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=12;fontStyle=1;fontColor=#000000;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="50" y="130" width="168" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="p6-entry-4" value="From page 4&lt;br&gt;foot size is set" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=12;fontStyle=1;fontColor=#000000;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="258" y="130" width="168" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="p6-entry-5" value="From page 5&lt;br&gt;they signed in" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=12;fontStyle=1;fontColor=#000000;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="466" y="130" width="168" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="p6-entry-11" value="From page 11&lt;br&gt;order is done" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=12;fontStyle=1;fontColor=#000000;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="674" y="130" width="168" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="p6-entry-12" value="From page 12&lt;br&gt;shop replied" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=12;fontStyle=1;fontColor=#000000;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="882" y="130" width="168" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="p6-home" value="The Home screen shows a search box, the cart,&lt;br&gt;Men’s · Women’s · Kids’, picks in their size,&lt;br&gt;items on sale and a grid of products." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="50" y="264" width="1000" height="103" as="geometry" />
+        </mxCell>
+        <mxCell id="p6-tabs" value="Four tabs sit at the bottom of every screen:&lt;br&gt;Home · Store · Notifications · Profile." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="50" y="409" width="1000" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p6-go" value="From Home they can go anywhere:" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="50" y="535" width="1000" height="65" as="geometry" />
+        </mxCell>
+        <mxCell id="p6-exit-7" value="Continue on page 7&lt;br&gt;Browse the shops" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=12;fontStyle=1;fontColor=#000000;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="50" y="642" width="182" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="p6-exit-12" value="Continue on page 12&lt;br&gt;Talk to the shop" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=12;fontStyle=1;fontColor=#000000;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="254" y="642" width="182" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="p6-exit-10" value="Continue on page 10&lt;br&gt;Cart and payment" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=12;fontStyle=1;fontColor=#000000;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="459" y="642" width="182" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="p6-exit-11" value="Continue on page 11&lt;br&gt;Track the order" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=12;fontStyle=1;fontColor=#000000;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="663" y="642" width="182" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="p6-exit-13" value="Continue on page 13&lt;br&gt;Profile and settings" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=12;fontStyle=1;fontColor=#000000;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="868" y="642" width="182" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="p6-title" value="6 · Home" style="text;html=1;fontSize=22;fontStyle=1;align=left;verticalAlign=middle;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="60" y="42" width="700" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="p6-subtitle" value="SoleVision — what the customer does · page 6 of 14" style="text;html=1;fontSize=12;align=left;verticalAlign=middle;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="60" y="76" width="700" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="e6-1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p6-entry-1" target="p6-home">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e6-2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p6-entry-4" target="p6-home">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e6-3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p6-entry-5" target="p6-home">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e6-4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p6-entry-11" target="p6-home">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e6-5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p6-entry-12" target="p6-home">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e6-6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p6-home" target="p6-tabs">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e6-7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p6-tabs" target="p6-go">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e6-8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p6-go" target="p6-exit-7">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e6-9" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p6-go" target="p6-exit-12">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e6-10" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p6-go" target="p6-exit-10">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e6-11" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p6-go" target="p6-exit-11">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e6-12" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p6-go" target="p6-exit-13">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        </root>
+      </mxGraphModel>
+    </diagram>
+    <diagram id="page-7" name="7 Browse the shops">
+      <mxGraphModel dx="0" dy="0" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="1337" math="0" shadow="0">
+        <root>
+          <mxCell id="0" />
+          <mxCell id="1" parent="0" />
+        <mxCell id="p7-entry-6" value="From page 6&lt;br&gt;they tapped Store" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=12;fontStyle=1;fontColor=#000000;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="420" y="130" width="290" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="p7-shops" value="The Store tab shows every shop,&lt;br&gt;with its name, rating and what it sells." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="264" width="290" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p7-open" value="Open a shop to see its products,&lt;br&gt;or search for a pair." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="390" width="290" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p7-narrow" value="Do they want to&lt;br&gt;narrow it down?" style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;perimeter=rhombusPerimeter;" vertex="1" parent="1">
+          <mxGeometry x="410" y="516" width="310" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="p7-filters" value="Search, or filter by size,&lt;br&gt;colour, price or shop." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="825" y="549" width="240" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p7-product" value="They open a product: photos, the 3D view,&lt;br&gt;the sizes still in stock and the reviews." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="708" width="290" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p7-next" value="What do they do next?" style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;perimeter=rhombusPerimeter;" vertex="1" parent="1">
+          <mxGeometry x="410" y="834" width="310" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="p7-exit-8-right" value="Continue on page 8&lt;br&gt;Try the shoes on" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=12;fontStyle=1;fontColor=#000000;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="845" y="863" width="200" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="p7-exit-9-left" value="Continue on page 9&lt;br&gt;Make it their own" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=12;fontStyle=1;fontColor=#000000;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="50" y="863" width="210" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="p7-cart" value="Add it to the cart." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="1026" width="290" height="65" as="geometry" />
+        </mxCell>
+        <mxCell id="p7-exit-10" value="Continue on page 10&lt;br&gt;Cart and payment" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=12;fontStyle=1;fontColor=#000000;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="420" y="1133" width="290" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="p7-note1" value="They can also reserve a pair&lt;br&gt;to collect at the shop — free,&lt;br&gt;held for 24 hours." style="rounded=0;whiteSpace=wrap;html=1;dashed=1;dashPattern=4 4;fillColor=none;strokeColor=#000000;fontSize=12;fontColor=#000000;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=10;" vertex="1" parent="1">
+          <mxGeometry x="825" y="1134" width="240" height="91" as="geometry" />
+        </mxCell>
+        <mxCell id="p7-title" value="7 · Browse the shops" style="text;html=1;fontSize=22;fontStyle=1;align=left;verticalAlign=middle;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="60" y="42" width="700" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="p7-subtitle" value="SoleVision — what the customer does · page 7 of 14" style="text;html=1;fontSize=12;align=left;verticalAlign=middle;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="60" y="76" width="700" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="e7-1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p7-entry-6" target="p7-shops">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e7-2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p7-shops" target="p7-open">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e7-3" value="No" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p7-open" target="p7-narrow">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e7-4" value="Yes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p7-narrow" target="p7-filters">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e7-5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p7-narrow" target="p7-product">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e7-6" value="Add it to the cart" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p7-product" target="p7-next">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e7-7" value="Try it on" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p7-next" target="p7-exit-8-right">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e7-8" value="Design it" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0;exitY=0.5;exitPerimeter=0;entryX=1;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p7-next" target="p7-exit-9-left">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e7-9" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p7-next" target="p7-cart">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e7-10" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p7-cart" target="p7-exit-10">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        </root>
+      </mxGraphModel>
+    </diagram>
+    <diagram id="page-8" name="8 Try the shoes on">
+      <mxGraphModel dx="0" dy="0" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="1126" math="0" shadow="0">
+        <root>
+          <mxCell id="0" />
+          <mxCell id="1" parent="0" />
+        <mxCell id="p8-entry-7" value="From page 7&lt;br&gt;they tapped Try on" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=12;fontStyle=1;fontColor=#000000;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="420" y="130" width="290" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="p8-camera" value="Point the camera at their feet." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="264" width="290" height="65" as="geometry" />
+        </mxCell>
+        <mxCell id="p8-appears" value="The shoe appears on their feet and&lt;br&gt;moves with them." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="371" width="290" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p8-swap" value="They can swap shoes while the camera&lt;br&gt;is on. The app shows the size that fits." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="497" width="290" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p8-looks" value="Does it look right?" style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;perimeter=rhombusPerimeter;" vertex="1" parent="1">
+          <mxGeometry x="410" y="623" width="310" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="p8-another" value="Try another shoe or size." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="825" y="666" width="240" height="65" as="geometry" />
+        </mxCell>
+        <mxCell id="p8-c-A-out" value="A" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=15;fontStyle=1;fontColor=#000000;aspect=fixed;perimeter=ellipsePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="921" y="773" width="48" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="p8-tocart" value="Add it to the cart." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="815" width="290" height="65" as="geometry" />
+        </mxCell>
+        <mxCell id="p8-exit-10" value="Continue on page 10&lt;br&gt;Cart and payment" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=12;fontStyle=1;fontColor=#000000;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="420" y="922" width="290" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="p8-note1" value="The fitting is a guide — the size&lt;br&gt;shown is what the app suggests." style="rounded=0;whiteSpace=wrap;html=1;dashed=1;dashPattern=4 4;fillColor=none;strokeColor=#000000;fontSize=12;fontColor=#000000;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=10;" vertex="1" parent="1">
+          <mxGeometry x="825" y="942" width="240" height="72" as="geometry" />
+        </mxCell>
+        <mxCell id="p8-c-A-in" value="A" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=15;fontStyle=1;fontColor=#000000;aspect=fixed;perimeter=ellipsePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="825" y="515" width="48" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="p8-title" value="8 · Try the shoes on" style="text;html=1;fontSize=22;fontStyle=1;align=left;verticalAlign=middle;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="60" y="42" width="700" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="p8-subtitle" value="SoleVision — what the customer does · page 8 of 14" style="text;html=1;fontSize=12;align=left;verticalAlign=middle;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="60" y="76" width="700" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="e8-1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p8-entry-7" target="p8-camera">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e8-2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p8-camera" target="p8-appears">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e8-3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p8-appears" target="p8-swap">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e8-4" value="Yes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p8-swap" target="p8-looks">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e8-5" value="No" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p8-looks" target="p8-another">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e8-6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p8-another" target="p8-c-A-out">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e8-7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p8-looks" target="p8-tocart">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e8-8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p8-tocart" target="p8-exit-10">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e8-9" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0;exitY=0.5;exitPerimeter=0;entryX=1;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p8-c-A-in" target="p8-swap">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        </root>
+      </mxGraphModel>
+    </diagram>
+    <diagram id="page-9" name="9 Make it their own">
+      <mxGraphModel dx="0" dy="0" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="1181" math="0" shadow="0">
+        <root>
+          <mxCell id="0" />
+          <mxCell id="1" parent="0" />
+        <mxCell id="p9-entry-7" value="From page 7&lt;br&gt;they tapped Make it their own" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=12;fontStyle=1;fontColor=#000000;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="420" y="130" width="290" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="p9-two" value="Two ways to make it their own: pick the&lt;br&gt;ready-made options, or design a pair." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="264" width="290" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p9-which" value="Which one?" style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;perimeter=rhombusPerimeter;" vertex="1" parent="1">
+          <mxGeometry x="410" y="390" width="310" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="p9-ready" value="Ready-made: choose the colour&lt;br&gt;and material the shop offers&lt;br&gt;for that shoe, then add it&lt;br&gt;to the cart." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="30" y="404" width="250" height="122" as="geometry" />
+        </mxCell>
+        <mxCell id="p9-exit-10-left" value="Continue on page 10&lt;br&gt;Cart and payment" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=12;fontStyle=1;fontColor=#000000;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="50" y="568" width="210" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="p9-design" value="Design a pair of their own: base shoe,&lt;br&gt;colour and dye, upper material, engraving&lt;br&gt;and sizing notes." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="582" width="290" height="103" as="geometry" />
+        </mxCell>
+        <mxCell id="p9-review" value="Review the choices and submit the design." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="727" width="290" height="65" as="geometry" />
+        </mxCell>
+        <mxCell id="p9-shop" value="The shop gets the request and asks&lt;br&gt;them about the price and when&lt;br&gt;it will be ready." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="834" width="290" height="103" as="geometry" />
+        </mxCell>
+        <mxCell id="p9-end" value="END" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=14;fontStyle=1;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="440" y="979" width="250" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="p9-note1" value="The shop checks every custom&lt;br&gt;pair by hand, so it is not&lt;br&gt;added to the cart." style="rounded=0;whiteSpace=wrap;html=1;dashed=1;dashPattern=4 4;fillColor=none;strokeColor=#000000;fontSize=12;fontColor=#000000;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=10;" vertex="1" parent="1">
+          <mxGeometry x="825" y="978" width="240" height="91" as="geometry" />
+        </mxCell>
+        <mxCell id="p9-title" value="9 · Make it their own" style="text;html=1;fontSize=22;fontStyle=1;align=left;verticalAlign=middle;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="60" y="42" width="700" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="p9-subtitle" value="SoleVision — what the customer does · page 9 of 14" style="text;html=1;fontSize=12;align=left;verticalAlign=middle;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="60" y="76" width="700" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="e9-1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p9-entry-7" target="p9-two">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e9-2" value="Design a pair" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p9-two" target="p9-which">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e9-3" value="Ready-made" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0;exitY=0.5;exitPerimeter=0;entryX=1;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p9-which" target="p9-ready">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e9-4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p9-ready" target="p9-exit-10-left">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e9-5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p9-which" target="p9-design">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e9-6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p9-design" target="p9-review">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e9-7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p9-review" target="p9-shop">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e9-8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p9-shop" target="p9-end">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        </root>
+      </mxGraphModel>
+    </diagram>
+    <diagram id="page-10" name="10 Cart and payment">
+      <mxGraphModel dx="0" dy="0" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="1639" math="0" shadow="0">
+        <root>
+          <mxCell id="0" />
+          <mxCell id="1" parent="0" />
+        <mxCell id="p10-entry-6-7-8-9" value="From pages 6, 7, 8 or 9&lt;br&gt;they opened the Cart" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=12;fontStyle=1;fontColor=#000000;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="420" y="130" width="290" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="p10-cart" value="The Cart lists what they picked:&lt;br&gt;the item, the size and how many." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="264" width="290" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p10-right" value="Is everything right?" style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;perimeter=rhombusPerimeter;" vertex="1" parent="1">
+          <mxGeometry x="410" y="390" width="310" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="p10-change" value="Change the size or the number,&lt;br&gt;or remove an item." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="825" y="423" width="240" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p10-c-A-out" value="A" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=15;fontStyle=1;fontColor=#000000;aspect=fixed;perimeter=ellipsePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="921" y="549" width="48" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="p10-checkout" value="Tap Check Out — review the order&lt;br&gt;and choose where it goes." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="582" width="290" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p10-address" value="Do they have an&lt;br&gt;address saved?" style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;perimeter=rhombusPerimeter;" vertex="1" parent="1">
+          <mxGeometry x="410" y="708" width="310" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="p10-addaddress" value="Add their address, then come&lt;br&gt;back to check out." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="30" y="741" width="250" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p10-c-B-out" value="B" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=15;fontStyle=1;fontColor=#000000;aspect=fixed;perimeter=ellipsePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="131" y="867" width="48" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="p10-payhow" value="How do they pay?" style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;perimeter=rhombusPerimeter;" vertex="1" parent="1">
+          <mxGeometry x="410" y="900" width="310" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="p10-gcash" value="GCash — the app opens GCash&lt;br&gt;to pay. The order waits until&lt;br&gt;the payment is confirmed." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="30" y="957" width="250" height="103" as="geometry" />
+        </mxCell>
+        <mxCell id="p10-cash" value="Cash on pickup — they pay at the shop&lt;br&gt;when they collect it." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="1092" width="290" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p10-placed" value="The order is placed — the shop sees it&lt;br&gt;right away." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="1218" width="290" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p10-exit-11" value="Continue on page 11&lt;br&gt;Track the order" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=12;fontStyle=1;fontColor=#000000;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="420" y="1344" width="290" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="p10-note1" value="The delivery fee and the&lt;br&gt;GCash fee are shown before&lt;br&gt;they confirm." style="rounded=0;whiteSpace=wrap;html=1;dashed=1;dashPattern=4 4;fillColor=none;strokeColor=#000000;fontSize=12;fontColor=#000000;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=10;" vertex="1" parent="1">
+          <mxGeometry x="825" y="1345" width="240" height="91" as="geometry" />
+        </mxCell>
+        <mxCell id="p10-note2" value="If a GCash payment fails or&lt;br&gt;runs out of time, the order is&lt;br&gt;not placed — they can try again." style="rounded=0;whiteSpace=wrap;html=1;dashed=1;dashPattern=4 4;fillColor=none;strokeColor=#000000;fontSize=12;fontColor=#000000;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=10;" vertex="1" parent="1">
+          <mxGeometry x="825" y="1478" width="240" height="91" as="geometry" />
+        </mxCell>
+        <mxCell id="p10-c-A-in" value="A" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=15;fontStyle=1;fontColor=#000000;aspect=fixed;perimeter=ellipsePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="825" y="282" width="48" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="p10-c-B-in" value="B" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=15;fontStyle=1;fontColor=#000000;aspect=fixed;perimeter=ellipsePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="232" y="600" width="48" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="p10-title" value="10 · Cart and payment" style="text;html=1;fontSize=22;fontStyle=1;align=left;verticalAlign=middle;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="60" y="42" width="700" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="p10-subtitle" value="SoleVision — what the customer does · page 10 of 14" style="text;html=1;fontSize=12;align=left;verticalAlign=middle;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="60" y="76" width="700" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="e10-1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p10-entry-6-7-8-9" target="p10-cart">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e10-2" value="Yes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p10-cart" target="p10-right">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e10-3" value="No" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p10-right" target="p10-change">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e10-4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p10-change" target="p10-c-A-out">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e10-5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p10-right" target="p10-checkout">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e10-6" value="Yes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p10-checkout" target="p10-address">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e10-7" value="No" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0;exitY=0.5;exitPerimeter=0;entryX=1;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p10-address" target="p10-addaddress">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e10-8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p10-addaddress" target="p10-c-B-out">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e10-9" value="Cash on pickup" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p10-address" target="p10-payhow">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e10-10" value="GCash" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0;exitY=0.5;exitPerimeter=0;entryX=1;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p10-payhow" target="p10-gcash">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e10-11" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p10-payhow" target="p10-cash">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e10-12" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p10-cash" target="p10-placed">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e10-13" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p10-gcash" target="p10-placed">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="155" y="1245" />
+            </Array>
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e10-14" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p10-placed" target="p10-exit-11">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e10-15" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0;exitY=0.5;exitPerimeter=0;entryX=1;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p10-c-A-in" target="p10-cart">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e10-16" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p10-c-B-in" target="p10-checkout">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        </root>
+      </mxGraphModel>
+    </diagram>
+    <diagram id="page-11" name="11 Track the order">
+      <mxGraphModel dx="0" dy="0" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="1432" math="0" shadow="0">
+        <root>
+          <mxCell id="0" />
+          <mxCell id="1" parent="0" />
+        <mxCell id="p11-entry-6-10" value="From pages 6 or 10&lt;br&gt;they opened My Orders" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=12;fontStyle=1;fontColor=#000000;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="420" y="130" width="290" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="p11-list" value="My Orders lists every order,&lt;br&gt;newest first: unpaid · being&lt;br&gt;prepared · ready · to review ·&lt;br&gt;cancelled." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="264" width="290" height="122" as="geometry" />
+        </mxCell>
+        <mxCell id="p11-cancel" value="Do they want to&lt;br&gt;cancel it?" style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;perimeter=rhombusPerimeter;" vertex="1" parent="1">
+          <mxGeometry x="410" y="428" width="310" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="p11-cancelflow" value="Before the shop starts: cancel&lt;br&gt;straight away. While it is being&lt;br&gt;prepared: send a request and&lt;br&gt;the shop decides." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="825" y="442" width="240" height="122" as="geometry" />
+        </mxCell>
+        <mxCell id="p11-follow" value="Tap an order to follow it: new →&lt;br&gt;being prepared → ready → handed over." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="620" width="290" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p11-arrived" value="Has it arrived?" style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;perimeter=rhombusPerimeter;" vertex="1" parent="1">
+          <mxGeometry x="410" y="746" width="310" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="p11-wait" value="Wait for the shop’s update —&lt;br&gt;they get a notification." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="825" y="779" width="240" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p11-c-A-out" value="A" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=15;fontStyle=1;fontColor=#000000;aspect=fixed;perimeter=ellipsePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="921" y="905" width="48" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="p11-confirm" value="Tap Confirm receipt — the order is done." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="938" width="290" height="65" as="geometry" />
+        </mxCell>
+        <mxCell id="p11-review" value="Rate each pair in the order:&lt;br&gt;stars are a must, a few words&lt;br&gt;and up to 5 photos. One review&lt;br&gt;per pair — it can be edited later." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="1045" width="290" height="122" as="geometry" />
+        </mxCell>
+        <mxCell id="p11-exit-6" value="Continue on page 6&lt;br&gt;Home&lt;br&gt;they can shop again" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=12;fontStyle=1;fontColor=#000000;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="420" y="1209" width="290" height="111" as="geometry" />
+        </mxCell>
+        <mxCell id="p11-note1" value="An unpaid order can be paid&lt;br&gt;from the same screen." style="rounded=0;whiteSpace=wrap;html=1;dashed=1;dashPattern=4 4;fillColor=none;strokeColor=#000000;fontSize=12;fontColor=#000000;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=10;" vertex="1" parent="1">
+          <mxGeometry x="825" y="1248" width="240" height="72" as="geometry" />
+        </mxCell>
+        <mxCell id="p11-note2" value="Only pairs from a delivered&lt;br&gt;order can be reviewed." style="rounded=0;whiteSpace=wrap;html=1;dashed=1;dashPattern=4 4;fillColor=none;strokeColor=#000000;fontSize=12;fontColor=#000000;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=10;" vertex="1" parent="1">
+          <mxGeometry x="30" y="1248" width="250" height="72" as="geometry" />
+        </mxCell>
+        <mxCell id="p11-c-A-in" value="A" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=15;fontStyle=1;fontColor=#000000;aspect=fixed;perimeter=ellipsePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="825" y="638" width="48" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="p11-title" value="11 · Track the order" style="text;html=1;fontSize=22;fontStyle=1;align=left;verticalAlign=middle;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="60" y="42" width="700" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="p11-subtitle" value="SoleVision — what the customer does · page 11 of 14" style="text;html=1;fontSize=12;align=left;verticalAlign=middle;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="60" y="76" width="700" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="e11-1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p11-entry-6-10" target="p11-list">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e11-2" value="No" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p11-list" target="p11-cancel">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e11-3" value="Yes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p11-cancel" target="p11-cancelflow">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e11-4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p11-cancel" target="p11-follow">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e11-5" value="Yes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p11-follow" target="p11-arrived">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e11-6" value="Not yet" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p11-arrived" target="p11-wait">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e11-7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p11-wait" target="p11-c-A-out">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e11-8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p11-arrived" target="p11-confirm">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e11-9" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p11-confirm" target="p11-review">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e11-10" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p11-review" target="p11-exit-6">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e11-11" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0;exitY=0.5;exitPerimeter=0;entryX=1;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p11-c-A-in" target="p11-follow">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        </root>
+      </mxGraphModel>
+    </diagram>
+    <diagram id="page-12" name="12 Talk to the shop">
+      <mxGraphModel dx="0" dy="0" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="1338" math="0" shadow="0">
+        <root>
+          <mxCell id="0" />
+          <mxCell id="1" parent="0" />
+        <mxCell id="p12-entry-6" value="From page 6&lt;br&gt;they tapped the messages icon" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=12;fontStyle=1;fontColor=#000000;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="420" y="130" width="290" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="p12-list" value="Messages shows one conversation&lt;br&gt;per shop." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="264" width="290" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p12-start" value="They can start from a shop,&lt;br&gt;a product, an order,&lt;br&gt;or the messages list." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="390" width="290" height="103" as="geometry" />
+        </mxCell>
+        <mxCell id="p12-type" value="They type their question,&lt;br&gt;or pick a ready note for&lt;br&gt;a first order message." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="535" width="290" height="103" as="geometry" />
+        </mxCell>
+        <mxCell id="p12-extras" value="Photos and short clips can go&lt;br&gt;with the words. Own messages&lt;br&gt;can be taken back." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="680" width="290" height="103" as="geometry" />
+        </mxCell>
+        <mxCell id="p12-reply" value="The shop replies in the same&lt;br&gt;conversation — typing dots show&lt;br&gt;while they write. Ticks turn&lt;br&gt;once the shop has read." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="825" width="290" height="122" as="geometry" />
+        </mxCell>
+        <mxCell id="p12-know" value="A notification and a badge on the bell&lt;br&gt;let them know a reply is waiting." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="989" width="290" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p12-exit-6" value="Continue on page 6&lt;br&gt;Home&lt;br&gt;they can shop again" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=12;fontStyle=1;fontColor=#000000;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="420" y="1115" width="290" height="111" as="geometry" />
+        </mxCell>
+        <mxCell id="p12-note1" value="Custom pairs are usually&lt;br&gt;arranged here, with photos&lt;br&gt;of the design." style="rounded=0;whiteSpace=wrap;html=1;dashed=1;dashPattern=4 4;fillColor=none;strokeColor=#000000;fontSize=12;fontColor=#000000;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=10;" vertex="1" parent="1">
+          <mxGeometry x="825" y="1135" width="240" height="91" as="geometry" />
+        </mxCell>
+        <mxCell id="p12-note2" value="Help and support chats live&lt;br&gt;under Profile, not here." style="rounded=0;whiteSpace=wrap;html=1;dashed=1;dashPattern=4 4;fillColor=none;strokeColor=#000000;fontSize=12;fontColor=#000000;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=10;" vertex="1" parent="1">
+          <mxGeometry x="30" y="1154" width="250" height="72" as="geometry" />
+        </mxCell>
+        <mxCell id="p12-title" value="12 · Talk to the shop" style="text;html=1;fontSize=22;fontStyle=1;align=left;verticalAlign=middle;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="60" y="42" width="700" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="p12-subtitle" value="SoleVision — what the customer does · page 12 of 14" style="text;html=1;fontSize=12;align=left;verticalAlign=middle;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="60" y="76" width="700" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="e12-1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p12-entry-6" target="p12-list">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e12-2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p12-list" target="p12-start">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e12-3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p12-start" target="p12-type">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e12-4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p12-type" target="p12-extras">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e12-5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p12-extras" target="p12-reply">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e12-6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p12-reply" target="p12-know">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e12-7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p12-know" target="p12-exit-6">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        </root>
+      </mxGraphModel>
+    </diagram>
+    <diagram id="page-13" name="13 Profile and settings">
+      <mxGraphModel dx="0" dy="0" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="1155" math="0" shadow="0">
+        <root>
+          <mxCell id="0" />
+          <mxCell id="1" parent="0" />
+        <mxCell id="p13-entry-6" value="From page 6&lt;br&gt;they tapped Profile" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=12;fontStyle=1;fontColor=#000000;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="420" y="130" width="290" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="p13-who" value="Their name, photo, phone and email —&lt;br&gt;name and phone can be edited,&lt;br&gt;a new email needs its link opened&lt;br&gt;before it counts." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="264" width="290" height="122" as="geometry" />
+        </mxCell>
+        <mxCell id="p13-orders" value="My Orders shortcuts: unpaid ·&lt;br&gt;being prepared · ready ·&lt;br&gt;to review · cancelled." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="428" width="290" height="103" as="geometry" />
+        </mxCell>
+        <mxCell id="p13-foot" value="Foot size — check it, scan again,&lt;br&gt;or type a new size." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="573" width="290" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p13-holds" value="Their pickup reservations — pairs they&lt;br&gt;are holding at a shop." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="699" width="290" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p13-gear" value="The gear opens the full&lt;br&gt;Settings screen." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="825" width="290" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p13-exit-14" value="Continue on page 14&lt;br&gt;Settings in detail" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=12;fontStyle=1;fontColor=#000000;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="420" y="951" width="290" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="p13-title" value="13 · Profile and settings" style="text;html=1;fontSize=22;fontStyle=1;align=left;verticalAlign=middle;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="60" y="42" width="700" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="p13-subtitle" value="SoleVision — what the customer does · page 13 of 14" style="text;html=1;fontSize=12;align=left;verticalAlign=middle;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="60" y="76" width="700" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="e13-1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p13-entry-6" target="p13-who">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e13-2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p13-who" target="p13-orders">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e13-3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p13-orders" target="p13-foot">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e13-4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p13-foot" target="p13-holds">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e13-5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p13-holds" target="p13-gear">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e13-6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p13-gear" target="p13-exit-14">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        </root>
+      </mxGraphModel>
+    </diagram>
+    <diagram id="page-14" name="14 Settings in detail">
+      <mxGraphModel dx="0" dy="0" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="1808" math="0" shadow="0">
+        <root>
+          <mxCell id="0" />
+          <mxCell id="1" parent="0" />
+        <mxCell id="p14-entry-13" value="From page 13&lt;br&gt;they tapped the gear&lt;br&gt;for Settings" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=12;fontStyle=1;fontColor=#000000;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="420" y="130" width="290" height="111" as="geometry" />
+        </mxCell>
+        <mxCell id="p14-account" value="Account and Security holds&lt;br&gt;name, phone and email,&lt;br&gt;the password link, fingerprint&lt;br&gt;switch, 2-step codes, devices." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="283" width="290" height="122" as="geometry" />
+        </mxCell>
+        <mxCell id="p14-switch" value="Extra sign-ins can be kept&lt;br&gt;here to jump between accounts." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="447" width="290" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p14-look" value="Theme sheet: follow the device,&lt;br&gt;or pin Light or Dark." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="573" width="290" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p14-addrs" value="Size Your Foot and My Addresses&lt;br&gt;live here too." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="699" width="290" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p14-help" value="Help and support: answers,&lt;br&gt;tell us about a problem,&lt;br&gt;chat with us, plus About,&lt;br&gt;Terms and news with version." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="825" width="290" height="122" as="geometry" />
+        </mxCell>
+        <mxCell id="p14-bye" value="Log out or&lt;br&gt;delete the account?" style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;perimeter=rhombusPerimeter;" vertex="1" parent="1">
+          <mxGeometry x="410" y="989" width="310" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="p14-logout" value="Log out — asks for confirm,&lt;br&gt;then the sign-in screen shows." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="825" y="1022" width="240" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p14-del" value="Deleting asks for confirm first." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="1181" width="290" height="65" as="geometry" />
+        </mxCell>
+        <mxCell id="p14-confirm" value="Do they confirm it?" style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;perimeter=rhombusPerimeter;" vertex="1" parent="1">
+          <mxGeometry x="410" y="1288" width="310" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="p14-keep" value="They stay — nothing changes." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="825" y="1331" width="240" height="65" as="geometry" />
+        </mxCell>
+        <mxCell id="p14-c-A-out" value="A" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=15;fontStyle=1;fontColor=#000000;aspect=fixed;perimeter=ellipsePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="921" y="1438" width="48" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="p14-gone" value="The request is sent and&lt;br&gt;they are signed out." style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="420" y="1480" width="290" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="p14-end" value="END" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=14;fontStyle=1;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="440" y="1606" width="250" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="p14-c-A-in" value="A" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=15;fontStyle=1;fontColor=#000000;aspect=fixed;perimeter=ellipsePerimeter;" vertex="1" parent="1">
+          <mxGeometry x="825" y="1190" width="48" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="p14-title" value="14 · Settings in detail" style="text;html=1;fontSize=22;fontStyle=1;align=left;verticalAlign=middle;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="60" y="42" width="700" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="p14-subtitle" value="SoleVision — what the customer does · page 14 of 14" style="text;html=1;fontSize=12;align=left;verticalAlign=middle;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="60" y="76" width="700" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="e14-1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p14-entry-13" target="p14-account">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e14-2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p14-account" target="p14-switch">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e14-3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p14-switch" target="p14-look">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e14-4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p14-look" target="p14-addrs">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e14-5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p14-addrs" target="p14-help">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e14-6" value="Delete the account" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p14-help" target="p14-bye">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e14-7" value="Log out" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p14-bye" target="p14-logout">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e14-8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p14-bye" target="p14-del">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e14-9" value="Yes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p14-del" target="p14-confirm">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e14-10" value="No" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p14-confirm" target="p14-keep">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e14-11" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p14-keep" target="p14-c-A-out">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e14-12" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p14-confirm" target="p14-gone">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e14-13" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" edge="1" parent="1" source="p14-gone" target="p14-end">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e14-14" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;;exitX=0;exitY=0.5;exitPerimeter=0;entryX=1;entryY=0.5;entryPerimeter=0;" edge="1" parent="1" source="p14-c-A-in" target="p14-del">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        </root>
+      </mxGraphModel>
+    </diagram>
+</mxfile>

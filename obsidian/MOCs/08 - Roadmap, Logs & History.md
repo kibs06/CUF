@@ -34,6 +34,8 @@ This MOC indexes the project's **history and trajectory**: the roadmap, the chan
 - [[docs/SESSION_LOG_JULY_8_2026_FULL|Session log July 8 (full)]]
 - [[docs/SESSION_LOG_JULY_9_2026|Session log July 9]] — test report day
 - [[docs/SESSION_LOG_JULY_14_2026|Session log July 14]] — messaging + seller notification center wiring
+- [[docs/SESSION_LOG_SEPTEMBER_28_2026|Session log September 28]]
+- [[docs/SESSION_LOG_SEPTEMBER_30_2026|Session log September 30]]
 - [[docs/SESSION_LOG_CUSTOMER_ADDRESSES_RLS_FIX|Session log — customer addresses RLS fix]]
 - [[docs/debug/SESSION_LOG_JULY_2_2026|Debug session log July 2]]
 - [[docs/debug/SESSION_LOG_JUNE_30_2026|Debug session log June 30]] — login-freeze investigation
@@ -45,16 +47,28 @@ This MOC indexes the project's **history and trajectory**: the roadmap, the chan
 - [[docs/VERIFICATION_AUDIT_JULY_4_2026|Verification audit July 4]] — proof that prior fixes were never deployed
 - [[docs/PHASE1_5_SECURITY_AUDIT|Security audit (Phase 1–5)]]
 - [[docs/MIGRATION_AUDIT_JULY_8_2026.sql|Migration audit SQL]]
-- Test suite: `test/` has real widget tests (terms/privacy screen, terms policy tile, smoke test) — 327 unit/widget tests passing per [[docs/AI/CHECKOUT_AND_GCASH_ARCHITECTURE|Checkout & GCash architecture]] §10.8. Run with `flutter test`.
+- Test suite: full Flutter suite ~2,770 passing (7 skipped, Oct 2026) plus JVM suites for the try-on math (`DetectionDotsTest`, `FootSnapshotTest`, `FootPoseTrackerTest`, `FootFlowTest`, `DepthMathTest`). Run with `flutter test`.
 
 ## 📦 Releases
 
-- `releases/version.json` + `releases/changelog.json` — machine-readable release metadata (latest: v1.0.15 — logout fix).
-- **v1.0.15** (Aug 22): Fixed logout bug (pop all routes → AuthGate), seller profile logout button.
-- **v1.0.14** (Aug 22): Banner system, sticky search bar, seller settings icon disabled.
-- **v1.0.13** (Aug 21): Full-bleed home hero, store performance fix, account management, profile redesign.
+- `releases/version.json` + `releases/changelog.json` — machine-readable release metadata (latest: v1.0.55, Oct 13). `CHANGELOG.md` at repo root has the per-release narratives; the list below is the map, not the territory.
+- **v1.0.55** (Oct 13): AR try-on behind-the-scenes improvements (not yet customer-visible) — see [[docs/3D fitting/AR_TRY_ON_V4_CHANGELOG|AR try-on V4 changelog]].
+- **v1.0.54** (Oct 13): lockout answers WHERE — city-level IP geolocation on overlay, e-mail, admin views.
+- **v1.0.53** (Oct 12): in-app password reset (e-mail link opens CUFMAI, new password in-app).
+- **v1.0.52** (Oct 12): foot sizing — camera scan or tap-to-measure.
+- **v1.0.51–v1.0.49** (Oct 9): try-on groundwork — tap-to-place shoe, floor-search guide with lock progress, depth reads the floor under the foot (not behind it), blur/unsettled-floor gates.
+- **v1.0.48–v1.0.46** (Oct 5–7): audience rails share one row (Men/Women/Kids → shelf pages); try-on works end to end, upright camera, shoe anchored to foot on floor.
+- **v1.0.45–v1.0.34** (Sep 29–Oct 3): the 3D viewer series — product-page 3D, fullscreen viewer, WebView renderer, GLES 3.0 floor message, touch/load diagnostics.
+- **v1.0.33–v1.0.31** (Sep 28): one project signing key (in-app update stops failing); sellers attach `.glb` handovers (11 validation checks) or request CUFMAI modeling.
+- **v1.0.30–v1.0.25** (Sep 13–22): app icon, sale tags, search-as-a-place, white-and-ink theme, vouchers.
+- **v1.0.24–v1.0.16** (Aug 26–Sep 7): GCash auto-cancel fix, 2FA, manual-GCash fraud hardening, lockout overlay + local lockout repair.
+- **v1.0.15** (Aug 22): logout fix (pop all routes → AuthGate), seller profile logout button.
+- **v1.0.14** (Aug 22): banner system, sticky search bar, seller settings icon disabled.
+- **v1.0.13** (Aug 21): full-bleed home hero, store perf fix, account management, profile redesign.
 - Earlier: seller tiered verification · CUFMAI terms gating · seller espresso/cream redesign · admin suspension management · paymongo webhook push on confirmed online GCash.
-- Recent features: AR wall calibration (foot sizing v2), buy-again-to-cart, settings redesign, per-color photo galleries, masonry grid, product tags, recently viewed.
+- Also shipped along the way: AR wall calibration (foot sizing v2), buy-again-to-cart, settings redesign, per-color photo galleries, masonry grid, product tags, recently viewed, dev-build update guard (`in_app_update_eligibility`).
+- [[docs/RELEASE_SIGNING|Release signing]] — one project key, debug-keystore trap, why `android/key.properties` matters. Read before touching signing or the update flow.
+- **Release comms:** `lib/widgets/update_overlay.dart` + `lib/screens/shared/whats_new_screen.dart` announce a release; `lib/utils/in_app_update_eligibility.dart` is the single decision behind them — dev builds are told *why* (debug keystore) instead of being offered a download Android will refuse.
 
 ## 📚 Master docs (near-duplicates — consolidation candidate)
 

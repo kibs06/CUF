@@ -46,7 +46,8 @@
 | `review_service.dart` / `report_service.dart` | Reviews (product + store) / user reports | 🛍️ Products & Stores |
 | `sale_tag_service.dart` / `sale_price` utils | On-sale tags/pricing | 🛍️ Products & Stores |
 | `address_service.dart` | Customer addresses | 📱 Customer |
-| `foot_measurement_service.dart` / `ar_core_channel.dart` | Foot scan + AR (simulated) | 📱 Customer |
+| `foot_measurement_service.dart` / `ar_core_channel.dart` | Foot scan + AR measurement pipeline | 📱 Customer |
+| `ar_try_on_channel.dart` (`FootPoseFrame`, `FootPresenceFrame`, `TryOnFootSnapshotEvent`) | Dart↔native try-on contract | 📱 Customer |
 | `notification_service.dart` | Customer notifications CRUD | [[obsidian/MOCs/06 - Notifications & Messaging|🔔 Notifications]] |
 | `seller_notification_service.dart` | Seller notifications + creation helpers (`createStaleOrder`) | 🔔 Notifications |
 | `push_notification_service.dart` | FCM token mgmt + foreground display | 🔔 Notifications |
@@ -68,6 +69,7 @@
 | `product_provider.dart` | Browsing, categories, search, `loadSellerProducts()`, low-stock | 🛍️ Products / 👞 Seller |
 | `address_provider.dart` | Address book | 📱 Customer |
 | `foot_measurement_provider.dart` | Foot scan state | 📱 Customer |
+| `try_on/try_on_session_controller.dart` | Try-on session: 100 ms ticks, presence refresh, snapshot handling | 📱 Customer |
 | `review_provider.dart` | Reviews + store reviews + replies | 🛍️ Products & Stores |
 | `follow_provider.dart` | Store follows | 🛍️ Products & Stores |
 | `sale_tag_provider.dart` | On-sale state | 🛍️ Products & Stores |
@@ -99,6 +101,8 @@
 | `notification_formatters.dart` | Notification display formatting | 🔔 Notifications |
 | `product_grid_ratio.dart` | Grid aspect-ratio helper for product grids | 📱 Customer |
 | `dev_mode.dart` | Dev-mode bypass (swipe gesture) — REMOVE BEFORE RELEASE | 🔐 Auth |
+| `foot_pose.dart` (pure heel/toe→frame) / `shoe_fit_view.dart` (pose→`<model-viewer>`) / `foot_mask.dart` (focus/presence) | Try-on publish path + viewer mapping | 📱 Customer |
+| `in_app_update_eligibility.dart` | The single update-guard decision both surfaces read | 🗺️ Roadmap & Logs |
 
 ## 🧱 Widgets (`lib/widgets/`)
 
@@ -129,6 +133,20 @@
 | `sale_price_tape.dart` | Sale price tape overlay | 🛍️ Products |
 | `release_note_card.dart` | What's-new release note card | 🗺️ Roadmap & Logs |
 | `app_error_toast.dart` | Error toast notification | 🏠 Home (cross-cutting) |
+
+## 📷 Native AR (`android/app/src/main/kotlin/com/solevision/app/`)
+
+| File | Role | → MOC |
+|------|------|-------|
+| `tryon/ArTryOnView.kt` | Render thread: dots, ring, detection-driven shoe, mirroring, carry, snapshot wiring, TEMP-DIAG probes | 📱 Customer |
+| `tryon/DetectionDots.kt` (pure) | Hold rule, carry rule, placement, projection helpers | 📱 Customer |
+| `tryon/FootSnapshot.kt` (pure) | Still-capture pose + streak acceptance | 📱 Customer |
+| `tryon/FootPoseTracker.kt` | Smoothing, world basis, lock hysteresis, side confirmation | 📱 Customer |
+| `tryon/FootFlow.kt` | Optical-flow carry between detector frames | 📱 Customer |
+| `tryon/ArTryOnPlugin.kt` / `ArCameraFeed.kt` | Channel branches (incl. presence) / camera feed + texture bind | 📱 Customer |
+| `arfoot/DepthMath.kt` (`planarFootAxisMeters`) | Scan-side depth math shared with sizing | 📱 Customer |
+
+Pure-Kotlin files (`DetectionDots`, `FootSnapshot`) are pinned by JVM suites of the same name. Full narrative: [[docs/3D fitting/AR_TRY_ON_V4_CHANGELOG|AR try-on V4 changelog]].
 
 ## ⚙️ Constants & exceptions
 

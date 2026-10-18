@@ -484,6 +484,23 @@ class ArTryOnPlugin(private val activity: Activity) : MethodChannel.MethodCallHa
                 result.success(null)
             }
 
+            // ── V4.22: camera zoom ───────────────────────────────────────────────────────
+            // A user-facing slider (the AR screen's zoom bar), not a build switch, so like the
+            // torch it has no parking: the platform view exists before the screen draws any
+            // control that could call this, and a dropped value is retried by the next tick.
+            // The view coerces garbage to 1x itself, so no validation here.
+            "setCameraZoom" -> {
+                val zoom =
+                    ((call.arguments as? Map<*, *>)?.get("zoom") as? Number)?.toFloat()
+                val target = view
+                if (target == null) {
+                    Log.w(TAG, "setCameraZoom($zoom): no view yet — dropped")
+                } else {
+                    target.setCameraZoom(zoom ?: 1f)
+                }
+                result.success(null)
+            }
+
             // ── V4.2: the detection loop's two calls ────────────────────────────────────────
             "setFootPose" -> {
                 // One observation per accepted detection (§2.8). A malformed payload is logged
@@ -509,6 +526,28 @@ class ArTryOnPlugin(private val activity: Activity) : MethodChannel.MethodCallHa
                 } else {
                     view?.setFootMask(mask.bytes, mask.confidence)
                 }
+                result.success(null)
+            }
+
+            // ── V4.15: presence without measurement ─────────────────────────────────────
+            "setFootPresence" -> {
+                // `{focusUv: {x, y}, confidence}` — the mask centroid. Dropped when
+                // malformed, like every other observation on this channel.
+                val args = call.arguments as? Map<*, *>
+                val focus = args?.get("focusUv") as? Map<*, *>
+                val u = (focus?.get("x") as? Number)?.toDouble()
+                val v = (focus?.get("y") as? Number)?.toDouble()
+                val confidence = (args?.get("confidence") as? Number)?.toDouble()
+                if (u == null || v == null || confidence == null) {
+                    Log.w(TAG, "setFootPresence: unusable payload ${call.arguments}")
+                } else {
+                    view?.setFootPresence(u, v, confidence)
+                }
+                result.success(null)
+            }
+
+            "clearFootPresence" -> {
+                view?.clearFootPresence()
                 result.success(null)
             }
 
@@ -729,6 +768,12 @@ class ArTryOnPlugin(private val activity: Activity) : MethodChannel.MethodCallHa
             sha256 = call.argument<String>("sha256") ?: "",
             authoredLengthMm = call.argument<Number>("authoredLengthMm")?.toDouble(),
             yawOffsetDeg = (alignment?.get("yawOffsetDeg") as? Number)?.toDouble(),
+            // V4.18: which foot the mesh was authored for, so the renderer can mirror it for the
+            // other one. Only the two known words are accepted, and anything else — including a
+            // missing key from an older Dart build — becomes null, which the view draws as
+            // authored rather than guessing at a mirror.
+            shoeSide = (call.argument<String>("shoeSide"))?.lowercase()
+                ?.takeIf { it == "left" || it == "right" },
             // ⚠️ Only the preview's `setPreviewModel` ever sends this (`SHOE_PREVIEW_ALLOW_LEVEL1`),
             // and the view honours it only in a debuggable build — see
             // `ArTryOnView.allowsUnsupportedRenderer`. Absent or non-true means "refuse as usual".

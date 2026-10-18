@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="2017" viewBox="0 0 1100 2017">
+<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L8,3 L0,6 z" fill="#000000"/></marker></defs>
+<rect x="4" y="4" width="1092" height="2009" fill="none" stroke="#000000" stroke-width="1"/>
+<text font-family="Helvetica, Arial, sans-serif" font-size="22" font-weight="bold" fill="#000000" text-anchor="start"><tspan x="60" y="57.0">5 · Sign in</tspan></text>
+<text font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#000000" text-anchor="start"><tspan x="60" y="88.0">SoleVision — what the customer does · page 5 of 14</tspan></text>
+<polyline points="565.0,222.0 565.0,264.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,367.0 565.0,409.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="720.0,484.0 825.0,484.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="945.0,526.0 945.0,568.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="945.0,671.0 945.0,713.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,559.0 565.0,601.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="720.0,676.0 825.0,676.0 825.0,854.5" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="945.0,906.0 945.0,948.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,751.0 565.0,793.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="410.0,868.0 280.0,868.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,943.0 565.0,985.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="155.0,938.5 155.0,1036.5 420.0,1036.5" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,1088.0 565.0,1130.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="720.0,1205.0 825.0,1205.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,1280.0 565.0,1322.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="720.0,1397.0 825.0,1397.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="945.0,1439.0 945.0,1481.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,1472.0 565.0,1514.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="410.0,1589.0 280.0,1589.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,1664.0 565.0,1706.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="155.0,1650.0 155.0,1738.5 420.0,1738.5" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,1771.0 565.0,1813.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="825.0,1005.6 710.0,1005.6" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="825.0,315.5 710.0,315.5" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="825.0,1067.4 710.0,1067.4" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000" text-anchor="middle"><tspan x="565" y="392.0">No</tspan></text>
+<text font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000" text-anchor="middle"><tspan x="772.5" y="488.0">Yes</tspan></text>
+<text font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000" text-anchor="middle"><tspan x="565" y="584.0">Yes</tspan></text>
+<text font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000" text-anchor="middle"><tspan x="825" y="716.8">No</tspan></text>
+<text font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000" text-anchor="middle"><tspan x="565" y="776.0">Yes</tspan></text>
+<text font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000" text-anchor="middle"><tspan x="345" y="872.0">No</tspan></text>
+<text font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000" text-anchor="middle"><tspan x="565" y="1113.0">No</tspan></text>
+<text font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000" text-anchor="middle"><tspan x="772.5" y="1209.0">Yes</tspan></text>
+<text font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000" text-anchor="middle"><tspan x="565" y="1305.0">Yes</tspan></text>
+<text font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000" text-anchor="middle"><tspan x="772.5" y="1401.0">No</tspan></text>
+<text font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000" text-anchor="middle"><tspan x="565" y="1497.0">No</tspan></text>
+<text font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000" text-anchor="middle"><tspan x="345" y="1593.0">Yes</tspan></text>
+<polygon points="420,130 710,130 710,198.07999999999998 565,222 420,198.07999999999998" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="12" font-weight="bold" fill="#000000" text-anchor="middle"><tspan x="565" y="159.5">From pages 1 or 3</tspan><tspan x="565" y="176.5">they want to sign in</tspan></text>
+<rect x="420" y="264" width="290" height="103" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="297.5">They type email and password.</tspan><tspan x="565" y="315.5">Empty boxes or a short password</tspan><tspan x="565" y="333.5">are flagged first.</tspan></text>
+<polygon points="565,409 720,484 565,559 410,484" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="475.0">Forgot password</tspan><tspan x="565" y="493.0">tapped?</tspan></text>
+<rect x="825" y="442" width="240" height="84" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="945" y="475.0">We email a link to set</tspan><tspan x="945" y="493.0">a new one.</tspan></text>
+<rect x="825" y="568" width="240" height="103" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="945" y="601.5">They open the link on the phone,</tspan><tspan x="945" y="619.5">set a new password —</tspan><tspan x="945" y="637.5">they are signed in.</tspan></text>
+<circle cx="945" cy="737" r="24" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="945" y="737.0">C</tspan></text>
+<polygon points="565,601 720,676 565,751 410,676" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="667.0">Is the password</tspan><tspan x="565" y="685.0">correct?</tspan></text>
+<rect x="825" y="803" width="240" height="103" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="945" y="836.5">Show the same error for a wrong</tspan><tspan x="945" y="854.5">email or password —</tspan><tspan x="945" y="872.5">they can try again.</tspan></text>
+<circle cx="945" cy="972" r="24" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="945" y="972.0">A</tspan></text>
+<polygon points="565,793 720,868 565,943 410,868" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="859.0">Is this a phone the</tspan><tspan x="565" y="877.0">app already knows?</tspan></text>
+<rect x="30" y="797.5" width="250" height="141" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="155" y="832.0">We email a 6-digit code.</tspan><tspan x="155" y="850.0">They type it to prove it is</tspan><tspan x="155" y="868.0">really them. If the mail fails,</tspan><tspan x="155" y="886.0">the reason shows on the</tspan><tspan x="155" y="904.0">same screen.</tspan></text>
+<rect x="420" y="985" width="290" height="103" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="1018.5">They are signed in.</tspan><tspan x="565" y="1036.5">Checks below still apply —</tspan><tspan x="565" y="1054.5">new accounts skip them.</tspan></text>
+<polygon points="565,1130 720,1205 565,1280 410,1205" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="1196.0">Is the account</tspan><tspan x="565" y="1214.0">suspended?</tspan></text>
+<rect x="825" y="1163" width="240" height="84" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="945" y="1196.0">They see why it is closed.</tspan><tspan x="945" y="1214.0">Signing out leaves the screen.</tspan></text>
+<polygon points="565,1322 720,1397 565,1472 410,1397" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="1388.0">Does the profile</tspan><tspan x="565" y="1406.0">load?</tspan></text>
+<rect x="825" y="1355" width="240" height="84" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="945" y="1388.0">Show Retry. They can try</tspan><tspan x="945" y="1406.0">again or sign out.</tspan></text>
+<circle cx="945" cy="1505" r="24" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="945" y="1505.0">B</tspan></text>
+<polygon points="565,1514 720,1589 565,1664 410,1589" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="1580.0">Is an extra code</tspan><tspan x="565" y="1598.0">needed? New accounts skip.</tspan></text>
+<rect x="30" y="1528" width="250" height="122" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="155" y="1562.0">They type the code from their</tspan><tspan x="155" y="1580.0">authenticator app. A lost phone</tspan><tspan x="155" y="1598.0">can mail a code. They can</tspan><tspan x="155" y="1616.0">also sign out.</tspan></text>
+<rect x="420" y="1706" width="290" height="65" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="1738.5">They see the Home screen.</tspan></text>
+<polygon points="420,1813 710,1813 710,1881.08 565,1905 420,1881.08" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="12" font-weight="bold" fill="#000000" text-anchor="middle"><tspan x="565" y="1842.5">Continue on page 6</tspan><tspan x="565" y="1859.5">Home</tspan></text>
+<rect x="30" y="1833" width="250" height="72" rx="0" fill="none" stroke="#000000" stroke-width="1.5" stroke-dasharray="5 5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="155" y="1860.0">Too many wrong tries locks</tspan><tspan x="155" y="1878.0">the screen for a while.</tspan></text>
+<rect x="825" y="1795" width="240" height="110" rx="0" fill="none" stroke="#000000" stroke-width="1.5" stroke-dasharray="5 5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="945" y="1823.0">On their own phone they can sign</tspan><tspan x="945" y="1841.0">in with a fingerprint next time.</tspan><tspan x="945" y="1859.0">First sign in offers</tspan><tspan x="945" y="1877.0">to turn it on.</tspan></text>
+<circle cx="849" cy="1005.6" r="24" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="849" y="1005.6">C</tspan></text>
+<circle cx="849" cy="315.5" r="24" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="849" y="315.5">A</tspan></text>
+<circle cx="849" cy="1067.4" r="24" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="849" y="1067.4">B</tspan></text>
+</svg>

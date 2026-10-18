@@ -21,7 +21,7 @@ Customer shell has a **4-tab bottom nav** (`PageView` + `KeepAlivePage`, so a vi
 | GCash Payment | `lib/screens/customer/gcash_payment_screen.dart` | See [[obsidian/MOCs/01 - Checkout, Orders & Payments\|💳 Checkout MOC]] — attempt #6 hosted-checkout flow |
 | Order Tracking | `lib/screens/customer/tracking_screen.dart` | Vertical `SoleTimeline`: Order Placed → Being Prepared → Ready for Pickup → Received; artisan-specific copy; `awaiting_payment` + `payment_conflict` banners |
 | Customization | `lib/screens/customer/customization_screen.dart` | 5-step vertical stepper (Base design → Color/dye → Upper material → Special request → Submit → `customization_requests`) |
-| AR Fitting | `lib/screens/customer/ar_fitting_screen.dart` | **Simulated AR** — particle painter, size availability check vs `inventory`, variant lookup, pulse "tracking" animation; ⚠️ placeholder, no real AR |
+| AR Fitting | `lib/screens/customer/ar_fitting_screen.dart` | Fitting entry + **capture mode** (closes itself once the viewer has the still-capture snapshot); launches the native try-on (`ar_try_on_spike_screen.dart`) |
 | Notifications | `lib/screens/notifications_screen.dart` | Category tabs (Unpaid/Processing/Shipped/Review/Returns), read/unread, tap → tracking |
 | Profile | `lib/screens/shared/profile_screen.dart` | Avatar upload, edit panel (email locked), notification panel w/ unread badges, settings entry, seller section, logout (clears state + biometrics) |
 | Settings | `lib/screens/shared/settings_screen.dart` | Dedicated settings: account security, password change, notifications, support, what's new, about, logout |
@@ -86,6 +86,16 @@ POST-ORDER → cart cleared → confirmation screen (real order ID, Track My Ord
 8. **Home hero**: full-bleed hero image with `BannerProvider` for carousel data; sticky search bar overlays on scroll.
 9. **AR foot sizing v2**: wall calibration step added; guided tap improvements; new `foot_measurements` v2 data model.
 
+## 🥽 AR try-on — native pipeline (V4.13–V4.21, uncommitted Oct 16)
+
+Dart publishes observations ≥5 Hz and never pre-filters; all smoothing, world basis and lock hysteresis live natively.
+
+- **Publish:** `lib/utils/foot_pose.dart` (pure heel/toe→frame conversion) → `try_on_session_controller.dart` (100 ms ticks, presence refresh every ~10th tick) → `ar_try_on_channel.dart` (`FootPoseFrame`, `FootPresenceFrame`, `TryOnFootSnapshotEvent`, authored-side on `TryOnModelSpec`).
+- **Native:** `FootPoseTracker` (smoothing + lock + side confirmation: first side taken at once, change needs 3 agreeing frames) · `FootFlow` (optical-flow carry between detector frames) · `DetectionDots` (heel/toe anchor overlays, depth-first, floor never consulted; one shared LIVE/COAST/LOST hold rule for dots and shoe) · `FootSnapshot` (still-capture yaw/pitch/length, 5-sample streak) · side-aware mirroring (unknown side never mirrored) · `DepthMath.planarFootAxisMeters`.
+- **Viewer:** `lib/utils/shoe_fit_view.dart` maps the capture pose to `<model-viewer>` attributes (yaw, top-down camera, measured-length scale).
+- **⚠️ Open:** `dots-probe` TEMP-DIAG lines in `ArTryOnView` say projection misses ~1,400 px on-device; V4.20 exonerated the texture transform (exact rotate-crop), V4.21's `IMAGE_PIXELS` read decides mapping-direction vs session-geometry fix. Remove probes before release.
+- Full detail: [[docs/3D fitting/AR_TRY_ON_V4_CHANGELOG|AR try-on V4 changelog]] · [[docs/3D fitting/AR_SHOE_TRY_ON_REFERENCE_ANALYSIS|reference analysis]].
+
 ## 📚 Deep-dive docs
 
 - [[docs/AI_PROJECT_SUMMARY|⚡ AI Project Summary — "Customer Experience"]] — screen-by-screen
@@ -99,9 +109,18 @@ POST-ORDER → cart cleared → confirmation screen (real order ID, Track My Ord
 - [[docs/AI/DELIVERY_FEE_AND_MAP_ARCHITECTURE|Delivery fee & map architecture]]
 - [[docs/AI/AR_TRY_ON_ARCHITECTURE|AR try-on architecture]] (simulated)
 - [[docs/ar_fitting_addToCart_reference|AR fitting add-to-cart reference]]
+- [[docs/3D fitting/AR_TRY_ON_V4_CHANGELOG|AR try-on V4 changelog (V4.13–V4.21)]] — detection dots, presence ring, hold rule, mirroring, still capture, probes
+- [[docs/3D fitting/AR_SHOE_TRY_ON_REFERENCE_ANALYSIS|AR shoe try-on reference analysis]]
 - [[docs/AI/PRODUCT_REVIEWS_ROADMAP|Product reviews roadmap]] · [[docs/AI/PRODUCT_REVIEWS_ROADMAP_v2|v2]]
 - [[docs/needs/PROFILE_AND_STORE_FOLLOW_ARCHITECTURE|Profile & store follow architecture]]
 - [[docs/AI/feature_file_lookup_guide|🔍 Feature file lookup guide]] — 8 customer-facing features mapped to files
+- [[docs/AI/PRODUCT_AUDIENCE_PLAN|Product audience plan]] — Men's/Women's/Kids rails, shelf pages, P0–P5 (data, not code, is what's left)
+- [[docs/AI/PRODUCT_3D_VIEW_ARCHITECTURE|Product 3D view architecture]] — `<model-viewer>` in a WebView, engine ladder, GLES floor
+- [[docs/AI/FOOT_SIZING_ARCHITECTURE|Foot sizing architecture]] — camera scan vs tap-to-measure (v1.0.52)
+- [[docs/AI/AR_FOOT_SCAN_ERROR_ANALYSIS|AR foot-scan error analysis]]
+- [[docs/AI/SEARCH_ARCHITECTURE|Search architecture]] — suggestions, results page, shop picks on empty
+- [[docs/AI/SIZE_AWARE_SHOPPING_PLAN|Size-aware shopping plan]] — "Based on your size" rails and tiles
+- [[docs/AI/DARK_MODE_PLAN|Dark mode plan]] · [[docs/AI/DARK_MODE_AUDIT|Dark mode audit]] · [[docs/AI/NEUTRAL_THEME_PLAN|Neutral theme plan]] · [[docs/AI/CREAM_THEME_SYSTEM|Cream theme system]] — v1.0.27 shipped the white-and-ink look; the plans above are the trail
 
 ## 🔗 Related
 

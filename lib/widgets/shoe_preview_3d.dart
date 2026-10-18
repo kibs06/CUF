@@ -12,6 +12,7 @@ import '../services/ar_try_on_channel.dart';
 import '../services/diag_logger.dart';
 import '../services/shoe_preview_channel.dart';
 import '../services/shoe_preview_fallback_guard.dart';
+import '../utils/shoe_fit_view.dart';
 import 'shoe_preview_webview.dart';
 
 /// **The viewer page's horizontal gutter** — the 20 px the page insets its own
@@ -108,6 +109,7 @@ class ShoePreview3D extends StatefulWidget {
     this.diagnostics = AppConstants.shoePreviewDiagnosticsEnabled,
     this.useWebViewEngine = AppConstants.shoePreviewWebViewEnabled,
     this.onEngineStatus,
+    this.footFit,
   });
 
   /// The verified local model, in the same payload the AR path hands over.
@@ -245,6 +247,10 @@ class ShoePreview3D extends StatefulWidget {
   /// whichever engine produced it. The section owns the readout, so the section
   /// owns the callback; see [ShoePreviewWebView.onStatus].
   final ValueChanged<String>? onEngineStatus;
+
+  /// The fit the customer captured in AR, handed to the WebView engine. Null keeps the default view.
+  /// The native engine does not take it yet, so it stays on the default view.
+  final ShoeFitView? footFit;
 
   /// **How long the box may sit untouched before it demonstrates the gesture**
   /// ([ShoePreviewGestureHint]).
@@ -642,6 +648,7 @@ class _ShoePreview3DState extends State<ShoePreview3D> {
         // see the page's `loaded` itself: that line is what starts the one pixel
         // check this engine needs ([_checkPaint]).
         onStatus: _onEngineLine,
+        fit: widget.footFit,
       );
     }
 
@@ -1214,6 +1221,7 @@ class ShoePreviewSection extends StatefulWidget {
     this.webViewBuilder,
     this.showDiagnostics = AppConstants.shoePreviewDiagnosticsEnabled,
     this.useWebViewEngine = AppConstants.shoePreviewWebViewEnabled,
+    this.footFit,
   });
 
   final TryOnModelSpec model;
@@ -1263,6 +1271,9 @@ class ShoePreviewSection extends StatefulWidget {
   /// involvement (see `_failOver`), so the engine a running box is using is not
   /// always the one this flag asked for.
   final bool useWebViewEngine;
+
+  /// See [ShoePreview3D.footFit].
+  final ShoeFitView? footFit;
 
   @override
   State<ShoePreviewSection> createState() => _ShoePreviewSectionState();
@@ -1697,6 +1708,7 @@ class _ShoePreviewSectionState extends State<ShoePreviewSection> {
           // reported it cannot draw has already flipped this, which is what makes
           // the fallback a single `setState` rather than a second widget tree.
           useWebViewEngine: _webViewEngine,
+          footFit: widget.footFit,
           // ⚠️ **The WebView engine's line arrives here rather than through
           // `_onEvent`**, which only ever carries what the *native* side sends. A
           // build running the WebView engine has no native renderer at all, so a

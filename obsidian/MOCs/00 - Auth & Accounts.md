@@ -87,6 +87,11 @@ AccountEntryScreen (create mode) ──"Shop as customer?"──▶ CustomerRegi
 - Docs live in `seller_business_docs` (`verification_status` ∈ none/pending/verified/rejected). `profiles` untouched.
 - Owners **can never self-certify**: trigger `guard_seller_business_docs_status` blocks owner writes of `verified`/`rejected`; admins set verdicts via SECURITY DEFINER RPC `set_business_verification_status(uuid, text)`.
 
+## 🔑 MFA / 2FA (TOTP, v1.0.23)
+
+- `lib/services/mfa_service.dart` + `mfa_settings_screen.dart` (enroll) / `mfa_verify_screen.dart` (challenge), covered by `test/services/mfa_service_test.dart`.
+- MFA accounts skip the new-device email step-up (MFA satisfies it) — see gotcha 9 above.
+
 ## ⛔ Suspension (hard ban — 3 layers)
 
 1. **Flutter**: `AuthGate._routeByRole` checks `suspended == true` **before** role routing → `_SuspendedAccountScreen` (shows reason, Sign out only). Auth runs before RLS, so this layer is required.
@@ -132,6 +137,10 @@ AccountEntryScreen (create mode) ──"Shop as customer?"──▶ CustomerRegi
 - [[docs/AI/PROFILE_ARCHITECTURE|Profile architecture]]
 - [[docs/AI/MY_PROFILE_ARCHITECTURE|My Profile architecture]]
 - [[docs/PROJECT_HANDOFF|Project Handoff — §Auth & Session decisions]] — force sign-out, 5× retry, biometric clearing
+- [[docs/AI/FORGOT_PASSWORD_ARCHITECTURE|Forgot-password architecture]] — in-app reset (v1.0.53): e-mail link opens CUFMAI, new password in-app
+- [[docs/AI/SIGN_IN_ARCHITECTURE|Sign-in architecture]]
+- [[docs/AI/SELLER_APPLICATION_UI_ARCHITECTURE|Seller application UI architecture]] — the 4-step flow's screens and states
+- [[docs/AI/SELLER_APPLICATION_ACCOUNT_CREATION_ARCHITECTURE|Seller application account creation]] — auth user + profile created only at final submit (no orphans)
 
 ## 🔗 Related
 

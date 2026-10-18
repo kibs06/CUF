@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="1808" viewBox="0 0 1100 1808">
+<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L8,3 L0,6 z" fill="#000000"/></marker></defs>
+<rect x="4" y="4" width="1092" height="1800" fill="none" stroke="#000000" stroke-width="1"/>
+<text font-family="Helvetica, Arial, sans-serif" font-size="22" font-weight="bold" fill="#000000" text-anchor="start"><tspan x="60" y="57.0">14 · Settings in detail</tspan></text>
+<text font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#000000" text-anchor="start"><tspan x="60" y="88.0">SoleVision — what the customer does · page 14 of 14</tspan></text>
+<polyline points="565.0,241.0 565.0,283.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,405.0 565.0,447.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,531.0 565.0,573.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,657.0 565.0,699.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,783.0 565.0,825.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,947.0 565.0,989.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="720.0,1064.0 825.0,1064.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,1139.0 565.0,1181.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,1246.0 565.0,1288.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="720.0,1363.0 825.0,1363.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="945.0,1395.5 945.0,1437.5" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,1438.0 565.0,1480.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,1564.0 565.0,1606.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="825.0,1213.5 710.0,1213.5" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000" text-anchor="middle"><tspan x="565" y="972.0">Delete the account</tspan></text>
+<text font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000" text-anchor="middle"><tspan x="772.5" y="1068.0">Log out</tspan></text>
+<text font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000" text-anchor="middle"><tspan x="565" y="1271.0">Yes</tspan></text>
+<text font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000" text-anchor="middle"><tspan x="772.5" y="1367.0">No</tspan></text>
+<polygon points="420,130 710,130 710,212.14 565,241 420,212.14" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="12" font-weight="bold" fill="#000000" text-anchor="middle"><tspan x="565" y="158.1">From page 13</tspan><tspan x="565" y="175.1">they tapped the gear</tspan><tspan x="565" y="192.1">for Settings</tspan></text>
+<rect x="420" y="283" width="290" height="122" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="317.0">Account and Security holds</tspan><tspan x="565" y="335.0">name, phone and email,</tspan><tspan x="565" y="353.0">the password link, fingerprint</tspan><tspan x="565" y="371.0">switch, 2-step codes, devices.</tspan></text>
+<rect x="420" y="447" width="290" height="84" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="480.0">Extra sign-ins can be kept</tspan><tspan x="565" y="498.0">here to jump between accounts.</tspan></text>
+<rect x="420" y="573" width="290" height="84" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="606.0">Theme sheet: follow the device,</tspan><tspan x="565" y="624.0">or pin Light or Dark.</tspan></text>
+<rect x="420" y="699" width="290" height="84" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="732.0">Size Your Foot and My Addresses</tspan><tspan x="565" y="750.0">live here too.</tspan></text>
+<rect x="420" y="825" width="290" height="122" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="859.0">Help and support: answers,</tspan><tspan x="565" y="877.0">tell us about a problem,</tspan><tspan x="565" y="895.0">chat with us, plus About,</tspan><tspan x="565" y="913.0">Terms and news with version.</tspan></text>
+<polygon points="565,989 720,1064 565,1139 410,1064" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="1055.0">Log out or</tspan><tspan x="565" y="1073.0">delete the account?</tspan></text>
+<rect x="825" y="1022" width="240" height="84" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="945" y="1055.0">Log out — asks for confirm,</tspan><tspan x="945" y="1073.0">then the sign-in screen shows.</tspan></text>
+<rect x="420" y="1181" width="290" height="65" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="1213.5">Deleting asks for confirm first.</tspan></text>
+<polygon points="565,1288 720,1363 565,1438 410,1363" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="1363.0">Do they confirm it?</tspan></text>
+<rect x="825" y="1330.5" width="240" height="65" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="945" y="1363.0">They stay — nothing changes.</tspan></text>
+<circle cx="945" cy="1461.5" r="24" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="945" y="1461.5">A</tspan></text>
+<rect x="420" y="1480" width="290" height="84" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="1513.0">The request is sent and</tspan><tspan x="565" y="1531.0">they are signed out.</tspan></text>
+<ellipse cx="565" cy="1651" rx="125" ry="45" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="bold" fill="#000000" text-anchor="middle"><tspan x="565" y="1651.0">END</tspan></text>
+<circle cx="849" cy="1213.5" r="24" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="849" y="1213.5">A</tspan></text>
+</svg>

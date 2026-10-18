@@ -101,6 +101,23 @@ internal class ArCameraFeed(private val context: Context) {
     private var viewUvs: FloatBuffer? = null
     private var transformedUvs: FloatBuffer? = null
 
+    /**
+     * **Camera zoom, view-only (V4.22).**
+     *
+     * Render-thread state, written by `ArTryOnView.setCameraZoom` and read by [update]: at
+     * `>= 1` the sampled texture region crops toward the centre (zoom-in, quad fullscreen);
+     * below 1 the quad shrinks to [DetectionDots.zoomBandRect] with thin dark bars (letterbox
+     * zoom-out — there is no wider sensor region to crop, so the quad gives up screen instead).
+     * The render projection narrows by the same factor, so overlays stay glued at any zoom.
+     */
+    var zoom: Float = 1f
+
+    /** The zoom [update] last built UVs and geometry for — a change rebuilds both. */
+    private var lastBuiltZoom = 1f
+
+    /** Quad positions in a direct buffer, so the letterbox path rewrites them in place. */
+    private var positionBuf: FloatBuffer? = null
+
     private var ready = false
 
     /** Whether the quad is currently drawn. Tracked so [setVisible] is not called every frame. */
@@ -111,6 +128,10 @@ internal class ArCameraFeed(private val context: Context) {
 
     /** How many re-registrations this feed has attempted, for the log line that reports each one. */
     private var rebindAttempts = 0
+
+    /** Where state changes reach the diagnostic log; the view sets it, since logcat is not on the phone. */
+    var report: (String) -> Unit = {}
+    private var revealChanges = 0
 
     /**
      * **Why the feed could not be built, or null when it was.** Carried into the view's diagnostic
@@ -256,7 +277,16 @@ internal class ArCameraFeed(private val context: Context) {
                     UV_STRIDE,
                 )
                 .build(engine)
-            vertices.setBufferAt(engine, 0, FloatBuffer.wrap(CAMERA_VERTICES))
+            // Positions in a direct buffer (the same guarantee the UVs need below): the
+            // letterbox path rewrites the Y extent in place on zoom change, and the native
+            // side reads the buffer after this method has returned.
+            val posBuf = ByteBuffer.allocateDirect(CAMERA_VERTICES.size * Float.SIZE_BYTES)
+                .order(ByteOrder.nativeOrder())
+                .asFloatBuffer()
+            posBuf.put(CAMERA_VERTICES)
+            posBuf.rewind()
+            vertices.setBufferAt(engine, 0, posBuf)
+            positionBuf = posBuf
             // ⚠️ A **direct** buffer, not `FloatBuffer.wrap`: the wrapped one is heap-backed, and
             // `VertexBuffer.setBufferAt` reads it from native code after this method has returned.
             // A direct buffer is the only one whose contents are guaranteed to still be where the
@@ -374,12 +404,19 @@ internal class ArCameraFeed(private val context: Context) {
         // legitimately choose a different one.
         val written = frame.cameraTextureName == cameraTextureId
         if (!written) {
-            // Not our texture yet: re-register it from the render thread, every
-            // [REBIND_EVERY_FRAMES] frames so a stuck session is retried without spamming the log.
+            // Not our texture yet: re-register it from the render thread. The first frames after
+            // resume are when the mismatch is expected (ARCore defaults to texture 0 until it
+            // honours our names), so rebind every frame for the first few attempts and back off
+            // to [REBIND_EVERY_FRAMES] afterwards — waiting a full second before the first retry
+            // is what kept the room black while beginFrame refused downstream.
             framesSinceRebind++
-            if (framesSinceRebind >= REBIND_EVERY_FRAMES) {
+            val rebindThreshold = if (rebindAttempts < 5) 1 else REBIND_EVERY_FRAMES
+            if (framesSinceRebind >= rebindThreshold) {
                 framesSinceRebind = 0
                 rebindAttempts++
+                if (rebindAttempts == 1 || rebindAttempts % 30 == 0) {
+                    report("camera feed: ARCore writes texture ${frame.cameraTextureName}, the feed owns $cameraTextureId — re-registering (attempt $rebindAttempts)")
+                }
                 Log.w(
                     TAG,
                     "camera feed: ARCore is writing texture ${frame.cameraTextureName}, " +
@@ -390,17 +427,39 @@ internal class ArCameraFeed(private val context: Context) {
         }
         instance.setParameter("cameraTexture", texture, EXTERNAL_SAMPLER)
 
-        if (transformedUvs == null || frame.hasDisplayGeometryChanged()) {
-            val source = viewUvs ?: return
-            val target = transformedUvs ?: clone(source).also { transformedUvs = it }
-            source.rewind()
-            target.rewind()
-            frame.transformCoordinates2d(
-                Coordinates2d.VIEW_NORMALIZED,
-                source,
-                Coordinates2d.TEXTURE_NORMALIZED,
-                target,
-            )
+        val z = DetectionDots.coerceCameraZoom(zoom)
+        if (transformedUvs == null || frame.hasDisplayGeometryChanged() || z != lastBuiltZoom) {
+            lastBuiltZoom = z
+            val target = transformedUvs ?: clone(viewUvs ?: return).also { transformedUvs = it }
+            if (z >= 1f) {
+                val source = viewUvs ?: return
+                source.rewind()
+                target.rewind()
+                frame.transformCoordinates2d(
+                    Coordinates2d.VIEW_NORMALIZED,
+                    source,
+                    Coordinates2d.TEXTURE_NORMALIZED,
+                    target,
+                )
+                // Zoom-in: sample the middle 1/z of the sensor frame, magnified fullscreen.
+                if (z > 1f) DetectionDots.applyZoomCropToUvs(target, z)
+            } else {
+                // Zoom-out letterbox: the full-quad transform first (the same crop 1x shows),
+                // then widen it — u expands about the centre by 1/z while v keeps the full
+                // texture height, so the sampled region genuinely widens instead of cropping
+                // vertically. Its aspect widens exactly as much as the band quad's, hence no
+                // stretch; the quad's bars are the rows the wider aspect cannot fill.
+                val source = viewUvs ?: return
+                source.rewind()
+                target.rewind()
+                frame.transformCoordinates2d(
+                    Coordinates2d.VIEW_NORMALIZED,
+                    source,
+                    Coordinates2d.TEXTURE_NORMALIZED,
+                    target,
+                )
+                DetectionDots.applyZoomOutToUvs(target, z)
+            }
             // ⚠️ **This flip is one half of a pair, and the device proved it (2026-10-05).** It is
             // SceneView's own line — `ARCameraStream` flips the transform's output V with the
             // comment "Adjust Camera Uvs for OpenGL" — and its other half is the *input*
@@ -415,6 +474,7 @@ internal class ArCameraFeed(private val context: Context) {
             }
             target.rewind()
             vertexBuffer?.setBufferAt(engine, 1, target)
+            updateZoomGeometry(engine, z)
         }
 
         // Reveal the feed only while ARCore is writing into it. A quad sampling a texture nothing
@@ -422,6 +482,10 @@ internal class ArCameraFeed(private val context: Context) {
         if (written != revealed) {
             setVisible(engine, written)
             revealed = written
+            if (revealChanges < MAX_REVEAL_REPORTS) {
+                revealChanges++
+                report("camera feed ${if (written) "shown" else "hidden"} — ARCore writes texture ${frame.cameraTextureName}, the feed owns $cameraTextureId")
+            }
         }
         if (written) {
             framesSinceRebind = 0
@@ -460,6 +524,7 @@ internal class ArCameraFeed(private val context: Context) {
         material?.let { engine?.destroyMaterial(it) }
         materialInstance = null
         vertexBuffer = null
+        positionBuf = null
         indexBuffer = null
         cameraTexture = null
         material = null
@@ -472,6 +537,27 @@ internal class ArCameraFeed(private val context: Context) {
             // there is nothing left to delete it in. Dropped, and recreated on the next attach.
             cameraTextureId = 0
         }
+    }
+
+    /**
+     * **Shrinks the quad for the letterbox band (V4.22).**
+     *
+     * Fullscreen at `zoom >= 1` (Y stays ±1); below 1 the Y extent is the zoom itself, so the
+     * band [DetectionDots.zoomBandRect] describes is what is drawn and the released rows stay
+     * on the clear colour. Absolute puts — the buffer position is undisturbed — and only called
+     * from the rebuild branch of [update], never per frame.
+     */
+    private fun updateZoomGeometry(engine: Engine, zoom: Float) {
+        val positions = positionBuf ?: return
+        // The band geometry is the single source. Its height fraction maps straight onto the
+        // NDC half-height: full quad spans -1..1 (half 1), the band spans a fraction of that.
+        val rect = DetectionDots.zoomBandRect(zoom)
+        val halfH = rect[3] - rect[1]
+        positions.put(1, -halfH)
+        positions.put(4, -halfH)
+        positions.put(7, halfH)
+        positions.put(10, halfH)
+        vertexBuffer?.setBufferAt(engine, 0, positions)
     }
 
     private fun setVisible(engine: Engine, visible: Boolean) {
@@ -631,6 +717,7 @@ internal class ArCameraFeed(private val context: Context) {
 
         /** Frames between texture re-registrations while ARCore names another texture (~1 s at 30 fps). */
         const val REBIND_EVERY_FRAMES = 30
+        const val MAX_REVEAL_REPORTS = 10
 
         const val VERTEX_STRIDE = 3 * 4
         const val UV_STRIDE = 2 * 4

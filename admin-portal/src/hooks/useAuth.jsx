@@ -27,6 +27,29 @@ function blockReason(profile) {
   return 'Access denied. This portal is for admins only.'
 }
 
+/**
+ * Best-effort session logging for the "Seller sessions" audit trail.
+ *
+ * Sign-ins touch no public table, so the trail only exists if the clients
+ * write it. Swallowed on failure — history is analytics, never auth — and
+ * sign-outs are logged BEFORE the session is dropped (afterwards the INSERT
+ * policy, auth.uid() = user_id, rejects the anonymous client).
+ */
+async function logSessionEvent(userId, event, role) {
+  if (!userId) return
+  try {
+    await supabase.from('account_session_log').insert({
+      user_id: userId,
+      event,
+      role: role ?? null,
+      source: 'admin-portal',
+      user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+    })
+  } catch {
+    // Never block auth on analytics.
+  }
+}
+
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [profile, setProfile] = useState(null)
@@ -115,10 +138,13 @@ export function AuthProvider({ children }) {
 
     setProfile(userProfile)
     setSession(data.session)
+    await logSessionEvent(data.user.id, 'sign_in', userProfile?.role)
     return userProfile
   }
 
   const signOut = async () => {
+    const uid = session?.user?.id
+    if (uid) await logSessionEvent(uid, 'sign_out', profile?.role)
     await supabase.auth.signOut()
     setProfile(null)
     setSession(null)

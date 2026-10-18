@@ -667,6 +667,7 @@ class AutoScanController extends ChangeNotifier {
       // frames record a sample below.
       double? lengthMm;
       double? widthMm;
+      bool widthMeasured = false;
       if (raycastHit) {
         final len = worldPoints[0]!.distanceTo(worldPoints[1]!) * 1000;
         final wid = (worldPoints.length >= 4 &&
@@ -678,6 +679,9 @@ class AutoScanController extends ChangeNotifier {
             : len * 0.38;
         lengthMm = len;
         widthMm = wid;
+        widthMeasured = worldPoints.length >= 4 &&
+            worldPoints[2] != null &&
+            worldPoints[3] != null;
         _setLiveMeasurement(lengthMm: len, widthMm: wid);
         _sampleDebug('raycast=OK len=${len.toStringAsFixed(1)}mm '
             'wid=${wid.toStringAsFixed(1)}mm');
@@ -743,6 +747,14 @@ class AutoScanController extends ChangeNotifier {
       }
       _passSamples.add(sample);
 
+      navDiag(
+        '[scan] sample len=${lengthMm.toStringAsFixed(1)}mm '
+        'wid=${widthMm.toStringAsFixed(1)}mm '
+        'wid_src=${widthMeasured ? 'points' : 'estimate'} '
+        'side=${detection.footSide} '
+        'conf=${detection.confidence.toStringAsFixed(2)} '
+        'n=${_leftSamples.length + _rightSamples.length}',
+      );
       _sampleDebug('sample=RECORDED total=${_leftSamples.length + _rightSamples.length}');
       if (!_disposed) {
         _currentSampleCount++;

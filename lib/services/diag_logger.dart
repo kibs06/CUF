@@ -126,7 +126,8 @@ class DiagLogger {
     } catch (_) {/* never let diagnostics break the app */}
   }
 
-  /// Share-sheet export of the current log file. No new permissions needed.
+  /// Share-sheet export of the current log file, plus this app's logcat when the
+  /// native side can supply it. No new permissions needed.
   Future<void> export() async {
     final path = _path;
     if (!kNavDiagEnabled || path == null) return;
@@ -134,12 +135,34 @@ class DiagLogger {
     try {
       _raf?.flushSync();
     } catch (_) {}
+    final files = [XFile(path, mimeType: 'text/plain')];
+    final logcatPath = await _captureLogcat(path);
+    if (logcatPath != null) {
+      files.add(XFile(logcatPath, mimeType: 'text/plain'));
+    }
     await SharePlus.instance.share(
       ShareParams(
-        files: [XFile(path, mimeType: 'text/plain')],
-        subject: 'nav_diag.log',
+        files: files,
+        subject: logcatPath == null ? 'nav_diag.log' : 'nav_diag.log + logcat',
       ),
     );
+  }
+
+  /// Writes the app's logcat to `logcat.txt` beside [navLogPath]. Returns null,
+  /// and logs why, when the native side cannot answer.
+  Future<String?> _captureLogcat(String navLogPath) async {
+    try {
+      final text = await invokeArFootMethod<String>('dumpLogcat');
+      if (text == null) return null;
+      final file = File(
+        '${File(navLogPath).parent.path}${Platform.pathSeparator}logcat.txt',
+      );
+      await file.writeAsString(text, flush: true);
+      return file.path;
+    } catch (e) {
+      log('logcat capture failed: $e');
+      return null;
+    }
   }
 
   void _writeDirect(String line) {

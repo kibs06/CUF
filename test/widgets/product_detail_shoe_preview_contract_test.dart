@@ -349,20 +349,24 @@ void main() {
     });
   });
 
-  group('there is exactly one AR entry on the page', () {
-    test('the viewer draws it once, at the foot of the page', () {
+  group('there are two AR entries on the page, both at the foot', () {
+    test('the viewer draws the AR pill and the capture pill, both at the foot', () {
       // ⚠️ The pill lived inside the section from 2026-10-01 to 2026-10-03, in
       // the flow directly under the box. The owner asked for it at the bottom of
       // the screen — with a box that fills most of the page, the button left a
       // dead half-page beneath it. What the move must not cost is the reason the
       // two used to be one widget (one entry, present exactly when the box is,
       // surviving a renderer that refuses), so each half of that is pinned here.
+      // Two entries into the same camera, by design: "Capture to fit" opens AR and closes it on the
+      // foot's first capture, and "Try On in AR" is the plain session. Anything beyond these two
+      // would be a third way in and needs its own reason.
       expect(
         'SoleARPill('.allMatches(previewScreen).length,
-        1,
-        reason: 'one entry: a second pill is a second way into the same camera',
+        2,
+        reason: 'two entries: plain AR, and capture-to-fit',
       );
       expect(previewScreen, contains('SoleARPill(onPressed: _openArTryOn)'));
+      expect(previewScreen, contains('onPressed: _captureFit'));
       // Drawn after the scroll body — the bottom bar is the page's own slot, not
       // a child of the box — and only on the door that has someone to try the
       // pair on.
@@ -433,7 +437,8 @@ void main() {
       // The push moved from the page to the viewer with the button: the box is
       // mounted by the pushed route now, so the route that owns both the box and
       // the AR push is the viewer.
-      final open = between(previewScreen, 'Future<void> _openArTryOn()', '\n  }');
+      // Both entries go through `_openAr`, which holds the flag and the push.
+      final open = between(previewScreen, 'Future<TryOnFootSnapshotEvent?> _openAr(', '\n  }');
 
       final paused = open.indexOf('_arTryOnOpen = true');
       final pushed = open.indexOf('Navigator.of(context).push');
