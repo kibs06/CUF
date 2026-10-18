@@ -385,6 +385,12 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
       const gltf = await new loaderMod.GLTFLoader().loadAsync(url)
       if (cancelled) return
       const model = gltf.scene
+      // Sole-side-up fix: glTF is Y-up with the sole facing −Y, but the
+      // flat group (rotation.x = −π/2) maps model +Y to −Z — away from the
+      // camera at +Z — so the shoe renders upside down. A half-turn about
+      // the toe axis (+Z, untouched, so heel→toe yaw math is unchanged)
+      // puts the upper toward the camera before measuring normalizes it.
+      model.rotation.z = Math.PI
       const box = new THREE.Box3().setFromObject(model)
       const size = new THREE.Vector3()
       const center = new THREE.Vector3()
