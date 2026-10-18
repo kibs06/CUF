@@ -65,6 +65,14 @@ function sizeOf(path) {
   }
 }
 
+// Vercel rejects the deploy on an invalid vercel.json (JSON has no
+// comments), so validate it here while the failure is still local.
+try {
+  JSON.parse(readFileSync(join(portalRoot, 'vercel.json'), 'utf8'))
+} catch (err) {
+  throw new Error(`[vendor-trackers] vercel.json is invalid JSON: ${err.message}`)
+}
+
 mkdirSync(outDir, { recursive: true })
 
 for (const file of WASM_FILES) {
