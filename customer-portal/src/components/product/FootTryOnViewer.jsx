@@ -34,7 +34,8 @@ import {
  *   only if that fails too, a sentence + the app door;
  * - tracker or model fails to load → a sentence + the app door;
  * - foot leaves frame → the shoe coasts briefly, then a coaching line
- *   ("Point your camera at your feet") replaces it.
+ *   ("Step back so ankle and toes show") replaces it — the pose model
+ *   needs ankle + toes, not a toe close-up.
  */
 /** What the loading overlay names while the try-on starts up, in order. */
 const LOAD_PHASE_LABELS = {
@@ -315,7 +316,10 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
       const onWorkerMessage = (event) => {
         const msg = event.data
         if (msg?.type === 'ready') {
+          if (cancelled) return
           track.workerReady = true
+          window.clearTimeout(track.stallTimer)
+          setStatus('live')
           return
         }
         if (msg?.type === 'error') {
@@ -429,10 +433,12 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
       }
       loop()
 
-      if (!cancelled) {
-        window.clearTimeout(track.stallTimer)
-        setStatus('live')
-      }
+      // Stay on the loading overlay until the worker says `ready` (or the
+      // fallback does). Going `live` here is the stuck-pill bug: the pump
+      // sends nothing until `workerReady`, so the page would show the
+      // camera + "point at your feet" forever while the ~19 MB tracker
+      // download is still in flight. The stall timer stays armed meanwhile
+      // so a slow connection names its missing piece instead of hanging.
     }
 
     setup().catch((err) => {
@@ -559,8 +565,8 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
               )}
 
               {status === 'live' && !hasFoot && (
-                <p className="absolute left-1/2 top-4 -translate-x-1/2 rounded-full bg-black/60 px-4 py-2 text-xs font-medium text-white">
-                  Point your camera at your feet
+                <p className="absolute left-1/2 top-4 -translate-x-1/2 rounded-full bg-black/60 px-4 py-2 text-center text-xs font-medium text-white">
+                  Step back so ankle and toes show, hold still
                 </p>
               )}
 
