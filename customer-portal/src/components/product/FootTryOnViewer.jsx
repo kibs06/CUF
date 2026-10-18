@@ -36,8 +36,21 @@ import {
  * - foot leaves frame → the shoe coasts briefly, then a coaching line
  *   ("Point your camera at your feet") replaces it.
  */
+/** What the loading overlay names while the try-on starts up, in order. */
+const LOAD_PHASE_LABELS = {
+  starting: 'Starting…',
+  '3d library': 'Loading the 3D engine…',
+  camera: 'Starting the camera…',
+  'shoe model': 'Loading the shoe…',
+  'foot tracker': 'Loading the foot tracker…',
+  'foot tracker (main thread)': 'Loading the foot tracker…',
+}
+
 export default function FootTryOnViewer({ open, url, name, onClose }) {
   const [status, setStatus] = useState('loading')
+  // Which start step the overlay names — mirrors `track.phase` in state so
+  // the page re-renders as each download finishes.
+  const [loadPhase, setLoadPhase] = useState('starting')
   const [hasFoot, setHasFoot] = useState(false)
   const [tryOnOpen, setTryOnOpen] = useState(false)
   const [aspect, setAspect] = useState(null)
@@ -86,12 +99,14 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
     const track = trackRef.current
     track.disposed = false
     setStatus('loading')
+    setLoadPhase('starting')
     setHasFoot(false)
     setAspect(null)
     setErrorDetail(null)
     setZoom(null)
     track.camTrack = null
     track.phase = 'starting'
+    setLoadPhase('starting')
     track.fellBack = false
     track.mainTracker = null
     track.side = null
@@ -132,6 +147,7 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
       t.worker?.terminate()
       t.worker = null
       t.phase = 'foot tracker (main thread)'
+      if (!cancelled) setLoadPhase('foot tracker (main thread)')
       armStallTimer()
       try {
         const { createMainThreadTracker } = await import(
@@ -171,6 +187,7 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
       // The two heavy downloads happen only for a visit that taps the
       // button — same rule as the 3D viewer's dynamic import.
       track.phase = '3d library'
+      if (!cancelled) setLoadPhase('3d library')
       const [three, loaderMod] = await Promise.all([
         import('three'),
         import('three/examples/jsm/loaders/GLTFLoader.js'),
@@ -191,6 +208,7 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
         return
       }
       track.phase = 'camera'
+      if (!cancelled) setLoadPhase('camera')
       track.stream = stream
       track.camTrack = stream.getVideoTracks()[0] ?? null
 
@@ -261,6 +279,7 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
       scene.add(yawGroup)
 
       track.phase = 'shoe model'
+      if (!cancelled) setLoadPhase('shoe model')
       const gltf = await new loaderMod.GLTFLoader().loadAsync(url)
       if (cancelled) return
       const model = gltf.scene
@@ -285,6 +304,7 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
       track.three = { THREE, renderer, scene, camera, yawGroup }
 
       track.phase = 'foot tracker'
+      if (!cancelled) setLoadPhase('foot tracker')
       const worker = new Worker(
         new URL('../../lib/footTracker.worker.js', import.meta.url),
         { type: 'module' },
@@ -520,8 +540,21 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
               <div data-tryon-stage className="absolute inset-0" />
 
               {status === 'loading' && (
-                <div className="absolute inset-0 grid place-items-center bg-black/40">
-                  <p className="text-sm text-white">Starting the camera…</p>
+                <div className="absolute inset-0 grid place-items-center bg-black/40 p-6 text-center">
+                  <div>
+                    <p className="text-sm text-white">
+                      {LOAD_PHASE_LABELS[loadPhase] ?? 'Starting…'}
+                    </p>
+                    {/* The tracker is the heavy download (~19 MB first
+                        visit, then cached): say so where it matters, before
+                        a slow connection looks like a hang. */}
+                    {(loadPhase === 'foot tracker' ||
+                      loadPhase === 'foot tracker (main thread)') && (
+                      <p className="mx-auto mt-2 max-w-64 text-[11px] leading-relaxed text-white/60">
+                        First visit downloads about 19 MB — WiFi recommended.
+                      </p>
+                    )}
+                  </div>
                 </div>
               )}
 
