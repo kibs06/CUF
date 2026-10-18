@@ -26,7 +26,11 @@ const MODEL_URL =
   'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.taskle'
 
 // The wasm runtime matching the installed `@mediapipe/tasks-vision` —
-// same version, so the loader and the bundle cannot disagree.
+// same version, so the loader and the bundle cannot disagree. The second
+// `forVisionTasks` argument selects the ESM loader
+// (`vision_wasm_module_internal.js`): this worker runs as `{ type: 'module' }`
+// where `importScripts` does not exist, so the classic UMD loader can never
+// install `self.ModuleFactory` and init fails with "ModuleFactory not set.".
 const WASM_URL =
   'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.1/wasm'
 
@@ -47,7 +51,7 @@ self.onmessage = async (event) => {
 
   if (msg.type === 'init') {
     try {
-      const vision = await FilesetResolver.forVisionTasks(WASM_URL)
+      const vision = await FilesetResolver.forVisionTasks(WASM_URL, true)
       try {
         landmarker = await createLandmarker(vision, 'GPU')
       } catch {

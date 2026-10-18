@@ -19,6 +19,17 @@ export default defineConfig({
   },
   server: { port: 5174 },
   preview: { port: 4174 },
+  // The foot-tracker worker is an ES module (`{ type: 'module' }`) importing
+  // `@mediapipe/tasks-vision`: emit it as ESM and keep the package out of
+  // pre-bundling, mirroring the official MediaPipe Vite + worker sample —
+  // otherwise the wasm loader resolves to the classic build and init fails
+  // with "ModuleFactory not set." on phones.
+  optimizeDeps: {
+    exclude: ['@mediapipe/tasks-vision'],
+  },
+  worker: {
+    format: 'es',
+  },
   build: {
     rollupOptions: {
       output: {
