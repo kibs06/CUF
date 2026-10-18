@@ -17,22 +17,10 @@
 import { FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision'
 
 import { extractFeet } from './footTryOn.js'
-
-// The Lite pose bundle — the smallest of the three variants, and the right
-// first try: a foot is three sparse points, and Full/Heavy buy body detail
-// this overlay never reads. Pinned to bundle version 1, not `latest`, so a
-// model republish cannot move the tracking under a shipped page.
-const MODEL_URL =
-  'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.taskle'
-
-// The wasm runtime matching the installed `@mediapipe/tasks-vision` —
-// same version, so the loader and the bundle cannot disagree. The second
-// `forVisionTasks` argument selects the ESM loader
-// (`vision_wasm_module_internal.js`): this worker runs as `{ type: 'module' }`
-// where `importScripts` does not exist, so the classic UMD loader can never
-// install `self.ModuleFactory` and init fails with "ModuleFactory not set.".
-const WASM_URL =
-  'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.1/wasm'
+// Single source of truth for the model + wasm URLs — the main-thread
+// fallback (`footTrackerMain.js`) owns them so the two paths can never
+// download different builds.
+import { TRACKER_MODEL_URL as MODEL_URL, TRACKER_WASM_URL as WASM_URL } from './footTrackerMain.js'
 
 let landmarker = null
 

@@ -30,6 +30,8 @@ import {
  *
  * Failure states, each drawn rather than thrown:
  * - camera denied / absent → a sentence + the app door;
+ * - worker fails to start → one silent retry on the main thread, and
+ *   only if that fails too, a sentence + the app door;
  * - tracker or model fails to load → a sentence + the app door;
  * - foot leaves frame → the shoe coasts briefly, then a coaching line
  *   ("Point your camera at your feet") replaces it.
@@ -73,6 +75,10 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
     // Which start step the setup is waiting on when it stalls — the timeout
     // reports this, so a slow connection names its missing piece.
     phase: 'starting',
+    // Main-thread fallback state: set once, so a failing worker gets exactly
+    // one second chance and retries start clean.
+    fellBack: false,
+    mainTracker: null,
   })
 
   useEffect(() => {
@@ -86,6 +92,8 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
     setZoom(null)
     track.camTrack = null
     track.phase = 'starting'
+    track.fellBack = false
+    track.mainTracker = null
     track.side = null
     track.heel = null
     track.toe = null
@@ -112,13 +120,52 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
       setStatus('error')
     }
 
+    // The worker is the fast path, but its wasm bootstrap can fail where
+    // the main thread succeeds (module workers have no `importScripts`, and
+    // the script-tag fallback needs a `document` workers lack). Any
+    // init-phase worker failure lands here: same detector, same math, this
+    // thread — only if that fails too does the error reach the screen.
+    const startMainThreadFallback = async (workerDetail) => {
+      const t = trackRef.current
+      if (cancelled || t.fellBack) return
+      t.fellBack = true
+      t.worker?.terminate()
+      t.worker = null
+      t.phase = 'foot tracker (main thread)'
+      armStallTimer()
+      try {
+        const { createMainThreadTracker } = await import(
+          '../../lib/footTrackerMain.js'
+        )
+        if (cancelled) return
+        t.mainTracker = await createMainThreadTracker()
+        if (cancelled) return
+        window.clearTimeout(track.stallTimer)
+        setStatus('live')
+      } catch (err) {
+        fail(
+          `worker: ${workerDetail ?? 'start failed'} / main: ${err?.message ?? 'start failed'}`,
+        )
+      }
+    }
+
     // A stall is a failure with a name. On a slow connection every download
     // hangs instead of throwing, so without this the page sits on its
-    // spinner forever; with it, the wait names the missing piece.
-    track.stallTimer = window.setTimeout(() => {
-      const t = trackRef.current
-      if (!t.disposed) fail(`still waiting on ${t.phase} — connection too slow?`)
-    }, 45000)
+    // spinner forever; with it, the wait names the missing piece. A stall
+    // while the worker itself is starting gets one fallback attempt first.
+    const armStallTimer = () => {
+      window.clearTimeout(track.stallTimer)
+      track.stallTimer = window.setTimeout(() => {
+        const t = trackRef.current
+        if (t.disposed) return
+        if (t.phase === 'foot tracker' && !t.workerReady && !t.fellBack) {
+          startMainThreadFallback('stalled starting')
+          return
+        }
+        fail(`still waiting on ${t.phase} — connection too slow?`)
+      }, 45000)
+    }
+    armStallTimer()
 
     const setup = async () => {
       // The two heavy downloads happen only for a visit that taps the
@@ -243,13 +290,21 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
         { type: 'module' },
       )
       track.worker = worker
-      worker.onmessage = (event) => {
+      // Named so the main-thread fallback can feed it synthetic pose
+      // messages — one handler for feet however they arrive.
+      const onWorkerMessage = (event) => {
         const msg = event.data
         if (msg?.type === 'ready') {
           track.workerReady = true
           return
         }
         if (msg?.type === 'error') {
+          // Init-phase worker failures fall through to the main thread;
+          // only a mid-stream failure is fatal.
+          if (!trackRef.current.workerReady) {
+            startMainThreadFallback(msg.message ?? 'tracker download failed')
+            return
+          }
           fail(msg.message ?? 'tracker download failed')
           return
         }
@@ -295,16 +350,41 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
           yawGroup.visible = false
         }
       }
-      worker.onerror = () => fail('tracker file failed to start')
+      worker.onmessage = onWorkerMessage
+      worker.onerror = () => {
+        // Same rule as a posted error: init-phase failure falls through to
+        // the main thread; only a mid-stream failure is fatal.
+        if (!trackRef.current.workerReady) {
+          startMainThreadFallback('tracker file failed to start')
+          return
+        }
+        fail('tracker file failed to start')
+      }
       worker.postMessage({ type: 'init' })
 
       // The pump: at most one frame in flight, so a slow phone degrades to
-      // fewer answers rather than a queue of stale ones.
+      // fewer answers rather than a queue of stale ones. On the main-thread
+      // fallback the video element goes straight into the detector and the
+      // feet re-enter through the same message handler — no bitmap copy.
       track.timer = window.setInterval(() => {
         const t = trackRef.current
-        if (!t.workerReady || t.inflight || t.disposed) return
+        if (t.disposed) return
         const v = videoRef.current
         if (!v || v.readyState < 2) return
+        if (t.mainTracker) {
+          if (t.inflight) return
+          t.inflight = true
+          try {
+            const feet = t.mainTracker.detect(v, performance.now())
+            if (!t.disposed) onWorkerMessage({ data: { type: 'pose', feet } })
+            else t.inflight = false
+          } catch {
+            // A dropped frame is silence, never a fault: the page coasts.
+            t.inflight = false
+          }
+          return
+        }
+        if (!t.workerReady || t.inflight) return
         t.inflight = true
         createImageBitmap(v)
           .then((bitmap) => {
@@ -357,6 +437,12 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
       track.worker = null
       track.workerReady = false
       track.inflight = false
+      try {
+        track.mainTracker?.close()
+      } catch {
+        // Already closed — harmless.
+      }
+      track.mainTracker = null
       track.stream?.getTracks().forEach((t) => t.stop())
       track.stream = null
       track.three?.renderer.dispose()
