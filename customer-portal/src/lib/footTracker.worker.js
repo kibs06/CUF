@@ -29,7 +29,10 @@ async function createLandmarker(vision, delegate) {
     baseOptions: { modelAssetPath: MODEL_URL, delegate },
     runningMode: 'VIDEO',
     numPoses: 2,
-    minPoseDetectionConfidence: 0.5,
+    // Low on purpose: feet-first framing gives the pose model little body
+    // context, so a strict gate means it never fires on the exact shot the
+    // coaching asks for. False positives just coast out via visibility.
+    minPoseDetectionConfidence: 0.3,
   })
 }
 

@@ -53,7 +53,9 @@ export async function createMainThreadTracker({
         baseOptions: { modelAssetPath: TRACKER_MODEL_URL, delegate },
         runningMode: 'VIDEO',
         numPoses: 2,
-        minPoseDetectionConfidence: 0.5,
+        // Low on purpose: feet-first framing gives the pose model little
+        // body context — mirrors the worker gate.
+        minPoseDetectionConfidence: 0.3,
       })
       return {
         delegate,

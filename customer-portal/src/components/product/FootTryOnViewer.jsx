@@ -69,6 +69,11 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
   // change; the zoom slider cannot go wider than its lens).
   const [rearCams, setRearCams] = useState([])
   const [camIdx, setCamIdx] = useState(0)
+  // Manual placement: the pose model needs body context a foot close-up
+  // never gives it, so the shoe would stay invisible forever. Tapping
+  // "Place it manually" drops the shoe mid-frame and dragging moves it;
+  // auto-tracking takes over the moment a real foot is found.
+  const [manual, setManual] = useState(false)
   const closeRef = useRef(null)
   const videoRef = useRef(null)
 
@@ -111,6 +116,11 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
     setErrorDetail(null)
     setZoom(null)
     setRearCams([])
+    setCamIdx(0)
+    setManual(false)
+    track.manual = false
+    track.placeManual = null
+    track.nudgeManual = null
     track.camTrack = null
     track.phase = 'starting'
     setLoadPhase('starting')
@@ -387,6 +397,45 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
 
       track.three = { THREE, renderer, scene, camera, yawGroup }
 
+      // Manual placement, defined once the stage exists: center-frame at
+      // half the short edge, toe pointing up-screen, then draggable.
+      const drawManual = () => {
+        const t = trackRef.current
+        if (!t.heel || !t.toe || t.angle === null || !t.length) return
+        const dx = t.toe.x - t.heel.x
+        const dy = t.toe.y - t.heel.y
+        yawGroup.position.set(t.heel.x - vw / 2, vh / 2 - t.heel.y, 0)
+        yawGroup.rotation.z = Math.atan2(-dx, -dy)
+        yawGroup.scale.set(t.length, t.length, t.length)
+        yawGroup.visible = true
+      }
+      track.placeManual = () => {
+        const t = trackRef.current
+        const len = Math.min(vw, vh) * 0.55
+        const cx = vw / 2
+        const cy = vh * 0.55
+        t.heel = { x: cx, y: cy + len / 2 }
+        t.toe = { x: cx, y: cy - len / 2 }
+        t.angle = -Math.PI / 2
+        t.length = len
+        t.lastSeen = NaN
+        t.side = null
+        t.showing = true
+        t.manual = true
+        drawManual()
+        if (!cancelled) {
+          setManual(true)
+          setHasFoot(true)
+        }
+      }
+      track.nudgeManual = (dxPx, dyPx) => {
+        const t = trackRef.current
+        if (!t.manual || !t.heel || !t.toe) return
+        t.heel = { x: t.heel.x + dxPx, y: t.heel.y + dyPx }
+        t.toe = { x: t.toe.x + dxPx, y: t.toe.y + dyPx }
+        drawManual()
+      }
+
       track.phase = 'foot tracker'
       if (!cancelled) setLoadPhase('foot tracker')
       const worker = new Worker(
@@ -420,6 +469,12 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
         const t = trackRef.current
         const foot = pickFoot(msg.feet ?? [], t.side)
         const now = performance.now()
+        // A hand-placed shoe survives empty frames; a found foot retires it.
+        if (!foot && t.manual) return
+        if (foot && t.manual) {
+          t.manual = false
+          if (!cancelled) setManual(false)
+        }
         if (foot) {
           t.side = foot.side
           const place = placementFromFoot(foot, vw, vh)
@@ -625,8 +680,41 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
                 className="absolute inset-0 h-full w-full"
               />
               {/* The shoe stage — the worker-driven Three.js canvas mounts
-                  here, transparent, over the video. */}
-              <div data-tryon-stage className="absolute inset-0" />
+                  here, transparent, over the video. In manual mode it also
+                  takes drags: the shoe follows the finger while auto-track
+                  has nothing. */}
+              <div
+                data-tryon-stage
+                className="absolute inset-0"
+                style={manual ? { touchAction: 'none' } : undefined}
+                onPointerDown={(event) => {
+                  const t = trackRef.current
+                  if (!manual || !t.manual) return
+                  t.dragFrom = { x: event.clientX, y: event.clientY }
+                  event.currentTarget.setPointerCapture?.(event.pointerId)
+                }}
+                onPointerMove={(event) => {
+                  const t = trackRef.current
+                  if (!manual || !t.manual || !t.dragFrom) return
+                  const rect = event.currentTarget.getBoundingClientRect()
+                  const v = videoRef.current
+                  const scale = v?.videoWidth
+                    ? v.videoWidth / Math.max(1, rect.width)
+                    : 1
+                  const dx =
+                    (event.clientX - t.dragFrom.x) * scale
+                  const dy =
+                    (event.clientY - t.dragFrom.y) * scale
+                  t.dragFrom = { x: event.clientX, y: event.clientY }
+                  t.nudgeManual?.(dx, dy)
+                }}
+                onPointerUp={() => {
+                  trackRef.current.dragFrom = null
+                }}
+                onPointerCancel={() => {
+                  trackRef.current.dragFrom = null
+                }}
+              />
 
               {status === 'loading' && (
                 <div className="absolute inset-0 grid place-items-center bg-black/40 p-6 text-center">
@@ -648,8 +736,22 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
               )}
 
               {status === 'live' && !hasFoot && (
+                <div className="absolute left-1/2 top-4 flex -translate-x-1/2 flex-col items-center gap-2">
+                  <p className="rounded-full bg-black/60 px-4 py-2 text-center text-xs font-medium text-white">
+                    Step back so ankle and toes show, hold still
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => trackRef.current.placeManual?.()}
+                    className="rounded-full border border-white/50 bg-black/60 px-4 py-1.5 text-xs font-semibold text-white backdrop-blur-sm transition-colors duration-200 hover:bg-white/20"
+                  >
+                    Place it manually
+                  </button>
+                </div>
+              )}
+              {status === 'live' && manual && hasFoot && (
                 <p className="absolute left-1/2 top-4 -translate-x-1/2 rounded-full bg-black/60 px-4 py-2 text-center text-xs font-medium text-white">
-                  Step back so ankle and toes show, hold still
+                  Drag to fit — auto-takeover when your foot is found
                 </p>
               )}
 

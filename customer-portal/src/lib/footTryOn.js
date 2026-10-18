@@ -20,8 +20,10 @@ export const FOOT_LANDMARKS = {
   right: { ankle: 28, heel: 30, toe: 32 },
 }
 
-/** Minimum visibility below which a point is treated as missing. */
-export const MIN_VISIBILITY = 0.5
+/** Minimum visibility below which a point is treated as missing. Kept low
+ * on purpose: the web beta points at feet, often half-cropped, where the
+ * pose model reports low visibility even when the axis is right. */
+export const MIN_VISIBILITY = 0.3
 
 /** How long a lost foot is coasted before the shoe lets go (ms). */
 export const COAST_MS = 1200
