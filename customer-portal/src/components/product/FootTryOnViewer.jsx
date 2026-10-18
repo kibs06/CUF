@@ -39,6 +39,15 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
   const [hasFoot, setHasFoot] = useState(false)
   const [tryOnOpen, setTryOnOpen] = useState(false)
   const [aspect, setAspect] = useState(null)
+  // Why a start failed, in the tracker's own words — shown under the error
+  // heading so a report from a phone carries its diagnosis with it.
+  const [errorDetail, setErrorDetail] = useState(null)
+  // Retry count: bumping it re-runs the whole start sequence.
+  const [attempt, setAttempt] = useState(0)
+  // Camera zoom, when the phone's camera exposes it: { value, min, max }.
+  // Starts at min (widest) — the complaint this answers is that the feed
+  // opens looking ~2x into the feet with nowhere to step back to.
+  const [zoom, setZoom] = useState(null)
   const closeRef = useRef(null)
   const videoRef = useRef(null)
 
@@ -49,6 +58,7 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
     workerReady: false,
     inflight: false,
     stream: null,
+    camTrack: null,
     raf: 0,
     timer: 0,
     three: null,
@@ -60,6 +70,9 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
     lastSeen: NaN,
     showing: false,
     disposed: false,
+    // Which start step the setup is waiting on when it stalls — the timeout
+    // reports this, so a slow connection names its missing piece.
+    phase: 'starting',
   })
 
   useEffect(() => {
@@ -69,6 +82,10 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
     setStatus('loading')
     setHasFoot(false)
     setAspect(null)
+    setErrorDetail(null)
+    setZoom(null)
+    track.camTrack = null
+    track.phase = 'starting'
     track.side = null
     track.heel = null
     track.toe = null
@@ -79,13 +96,34 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
 
     let cancelled = false
 
-    const fail = () => {
-      if (!cancelled) setStatus('error')
+    // Every start failure lands here with its reason: the heading names the
+    // state, `errorDetail` carries the cause to the screen and the console.
+    const fail = (detail) => {
+      if (cancelled) return
+      window.clearTimeout(track.stallTimer)
+      if (detail) {
+        setErrorDetail(String(detail).slice(0, 160))
+        try {
+          console.error('[foot-tryon]', detail)
+        } catch {
+          // Logging must never break the fallback UI.
+        }
+      }
+      setStatus('error')
     }
+
+    // A stall is a failure with a name. On a slow connection every download
+    // hangs instead of throwing, so without this the page sits on its
+    // spinner forever; with it, the wait names the missing piece.
+    track.stallTimer = window.setTimeout(() => {
+      const t = trackRef.current
+      if (!t.disposed) fail(`still waiting on ${t.phase} — connection too slow?`)
+    }, 45000)
 
     const setup = async () => {
       // The two heavy downloads happen only for a visit that taps the
       // button — same rule as the 3D viewer's dynamic import.
+      track.phase = '3d library'
       const [three, loaderMod] = await Promise.all([
         import('three'),
         import('three/examples/jsm/loaders/GLTFLoader.js'),
@@ -105,7 +143,28 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
         stream.getTracks().forEach((t) => t.stop())
         return
       }
+      track.phase = 'camera'
       track.stream = stream
+      track.camTrack = stream.getVideoTracks()[0] ?? null
+
+      // Widest view first, where the hardware allows it. Several phone
+      // cameras open part-way into their zoom range, which reads as a
+      // broken zoomed-in feed next to the camera app.
+      try {
+        const caps = track.camTrack?.getCapabilities?.()
+        if (caps?.zoom && Number.isFinite(caps.zoom.min)) {
+          const min = caps.zoom.min
+          const max = caps.zoom.max ?? min
+          if (max > min) {
+            await track.camTrack
+              ?.applyConstraints({ advanced: [{ zoom: min }] })
+              .catch(() => {})
+            if (!cancelled) setZoom({ value: min, min, max })
+          }
+        }
+      } catch {
+        // No zoom capability on this camera — the slider stays hidden.
+      }
 
       const video = videoRef.current
       if (!video) {
@@ -154,6 +213,7 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
       yawGroup.visible = false
       scene.add(yawGroup)
 
+      track.phase = 'shoe model'
       const gltf = await new loaderMod.GLTFLoader().loadAsync(url)
       if (cancelled) return
       const model = gltf.scene
@@ -177,6 +237,7 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
 
       track.three = { THREE, renderer, scene, camera, yawGroup }
 
+      track.phase = 'foot tracker'
       const worker = new Worker(
         new URL('../../lib/footTracker.worker.js', import.meta.url),
         { type: 'module' },
@@ -189,7 +250,7 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
           return
         }
         if (msg?.type === 'error') {
-          fail()
+          fail(msg.message ?? 'tracker download failed')
           return
         }
         if (msg?.type !== 'pose') return
@@ -234,7 +295,7 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
           yawGroup.visible = false
         }
       }
-      worker.onerror = fail
+      worker.onerror = () => fail('tracker file failed to start')
       worker.postMessage({ type: 'init' })
 
       // The pump: at most one frame in flight, so a slow phone degrades to
@@ -268,14 +329,22 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
       }
       loop()
 
-      if (!cancelled) setStatus('live')
+      if (!cancelled) {
+        window.clearTimeout(track.stallTimer)
+        setStatus('live')
+      }
     }
 
     setup().catch((err) => {
       // A denied camera is the common case, and it has its own face below.
-      if (!cancelled) {
-        setStatus(err?.name === 'NotAllowedError' ? 'denied' : 'error')
+      if (err?.name === 'NotAllowedError') {
+        if (!cancelled) {
+          window.clearTimeout(track.stallTimer)
+          setStatus('denied')
+        }
+        return
       }
+      fail(err?.message ?? 'start failed')
     })
 
     return () => {
@@ -283,6 +352,7 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
       track.disposed = true
       cancelAnimationFrame(track.raf)
       window.clearInterval(track.timer)
+      window.clearTimeout(track.stallTimer)
       track.worker?.terminate()
       track.worker = null
       track.workerReady = false
@@ -295,7 +365,7 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
       track.three = null
       if (videoRef.current) videoRef.current.srcObject = null
     }
-  }, [open, url])
+  }, [open, url, attempt])
 
   useEffect(() => {
     if (!open) return undefined
@@ -375,6 +445,35 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
                 </p>
               )}
 
+              {/* Camera zoom, only where the hardware offers it: a slider
+                  from the widest the lens goes. View-only — the tracker
+                  reads the same pixels at any zoom, so the shoe stays put. */}
+              {status === 'live' && zoom && (
+                <div className="absolute bottom-3 left-1/2 w-64 max-w-[80%] -translate-x-1/2 rounded-full bg-black/60 px-4 py-1.5 backdrop-blur-sm">
+                  <label className="flex items-center gap-2 text-white">
+                    <span className="text-[11px] font-medium tabular-nums opacity-80">
+                      {zoom.value.toFixed(1)}x
+                    </span>
+                    <input
+                      type="range"
+                      min={zoom.min}
+                      max={zoom.max}
+                      step={0.1}
+                      value={zoom.value}
+                      aria-label="Camera zoom"
+                      className="w-full accent-white"
+                      onChange={(event) => {
+                        const value = event.target.valueAsNumber
+                        setZoom({ ...zoom, value })
+                        trackRef.current.camTrack
+                          ?.applyConstraints({ advanced: [{ zoom: value }] })
+                          .catch(() => {})
+                      }}
+                    />
+                  </label>
+                </div>
+              )}
+
               {(status === 'denied' || status === 'error') && (
                 <div className="absolute inset-0 grid place-items-center bg-black/60 p-6 text-center">
                   <div>
@@ -387,6 +486,20 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
                       Allow the camera and try again — or get the precise,
                       fitted try-on in the app instead.
                     </p>
+                    {status === 'error' && (
+                      <p className="mx-auto mt-2 max-w-64 text-[11px] leading-relaxed text-white/50">
+                        {errorDetail ?? 'unknown cause'}
+                      </p>
+                    )}
+                    {status === 'error' && (
+                      <button
+                        type="button"
+                        onClick={() => setAttempt((n) => n + 1)}
+                        className="mt-3 rounded-full border border-white/40 px-5 py-2 text-xs font-semibold text-white transition-colors duration-200 hover:bg-white/10"
+                      >
+                        Try again
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
