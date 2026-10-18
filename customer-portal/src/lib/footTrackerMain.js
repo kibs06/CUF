@@ -20,15 +20,16 @@ import { extractFeet } from './footTryOn.js'
 
 // The Lite pose bundle — the smallest of the three variants, and the right
 // first try: a foot is three sparse points, and Full/Heavy buy body detail
-// this overlay never reads. Pinned to bundle version 1, not `latest`, so a
-// model republish cannot move the tracking under a shipped page.
-export const TRACKER_MODEL_URL =
-  'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.taskle'
+// this overlay never reads. Self-hosted under `public/vendor/mediapipe`
+// (see `scripts/vendor-trackers.mjs`): same-origin, cached immutably, and
+// pinned to bundle version 1, not `latest`, so a model republish cannot
+// move the tracking under a shipped page.
+export const TRACKER_MODEL_URL = '/vendor/mediapipe/pose_landmarker_lite.task'
 
-// The wasm runtime matching the installed `@mediapipe/tasks-vision` —
-// same version, so the loader and the bundle cannot disagree.
-export const TRACKER_WASM_URL =
-  'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.1/wasm'
+// The wasm runtime, vendored from the installed `@mediapipe/tasks-vision`
+// package at build time — same version, so the loader and the bundle
+// cannot disagree, and no third-party CDN sits in the critical path.
+export const TRACKER_WASM_URL = '/vendor/mediapipe'
 
 /**
  * Create a tracker bound to the calling thread. Tries the GPU delegate
