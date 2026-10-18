@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 
 import Price from '../components/ui/Price'
+import FootTryOnViewer from '../components/product/FootTryOnViewer'
 import Product3DViewer from '../components/product/Product3DViewer'
 import ProductGrid from '../components/product/ProductGrid'
 import SaleBadge from '../components/ui/SaleBadge'
@@ -95,6 +96,7 @@ export default function ProductDetail({ preview = false }) {
 
   const [activeImage, setActiveImage] = useState(0)
   const [viewerOpen, setViewerOpen] = useState(false)
+  const [footTryOnOpen, setFootTryOnOpen] = useState(false)
   const [selectedSize, setSelectedSize] = useState(null)
   const [adding, setAdding] = useState(false)
   const [added, setAdded] = useState(false)
@@ -104,6 +106,7 @@ export default function ProductDetail({ preview = false }) {
   useEffect(() => {
     setActiveImage(0)
     setViewerOpen(false)
+    setFootTryOnOpen(false)
     setSelectedSize(null)
     setAdded(false)
     setAddError(null)
@@ -309,14 +312,24 @@ export default function ProductDetail({ preview = false }) {
                 button, and no gap where one would have been. That is the app's
                 rule too: the box and its entry are one decision. */}
             {model && (
-              <button
-                type="button"
-                onClick={() => setViewerOpen(true)}
-                className="btn btn-outline mt-4 w-full gap-2"
-              >
-                <Rotate3d size={16} strokeWidth={2} />
-                View in 3D
-              </button>
+              <div className="mt-4 flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={() => setViewerOpen(true)}
+                  className="btn btn-outline w-full gap-2"
+                >
+                  <Rotate3d size={16} strokeWidth={2} />
+                  View in 3D
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFootTryOnOpen(true)}
+                  className="btn btn-outline w-full gap-2"
+                >
+                  <Footprints size={16} strokeWidth={2} />
+                  Try on feet (Beta)
+                </button>
+              </div>
             )}
           </div>
 
@@ -538,6 +551,12 @@ export default function ProductDetail({ preview = false }) {
         url={model?.url ?? null}
         name={product.name}
         onClose={() => setViewerOpen(false)}
+      />
+      <FootTryOnViewer
+        open={footTryOnOpen}
+        url={model?.url ?? null}
+        name={product.name}
+        onClose={() => setFootTryOnOpen(false)}
       />
     </>
   )
