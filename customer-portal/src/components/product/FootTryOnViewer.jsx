@@ -64,6 +64,11 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
   // Starts at min (widest) — the complaint this answers is that the feed
   // opens looking ~2x into the feet with nowhere to step back to.
   const [zoom, setZoom] = useState(null)
+  // Rear cameras on this phone, once permission reveals their labels —
+  // lets a tele-default phone switch to its ultrawide (real magnification
+  // change; the zoom slider cannot go wider than its lens).
+  const [rearCams, setRearCams] = useState([])
+  const [camIdx, setCamIdx] = useState(0)
   const closeRef = useRef(null)
   const videoRef = useRef(null)
 
@@ -105,6 +110,7 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
     setAspect(null)
     setErrorDetail(null)
     setZoom(null)
+    setRearCams([])
     track.camTrack = null
     track.phase = 'starting'
     setLoadPhase('starting')
@@ -196,14 +202,30 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
       if (cancelled) return
       const THREE = three
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: 'environment',
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-        audio: false,
-      })
+      // A previous lens switch (or the first open) decides the constraint:
+      // an exact deviceId where the user already picked a lens, otherwise
+      // the rear camera. Resolution stays landscape 720p either way.
+      const baseVideo = {
+        facingMode: 'environment',
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      }
+      const openStream = (video) =>
+        navigator.mediaDevices.getUserMedia({ video, audio: false })
+      let stream
+      if (track.wantDeviceId) {
+        try {
+          stream = await openStream({
+            deviceId: { exact: track.wantDeviceId },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          })
+        } catch {
+          stream = await openStream(baseVideo)
+        }
+      } else {
+        stream = await openStream(baseVideo)
+      }
       if (cancelled) {
         stream.getTracks().forEach((t) => t.stop())
         return
@@ -212,6 +234,67 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
       if (!cancelled) setLoadPhase('camera')
       track.stream = stream
       track.camTrack = stream.getVideoTracks()[0] ?? null
+
+      // Magnification is a lens choice, not a zoom setting: several phones
+      // default to the tele lens, so min-zoom is still tight. Once
+      // permission reveals labels, prefer the ultrawide automatically on
+      // first open — and remember every rear lens for the switch button.
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices()
+        const videos = devices.filter(
+          (d) => d.kind === 'videoinput' && d.deviceId,
+        )
+        const rear = videos.filter(
+          (d) => !/front|user|selfie|internal/i.test(d.label ?? ''),
+        )
+        const list = (rear.length ? rear : videos).map((d) => ({
+          deviceId: d.deviceId,
+          label: d.label || 'Camera',
+        }))
+        if (!cancelled && list.length) {
+          setRearCams(list)
+          const currentId =
+            track.camTrack?.getSettings?.().deviceId ?? null
+          if (!track.wantDeviceId) {
+            const ultra = list.find((d) =>
+              /ultra|0\.5|0\.6|wide.*angle/i.test(d.label),
+            )
+            if (ultra && ultra.deviceId !== currentId) {
+              try {
+                const wide = await openStream({
+                  deviceId: { exact: ultra.deviceId },
+                  width: { ideal: 1280 },
+                  height: { ideal: 720 },
+                })
+                if (cancelled) {
+                  wide.getTracks().forEach((t) => t.stop())
+                } else {
+                  stream.getTracks().forEach((t) => t.stop())
+                  stream = wide
+                  track.stream = wide
+                  track.camTrack = wide.getVideoTracks()[0] ?? null
+                  track.wantDeviceId = ultra.deviceId
+                }
+              } catch {
+                // Ultrawide refused — stay on the default lens.
+              }
+            }
+          }
+          if (!cancelled) {
+            const activeId =
+              track.camTrack?.getSettings?.().deviceId ??
+              track.wantDeviceId ??
+              currentId
+            const at = Math.max(
+              0,
+              list.findIndex((d) => d.deviceId === activeId),
+            )
+            setCamIdx(at)
+          }
+        }
+      } catch {
+        // Labels unavailable — single-lens path below still works.
+      }
 
       // Widest view first, where the hardware allows it. Several phone
       // cameras open part-way into their zoom range, which reads as a
@@ -572,30 +655,57 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
 
               {/* Camera zoom, only where the hardware offers it: a slider
                   from the widest the lens goes. View-only — the tracker
-                  reads the same pixels at any zoom, so the shoe stays put. */}
-              {status === 'live' && zoom && (
-                <div className="absolute bottom-3 left-1/2 w-64 max-w-[80%] -translate-x-1/2 rounded-full bg-black/60 px-4 py-1.5 backdrop-blur-sm">
-                  <label className="flex items-center gap-2 text-white">
-                    <span className="text-[11px] font-medium tabular-nums opacity-80">
-                      {zoom.value.toFixed(1)}x
-                    </span>
-                    <input
-                      type="range"
-                      min={zoom.min}
-                      max={zoom.max}
-                      step={0.1}
-                      value={zoom.value}
-                      aria-label="Camera zoom"
-                      className="w-full accent-white"
-                      onChange={(event) => {
-                        const value = event.target.valueAsNumber
-                        setZoom({ ...zoom, value })
-                        trackRef.current.camTrack
-                          ?.applyConstraints({ advanced: [{ zoom: value }] })
-                          .catch(() => {})
+                  reads the same pixels at any zoom, so the shoe stays put.
+                  The lens button alongside it is the real de-magnifier:
+                  it cycles the rear lenses (ultrawide first) where the
+                  phone has more than one. */}
+              {(status === 'live' || status === 'loading') &&
+                (zoom || rearCams.length > 1) && (
+                <div className="absolute bottom-3 left-1/2 flex w-64 max-w-[80%] -translate-x-1/2 items-center gap-2 rounded-full bg-black/60 px-4 py-1.5 backdrop-blur-sm">
+                  {rearCams.length > 1 && (
+                    <button
+                      type="button"
+                      aria-label="Switch rear camera lens"
+                      title={rearCams[camIdx]?.label ?? 'Switch lens'}
+                      onClick={() => {
+                        const next = (camIdx + 1) % rearCams.length
+                        trackRef.current.wantDeviceId =
+                          rearCams[next].deviceId
+                        setCamIdx(next)
+                        setAttempt((n) => n + 1)
                       }}
-                    />
-                  </label>
+                      className="shrink-0 rounded-full border border-white/40 px-2.5 py-1 text-[11px] font-semibold text-white transition-colors duration-200 hover:bg-white/10"
+                    >
+                      {camIdx + 1}/{rearCams.length}
+                    </button>
+                  )}
+                  {zoom ? (
+                    <label className="flex flex-1 items-center gap-2 text-white">
+                      <span className="text-[11px] font-medium tabular-nums opacity-80">
+                        {zoom.value.toFixed(1)}x
+                      </span>
+                      <input
+                        type="range"
+                        min={zoom.min}
+                        max={zoom.max}
+                        step={0.1}
+                        value={zoom.value}
+                        aria-label="Camera zoom"
+                        className="w-full accent-white"
+                        onChange={(event) => {
+                          const value = event.target.valueAsNumber
+                          setZoom({ ...zoom, value })
+                          trackRef.current.camTrack
+                            ?.applyConstraints({ advanced: [{ zoom: value }] })
+                            .catch(() => {})
+                        }}
+                      />
+                    </label>
+                  ) : (
+                    <span className="max-w-full truncate text-[11px] text-white/70">
+                      {rearCams[camIdx]?.label ?? 'Rear camera'}
+                    </span>
+                  )}
                 </div>
               )}
 
