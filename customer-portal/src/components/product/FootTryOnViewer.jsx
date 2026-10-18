@@ -196,19 +196,11 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
       if (cancelled) return
       const THREE = three
 
-      // Portrait-first constraints: the phone is held upright over the
-      // feet, so ask for a tall frame. The old landscape ask (1280x720)
-      // made browsers center-crop the sensor on portrait phones, which
-      // reads as a broken ~2x zoom you cannot slider out of — the zoom
-      // minimum is already 1.0x in the screenshot. 720 wide keeps the
-      // detector cheap; height ideal asks the browser not to crop top
-      // and bottom to make a landscape frame.
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: 'environment',
-          width: { ideal: 720 },
-          height: { ideal: 1280 },
-          aspectRatio: { ideal: 0.75 },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
         },
         audio: false,
       })
@@ -547,7 +539,7 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
                 ref={videoRef}
                 muted
                 playsInline
-                className="absolute inset-0 h-full w-full object-cover"
+                className="absolute inset-0 h-full w-full"
               />
               {/* The shoe stage — the worker-driven Three.js canvas mounts
                   here, transparent, over the video. */}
