@@ -1,8 +1,13 @@
 {
-  "latest_version": "1.0.55",
-  "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.55/app-release-1.0.55.apk",
-  "released_at": "2026-10-13",
+  "latest_version": "1.0.56",
+  "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.56/app-release-1.0.56.apk",
+  "released_at": "2026-10-18",
   "notes": [
-    "Behind-the-scenes improvements to the AR try-on (not yet visible to customers)"
+    "Development builds no longer offer updates they cannot install, and say why instead",
+    "Account lockout alerts now show where attempts came from (city-level, labelled as such)",
+    "Home tile rotates personalized shelves; product pages swipe through the list",
+    "Seller numbers on an Android home-screen widget",
+    "More reliable 3D and try-on views (WebView engine, orientation and night-light fixes)",
+    "Men's / Women's / Kids' share one row of photos, and every photo is a door"
   ]
 }
