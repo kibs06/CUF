@@ -538,6 +538,28 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
                 ? place.lengthPx
                 : t.length + 0.4 * (place.lengthPx - t.length)
             t.lastSeen = now
+            // Automatic anchors: mirror the detected heel→toe into the
+            // same H/T markers the hand flow uses, so the points are
+            // always the detection — no taps needed when it can see.
+            // Epsilon-gated: re-rendering the dialog at detector rate
+            // would be wasteful; only move the dots past ~1% of frame.
+            const uh = t.heel.x / vw
+            const vh_ = t.heel.y / vh
+            const ut = t.toe.x / vw
+            const vt = t.toe.y / vh
+            const prev = t.autoAnchors
+            const moved = !prev
+              || Math.abs(prev.heel.u - uh) > 0.01
+              || Math.abs(prev.heel.v - vh_) > 0.01
+              || Math.abs(prev.toe.u - ut) > 0.01
+              || Math.abs(prev.toe.v - vt) > 0.01
+            if (moved) {
+              t.autoAnchors = {
+                heel: { u: uh, v: vh_ },
+                toe: { u: ut, v: vt },
+              }
+              if (!cancelled && !t.manual) setAnchors(t.autoAnchors)
+            }
           }
         }
         const draw = shouldDrawShoe({
@@ -799,12 +821,14 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
                   trackRef.current.dragFrom = null
                 }}
               />
-              {/* Anchor markers — heel (H) and toe (T), draggable to re-fit. */}
-              {anchors?.heel && (
+              {/* Anchor markers — automatic while tracking (display-only),
+                  draggable while hand-placed. Hidden with the shoe. */}
+              {(hasFoot || manual) && anchors?.heel && (
                 <button
                   type="button"
                   aria-label="Drag heel anchor"
                   onPointerDown={(event) => {
+                    if (!trackRef.current.manual) return
                     event.stopPropagation()
                     trackRef.current.anchorDrag = 'heel'
                     event.currentTarget.setPointerCapture?.(event.pointerId)
@@ -852,11 +876,12 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
                   H
                 </button>
               )}
-              {anchors?.toe && (
+              {(hasFoot || manual) && anchors?.toe && (
                 <button
                   type="button"
                   aria-label="Drag toe anchor"
                   onPointerDown={(event) => {
+                    if (!trackRef.current.manual) return
                     event.stopPropagation()
                     trackRef.current.anchorDrag = 'toe'
                     event.currentTarget.setPointerCapture?.(event.pointerId)
