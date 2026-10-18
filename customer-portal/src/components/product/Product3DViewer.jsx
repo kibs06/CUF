@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Footprints, Rotate3d, Sun, X } from 'lucide-react'
+import { Box, Footprints, Rotate3d, Sun, X } from 'lucide-react'
 
 import ConfirmDialog from '../ui/ConfirmDialog.jsx'
 import { APP_DOWNLOAD_URL, tryOnAppPrompt } from '../../lib/appDownload.js'
+import { spaceArModes, shouldOfferSpaceView } from '../../lib/arSpace.js'
 import { useScrollLock } from '../../hooks/useScrollLock.js'
 import { useTheme } from '../../hooks/useTheme.jsx'
 import { useTransitionTiming } from '../motion/transitions'
@@ -36,11 +37,14 @@ import { useTransitionTiming } from '../motion/transitions'
  *     tag is an unknown element that renders nothing but still reserves the box;
  *     the placeholder says "loading the viewer" instead of showing an empty
  *     stage that looks broken.
- *  3. **`interaction-prompt="none"` and no `ar` attribute.** The app switches
+ *  3. **`interaction-prompt="none"` and `ar` for space view.** The app switches
  *     off the library's own three-second prompt for the same reason (it has a
- *     hand-drawn tutorial instead) — and `ar` is deliberately absent, because a
- *     second, unmanaged AR door out of a product page is not this component's to
- *     open. The opening **orbit is the app's opening pose** (its
+ *     hand-drawn tutorial instead) — and `ar` is present so the same verified
+ *     `.glb` opens in the platform viewer (Scene Viewer / WebXR on Android;
+ *     Quick Look only when an `iosSrc` `.usdz` is passed). This is the
+ *     reference demo's web half without the foot lock: the shoe is placed on
+ *     the floor, not stuck to the foot — foot try-on stays in the app. The
+ *     opening **orbit is the app's opening pose** (its
  *     `INITIAL_YAW_DEG = 60`, `INITIAL_PITCH_DEG = 18`): the library's own default
  *     looks straight down the shoe's length, so the first thing a customer saw
  *     was a toe-on blob rather than the three-quarter view a product shot uses.
@@ -90,13 +94,15 @@ import { useTransitionTiming } from '../motion/transitions'
  * outranks `:host` — so the element gets the stage's box and `model-viewer`
  * re-frames the model for it.
  */
-export default function Product3DViewer({ open, url, name, onClose }) {
+export default function Product3DViewer({ open, url, name, onClose, iosSrc = null }) {
   const { reduce } = useTransitionTiming()
   const { isDark } = useTheme()
   const [ready, setReady] = useState(false)
   const [tryOnOpen, setTryOnOpen] = useState(false)
   const [panelOpen, setPanelOpen] = useState(false)
+  const [spaceAr, setSpaceAr] = useState(false)
   const closeRef = useRef(null)
+  const viewerRef = useRef(null)
 
   // The theme-aware defaults from decision 6. `exposure` and `shadow-intensity`
   // are the two knobs the stage needs; everything else about the rig stays the
@@ -155,6 +161,33 @@ export default function Product3DViewer({ open, url, name, onClose }) {
   // Shared with every other dialog — see `useScrollLock`.
   useScrollLock(open)
 
+  // `<model-viewer>` reports AR support through `ar-status` and the
+  // `canActivateAR` probe once the element is upgraded. Desktops and browsers
+  // without WebXR / Scene Viewer keep exactly the viewer they have today: the
+  // space button stays hidden rather than opening nothing.
+  useEffect(() => {
+    if (!ready) return undefined
+    const el = viewerRef.current
+    if (!el) return undefined
+
+    const onArStatus = (event) => {
+      if (shouldOfferSpaceView(event?.detail?.status)) setSpaceAr(true)
+    }
+    el.addEventListener('ar-status', onArStatus)
+    // The probe is async on some builds — a sync `true` still counts.
+    try {
+      const probe = el.canActivateAR
+      if (probe === true) setSpaceAr(true)
+      else if (probe?.then) probe.then((ok) => ok && setSpaceAr(true)).catch(() => {})
+    } catch {
+      // No probe on this build — the `ar-status` event remains the signal.
+    }
+
+    return () => {
+      el.removeEventListener('ar-status', onArStatus)
+    }
+  }, [ready, url])
+
   if (!open || !url) return null
 
   return (
@@ -195,6 +228,7 @@ export default function Product3DViewer({ open, url, name, onClose }) {
             <div className="relative aspect-[4/3] w-full bg-stage sm:aspect-[16/10]">
               {ready ? (
                 <model-viewer
+                  ref={viewerRef}
                   src={url}
                   alt={`${name} — 3D model`}
                   // Presence, not value: the library reads these as attributes.
@@ -204,9 +238,24 @@ export default function Product3DViewer({ open, url, name, onClose }) {
                   camera-orbit="-60deg 72deg 105%"
                   exposure={exposure}
                   shadow-intensity={shadow}
+                  ar=""
+                  ar-modes={spaceArModes(iosSrc)}
+                  ar-placement="floor"
+                  ar-scale="auto"
+                  xr-environment=""
+                  {...(iosSrc ? { 'ios-src': iosSrc } : {})}
                   {...(reduce ? {} : { 'auto-rotate': '' })}
                   style={{ display: 'block', width: '100%', height: '100%' }}
-                />
+                >
+                  <button
+                    type="button"
+                    slot="ar-button"
+                    className="absolute bottom-3 right-3 inline-flex h-9 items-center gap-1.5 rounded-full border border-hairline bg-raised/95 px-3 text-xs font-medium text-ink shadow-premium backdrop-blur-sm transition-colors duration-200 hover:bg-subtle"
+                  >
+                    <Box size={14} strokeWidth={2} aria-hidden="true" />
+                    View in your space
+                  </button>
+                </model-viewer>
               ) : (
                 <div className="absolute inset-0 grid place-items-center">
                   <p className="shimmer h-3 w-40 rounded-full" aria-hidden="true" />
@@ -325,23 +374,36 @@ export default function Product3DViewer({ open, url, name, onClose }) {
             </div>
     
             {/*
-              The box's foot, which is where the app pins the same control. The
-              sentence no longer mentions the app as an aside: the button is the
-              door, and the prompt behind it does the explaining.
+              The box's foot: space view first (same `.glb`, platform viewer),
+              foot try-on second (the app, where the foot tracker lives). Space
+              view is rendered only after `<model-viewer>` proves AR support,
+              so desktops see exactly the viewer they had before.
             */}
             <div className="flex flex-col gap-3 border-t border-hairline-soft px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
               <p className="text-xs leading-relaxed text-muted">
                 Drag to turn the shoe · pinch or scroll to zoom. This is the model
                 the workshop published, not a photo.
               </p>
-              <button
-                type="button"
-                onClick={() => setTryOnOpen(true)}
-                className="btn btn-primary w-full shrink-0 gap-2 sm:w-auto"
-              >
-                <Footprints size={16} strokeWidth={2} aria-hidden="true" />
-                Try On in AR
-              </button>
+              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+                {spaceAr && (
+                  <button
+                    type="button"
+                    onClick={() => viewerRef.current?.activateAR?.()}
+                    className="btn btn-outline w-full shrink-0 gap-2 sm:w-auto"
+                  >
+                    <Box size={16} strokeWidth={2} aria-hidden="true" />
+                    View in your space
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setTryOnOpen(true)}
+                  className="btn btn-primary w-full shrink-0 gap-2 sm:w-auto"
+                >
+                  <Footprints size={16} strokeWidth={2} aria-hidden="true" />
+                  Try On in AR
+                </button>
+              </div>
             </div>
           </div>
         </div>,
