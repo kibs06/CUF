@@ -16,6 +16,7 @@ import {
   extractKnees,
   handoffPose,
   isPlausiblePlacement,
+  isStagedDrawable,
   pickFoot,
   placementFromFoot,
   poseFromLandmarks,
@@ -409,4 +410,58 @@ test('handoffPose: stage at t=0, foot at t=1, between with no pop', () => {
   assert.deepEqual(bad.heel, to.heel)
   // The handoff window is a real, short duration.
   assert.ok(HANDOFF_MS >= 200 && HANDOFF_MS <= 500)
+})
+
+test('isStagedDrawable: staged waits visibly, worn follows tracking', () => {
+  // The regression this guards: auto-stage draws the shoe, then the first
+  // empty pose message (lastSeen still NaN) hid it again because only the
+  // coast check fed `seenNow`. Staged must draw regardless of coast state.
+  assert.equal(isStagedDrawable({ manual: true }), true)
+  assert.equal(isStagedDrawable({ manual: false }), false)
+  assert.equal(isStagedDrawable({}), false)
+  assert.equal(isStagedDrawable(), false)
+})
+
+test('step-in sequence: slide in, dwell, arm, leave, reset', () => {
+  // Detector-rate frames (~100ms) through the real gate entry, with
+  // velocity from midpoint displacement exactly as the viewer computes it.
+  const stage = { heel: { x: 500, y: 820 }, toe: { x: 500, y: 480 } }
+  const axisAt = (cx, cy) => ({
+    heel: { x: cx - 87, y: cy },
+    toe: { x: cx + 87, y: cy },
+  })
+  let frames = 0
+  let prev = null
+  const step = (cx, cy) => {
+    const a = axisAt(cx, cy)
+    const vel = prev ? Math.hypot(cx - prev[0], cy - prev[1]) / 100 * 1000 : 0
+    prev = [cx, cy]
+    const g = stepInGate({
+      footHeel: a.heel,
+      footToe: a.toe,
+      stageHeel: stage.heel,
+      stageToe: stage.toe,
+      footVelocityPxPerSec: vel,
+      overlapFrames: frames,
+    })
+    frames = g.overlapFrames
+    return g
+  }
+  // Far away: no overlap, counter stays zero.
+  assert.equal(step(200, 700).overlapFrames, 0)
+  // Fast jump into the shoe: overlapped but too fast, counter resets.
+  let g = step(470, 700)
+  assert.equal(g.armed, false)
+  assert.equal(g.overlapFrames, 0)
+  // Slow settle (<=12px per 100ms frame stays under the velocity cap):
+  // dwell accumulates and arms exactly at the sustain threshold.
+  const settle = [[478, 700], [486, 700], [494, 700], [500, 700], [500, 700], [500, 700]]
+  settle.forEach(([x, y], i) => {
+    g = step(x, y)
+    assert.equal(g.armed, i + 1 >= STEPIN_SUSTAIN_FRAMES)
+  })
+  // Leaving resets the dwell so a later pass must qualify again.
+  g = step(200, 700)
+  assert.equal(g.armed, false)
+  assert.equal(g.overlapFrames, 0)
 })

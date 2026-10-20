@@ -384,6 +384,17 @@ export function stepInGate({
 }
 
 /**
+ * Whether the staged shoe counts as drawable this frame. While staged the
+ * shoe waits visibly: there is no `lastSeen` yet (NaN), so the coast check
+ * alone would hide the stage on the first empty pose message. The viewer
+ * ORs this into `shouldDrawShoe`'s `seenNow` — staged always draws, worn
+ * follows tracking exactly as before.
+ */
+export function isStagedDrawable({ manual } = {}) {
+  return Boolean(manual)
+}
+
+/**
  * One frame of the staged → worn handoff: smoothstep-eased (`t` is 0–1
  * wall-clock progress, clamped) interpolation of heel, toe, angle and
  * length from the stage pose to the live tracked pose. Angles take the
