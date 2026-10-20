@@ -514,7 +514,7 @@ class _FootResultsScreenState extends State<FootResultsScreen> {
               widget.sizeRangeLow != widget.sizeRangeHigh) ...[
             const SizedBox(height: 8),
             Text(
-              'EU ${widget.sizeRangeLow}–${widget.sizeRangeHigh} also fit — pick snugger or roomier',
+              '${formatSize(widget.sizeRangeLow!)}–${formatSize(widget.sizeRangeHigh!)} also fit — pick snugger or roomier',
               textAlign: TextAlign.center,
               style: AppConstants.bodyStyle(
                 fontSize: 13,
