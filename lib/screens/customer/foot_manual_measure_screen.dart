@@ -678,22 +678,13 @@ class _FootManualMeasureScreenState extends State<FootManualMeasureScreen>
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (_scan.canRetrySession)
-                  FilledButton(
+                  _errorButton(
+                    label: 'Try again',
                     onPressed: () => _scan.retrySessionStart(),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppConstants.accent,
-                      foregroundColor: AppConstants.secondary,
-                    ),
-                    child: Text(
-                      'Try again',
-                      style: AppConstants.bodyStyle(
-                        fontWeight: FontWeight.bold,
-                        color: AppConstants.secondary,
-                      ),
-                    ),
                   )
                 else if (_scan.sessionUnsupported)
-                  FilledButton(
+                  _errorButton(
+                    label: 'Use card scan instead',
                     onPressed: () => Navigator.of(context).pushReplacement(
                       MaterialPageRoute(
                         builder: (_) => FootCaptureScreen(
@@ -701,17 +692,6 @@ class _FootManualMeasureScreenState extends State<FootManualMeasureScreen>
                           footCondition: _scan.footCondition,
                           shoeCategory: _scan.shoeCategory,
                         ),
-                      ),
-                    ),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppConstants.accent,
-                      foregroundColor: AppConstants.secondary,
-                    ),
-                    child: Text(
-                      'Use card scan instead',
-                      style: AppConstants.bodyStyle(
-                        fontWeight: FontWeight.bold,
-                        color: AppConstants.secondary,
                       ),
                     ),
                   ),
@@ -730,6 +710,25 @@ class _FootManualMeasureScreenState extends State<FootManualMeasureScreen>
             ),
         ],
       ),
+      ),
+    );
+  }
+
+  /// Shared stadium CTA for the error state (retry + fallback, one style).
+  Widget _errorButton(
+      {required String label, required VoidCallback onPressed}) {
+    return FilledButton(
+      onPressed: onPressed,
+      style: FilledButton.styleFrom(
+        backgroundColor: AppConstants.accent,
+        foregroundColor: AppConstants.secondary,
+      ),
+      child: Text(
+        label,
+        style: AppConstants.bodyStyle(
+          fontWeight: FontWeight.bold,
+          color: AppConstants.secondary,
+        ),
       ),
     );
   }
