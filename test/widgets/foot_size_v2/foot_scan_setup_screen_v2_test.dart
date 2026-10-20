@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:app/screens/customer/foot_capture_screen.dart';
 import 'package:app/screens/customer/foot_size_v2/foot_scan_setup_screen_v2.dart';
 import 'package:app/screens/customer/foot_size_v2/foot_scan_session_screen_v2.dart';
 import 'package:app/screens/customer/foot_manual_measure_screen.dart';
@@ -134,6 +135,70 @@ void main() {
     await tester.pump();
     await tester.pump();
     expect(find.byType(FootScanSessionScreenV2), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Card scan swaps the CTA and shows card guidance',
+      (tester) async {
+    await pumpSetup(tester);
+
+    await tester.tap(find.text('Card scan'));
+    await tester.pump();
+
+    expect(find.text('Start card scan'), findsOneWidget);
+    expect(find.text('Start scanning'), findsNothing);
+    // Row titles render as-is; only section labels are uppercased.
+    expect(find.text('Place a card flat beside your foot'), findsOneWidget);
+    // The card flow measures both feet itself, so the feet choice is hidden.
+    expect(find.text('WHICH FEET'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Card scan opens the card capture flow, not the AR session',
+      (tester) async {
+    // The capture screen requests camera permission with requestPermissions,
+    // which answers with a map of permission -> status (camera = 0).
+    mockMessenger.setMockMethodCallHandler(permissionsChannel, (call) async {
+      if (call.method == 'requestPermissions') return <int, int>{0: 1};
+      if (call.method == 'checkPermissionStatus') return 1;
+      return null;
+    });
+
+    await pumpSetup(tester);
+
+    await tester.tap(find.text('Card scan'));
+    await tester.pump();
+    await tester.tap(find.text('Start card scan'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byType(FootCaptureScreen), findsOneWidget);
+    expect(find.byType(FootScanSessionScreenV2), findsNothing);
+  });
+
+  testWidgets('Card scan stays available when ARCore is unsupported',
+      (tester) async {
+    // Card capture is camera-only: an AR-blocked phone must still scan.
+    availability = 'UNSUPPORTED_DEVICE_NOT_CAPABLE';
+    mockMessenger.setMockMethodCallHandler(permissionsChannel, (call) async {
+      if (call.method == 'requestPermissions') return <int, int>{0: 1};
+      if (call.method == 'checkPermissionStatus') return 1;
+      return null;
+    });
+    await pumpSetup(tester);
+
+    await tester.tap(find.text('Card scan'));
+    await tester.pump();
+
+    expect(find.text('Start card scan'), findsOneWidget);
+    expect(find.text('AR scanning not supported here'), findsNothing);
+    expect(
+        find.text("AR scanning isn't supported on this phone"), findsNothing);
+
+    await tester.tap(find.text('Start card scan'));
+    await tester.pump();
+    await tester.pump();
+    expect(find.byType(FootCaptureScreen), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

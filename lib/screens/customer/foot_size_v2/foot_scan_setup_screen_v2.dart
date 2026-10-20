@@ -4,6 +4,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../../constants/app_constants.dart';
 import '../../../services/ar_core_channel.dart';
 import '../../../utils/ar_core_install.dart';
+import '../foot_capture_screen.dart';
 import '../foot_manual_measure_screen.dart';
 import 'foot_scan_session_screen_v2.dart';
 
@@ -16,7 +17,7 @@ import 'foot_scan_session_screen_v2.dart';
 /// - One stadium CTA that doubles as camera-permission pre-flight:
 ///   if permission is missing it becomes "Allow camera access".
 ///
-/// Auto Scan only — Guided Tap / paper modes stay in v1.
+/// Auto Scan, card scan, and tap — Guided Tap stays in v1.
 class FootScanSetupScreenV2 extends StatefulWidget {
   /// When true, renders only the setup CONTENT — no Scaffold, no AppBar — so
   /// the screen can be embedded as a panel (see `SizeYourFootScreen`, whose
@@ -35,7 +36,8 @@ class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2>
   /// Shopping preference: men's / women's / kids' sizing.
   String _shoeCategory = 'men';
 
-  /// 'scan' (camera auto scan) or 'tap' (place the points by hand).
+  /// 'scan' (camera auto scan), 'tap' (place the points by hand), or
+  /// 'card' (card-referenced capture — camera only, no ARCore).
   String _measureMode = 'scan';
 
   /// 'bare' or 'socks' — sock thickness affects compensation.
@@ -107,6 +109,11 @@ class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2>
           _arAvailability?.support == ArCoreSupport.needsUpdate);
 
   IconData get _ctaIcon {
+    if (_measureMode == 'card') {
+      return _cameraGranted
+          ? Icons.credit_card_outlined
+          : Icons.photo_camera_outlined;
+    }
     if (_arScanBlocked) return Icons.view_in_ar_outlined;
     if (_arNeedsInstall) return Icons.download_for_offline_outlined;
     return _cameraGranted
@@ -117,6 +124,10 @@ class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2>
   }
 
   String get _ctaLabel {
+    // Card scan needs only the camera, so the AR gates below never apply.
+    if (_measureMode == 'card') {
+      return _cameraGranted ? 'Start card scan' : 'Allow camera access';
+    }
     if (_arScanBlocked) return 'AR scanning not supported here';
     if (_arNeedsInstall) return 'Install AR support';
     if (_cameraGranted && _measureMode == 'tap') return 'Start tapping';
@@ -124,9 +135,10 @@ class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2>
   }
 
   Future<void> _onCtaPressed() async {
-    if (_arScanBlocked) return;
+    // Card scan is camera-only: ARCore gates never block it.
+    if (_arScanBlocked && _measureMode != 'card') return;
 
-    if (_arNeedsInstall) {
+    if (_arNeedsInstall && _measureMode != 'card') {
       setState(() => _arInstallOffered = true);
       await openArCoreInstallPage();
       // The probe re-runs on app resume, so a successful install turns this
@@ -156,7 +168,13 @@ class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2>
                 footCondition: _footCondition,
                 shoeCategory: _shoeCategory,
               )
-            : FootScanSessionScreenV2(
+            : _measureMode == 'card'
+                ? FootCaptureScreen(
+                    paperSize: 'card',
+                    footCondition: _footCondition,
+                    shoeCategory: _shoeCategory,
+                  )
+                : FootScanSessionScreenV2(
           footCondition: _footCondition,
           shoeCategory: _shoeCategory,
           footMode: _scanFeet,
@@ -167,7 +185,9 @@ class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2>
 
   @override
   Widget build(BuildContext context) {
-    final arNotice = _buildArSupportNotice();
+    // Card scan is camera-only: AR notices would wrongly imply it is blocked.
+    final arNotice =
+        _measureMode == 'card' ? null : _buildArSupportNotice();
     final body = Stack(
         children: [
           AppConstants.noiseOverlay(opacity: 0.03),
@@ -186,7 +206,9 @@ class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2>
                         const SizedBox(height: 28),
                         _measureMode == 'scan'
                             ? _buildWhatToExpect()
-                            : _buildTapExpect(),
+                            : _measureMode == 'card'
+                                ? _buildCardExpect()
+                                : _buildTapExpect(),
                         const SizedBox(height: 28),
                         _buildChipSection(
                           title: 'Shopping size',
@@ -242,7 +264,9 @@ class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2>
                     width: double.infinity,
                     height: 56,
                     child: FilledButton.icon(
-                      onPressed: _arScanBlocked ? null : _onCtaPressed,
+                      onPressed: (_arScanBlocked && _measureMode != 'card')
+                          ? null
+                          : _onCtaPressed,
                       style: FilledButton.styleFrom(
                         backgroundColor: AppConstants.accent,
                         foregroundColor: AppConstants.secondary,
@@ -256,7 +280,7 @@ class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2>
                         style: AppConstants.bodyStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: _arScanBlocked
+                          color: (_arScanBlocked && _measureMode != 'card')
                               ? AppConstants.secondary.withValues(alpha: 0.45)
                               : AppConstants.secondary,
                         ),
@@ -300,10 +324,12 @@ class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2>
   Widget _buildMeasureModeSection() {
     return _buildChipSection(
       title: 'How to measure',
-      subtitle: 'Scan lets the camera read your foot. Tap lets you place the '
+      subtitle: 'Scan lets the camera read your foot. Card uses a bank card '
+          'as a scale reference — no AR needed. Tap lets you place the '
           'points yourself.',
       options: const [
         ('scan', 'Camera scan'),
+        ('card', 'Card scan'),
         ('tap', 'Tap to measure'),
       ],
       selected: _measureMode,
@@ -335,6 +361,38 @@ class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2>
           icon: Icons.compare_arrows_rounded,
           title: 'Both feet',
           description: 'The guide walks you through each foot in turn.',
+          delay: 160,
+        ),
+      ],
+    );
+  }
+
+  /// What the card flow asks of the customer, in place of the scan steps.
+  Widget _buildCardExpect() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionLabel('What to expect'),
+        const SizedBox(height: 12),
+        _expectRow(
+          icon: Icons.credit_card_outlined,
+          title: 'Place a card flat beside your foot',
+          description:
+              'Any bank card works — fully visible, same surface as your foot.',
+          delay: 0,
+        ),
+        _expectRow(
+          icon: Icons.timer_outlined,
+          title: 'Hold still for a second',
+          description:
+              'Keep the card in frame; the burst captures automatically.',
+          delay: 80,
+        ),
+        _expectRow(
+          icon: Icons.compare_arrows_rounded,
+          title: 'Both feet',
+          description:
+              'Left foot first, then right — the larger foot sizes you.',
           delay: 160,
         ),
       ],
