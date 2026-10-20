@@ -197,6 +197,65 @@ void main() {
     });
   });
 
+  group('the step-in', () {
+    TryOnCoachCue? cue({
+      bool trackingActive = true,
+      TryOnPhase phase = TryOnPhase.searching,
+      bool locked = false,
+      bool footSeen = false,
+      Duration searchingFor = Duration.zero,
+      TryOnFootFraming framing = TryOnFootFraming.ok,
+      bool manualOfferDismissed = false,
+      bool shoeStaged = false,
+    }) =>
+        coachCueFor(
+          trackingEnabled: true,
+          trackingActive: trackingActive,
+          phase: phase,
+          locked: locked,
+          footSeen: footSeen,
+          searchingFor: searchingFor,
+          framing: framing,
+          manualOfferDismissed: manualOfferDismissed,
+          shoeStaged: shoeStaged,
+        );
+
+    test('a staged shoe plus a foot says step in, not hold still', () {
+      expect(
+        cue(shoeStaged: true, footSeen: true),
+        TryOnCoachCue.stepIntoShoe,
+      );
+    });
+
+    test('a lock still outranks the step-in', () {
+      expect(
+        cue(locked: true, phase: TryOnPhase.locked, shoeStaged: true, footSeen: true),
+        TryOnCoachCue.locked,
+      );
+    });
+
+    test('staged with no foot keeps the scene hints', () {
+      expect(cue(shoeStaged: true), TryOnCoachCue.pointAtFoot);
+      expect(
+        cue(shoeStaged: true, searchingFor: kFootSceneHintAfter),
+        TryOnCoachCue.improveScene,
+      );
+    });
+
+    test('a dead loop still offers manual placement when staged', () {
+      // No foot is ever seen without the loop, so the step-in rule never
+      // fires and the offer path is unchanged.
+      expect(
+        cue(trackingActive: false, shoeStaged: true),
+        TryOnCoachCue.manual,
+      );
+    });
+
+    test('unstaged framing advice is unchanged', () {
+      expect(cue(footSeen: true), TryOnCoachCue.holdStill);
+    });
+  });
+
   group('the manual offer', () {
     TryOnCoachCue? cue({
       bool trackingActive = true,

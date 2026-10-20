@@ -54,6 +54,9 @@ enum TryOnCoachCue {
   /// The tracker holds a lock. The success beat.
   locked,
 
+  /// A shoe is staged on the floor and a foot is in frame: step into it.
+  stepIntoShoe,
+
   /// A lock was lost and the customer is being walked back.
   regain,
 
@@ -127,19 +130,24 @@ TryOnFootFraming footFramingFromDetection(FootDetectionResult detection) {
 ///
 ///  1. **A lock.** It outranks everything, including a manual offer that was
 ///     pending a moment earlier.
-///  2. **The offer.** `!trackingActive` (the loop stopped after
+///  2. **The step-in.** A staged shoe plus a foot in frame means the customer
+///     should slide the foot into the shoe — more actionable than framing
+///     advice, and it retires the manual offer (the shoe is already placed).
+///     Staged with no foot keeps the scene hints; a dead loop keeps the offer
+///     (no foot is ever seen, so this rule never fires).
+///  3. **The offer.** `!trackingActive` (the loop stopped after
 ///     [kFootTrackFailureLimit] failures) or [kFootManualOfferAfter] without a
 ///     lock. It outranks `regain` on purpose: "step back into view" has been
 ///     said for 15 s by then, and repeating it forever is how a customer ends up
 ///     stuck. Dismissed, it becomes [TryOnCoachCue.placeByTap] — the offer is
 ///     not re-made until the next lock, but the instruction stays.
-///  3. **A loss** ([TryOnCoachCue.regain]).
-///  4. **The framing**, when a foot is seen: far → [TryOnCoachCue.moveCloser],
+///  4. **A loss** ([TryOnCoachCue.regain]).
+///  5. **The framing**, when a foot is seen: far → [TryOnCoachCue.moveCloser],
 ///     close → [TryOnCoachCue.moveBack], otherwise [TryOnCoachCue.holdStill].
 ///     Framing outranks "hold still" because it is the more actionable of the
 ///     two: a customer holding perfectly still 1 m from the phone is still not
 ///     going to lock.
-///  5. **Nothing seen**: [TryOnCoachCue.pointAtFoot] for
+///  6. **Nothing seen**: [TryOnCoachCue.pointAtFoot] for
 ///     [kFootSceneHintAfter], then [TryOnCoachCue.improveScene].
 TryOnCoachCue? coachCueFor({
   required bool trackingEnabled,
@@ -150,6 +158,7 @@ TryOnCoachCue? coachCueFor({
   required Duration searchingFor,
   required TryOnFootFraming framing,
   required bool manualOfferDismissed,
+  bool shoeStaged = false,
 }) {
   if (!trackingEnabled) return null;
   if (phase != TryOnPhase.searching &&
@@ -159,6 +168,8 @@ TryOnCoachCue? coachCueFor({
   }
 
   if (locked) return TryOnCoachCue.locked;
+
+  if (shoeStaged && footSeen) return TryOnCoachCue.stepIntoShoe;
 
   if (!trackingActive || searchingFor >= kFootManualOfferAfter) {
     return manualOfferDismissed

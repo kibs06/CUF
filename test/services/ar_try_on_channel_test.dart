@@ -336,6 +336,23 @@ void main() {
       expect((without as TryOnScreenshotEvent).bytes, isEmpty);
     });
 
+    test('a staged shoe arrives as a placement, defaulting to placed', () {
+      final staged = ArTryOnEvent.fromMap(<Object?, Object?>{
+        'type': 'shoeStaged',
+        'data': <Object?, Object?>{'placed': true},
+      });
+      expect(staged, isA<TryOnShoeStagedEvent>());
+      expect((staged as TryOnShoeStagedEvent).placed, isTrue);
+
+      final bare = ArTryOnEvent.fromMap(<Object?, Object?>{
+        'type': 'shoeStaged',
+        'data': <Object?, Object?>{},
+      });
+      expect((bare as TryOnShoeStagedEvent).placed, isTrue,
+          reason: 'the event existing is the claim; a missing flag '
+              'must not read as unplaced');
+    });
+
     test('an event type this build has never heard of is not a crash', () {
       // A V5/V6 event reaches a Dart build that predates it as an unknown
       // rather than as an exception — the property that let `footLock` be added

@@ -44,6 +44,7 @@ void main() {
       TryOnCoachCue.moveBack: 'Move the phone back',
       TryOnCoachCue.holdStill: 'Hold still',
       TryOnCoachCue.locked: 'Locked on',
+      TryOnCoachCue.stepIntoShoe: 'Slide your foot into the shoe',
       TryOnCoachCue.regain: 'Bring your foot back into view',
       TryOnCoachCue.manual: 'Place the shoe yourself',
       TryOnCoachCue.placeByTap: 'Tap the floor to place the shoe',

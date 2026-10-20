@@ -2679,6 +2679,15 @@ class ArTryOnView(
     private var shoeHiddenForNoFoot = false
 
     /**
+     * Step-in journey (floor-first staging): true once the foot tracker has
+     * held an anchor. A staged shoe that was never worn stays visible with no
+     * foot in frame; only a shoe that was worn and lost gets parked. Reset
+     * with [placed] on model load; a tap re-parks to staged via
+     * [applyPlacement].
+     */
+    private var everAnchored = false
+
+    /**
      * Park the model at zero scale: invisible, but still loaded, so the first foot fix only
      * needs a transform write to appear — no reload, no pop-in at the wrong size.
      */
@@ -2701,6 +2710,9 @@ class ArTryOnView(
     private fun hideShoeIfNoFoot() {
         if (mode != Mode.AR || !footModeRequested || tearingDown) return
         if (modelRoot == 0 || asset == null) return
+        if (footTracker.hasAnchor) everAnchored = true
+        // Floor-first staging: a shoe that was never worn waits visibly.
+        if (!everAnchored) return
         if (hasPlaceableFoot()) {
             if (shoeHiddenForNoFoot) {
                 shoeHiddenForNoFoot = false
@@ -2712,17 +2724,17 @@ class ArTryOnView(
     }
 
     /**
-     * Puts the shoe in front of the viewer the first frame after it loads (floor/QA mode only).
+     * Puts the shoe in front of the viewer the first frame after it loads.
      *
      * Without this the model sits at ARCore's world origin — where the device started, i.e. behind
      * or under the camera — and the screen looks empty until the customer taps. A tap still
      * re-places it ([placeShoe]); this is only the initial answer.
+     *
+     * Floor-first staging: foot mode stages here too — the shoe waits on the
+     * floor until the customer steps in. The tracker anchor still wins the
+     * moment it exists, so a worn shoe is never teleported back.
      */
     private fun autoPlaceIfNeeded(frame: Frame) {
-        // Foot mode: the shoe belongs on the foot, never at the screen centre. Centre
-        // auto-placement is the floor-mode (QA) answer only — in foot mode a shoe on an
-        // empty floor is the bug, so stand down even before the tracker locks.
-        if (footModeRequested) return
         // A tracked shoe is already placed where it belongs: auto-placement is the answer for the
         // seconds *before* the tracker has seen a foot, and fighting it afterwards would teleport
         // the shoe back to the screen centre on every frame.
@@ -2960,6 +2972,7 @@ class ArTryOnView(
         // until then the frame-scale correction has no baseline and must answer ×1 (V4.3).
         renderedLastMm = null
         placed = false
+        everAnchored = false
         Matrix.setIdentityM(placement, 0)
         applyTransform()
 
@@ -3137,6 +3150,13 @@ class ArTryOnView(
         Matrix.translateM(placement, 0, pose.tx(), pose.ty(), pose.tz())
         placedYawDeg = yawDeg
         placed = true
+        // Floor-first staging: every tap/auto placement (re-)parks the shoe
+        // to staged — including a tap that pulls it off a worn foot — so
+        // Dart's coach can say "step into it". The tracker anchor still wins
+        // afterwards (auto-place and the hide guard both stand down for it).
+        everAnchored = false
+        relay("shoe: staged on floor")
+        listener.onEvent("shoeStaged", mapOf("placed" to true))
         applyTransform()
     }
 

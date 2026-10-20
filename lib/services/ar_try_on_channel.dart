@@ -356,6 +356,9 @@ sealed class ArTryOnEvent {
           lengthMm: _asDouble(data['lengthMm']),
           quality: _asDouble(data['quality']),
         ),
+      'shoeStaged' => TryOnShoeStagedEvent(
+          placed: data['placed'] != false,
+        ),
       'status' => TryOnStatusEvent(line: data['line']?.toString() ?? ''),
       'screenshot' => TryOnScreenshotEvent(bytes: _asBytes(data['bytes'])),
       _ => ArTryOnUnknownEvent(type: type, data: data),
@@ -380,6 +383,21 @@ class TryOnPerfEvent extends ArTryOnEvent {
   final TryOnPerf perf;
 
   const TryOnPerfEvent({required this.perf});
+}
+
+/// The shoe was parked on the floor — tap placement or screen-centre
+/// auto-place, both funnelled through native `applyPlacement`.
+///
+/// **Floor-first staging, not a lock.** This drives the coach card's
+/// "step into it" cue, never the render (native-resident): a staged shoe
+/// waits visibly with no foot in frame, and the tracker's anchor still wins
+/// afterwards. Absent on older natives — Dart treats "never heard" as
+/// "not staged", and the unknown-event fallback keeps that silent.
+class TryOnShoeStagedEvent extends ArTryOnEvent {
+  /// True when a shoe is waiting on the floor.
+  final bool placed;
+
+  const TryOnShoeStagedEvent({required this.placed});
 }
 
 /// The renderer failed — `renderer_init_failed`, `model_parse_failed`, …

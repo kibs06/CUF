@@ -773,6 +773,47 @@ void main() {
     });
   });
 
+  group('shoeStaged', () {
+    test('a staged event arms the step-in cue; a lock retires it', () {
+      fakeAsync((async) {
+        final channel = _FakeChannel();
+        final controller =
+            _controller(channel: channel, detector: _FakeDetector());
+        _startRealSession(controller, async);
+        expect(controller.shoeStaged, isFalse);
+
+        channel.emit(const TryOnShoeStagedEvent(placed: true));
+        async.flushMicrotasks();
+
+        expect(controller.shoeStaged, isTrue);
+
+        channel.emit(const TryOnFootLockEvent(locked: true, quality: 0.8));
+        async.flushMicrotasks();
+
+        expect(controller.phase, TryOnPhase.locked);
+        expect(controller.shoeStaged, isFalse,
+            reason: 'the tracker took the shoe — it is worn, not staged');
+        controller.dispose();
+      });
+    });
+
+    test('a staged event off the real session is ignored', () {
+      fakeAsync((async) {
+        final channel = _FakeChannel()..startSucceeds = false;
+        final controller =
+            _controller(channel: channel, detector: _FakeDetector());
+        _startRealSession(controller, async);
+        expect(controller.mode, TryOnMode.simulated);
+
+        channel.emit(const TryOnShoeStagedEvent(placed: true));
+        async.flushMicrotasks();
+
+        expect(controller.shoeStaged, isFalse);
+        controller.dispose();
+      });
+    });
+  });
+
   // ═══════════════════════════════════════════════════════════════════════
   // V4.8 — the app's lifecycle is a pause, not a stop
   // ═══════════════════════════════════════════════════════════════════════
