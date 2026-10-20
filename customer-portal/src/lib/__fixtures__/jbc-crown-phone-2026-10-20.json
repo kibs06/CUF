@@ -146,9 +146,48 @@
           "toe": { "x": 0.4707350730895996, "y": 0.8034591674804688, "score": 0.35197901725769043 },
           "ankle": { "x": 0.4668596386909485, "y": 0.7965511083602905, "score": 0.38873404264450073 }
         }
-      ],
-      "lengthPx": 119.18970234932576, "rawLen": 11.298050225268874,
+      ],      "lengthPx": 119.18970234932576,
+      "rawLen": 11.298050225268874,
       "note": "WORST COLLAPSE: raw 11px. Smoothed length hides it completely."
+    },
+    {
+      "t": 19867, "vw": 720, "vh": 1280,
+      "feet": [
+        {
+          "side": "left",
+          "heel": { "x": 0.4952477216720581, "y": 0.248520627617836, "score": 0.3071501553058624 },
+          "toe": { "x": 0.5311675667762756, "y": 0.21007436513900757, "score": 0.37159261107444763 },
+          "ankle": { "x": 0.5086938738822937, "y": 0.24229393899440765, "score": 0.3360041677951813 }
+        }
+      ],
+      "lengthPx": null, "rawLen": 55.593180721177106,
+      "note": "SESSION 3 (t=7968 base): lone 55px detection in ~40s of nothing. Extended 80px < 86.4px gate min -> rejected. Gate working."
+    },
+    {
+      "t": 58517, "vw": 720, "vh": 1280,
+      "feet": [
+        {
+          "side": "left",
+          "heel": { "x": 0.7318086624145508, "y": 0.6117594838142395, "score": 0.336985319852829 },
+          "toe": { "x": 0.7330594062805176, "y": 0.556926965713501, "score": 0.3265935182571411 },
+          "ankle": { "x": 0.7484394311904907, "y": 0.6074273586273193, "score": 0.33589524030685425 }
+        }
+      ],
+      "lengthPx": 149.94037688668465, "rawLen": 70.19140021363255,
+      "note": "NEAR-VERTICAL short axis (dx~0, dy~70px, scores ~0.33): shin-candidate shape, yet ACCEPTED at smoothed 150px. Phase 4 continuity material."
+    },
+    {
+      "t": 61951, "vw": 720, "vh": 1280,
+      "feet": [
+        {
+          "side": "left",
+          "heel": { "x": 0.19813308119773865, "y": 1.082991600036621, "score": 0.40333181619644165 },
+          "toe": { "x": -0.0012050271034240723, "y": 1.1528867483139038, "score": 0.33339470624923706 },
+          "ankle": { "x": 0.12719979882240295, "y": 1.0782719850540161, "score": 0.42560523748397827 }
+        }
+      ],
+      "lengthPx": 205.8818346792417, "rawLen": 169.12452451469056,
+      "note": "Largest accepted length yet (206px smoothed) — foot fully below frame bottom (y>1). Still <40% of a ~550px true foot."
     }
   ]
 }
