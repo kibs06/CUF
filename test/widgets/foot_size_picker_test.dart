@@ -257,11 +257,50 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    // EU 48 is the last chip of the men’s band: the lazy strip only
+    // EU 48 is the last chip of the men's band: the lazy strip only
     // builds visible chips, so finding it proves the strip opened on it.
     expect(find.text('48'), findsOneWidget);
 
     await tapSave(tester);
     expect(saved?.euSize, 48);
+  });
+
+  testWidgets('tapping a chip centres it in the strip', (tester) async {
+    await pumpPanel(tester, initialEuSize: 42, initialCategory: 'men');
+    await tester.pump();
+    await tester.pump();
+
+    // Leave the centred 42 behind (drag toward the end of the band),
+    // then tap a visible off-centre chip.
+    await tester.drag(find.byType(ListView), const Offset(-400, 0));
+    await tester.pump();
+    // '45 has room on both sides, so centring it is physically possible
+    // (end chips clamp at max scroll instead — still fully visible).
+    await tester.tap(find.text('45'));
+    await tester.pumpAndSettle();
+
+    final stripCenter = tester.getCenter(find.byType(ListView)).dx;
+    expect(tester.getCenter(find.text('45')).dx,
+        moreOrLessEquals(stripCenter, epsilon: 2.0));
+    await tapSave(tester);
+    expect(saved?.euSize, 45);
+  });
+
+  testWidgets('switching scale keeps the selection centred at its new index',
+      (tester) async {
+    await pumpPanel(tester, initialEuSize: 30, initialCategory: 'men');
+    await tester.pump();
+    await tester.pump();
+
+    // EU 30 survives into the kids band (22-35) at a different index:
+    // without the switch follow it would sit off-screen, strip unmoved.
+    await tester.tap(find.text("Kids'"));
+    await tester.pumpAndSettle();
+
+    expect(find.text('30'), findsOneWidget);
+    final stripCenter = tester.getCenter(find.byType(ListView)).dx;
+    expect(tester.getCenter(find.text('30')).dx,
+        moreOrLessEquals(stripCenter, epsilon: 2.0));
+    expect(saveEnabled(tester), isTrue);
   });
 }
