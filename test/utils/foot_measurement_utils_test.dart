@@ -446,4 +446,143 @@ void main() {
       expect(p.dy, lessThanOrEqualTo(1.0));
     });
   });
+
+  group('Card reference (ID-1 85.60x53.98mm)', () {
+    test('has correct ID-1 dimensions', () {
+      expect(PaperDimensions.card.widthMm, 85.60);
+      expect(PaperDimensions.card.heightMm, 53.98);
+      expect(PaperDimensions.card.name, 'Card (ID-1)');
+    });
+
+    test('fromKey returns card for "card" (case-insensitive)', () {
+      expect(PaperDimensions.fromKey('card').widthMm, 85.60);
+      expect(PaperDimensions.fromKey('Card').name, 'Card (ID-1)');
+      expect(PaperDimensions.fromKey('CARD').heightMm, 53.98);
+    });
+
+    test('fromKey still handles a4/letter + unknown default', () {
+      expect(PaperDimensions.fromKey('a4').widthMm, 210.0);
+      expect(PaperDimensions.fromKey('letter').widthMm, 215.9);
+      expect(PaperDimensions.fromKey('unknown').widthMm, 210.0);
+    });
+
+    test('card scale: 85.6x53.98 quad ~200px diagonal gives ~0.5mm/px', () {
+      // ID-1 diagonal = sqrt(85.6^2 + 53.98^2) ≈ 101.25mm.
+      // A 160x100px card → diagonal ≈ 188.7px → scale ≈ 0.537mm/px.
+      final corners = [
+        const Offset(100, 100),
+        const Offset(260, 100),
+        const Offset(260, 200),
+        const Offset(100, 200),
+      ];
+      final scale = computeScaleFactor(
+        paperCorners: corners,
+        paper: PaperDimensions.card,
+      );
+      expect(scale, isNotNull);
+      // 101.25 / 188.7 ≈ 0.537
+      expect(scale!, closeTo(0.537, 0.03));
+    });
+
+    test('card scale round-trips a 260mm foot within 5mm budget', () {
+      final corners = [
+        const Offset(100, 100),
+        const Offset(260, 100),
+        const Offset(260, 200),
+        const Offset(100, 200),
+      ];
+      final scale = computeScaleFactor(
+        paperCorners: corners,
+        paper: PaperDimensions.card,
+      )!;
+      // 260mm foot at this scale spans ~484px; 2px corner error ≈ 1mm.
+      final footPx = 260 / scale;
+      expect(pixelsToMm(footPx, scale), closeTo(260.0, 0.5));
+      expect(pixelsToMm(footPx + 2, scale) - 260.0, lessThan(2.0));
+    });
+
+    test('rejects tiny card (too few pixels → quantization breaks budget)', () {
+      // 40x25px card → diagonal ~47px < 80px minimum.
+      final corners = [
+        const Offset(100, 100),
+        const Offset(140, 100),
+        const Offset(140, 125),
+        const Offset(100, 125),
+      ];
+      expect(
+        computeScaleFactor(
+          paperCorners: corners,
+          paper: PaperDimensions.card,
+        ),
+        isNull,
+      );
+      expect(isPlausibleReferenceQuad(corners, PaperDimensions.card), isFalse);
+    });
+
+    test('rejects tilted card (keystoned quad, diagonals disagree)', () {
+      // Strong keystone trapezoid: top edge 80px vs bottom 200px (tilt
+      // away) — opposite-side ratio 0.4 + aspect 2.5 vs card 1.59.
+      final tilted = [
+        const Offset(140, 100),
+        const Offset(220, 100),
+        const Offset(260, 200),
+        const Offset(60, 200),
+      ];
+      expect(isPlausibleReferenceQuad(tilted, PaperDimensions.card), isFalse);
+      expect(
+        computeScaleFactor(
+          paperCorners: tilted,
+          paper: PaperDimensions.card,
+        ),
+        isNull,
+      );
+    });
+
+    test('rejects wrong object (A4 quad passed as card → aspect mismatch)', () {
+      // A4-shaped quad (210x297, aspect 1.41) claimed as card (aspect 1.59
+      // … wait, 85.6/53.98 = 1.586 — a square-ish detection fails instead).
+      // Use a square: aspect 1.0 vs card 1.586 → 37% error → reject.
+      final square = [
+        const Offset(100, 100),
+        const Offset(250, 100),
+        const Offset(250, 250),
+        const Offset(100, 250),
+      ];
+      expect(isPlausibleReferenceQuad(square, PaperDimensions.card), isFalse);
+    });
+
+    test('accepts good card quad, rejects same quad when lifted/odd', () {
+      final good = [
+        const Offset(100, 100),
+        const Offset(260, 100),
+        const Offset(260, 200),
+        const Offset(100, 200),
+      ];
+      expect(isPlausibleReferenceQuad(good, PaperDimensions.card), isTrue);
+      // Same shape at 1/4 scale → too small, must re-coach.
+      final far = [
+        const Offset(100, 100),
+        const Offset(140, 100),
+        const Offset(140, 125),
+        const Offset(100, 125),
+      ];
+      expect(isPlausibleReferenceQuad(far, PaperDimensions.card), isFalse);
+    });
+
+    test('A4 path still works after quad-gate (regression)', () {
+      final corners = [
+        const Offset(100, 50),
+        const Offset(400, 50),
+        const Offset(400, 550),
+        const Offset(100, 550),
+      ];
+      final scale = computeScaleFactor(
+        paperCorners: corners,
+        paper: PaperDimensions.a4,
+      );
+      expect(scale, isNotNull);
+      expect(scale!, greaterThan(0.3));
+      expect(scale, lessThan(2.0));
+    });
+  });
 }

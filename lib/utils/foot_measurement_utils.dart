@@ -22,8 +22,12 @@ import 'size_key.dart';
 // PAPER DIMENSIONS (known real-world sizes)
 // ═══════════════════════════════════════════════════════════════════
 
-/// Paper dimensions in millimeters.
+/// Reference dimensions in millimeters.
 /// Used as the scale reference for pixel→mm conversion.
+///
+/// Supports sheets (`a4`, `letter`) and the wallet card (`card`, ID-1
+/// 85.60 × 53.98 mm). The card must lie flat on the floor in the same
+/// plane as the foot — any tilt/lift breaks the mm/px scale.
 class PaperDimensions {
   final String name;
   final double widthMm;
@@ -49,9 +53,35 @@ class PaperDimensions {
     heightMm: 279.4,
   );
 
-  /// Get the correct dimensions for a paper size key.
+  /// Wallet card (ID-1): 85.60 × 53.98 mm (credit/bank-card size).
+  /// Smaller baseline than A4, so it needs more pixels + stricter
+  /// quad checks to hold the ±5mm sizing budget (see below).
+  static const card = PaperDimensions(
+    name: 'Card (ID-1)',
+    widthMm: 85.60,
+    heightMm: 53.98,
+  );
+
+  /// Known diagonal in mm (scale anchor).
+  double get diagonalMm => math.sqrt(widthMm * widthMm + heightMm * heightMm);
+
+  /// Known long/short edge ratio (aspect sanity check).
+  double get aspectRatio =>
+      math.max(widthMm, heightMm) / math.min(widthMm, heightMm);
+
+  /// True for the small card reference (tighter pixel minimums apply).
+  bool get isCard => widthMm < 100 && heightMm < 100;
+
+  /// Get the correct dimensions for a reference key.
+  /// Accepts 'a4', 'letter', 'card' (case-insensitive); unknown → A4
+  /// for backwards compatibility with stored scans.
   static PaperDimensions fromKey(String key) {
-    return key == 'letter' ? letter : a4;
+    final k = key.trim().toLowerCase();
+    if (k == 'letter') return letter;
+    if (k == 'card' || k == 'id-1' || k == 'id1' || k == 'credit-card') {
+      return card;
+    }
+    return a4;
   }
 }
 
@@ -59,23 +89,75 @@ class PaperDimensions {
 // PIXELS → MILLIMETERS CONVERSION
 // ═══════════════════════════════════════════════════════════════════
 
-/// Compute a pixels-to-millimeters scale factor from paper corner positions.
+/// Whether a detected 4-corner quad is plausible for [paper].
 ///
-/// [paperCorners] should contain 4 corners detected in the image (in pixels).
-/// [paper] is the known real-world paper dimensions.
+/// Off-plane / tilt rejection: a lifted or strongly tilted card changes its
+/// apparent aspect and breaks the parallelogram, so the mm/px scale would
+/// lie. Returns false (caller must re-coach, never measure) when:
+/// - not exactly 4 finite corners,
+/// - any side or diagonal too small (card: ≥40px sides / ≥80px diagonal —
+///   smaller means quantization error alone breaks the 5mm budget),
+/// - diagonals disagree >18% (keystone / non-planar view),
+/// - opposite sides disagree >43% (strong perspective),
+/// - detected aspect vs known aspect off >30% (wrong object or severe tilt).
+double? _minSidePxFor(PaperDimensions paper) => paper.isCard ? 40.0 : 50.0;
+double? _minDiagonalPxFor(PaperDimensions paper) =>
+    paper.isCard ? 80.0 : 10.0;
+
+bool isPlausibleReferenceQuad(
+  List<Offset> corners,
+  PaperDimensions paper,
+) {
+  if (corners.length != 4) return false;
+  for (final c in corners) {
+    if (!c.dx.isFinite || !c.dy.isFinite) return false;
+  }
+  final sorted = _sortCornersClockwise(corners);
+  final sides = <double>[
+    for (int i = 0; i < 4; i++) _distance(sorted[i], sorted[(i + 1) % 4]),
+  ];
+  final minSide = _minSidePxFor(paper)!;
+  if (sides.any((s) => !(s >= minSide))) return false;
+  final diag1 = _distance(sorted[0], sorted[2]);
+  final diag2 = _distance(sorted[1], sorted[3]);
+  final minDiag = _minDiagonalPxFor(paper)!;
+  if (!(diag1 >= minDiag) || !(diag2 >= minDiag)) return false;
+  final diagRatio = math.min(diag1, diag2) / math.max(diag1, diag2);
+  if (diagRatio < 0.82) return false;
+  final sideRatio1 = math.min(sides[0], sides[2]) / math.max(sides[0], sides[2]);
+  final sideRatio2 = math.min(sides[1], sides[3]) / math.max(sides[1], sides[3]);
+  if (sideRatio1 < 0.57 || sideRatio2 < 0.57) return false;
+  final longPx = sides.reduce(math.max);
+  final shortPx = sides.reduce(math.min);
+  if (!(shortPx > 0)) return false;
+  final detectedAspect = longPx / shortPx;
+  final aspectErr =
+      (detectedAspect - paper.aspectRatio).abs() / paper.aspectRatio;
+  if (aspectErr > 0.30) return false;
+  return true;
+}
+
+/// Compute a pixels-to-millimeters scale factor from reference corner positions.
 ///
-/// Returns the average mm-per-pixel ratio, or `null` if corners are invalid.
+/// [paperCorners] should contain 4 corners detected in the image (in pixels),
+/// coplanar with the foot. [paper] is the known real-world reference
+/// dimensions (A4, Letter, or ID-1 card).
 ///
-/// Algorithm: compute the ratio of the known paper diagonal (mm) to the
+/// Returns the average mm-per-pixel ratio, or `null` if corners are invalid
+/// or fail [isPlausibleReferenceQuad] (tilted / too small / wrong object —
+/// the caller must re-coach, never measure).
+///
+/// Algorithm: compute the ratio of the known diagonal (mm) to the
 /// detected diagonal (pixels). Average the two diagonals for robustness.
 double? computeScaleFactor({
   required List<Offset> paperCorners,
   required PaperDimensions paper,
 }) {
   if (paperCorners.length < 4) return null;
+  if (!isPlausibleReferenceQuad(paperCorners, paper)) return null;
 
-  // Known paper diagonal in mm
-  final knownDiagonalMm = _hypot(paper.widthMm, paper.heightMm);
+  // Known diagonal in mm
+  final knownDiagonalMm = paper.diagonalMm;
 
   // Sort corners: top-left, top-right, bottom-right, bottom-left
   // by angle from centroid
@@ -84,8 +166,6 @@ double? computeScaleFactor({
   // Detected diagonals in pixels (top-left↔bottom-right, top-right↔bottom-left)
   final diag1Px = _distance(sorted[0], sorted[2]);
   final diag2Px = _distance(sorted[1], sorted[3]);
-
-  if (diag1Px < 10 || diag2Px < 10) return null; // Too small to be valid
 
   // Average mm-per-pixel from both diagonals
   final scale1 = knownDiagonalMm / diag1Px;
@@ -625,8 +705,6 @@ Offset mapViewToNormalized(
 // ═══════════════════════════════════════════════════════════════════
 // GEOMETRY HELPERS (private)
 // ═══════════════════════════════════════════════════════════════════
-
-double _hypot(double a, double b) => math.sqrt(a * a + b * b);
 
 double _distance(Offset a, Offset b) {
   return math.sqrt((a.dx - b.dx) * (a.dx - b.dx) + (a.dy - b.dy) * (a.dy - b.dy));

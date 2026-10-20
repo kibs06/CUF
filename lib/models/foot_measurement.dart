@@ -36,7 +36,7 @@ class FootMeasurement {
   final String? sizeRecommendationReason;  // human-readable sizing rationale
 
   // Scan metadata
-  final String paperSizeUsed; // 'ar' (live ARCore), 'a4', or 'letter'
+  final String paperSizeUsed; // 'ar' (live ARCore), 'a4', 'letter', or 'card' (ID-1 85.60x53.98mm)
   final String? footCondition; // 'bare' or 'socks'
 
   // Shopping preference
