@@ -3,10 +3,16 @@ import { test } from 'node:test'
 
 import {
   COAST_MS,
+  FOOT_SHANK_RATIO,
+  MAX_DISAGREE_RATIO,
+  blendFootLength,
+  estimateFootLengthFromLeg,
   extractFeet,
+  extractKnees,
   isPlausiblePlacement,
   pickFoot,
   placementFromFoot,
+  poseFromLandmarks,
   shouldDrawShoe,
   smoothAngle,
   smoothPoint,
@@ -118,4 +124,132 @@ test('shouldDrawShoe: now, or recently — never long-lost', () => {
     shouldDrawShoe({ seenNow: false, lastSeenMs: NaN, nowMs: 2000 }),
     false,
   )
+})
+
+test('extractKnees: knees gated at 0.5, null per missing side', () => {
+  const knees = extractKnees(landmarks())
+  // The shared fixture helper sets no knee landmarks: both null, never thrown.
+  assert.equal(knees.left, null)
+  assert.equal(knees.right, null)
+
+  const bent = landmarks({
+    25: { x: 0.5, y: 0.2, visibility: 0.9 },
+    26: { x: 0.55, y: 0.25, visibility: 0.4 },
+  })
+  assert.deepEqual(extractKnees(bent).left, { x: 0.5, y: 0.2, score: 0.9 })
+  // 0.4 is above the foot gate (0.3) but below the stricter knee gate.
+  assert.equal(extractKnees(bent).right, null)
+})
+
+test('estimateFootLengthFromLeg: 400px shank reads 250.4px', () => {
+  const prior = estimateFootLengthFromLeg({
+    knee: { x: 0.5, y: 0.2, score: 0.9 },
+    ankle: { x: 0.5, y: 0.6, score: 0.7 },
+    videoW: 1000,
+    videoH: 1000,
+  })
+  // hypot() lands within float dust of 400.
+  assert.ok(Math.abs(prior.shankPx - 400) < 1e-9)
+  // The module scales the measured shank (400 up to hypot dust).
+  assert.ok(Math.abs(prior.lengthPx - 250.4) < 1e-9)
+  // Confidence is the weaker of the two ends.
+  assert.equal(prior.confidence, 0.7)
+})
+
+test('estimateFootLengthFromLeg: null without both ends', () => {
+  const ankle = { x: 0.5, y: 0.6, score: 0.9 }
+  assert.equal(
+    estimateFootLengthFromLeg({ knee: null, ankle, videoW: 1000, videoH: 1000 }),
+    null,
+  )
+  assert.equal(
+    estimateFootLengthFromLeg({
+      knee: { x: 0.5, y: 0.2, score: 0.9 },
+      ankle,
+      videoW: 0,
+      videoH: 1000,
+    }),
+    null,
+  )
+})
+
+test('blendFootLength: no prior passes the axis through untouched', () => {
+  assert.deepEqual(
+    blendFootLength({ axisLengthPx: 150, legPriorPx: null, legConfidence: 0 }),
+    { lengthPx: 150, source: 'axis', disagree: false },
+  )
+  assert.deepEqual(
+    blendFootLength({ axisLengthPx: 150, legPriorPx: 250, legConfidence: 0 }),
+    { lengthPx: 150, source: 'axis', disagree: false },
+  )
+  assert.equal(blendFootLength({ axisLengthPx: 0, legPriorPx: 250, legConfidence: 0.8 }), null)
+})
+
+test('blendFootLength: agreeing estimates blend by confidence', () => {
+  // 150 vs 200: ratio 1.33 < 1.8, weights 0.5/0.5 -> midpoint.
+  const out = blendFootLength({
+    axisLengthPx: 150,
+    axisConfidence: 0.5,
+    legPriorPx: 200,
+    legConfidence: 0.5,
+  })
+  assert.equal(out.source, 'blend')
+  assert.equal(out.disagree, false)
+  assert.equal(out.lengthPx, 175)
+})
+
+test('blendFootLength: collapsed axis loses to the leg with a flag', () => {
+  // Fixture-shaped collapse: smoothed axis 119px against a 250px leg prior.
+  const out = blendFootLength({
+    axisLengthPx: 119,
+    axisConfidence: 0.4,
+    legPriorPx: 250.4,
+    legConfidence: 0.7,
+  })
+  assert.equal(out.source, 'leg-override')
+  assert.equal(out.disagree, true)
+  assert.equal(out.lengthPx, 250.4)
+})
+
+test('blendFootLength: ratio exactly 1.8 still blends, above overrides', () => {
+  const atEdge = blendFootLength({
+    axisLengthPx: 100,
+    axisConfidence: 0.5,
+    legPriorPx: 100 * MAX_DISAGREE_RATIO,
+    legConfidence: 0.5,
+  })
+  assert.equal(atEdge.source, 'blend')
+
+  const overEdge = blendFootLength({
+    axisLengthPx: 100,
+    axisConfidence: 0.9,
+    legPriorPx: 100 * MAX_DISAGREE_RATIO + 0.01,
+    legConfidence: 0.1,
+  })
+  // Even a confident axis loses past the edge: collapse is the known failure.
+  assert.equal(overEdge.source, 'leg-override')
+  assert.equal(overEdge.disagree, true)
+})
+
+test('poseFromLandmarks: feet plus per-side knees, nulls when missing', () => {
+  // One pose per list entry (the worker passes `result.landmarks`).
+  const { feet, knees } = poseFromLandmarks([landmarks()])
+  assert.equal(feet.length, 1)
+  assert.equal(knees.left, null)
+  assert.equal(knees.right, null)
+
+  const withKnee = landmarks({ 25: { x: 0.5, y: 0.2, visibility: 0.9 } })
+  const out = poseFromLandmarks([withKnee])
+  assert.deepEqual(out.knees.left, { x: 0.5, y: 0.2, score: 0.9 })
+  assert.equal(out.knees.right, null)
+  assert.deepEqual(poseFromLandmarks([]), { feet: [], knees: { left: null, right: null } })
+})
+
+test('blendFootLength: no-knee passthrough is the identical double (viewer byte-identical)', () => {
+  // An awkward non-round double must flow through with zero arithmetic so
+  // the viewer lerp computes bit-for-bit what the old code computed.
+  const axis = 150.123456789
+  const out = blendFootLength({ axisLengthPx: axis, axisConfidence: 0.4, legPriorPx: null, legConfidence: 0 })
+  assert.equal(out.lengthPx, axis)
+  assert.equal(out.source, 'axis')
 })
