@@ -11,6 +11,7 @@ import {
   estimateFootLengthFromLeg,
   handoffPose,
   isPlausiblePlacement,
+  isStagedDrawable,
   pickFoot,
   placementFromFoot,
   shouldDrawShoe,
@@ -664,8 +665,11 @@ export default function FootTryOnViewer({ open, url, name, onClose, forwardAxis 
           }
           if (!tracked) t.lastBlend = null
         }
+        // A staged shoe waits visibly: it has no lastSeen yet, so the
+        // coast check alone would hide the stage on the first empty pose
+        // message. Worn follows tracking exactly as before.
         const draw = shouldDrawShoe({
-          seenNow: Boolean(tracked),
+          seenNow: Boolean(tracked) || isStagedDrawable(t),
           lastSeenMs: t.lastSeen,
           nowMs: now,
         })
