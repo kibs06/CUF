@@ -693,7 +693,7 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen>
                       children: [
                         Icon(
                           Icons.zoom_out,
-                          color: AppConstants.surfaceLight,
+                          color: AppConstants.inkInverse,
                           size: 18,
                         ),
                         Expanded(
