@@ -55,6 +55,10 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
   String _guidanceStatus =
       'searching'; // searching|detected|holding|ready|burst|tooSmall|tilted|wrongObject
 
+  // Per-foot intro gate: the overlay names the foot to scan, and
+  // detection only starts once the customer dismisses it.
+  bool _showFootIntro = true;
+
   // Hold-still dwell: consecutive ready ticks (500ms each → 2 = ~1s).
   int _holdTicks = 0;
 
@@ -231,7 +235,8 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
       if (mounted) {
         setState(() => _isInitializing = false);
         await _startFrameStream();
-        _startPaperDetection();
+        // The intro overlay gates detection: it starts on dismissal.
+        if (!_showFootIntro) _startPaperDetection();
       }
     } catch (e) {
       debugPrint('[FootCapture] Camera init error: $e');
@@ -242,6 +247,14 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
         });
       }
     }
+  }
+
+  /// The intro overlay names the foot to scan; detection starts only
+  /// once the customer confirms — so nobody scans blind.
+  void _dismissFootIntro() {
+    _detectionTimer?.cancel();
+    setState(() => _showFootIntro = false);
+    _startPaperDetection();
   }
 
   /// Reference detection loop: live CV corners (or sim fallback) through
@@ -294,7 +307,6 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
       }
     });
   }
-
 
   /// Auto-capture burst: [cardBurstFrameCount] frames, ~250ms apart.
   ///
@@ -377,12 +389,13 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
       setState(() {
         _currentFoot = 1;
         _holdTicks = 0;
+        _showFootIntro = true;
         _guidanceStatus = 'searching';
         _guidanceText =
             'Left foot captured — now place your right foot beside the $_refNoun';
       });
       await _startFrameStream();
-      _startPaperDetection();
+      // The right-foot intro gates detection: it restarts on dismissal.
       return;
     }
 
@@ -458,14 +471,14 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
               },
             ),
 
-          // ── Paper Detection Frame ──
-          _buildDetectionFrame(),
-
           // ── Top Bar (foot indicator + close) ──
           _buildTopBar(),
 
           // ── Bottom Guidance Bar ──
           _buildBottomBar(),
+
+          // ── Per-foot intro gate ──
+          if (_showFootIntro) _buildFootIntro(),
         ],
       ),
     );
@@ -528,94 +541,85 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
       ),
     );
   }
-
-  Widget _buildDetectionFrame() {
-    final screenSize = MediaQuery.of(context).size;
-    final frameWidth = screenSize.width * 0.75;
-    final frameHeight = frameWidth * 1.4; // Paper-like aspect ratio
-
-    return Center(
-      child: SizedBox(
-        width: frameWidth,
-        height: frameHeight,
-        child: Stack(
-          children: [
-            // Corner brackets (matching ARViewPlaceholder style)
-            _buildCorner(Alignment.topLeft),
-            _buildCorner(Alignment.topRight),
-            _buildCorner(Alignment.bottomLeft),
-            _buildCorner(Alignment.bottomRight),
-
-            // Border
-            Container(
-              decoration: BoxDecoration(
-                border: Border.all(
-                  color: _guidanceStatus == 'ready'
-                      ? AppConstants.success
-                      : AppConstants.accent.withValues(alpha: 0.4),
-                  width: 2,
-                ),
-                borderRadius: BorderRadius.circular(20),
-              ),
-            ),
-
-            // Center guide text
-            Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.fit_screen_outlined,
-                    color: AppConstants.accent.withValues(alpha: 0.4),
-                    size: 36,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Place foot here',
-                    style: AppConstants.bodyStyle(
-                      fontSize: 12,
-                      color: AppConstants.surfaceLight.withValues(alpha: 0.5),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCorner(Alignment alignment) {
-    const double size = 24;
-    const double thickness = 4;
-    final double top = (alignment == Alignment.topLeft || alignment == Alignment.topRight) ? 0 : double.nan;
-    final double bottom = (alignment == Alignment.bottomLeft || alignment == Alignment.bottomRight) ? 0 : double.nan;
-    final double left = (alignment == Alignment.topLeft || alignment == Alignment.bottomLeft) ? 0 : double.nan;
-    final double right = (alignment == Alignment.topRight || alignment == Alignment.bottomRight) ? 0 : double.nan;
-
-    return Positioned(
-      top: top.isNaN ? null : top,
-      bottom: bottom.isNaN ? null : bottom,
-      left: left.isNaN ? null : left,
-      right: right.isNaN ? null : right,
+  /// Full-screen intro naming the foot to scan, with an explicit confirm.
+  /// Shown on entry (left foot) and again before the right-foot pass.
+  Widget _buildFootIntro() {
+    final foot = _footLabel;
+    return Positioned.fill(
       child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          border: Border(
-            top: (top == 0)
-                ? const BorderSide(color: AppConstants.accent, width: thickness)
-                : BorderSide.none,
-            bottom: (bottom == 0)
-                ? const BorderSide(color: AppConstants.accent, width: thickness)
-                : BorderSide.none,
-            left: (left == 0)
-                ? const BorderSide(color: AppConstants.accent, width: thickness)
-                : BorderSide.none,
-            right: (right == 0)
-                ? const BorderSide(color: AppConstants.accent, width: thickness)
-                : BorderSide.none,
+        color: Colors.black.withValues(alpha: 0.72),
+        child: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+                decoration: BoxDecoration(
+                  color: AppConstants.surfaceLight,
+                  borderRadius: AppConstants.premiumCardRadius,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        color: AppConstants.accent.withValues(alpha: 0.14),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.accessibility_new_rounded,
+                        size: 28,
+                        color: AppConstants.primary,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Scan your $foot foot',
+                      style: AppConstants.headlineStyle(
+                        fontSize: 22,
+                        color: AppConstants.secondary,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Place your $foot foot beside the $_refNoun, '
+                      'both flat on the floor.',
+                      textAlign: TextAlign.center,
+                      style: AppConstants.bodyStyle(
+                        fontSize: 14,
+                        color: AppConstants.secondary.withValues(alpha: 0.65),
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: FilledButton(
+                        onPressed: _dismissFootIntro,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppConstants.accent,
+                          foregroundColor: AppConstants.secondary,
+                          shape: const RoundedRectangleBorder(
+                            borderRadius: AppConstants.stadiumRadius,
+                          ),
+                        ),
+                        child: Text(
+                          'I understand',
+                          style: AppConstants.bodyStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: AppConstants.secondary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
       ),
