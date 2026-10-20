@@ -30,7 +30,7 @@ class FootResultsScreen extends StatefulWidget {
   final String? euSize;
   final String? usSize;
   final String? ukSize;
-  final String paperSize; // 'ar', 'a4', or 'letter'
+  final String paperSize; // 'ar', 'a4', 'letter', or 'card'
   final String footCondition;
   final double paperConfidence;
   final double lightingQuality;

@@ -34,7 +34,7 @@ class FootInstructionsScreen extends StatefulWidget {
 enum ArMode { guidedTap, autoScan }
 
 class _FootInstructionsScreenState extends State<FootInstructionsScreen> {
-  String _paperSize = 'a4'; // 'a4' or 'letter'
+  String _paperSize = 'card'; // 'card' (default, lowest friction), 'a4', or 'letter'
   String _footCondition = 'bare'; // 'bare' or 'socks'
   bool _useLiveAr = true; // true = live AR scan, false = paper-based
 
@@ -253,13 +253,22 @@ class _FootInstructionsScreenState extends State<FootInstructionsScreen> {
                     children: [
                       Expanded(
                         child: _buildPaperOption(
+                          key: 'card',
+                          label: 'Card',
+                          dimensions: '85.6 × 54 mm',
+                          isSelected: _paperSize == 'card',
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _buildPaperOption(
                           key: 'a4',
                           label: 'A4',
                           dimensions: '210 × 297 mm',
                           isSelected: _paperSize == 'a4',
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: _buildPaperOption(
                           key: 'letter',

@@ -104,38 +104,89 @@ double? _minSidePxFor(PaperDimensions paper) => paper.isCard ? 40.0 : 50.0;
 double? _minDiagonalPxFor(PaperDimensions paper) =>
     paper.isCard ? 80.0 : 10.0;
 
-bool isPlausibleReferenceQuad(
+/// Granular failure reasons for a detected reference quad.
+///
+/// Lets the capture UI coach the exact fix (move closer, lay flat, check
+/// the object) instead of a generic "not detected". Empty = plausible.
+enum ReferenceQuadIssue {
+  /// Not exactly 4 corners (missing / extra detections).
+  badCornerCount,
+
+  /// A corner is non-finite (tracker glitch — retry next frame).
+  nonFinite,
+
+  /// Quad too small in pixels: quantization error alone breaks the 5mm
+  /// budget (typical when the phone is too far — move closer).
+  tooSmall,
+
+  /// Diagonals disagree: keystoned / non-planar view (card lifted or
+  /// tilted — lay it flat on the floor).
+  keystoned,
+
+  /// Opposite sides disagree: strong perspective (phone not perpendicular
+  /// — hold it straight above).
+  sideMismatch,
+
+  /// Detected aspect far from the reference aspect (wrong object in frame
+  /// or severe tilt).
+  aspectMismatch,
+}
+
+/// Diagnose a detected 4-corner quad against [paper].
+///
+/// Returns the set of issues found; empty means the quad is plausible and
+/// [computeScaleFactor] may use it. See [ReferenceQuadIssue] for what each
+/// reason tells the user to fix.
+Set<ReferenceQuadIssue> diagnoseReferenceQuad(
   List<Offset> corners,
   PaperDimensions paper,
 ) {
-  if (corners.length != 4) return false;
+  if (corners.length != 4) return {ReferenceQuadIssue.badCornerCount};
   for (final c in corners) {
-    if (!c.dx.isFinite || !c.dy.isFinite) return false;
+    if (!c.dx.isFinite || !c.dy.isFinite) return {ReferenceQuadIssue.nonFinite};
   }
   final sorted = _sortCornersClockwise(corners);
   final sides = <double>[
     for (int i = 0; i < 4; i++) _distance(sorted[i], sorted[(i + 1) % 4]),
   ];
+  final issues = <ReferenceQuadIssue>{};
   final minSide = _minSidePxFor(paper)!;
-  if (sides.any((s) => !(s >= minSide))) return false;
+  final minDiag = _minDiagonalPxFor(paper)!;
   final diag1 = _distance(sorted[0], sorted[2]);
   final diag2 = _distance(sorted[1], sorted[3]);
-  final minDiag = _minDiagonalPxFor(paper)!;
-  if (!(diag1 >= minDiag) || !(diag2 >= minDiag)) return false;
-  final diagRatio = math.min(diag1, diag2) / math.max(diag1, diag2);
-  if (diagRatio < 0.82) return false;
-  final sideRatio1 = math.min(sides[0], sides[2]) / math.max(sides[0], sides[2]);
-  final sideRatio2 = math.min(sides[1], sides[3]) / math.max(sides[1], sides[3]);
-  if (sideRatio1 < 0.57 || sideRatio2 < 0.57) return false;
+  if (sides.any((s) => !(s >= minSide)) ||
+      !(diag1 >= minDiag) ||
+      !(diag2 >= minDiag)) {
+    issues.add(ReferenceQuadIssue.tooSmall);
+  }
+  final diagRatio =
+      math.min(diag1, diag2) / math.max(diag1, diag2);
+  if (!(diagRatio >= 0.82)) issues.add(ReferenceQuadIssue.keystoned);
+  final sideRatio1 =
+      math.min(sides[0], sides[2]) / math.max(sides[0], sides[2]);
+  final sideRatio2 =
+      math.min(sides[1], sides[3]) / math.max(sides[1], sides[3]);
+  if (!(sideRatio1 >= 0.57) || !(sideRatio2 >= 0.57)) {
+    issues.add(ReferenceQuadIssue.sideMismatch);
+  }
   final longPx = sides.reduce(math.max);
   final shortPx = sides.reduce(math.min);
-  if (!(shortPx > 0)) return false;
-  final detectedAspect = longPx / shortPx;
-  final aspectErr =
-      (detectedAspect - paper.aspectRatio).abs() / paper.aspectRatio;
-  if (aspectErr > 0.30) return false;
-  return true;
+  if (!(shortPx > 0)) {
+    issues.add(ReferenceQuadIssue.aspectMismatch);
+  } else {
+    final detectedAspect = longPx / shortPx;
+    final aspectErr =
+        (detectedAspect - paper.aspectRatio).abs() / paper.aspectRatio;
+    if (aspectErr > 0.30) issues.add(ReferenceQuadIssue.aspectMismatch);
+  }
+  return issues;
 }
+
+bool isPlausibleReferenceQuad(
+  List<Offset> corners,
+  PaperDimensions paper,
+) =>
+    diagnoseReferenceQuad(corners, paper).isEmpty;
 
 /// Compute a pixels-to-millimeters scale factor from reference corner positions.
 ///
