@@ -2,22 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../../constants/app_constants.dart';
-import '../../../services/ar_core_channel.dart';
-import '../../../utils/ar_core_install.dart';
 import '../foot_capture_screen.dart';
 import '../foot_manual_measure_screen.dart';
-import 'foot_scan_session_screen_v2.dart';
 
-/// Entry screen for "Get Your Foot Size 2.0" — the clean-rewrite auto scan.
+/// Entry screen for "Get Your Foot Size 2.0" — the clean-rewrite flow.
 ///
 /// Modern single-purpose setup flow (deliberately NOT v1's option-wall):
 /// - Hero header with a time estimate
-/// - Staggered "what to expect" preview of the three beats
+/// - Staggered "what to expect" preview of the beats
 /// - Two segmented chip groups (shopping category, foot condition)
 /// - One stadium CTA that doubles as camera-permission pre-flight:
 ///   if permission is missing it becomes "Allow camera access".
 ///
-/// Auto Scan, card scan, and tap — Guided Tap stays in v1.
+/// Card scan and tap — the AR camera scan was removed (inaccurate).
+/// Both remaining modes measure both feet themselves.
 class FootScanSetupScreenV2 extends StatefulWidget {
   /// When true, renders only the setup CONTENT — no Scaffold, no AppBar — so
   /// the screen can be embedded as a panel (see `SizeYourFootScreen`, whose
@@ -31,121 +29,43 @@ class FootScanSetupScreenV2 extends StatefulWidget {
   State<FootScanSetupScreenV2> createState() => _FootScanSetupScreenV2State();
 }
 
-class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2>
-    with WidgetsBindingObserver {
+class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2> {
   /// Shopping preference: men's / women's / kids' sizing.
   String _shoeCategory = 'men';
 
-  /// 'scan' (camera auto scan), 'tap' (place the points by hand), or
-  /// 'card' (card-referenced capture — camera only, no ARCore).
-  String _measureMode = 'scan';
+  /// 'card' (card-referenced capture — camera only) or
+  /// 'tap' (place the points by hand).
+  String _measureMode = 'card';
 
   /// 'bare' or 'socks' — sock thickness affects compensation.
   String _footCondition = 'bare';
-  // One foot by default; 'both' for customers whose feet differ in size or shape.
-  String _scanFeet = 'left';
 
   /// Whether camera permission is already granted (drives CTA label).
   bool _cameraGranted = false;
 
-  /// ARCore availability on this device, probed up front so a phone that can't
-  /// run ARCore never drops into the camera screen (see [ArCoreChannel]).
-  /// `null` until the first probe resolves, and inconclusive probes stay
-  /// [ArCoreSupport.unknown] — the CTA keeps its normal behaviour for both, so
-  /// a slow or flaky Play Services round-trip can't block a working device.
-  ArCoreAvailability? _arAvailability;
-
-  /// Whether we have already handed the customer off to Google Play for the
-  /// ARCore install. Drives the honest dead-end message on devices Play won't
-  /// serve (their listing answers "The device is not supported." — the vivo
-  /// V2022 that surfaced this).
-  bool _arInstallOffered = false;
-
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     Permission.camera.status.then((status) {
       if (mounted) setState(() => _cameraGranted = status.isGranted);
     });
-    _checkArSupport();
   }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Returning from the Play Store we sent them to: re-probe so the CTA
-    // unlocks the moment ARCore is actually installed.
-    if (state == AppLifecycleState.resumed && _arInstallOffered) {
-      _checkArSupport();
-    }
-  }
-
-  Future<void> _checkArSupport() async {
-    final availability = await ArCoreChannel.instance.checkAvailability();
-    if (!mounted) return;
-    setState(() => _arAvailability = availability);
-  }
-
-  /// True when AR scanning cannot run here: ARCore reports the device as
-  /// unsupported, or Play was already offered the install and ARCore is still
-  /// missing after we came back (so Play has nothing to give this device).
-  bool get _arScanBlocked {
-    final support = _arAvailability?.support;
-    if (support == ArCoreSupport.unsupported) return true;
-    return _arInstallOffered &&
-        (support == ArCoreSupport.needsInstall ||
-            support == ArCoreSupport.needsUpdate);
-  }
-
-  bool get _arNeedsInstall =>
-      !_arScanBlocked &&
-      (_arAvailability?.support == ArCoreSupport.needsInstall ||
-          _arAvailability?.support == ArCoreSupport.needsUpdate);
 
   IconData get _ctaIcon {
-    if (_measureMode == 'card') {
-      return _cameraGranted
-          ? Icons.credit_card_outlined
-          : Icons.photo_camera_outlined;
+    if (_measureMode == 'tap' && _cameraGranted) {
+      return Icons.touch_app_rounded;
     }
-    if (_arScanBlocked) return Icons.view_in_ar_outlined;
-    if (_arNeedsInstall) return Icons.download_for_offline_outlined;
     return _cameraGranted
-        ? (_measureMode == 'tap'
-            ? Icons.touch_app_rounded
-            : Icons.view_in_ar_rounded)
+        ? Icons.credit_card_outlined
         : Icons.photo_camera_outlined;
   }
 
   String get _ctaLabel {
-    // Card scan needs only the camera, so the AR gates below never apply.
-    if (_measureMode == 'card') {
-      return _cameraGranted ? 'Start card scan' : 'Allow camera access';
-    }
-    if (_arScanBlocked) return 'AR scanning not supported here';
-    if (_arNeedsInstall) return 'Install AR support';
-    if (_cameraGranted && _measureMode == 'tap') return 'Start tapping';
-    return _cameraGranted ? 'Start scanning' : 'Allow camera access';
+    if (!_cameraGranted) return 'Allow camera access';
+    return _measureMode == 'tap' ? 'Start tapping' : 'Start card scan';
   }
 
   Future<void> _onCtaPressed() async {
-    // Card scan is camera-only: ARCore gates never block it.
-    if (_arScanBlocked && _measureMode != 'card') return;
-
-    if (_arNeedsInstall && _measureMode != 'card') {
-      setState(() => _arInstallOffered = true);
-      await openArCoreInstallPage();
-      // The probe re-runs on app resume, so a successful install turns this
-      // CTA into "Start scanning" without the customer leaving the screen.
-      return;
-    }
-
     if (!_cameraGranted) {
       final status = await Permission.camera.request();
       if (!mounted) return;
@@ -168,26 +88,17 @@ class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2>
                 footCondition: _footCondition,
                 shoeCategory: _shoeCategory,
               )
-            : _measureMode == 'card'
-                ? FootCaptureScreen(
-                    paperSize: 'card',
-                    footCondition: _footCondition,
-                    shoeCategory: _shoeCategory,
-                  )
-                : FootScanSessionScreenV2(
-          footCondition: _footCondition,
-          shoeCategory: _shoeCategory,
-          footMode: _scanFeet,
-        ),
+            : FootCaptureScreen(
+                paperSize: 'card',
+                footCondition: _footCondition,
+                shoeCategory: _shoeCategory,
+              ),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    // Card scan is camera-only: AR notices would wrongly imply it is blocked.
-    final arNotice =
-        _measureMode == 'card' ? null : _buildArSupportNotice();
     final body = Stack(
         children: [
           AppConstants.noiseOverlay(opacity: 0.03),
@@ -204,11 +115,9 @@ class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2>
                         const SizedBox(height: 28),
                         _buildMeasureModeSection(),
                         const SizedBox(height: 28),
-                        _measureMode == 'scan'
-                            ? _buildWhatToExpect()
-                            : _measureMode == 'card'
-                                ? _buildCardExpect()
-                                : _buildTapExpect(),
+                        _measureMode == 'card'
+                            ? _buildCardExpect()
+                            : _buildTapExpect(),
                         const SizedBox(height: 28),
                         _buildChipSection(
                           title: 'Shopping size',
@@ -220,20 +129,6 @@ class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2>
                           ],
                           selected: _shoeCategory,
                           onSelect: (v) => setState(() => _shoeCategory = v),
-                        ),
-                        const SizedBox(height: 24),
-                        if (_measureMode == 'scan')
-                        _buildChipSection(
-                          title: 'Which feet',
-                          subtitle:
-                              'One foot is enough if your feet match. Choose both if they differ in size or shape.',
-                          options: const [
-                            ('left', 'Left foot'),
-                            ('right', 'Right foot'),
-                            ('both', 'Both feet'),
-                          ],
-                          selected: _scanFeet,
-                          onSelect: (v) => setState(() => _scanFeet = v),
                         ),
                         const SizedBox(height: 24),
                         _buildChipSection(
@@ -248,10 +143,6 @@ class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2>
                         ),
                         const SizedBox(height: 16),
                         _buildDisclaimer(),
-                        if (arNotice != null) ...[
-                          const SizedBox(height: 16),
-                          arNotice,
-                        ],
                       ],
                     ),
                   ),
@@ -264,9 +155,7 @@ class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2>
                     width: double.infinity,
                     height: 56,
                     child: FilledButton.icon(
-                      onPressed: (_arScanBlocked && _measureMode != 'card')
-                          ? null
-                          : _onCtaPressed,
+                      onPressed: _onCtaPressed,
                       style: FilledButton.styleFrom(
                         backgroundColor: AppConstants.accent,
                         foregroundColor: AppConstants.secondary,
@@ -280,9 +169,7 @@ class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2>
                         style: AppConstants.bodyStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: (_arScanBlocked && _measureMode != 'card')
-                              ? AppConstants.secondary.withValues(alpha: 0.45)
-                              : AppConstants.secondary,
+                          color: AppConstants.secondary,
                         ),
                       ),
                     ),
@@ -319,16 +206,14 @@ class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2>
     );
   }
 
-  /// Chooses how the foot is measured: the camera reads it, or the customer
-  /// taps the points themselves.
+  /// Chooses how the foot is measured: card-referenced camera capture, or
+  /// the customer taps the points themselves.
   Widget _buildMeasureModeSection() {
     return _buildChipSection(
       title: 'How to measure',
-      subtitle: 'Scan lets the camera read your foot. Card uses a bank card '
-          'as a scale reference — no AR needed. Tap lets you place the '
-          'points yourself.',
+      subtitle: 'Card uses a bank card as a scale reference. Tap lets you '
+          'place the points yourself.',
       options: const [
-        ('scan', 'Camera scan'),
         ('card', 'Card scan'),
         ('tap', 'Tap to measure'),
       ],
@@ -449,34 +334,6 @@ class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2>
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildWhatToExpect() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _sectionLabel('What to expect'),
-        const SizedBox(height: 12),
-        _expectRow(
-          icon: Icons.crop_free_rounded,
-          title: 'Frame your foot',
-          description: 'Hold your phone straight above each foot, inside the guide.',
-          delay: 0,
-        ),
-        _expectRow(
-          icon: Icons.timer_outlined,
-          title: 'Hold still for 4 seconds',
-          description: 'We sample from many angles and keep only the best readings.',
-          delay: 120,
-        ),
-        _expectRow(
-          icon: Icons.check_circle_outline_rounded,
-          title: 'Get your size',
-          description: 'Both feet measured, converted to your shoe size.',
-          delay: 240,
-        ),
-      ],
     );
   }
 
@@ -640,85 +497,6 @@ class _FootScanSetupScreenV2State extends State<FootScanSetupScreenV2>
                 color: AppConstants.secondary.withValues(alpha: 0.55),
                 height: 1.4,
               ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Inline explanation when ARCore isn't usable here. Null while the first
-  /// probe is in flight and for inconclusive states — an offline moment must
-  /// never read as "this phone can't do it".
-  Widget? _buildArSupportNotice() {
-    final support = _arAvailability?.support;
-    if (support == null || support == ArCoreSupport.unknown) return null;
-
-    if (_arScanBlocked) {
-      return _notice(
-        icon: Icons.block_outlined,
-        title: "AR scanning isn't supported on this phone",
-        body: _arInstallOffered
-            ? "Google Play didn't install Google Play Services for AR — the "
-                "listing isn't available for this device. You can still "
-                'measure your feet with "Enter size manually".'
-            : "This phone can't run ARCore (Google Play Services for AR). You "
-                'can still measure your feet with "Enter size manually".',
-      );
-    }
-
-    if (support == ArCoreSupport.needsInstall ||
-        support == ArCoreSupport.needsUpdate) {
-      return _notice(
-        icon: Icons.download_for_offline_outlined,
-        title: 'AR support needed',
-        body: 'Foot Size 2.0 uses Google Play Services for AR. Install it from '
-            'Google Play, then come back — this check runs again for you.',
-      );
-    }
-
-    return null;
-  }
-
-  Widget _notice({
-    required IconData icon,
-    required String title,
-    required String body,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppConstants.accent.withValues(alpha: 0.08),
-        borderRadius: AppConstants.buttonRadius,
-        border: Border.all(color: AppConstants.accent.withValues(alpha: 0.35)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 20, color: AppConstants.accent),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: AppConstants.bodyStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    color: AppConstants.secondary,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  body,
-                  style: AppConstants.bodyStyle(
-                    fontSize: 12,
-                    color: AppConstants.secondary.withValues(alpha: 0.65),
-                    height: 1.4,
-                  ),
-                ),
-              ],
             ),
           ),
         ],
