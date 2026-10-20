@@ -153,6 +153,10 @@ class GuidedTapController extends ChangeNotifier {
   // ── ARCore State ──
   ArTrackingState _trackingState = ArTrackingState.paused;
 
+  /// Terminal session-start failure reason (`needs_install`, `timeout`,
+  /// `unsupported_device`, …). Null when the session is fine or never failed.
+  String? _sessionFailureReason;
+
   /// Cached camera-frame geometry, needed to invert the preview's center-crop
   /// so a tap (view pixels) becomes normalized upright-frame coordinates for
   /// the native hitTest.
@@ -290,6 +294,25 @@ class GuidedTapController extends ChangeNotifier {
 
   // ── Read-only state for rendering ──
   ArTrackingState get trackingState => _trackingState;
+
+  /// True when the last failure is transient — the UI offers "Try again"
+  /// (routed through [retrySessionStart], never a cached start).
+  bool get canRetrySession {
+    final reason = _sessionFailureReason;
+    if (guidanceState != 'error' || reason == null) return false;
+    return reason != 'unsupported_device' &&
+        reason != 'user_opted_out' &&
+        reason != 'unsupported';
+  }
+
+  /// True when AR can never run here — the UI offers card scan instead.
+  bool get sessionUnsupported {
+    if (guidanceState != 'error') return false;
+    final reason = _sessionFailureReason;
+    return reason == 'unsupported_device' ||
+        reason == 'user_opted_out' ||
+        reason == 'unsupported';
+  }
   int get frameWidth => _frameWidth;
   int get frameHeight => _frameHeight;
   int get frameRotation => _frameRotation;
@@ -334,14 +357,31 @@ class GuidedTapController extends ChangeNotifier {
 
   /// Start the ARCore session and begin listening for events. Resolves only
   /// after the terminal session-start outcome is known.
-  Future<void> initialize() async {
+  Future<void> initialize() => _attemptStart(retry: false);
+
+  /// Retry a failed session start (transient failures only — unsupported
+  /// devices keep their dead-end with a card-scan fallback). Uses
+  /// [retrySession], never [startSession]: the native side replays a cached
+  /// failure for the same view on a plain `startSession`.
+  Future<void> retrySessionStart() async {
+    if (_disposed || !canRetrySession) return;
+    _sessionFailureReason = null;
+    _guidanceText = 'Restarting AR — hold on…';
+    _guidanceState = 'searching';
+    notifyListeners();
+    await _attemptStart(retry: true);
+  }
+
+  Future<void> _attemptStart({required bool retry}) async {
     // Start ARCore session (world tracking + plane detection only — no
     // detection models needed in the manual flow). E3 fix: started == false
     // is now reachable — surface the specific reason.
-    final start = await _arCore.startSession();
+    final start =
+        await (retry ? _arCore.retrySession() : _arCore.startSession());
     _logTiming('session_started');
     if (_disposed) return;
     if (!start.started) {
+      _sessionFailureReason = start.reason;
       switch (start.reason) {
         case 'needs_install':
           _guidanceText =
@@ -351,7 +391,7 @@ class GuidedTapController extends ChangeNotifier {
         case 'user_opted_out':
         case 'unsupported':
           _guidanceText =
-              "AR isn't supported on this device — use manual measurement instead.";
+              "AR isn't supported on this device — card scan still works.";
           break;
         case 'timeout':
           _guidanceText =
@@ -364,6 +404,8 @@ class GuidedTapController extends ChangeNotifier {
       notifyListeners();
       return;
     }
+
+    _sessionFailureReason = null;
 
     if (_disposed) return; // Torn down during init — don't register timers/events
 
@@ -414,7 +456,8 @@ class GuidedTapController extends ChangeNotifier {
 
       case 'error':
         final msg = event.data['message']?.toString() ?? 'Unknown error';
-        _guidanceText = msg;
+        _sessionFailureReason = 'error';
+        _guidanceText = '$msg — you can try again.';
         _guidanceState = 'error';
         notifyListeners();
         break;
@@ -436,6 +479,13 @@ class GuidedTapController extends ChangeNotifier {
       }
       await Future.delayed(const Duration(milliseconds: 300));
     }
+    if (_disposed || _frameGeometryKnown) return;
+    // Geometry never arrived: taps would map through a wrong crop, so say
+    // so with a retry instead of silently mis-measuring.
+    _sessionFailureReason = 'frame';
+    _guidanceText = "Couldn't read the camera frame — try again.";
+    _guidanceState = 'error';
+    notifyListeners();
   }
 
   // ═════════════════════════════════════════════════════════════
@@ -450,6 +500,10 @@ class GuidedTapController extends ChangeNotifier {
   /// "scanning floor" wait.
   void _updateGuidance() {
     if (_disposed) return;
+    // Error states are terminal until the user retries, falls back, or
+    // goes back — the refresh timer and tracking events must not
+    // clobber them back to coaching text.
+    if (_guidanceState == 'error') return;
     if (_pairPhase > 0) return; // Don't clobber the placement prompt
 
     final ready = _trackingState == ArTrackingState.tracking;

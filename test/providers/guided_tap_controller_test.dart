@@ -22,6 +22,11 @@ class FakeArCore implements ArCoreChannel {
   Future<void> setTorch(bool enabled) async {}
 
   final Completer<ArSessionStartResult> startCompleter = Completer();
+
+  /// Terminal outcome of a [retrySession] call. Unset → reuse the start
+  /// result, so a plain retry behaves like a second start.
+  ArSessionStartResult? retryResult;
+  int retryCalls = 0;
   final StreamController<ArSessionEvent> eventSink =
       StreamController<ArSessionEvent>.broadcast();
 
@@ -66,7 +71,12 @@ class FakeArCore implements ArCoreChannel {
       );
 
   @override
-  Future<ArSessionStartResult> retrySession() => startSession();
+  Future<ArSessionStartResult> retrySession() {
+    retryCalls++;
+    sessionActive = true;
+    return Future.value(retryResult ??
+        const ArSessionStartResult(started: true));
+  }
 
   @override
   Future<void> stopSession() async {
@@ -225,8 +235,97 @@ void main() {
             'Camera permission is required for AR measuring');
       });
     });
-  });
+    test('timeout is retryable and the retry recovers to ready', () {
+      fakeAsync((async) {
+        ar = FakeArCore();
+        assist = FakeAssistDetector();
+        ctrl = GuidedTapController(arCore: ar, detectorFactory: () => assist);
+        ctrl.initialize();
+        ar.startCompleter.complete(const ArSessionStartResult(
+            started: false, reason: 'timeout'));
+        async.flushMicrotasks();
 
+        expect(ctrl.guidanceState, 'error');
+        expect(ctrl.canRetrySession, isTrue);
+        expect(ctrl.sessionUnsupported, isFalse);
+
+        ar.nextFrame = frame();
+        ctrl.retrySessionStart();
+        async.flushMicrotasks();
+
+        // Retry went through retrySession (never a cached startSession).
+        expect(ar.retryCalls, 1);
+        ar.eventSink.add(const ArSessionEvent(
+            type: 'tracking', data: {'state': 'tracking'}));
+        async.flushMicrotasks();
+
+        expect(ctrl.guidanceState, 'ready');
+        expect(ctrl.canRetrySession, isFalse);
+      });
+    });
+
+    test('unsupported device is not retryable, but offers the card fallback',
+        () {
+      fakeAsync((async) {
+        ar = FakeArCore();
+        assist = FakeAssistDetector();
+        ctrl = GuidedTapController(arCore: ar, detectorFactory: () => assist);
+        ctrl.initialize();
+        ar.startCompleter.complete(const ArSessionStartResult(
+            started: false, reason: 'unsupported_device'));
+        async.flushMicrotasks();
+
+        expect(ctrl.guidanceState, 'error');
+        expect(ctrl.canRetrySession, isFalse);
+        expect(ctrl.sessionUnsupported, isTrue);
+        expect(ctrl.guidanceText, contains('card scan'));
+
+        ctrl.retrySessionStart();
+        async.flushMicrotasks();
+        expect(ar.retryCalls, 0, reason: 'unsupported must not retry');
+      });
+    });
+
+    test('missing camera-frame geometry surfaces a retryable error', () {
+      fakeAsync((async) {
+        ar = FakeArCore();
+        assist = FakeAssistDetector();
+        ctrl = GuidedTapController(arCore: ar, detectorFactory: () => assist);
+        ar.nextFrame = null; // geometry never arrives
+        ctrl.initialize();
+        ar.startCompleter.complete(const ArSessionStartResult(started: true));
+        async.flushMicrotasks();
+        async.elapse(const Duration(seconds: 3));
+
+        expect(ctrl.guidanceState, 'error');
+        expect(ctrl.guidanceText, contains("Couldn't read the camera frame"));
+        expect(ctrl.canRetrySession, isTrue);
+
+        // Geometry arrives on the retry — the screen leaves the error state.
+        ar.nextFrame = frame();
+        ctrl.retrySessionStart();
+        async.flushMicrotasks();
+        expect(ar.retryCalls, 1);
+        expect(ctrl.guidanceState, isNot('error'));
+        expect(ctrl.frameWidth, 480);
+      });
+    });
+
+    test('mid-session error event is retryable', () {
+      fakeAsync((async) {
+        harness(async);
+
+        ar.eventSink
+            .add(const ArSessionEvent(type: 'error', data: {'message': 'Boom'}));
+        async.flushMicrotasks();
+
+        expect(ctrl.guidanceState, 'error');
+        expect(ctrl.guidanceText, contains('Boom'));
+        expect(ctrl.guidanceText, contains('try again'));
+        expect(ctrl.canRetrySession, isTrue);
+      });
+    });
+  });
   group('GuidedTapController — full successful flow', () {
     test('advances front→side→right-foot and emits completed payload '
         '(both angles, both feet)', () {

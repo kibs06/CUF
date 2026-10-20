@@ -15,6 +15,7 @@ import '../../services/diag_logger.dart' show navDiag;
 import '../../services/ar_core_channel.dart';
 import '../../utils/foot_detector.dart';
 import '../../utils/foot_measurement_utils.dart';
+import 'foot_capture_screen.dart';
 import 'foot_floor_detection_screen.dart' show FloorReference;
 import 'foot_results_screen.dart';
 
@@ -673,15 +674,59 @@ class _FootManualMeasureScreenState extends State<FootManualMeasureScreen>
               ],
             )
           else if (_scan.guidanceState == 'error')
-            OutlinedButton(
-              onPressed: () => Navigator.of(context).pop(),
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: Colors.white54),
-              ),
-              child: Text(
-                'Go Back',
-                style: AppConstants.bodyStyle(color: Colors.white),
-              ),
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_scan.canRetrySession)
+                  FilledButton(
+                    onPressed: () => _scan.retrySessionStart(),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppConstants.accent,
+                      foregroundColor: AppConstants.secondary,
+                    ),
+                    child: Text(
+                      'Try again',
+                      style: AppConstants.bodyStyle(
+                        fontWeight: FontWeight.bold,
+                        color: AppConstants.secondary,
+                      ),
+                    ),
+                  )
+                else if (_scan.sessionUnsupported)
+                  FilledButton(
+                    onPressed: () => Navigator.of(context).pushReplacement(
+                      MaterialPageRoute(
+                        builder: (_) => FootCaptureScreen(
+                          paperSize: 'card',
+                          footCondition: _scan.footCondition,
+                          shoeCategory: _scan.shoeCategory,
+                        ),
+                      ),
+                    ),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppConstants.accent,
+                      foregroundColor: AppConstants.secondary,
+                    ),
+                    child: Text(
+                      'Use card scan instead',
+                      style: AppConstants.bodyStyle(
+                        fontWeight: FontWeight.bold,
+                        color: AppConstants.secondary,
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 10),
+                OutlinedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.white54),
+                  ),
+                  child: Text(
+                    'Go Back',
+                    style: AppConstants.bodyStyle(color: Colors.white),
+                  ),
+                ),
+              ],
             ),
         ],
       ),
