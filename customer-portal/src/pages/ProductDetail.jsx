@@ -556,6 +556,8 @@ export default function ProductDetail({ preview = false }) {
         open={footTryOnOpen}
         url={model?.url ?? null}
         name={product.name}
+        forwardAxis={model?.forwardAxis ?? '+z'}
+        defaultScale={model?.defaultScale ?? 1}
         onClose={() => setFootTryOnOpen(false)}
       />
     </>

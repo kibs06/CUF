@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 
 import { fetchProductModel } from '../lib/catalog'
-import { activeProductModel, modelFileUrl } from '../lib/shoeModel'
+import { activeProductModel, modelDefaultScale, modelFileUrl, modelForwardAxis } from '../lib/shoeModel'
 
 /**
  * The product's live 3D model, ready to draw — or null.
@@ -41,5 +41,10 @@ export default function useProductModel(productId) {
     ? modelFileUrl(row.storage_path, import.meta.env.VITE_SUPABASE_URL)
     : null
 
-  return { model: url ? { url, row } : null, isLoading: query.isLoading }
+  // Per-model try-on metadata; both default safely when the row predates
+  // the migration (or the fallback select ran), so old rows behave as before.
+  const forwardAxis = row ? modelForwardAxis(row) : '+z'
+  const defaultScale = row ? modelDefaultScale(row) : 1
+
+  return { model: url ? { url, row, forwardAxis, defaultScale } : null, isLoading: query.isLoading }
 }

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { MODEL_BUCKET, activeProductModel, modelFileUrl } from './shoeModel.js'
+import { MODEL_BUCKET, activeProductModel, modelDefaultScale, modelFileUrl, modelForwardAxis } from './shoeModel.js'
 
 const ROW = {
   id: 7,
@@ -77,4 +77,22 @@ test('modelFileUrl: nothing to fetch is null, never a half-built URL', () => {
   // path that 404s into a blank canvas.
   assert.equal(modelFileUrl(ROW.storage_path, ''), null)
   assert.equal(modelFileUrl(ROW.storage_path, undefined), null)
+})
+
+test('modelForwardAxis: annotated rows pass through, old rows assume +z', () => {
+  assert.equal(modelForwardAxis({ ...ROW, forward_axis: '-z' }), '-z')
+  assert.equal(modelForwardAxis({ ...ROW, forward_axis: '+x' }), '+x')
+  // A row from before the migration (or a null/garbage value) renders
+  // exactly as the viewer always has: toe on +Z.
+  assert.equal(modelForwardAxis(ROW), '+z')
+  assert.equal(modelForwardAxis({ ...ROW, forward_axis: null }), '+z')
+  assert.equal(modelForwardAxis({ ...ROW, forward_axis: 'up' }), '+z')
+  assert.equal(modelForwardAxis(null), '+z')
+})
+
+test('modelDefaultScale: annotated rows pass through, old rows stay 1', () => {
+  assert.equal(modelDefaultScale({ ...ROW, default_scale: 1.4 }), 1.4)
+  assert.equal(modelDefaultScale(ROW), 1)
+  assert.equal(modelDefaultScale({ ...ROW, default_scale: null }), 1)
+  assert.equal(modelDefaultScale(null), 1)
 })

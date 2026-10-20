@@ -13,6 +13,12 @@ import {
   smoothAngle,
   smoothPoint,
 } from '../../lib/footTryOn.js'
+import {
+  FORWARD_YAW,
+  computeModelNormalization,
+  normalizeForwardAxis,
+  normalizeModelScale,
+} from '../../lib/modelNormalization.js'
 
 /**
  * **Foot-tracked try-on (beta)** — the shoe stuck to the foot, in the browser.
@@ -48,7 +54,7 @@ const LOAD_PHASE_LABELS = {
   'foot tracker (main thread)': 'Loading the foot tracker…',
 }
 
-export default function FootTryOnViewer({ open, url, name, onClose }) {
+export default function FootTryOnViewer({ open, url, name, onClose, forwardAxis = '+z', defaultScale = 1 }) {
   const [status, setStatus] = useState('loading')
   // Which start step the overlay names — mirrors `track.phase` in state so
   // the page re-renders as each download finishes.
@@ -404,22 +410,37 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
       // the toe axis (+Z, untouched, so heel→toe yaw math is unchanged)
       // puts the upper toward the camera before measuring normalizes it.
       model.rotation.z = Math.PI
+      // Per-model forward axis (Phase 2): the yaw goes on BEFORE measuring,
+      // so the measured box is already post-yaw and the unit contract
+      // (heel at origin, toe at +1) holds however the asset was authored.
+      // Unknown axes fall back to +z — byte-identical to the legacy path.
+      const normAxis = normalizeForwardAxis(forwardAxis)
+      const normScale = normalizeModelScale(defaultScale)
+      model.rotation.y = FORWARD_YAW[normAxis]
+      model.updateMatrixWorld(true)
+      track.modelAxis = normAxis
       const box = new THREE.Box3().setFromObject(model)
       const size = new THREE.Vector3()
       const center = new THREE.Vector3()
       box.getSize(size)
       box.getCenter(center)
-      if (!(size.z > 1e-6)) {
+      const norm = computeModelNormalization(
+        {
+          size: { x: size.x, y: size.y, z: size.z },
+          center: { x: center.x, y: center.y, z: center.z },
+          min: { x: box.min.x, y: box.min.y, z: box.min.z },
+        },
+        normAxis,
+        normScale,
+      )
+      if (!norm) {
         fail()
         return
       }
-      // Unit length along the model's forward axis (toe on +Z by the
-      // authoring contract), heel at the origin, sole on the ground.
-      const s = 1 / size.z
       const inner = new THREE.Group()
       inner.add(model)
-      inner.scale.set(s, s, s)
-      inner.position.set(-center.x * s, -box.min.y * s, (-center.z + size.z / 2) * s)
+      inner.scale.set(norm.uniformScale, norm.uniformScale, norm.uniformScale)
+      inner.position.set(norm.offset.x, norm.offset.y, norm.offset.z)
       flatGroup.add(inner)
 
       track.three = { THREE, renderer, scene, camera, yawGroup }
@@ -566,6 +587,7 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
             plausibleReason: foot ? (tracked ? null : 'rejected') : 'no-foot',
             showing: t.showing,
             side: t.side,
+            modelAxis: t.modelAxis ?? '+z',
           }
           t.frames = t.frames ?? []
           t.frames.push({
@@ -698,7 +720,7 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
         const lines = [
           `len=${d.length == null ? '—' : Math.round(d.length)}px raw=${d.rawLen == null ? '—' : Math.round(d.rawLen)}px x${(d.userScale ?? 1).toFixed(2)}`,
           `plausible=${d.plausible ? 'yes' : 'NO (' + (d.plausibleReason ?? '?') + ')'} showing=${d.showing ? 'yes' : 'no'} side=${d.side ?? '—'}`,
-          `fps=${Math.round(t.fps ?? 0)} frames=${(t.frames ?? []).length}`,
+          `axis=${d.modelAxis ?? '+z'} fps=${Math.round(t.fps ?? 0)} frames=${(t.frames ?? []).length}`,
         ]
         ctx.fillStyle = 'rgba(0,0,0,0.65)'
         const fs = Math.max(12, vw * 0.02)

@@ -123,18 +123,29 @@ export async function fetchProductById(productId) {
  * project whose schema predates the migration would fail the whole catalogue
  * read rather than this one query — the shop must not go down over a decoration.
  */
-export async function fetchProductModel(productId) {
-  const { data, error } = await supabase
-    .from('product_models')
-    .select('id, product_id, storage_path, version, status, authored_length_mm')
-    .eq('product_id', productId)
-    .eq('status', 'active')
-    .order('version', { ascending: false })
-    .limit(1)
-    .maybeSingle()
+const MODEL_SELECT = 'id, product_id, storage_path, version, status, authored_length_mm'
+// The orientation columns arrive with the Phase 2 migration. A project
+// whose schema predates it answers this select with an error, so fall
+// back to the legacy columns rather than failing the whole read — the
+// row helpers default both fields, and old rows render exactly as before.
+const MODEL_SELECT_WITH_ORIENTATION = `${MODEL_SELECT}, forward_axis, default_scale`
 
-  if (error) throw error
-  return data ?? null
+export async function fetchProductModel(productId) {
+  const query = (columns) =>
+    supabase
+      .from('product_models')
+      .select(columns)
+      .eq('product_id', productId)
+      .eq('status', 'active')
+      .order('version', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+  const first = await query(MODEL_SELECT_WITH_ORIENTATION)
+  if (!first.error) return first.data ?? null
+  const retry = await query(MODEL_SELECT)
+  if (retry.error) throw retry.error
+  return retry.data ?? null
 }
 
 /**

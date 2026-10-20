@@ -23,6 +23,8 @@
  *     between a hidden entry and a broken canvas is one truthy check.
  */
 
+import { normalizeForwardAxis, normalizeModelScale } from './modelNormalization.js'
+
 /** The bucket the app's Dart side names in `ShoeModelService.bucket`. */
 export const MODEL_BUCKET = 'shoe-models'
 
@@ -67,6 +69,27 @@ export function activeProductModel(rows) {
     }
     return stampOf(row) > stampOf(best) ? row : best
   })
+}
+
+/**
+ * **Which way the model's toe points**, from its row — or the legacy
+ * assumption when the row predates `product_models.forward_axis`.
+ *
+ * Delegates to `normalizeForwardAxis` (`modelNormalization.js`): unknown
+ * values render exactly as before, so a migration applied late (or never)
+ * changes nothing until a row is actually annotated.
+ */
+export function modelForwardAxis(row) {
+  return normalizeForwardAxis(row?.forward_axis)
+}
+
+/**
+ * **The per-model size baseline**, from its row — 1 when the row predates
+ * `product_models.default_scale`. Multiplies on top of the wearer's live
+ * +/- trim, so the trim UI still reads 100% at this baseline.
+ */
+export function modelDefaultScale(row) {
+  return normalizeModelScale(row?.default_scale)
 }
 
 /**
