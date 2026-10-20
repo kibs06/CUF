@@ -23,9 +23,17 @@ import 'foot_results_screen.dart';
 /// Shows progress feedback to the user during processing.
 class FootProcessingScreen extends StatefulWidget {
   final String imagePath;
-  final String paperSize; // 'a4' or 'letter'
+  final String paperSize; // 'a4', 'letter', or 'card'
   final String footCondition; // 'bare' or 'socks'
   final String footSide; // 'left' or 'right'
+
+  /// Burst scale summary from the capture screen (mm/px median + IQR
+  /// spread + kept frames). Null for legacy single captures; when present
+  /// the reported reference confidence comes from the burst IQR spread
+  /// instead of the hardcoded simulation value.
+  final double? burstScaleMedian;
+  final double? burstScaleIqr;
+  final int? burstFrames;
 
   const FootProcessingScreen({
     super.key,
@@ -33,6 +41,9 @@ class FootProcessingScreen extends StatefulWidget {
     required this.paperSize,
     required this.footCondition,
     required this.footSide,
+    this.burstScaleMedian,
+    this.burstScaleIqr,
+    this.burstFrames,
   });
 
   @override
@@ -143,7 +154,7 @@ class _FootProcessingScreenState extends State<FootProcessingScreen>
             ukSize: ukSize,
             paperSize: widget.paperSize,
             footCondition: widget.footCondition,
-            paperConfidence: 0.92,
+            paperConfidence: _burstConfidence(),
             lightingQuality: 0.88,
           ),
         ),
@@ -172,6 +183,17 @@ class _FootProcessingScreenState extends State<FootProcessingScreen>
   /// Simulate foot width based on length (typical ratio is ~38-40% of length).
   double _simulateFootWidth(double lengthMm) {
     return lengthMm * 0.39;
+  }
+
+  /// Reference confidence from the burst IQR spread when available:
+  /// a tight burst (IQR ≈ 0) scores ~0.99, a spread burst degrades toward
+  /// 0.2 (re-coach territory). Falls back to the simulation value for
+  /// legacy single captures.
+  double _burstConfidence() {
+    final median = widget.burstScaleMedian;
+    final iqr = widget.burstScaleIqr;
+    if (median == null || iqr == null || !(median > 0)) return 0.92;
+    return (1.0 - (iqr / median) * 8).clamp(0.2, 0.99);
   }
 
   @override

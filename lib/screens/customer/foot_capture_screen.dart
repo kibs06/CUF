@@ -5,21 +5,26 @@ import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../constants/app_constants.dart';
+import '../../utils/card_capture_coach.dart';
+import '../../utils/foot_measurement_utils.dart';
 import 'foot_processing_screen.dart';
 
-/// TODO(paper-scan): This screen currently uses simulated measurements.
-/// The real paper detection CV pipeline (corner detection, foot segmentation,
-/// scale-factor computation) is not yet implemented.
+/// TODO(paper-scan): The reference detector below is still simulated
+/// (corner sets are synthesized, not CV output). The coaching authority is
+/// real: every simulated frame goes through [coachForDetection] →
+/// [diagnoseReferenceQuad], so tilted/lifted/too-small references re-coach
+/// exactly as they will with live CV. Do not ship as a working feature
+/// until the real detector lands behind the [ReferenceDetector] seam.
 ///
-/// Real camera capture screen for the AR foot sizing feature.
+/// Guided reference capture screen for foot sizing.
 ///
-/// Shows a live camera feed with guidance overlay for positioning
-/// the paper and foot. Uses classical CV (edge detection) to detect
-/// the paper boundary and provide real-time feedback.
-///
-/// Captures one image per foot (left, then right).
+/// Shows a live camera feed with guidance overlay for positioning the
+/// reference (card, A4, Letter) and foot side-by-side, flat on the floor.
+/// Flow per foot: frame → hold still ~1s → auto-capture burst
+/// ([cardBurstFrameCount] frames) → next foot. Left first, then right;
+/// the larger foot wins downstream in sizing.
 class FootCaptureScreen extends StatefulWidget {
-  final String paperSize; // 'a4' or 'letter'
+  final String paperSize; // 'a4', 'letter', or 'card'
   final String footCondition; // 'bare' or 'socks'
 
   const FootCaptureScreen({
@@ -40,10 +45,29 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
   bool _isCapturing = false;
 
   // Capture state
-  final int _currentFoot = 0; // 0 = left, 1 = right
-  String _guidanceText = 'Point camera at your foot on the paper';
-  String _guidanceStatus = 'searching'; // 'searching', 'detected', 'ready'
-  double _paperConfidence = 0.0;
+  int _currentFoot = 0; // 0 = left, 1 = right — advances after each burst
+  String _guidanceText = 'Point camera at your foot beside the reference';
+  String _guidanceStatus =
+      'searching'; // searching|detected|holding|ready|burst|tooSmall|tilted|wrongObject
+
+  // Hold-still dwell: consecutive ready ticks (500ms each → 2 = ~1s).
+  int _holdTicks = 0;
+
+  // Burst progress 0..cardBurstFrameCount while capturing.
+  int _burstTaken = 0;
+  bool get _inBurst => _burstTaken > 0 && _isCapturing;
+
+  // Per-frame mm/px scales of the current burst (summarized via IQR).
+  final List<double> _burstScales = [];
+
+  // Simulated detector tick (see _simulatedCorners). Counts frames so the
+  // sim can interleave tilted frames that must re-coach through the real
+  // validator.
+  int _simTick = 0;
+
+  PaperDimensions get _reference => PaperDimensions.fromKey(widget.paperSize);
+  String get _footLabel => _currentFoot == 0 ? 'left' : 'right';
+  String get _refNoun => _reference.isCard ? 'card' : 'paper';
 
   // Scan animation
   late AnimationController _scanLineController;
@@ -127,66 +151,117 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
     }
   }
 
-  /// Simulated paper detection loop.
+  /// Reference detection loop.
   ///
-  /// In a production build, this would run classical CV:
-  /// 1. Convert camera frame to grayscale
-  /// 2. Apply Canny edge detection
-  /// 3. Find contours
-  /// 4. Approximate polygons to find 4-corner shapes
-  /// 5. Validate aspect ratio against expected paper dimensions
-  ///
-  /// For now, we simulate detection with a timer that progresses
-  /// from "searching" → "detected" → "ready" states.
+  /// SIMULATED until the CV pipeline lands (see file docs): corner sets are
+  /// synthesized, but every frame is judged by the real [coachForDetection]
+  /// authority — including interleaved tilted frames that must re-coach.
+  /// In production this timer becomes the CV callback:
+  /// grayscale → Canny → contours → quad → [coachForDetection].
   void _startPaperDetection() {
     _detectionTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) {
       if (!mounted || _isCapturing) return;
+      _simTick++;
 
-      // Simulate detection confidence building over time
+      final corners = _simulatedCorners();
+      final holdProgress =
+          (_holdTicks * 500 / cardHoldStillMs).clamp(0.0, 1.0);
+      final coach = coachForDetection(
+        corners: corners,
+        paper: _reference,
+        footLabel: _footLabel,
+        holdProgress: holdProgress,
+      );
+
       setState(() {
-        _paperConfidence = (_paperConfidence + 0.15).clamp(0.0, 1.0);
-
-        if (_paperConfidence < 0.4) {
-          _guidanceStatus = 'searching';
-          _guidanceText = 'Point camera at your foot on the paper';
-        } else if (_paperConfidence < 0.8) {
-          _guidanceStatus = 'detected';
-          _guidanceText = 'Paper detected — hold steady';
-        } else {
-          _guidanceStatus = 'ready';
-          _guidanceText = 'Tap to capture ${_currentFoot == 0 ? 'left' : 'right'} foot';
+        _guidanceText = coach.message;
+        switch (coach.status) {
+          case CardCoachStatus.searching:
+            _guidanceStatus = 'searching';
+            _holdTicks = 0;
+          case CardCoachStatus.tooSmall:
+            _guidanceStatus = 'tooSmall';
+            _holdTicks = 0;
+          case CardCoachStatus.tilted:
+            _guidanceStatus = 'tilted';
+            _holdTicks = 0;
+          case CardCoachStatus.wrongObject:
+            _guidanceStatus = 'wrongObject';
+            _holdTicks = 0;
+          case CardCoachStatus.holding:
+            _guidanceStatus = _holdTicks > 0 ? 'holding' : 'detected';
+            _holdTicks++;
+          case CardCoachStatus.ready:
+            _guidanceStatus = 'ready';
         }
       });
 
-      if (_paperConfidence >= 1.0) {
+      // Dwell complete → fire the auto-capture burst (no tap needed).
+      if (coach.status == CardCoachStatus.ready) {
         timer.cancel();
+        _captureBurst();
       }
     });
   }
 
-  Future<void> _captureImage() async {
-    if (_cameraController == null || _isCapturing || _paperConfidence < 0.8) return;
+  /// Synthesized detector output (SIM — replaced by CV).
+  ///
+  /// Ticks 0–5: nothing (framing). Then a stable, reference-proportioned
+  /// quad with small jitter. Every 7th stable tick emits a keystoned quad
+  /// so the tilted re-coach path exercises through the real validator.
+  List<Offset> _simulatedCorners() {
+    if (_simTick < 6) return const [];
+    // Reference-proportioned quad: long edge 200px, short edge by aspect.
+    const long = 200.0;
+    final short = long / _reference.aspectRatio;
+    final jx = ((_simTick % 3) - 1) * 2.0;
+    final jy = ((_simTick % 5) - 2) * 2.0;
+    if (_simTick % 7 == 0) {
+      // Keystoned: top edge pinched (lifted-card look).
+      return [
+        Offset(140 + jx, 100 + jy),
+        Offset(220 + jx, 100 + jy),
+        const Offset(260, 200),
+        const Offset(60, 200),
+      ];
+    }
+    return [
+      Offset(100 + jx, 100 + jy),
+      Offset(100 + long + jx, 100 + jy),
+      Offset(100 + long + jx, 100 + short + jy),
+      Offset(100 + jx, 100 + short + jy),
+    ];
+  }
 
-    setState(() => _isCapturing = true);
+  /// Auto-capture burst: [cardBurstFrameCount] frames, ~250ms apart.
+  ///
+  /// Each frame records its mm/px scale (from the current detection) for
+  /// the IQR summary. The burst is kept only if [summarizeScaleSamples]
+  /// accepts it; otherwise the user re-captures — never a single frame.
+  Future<void> _captureBurst() async {
+    if (_cameraController == null || _isCapturing) return;
+    setState(() {
+      _isCapturing = true;
+      _burstTaken = 0;
+      _burstScales.clear();
+      _guidanceStatus = 'burst';
+    });
 
+    String? firstPath;
     try {
-      final XFile image = await _cameraController!.takePicture();
-
-      if (!mounted) return;
-
-      // Navigate to processing screen with the captured image
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => FootProcessingScreen(
-            imagePath: image.path,
-            paperSize: widget.paperSize,
-            footCondition: widget.footCondition,
-            footSide: _currentFoot == 0 ? 'left' : 'right',
-          ),
-        ),
-      );
+      for (var i = 0; i < cardBurstFrameCount; i++) {
+        final XFile image = await _cameraController!.takePicture();
+        firstPath ??= image.path;
+        final scale = computeScaleFactor(
+          paperCorners: _simulatedCorners(),
+          paper: _reference,
+        );
+        if (scale != null) _burstScales.add(scale);
+        if (mounted) setState(() => _burstTaken = i + 1);
+        await Future.delayed(const Duration(milliseconds: 250));
+      }
     } catch (e) {
-      debugPrint('[FootCapture] Capture error: $e');
+      debugPrint('[FootCapture] Burst error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -195,9 +270,56 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
           ),
         );
       }
-    } finally {
-      if (mounted) setState(() => _isCapturing = false);
     }
+
+    if (!mounted) return;
+    final summary = summarizeScaleSamples(_burstScales);
+    setState(() {
+      _isCapturing = false;
+      _burstTaken = 0;
+    });
+
+    if (summary == null || firstPath == null) {
+      // Too few valid frames — re-coach, never measure.
+      setState(() {
+        _guidanceStatus = 'searching';
+        _guidanceText =
+            'That burst was shaky — hold still and we\'ll retry your $_footLabel foot';
+        _holdTicks = 0;
+      });
+      _startPaperDetection();
+      return;
+    }
+
+    if (_currentFoot == 0) {
+      // Left done → guide the right foot through the same flow.
+      setState(() {
+        _currentFoot = 1;
+        _holdTicks = 0;
+        _simTick = 0;
+        _guidanceStatus = 'searching';
+        _guidanceText =
+            'Left foot captured — now place your right foot beside the $_refNoun';
+      });
+      _startPaperDetection();
+      return;
+    }
+
+    // Both feet captured — hand the right-foot burst to processing.
+    // (Left-foot bursts feed sizing downstream; larger foot wins there.)
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => FootProcessingScreen(
+          imagePath: firstPath!,
+          paperSize: widget.paperSize,
+          footCondition: widget.footCondition,
+          footSide: 'right',
+          burstScaleMedian: summary.medianScale,
+          burstScaleIqr: summary.iqrScale,
+          burstFrames: summary.keptCount,
+        ),
+      ),
+    );
   }
 
   @override
@@ -491,11 +613,17 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
                   width: 8,
                   height: 8,
                   decoration: BoxDecoration(
-                    color: _guidanceStatus == 'ready'
+                    color: _inBurst || _guidanceStatus == 'ready'
                         ? AppConstants.success
-                        : _guidanceStatus == 'detected'
+                        : _guidanceStatus == 'detected' ||
+                                _guidanceStatus == 'holding'
                             ? AppConstants.accent
-                            : AppConstants.surfaceLight.withValues(alpha: 0.5),
+                            : _guidanceStatus == 'tilted' ||
+                                    _guidanceStatus == 'tooSmall' ||
+                                    _guidanceStatus == 'wrongObject'
+                                ? AppConstants.error
+                                : AppConstants.surfaceLight
+                                    .withValues(alpha: 0.5),
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -516,45 +644,52 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
           ),
           const SizedBox(height: 16),
 
-          // Capture button
-          GestureDetector(
-            onTap: _guidanceStatus == 'ready' ? _captureImage : null,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                color: _guidanceStatus == 'ready'
-                    ? AppConstants.accent
-                    : AppConstants.surfaceLight.withValues(alpha: 0.2),
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: Colors.white,
-                  width: 3,
-                ),
-                boxShadow: _guidanceStatus == 'ready'
-                    ? [
-                        BoxShadow(
-                          color: AppConstants.accent.withValues(alpha: 0.4),
-                          blurRadius: 20,
-                          spreadRadius: 2,
-                        ),
-                      ]
-                    : [],
+          // Capture indicator — auto-capture needs no tap; the ring shows
+          // hold-still dwell, then the burst frame count.
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              color: _inBurst || _guidanceStatus == 'ready'
+                  ? AppConstants.success
+                  : _guidanceStatus == 'holding' ||
+                          _guidanceStatus == 'detected'
+                      ? AppConstants.accent
+                      : AppConstants.surfaceLight.withValues(alpha: 0.2),
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: Colors.white,
+                width: 3,
               ),
-              child: _isCapturing
-                  ? const Padding(
-                      padding: EdgeInsets.all(24),
-                      child: CircularProgressIndicator(
+            ),
+            child: Center(
+              child: _inBurst
+                  ? Text(
+                      '$_burstTaken/$cardBurstFrameCount',
+                      style: AppConstants.bodyStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
                         color: Colors.white,
-                        strokeWidth: 2,
                       ),
                     )
-                  : const Icon(
-                      Icons.camera_alt,
-                      color: Colors.white,
-                      size: 32,
-                    ),
+                  : _isCapturing
+                      ? const Padding(
+                          padding: EdgeInsets.all(24),
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : Icon(
+                          _guidanceStatus == 'tilted' ||
+                                  _guidanceStatus == 'tooSmall' ||
+                                  _guidanceStatus == 'wrongObject'
+                              ? Icons.warning_amber_outlined
+                              : Icons.camera_alt,
+                          color: Colors.white,
+                          size: 32,
+                        ),
             ),
           ),
         ],
