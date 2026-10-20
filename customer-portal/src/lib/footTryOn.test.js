@@ -4,11 +4,17 @@ import { test } from 'node:test'
 import {
   COAST_MS,
   FOOT_SHANK_RATIO,
+  HANDOFF_MS,
   MAX_DISAGREE_RATIO,
+  STEPIN_MAX_VELOCITY_PX_S,
+  STEPIN_OVERLAP_RATIO,
+  STEPIN_SUSTAIN_FRAMES,
+  axisOverlapRatio,
   blendFootLength,
   estimateFootLengthFromLeg,
   extractFeet,
   extractKnees,
+  handoffPose,
   isPlausiblePlacement,
   pickFoot,
   placementFromFoot,
@@ -16,6 +22,7 @@ import {
   shouldDrawShoe,
   smoothAngle,
   smoothPoint,
+  stepInGate,
   toPixels,
 } from './footTryOn.js'
 
@@ -320,4 +327,86 @@ test('viewer pipeline: knee-visible frame blends, collapsed axis overrides, no k
   const { place, blended: axisOut } = runFrame(noKnee)
   assert.equal(axisOut.source, 'axis')
   assert.equal(axisOut.lengthPx, place.lengthPx)
+})
+
+test('axisOverlapRatio: coincident axes read 1, far axes read 0', () => {
+  const heel = { x: 410, y: 700 }
+  const toe = { x: 584, y: 700 }
+  assert.equal(axisOverlapRatio(heel, toe, heel, toe), 1)
+  const far = axisOverlapRatio(heel, toe, { x: 410, y: 100 }, { x: 584, y: 100 })
+  assert.equal(far, 0)
+  // Tolerance scales with stage size: the same pixel offset overlaps a
+  // big stage and misses a small one.
+  const offset = { x: 470, y: 790 }
+  const toeOff = { x: 644, y: 790 }
+  assert.ok(axisOverlapRatio(offset, toeOff, heel, toe) < STEPIN_OVERLAP_RATIO)
+  // Bad input never claims overlap.
+  assert.equal(axisOverlapRatio(null, toe, heel, toe), 0)
+  assert.equal(axisOverlapRatio(heel, toe, heel, heel), 0)
+})
+
+test('stepInGate: dwells to armed, resets on leave or speed', () => {
+  const staged = {
+    footHeel: { x: 410, y: 700 },
+    footToe: { x: 584, y: 700 },
+    stageHeel: { x: 410, y: 700 },
+    stageToe: { x: 584, y: 700 },
+    footVelocityPxPerSec: 0,
+  }
+  // A brush-past (one overlapping frame) must not attach.
+  let g = stepInGate(staged)
+  assert.equal(g.armed, false)
+  assert.equal(g.overlapFrames, 1)
+  assert.equal(g.overlapRatio, 1)
+  // Dwelling sustains to armed exactly at the threshold.
+  for (let i = 1; i < STEPIN_SUSTAIN_FRAMES; i += 1) {
+    g = stepInGate({ ...staged, overlapFrames: g.overlapFrames })
+    assert.equal(g.armed, i + 1 >= STEPIN_SUSTAIN_FRAMES)
+  }
+  // A fast sweep past the shoe never arms, however overlapped.
+  g = stepInGate({ ...staged, footVelocityPxPerSec: STEPIN_MAX_VELOCITY_PX_S + 1 })
+  assert.equal(g.armed, false)
+  assert.equal(g.overlapFrames, 0)
+  // Leaving resets the dwell counter.
+  g = stepInGate({
+    ...staged,
+    overlapFrames: STEPIN_SUSTAIN_FRAMES - 1,
+    footHeel: { x: 0, y: 0 },
+    footToe: { x: 10, y: 0 },
+  })
+  assert.equal(g.armed, false)
+  assert.equal(g.overlapFrames, 0)
+  // Blind input stays shut.
+  g = stepInGate({ ...staged, footHeel: null })
+  assert.equal(g.armed, false)
+  g = stepInGate({ ...staged, footVelocityPxPerSec: NaN })
+  assert.equal(g.armed, false)
+})
+
+test('handoffPose: stage at t=0, foot at t=1, between with no pop', () => {
+  const from = { heel: { x: 500, y: 820 }, toe: { x: 500, y: 480 }, angle: -Math.PI / 2, length: 489.6 }
+  const to = { heel: { x: 410, y: 700 }, toe: { x: 584, y: 700 }, angle: 0, length: 250.56 }
+  const start = handoffPose({ from, to, t: 0 })
+  assert.deepEqual(start.heel, from.heel)
+  assert.deepEqual(start.toe, from.toe)
+  assert.equal(start.length, from.length)
+  const end = handoffPose({ from, to, t: 1 })
+  assert.deepEqual(end.heel, to.heel)
+  assert.equal(end.length, to.length)
+  // Smoothstep midpoint eases (0.5 -> 0.5 exactly at the middle, and the
+  // quarter point lags linear: no jump, no overshoot past either end).
+  const mid = handoffPose({ from, to, t: 0.5 })
+  assert.ok(mid.heel.x < from.heel.x && mid.heel.x > to.heel.x)
+  assert.ok(mid.length > to.length && mid.length < from.length)
+  const q = handoffPose({ from, to, t: 0.25 })
+  assert.ok(q.length > mid.length)
+  assert.ok(Number.isFinite(q.length) && q.length > 0)
+  // Out-of-range progress clamps instead of extrapolating.
+  assert.deepEqual(handoffPose({ from, to, t: -2 }).heel, from.heel)
+  assert.deepEqual(handoffPose({ from, to, t: 5 }).heel, to.heel)
+  // Garbage in draws the target, never NaN on screen.
+  const bad = handoffPose({ from: { heel: null }, to, t: 0.5 })
+  assert.deepEqual(bad.heel, to.heel)
+  // The handoff window is a real, short duration.
+  assert.ok(HANDOFF_MS >= 200 && HANDOFF_MS <= 500)
 })

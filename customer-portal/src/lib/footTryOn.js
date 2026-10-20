@@ -305,3 +305,107 @@ export function blendFootLength({ axisLengthPx, axisConfidence = 0.5, legPriorPx
     disagree: false,
   }
 }
+
+/**
+ * Step-in gate tuning (provisional — re-derive from the first live
+ * `?footdebug=1` step-in export):
+ * - the foot counts as "inside" the staged shoe past this fraction of its
+ *   axis within tolerance of the stage axis;
+ * - it must dwell there this many consecutive pose messages (the detector
+ *   answers ~10x/s, so 4 is roughly a second of stepping in);
+ * - faster than this it is a walk-past, not a step-in.
+ */
+export const STEPIN_OVERLAP_RATIO = 0.35
+export const STEPIN_SUSTAIN_FRAMES = 4
+export const STEPIN_MAX_VELOCITY_PX_S = 120
+/** Wall-clock length of the staged → worn handoff (smoothstep-eased). */
+export const HANDOFF_MS = 300
+
+function pointSegDist(p, a, b) {
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  const lenSq = dx * dx + dy * dy
+  if (!(lenSq > 0)) return Math.hypot(p.x - a.x, p.y - a.y)
+  const u = Math.min(1, Math.max(0, ((p.x - a.x) * dx + (p.y - a.y) * dy) / lenSq))
+  return Math.hypot(p.x - (a.x + u * dx), p.y - (a.y + u * dy))
+}
+
+/**
+ * Fraction of the foot axis (sampled) lying within tolerance of the stage
+ * axis. Tolerance scales with the stage size so the gate behaves the same
+ * near and far. All inputs are video-pixel points; returns 0 on bad input.
+ */
+export function axisOverlapRatio(footHeel, footToe, stageHeel, stageToe, samples = 9) {
+  for (const p of [footHeel, footToe, stageHeel, stageToe]) {
+    if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) return 0
+  }
+  const stageLen = Math.hypot(stageToe.x - stageHeel.x, stageToe.y - stageHeel.y)
+  if (!(stageLen > 0) || !(samples >= 1)) return 0
+  const tol = stageLen * STEPIN_OVERLAP_RATIO
+  let inside = 0
+  for (let i = 0; i < samples; i += 1) {
+    const u = samples === 1 ? 0 : i / (samples - 1)
+    const p = {
+      x: footHeel.x + (footToe.x - footHeel.x) * u,
+      y: footHeel.y + (footToe.y - footHeel.y) * u,
+    }
+    if (pointSegDist(p, stageHeel, stageToe) <= tol) inside += 1
+  }
+  return inside / samples
+}
+
+/**
+ * Whether a staged shoe may attach to the foot this frame. Returns
+ * `{ armed, overlapRatio, overlapFrames }` — the caller keeps
+ * `overlapFrames` across pose messages so dwelling accumulates, and resets
+ * it (by passing 0) whenever the foot leaves or the shoe re-stages. Bad
+ * input never arms: a gate that cannot see clearly stays shut.
+ */
+export function stepInGate({
+  footHeel,
+  footToe,
+  stageHeel,
+  stageToe,
+  footVelocityPxPerSec = 0,
+  overlapFrames = 0,
+}) {
+  const overlapRatio = axisOverlapRatio(footHeel, footToe, stageHeel, stageToe)
+  const dwelling = overlapRatio >= STEPIN_OVERLAP_RATIO
+  const slow =
+    Number.isFinite(footVelocityPxPerSec) &&
+    footVelocityPxPerSec >= 0 &&
+    footVelocityPxPerSec <= STEPIN_MAX_VELOCITY_PX_S
+  const next = dwelling && slow ? overlapFrames + 1 : 0
+  return {
+    armed: next >= STEPIN_SUSTAIN_FRAMES,
+    overlapRatio,
+    overlapFrames: next,
+  }
+}
+
+/**
+ * One frame of the staged → worn handoff: smoothstep-eased (`t` is 0–1
+ * wall-clock progress, clamped) interpolation of heel, toe, angle and
+ * length from the stage pose to the live tracked pose. Angles take the
+ * short way around (shared with the smoothing EMA). Non-finite input
+ * returns the target as-is — a handoff that cannot see clearly jumps
+ * rather than drawing garbage.
+ */
+export function handoffPose({ from, to, t }) {
+  const k = Number.isFinite(t) ? Math.min(1, Math.max(0, t)) : 1
+  const e = k * k * (3 - 2 * k)
+  const pts = [from?.heel, from?.toe, to?.heel, to?.toe]
+  const nums = [from?.angle, to?.angle, from?.length, to?.length]
+  const ok =
+    pts.every((p) => p && Number.isFinite(p.x) && Number.isFinite(p.y)) &&
+    nums.every(Number.isFinite) &&
+    to.length > 0
+  if (!ok) return { ...to }
+  const lerp = (a, b) => a + (b - a) * e
+  return {
+    heel: { x: lerp(from.heel.x, to.heel.x), y: lerp(from.heel.y, to.heel.y) },
+    toe: { x: lerp(from.toe.x, to.toe.x), y: lerp(from.toe.y, to.toe.y) },
+    angle: smoothAngle(from.angle, to.angle, e),
+    length: lerp(from.length, to.length),
+  }
+}
