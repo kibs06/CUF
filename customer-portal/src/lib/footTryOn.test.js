@@ -253,3 +253,71 @@ test('blendFootLength: no-knee passthrough is the identical double (viewer byte-
   assert.equal(out.lengthPx, axis)
   assert.equal(out.source, 'axis')
 })
+
+test('viewer pipeline: knee-visible frame blends, collapsed axis overrides, no knee passes through', () => {
+  // The exact call sequence from FootTryOnViewer.jsx on each pose message,
+  // fed with leg-consistent synthetic landmarks (1000x1000 frame). This is
+  // the blend path firing from detector-shaped output — the closest the
+  // unit suite can come to a live knee-visible frame.
+  const vw = 1000
+  const vh = 1000
+  function runFrame(lm) {
+    const { feet, knees } = poseFromLandmarks([lm])
+    const foot = pickFoot(feet, null)
+    assert.ok(foot, 'expected a worn foot')
+    const place = placementFromFoot(foot, vw, vh)
+    assert.ok(place && isPlausiblePlacement(place, vw, vh), 'expected a drawable placement')
+    const knee = knees[foot.side] ?? null
+    const prior = estimateFootLengthFromLeg({
+      knee,
+      ankle: foot.ankle,
+      videoW: vw,
+      videoH: vh,
+    })
+    const blended = blendFootLength({
+      axisLengthPx: place.lengthPx,
+      axisConfidence: foot.score ?? 0.5,
+      legPriorPx: prior?.lengthPx ?? null,
+      legConfidence: prior?.confidence ?? 0,
+    })
+    return { place, blended }
+  }
+
+  // Agreeing estimators: 400px shank -> 250.4px prior against a 174px raw
+  // axis -> 250.56px extended. Ratio ~1.001, so confidence weights decide.
+  const agree = landmarks({
+    25: { x: 0.5, y: 0.2, visibility: 0.9 },
+    27: { x: 0.5, y: 0.6, visibility: 0.8 },
+    29: { x: 0.41, y: 0.7, visibility: 0.9 },
+    31: { x: 0.584, y: 0.7, visibility: 0.9 },
+  })
+  const { blended: blendOut } = runFrame(agree)
+  assert.equal(blendOut.source, 'blend')
+  assert.equal(blendOut.disagree, false)
+  assert.ok(blendOut.lengthPx > 250.4 && blendOut.lengthPx < 250.56)
+
+  // Collapsed axis that still clears the plausibility gate: 90px raw ->
+  // 129.6px extended against the same 250.4px prior (ratio ~1.93), so the
+  // leg wins and the disagree flag is set for the debug overlay.
+  const collapsed = landmarks({
+    25: { x: 0.5, y: 0.2, visibility: 0.9 },
+    27: { x: 0.5, y: 0.6, visibility: 0.8 },
+    29: { x: 0.45, y: 0.7, visibility: 0.9 },
+    31: { x: 0.54, y: 0.7, visibility: 0.9 },
+  })
+  const { blended: overOut } = runFrame(collapsed)
+  assert.equal(overOut.source, 'leg-override')
+  assert.equal(overOut.disagree, true)
+  assert.ok(Math.abs(overOut.lengthPx - 400 * FOOT_SHANK_RATIO) < 1e-9)
+
+  // Same agreeing frame with the knee hidden: the prior is null and the
+  // axis double flows through untouched, exactly as pre-Phase-3 code drew.
+  const noKnee = landmarks({
+    27: { x: 0.5, y: 0.6, visibility: 0.8 },
+    29: { x: 0.41, y: 0.7, visibility: 0.9 },
+    31: { x: 0.584, y: 0.7, visibility: 0.9 },
+  })
+  const { place, blended: axisOut } = runFrame(noKnee)
+  assert.equal(axisOut.source, 'axis')
+  assert.equal(axisOut.lengthPx, place.lengthPx)
+})
