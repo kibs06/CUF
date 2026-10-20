@@ -195,6 +195,26 @@ BurstScaleSummary? summarizeScaleSamples(List<double> scales) {
   );
 }
 
+/// Map a burst's scale spread to the confidence level the sizing path uses.
+///
+/// Relative spread (IQR ÷ median) under 1% is a rock-steady burst (high);
+/// under 3% is normal hand shake (medium); anything wider is low — the
+/// results screen shows a range and a confirm-fit note instead of a
+/// single pretending-exact size. Non-finite or non-positive medians
+/// conservatively return 'low'.
+String burstConfidenceLevel({
+  required double scaleMedian,
+  required double scaleIqr,
+}) {
+  if (!scaleMedian.isFinite || !scaleIqr.isFinite || !(scaleMedian > 0)) {
+    return 'low';
+  }
+  final rel = (scaleIqr / scaleMedian).clamp(0.0, double.infinity);
+  if (rel < 0.01) return 'high';
+  if (rel < 0.03) return 'medium';
+  return 'low';
+}
+
 double _pct(List<double> sorted, double p) {
   if (sorted.isEmpty) return 0;
   if (sorted.length == 1) return sorted[0];

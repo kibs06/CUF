@@ -27,10 +27,14 @@ class FootCaptureScreen extends StatefulWidget {
   final String paperSize; // 'a4', 'letter', or 'card'
   final String footCondition; // 'bare' or 'socks'
 
+  /// Shopping preference for EU→US conversion ('men', 'women', 'kids').
+  final String shoeCategory;
+
   const FootCaptureScreen({
     super.key,
     required this.paperSize,
     required this.footCondition,
+    this.shoeCategory = 'men',
   });
 
   @override
@@ -59,6 +63,11 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
 
   // Per-frame mm/px scales of the current burst (summarized via IQR).
   final List<double> _burstScales = [];
+
+  // Last validator-approved reference quad: forwarded to processing so the
+  // real pipeline can run once an outline is also available. Null until
+  // the first measurable frame (never a stale or refused quad).
+  List<Offset>? _lastGoodCorners;
 
   // Simulated detector tick (see _simulatedCorners). Counts frames so the
   // sim can interleave tilted frames that must re-coach through the real
@@ -164,6 +173,10 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
       _simTick++;
 
       final corners = _simulatedCorners();
+      if (corners.isNotEmpty &&
+          isPlausibleReferenceQuad(corners, _reference)) {
+        _lastGoodCorners = List<Offset>.from(corners);
+      }
       final holdProgress =
           (_holdTicks * 500 / cardHoldStillMs).clamp(0.0, 1.0);
       final coach = coachForDetection(
@@ -306,7 +319,11 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
     }
 
     // Both feet captured — hand the right-foot burst to processing.
-    // (Left-foot bursts feed sizing downstream; larger foot wins there.)
+    // NOTE: the left-foot burst is currently discarded after confirming the
+    // flow; per-foot persistence + larger-foot-wins comparison land with the
+    // dual-foot results wiring (follow-up), not here.
+    // (No outline yet — segmentation lands in phases, so processing keeps
+    // its explicit simulation until then; corners already flow through.)
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => FootProcessingScreen(
@@ -317,6 +334,8 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
           burstScaleMedian: summary.medianScale,
           burstScaleIqr: summary.iqrScale,
           burstFrames: summary.keptCount,
+          refCorners: _lastGoodCorners,
+          shoeCategory: widget.shoeCategory,
         ),
       ),
     );
