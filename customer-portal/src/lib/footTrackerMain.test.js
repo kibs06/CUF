@@ -54,9 +54,10 @@ describe('footTrackerMain', () => {
     const deps = depsWith({ landmarker: marker })
     const tracker = await createMainThreadTracker({ visionDeps: deps })
     assert.equal(tracker.delegate, 'GPU')
-    const feet = tracker.detect({}, 100)
+    const { feet, knees } = tracker.detect({}, 100)
     assert.equal(feet.length, 1)
     assert.equal(feet[0].side, 'left')
+    assert.deepEqual(knees, { left: null, right: null })
     tracker.close()
     assert.equal(marker.closeCalls, 1)
   })
@@ -67,14 +68,14 @@ describe('footTrackerMain', () => {
     const tracker = await createMainThreadTracker({ visionDeps: deps })
     assert.equal(tracker.delegate, 'CPU')
     assert.equal(deps.calls(), 2)
-    assert.equal(tracker.detect({}, 100).length, 1)
+    assert.equal(tracker.detect({}, 100).feet.length, 1)
   })
 
   it('returns no feet when nothing is visible', async () => {
     const marker = fakeLandmarker([Array.from({ length: 33 }, () => ({ x: 0, y: 0, visibility: 0 }))])
     const deps = depsWith({ landmarker: marker })
     const tracker = await createMainThreadTracker({ visionDeps: deps })
-    assert.deepEqual(tracker.detect({}, 100), [])
+    assert.deepEqual(tracker.detect({}, 100), { feet: [], knees: { left: null, right: null } })
   })
 
   it('throws when every delegate fails', async () => {
@@ -87,5 +88,17 @@ describe('footTrackerMain', () => {
       },
     }
     await assert.rejects(() => createMainThreadTracker({ visionDeps: deps }), /no backend/)
+  })
+
+  it('passes through a visible knee alongside the foot', async () => {
+    const lm = leftFootLandmarks()
+    lm[0][25] = { x: 0.5, y: 0.2, visibility: 0.9 }
+    const marker = fakeLandmarker(lm)
+    const deps = depsWith({ landmarker: marker })
+    const tracker = await createMainThreadTracker({ visionDeps: deps })
+    const { feet, knees } = tracker.detect({}, 100)
+    assert.equal(feet.length, 1)
+    assert.deepEqual(knees.left, { x: 0.5, y: 0.2, score: 0.9 })
+    assert.equal(knees.right, null)
   })
 })

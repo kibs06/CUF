@@ -16,7 +16,7 @@
  */
 import { FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision'
 
-import { extractFeet } from './footTryOn.js'
+import { poseFromLandmarks } from './footTryOn.js'
 
 // The Lite pose bundle — the smallest of the three variants, and the right
 // first try: a foot is three sparse points, and Full/Heavy buy body detail
@@ -36,7 +36,7 @@ export const TRACKER_WASM_URL = '/vendor/mediapipe'
  * first, then CPU — a phone without WebGL-backed inference still gets a
  * tracker, just a slower one.
  *
- * Returns `{ delegate, detect(image, timestampMs) -> feet[], close() }`.
+ * Returns `{ delegate, detect(image, timestampMs) -> { feet, knees }, close() }`.
  * `image` is anything `detectForVideo` accepts (the viewer passes the
  * `<video>` element directly — no bitmap copy needed on this path).
  */
@@ -61,11 +61,7 @@ export async function createMainThreadTracker({
         delegate,
         detect(image, timestampMs) {
           const result = landmarker.detectForVideo(image, timestampMs)
-          const feet = []
-          for (const landmarks of result.landmarks ?? []) {
-            for (const foot of extractFeet(landmarks)) feet.push(foot)
-          }
-          return feet
+          return poseFromLandmarks(result.landmarks)
         },
         close() {
           try {

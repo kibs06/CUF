@@ -176,3 +176,132 @@ export function shouldDrawShoe({ seenNow, lastSeenMs, nowMs }) {
   if (!Number.isFinite(lastSeenMs)) return false
   return nowMs - lastSeenMs <= COAST_MS
 }
+
+/**
+ * Phase 3 -- leg-proportion scale prior (fix the scale at its source).
+ *
+ * Measurement basis (`docs/FOOT_TRYON_PHASE3_REPORT.md`): across the 15
+ * phone fixture frames the extended heel-to-toe axis lands at ~20-37% of the
+ * true foot length (~110-206px vs ~550px), with large framing variance.
+ * The axis alone cannot know the scale, so a second, independent length
+ * estimate is blended in.
+ *
+ * The prior: foot length ~= 0.626 x knee-to-ankle shank length (Hora et al.
+ * 2017, quotients of group means, men and women, adults 19-38 -- see
+ * `docs/foot-tryon-research.md`). The shank spans several hundred pixels
+ * where the collapsed foot axis spans tens, so it is collapse-resistant;
+ * when the two disagree wildly the leg wins and the overlay says so.
+ *
+ * Limits, stated plainly: the ratio is a population mean, not per-person
+ * truth; a foot pointing at the camera is foreshortened and neither
+ * estimate models perspective; with no visible knee there is no prior and
+ * the axis estimate passes through unchanged (no invented close-up
+ * correction -- the data do not justify one).
+ */
+
+/** Pose Landmarker indices for the knees. */
+export const KNEE_LANDMARKS = { left: 25, right: 26 }
+
+/**
+ * Minimum knee visibility. Stricter than the foot gate (0.3): the prior
+ * multiplies the shank pixel distance, so a guessed knee scales the error.
+ * 0.5 mirrors MediaPipe's own drawing threshold.
+ */
+export const KNEE_MIN_VISIBILITY = 0.5
+
+/** Foot / shank length ratio (Hora et al. 2017, see research doc). */
+export const FOOT_SHANK_RATIO = 0.626
+
+/**
+ * Disagreement ratio above which the blend stops trusting the axis.
+ * Provisional from fixture variance (extended/true spans 0.20-0.37, i.e. up
+ * to ~3x under-read): 1.8 splits honest framing noise from collapse. Needs
+ * live validation once knee-visible framings have fixtures.
+ */
+export const MAX_DISAGREE_RATIO = 1.8
+
+function kneePoint(landmarks, index) {
+  const p = landmarks?.[index]
+  if (!p) return null
+  const visibility = p.visibility ?? p.presence ?? 1
+  if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) return null
+  if (visibility < KNEE_MIN_VISIBILITY) return null
+  return { x: p.x, y: p.y, score: visibility }
+}
+
+/**
+ * Feet + knees from one detector result, in tracker-agnostic shape.
+ * Both backends (Pose worker, main-thread fallback) answer pose messages
+ * through here so they can never disagree about the message shape:
+ * `{ feet, knees }` with `knees = { left, right }` (null per missing side).
+ */
+export function poseFromLandmarks(landmarksList) {
+  const feet = []
+  const knees = { left: null, right: null }
+  for (const landmarks of landmarksList ?? []) {
+    for (const foot of extractFeet(landmarks)) feet.push(foot)
+    const k = extractKnees(landmarks)
+    knees.left ??= k.left
+    knees.right ??= k.right
+  }
+  return { feet, knees }
+}
+
+/** The knees the tracker can see right now (null per side when missing). */
+export function extractKnees(landmarks) {
+  const out = {}
+  for (const side of ['left', 'right']) {
+    out[side] = kneePoint(landmarks, KNEE_LANDMARKS[side])
+  }
+  return out
+}
+
+/**
+ * Independent foot-length estimate from the leg, in video pixels.
+ * `knee`/`ankle` are normalized UV points with scores; returns
+ * `{ lengthPx, confidence, shankPx }` or null when either end is missing.
+ */
+export function estimateFootLengthFromLeg({ knee, ankle, videoW, videoH }) {
+  if (!knee || !ankle) return null
+  if (!Number.isFinite(videoW) || !Number.isFinite(videoH)) return null
+  if (!(videoW > 0) || !(videoH > 0)) return null
+  const dx = (knee.x - ankle.x) * videoW
+  const dy = (knee.y - ankle.y) * videoH
+  const shankPx = Math.hypot(dx, dy)
+  if (!(shankPx > 1)) return null
+  return {
+    lengthPx: shankPx * FOOT_SHANK_RATIO,
+    confidence: Math.min(knee.score ?? 0, ankle.score ?? 0),
+    shankPx,
+  }
+}
+
+/**
+ * Blend the axis length with the leg prior into one length.
+ * - No prior (null / zero confidence) -> axis unchanged, `source: 'axis'`.
+ * - Agree (ratio <= MAX_DISAGREE_RATIO) -> confidence-weighted mean.
+ * - Disagree -> the leg wins (`source: 'leg-override'`, `disagree: true`)
+ *   because a collapsed axis is the known failure and the shank is the
+ *   longer, stabler measurement. The caller surfaces `disagree` in debug.
+ * The existing length lerp still applies downstream for smoothness.
+ */
+export function blendFootLength({ axisLengthPx, axisConfidence = 0.5, legPriorPx = null, legConfidence = 0 }) {
+  if (!(axisLengthPx > 0)) return null
+  if (!Number.isFinite(axisConfidence) || axisConfidence < 0) axisConfidence = 0.5
+  if (!(legPriorPx > 0) || !(legConfidence > 0)) {
+    return { lengthPx: axisLengthPx, source: 'axis', disagree: false }
+  }
+  const hi = Math.max(axisLengthPx, legPriorPx)
+  const lo = Math.min(axisLengthPx, legPriorPx)
+  if (hi / lo > MAX_DISAGREE_RATIO) {
+    return { lengthPx: legPriorPx, source: 'leg-override', disagree: true }
+  }
+  // total > 0 always here: legConfidence > 0 is guarded above and the
+  // axisConfidence guard floors at 0 — no zero-division fallback needed.
+  const total = axisConfidence + legConfidence
+  return {
+    lengthPx: (axisLengthPx * axisConfidence + legPriorPx * legConfidence) / total,
+    source: 'blend',
+    disagree: false,
+  }
+}

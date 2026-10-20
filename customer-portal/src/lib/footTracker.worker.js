@@ -11,12 +11,14 @@
  *   → `{ type: 'init' }` — loads wasm + the Lite pose bundle, answers
  *     `{ type: 'ready' }` or `{ type: 'error', message }`.
  *   → `{ type: 'frame', bitmap, timestampMs }` — answers
- *     `{ type: 'pose', feet, timestampMs }`. The bitmap is transferred and
+ *     `{ type: 'pose', feet, knees, timestampMs }` (`knees` is
+ *     `{ left, right }`, null per missing side; always null on the ONNX
+ *     path — that model predicts no knees). The bitmap is transferred and
  *     always closed here, answered or not.
  */
 import { FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision'
 
-import { extractFeet } from './footTryOn.js'
+import { poseFromLandmarks } from './footTryOn.js'
 import { FOOT_ONNX_URL, decodeOnnxProposals } from './footDetectorOnnx.js'
 // Single source of truth for the model + wasm URLs — the main-thread
 // fallback (`footTrackerMain.js`) owns them so the two paths can never
@@ -26,7 +28,7 @@ import { TRACKER_MODEL_URL as MODEL_URL, TRACKER_WASM_URL as WASM_URL } from './
 let landmarker = null
 // Custom foot model (YOLO11n-pose → ONNX) when vendored. Null = absent or
 // failed to load → Pose Landmarker path below. The page protocol is unchanged
-// either way: `{ type: 'pose', feet, timestampMs }`.
+// either way: `{ type: 'pose', feet, knees, timestampMs }` (knees null on ONNX).
 let onnxSession = null
 
 async function createLandmarker(vision, delegate) {
@@ -85,6 +87,8 @@ self.onmessage = async (event) => {
     try {
       if (onnxSession) {
         let feet = []
+        // The ONNX pose head predicts no knees — documented nulls.
+        let knees = { left: null, right: null }
         try {
           feet = await detectOnnx(msg.bitmap)
         } catch {
@@ -92,29 +96,27 @@ self.onmessage = async (event) => {
           // than wedging the session on one backend forever.
           if (landmarker) {
             const result = landmarker.detectForVideo(msg.bitmap, msg.timestampMs)
-            for (const landmarks of result.landmarks ?? []) {
-              for (const foot of extractFeet(landmarks)) feet.push(foot)
-            }
+            const fallback = poseFromLandmarks(result.landmarks)
+            feet = fallback.feet
+            knees = fallback.knees
           }
         }
-        self.postMessage({ type: 'pose', feet, timestampMs: msg.timestampMs, backend: 'onnx' })
+        self.postMessage({ type: 'pose', feet, knees, timestampMs: msg.timestampMs, backend: 'onnx' })
         return
       }
       if (!landmarker) return
       const result = landmarker.detectForVideo(msg.bitmap, msg.timestampMs)
-      const feet = []
-      for (const landmarks of result.landmarks ?? []) {
-        for (const foot of extractFeet(landmarks)) feet.push(foot)
-      }
+      const { feet, knees } = poseFromLandmarks(result.landmarks)
       self.postMessage({
         type: 'pose',
         feet,
+        knees,
         timestampMs: msg.timestampMs,
       })
     } catch {
       // A dropped frame is silence, never a fault: the page coasts.
       try {
-        self.postMessage({ type: 'pose', feet: [], timestampMs: msg.timestampMs })
+        self.postMessage({ type: 'pose', feet: [], knees: { left: null, right: null }, timestampMs: msg.timestampMs })
       } catch {
         // The page went away mid-answer — nothing to do.
       }

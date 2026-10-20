@@ -6,6 +6,8 @@ import ConfirmDialog from '../ui/ConfirmDialog.jsx'
 import { APP_DOWNLOAD_URL, tryOnAppPrompt } from '../../lib/appDownload.js'
 import { useScrollLock } from '../../hooks/useScrollLock.js'
 import {
+  blendFootLength,
+  estimateFootLengthFromLeg,
   isPlausiblePlacement,
   pickFoot,
   placementFromFoot,
@@ -538,12 +540,31 @@ export default function FootTryOnViewer({ open, url, name, onClose, forwardAxis 
             t.heel = smoothPoint(t.heel, place.heel)
             t.toe = smoothPoint(t.toe, place.toe)
             t.angle = smoothAngle(t.angle, place.angleRad)
+            // Phase 3: independent leg prior blended with the axis
+            // length. With no visible knee the blend returns the axis
+            // unchanged, so those frames render exactly as before.
+            const knee = (msg.knees ?? {})[foot.side] ?? null
+            const prior = estimateFootLengthFromLeg({
+              knee,
+              ankle: foot.ankle,
+              videoW: vw,
+              videoH: vh,
+            })
+            const blended = blendFootLength({
+              axisLengthPx: place.lengthPx,
+              axisConfidence: foot.score ?? 0.5,
+              legPriorPx: prior?.lengthPx ?? null,
+              legConfidence: prior?.confidence ?? 0,
+            })
+            t.lastBlend = blended
+            const targetLen = blended?.lengthPx ?? place.lengthPx
             t.length =
               t.length === null
-                ? place.lengthPx
-                : t.length + 0.4 * (place.lengthPx - t.length)
+                ? targetLen
+                : t.length + 0.4 * (targetLen - t.length)
             t.lastSeen = now
           }
+          if (!tracked) t.lastBlend = null
         }
         const draw = shouldDrawShoe({
           seenNow: Boolean(tracked),
@@ -582,6 +603,8 @@ export default function FootTryOnViewer({ open, url, name, onClose, forwardAxis 
             toe: t.toe ? { ...t.toe } : null,
             length: t.length,
             rawLen: t.lastRawLen ?? null,
+            blendSource: t.lastBlend?.source ?? 'axis',
+            disagree: t.lastBlend?.disagree ?? false,
             userScale: t.userScale ?? 1,
             plausible: Boolean(tracked),
             plausibleReason: foot ? (tracked ? null : 'rejected') : 'no-foot',
@@ -597,6 +620,8 @@ export default function FootTryOnViewer({ open, url, name, onClose, forwardAxis 
             feet: t.lastDebug.feet,
             lengthPx: t.length,
             rawLen: t.lastRawLen ?? null,
+            blendSource: t.lastBlend?.source ?? 'axis',
+            disagree: t.lastBlend?.disagree ?? false,
           })
           if (t.frames.length > 300) t.frames.splice(0, t.frames.length - 300)
         }
@@ -626,8 +651,8 @@ export default function FootTryOnViewer({ open, url, name, onClose, forwardAxis 
           if (t.inflight) return
           t.inflight = true
           try {
-            const feet = t.mainTracker.detect(v, performance.now())
-            if (!t.disposed) onWorkerMessage({ data: { type: 'pose', feet } })
+            const { feet, knees } = t.mainTracker.detect(v, performance.now())
+            if (!t.disposed) onWorkerMessage({ data: { type: 'pose', feet, knees } })
             else t.inflight = false
           } catch {
             // A dropped frame is silence, never a fault: the page coasts.
@@ -718,7 +743,7 @@ export default function FootTryOnViewer({ open, url, name, onClose, forwardAxis 
           ctx.stroke()
         }
         const lines = [
-          `len=${d.length == null ? '—' : Math.round(d.length)}px raw=${d.rawLen == null ? '—' : Math.round(d.rawLen)}px x${(d.userScale ?? 1).toFixed(2)}`,
+          `len=${d.length == null ? '—' : Math.round(d.length)}px raw=${d.rawLen == null ? '—' : Math.round(d.rawLen)}px x${(d.userScale ?? 1).toFixed(2)} src=${d.blendSource ?? 'axis'}${d.disagree ? ' DISAGREE' : ''}`,
           `plausible=${d.plausible ? 'yes' : 'NO (' + (d.plausibleReason ?? '?') + ')'} showing=${d.showing ? 'yes' : 'no'} side=${d.side ?? '—'}`,
           `axis=${d.modelAxis ?? '+z'} fps=${Math.round(t.fps ?? 0)} frames=${(t.frames ?? []).length}`,
         ]
