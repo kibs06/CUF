@@ -6,14 +6,17 @@ import ConfirmDialog from '../ui/ConfirmDialog.jsx'
 import { APP_DOWNLOAD_URL, tryOnAppPrompt } from '../../lib/appDownload.js'
 import { useScrollLock } from '../../hooks/useScrollLock.js'
 import {
+  HANDOFF_MS,
   blendFootLength,
   estimateFootLengthFromLeg,
+  handoffPose,
   isPlausiblePlacement,
   pickFoot,
   placementFromFoot,
   shouldDrawShoe,
   smoothAngle,
   smoothPoint,
+  stepInGate,
 } from '../../lib/footTryOn.js'
 import {
   FORWARD_YAW,
@@ -42,10 +45,67 @@ import {
  * - worker fails to start → one silent retry on the main thread, and
  *   only if that fails too, a sentence + the app door;
  * - tracker or model fails to load → a sentence + the app door;
- * - foot leaves frame → the shoe coasts briefly, then a coaching line
- *   ("Step back so ankle and toes show") replaces it — the pose model
- *   needs ankle + toes, not a toe close-up.
+ * - foot leaves frame → the shoe coasts briefly, then returns to its
+ *   staged spot for another step-in — the pose model needs ankle +
+ *   toes, not a toe close-up.
  */
+/**
+ * One pose-message step of the staged step-in gate. The shoe waits staged
+ * (today's manual placement); a found foot must dwell inside it, slowly,
+ * before it counts — this replaces the old instant manual takeover.
+ *
+ * Returns true while the shoe stays staged (the caller keeps the stage
+ * shoe drawn and skips the worn branch); false once the gate arms (the
+ * caller snapshots the stage pose, starts the handoff, and falls through
+ * to the worn branch untouched). All counters live on the track object so
+ * dwelling accumulates across pose messages.
+ */
+function stepInUpdate(t, foot, vw, vh, now) {
+  if (!foot) {
+    // A hand-placed shoe survives empty frames.
+    t.overlapFrames = 0
+    t.stepPhase = 'staged'
+    t.stepOverlap = 0
+    t.lastStepMid = null
+    return true
+  }
+  const place = placementFromFoot(foot, vw, vh)
+  if (!place || !isPlausiblePlacement(place, vw, vh)) {
+    t.overlapFrames = 0
+    t.stepPhase = 'staged'
+    t.stepOverlap = 0
+    t.lastStepMid = null
+    t.lastRawLen = place?.rawLen ?? null
+    return true
+  }
+  t.lastRawLen = place.rawLen
+  const mid = {
+    x: (place.heel.x + place.toe.x) / 2,
+    y: (place.heel.y + place.toe.y) / 2,
+  }
+  let velocity = 0
+  if (t.lastStepMid && Number.isFinite(t.lastStepT) && now > t.lastStepT) {
+    velocity =
+      (Math.hypot(mid.x - t.lastStepMid.x, mid.y - t.lastStepMid.y) /
+        (now - t.lastStepT)) *
+      1000
+  }
+  t.lastStepMid = mid
+  t.lastStepT = now
+  const gate = stepInGate({
+    footHeel: place.heel,
+    footToe: place.toe,
+    stageHeel: t.heel,
+    stageToe: t.toe,
+    footVelocityPxPerSec: velocity,
+    overlapFrames: t.overlapFrames ?? 0,
+  })
+  t.overlapFrames = gate.overlapFrames
+  t.stepOverlap = gate.overlapRatio
+  t.stepPhase = gate.overlapRatio > 0 ? 'arming' : 'staged'
+  return !gate.armed
+}
+
 /** What the loading overlay names while the try-on starts up, in order. */
 const LOAD_PHASE_LABELS = {
   starting: 'Starting…',
@@ -162,6 +222,12 @@ export default function FootTryOnViewer({ open, url, name, onClose, forwardAxis 
     track.length = null
     track.lastSeen = NaN
     track.showing = false
+    track.stepPhase = null
+    track.overlapFrames = 0
+    track.stepOverlap = null
+    track.handoff = null
+    track.lastStepMid = null
+    track.lastStepT = 0
 
     let cancelled = false
 
@@ -518,16 +584,48 @@ export default function FootTryOnViewer({ open, url, name, onClose, forwardAxis 
         if (msg?.type !== 'pose') return
         track.inflight = false
         const t = trackRef.current
+        // Auto-stage on the first answer: the shoe waits center-frame from
+        // the start (draggable as before) instead of an empty camera.
+        if (!t.stepPhase && !t.manual && t.placeManual) {
+          t.placeManual()
+          t.stepPhase = 'staged'
+          t.overlapFrames = 0
+          t.stepOverlap = null
+          t.handoff = null
+          t.lastStepMid = null
+        }
         const foot = pickFoot(msg.feet ?? [], t.side)
         const now = performance.now()
-        // A hand-placed shoe survives empty frames; a found foot retires it.
-        if (!foot && t.manual) return
-        if (foot && t.manual) {
-          t.manual = false
-          if (!cancelled) setManual(false)
-        }
+        // Staged step-in gate (replaces the old instant manual takeover):
+        // while the shoe waits, a found foot must dwell inside it before
+        // it counts. A hold skips the worn branch below — the stage shoe
+        // stays drawn and the shared coast/debug code handles the rest.
         let tracked = foot
-        if (foot) {
+        let stagedHold = false
+        if (t.manual && !t.handoff) {
+          stagedHold = stepInUpdate(t, foot, vw, vh, now)
+          if (!stagedHold) {
+            // Gate armed: snapshot the stage pose for the handoff lerp,
+            // then fall through to the worn branch untouched.
+            t.handoff = {
+              from: {
+                heel: { ...t.heel },
+                toe: { ...t.toe },
+                angle: t.angle,
+                length: t.length,
+              },
+              startMs: now,
+            }
+            t.stepPhase = 'handoff'
+            t.manual = false
+            if (!cancelled) setManual(false)
+          } else {
+            tracked = null
+            t.lastBlend = null
+          }
+        }
+        // A staged hold skips the worn branch: the stage shoe stays drawn.
+        if (foot && !stagedHold) {
           const place = placementFromFoot(foot, vw, vh)
           t.lastRawLen = place?.rawLen ?? null
           // Collapsed heel+toe axes (the tiny-shoe-on-the-shin report) are
@@ -575,15 +673,45 @@ export default function FootTryOnViewer({ open, url, name, onClose, forwardAxis 
           t.showing = draw
           if (!cancelled) setHasFoot(draw)
         }
+        // Long loss after wearing: put the shoe back on stage for another
+        // step-in instead of leaving an empty camera. Coast gaps still
+        // draw through above; this only fires past COAST_MS.
+        if (!draw && !t.manual && !t.handoff && t.stepPhase === 'worn' && t.placeManual) {
+          t.placeManual()
+          t.stepPhase = 'staged'
+          t.overlapFrames = 0
+          t.stepOverlap = null
+          t.handoff = null
+          t.lastStepMid = null
+        }
         if (draw && t.heel && t.toe && t.angle !== null && t.length) {
+          let heel = t.heel
+          let toe = t.toe
+          let angle = t.angle
+          let length = t.length
+          // Handoff: ease the drawn shoe from the snapped stage pose to
+          // the live tracked pose over HANDOFF_MS so attaching never pops.
+          if (t.handoff) {
+            const k = (now - t.handoff.startMs) / HANDOFF_MS
+            if (k >= 1) {
+              t.handoff = null
+              t.stepPhase = 'worn'
+            } else {
+              ;({ heel, toe, angle, length } = handoffPose({
+                from: t.handoff.from,
+                to: { heel, toe, angle, length },
+                t: k,
+              }))
+            }
+          }
           // Screen space is y-down; three is y-up. The toe direction
           // (dx, dy) on screen is (dx, −dy) in the scene, and the yaw that
           // takes the model's +Y-projected toe onto it is atan2(−dx, −dy).
-          const dx = t.toe.x - t.heel.x
-          const dy = t.toe.y - t.heel.y
-          yawGroup.position.set(t.heel.x - vw / 2, vh / 2 - t.heel.y, 0)
+          const dx = toe.x - heel.x
+          const dy = toe.y - heel.y
+          yawGroup.position.set(heel.x - vw / 2, vh / 2 - heel.y, 0)
           yawGroup.rotation.z = Math.atan2(-dx, -dy)
-          const fitted = t.length * (t.userScale ?? 1)
+          const fitted = length * (t.userScale ?? 1)
           yawGroup.scale.set(fitted, fitted, fitted)
           yawGroup.visible = true
         } else {
@@ -607,7 +735,9 @@ export default function FootTryOnViewer({ open, url, name, onClose, forwardAxis 
             disagree: t.lastBlend?.disagree ?? false,
             userScale: t.userScale ?? 1,
             plausible: Boolean(tracked),
-            plausibleReason: foot ? (tracked ? null : 'rejected') : 'no-foot',
+            plausibleReason: foot ? (tracked ? null : t.manual ? 'staged' : 'rejected') : 'no-foot',
+            stepPhase: t.stepPhase ?? null,
+            stepOverlap: t.stepOverlap ?? null,
             showing: t.showing,
             side: t.side,
             modelAxis: t.modelAxis ?? '+z',
@@ -622,6 +752,8 @@ export default function FootTryOnViewer({ open, url, name, onClose, forwardAxis 
             rawLen: t.lastRawLen ?? null,
             blendSource: t.lastBlend?.source ?? 'axis',
             disagree: t.lastBlend?.disagree ?? false,
+            stepPhase: t.stepPhase ?? null,
+            stepOverlap: t.stepOverlap ?? null,
           })
           if (t.frames.length > 300) t.frames.splice(0, t.frames.length - 300)
         }
@@ -744,7 +876,7 @@ export default function FootTryOnViewer({ open, url, name, onClose, forwardAxis 
         }
         const lines = [
           `len=${d.length == null ? '—' : Math.round(d.length)}px raw=${d.rawLen == null ? '—' : Math.round(d.rawLen)}px x${(d.userScale ?? 1).toFixed(2)} src=${d.blendSource ?? 'axis'}${d.disagree ? ' DISAGREE' : ''}`,
-          `plausible=${d.plausible ? 'yes' : 'NO (' + (d.plausibleReason ?? '?') + ')'} showing=${d.showing ? 'yes' : 'no'} side=${d.side ?? '—'}`,
+          `plausible=${d.plausible ? 'yes' : 'NO (' + (d.plausibleReason ?? '?') + ')'} showing=${d.showing ? 'yes' : 'no'} side=${d.side ?? '—'} step=${d.stepPhase ?? '—'}${d.stepOverlap != null ? ' ' + Math.round(d.stepOverlap * 100) + '%' : ''}`,
           `axis=${d.modelAxis ?? '+z'} fps=${Math.round(t.fps ?? 0)} frames=${(t.frames ?? []).length}`,
         ]
         ctx.fillStyle = 'rgba(0,0,0,0.65)'
@@ -964,7 +1096,7 @@ export default function FootTryOnViewer({ open, url, name, onClose, forwardAxis 
               )}
               {status === 'live' && manual && hasFoot && (
                 <p className="absolute left-1/2 top-4 -translate-x-1/2 rounded-full bg-black/60 px-4 py-2 text-center text-xs font-medium text-white">
-                  Drag to fit — auto-takeover when your foot is found
+                  Drag to move — step your foot in to wear it
                 </p>
               )}
               {/* Shoe size trim: pose axis under-reads true foot length and
