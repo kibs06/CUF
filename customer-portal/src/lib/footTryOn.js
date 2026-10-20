@@ -117,6 +117,7 @@ export function placementFromFoot(foot, videoW, videoH) {
     heel,
     toe,
     lengthPx,
+    rawLen,
     angleRad: Math.atan2(dy, dx),
     side: foot.side,
     score: foot.score,

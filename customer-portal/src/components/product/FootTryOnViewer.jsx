@@ -79,8 +79,21 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
   // .glb is authored at a different scale, so the shoe gets − / + buttons
   // while live. Multiplies the tracked length; manual drags keep it too.
   const [shoeScale, setShoeScale] = useState(1)
+  // Phase 1 debug overlay: `?footdebug=1` or `localStorage footdebug=1`.
+  // Off by default — adds nothing (no canvas, no per-frame work) for
+  // normal users. When on, landmarks/axes/readout draw over the video and
+  // a button downloads recent landmark frames (numbers only, no images).
+  const [debug] = useState(() => {
+    try {
+      if (new URLSearchParams(window.location.search).get('footdebug') === '1') return true
+      return window.localStorage?.getItem('footdebug') === '1'
+    } catch {
+      return false
+    }
+  })
   const closeRef = useRef(null)
   const videoRef = useRef(null)
+  const debugCanvasRef = useRef(null)
 
   // Everything the frame loop touches lives in refs — the loop must never
   // re-render the page at camera rate.
@@ -493,6 +506,7 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
         let tracked = foot
         if (foot) {
           const place = placementFromFoot(foot, vw, vh)
+          t.lastRawLen = place?.rawLen ?? null
           // Collapsed heel+toe axes (the tiny-shoe-on-the-shin report) are
           // rejected here: the shoe coasts/hides instead of jumping up
           // the leg at doll size.
@@ -532,6 +546,37 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
           yawGroup.visible = true
         } else {
           yawGroup.visible = false
+        }
+        // Phase 1 debug record: what the overlay + fixtures read. Written
+        // every pose message; the overlay draws it in RAF, never via state.
+        if (debug) {
+          t.lastDebug = {
+            feet: (msg.feet ?? []).map((f) => ({
+              side: f.side,
+              heel: f.heel ? { ...f.heel } : null,
+              toe: f.toe ? { ...f.toe } : null,
+              ankle: f.ankle ? { ...f.ankle } : null,
+            })),
+            heel: t.heel ? { ...t.heel } : null,
+            toe: t.toe ? { ...t.toe } : null,
+            length: t.length,
+            rawLen: t.lastRawLen ?? null,
+            userScale: t.userScale ?? 1,
+            plausible: Boolean(tracked),
+            plausibleReason: foot ? (tracked ? null : 'rejected') : 'no-foot',
+            showing: t.showing,
+            side: t.side,
+          }
+          t.frames = t.frames ?? []
+          t.frames.push({
+            t: Math.round(now),
+            vw,
+            vh,
+            feet: t.lastDebug.feet,
+            lengthPx: t.length,
+            rawLen: t.lastRawLen ?? null,
+          })
+          if (t.frames.length > 300) t.frames.splice(0, t.frames.length - 300)
         }
       }
       worker.onmessage = onWorkerMessage
@@ -590,6 +635,82 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
         if (track.disposed) return
         track.raf = requestAnimationFrame(loop)
         track.three?.renderer.render(track.three.scene, track.three.camera)
+        if (debug) drawDebugOverlay()
+      }
+      // Debug overlay: 2D canvas over the video, drawn in the same RAF so
+      // it never re-renders React at camera rate. Reads `track.lastDebug`
+      // written by the pose-message handler below.
+      const drawDebugOverlay = () => {
+        const canvas = debugCanvasRef.current
+        const t = trackRef.current
+        const d = t.lastDebug
+        if (!canvas || !d) return
+        if (canvas.width !== vw || canvas.height !== vh) {
+          canvas.width = vw
+          canvas.height = vh
+        }
+        const ctx = canvas.getContext('2d')
+        if (!ctx) return
+        ctx.clearRect(0, 0, vw, vh)
+        // FPS (EMA over RAF ticks).
+        const now = performance.now()
+        t.fps = t.fps == null ? 60 : t.fps + 0.05 * (1000 / Math.max(1, now - (t.lastFpsT ?? now)) - t.fps)
+        t.lastFpsT = now
+        const dot = (p, color, label) => {
+          if (!p) return
+          ctx.fillStyle = color
+          ctx.beginPath()
+          ctx.arc(p.x, p.y, Math.max(4, vw * 0.008), 0, Math.PI * 2)
+          ctx.fill()
+          ctx.fillStyle = '#fff'
+          ctx.font = `${Math.max(12, vw * 0.02)}px monospace`
+          ctx.fillText(label, p.x + 10, p.y - 8)
+        }
+        // Raw landmarks (UV → px) with visibility scores.
+        for (const f of d.feet ?? []) {
+          for (const [key, color] of [['heel', '#4ade80'], ['toe', '#f87171'], ['ankle', '#60a5fa']]) {
+            const p = f[key]
+            if (p && Number.isFinite(p.x) && Number.isFinite(p.y) && p.x >= 0 && p.x <= 1 && p.y >= 0 && p.y <= 1) {
+              dot({ x: p.x * vw, y: p.y * vh }, color, `${f.side[0]}:${key} ${(p.score ?? 0).toFixed(2)}`)
+            }
+          }
+        }
+        // Extended (smoothed) axis the shoe is drawn on.
+        if (d.heel && d.toe) {
+          ctx.strokeStyle = '#facc15'
+          ctx.lineWidth = Math.max(2, vw * 0.004)
+          ctx.beginPath()
+          ctx.moveTo(d.heel.x, d.heel.y)
+          ctx.lineTo(d.toe.x, d.toe.y)
+          ctx.stroke()
+          // Model toe-direction arrow (extends past the toe).
+          const dx = d.toe.x - d.heel.x
+          const dy = d.toe.y - d.heel.y
+          const len = Math.hypot(dx, dy) || 1
+          const ax = d.toe.x + (dx / len) * len * 0.25
+          const ay = d.toe.y + (dy / len) * len * 0.25
+          ctx.strokeStyle = '#22d3ee'
+          ctx.beginPath()
+          ctx.moveTo(d.toe.x, d.toe.y)
+          ctx.lineTo(ax, ay)
+          ctx.stroke()
+        }
+        const lines = [
+          `len=${d.length == null ? '—' : Math.round(d.length)}px raw=${d.rawLen == null ? '—' : Math.round(d.rawLen)}px x${(d.userScale ?? 1).toFixed(2)}`,
+          `plausible=${d.plausible ? 'yes' : 'NO (' + (d.plausibleReason ?? '?') + ')'} showing=${d.showing ? 'yes' : 'no'} side=${d.side ?? '—'}`,
+          `fps=${Math.round(t.fps ?? 0)} frames=${(t.frames ?? []).length}`,
+        ]
+        ctx.fillStyle = 'rgba(0,0,0,0.65)'
+        const fs = Math.max(12, vw * 0.02)
+        ctx.font = `${fs}px monospace`
+        lines.forEach((line, i) => {
+          const y = fs * 1.4 * (i + 1) + 6
+          const w = ctx.measureText(line).width
+          ctx.fillRect(6, y - fs, w + 12, fs + 6)
+          ctx.fillStyle = '#fff'
+          ctx.fillText(line, 12, y)
+          ctx.fillStyle = 'rgba(0,0,0,0.65)'
+        })
       }
       loop()
 
@@ -653,6 +774,21 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
 
   useScrollLock(open)
 
+  // Phase 1: downloads recent landmark frames (numbers only, no images)
+  // so real tracker output becomes unit-test fixtures.
+  const saveDebugFrames = () => {
+    const frames = trackRef.current.frames ?? []
+    const blob = new Blob(
+      [JSON.stringify({ exportedAt: new Date().toISOString(), product: name ?? null, frames }, null, 2)],
+      { type: 'application/json' },
+    )
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `foot-frames-${Date.now()}.json`
+    a.click()
+    window.setTimeout(() => URL.revokeObjectURL(a.href), 5000)
+  }
+
   if (!open || !url) return null
 
   return (
@@ -701,6 +837,13 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
                 playsInline
                 className="absolute inset-0 h-full w-full"
               />
+              {debug && (
+                <canvas
+                  ref={debugCanvasRef}
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0 h-full w-full"
+                />
+              )}
               {/* The shoe stage — the worker-driven Three.js canvas mounts
                   here, transparent, over the video. In manual mode it also
                   takes drags: the shoe follows the finger while auto-track
@@ -780,6 +923,15 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
               {/* Shoe size trim: pose axis under-reads true foot length and
                   .glb scales vary, so the wearer trims it live. Applies to
                   both auto-track and manual drags via track.userScale. */}
+              {debug && status === 'live' && (
+                <button
+                  type="button"
+                  onClick={saveDebugFrames}
+                  className="absolute bottom-3 right-3 rounded-full bg-black/60 px-4 py-1.5 text-xs font-semibold text-white backdrop-blur-sm transition-colors duration-200 hover:bg-white/20"
+                >
+                  Save frames
+                </button>
+              )}
               {status === 'live' && hasFoot && (
                 <div className="absolute right-3 top-1/2 flex -translate-y-1/2 flex-col items-center gap-1 rounded-full bg-black/60 px-1.5 py-2 backdrop-blur-sm">
                   <button

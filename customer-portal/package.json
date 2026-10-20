@@ -25,6 +25,7 @@
     "three": "^0.183.2"
   },
   "devDependencies": {
+    "@gltf-transform/core": "^4.5.1",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.21",
     "postcss": "^8.5.3",
