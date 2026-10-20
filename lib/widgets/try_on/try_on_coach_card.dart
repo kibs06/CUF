@@ -171,6 +171,13 @@ _CueCopy _copyFor(TryOnCoachCue cue) {
         'The shoe is following your foot.',
         GlassTone.success,
       );
+    case TryOnCoachCue.stepIntoShoe:
+      return const _CueCopy(
+        Icons.directions_walk,
+        'Slide your foot into the shoe',
+        'The shoe is waiting on the floor — step in to wear it.',
+        GlassTone.active,
+      );
     case TryOnCoachCue.regain:
       return const _CueCopy(
         Icons.refresh,

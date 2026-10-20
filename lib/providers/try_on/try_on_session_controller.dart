@@ -211,6 +211,16 @@ class TryOnSessionController extends ChangeNotifier {
   /// the next lock, so a later loss can offer again.
   bool _manualOfferDismissed = false;
 
+  /// Floor-first staging: true once native parks the shoe on the floor
+  /// (`shoeStaged`), until the tracker takes it (`footLock`) or the session
+  /// ends. Dart never sets this from frames — only the native placement
+  /// funnel may claim the shoe is waiting.
+  bool _shoeStaged = false;
+
+  /// Whether a shoe is currently waiting on the floor for a foot to step
+  /// into. Feeds the coach card's step-in cue; the render stays native.
+  bool get shoeStaged => _shoeStaged;
+
   StreamSubscription<ArTryOnEvent>? _eventSubscription;
   final StreamController<TryOnSessionEvent> _events =
       StreamController<TryOnSessionEvent>.broadcast();
@@ -628,6 +638,7 @@ class TryOnSessionController extends ChangeNotifier {
       searchingFor: kFootTrackInterval * _footSearchTicks,
       framing: _footFraming,
       manualOfferDismissed: _manualOfferDismissed,
+      shoeStaged: _shoeStaged,
     );
   }
 
@@ -860,6 +871,8 @@ class TryOnSessionController extends ChangeNotifier {
       // so a later loss can offer manual placement again.
       _footSearchTicks = 0;
       _manualOfferDismissed = false;
+      // Floor-first: the tracker took the shoe — it is worn, not staged.
+      _shoeStaged = false;
     } else if (_phase == TryOnPhase.locked) {
       _phase = TryOnPhase.lost;
     }
@@ -895,6 +908,15 @@ class TryOnSessionController extends ChangeNotifier {
 
       case TryOnFootMeasureEvent(:final lengthMm, :final quality):
         _applyFootMeasure(lengthMm: lengthMm, quality: quality);
+
+      case TryOnShoeStagedEvent(:final placed):
+        // Floor-first staging: native parked the shoe; the coach card may
+        // now say "step into it". Ignored off the real session like any
+        // late event, and a lock clears it (see `_applyFootLock`).
+        if (_mode != TryOnMode.real) break;
+        _shoeStaged = placed;
+        _refreshCoachCue();
+        notifyListeners();
 
       case TryOnStatusEvent(:final line):
         // An empty line is a malformed payload's residue rather than a
@@ -970,6 +992,8 @@ class TryOnSessionController extends ChangeNotifier {
     if (_disposed) return;
     _mode = TryOnMode.simulated;
     _degradeReason = reason;
+    // The session is over — no shoe is waiting for anything.
+    _shoeStaged = false;
 
     final key = '${reason.name}|${message ?? ''}';
     if (_lastDegradeKey == key) return;
