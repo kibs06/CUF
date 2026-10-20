@@ -1,0 +1,154 @@
+{
+  "meta": {
+    "product": "JBC Crown Leather Sandals",
+    "exportedAt": "2026-10-20T03:57:45.399Z",
+    "source": "Phone recordings via ?footdebug=1 Save-frames (uploads foot-frames-1792468579279..1792468665402, same session buffer)",
+    "video": "720x1280 portrait (phone gave portrait despite landscape request)",
+    "note": "Landmark numbers only, no images. Curated: off-frame ghosts, accepted small axes, good detections. lengthPx is the smoothed tracker value (stale across empty frames while coasting); rawLen updates only on detections."
+  },
+  "frames": [
+    { "t": 9362, "vw": 720, "vh": 1280, "feet": [], "lengthPx": null, "rawLen": null },
+    { "t": 11842, "vw": 720, "vh": 1280, "feet": [], "lengthPx": null, "rawLen": null },
+    {
+      "t": 22308, "vw": 720, "vh": 1280,
+      "feet": [
+        {
+          "side": "left",
+          "heel": { "x": -0.31254273653030396, "y": 0.9158686995506287, "score": 0.3302551507949829 },
+          "toe": { "x": -0.5599294900894165, "y": 0.8705769777297974, "score": 0.35119980573654175 },
+          "ankle": { "x": -0.28248903155326843, "y": 0.8710589408874512, "score": 0.46465864777565 }
+        }
+      ],
+      "lengthPx": null, "rawLen": 187.31551529160203,
+      "note": "OFF-FRAME GHOST: heel/toe x<0 (left of frame), low scores 0.33/0.35. Gate correctly rejected (lengthPx null)."
+    },
+    {
+      "t": 23960, "vw": 720, "vh": 1280,
+      "feet": [
+        {
+          "side": "left",
+          "heel": { "x": -1.2107326984405518, "y": 1.0047553777694702, "score": 0.7191864252090454 },
+          "toe": { "x": -1.58076012134552, "y": 0.963416576385498, "score": 0.6274948120117188 },
+          "ankle": { "x": -1.1761560440063477, "y": 0.9538216590881348, "score": 0.7673413753509521 }
+        },
+        {
+          "side": "right",
+          "heel": { "x": -1.4505873918533325, "y": 0.9589438438415527, "score": 0.5796384215354919 },
+          "toe": { "x": -1.739202857017517, "y": 0.9563087224960327, "score": 0.5513321757316589 },
+          "ankle": { "x": -1.4072439670562744, "y": 0.9089245200157166, "score": 0.6621413826942444 }
+        }
+      ],
+      "lengthPx": null, "rawLen": 271.6235193799197,
+      "note": "OFF-FRAME GHOST with HIGH scores 0.55-0.77 a full frame away. Gate rejected, but extractFeet passed it through — needs bounds check (Phase 4)."
+    },
+    {
+      "t": 12363, "vw": 720, "vh": 1280,
+      "feet": [
+        {
+          "side": "left",
+          "heel": { "x": 0.3139163851737976, "y": 1.0039305686950684, "score": 0.39981165528297424 },
+          "toe": { "x": 0.20578458905220032, "y": 1.0355432033538818, "score": 0.5241511464118958 },
+          "ankle": { "x": 0.2849639058113098, "y": 0.9838247299194336, "score": 0.5544704794883728 }
+        }
+      ],
+      "lengthPx": 126.34909607439255, "rawLen": 87.74242782943926,
+      "note": "In-frame but BELOW frame bottom (y>1). Accepted: extended 126px vs ~550px true foot."
+    },
+    {
+      "t": 13295, "vw": 720, "vh": 1280,
+      "feet": [
+        {
+          "side": "left",
+          "heel": { "x": 0.3760519027709961, "y": 0.7919824123382568, "score": 0.3390612304210663 },
+          "toe": { "x": 0.2932157516479492, "y": 0.7983569502830505, "score": 0.4059196412563324 },
+          "ankle": { "x": 0.36228930950164795, "y": 0.7819124460220337, "score": 0.3993430435657501 }
+        },
+        {
+          "side": "right",
+          "heel": { "x": 0.33655214309692383, "y": 0.7969896197319031, "score": 0.3063195049762726 },
+          "toe": { "x": 0.26742082834243774, "y": 0.7891514897346497, "score": 0.32402145862579346 },
+          "ankle": null
+        }
+      ],
+      "lengthPx": 110.48325851339612, "rawLen": 60.19757095270938,
+      "note": "Both feet, scores ~0.31-0.41 (guessing). Raw 60px -> 110px smoothed."
+    },
+    {
+      "t": 17269, "vw": 720, "vh": 1280,
+      "feet": [
+        {
+          "side": "left",
+          "heel": { "x": 0.19383949041366577, "y": 0.9279772639274597, "score": 0.5571225881576538 },
+          "toe": { "x": 0.05263185501098633, "y": 0.9759846925735474, "score": 0.7468782067298889 },
+          "ankle": { "x": 0.1623450368642807, "y": 0.9122322797775269, "score": 0.7134315967559814 }
+        }
+      ],
+      "lengthPx": 150.43438919262405, "rawLen": 118.79700684474112,
+      "note": "Best-confidence detection (0.56-0.75). Still only ~150px vs ~550px true."
+    },
+    {
+      "t": 18233, "vw": 720, "vh": 1280,
+      "feet": [
+        {
+          "side": "left",
+          "heel": { "x": 0.09905654937028885, "y": 0.9555419087409973, "score": 0.5326682329177856 },
+          "toe": { "x": -0.036788925528526306, "y": 1.004488468170166, "score": 0.571049153804779 },
+          "ankle": { "x": 0.08317430317401886, "y": 0.9393634796142578, "score": 0.562176525592804 }
+        }
+      ],
+      "lengthPx": 158.05357502844382, "rawLen": 116.1540894131862,
+      "note": "Toe slightly off-frame left (x<0) yet accepted."
+    },
+    {
+      "t": 24148, "vw": 720, "vh": 1280,
+      "feet": [
+        {
+          "side": "left",
+          "heel": { "x": 0.17793916165828705, "y": 1.0681110620498657, "score": 0.4824290871620178 },
+          "toe": { "x": 0.02223607897758484, "y": 1.1072797775268555, "score": 0.328529417514801 },
+          "ankle": { "x": 0.14766809344291687, "y": 1.0537217855453491, "score": 0.47219666838645935 }
+        }
+      ],
+      "lengthPx": 166.71748092212346, "rawLen": 122.80642704015672,
+      "note": "Whole foot below frame bottom (y>1), still tracked."
+    },
+    {
+      "t": 26375, "vw": 720, "vh": 1280,
+      "feet": [
+        {
+          "side": "left",
+          "heel": { "x": 0.1561378389596939, "y": 0.9694259166717529, "score": 0.4185780882835388 },
+          "toe": { "x": 0.08132046461105347, "y": 1.027066707611084, "score": 0.5539879202842712 },
+          "ankle": { "x": 0.10351312160491943, "y": 0.9550049901008606, "score": 0.5929023027420044 }
+        }
+      ],
+      "lengthPx": 157.25903002613185, "rawLen": 91.35281091038561
+    },
+    {
+      "t": 59688, "vw": 720, "vh": 1280,
+      "feet": [
+        {
+          "side": "left",
+          "heel": { "x": 0.44126003980636597, "y": 0.8541008234024048, "score": 0.42298123240470886 },
+          "toe": { "x": 0.4000832736492157, "y": 0.8514783978462219, "score": 0.3580162823200226 },
+          "ankle": { "x": 0.42753174901008606, "y": 0.8433878421783447, "score": 0.4139508903026581 }
+        }
+      ],
+      "lengthPx": 119.18970234932576, "rawLen": 29.836691871128405,
+      "note": "COLLAPSED AXIS: raw 30px on a 720px frame. Extended+smoothed still 119px > 86px gate min, so it draws a tiny shoe. Phase 4 continuity material."
+    },
+    {
+      "t": 64289, "vw": 720, "vh": 1280,
+      "feet": [
+        {
+          "side": "left",
+          "heel": { "x": 0.4853472411632538, "y": 0.8002418279647827, "score": 0.4491509795188904 },
+          "toe": { "x": 0.4707350730895996, "y": 0.8034591674804688, "score": 0.35197901725769043 },
+          "ankle": { "x": 0.4668596386909485, "y": 0.7965511083602905, "score": 0.38873404264450073 }
+        }
+      ],
+      "lengthPx": 119.18970234932576, "rawLen": 11.298050225268874,
+      "note": "WORST COLLAPSE: raw 11px. Smoothed length hides it completely."
+    }
+  ]
+}
