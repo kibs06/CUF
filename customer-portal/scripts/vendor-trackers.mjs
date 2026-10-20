@@ -92,6 +92,29 @@ for (const file of WASM_FILES) {
   console.log(`[vendor-trackers] copied ${file} (${sizeOf(dest)} bytes)`)
 }
 
+// Custom foot detector (YOLO11n-pose → ONNX). Optional until trained: when
+// training/foot-detector/runs/foot-v1/weights/best.onnx exists it is vendored
+// to /vendor/foot-detector/foot-v1.onnx and the worker prefers it over Pose.
+// Absent → log + keep Pose path so dev/build never fail pre-training.
+try {
+  const footSrc = join(portalRoot, '..', 'training', 'foot-detector', 'runs', 'foot-v1', 'weights', 'best.onnx')
+  const footOutDir = join(portalRoot, 'public', 'vendor', 'foot-detector')
+  const footDest = join(footOutDir, 'foot-v1.onnx')
+  if (existsSync(footSrc)) {
+    mkdirSync(footOutDir, { recursive: true })
+    if (sizeOf(footDest) !== sizeOf(footSrc)) {
+      copyFileSync(footSrc, footDest)
+      console.log(`[vendor-trackers] vendored foot model (${sizeOf(footDest)} bytes)`)
+    } else {
+      console.log('[vendor-trackers] skip foot model (already vendored)')
+    }
+  } else {
+    console.log('[vendor-trackers] no foot ONNX yet (train first) — Pose fallback active')
+  }
+} catch (err) {
+  console.log(`[vendor-trackers] foot model skip: ${err.message}`)
+}
+
 const modelDest = join(outDir, MODEL_FILE)
 if (sizeOf(modelDest) === MODEL_BYTES) {
   console.log('[vendor-trackers] skip pose model (already vendored)')
