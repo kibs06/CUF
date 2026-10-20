@@ -70,6 +70,13 @@ class _FootSizePickerPanelState extends State<FootSizePickerPanel> {
   String? _category;
   late String _width;
 
+  /// One key per size chip so the strip can scroll the selection into
+  /// view. Regenerated whenever the band changes length.
+  List<GlobalKey> _sizeKeys = [];
+
+  /// Owns the size strip's scroll offset for scroll-to-selection.
+  final ScrollController _stripController = ScrollController();
+
   @override
   void initState() {
     super.initState();
@@ -82,6 +89,57 @@ class _FootSizePickerPanelState extends State<FootSizePickerPanel> {
     // the customer picks one rather than inheriting a wrong label.
     final category = widget.initialCategory;
     _category = footSizeCategoryLabel(category) == null ? null : category;
+    _sizeKeys = List.generate(_euOptions.length, (_) => GlobalKey());
+    // A saved size at the far end of the range would otherwise sit
+    // off-screen with no scroll hint — open on it instead.
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _ensureSelectionVisible(animate: false));
+  }
+
+  /// Scrolls the size strip so the selected size is visible (centred).
+  /// The strip builds lazily, so an off-screen target has no context yet:
+  /// stride-jump near it first (measured chip width), then centre it
+  /// exactly once built. No-ops when nothing is picked.
+  void _ensureSelectionVisible({bool animate = true}) {
+    final size = _sizeEu;
+    if (size == null) return;
+    final options = _euOptions;
+    final index =
+        options.indexWhere((eu) => double.parse(eu) == size);
+    if (index < 0 || index >= _sizeKeys.length) return;
+    final exact = _sizeKeys[index].currentContext;
+    if (exact != null) {
+      Scrollable.ensureVisible(
+        exact,
+        alignment: 0.5,
+        duration:
+            animate ? const Duration(milliseconds: 250) : Duration.zero,
+        curve: Curves.easeOut,
+      );
+      return;
+    }
+    double stride = 72;
+    for (final key in _sizeKeys) {
+      final w = key.currentContext?.size?.width;
+      if (w != null) {
+        stride = w + 8;
+        break;
+      }
+    }
+    if (!_stripController.hasClients) return;
+    final target = (index * stride)
+        .clamp(0.0, _stripController.position.maxScrollExtent);
+    if (animate) {
+      _stripController
+          .animateTo(target,
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeOut)
+          .then((_) => _ensureSelectionVisible(animate: false));
+    } else {
+      _stripController.jumpTo(target);
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) => _ensureSelectionVisible(animate: false));
+    }
   }
 
   /// EU sizes this scale offers — the size chips are built from these, in
@@ -105,6 +163,8 @@ class _FootSizePickerPanelState extends State<FootSizePickerPanel> {
   void _selectCategory(String key) {
     setState(() {
       _category = key;
+      _sizeKeys =
+          List.generate(customerEuSizesFor(key).length, (_) => GlobalKey());
       if (!sizeUnitsForCategory(key).contains(_unit)) {
         _unit = kSizeUnits.first;
       }
@@ -116,6 +176,8 @@ class _FootSizePickerPanelState extends State<FootSizePickerPanel> {
         _sizeEu = null;
       }
     });
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _ensureSelectionVisible());
   }
 
   void _save() {
@@ -127,6 +189,12 @@ class _FootSizePickerPanelState extends State<FootSizePickerPanel> {
       widthLabel: _width,
       sizeCategory: category,
     ));
+  }
+
+  @override
+  void dispose() {
+    _stripController.dispose();
+    super.dispose();
   }
 
   @override
@@ -212,6 +280,7 @@ class _FootSizePickerPanelState extends State<FootSizePickerPanel> {
           SizedBox(
             height: 48,
             child: ListView.separated(
+              controller: _stripController,
               scrollDirection: Axis.horizontal,
               itemCount: options.length,
               separatorBuilder: (_, _) => const SizedBox(width: 8),
@@ -219,11 +288,19 @@ class _FootSizePickerPanelState extends State<FootSizePickerPanel> {
                 final eu = options[index];
                 // The label moves with the unit; the selection stays pinned to
                 // the EU value, so switching US → EU never changes the size.
-                return _chip(
-                  label: _labelFor(eu),
-                  selected: size != null && size == double.parse(eu),
-                  mono: true,
-                  onTap: () => setState(() => _sizeEu = double.parse(eu)),
+                return KeyedSubtree(
+                  key: _sizeKeys[index],
+                  child: _chip(
+                    label: _labelFor(eu),
+                    selected: size != null && size == double.parse(eu),
+                    mono: true,
+                    onTap: () {
+                      setState(() => _sizeEu = double.parse(eu));
+                      WidgetsBinding.instance.addPostFrameCallback(
+                        (_) => _ensureSelectionVisible(),
+                      );
+                    },
+                  ),
                 );
               },
             ),

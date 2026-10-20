@@ -85,6 +85,9 @@ void main() {
       (tester) async {
     await pumpPanel(tester, initialEuSize: 42, initialCategory: 'men');
 
+    // The strip opens centred on the saved 42, so 35 needs a scroll first.
+    await tester.scrollUntilVisible(find.text('35'), -200);
+    await tester.pump();
     await tester.tap(find.text('35'));
     await tester.pump();
     await tester.tap(find.text("Women's"));
@@ -246,5 +249,19 @@ void main() {
     // The label is swapped for the spinner, so the CTA cannot be fired again.
     expect(find.text('Save my size'), findsNothing);
     expect(saved, isNull);
+  });
+
+  testWidgets('a saved size at the far end opens scrolled into view',
+      (tester) async {
+    await pumpPanel(tester, initialEuSize: 48, initialCategory: 'men');
+    await tester.pump();
+    await tester.pump();
+
+    // EU 48 is the last chip of the men’s band: the lazy strip only
+    // builds visible chips, so finding it proves the strip opened on it.
+    expect(find.text('48'), findsOneWidget);
+
+    await tapSave(tester);
+    expect(saved?.euSize, 48);
   });
 }
