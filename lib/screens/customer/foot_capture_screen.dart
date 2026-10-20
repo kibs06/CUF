@@ -1,20 +1,21 @@
 import 'dart:async';
 
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../constants/app_constants.dart';
 import '../../utils/card_capture_coach.dart';
 import '../../utils/foot_measurement_utils.dart';
+import '../../utils/reference_detector.dart';
 import 'foot_processing_screen.dart';
 
-/// TODO(paper-scan): The reference detector below is still simulated
-/// (corner sets are synthesized, not CV output). The coaching authority is
-/// real: every simulated frame goes through [coachForDetection] →
-/// [diagnoseReferenceQuad], so tilted/lifted/too-small references re-coach
-/// exactly as they will with live CV. Do not ship as a working feature
-/// until the real detector lands behind the [ReferenceDetector] seam.
+/// TODO(paper-scan): Foot-outline segmentation is still simulated
+/// downstream in processing. The reference detector here is REAL classical
+/// CV ([CvReferenceDetector] over live Y-plane frames); the
+/// [SimulatedReferenceDetector] only runs when the image stream is
+/// unavailable on a device.
 ///
 /// Guided reference capture screen for foot sizing.
 ///
@@ -69,10 +70,14 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
   // the first measurable frame (never a stale or refused quad).
   List<Offset>? _lastGoodCorners;
 
-  // Simulated detector tick (see _simulatedCorners). Counts frames so the
-  // sim can interleave tilted frames that must re-coach through the real
-  // validator.
-  int _simTick = 0;
+  // Corner source: live CV over the image stream, sim fallback when the
+  // stream is unavailable. The UI never knows which is behind the seam.
+  ReferenceDetector _detector = const CvReferenceDetector();
+
+  // Latest preview frame for the detection tick (cached by reference —
+  // bytes are copied at tick time, never held across frames).
+  CameraImage? _latestFrame;
+  bool _streamActive = false;
 
   PaperDimensions get _reference => PaperDimensions.fromKey(widget.paperSize);
   String get _footLabel => _currentFoot == 0 ? 'left' : 'right';
@@ -101,10 +106,88 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
 
   @override
   void dispose() {
+    _detectionTimer?.cancel();
+    _stopFrameStream();
     _cameraController?.dispose();
     _scanLineController.dispose();
-    _detectionTimer?.cancel();
     super.dispose();
+  }
+
+  /// Live Y-plane stream for the CV detector. On failure the sim fallback
+  /// takes over so the guided flow still works (coaching authority —
+  /// validator + hold dwell + burst — is identical either way).
+  Future<void> _startFrameStream() async {
+    final controller = _cameraController;
+    if (controller == null || _streamActive) return;
+    try {
+      await controller.startImageStream((image) {
+        _latestFrame = image;
+      });
+      _streamActive = true;
+    } catch (e) {
+      debugPrint('[FootCapture] Image stream unavailable, sim fallback: $e');
+      _streamActive = false;
+      _detector = SimulatedReferenceDetector(reference: _reference);
+    }
+  }
+
+  Future<void> _stopFrameStream() async {
+    final controller = _cameraController;
+    if (controller == null || !_streamActive) return;
+    _streamActive = false;
+    _latestFrame = null;
+    try {
+      await controller.stopImageStream();
+    } catch (e) {
+      debugPrint('[FootCapture] stopImageStream: $e');
+    }
+  }
+
+  /// Current corners from whichever detector is active, in preview pixels.
+  List<Offset> _currentCorners() {
+    final detector = _detector;
+    if (detector is SimulatedReferenceDetector) {
+      // Proportional sim quad; frame size only sets the scale.
+      const frameW = 640;
+      const frameH = 480;
+      return detector.detect(
+        luminance: Uint8List(0),
+        frameW: frameW,
+        frameH: frameH,
+      );
+    }
+    final frame = _latestFrame;
+    if (frame == null || frame.planes.isEmpty) return const [];
+    try {
+      final yPlane = frame.planes[0];
+      final yBytes = yPlane.bytes;
+      final rowStride = yPlane.bytesPerRow;
+      final pixelStride = yPlane.bytesPerPixel ?? 1;
+      if (yBytes.length < rowStride * (frame.height - 1) + frame.width) {
+        return const [];
+      }
+      // Compact copy honoring stride (Y plane is the luminance signal).
+      final compact = Uint8List(frame.width * frame.height);
+      if (pixelStride == 1 && rowStride == frame.width) {
+        compact.setAll(
+            0, yBytes.sublist(0, compact.length));
+      } else {
+        for (var y = 0; y < frame.height; y++) {
+          for (var x = 0; x < frame.width; x++) {
+            compact[y * frame.width + x] =
+                yBytes[y * rowStride + x * pixelStride];
+          }
+        }
+      }
+      return detector.detect(
+        luminance: compact,
+        frameW: frame.width,
+        frameH: frame.height,
+      );
+    } catch (e) {
+      debugPrint('[FootCapture] Frame convert: $e');
+      return const [];
+    }
   }
 
   Future<void> _initCamera() async {
@@ -147,6 +230,7 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
       await _cameraController!.initialize();
       if (mounted) {
         setState(() => _isInitializing = false);
+        await _startFrameStream();
         _startPaperDetection();
       }
     } catch (e) {
@@ -160,19 +244,13 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
     }
   }
 
-  /// Reference detection loop.
-  ///
-  /// SIMULATED until the CV pipeline lands (see file docs): corner sets are
-  /// synthesized, but every frame is judged by the real [coachForDetection]
-  /// authority — including interleaved tilted frames that must re-coach.
-  /// In production this timer becomes the CV callback:
-  /// grayscale → Canny → contours → quad → [coachForDetection].
+  /// Reference detection loop: live CV corners (or sim fallback) through
+  /// the real [coachForDetection] authority every 500ms.
   void _startPaperDetection() {
     _detectionTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) {
       if (!mounted || _isCapturing) return;
-      _simTick++;
 
-      final corners = _simulatedCorners();
+      final corners = _currentCorners();
       if (corners.isNotEmpty &&
           isPlausibleReferenceQuad(corners, _reference)) {
         _lastGoodCorners = List<Offset>.from(corners);
@@ -217,34 +295,6 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
     });
   }
 
-  /// Synthesized detector output (SIM — replaced by CV).
-  ///
-  /// Ticks 0–5: nothing (framing). Then a stable, reference-proportioned
-  /// quad with small jitter. Every 7th stable tick emits a keystoned quad
-  /// so the tilted re-coach path exercises through the real validator.
-  List<Offset> _simulatedCorners() {
-    if (_simTick < 6) return const [];
-    // Reference-proportioned quad: long edge 200px, short edge by aspect.
-    const long = 200.0;
-    final short = long / _reference.aspectRatio;
-    final jx = ((_simTick % 3) - 1) * 2.0;
-    final jy = ((_simTick % 5) - 2) * 2.0;
-    if (_simTick % 7 == 0) {
-      // Keystoned: top edge pinched (lifted-card look).
-      return [
-        Offset(140 + jx, 100 + jy),
-        Offset(220 + jx, 100 + jy),
-        const Offset(260, 200),
-        const Offset(60, 200),
-      ];
-    }
-    return [
-      Offset(100 + jx, 100 + jy),
-      Offset(100 + long + jx, 100 + jy),
-      Offset(100 + long + jx, 100 + short + jy),
-      Offset(100 + jx, 100 + short + jy),
-    ];
-  }
 
   /// Auto-capture burst: [cardBurstFrameCount] frames, ~250ms apart.
   ///
@@ -261,15 +311,30 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
     });
 
     String? firstPath;
+    // takePicture and the image stream are mutually exclusive: stop the
+    // stream for the burst, restart it on every exit path below.
+    await _stopFrameStream();
     try {
       for (var i = 0; i < cardBurstFrameCount; i++) {
         final XFile image = await _cameraController!.takePicture();
         firstPath ??= image.path;
-        final scale = computeScaleFactor(
-          paperCorners: _simulatedCorners(),
-          paper: _reference,
+        // Real per-frame evidence: decode this still and detect (isolate),
+        // so the burst IQR reflects actual frame-to-frame spread.
+        final bytes = await image.readAsBytes();
+        final still = await compute(
+          decodeAndDetectStill,
+          {'bytes': bytes, 'maxSide': 320},
         );
-        if (scale != null) _burstScales.add(scale);
+        if (still.corners.isNotEmpty) {
+          final scale = computeScaleFactor(
+            paperCorners: still.corners,
+            paper: _reference,
+          );
+          if (scale != null) {
+            _burstScales.add(scale);
+            _lastGoodCorners = List<Offset>.from(still.corners);
+          }
+        }
         if (mounted) setState(() => _burstTaken = i + 1);
         await Future.delayed(const Duration(milliseconds: 250));
       }
@@ -300,20 +365,23 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
             'That burst was shaky — hold still and we\'ll retry your $_footLabel foot';
         _holdTicks = 0;
       });
+      await _startFrameStream();
       _startPaperDetection();
       return;
     }
 
     if (_currentFoot == 0) {
       // Left done → guide the right foot through the same flow.
+      final detector = _detector;
+      if (detector is SimulatedReferenceDetector) detector.reset();
       setState(() {
         _currentFoot = 1;
         _holdTicks = 0;
-        _simTick = 0;
         _guidanceStatus = 'searching';
         _guidanceText =
             'Left foot captured — now place your right foot beside the $_refNoun';
       });
+      await _startFrameStream();
       _startPaperDetection();
       return;
     }
@@ -323,7 +391,8 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
     // flow; per-foot persistence + larger-foot-wins comparison land with the
     // dual-foot results wiring (follow-up), not here.
     // (No outline yet — segmentation lands in phases, so processing keeps
-    // its explicit simulation until then; corners already flow through.)
+    // its explicit simulation until then; burst-still corners are real CV
+    // output and already flow through.)
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => FootProcessingScreen(
