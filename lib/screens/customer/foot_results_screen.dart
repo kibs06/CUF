@@ -56,6 +56,14 @@ class FootResultsScreen extends StatefulWidget {
   final double? rightWidthComp;
   final String? sizeRecommendationReason;
 
+  // ── card-path range + confidence (shown only when provided) ──
+  // When the measurement came through recommendCardSizes, the screen shows
+  // the honest range (single size when clear, two when between sizes or
+  // uncertain) plus the confidence label instead of bare decimals.
+  final String? sizeRangeLow;
+  final String? sizeRangeHigh;
+  final String? sizeConfidenceLabel;
+
   const FootResultsScreen({
     super.key,
     required this.footSide,
@@ -84,6 +92,9 @@ class FootResultsScreen extends StatefulWidget {
     this.rightLengthComp,
     this.rightWidthComp,
     this.sizeRecommendationReason,
+    this.sizeRangeLow,
+    this.sizeRangeHigh,
+    this.sizeConfidenceLabel,
   });
 
   @override
@@ -498,6 +509,38 @@ class _FootResultsScreenState extends State<FootResultsScreen> {
               ],
             ],
           ),
+          if (widget.sizeRangeLow != null &&
+              widget.sizeRangeHigh != null &&
+              widget.sizeRangeLow != widget.sizeRangeHigh) ...[
+            const SizedBox(height: 8),
+            Text(
+              'EU ${widget.sizeRangeLow}–${widget.sizeRangeHigh} also fit — pick snugger or roomier',
+              textAlign: TextAlign.center,
+              style: AppConstants.bodyStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppConstants.secondary,
+              ),
+            ),
+          ],
+          if (widget.sizeConfidenceLabel != null) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppConstants.secondary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Text(
+                widget.sizeConfidenceLabel!,
+                style: AppConstants.bodyStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: AppConstants.secondary.withValues(alpha: 0.8),
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),

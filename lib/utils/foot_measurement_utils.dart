@@ -318,6 +318,186 @@ FootMeasurementResult? computeFootMeasurements({
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// RECTIFIED MEASUREMENT (homography → mm space → PCA bbox)
+// ═══════════════════════════════════════════════════════════════════
+//
+// The legacy path above scales raw pixel extents, so any phone tilt
+// foreshortens the foot and the error lands in the size. The rectified
+// path first maps the outline into the reference's own millimeter plane
+// (a planar homography from the 4 detected corners), then measures there
+// — tilt within the validator's gate cancels out instead of biasing.
+//
+// Deliberately NO arch-correction fudge here: the outline extent in mm
+// IS the measurement. Callers apply sock compensation + comfort allowance
+// downstream, each visible and tested, instead of one hidden 0.92.
+
+/// 3×3 planar homography (row-major) mapping image pixels → mm plane.
+/// Null when the quad is degenerate (singular system).
+List<double>? homographyPixelsToMm(
+  List<Offset> imageCorners,
+  PaperDimensions paper,
+) {
+  if (imageCorners.length != 4) return null;
+  for (final c in imageCorners) {
+    if (!c.dx.isFinite || !c.dy.isFinite) return null;
+  }
+  final src = _sortCornersClockwise(imageCorners);
+  final dst = [
+    const Offset(0, 0),
+    Offset(paper.widthMm, 0),
+    Offset(paper.widthMm, paper.heightMm),
+    Offset(0, paper.heightMm),
+  ];
+  // Solve Ah = b for h (8 unknowns, h[8] = 1) via Gaussian elimination
+  // with partial pivoting.
+  final a = List.generate(8, (_) => List.filled(9, 0.0));
+  for (var i = 0; i < 4; i++) {
+    final x = src[i].dx, y = src[i].dy;
+    final u = dst[i].dx, v = dst[i].dy;
+    a[2 * i][0] = x;
+    a[2 * i][1] = y;
+    a[2 * i][2] = 1;
+    a[2 * i][6] = -u * x;
+    a[2 * i][7] = -u * y;
+    a[2 * i][8] = u;
+    a[2 * i + 1][3] = x;
+    a[2 * i + 1][4] = y;
+    a[2 * i + 1][5] = 1;
+    a[2 * i + 1][6] = -v * x;
+    a[2 * i + 1][7] = -v * y;
+    a[2 * i + 1][8] = v;
+  }
+  const eps = 1e-9;
+  for (var col = 0; col < 8; col++) {
+    var pivot = col;
+    for (var row = col + 1; row < 8; row++) {
+      if (a[row][col].abs() > a[pivot][col].abs()) pivot = row;
+    }
+    if (a[pivot][col].abs() < eps) return null; // Singular — no plane.
+    if (pivot != col) {
+      final tmp = a[pivot];
+      a[pivot] = a[col];
+      a[col] = tmp;
+    }
+    for (var row = 0; row < 8; row++) {
+      if (row == col) continue;
+      final factor = a[row][col] / a[col][col];
+      if (factor == 0) continue;
+      for (var k = col; k < 9; k++) {
+        a[row][k] -= factor * a[col][k];
+      }
+    }
+  }
+  final h = List.filled(9, 0.0);
+  for (var i = 0; i < 8; i++) {
+    if (a[i][i].abs() < eps) return null;
+    h[i] = a[i][8] / a[i][i];
+    if (!h[i].isFinite) return null;
+  }
+  h[8] = 1.0;
+  return h;
+}
+
+/// Map one image point through [h] into mm. Null on divide-by-zero/NaN.
+Offset? applyHomography(List<double> h, Offset p) {
+  if (h.length != 9) return null;
+  if (!p.dx.isFinite || !p.dy.isFinite) return null;
+  final w = h[6] * p.dx + h[7] * p.dy + h[8];
+  if (!w.isFinite || w.abs() < 1e-9) return null;
+  final u = (h[0] * p.dx + h[1] * p.dy + h[2]) / w;
+  final v = (h[3] * p.dx + h[4] * p.dy + h[5]) / w;
+  if (!u.isFinite || !v.isFinite) return null;
+  return Offset(u, v);
+}
+
+/// Foot length/width in mm measured in the reference's rectified plane.
+///
+/// Validator-gated: any [diagnoseReferenceQuad] issue (tilted/lifted/too
+/// small/wrong object) returns null — the caller re-coaches, never sizes
+/// off a skewed plane. Also null for degenerate outlines (<10 points,
+/// zero extent) or a singular homography.
+FootMeasurementResult? measureFootRectified({
+  required List<Offset> footOutline,
+  required List<Offset> refCorners,
+  required PaperDimensions paper,
+}) {
+  if (footOutline.length < 10) return null;
+  if (diagnoseReferenceQuad(refCorners, paper).isNotEmpty) return null;
+  final h = homographyPixelsToMm(refCorners, paper);
+  if (h == null) return null;
+  final mm = <Offset>[];
+  for (final p in footOutline) {
+    final q = applyHomography(h, p);
+    if (q == null) return null;
+    mm.add(q);
+  }
+  // PCA bbox in mm (same oriented-extent math as the legacy path, but
+  // the units are already millimeters — no scale factor, no fudge).
+  final centroid = _centroid(mm);
+  double xx = 0, xy = 0, yy = 0;
+  for (final p in mm) {
+    final dx = p.dx - centroid.dx;
+    final dy = p.dy - centroid.dy;
+    xx += dx * dx;
+    xy += dx * dy;
+    yy += dy * dy;
+  }
+  final n = mm.length.toDouble();
+  xx /= n;
+  xy /= n;
+  yy /= n;
+  if (!xx.isFinite || !xy.isFinite || !yy.isFinite) return null;
+  final angle = 0.5 * math.atan2(2 * xy, xx - yy);
+  if (!angle.isFinite) return null;
+  final cosA = math.cos(angle);
+  final sinA = math.sin(angle);
+  double minProj = double.infinity, maxProj = double.negativeInfinity;
+  double minPerp = double.infinity, maxPerp = double.negativeInfinity;
+  for (final p in mm) {
+    final dx = p.dx - centroid.dx;
+    final dy = p.dy - centroid.dy;
+    final proj = dx * cosA + dy * sinA;
+    final perp = -dx * sinA + dy * cosA;
+    if (proj < minProj) minProj = proj;
+    if (proj > maxProj) maxProj = proj;
+    if (perp < minPerp) minPerp = perp;
+    if (perp > maxPerp) maxPerp = perp;
+  }
+  final lengthMm = maxProj - minProj;
+  final widthMm = maxPerp - minPerp;
+  // Epsilon, not just >0: exactly-collinear outlines leave ~1e-15px
+  // float dust that must not become a "measurement".
+  const minExtentMm = 1e-6;
+  if (!lengthMm.isFinite ||
+      !widthMm.isFinite ||
+      !(lengthMm > minExtentMm) ||
+      !(widthMm > minExtentMm)) {
+    return null;
+  }
+  return FootMeasurementResult(lengthMm: lengthMm, widthMm: widthMm);
+}
+
+/// Manual corner-adjust fallback: replace corner [index] with [next].
+///
+/// The capture UI calls this when the user drags a mis-detected corner;
+/// the adjusted quad must still pass [diagnoseReferenceQuad] before any
+/// measurement uses it. Returns null for bad input (wrong count,
+/// out-of-range index, non-finite replacement) — the caller keeps the
+/// previous quad and keeps coaching.
+List<Offset>? adjustReferenceCorner(
+  List<Offset> corners,
+  int index,
+  Offset next,
+) {
+  if (corners.length != 4) return null;
+  if (index < 0 || index > 3) return null;
+  if (!next.dx.isFinite || !next.dy.isFinite) return null;
+  final out = List<Offset>.from(corners);
+  out[index] = next;
+  return out;
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // SHOE SIZE CHART (EU / Mondopoint)
 // ═══════════════════════════════════════════════════════════════════
 
@@ -491,6 +671,102 @@ String generateSizeRecommendationReason({
   }
 
   return 'Based on your measurement ($cmStr cm), we recommend EU $euSize.';
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CARD SIZE RECOMMENDATION (range + confidence, no fake precision)
+// ═══════════════════════════════════════════════════════════════════
+
+/// What the results screen shows for a card-path measurement.
+///
+/// A single EU number pretends to ±3mm knowledge the pipeline does not
+/// have near a size boundary, so the recommendation carries its range:
+/// [rangeLowEu]..[rangeHighEu] collapse to one size only for a clear,
+/// high-confidence fit. Displayed mm stay whole (cm to 1 decimal) — the
+/// burst IQR spread is shown as the confidence label, not decimals.
+class CardSizeRecommendation {
+  final String eu;
+  final String us;
+  final String uk;
+  final String rangeLowEu;
+  final String rangeHighEu;
+  final String confidenceLabel;
+  final String reason;
+
+  const CardSizeRecommendation({
+    required this.eu,
+    required this.us,
+    required this.uk,
+    required this.rangeLowEu,
+    required this.rangeHighEu,
+    required this.confidenceLabel,
+    required this.reason,
+  });
+
+  bool get isSingleSize => rangeLowEu == rangeHighEu;
+}
+
+/// Build the display recommendation from a compensated foot length.
+///
+/// [compensatedLengthMm] is post-sock-compensation. Returns null for
+/// non-finite input or lengths outside the hard-reject plausibility bounds
+/// — the caller re-captures instead of sizing garbage.
+CardSizeRecommendation? recommendCardSizes({
+  required double compensatedLengthMm,
+  required String measurementSource,
+  String? confidenceLevel,
+  String shoeCategory = 'men',
+}) {
+  if (!compensatedLengthMm.isFinite) return null;
+  if (checkPlausibility(compensatedLengthMm / 10, isLength: true) ==
+      PlausibilityResult.hardReject) {
+    return null;
+  }
+  final eu = footLengthMmToEuSize(compensatedLengthMm);
+  if (eu == null) return null;
+  final euNum = int.tryParse(eu);
+  if (euNum == null) return null;
+
+  // Near the lower boundary of this size? Then the previous size is live.
+  final adjusted = compensatedLengthMm + comfortAllowanceMm;
+  String? lowerBound;
+  for (final (minMm, _, size) in euSizeChart) {
+    if (size == eu) {
+      lowerBound = minMm.toString();
+      break;
+    }
+  }
+  final lower = double.tryParse(lowerBound ?? '') ?? adjusted;
+  final nearBoundary = (adjusted - lower).abs() < kBoundaryProximityMm;
+  final highConfidence = confidenceLevel == 'high';
+
+  final lowEu =
+      (nearBoundary || !highConfidence) && euNum > 22 ? euNum - 1 : euNum;
+  final rangeLow = '$lowEu';
+  final rangeHigh = eu;
+
+  final label = highConfidence && !nearBoundary
+      ? 'High confidence'
+      : nearBoundary
+          ? 'Between sizes — both fit, snugger pick is $rangeLow'
+          : confidenceLevel == 'medium'
+              ? 'Medium confidence'
+              : 'Low confidence — confirm fit in store';
+
+  return CardSizeRecommendation(
+    eu: eu,
+    us: euToUs(eu, category: shoeCategory) ?? '—',
+    uk: euToUk(eu) ?? '—',
+    rangeLowEu: rangeLow,
+    rangeHighEu: rangeHigh,
+    confidenceLabel: label,
+    reason: generateSizeRecommendationReason(
+      compensatedLengthMm: compensatedLengthMm,
+      euSize: eu,
+      measurementSource: measurementSource,
+      confidenceLevel: confidenceLevel,
+    ),
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════

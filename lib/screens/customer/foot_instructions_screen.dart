@@ -429,6 +429,7 @@ class _FootInstructionsScreenState extends State<FootInstructionsScreen> {
           builder: (_) => FootCaptureScreen(
             paperSize: _paperSize,
             footCondition: _footCondition,
+            shoeCategory: _shoeCategory,
           ),
         ),
       );

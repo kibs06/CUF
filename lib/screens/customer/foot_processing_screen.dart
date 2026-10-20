@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../../constants/app_constants.dart';
+import '../../utils/card_capture_coach.dart' show burstConfidenceLevel;
+import '../../utils/card_measurement_pipeline.dart';
 import '../../utils/foot_measurement_utils.dart';
 import 'foot_results_screen.dart';
 
@@ -35,6 +37,16 @@ class FootProcessingScreen extends StatefulWidget {
   final double? burstScaleIqr;
   final int? burstFrames;
 
+  /// Last good reference quad from the capture burst (image pixels).
+  /// Foot outline from segmentation (image pixels). Both present → the
+  /// real [measureCardCapture] pipeline runs; otherwise the explicit
+  /// simulation below runs (detector/segmentation still land in phases).
+  final List<Offset>? refCorners;
+  final List<Offset>? footOutline;
+
+  /// Shopping preference for EU→US conversion ('men', 'women', 'kids').
+  final String shoeCategory;
+
   const FootProcessingScreen({
     super.key,
     required this.imagePath,
@@ -44,6 +56,9 @@ class FootProcessingScreen extends StatefulWidget {
     this.burstScaleMedian,
     this.burstScaleIqr,
     this.burstFrames,
+    this.refCorners,
+    this.footOutline,
+    this.shoeCategory = 'men',
   });
 
   @override
@@ -119,9 +134,22 @@ class _FootProcessingScreenState extends State<FootProcessingScreen>
         _currentStep = 'Calculating measurements...';
         _progress = 0.75;
       });
-      // Simulate realistic foot measurements (in production, from actual CV output)
-      final footLengthMm = _simulateFootLength();
-      final footWidthMm = _simulateFootWidth(footLengthMm);
+      // Real pipeline when the capture forwarded corners + outline;
+      // otherwise the explicit simulation (see file docs).
+      final real = _runRealPipeline();
+      if (real != null && !real.isOk) {
+        if (mounted) {
+          setState(() {
+            _error = _failureCopy(real.failure!);
+          });
+        }
+        return;
+      }
+      final footLengthMm =
+          real?.success?.lengthMm ?? _simulateFootLength();
+      final footWidthMm = real?.success?.widthMm ??
+          _simulateFootWidth(footLengthMm);
+      final recommendation = real?.success?.recommendation;
       await Future.delayed(const Duration(milliseconds: 500));
 
       // Step 6: Map to shoe sizes
@@ -129,9 +157,11 @@ class _FootProcessingScreenState extends State<FootProcessingScreen>
         _currentStep = 'Mapping to shoe sizes...';
         _progress = 0.9;
       });
-      final euSize = footLengthMmToEuSize(footLengthMm);
-      final usSize = euSize != null ? euToUs(euSize) : null;
-      final ukSize = euSize != null ? euToUk(euSize) : null;
+      final euSize = recommendation?.eu ?? footLengthMmToEuSize(footLengthMm);
+      final usSize = recommendation?.us ??
+          (euSize != null ? euToUs(euSize, category: widget.shoeCategory) : null);
+      final ukSize =
+          recommendation?.uk ?? (euSize != null ? euToUk(euSize) : null);
       await Future.delayed(const Duration(milliseconds: 400));
 
       setState(() {
@@ -156,6 +186,11 @@ class _FootProcessingScreenState extends State<FootProcessingScreen>
             footCondition: widget.footCondition,
             paperConfidence: _burstConfidence(),
             lightingQuality: 0.88,
+            shoeCategory: widget.shoeCategory,
+            sizeRangeLow: recommendation?.rangeLowEu,
+            sizeRangeHigh: recommendation?.rangeHighEu,
+            sizeConfidenceLabel: recommendation?.confidenceLabel,
+            sizeRecommendationReason: recommendation?.reason,
           ),
         ),
       );
@@ -194,6 +229,55 @@ class _FootProcessingScreenState extends State<FootProcessingScreen>
     final iqr = widget.burstScaleIqr;
     if (median == null || iqr == null || !(median > 0)) return 0.92;
     return (1.0 - (iqr / median) * 8).clamp(0.2, 0.99);
+  }
+
+  /// Real validator-gated pipeline. Null when the capture did not forward
+  /// corners + outline + burst stats (simulation path keeps running).
+  CardMeasurementOutcome? _runRealPipeline() {
+    final corners = widget.refCorners;
+    final outline = widget.footOutline;
+    final median = widget.burstScaleMedian;
+    final iqr = widget.burstScaleIqr;
+    final frames = widget.burstFrames;
+    if (corners == null ||
+        outline == null ||
+        median == null ||
+        iqr == null ||
+        frames == null) {
+      return null;
+    }
+    return measureCardCapture(
+      refCorners: corners,
+      footOutline: outline,
+      paper: PaperDimensions.fromKey(widget.paperSize),
+      isSocks: widget.footCondition == 'socks',
+      measurementSource: 'paper',
+      confidenceLevel: burstConfidenceLevel(
+        scaleMedian: median,
+        scaleIqr: iqr,
+      ),
+      shoeCategory: widget.shoeCategory,
+      scaleMedian: median,
+      scaleIqrMmPerPx: iqr,
+      burstFrames: frames,
+    );
+  }
+
+  /// Retake coaching for a pipeline refusal (shown in the error state).
+  String _failureCopy(CardMeasurementFailure failure) {
+    switch (failure) {
+      case CardMeasurementFailure.referenceInvalid:
+        return 'The reference shifted mid-capture — retake with the '
+            '${widget.paperSize == 'card' ? 'card' : 'paper'} flat on the floor.';
+      case CardMeasurementFailure.outlineInvalid:
+        return 'We couldn\'t isolate the foot outline — retake with the '
+            'whole foot in frame and good light.';
+      case CardMeasurementFailure.implausibleMeasurement:
+        return 'That measurement doesn\'t look like a foot — check the '
+            'reference is fully visible and retake.';
+      case CardMeasurementFailure.sizingOutOfRange:
+        return 'That foot falls outside our size chart — try our in-store fitting.';
+    }
   }
 
   @override
