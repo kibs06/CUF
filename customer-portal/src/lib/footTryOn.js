@@ -83,17 +83,36 @@ export function toPixels(p, videoW, videoH) {
 }
 
 /**
- * Where the shoe goes, in video pixels: anchored at the heel, pointing at
- * the toe. The renderer draws the model with its toe forward along this
- * axis and its length matched to `lengthPx`.
+ * Pose foot-index (31/32) sits proximal to the true toe tip and the heel
+ * point sits forward of the true heel back — a shoe scaled to their raw
+ * distance renders short. These extend the axis to the true shoe length.
+ */
+export const TOE_EXTENSION = 0.28
+/** How far behind the detected heel the true heel back sits. */
+export const HEEL_BACK = 0.16
+
+/**
+ * Where the shoe goes, in video pixels: anchored at the extended heel,
+ * pointing at the extended toe. The renderer draws the model with its toe
+ * forward along this axis and its length matched to `lengthPx`.
+ *
+ * `lengthPx` already includes the toe/heel extension, so callers must not
+ * re-apply it — `yawGroup.scale` takes it as-is.
  */
 export function placementFromFoot(foot, videoW, videoH) {
-  const heel = toPixels(foot.heel, videoW, videoH)
-  const toe = toPixels(foot.toe, videoW, videoH)
-  const dx = toe.x - heel.x
-  const dy = toe.y - heel.y
-  const lengthPx = Math.hypot(dx, dy)
-  if (!(lengthPx > 1)) return null
+  const rawHeel = toPixels(foot.heel, videoW, videoH)
+  const rawToe = toPixels(foot.toe, videoW, videoH)
+  const dx = rawToe.x - rawHeel.x
+  const dy = rawToe.y - rawHeel.y
+  const rawLen = Math.hypot(dx, dy)
+  if (!(rawLen > 1)) return null
+  const ux = dx / rawLen
+  const uy = dy / rawLen
+  const heelBackPx = rawLen * HEEL_BACK
+  const toeExtPx = rawLen * TOE_EXTENSION
+  const heel = { x: rawHeel.x - ux * heelBackPx, y: rawHeel.y - uy * heelBackPx }
+  const toe = { x: rawToe.x + ux * toeExtPx, y: rawToe.y + uy * toeExtPx }
+  const lengthPx = rawLen + heelBackPx + toeExtPx
   return {
     heel,
     toe,
@@ -102,6 +121,30 @@ export function placementFromFoot(foot, videoW, videoH) {
     side: foot.side,
     score: foot.score,
   }
+}
+
+/**
+ * False-positive guard for the shin望tiny-shoe symptom: when the pose model
+ * loses body context on a foot close-up it collapses heel+toe into a short
+ * axis up the leg. Anything shorter than ~12% of the short frame edge is
+ * not a foot — the caller should coast/hide, never draw a tiny shoe on
+ * the shin.
+ */
+export function isPlausiblePlacement(place, videoW, videoH) {
+  if (!place) return false
+  if (!Number.isFinite(videoW) || !Number.isFinite(videoH)) return false
+  if (!(videoW > 0) || !(videoH > 0)) return false
+  const minLen = Math.min(videoW, videoH) * 0.12
+  const maxLen = Math.max(videoW, videoH) * 0.95
+  if (!(place.lengthPx >= minLen)) return false
+  if (place.lengthPx > maxLen) return false
+  for (const p of [place.heel, place.toe]) {
+    if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) return false
+    // Allow slightly off-frame close-ups, but not a point a full frame away.
+    if (p.x < -videoW * 0.25 || p.x > videoW * 1.25) return false
+    if (p.y < -videoH * 0.25 || p.y > videoH * 1.25) return false
+  }
+  return true
 }
 
 /** Exponential moving average for a point — the wobble remover. */

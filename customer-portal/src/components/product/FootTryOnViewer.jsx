@@ -6,6 +6,7 @@ import ConfirmDialog from '../ui/ConfirmDialog.jsx'
 import { APP_DOWNLOAD_URL, tryOnAppPrompt } from '../../lib/appDownload.js'
 import { useScrollLock } from '../../hooks/useScrollLock.js'
 import {
+  isPlausiblePlacement,
   pickFoot,
   placementFromFoot,
   shouldDrawShoe,
@@ -74,6 +75,10 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
   // "Place it manually" drops the shoe mid-frame and dragging moves it;
   // auto-tracking takes over the moment a real foot is found.
   const [manual, setManual] = useState(false)
+  // User size trim: the pose axis under-reads true foot length and every
+  // .glb is authored at a different scale, so the shoe gets − / + buttons
+  // while live. Multiplies the tracked length; manual drags keep it too.
+  const [shoeScale, setShoeScale] = useState(1)
   const closeRef = useRef(null)
   const videoRef = useRef(null)
 
@@ -103,6 +108,7 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
     // one second chance and retries start clean.
     fellBack: false,
     mainTracker: null,
+    userScale: 1,
   })
 
   useEffect(() => {
@@ -118,7 +124,9 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
     setRearCams([])
     setCamIdx(0)
     setManual(false)
+    setShoeScale(1)
     track.manual = false
+    track.userScale = 1
     track.placeManual = null
     track.nudgeManual = null
     track.camTrack = null
@@ -412,7 +420,8 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
         const dy = t.toe.y - t.heel.y
         yawGroup.position.set(t.heel.x - vw / 2, vh / 2 - t.heel.y, 0)
         yawGroup.rotation.z = Math.atan2(-dx, -dy)
-        yawGroup.scale.set(t.length, t.length, t.length)
+        const fitted = t.length * (t.userScale ?? 1)
+        yawGroup.scale.set(fitted, fitted, fitted)
         yawGroup.visible = true
       }
       track.placeManual = () => {
@@ -481,10 +490,16 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
           t.manual = false
           if (!cancelled) setManual(false)
         }
+        let tracked = foot
         if (foot) {
-          t.side = foot.side
           const place = placementFromFoot(foot, vw, vh)
-          if (place) {
+          // Collapsed heel+toe axes (the tiny-shoe-on-the-shin report) are
+          // rejected here: the shoe coasts/hides instead of jumping up
+          // the leg at doll size.
+          if (!place || !isPlausiblePlacement(place, vw, vh)) {
+            tracked = null
+          } else {
+            t.side = foot.side
             t.heel = smoothPoint(t.heel, place.heel)
             t.toe = smoothPoint(t.toe, place.toe)
             t.angle = smoothAngle(t.angle, place.angleRad)
@@ -496,7 +511,7 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
           }
         }
         const draw = shouldDrawShoe({
-          seenNow: Boolean(foot),
+          seenNow: Boolean(tracked),
           lastSeenMs: t.lastSeen,
           nowMs: now,
         })
@@ -512,7 +527,8 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
           const dy = t.toe.y - t.heel.y
           yawGroup.position.set(t.heel.x - vw / 2, vh / 2 - t.heel.y, 0)
           yawGroup.rotation.z = Math.atan2(-dx, -dy)
-          yawGroup.scale.set(t.length, t.length, t.length)
+          const fitted = t.length * (t.userScale ?? 1)
+          yawGroup.scale.set(fitted, fitted, fitted)
           yawGroup.visible = true
         } else {
           yawGroup.visible = false
@@ -760,6 +776,56 @@ export default function FootTryOnViewer({ open, url, name, onClose }) {
                 <p className="absolute left-1/2 top-4 -translate-x-1/2 rounded-full bg-black/60 px-4 py-2 text-center text-xs font-medium text-white">
                   Drag to fit — auto-takeover when your foot is found
                 </p>
+              )}
+              {/* Shoe size trim: pose axis under-reads true foot length and
+                  .glb scales vary, so the wearer trims it live. Applies to
+                  both auto-track and manual drags via track.userScale. */}
+              {status === 'live' && hasFoot && (
+                <div className="absolute right-3 top-1/2 flex -translate-y-1/2 flex-col items-center gap-1 rounded-full bg-black/60 px-1.5 py-2 backdrop-blur-sm">
+                  <button
+                    type="button"
+                    aria-label="Make the shoe bigger"
+                    onClick={() => {
+                      setShoeScale((s) => {
+                        const next = Math.min(1.6, Math.round((s + 0.05) * 100) / 100)
+                        const t = trackRef.current
+                        t.userScale = next
+                        const g = t.three?.yawGroup
+                        if (g && t.length) {
+                          const fitted = t.length * next
+                          g.scale.set(fitted, fitted, fitted)
+                        }
+                        return next
+                      })
+                    }}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-full text-base font-semibold text-white transition-colors duration-200 hover:bg-white/20"
+                  >
+                    +
+                  </button>
+                  <span className="text-[10px] font-medium tabular-nums text-white/80">
+                    {Math.round(shoeScale * 100)}%
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="Make the shoe smaller"
+                    onClick={() => {
+                      setShoeScale((s) => {
+                        const next = Math.max(0.7, Math.round((s - 0.05) * 100) / 100)
+                        const t = trackRef.current
+                        t.userScale = next
+                        const g = t.three?.yawGroup
+                        if (g && t.length) {
+                          const fitted = t.length * next
+                          g.scale.set(fitted, fitted, fitted)
+                        }
+                        return next
+                      })
+                    }}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-full text-base font-semibold text-white transition-colors duration-200 hover:bg-white/20"
+                  >
+                    −
+                  </button>
+                </div>
               )}
 
               {/* Camera zoom, only where the hardware offers it: a slider

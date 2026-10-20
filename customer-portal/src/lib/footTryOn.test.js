@@ -4,6 +4,7 @@ import { test } from 'node:test'
 import {
   COAST_MS,
   extractFeet,
+  isPlausiblePlacement,
   pickFoot,
   placementFromFoot,
   shouldDrawShoe,
@@ -47,7 +48,7 @@ test('pickFoot: best score wins, with a stick to the previous foot', () => {
   )
 })
 
-test('placementFromFoot: heel anchor, toe direction, pixel length', () => {
+test('placementFromFoot: extended heel/toe, pixel length', () => {
   const foot = {
     side: 'left',
     score: 0.9,
@@ -55,13 +56,36 @@ test('placementFromFoot: heel anchor, toe direction, pixel length', () => {
     toe: { x: 0.6, y: 0.7 },
   }
   const place = placementFromFoot(foot, 1000, 500)
-  assert.deepEqual(place.heel, { x: 400, y: 350 })
-  assert.equal(place.lengthPx, 200)
+  // Raw axis is 200px; extended by HEEL_BACK 0.16 + TOE 0.28 → 288px.
+  assert.equal(place.lengthPx, 288)
+  // Heel pulled back, toe pushed forward along +x.
+  assert.ok(place.heel.x < 400)
+  assert.ok(place.toe.x > 600)
+  assert.equal(place.heel.y, 350)
   assert.ok(Math.abs(place.angleRad) < 1e-9)
 
   // A zero-length axis is not a placement.
   const same = { ...foot, toe: { ...foot.heel } }
   assert.equal(placementFromFoot(same, 1000, 500), null)
+})
+
+test('isPlausiblePlacement: rejects the tiny shin axis, keeps feet', () => {
+  const foot = {
+    side: 'left',
+    score: 0.9,
+    heel: { x: 0.4, y: 0.7 },
+    toe: { x: 0.6, y: 0.7 },
+  }
+  assert.equal(isPlausiblePlacement(placementFromFoot(foot, 1000, 500), 1000, 500), true)
+  // Collapsed 20px axis on a 1000px frame → shin false positive.
+  const tiny = {
+    side: 'left',
+    score: 0.9,
+    heel: { x: 0.5, y: 0.3 },
+    toe: { x: 0.51, y: 0.32 },
+  }
+  assert.equal(isPlausiblePlacement(placementFromFoot(tiny, 1000, 800), 1000, 800), false)
+  assert.equal(isPlausiblePlacement(null, 1000, 800), false)
 })
 
 test('toPixels: normalized UV into video pixels', () => {
