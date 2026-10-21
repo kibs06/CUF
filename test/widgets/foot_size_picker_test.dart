@@ -4,11 +4,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:app/widgets/foot_size_picker.dart';
 import 'package:app/widgets/sole_primary_button.dart';
 
-/// The manual foot-size picker panel (the manual panel of `SizeYourFootPanel`).
+/// The manual foot-size picker panel, now a 2-step wizard: scale cards
+/// first, then the size wheel.
 ///
 /// It must never hand back a size or a shopping scale the customer did not
 /// choose: EU 42 is unisex, but the scale decides whether that EU size reads
 /// as US 9 (men) or US 10.5 (women), so a guessed scale mislabels the size.
+/// Touching the wheel IS picking; mounting it never commits.
 void main() {
   FootSizeSelection? saved;
 
@@ -40,6 +42,9 @@ void main() {
   }
 
   Future<void> tapSave(WidgetTester tester) async {
+    // The size step scrolls on small screens: bring the CTA into view.
+    await tester.scrollUntilVisible(find.text('Save my size'), 200);
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Save my size'));
     await tester.pump();
   }
@@ -50,29 +55,67 @@ void main() {
           .onPressed !=
       null;
 
-  testWidgets('cannot save until something is picked', (tester) async {
-    await pumpPanel(tester);
+  /// Picks a scale card and waits for the confirmation + step transition.
+  Future<void> pickScale(WidgetTester tester, String label) async {
+    await tester.tap(find.text(label));
+    await tester.pumpAndSettle();
+  }
 
-    expect(saveEnabled(tester), isFalse);
-    await tapSave(tester);
-    expect(saved, isNull);
-  });
+  /// Taps the wheel entry just below centre: one step up the band.
+  Future<void> tapWheelUp(WidgetTester tester, String label) async {
+    await tester.tap(find.text(label));
+    await tester.pumpAndSettle();
+  }
 
-  testWidgets('a size alone is not enough — the scale must be chosen too',
+  testWidgets('the first step is the scale cards, with no save yet',
       (tester) async {
     await pumpPanel(tester);
 
-    // 35 is the first chip, so it is on screen without scrolling.
-    await tester.tap(find.text('35'));
-    await tester.pump();
+    expect(find.text('Who are you shopping for?'), findsOneWidget);
+    expect(find.text("Men's"), findsOneWidget);
+    expect(find.text("Women's"), findsOneWidget);
+    expect(find.text("Kids'"), findsNothing);
+    // Step 1 owns the CTA; nothing can be saved from the cards.
+    expect(find.byType(SolePrimaryButton), findsNothing);
+    expect(saved, isNull);
+  });
 
+  testWidgets('picking a scale advances to the size wheel', (tester) async {
+    await pumpPanel(tester);
+
+    await pickScale(tester, "Men's");
+
+    expect(find.text('Back'), findsOneWidget);
+    expect(find.text('Spin the wheel to your size'), findsOneWidget);
     expect(saveEnabled(tester), isFalse);
     expect(saved, isNull);
   });
 
-  testWidgets('the saved size, scale and width are preselected and returned',
+  testWidgets(
+      'an unrecognised saved scale is not inherited, but a valid size is kept',
+      (tester) async {
+    await pumpPanel(tester, initialEuSize: 42, initialCategory: 'unisex');
+
+    // The scale does not silently fall back to Men's.
+    expect(find.text('Who are you shopping for?'), findsOneWidget);
+    expect(find.byType(SolePrimaryButton), findsNothing);
+
+    await pickScale(tester, "Women's");
+
+    // 42 is a valid adult size, so it survives; only the scale was missing.
+    expect(saveEnabled(tester), isTrue);
+    await tapSave(tester);
+    expect(saved?.euSize, 42);
+    expect(saved?.sizeCategory, 'women');
+  });
+
+  testWidgets('the saved size, scale and width open on the wheel',
       (tester) async {
     await pumpPanel(tester, initialEuSize: 42, initialCategory: 'men');
+
+    // Straight to step 2, wheel centred on the saved size.
+    expect(find.text('Back'), findsOneWidget);
+    expect(find.text('42'), findsWidgets);
 
     await tapSave(tester);
 
@@ -81,156 +124,202 @@ void main() {
     expect(saved?.sizeCategory, 'men');
   });
 
-  testWidgets('picking a size, a scale and a width returns all three',
+  testWidgets('touching the wheel picks a size and enables save',
       (tester) async {
+    await pumpPanel(tester, initialCategory: 'men');
+
+    expect(saveEnabled(tester), isFalse);
+
+    // The fresh wheel rests mid-band (41.5); the neighbour commits on tap.
+    await tapWheelUp(tester, '42');
+
+    expect(
+      find.text("EU 42 \u00b7 Regular \u00b7 Men's"),
+      findsOneWidget,
+    );
+    expect(saveEnabled(tester), isTrue);
+    await tapSave(tester);
+
+    expect(saved?.euSize, 42);
+    expect(saved?.sizeCategory, 'men');
+  });
+
+  testWidgets('a half size survives as a half size', (tester) async {
     await pumpPanel(tester, initialEuSize: 42, initialCategory: 'men');
 
-    // The strip opens centred on the saved 42, so 35 needs a scroll first.
-    await tester.scrollUntilVisible(find.text('35'), -200);
-    await tester.pump();
-    await tester.tap(find.text('35'));
-    await tester.pump();
-    await tester.tap(find.text("Women's"));
-    await tester.pump();
+    await tapWheelUp(tester, '42.5');
+    await tapSave(tester);
+
+    expect(saved?.euSize, 42.5);
+  });
+
+  testWidgets('picking a width returns it with the size', (tester) async {
+    await pumpPanel(tester, initialEuSize: 42, initialCategory: 'men');
+
     await tester.tap(find.text('Wide'));
     await tester.pump();
     await tapSave(tester);
 
-    expect(saved?.euSize, 35);
+    expect(saved?.euSize, 42);
     expect(saved?.widthLabel, 'Wide');
-    expect(saved?.sizeCategory, 'women');
-  });
-
-  testWidgets('an unrecognised saved scale is not inherited', (tester) async {
-    await pumpPanel(tester, initialEuSize: 42, initialCategory: 'unisex');
-
-    // The row does not silently fall back to Men's.
-    expect(saveEnabled(tester), isFalse);
-
-    await tester.tap(find.text("Women's"));
-    await tester.pump();
-
-    expect(saveEnabled(tester), isTrue);
+    expect(saved?.sizeCategory, 'men');
   });
 
   testWidgets('the size can be entered in US, but the pick stays EU',
       (tester) async {
     await pumpPanel(tester, initialCategory: 'men');
 
-    await tester.tap(find.text('35'));
-    await tester.pump();
+    await tapWheelUp(tester, '42');
     await tester.tap(find.text('US'));
     await tester.pump();
 
-    // EU 35 is US 2 on the men's chart, and the EU value is no longer shown —
-    // one list, relabelled, not a second list.
-    expect(find.text('2'), findsOneWidget);
-    expect(find.text('35'), findsNothing);
+    // EU 42 is US 9 on the men's chart; the summary still names the EU truth.
+    expect(
+      find.text("EU 42 \u00b7 Regular \u00b7 Men's"),
+      findsOneWidget,
+    );
 
-    // Switching the unit is display-only: the pick survives as EU 35.
     await tapSave(tester);
-    expect(saved?.euSize, 35);
+    expect(saved?.euSize, 42);
   });
 
-  testWidgets("the US list follows the shopping scale", (tester) async {
-    await pumpPanel(tester, initialCategory: 'women');
+  testWidgets('the US labels follow the shopping scale', (tester) async {
+    await pumpPanel(
+        tester, initialEuSize: 35, initialCategory: 'women');
 
     await tester.tap(find.text('US'));
     await tester.pump();
 
     // EU 35 is US 3.5 for a woman and US 2 on the men's chart.
-    expect(find.text('3.5'), findsOneWidget);
+    expect(find.text('3.5'), findsWidgets);
 
-    await tester.tap(find.text('3.5'));
-    await tester.pump();
     await tapSave(tester);
 
     expect(saved?.euSize, 35);
     expect(saved?.sizeCategory, 'women');
   });
 
-  testWidgets("Kids' offers the children's band and no unit to choose",
-      (tester) async {
-    await pumpPanel(tester);
+  testWidgets('going back and switching scale keeps the size', (tester) async {
+    await pumpPanel(tester, initialEuSize: 42, initialCategory: 'men');
 
-    await tester.tap(find.text("Kids'"));
+    await tester.tap(find.text('Back'));
+    await tester.pumpAndSettle();
+    await pickScale(tester, "Women's");
+
+    // Same EU, new scale: the US label would now read 10.5.
+    await tester.tap(find.text('US'));
     await tester.pump();
+    expect(find.text('10.5'), findsWidgets);
+    expect(
+      find.text("EU 42 \u00b7 Regular \u00b7 Women's"),
+      findsOneWidget,
+    );
 
-    // No US/UK chart exists for kids, so there is nothing to switch between.
-    expect(find.text('US'), findsNothing);
-    expect(find.text('UK'), findsNothing);
-    // The band starts at 22 — a child's size, not 35.
-    expect(find.text('22'), findsOneWidget);
-
-    // 23 is near the start of the band, so it is on screen without scrolling.
-    await tester.tap(find.text('23'));
-    await tester.pump();
     await tapSave(tester);
-
-    expect(saved?.euSize, 23);
-    expect(saved?.sizeCategory, 'kids');
+    expect(saved?.euSize, 42);
+    expect(saved?.sizeCategory, 'women');
   });
 
-  testWidgets('a pick the new scale does not offer is dropped', (tester) async {
-    await pumpPanel(tester, initialEuSize: 42, initialCategory: 'men');
-    expect(saveEnabled(tester), isTrue);
+  testWidgets("a legacy kids' save keeps its band, with no unit switch",
+      (tester) async {
+    await pumpPanel(tester, initialEuSize: 23, initialCategory: 'kids');
 
-    await tester.tap(find.text("Kids'"));
+    // Opens on the size step with the children's band and a way back.
+    expect(find.text('Back'), findsOneWidget);
+    expect(find.text('US'), findsNothing);
+    expect(find.text('UK'), findsNothing);
+    expect(find.text('23'), findsWidgets);
+    await tapSave(tester);
+    expect(saved?.euSize, 23);
+    expect(saved?.sizeCategory, 'kids');
+
+    // Switching to an adult scale drops the kids-only size: 23 is not
+    // offered at 35+, so it must not survive behind an enabled Save.
+    // (The save CTA scrolled the step down; bring Back into view first.)
+    await tester.scrollUntilVisible(find.text('Back'), -200);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Back'));
+    await tester.pumpAndSettle();
+    await pickScale(tester, "Men's");
+
+    expect(find.text('Spin the wheel to your size'), findsOneWidget);
+    expect(saveEnabled(tester), isFalse);
+  });
+
+  testWidgets('picking from the US wheel stores the EU size',
+      (tester) async {
+    await pumpPanel(tester, initialCategory: 'men');
+
+    await tester.tap(find.text('US'));
     await tester.pump();
 
-    // EU 42 is not a kids' size and is not on screen any more, so it must not
-    // survive as an invisible selection behind an enabled Save.
-    expect(find.text('42'), findsNothing);
-    expect(saveEnabled(tester), isFalse);
+    // The fresh wheel rests mid-band; the neighbour below centre reads
+    // US 9 (EU 42 on the men's chart). Tapping the label must store EU.
+    await tapWheelUp(tester, '9');
+
+    expect(
+      find.text("EU 42 \u00b7 Regular \u00b7 Men's"),
+      findsOneWidget,
+    );
+    await tapSave(tester);
+    expect(saved?.euSize, 42);
+  });
+
+  testWidgets('a kids size the adult band shares survives the switch',
+      (tester) async {
+    await pumpPanel(tester, initialEuSize: 35, initialCategory: 'kids');
+
+    await tapSave(tester);
+    expect(saved?.euSize, 35);
+    expect(saved?.sizeCategory, 'kids');
+
+    // 35 sits in both bands, so switching scale keeps the pick armed.
+    await tester.scrollUntilVisible(find.text('Back'), -200);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Back'));
+    await tester.pumpAndSettle();
+    await pickScale(tester, "Men's");
+
+    expect(saveEnabled(tester), isTrue);
+    await tapSave(tester);
+    expect(saved?.euSize, 35);
+    expect(saved?.sizeCategory, 'men');
   });
 
   testWidgets('an unrecognised saved width falls back to Regular, not Narrow',
       (tester) async {
-    await pumpPanel(tester, initialWidth: 'Extra-wide', initialCategory: 'men');
+    await pumpPanel(
+      tester,
+      initialEuSize: 40,
+      initialWidth: 'Extra-wide',
+      initialCategory: 'men',
+    );
 
-    await tester.tap(find.text('36'));
-    await tester.pump();
     await tapSave(tester);
 
     expect(saved?.widthLabel, 'Regular');
   });
 
-  testWidgets('a half size survives as a half size', (tester) async {
-    await pumpPanel(tester, initialCategory: 'men');
-
-    // 35.5 is the second chip, so it is on screen without scrolling.
-    await tester.tap(find.text('35.5'));
-    await tester.pump();
-    await tapSave(tester);
-
-    expect(saved?.euSize, 35.5);
-  });
-
-  testWidgets('the disabled save says what is missing, then confirms the pick',
+  testWidgets('the disabled save says what is missing, then confirms',
       (tester) async {
     await pumpPanel(tester);
 
+    await pickScale(tester, "Women's");
     expect(
-      find.text('Choose a shopping size and your size to continue.'),
+      find.text('Choose a size to continue.'),
       findsOneWidget,
     );
 
-    await tester.tap(find.text("Women's"));
-    await tester.pump();
-    // Scale alone still leaves the size missing.
-    expect(
-      find.text('Choose a shopping size and your size to continue.'),
-      findsOneWidget,
-    );
-
-    await tester.tap(find.text('35'));
-    await tester.pump();
+    await tapWheelUp(tester, '42');
 
     expect(
-      find.text('Choose a shopping size and your size to continue.'),
+      find.text('Choose a size to continue.'),
       findsNothing,
     );
-    expect(find.text("EU 35 \u00b7 Regular \u00b7 Women's"), findsOneWidget);
+    expect(
+      find.text("EU 42 \u00b7 Regular \u00b7 Women's"),
+      findsOneWidget,
+    );
   });
 
   testWidgets('a save in flight shows a spinner instead of the label',
@@ -251,56 +340,18 @@ void main() {
     expect(saved, isNull);
   });
 
-  testWidgets('a saved size at the far end opens scrolled into view',
-      (tester) async {
+  testWidgets('a saved size at the far end opens on it', (tester) async {
     await pumpPanel(tester, initialEuSize: 48, initialCategory: 'men');
     await tester.pump();
     await tester.pump();
 
-    // EU 48 is the last chip of the men's band: the lazy strip only
-    // builds visible chips, so finding it proves the strip opened on it.
-    expect(find.text('48'), findsOneWidget);
+    // EU 48 is the last entry of the adult band: the wheel opens on it.
+    expect(
+      find.text("EU 48 \u00b7 Regular \u00b7 Men's"),
+      findsOneWidget,
+    );
 
     await tapSave(tester);
     expect(saved?.euSize, 48);
-  });
-
-  testWidgets('tapping a chip centres it in the strip', (tester) async {
-    await pumpPanel(tester, initialEuSize: 42, initialCategory: 'men');
-    await tester.pump();
-    await tester.pump();
-
-    // Leave the centred 42 behind (drag toward the end of the band),
-    // then tap a visible off-centre chip.
-    await tester.drag(find.byType(ListView), const Offset(-400, 0));
-    await tester.pump();
-    // '45 has room on both sides, so centring it is physically possible
-    // (end chips clamp at max scroll instead — still fully visible).
-    await tester.tap(find.text('45'));
-    await tester.pumpAndSettle();
-
-    final stripCenter = tester.getCenter(find.byType(ListView)).dx;
-    expect(tester.getCenter(find.text('45')).dx,
-        moreOrLessEquals(stripCenter, epsilon: 2.0));
-    await tapSave(tester);
-    expect(saved?.euSize, 45);
-  });
-
-  testWidgets('switching scale keeps the selection centred at its new index',
-      (tester) async {
-    await pumpPanel(tester, initialEuSize: 30, initialCategory: 'men');
-    await tester.pump();
-    await tester.pump();
-
-    // EU 30 survives into the kids band (22-35) at a different index:
-    // without the switch follow it would sit off-screen, strip unmoved.
-    await tester.tap(find.text("Kids'"));
-    await tester.pumpAndSettle();
-
-    expect(find.text('30'), findsOneWidget);
-    final stripCenter = tester.getCenter(find.byType(ListView)).dx;
-    expect(tester.getCenter(find.text('30')).dx,
-        moreOrLessEquals(stripCenter, epsilon: 2.0));
-    expect(saveEnabled(tester), isTrue);
   });
 }

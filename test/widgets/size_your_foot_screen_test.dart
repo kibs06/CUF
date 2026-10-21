@@ -75,25 +75,29 @@ void main() {
     await tester.tap(find.text('Enter size manually'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Save my size'), findsOneWidget);
-    expect(find.text('Enter your size'), findsOneWidget);
-    // The shopping scale the customer picks here (the scan panel is gone, so
-    // these chips can only belong to the manual panel).
-    expect(find.text('SHOPPING SIZE'), findsOneWidget);
+    // The manual panel now opens on its scale step (the scan panel is gone,
+    // so these cards can only belong to the manual panel).
+    expect(find.text('Who are you shopping for?'), findsOneWidget);
+    expect(find.text("Men's"), findsOneWidget);
     expect(find.text("Women's"), findsOneWidget);
     expect(find.text('WHAT TO EXPECT'), findsNothing);
     expect(find.text('Start scanning'), findsNothing);
+
+    // Picking a scale advances to the size step, where the CTA lives.
+    await tester.tap(find.text("Men's"));
+    await tester.pumpAndSettle();
+    expect(find.text('Save my size'), findsOneWidget);
   });
 
   testWidgets('swiping also switches panels, both ways', (tester) async {
     await pumpScreen(tester);
 
     await swipe(tester, -400);
-    expect(find.text('Save my size'), findsOneWidget);
+    expect(find.text('Who are you shopping for?'), findsOneWidget);
 
     await swipe(tester, 400);
     expect(find.text('WHAT TO EXPECT'), findsOneWidget);
-    expect(find.text('Save my size'), findsNothing);
+    expect(find.text('Who are you shopping for?'), findsNothing);
   });
 
   testWidgets('tapping the active panel again is a no-op', (tester) async {

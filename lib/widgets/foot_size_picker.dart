@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:wheel_picker/wheel_picker.dart';
 
 import '../constants/app_constants.dart';
 import '../utils/customer_profile_fields.dart';
@@ -15,15 +16,21 @@ typedef FootSizeSelection = ({
   String sizeCategory,
 });
 
-/// Manual foot-size entry — the EU size + width picker as an inline panel.
+/// Manual foot-size entry as a 2-step wizard panel.
+///
+/// Step 1 (scale) offers two animated cards — Men's and Women's. Step 2
+/// (size) offers the EU/US/UK unit switch, a horizontal size wheel, the
+/// width row and the save CTA.
 ///
 /// The panel owns only the selection UI: it reports the choice through
 /// [onSave] and never persists anything, so the foot-profile write path stays
 /// in one place (`AuthProvider.saveFootProfile`). It renders no Scaffold, so
 /// it can sit inside a swipeable panel (`SizeYourFootScreen`).
 ///
-/// The range follows the shopping scale ([customerEuSizesFor]): 35 → 48 for
-/// Men's/Women's, 22 → 35 for Kids', which is the scan's own children's band.
+/// The adult band is 35 → 48 for both scales; the legacy Kids' band (22 → 35)
+/// is still honoured for a profile saved with it, but new picks are
+/// men/women only (kids' shoppers use the camera scan flow, which keeps the
+/// children's band).
 ///
 /// The size can be entered in EU, US or UK ([sizeUnitsForCategory]) so a
 /// customer who only knows "US 9" never has to translate: whatever unit is
@@ -62,20 +69,20 @@ class FootSizePickerPanel extends StatefulWidget {
 }
 
 class _FootSizePickerPanelState extends State<FootSizePickerPanel> {
+  /// 0 = scale cards, 1 = size wheel.
+  late int _step;
+
   /// The canonical EU size — the single truth behind every unit shown.
   double? _sizeEu;
 
-  /// The unit the size chips are labelled in. Display-only.
+  /// The unit the size wheel is labelled in. Display-only.
   String _unit = kSizeUnits.first;
   String? _category;
   late String _width;
 
-  /// One key per size chip so the strip can scroll the selection into
-  /// view. Regenerated whenever the band changes length.
-  List<GlobalKey> _sizeKeys = [];
-
-  /// Owns the size strip's scroll offset for scroll-to-selection.
-  final ScrollController _stripController = ScrollController();
+  /// Briefly holds the tapped card so its confirmation fill is visible
+  /// before the wizard advances.
+  String? _confirming;
 
   @override
   void initState() {
@@ -89,95 +96,63 @@ class _FootSizePickerPanelState extends State<FootSizePickerPanel> {
     // the customer picks one rather than inheriting a wrong label.
     final category = widget.initialCategory;
     _category = footSizeCategoryLabel(category) == null ? null : category;
-    _sizeKeys = List.generate(_euOptions.length, (_) => GlobalKey());
-    // A saved size at the far end of the range would otherwise sit
-    // off-screen with no scroll hint — open on it instead.
-    WidgetsBinding.instance
-        .addPostFrameCallback((_) => _ensureSelectionVisible(animate: false));
+    // A known scale opens straight on the size step — including a legacy
+    // kids' save, which keeps its children's band there. Anything else
+    // starts on the scale cards.
+    _step = _category == null ? 0 : 1;
   }
 
-  /// Scrolls the size strip so the selected size is visible (centred).
-  /// The strip builds lazily, so an off-screen target has no context yet:
-  /// stride-jump near it first (measured chip width), then centre it
-  /// exactly once built. No-ops when nothing is picked.
-  void _ensureSelectionVisible({bool animate = true}) {
-    final size = _sizeEu;
-    if (size == null) return;
-    final options = _euOptions;
-    final index =
-        options.indexWhere((eu) => double.parse(eu) == size);
-    if (index < 0 || index >= _sizeKeys.length) return;
-    final exact = _sizeKeys[index].currentContext;
-    if (exact != null) {
-      Scrollable.ensureVisible(
-        exact,
-        alignment: 0.5,
-        duration:
-            animate ? const Duration(milliseconds: 250) : Duration.zero,
-        curve: Curves.easeOut,
-      );
-      return;
-    }
-    double stride = 72;
-    for (final key in _sizeKeys) {
-      final w = key.currentContext?.size?.width;
-      if (w != null) {
-        stride = w + 8;
-        break;
-      }
-    }
-    if (!_stripController.hasClients) return;
-    final target = (index * stride)
-        .clamp(0.0, _stripController.position.maxScrollExtent);
-    if (animate) {
-      _stripController
-          .animateTo(target,
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeOut)
-          .then((_) => _ensureSelectionVisible(animate: false));
-    } else {
-      _stripController.jumpTo(target);
-      WidgetsBinding.instance
-          .addPostFrameCallback((_) => _ensureSelectionVisible(animate: false));
-    }
-  }
-
-  /// EU sizes this scale offers — the size chips are built from these, in
-  /// whichever unit is active.
+  /// EU sizes the active band offers: the adult band for Men's/Women's (and
+  /// for an unpicked scale), the children's band for a legacy Kids' save.
   List<String> get _euOptions => customerEuSizesFor(_category);
 
-  /// Units this scale can be labelled in. One entry (Kids') means there is
-  /// nothing to choose, so the selector is hidden.
-  List<String> get _units => sizeUnitsForCategory(_category);
+  /// Units the active scale can be labelled in. The legacy kids' band has no
+  /// US/UK chart, so the selector hides and EU is the only label.
+  List<String> get _units =>
+      _category == 'kids' ? const ['EU'] : sizeUnitsForCategory(_category);
 
-  /// A chip's label for an EU option, in the active unit: `'42'` in EU, `'9'`
-  /// in US for a man, `'10.5'` in US for a woman.
+  /// A wheel entry's label for an EU option, in the active unit: `'42'` in
+  /// EU, `'9'` in US for a man, `'10.5'` in US for a woman.
   String _labelFor(String eu) => _unit == kSizeUnits.first
       ? eu
       : formatSizeNumber(convertSizeNumber(double.parse(eu), 'EU', _unit,
           category: _category));
 
-  /// Switching scale changes the band and can change the available units, so a
-  /// pick that no longer exists in the new list is dropped — an unseen
-  /// selection must never sit armed behind an enabled Save.
-  void _selectCategory(String key) {
+  /// Index of [eu] in the active band, or null when the band has no such
+  /// size (e.g. a kids' size after switching to an adult scale).
+  int? _indexOf(double? eu) {
+    if (eu == null) return null;
+    final index = _euOptions.indexWhere((option) => double.parse(option) == eu);
+    return index < 0 ? null : index;
+  }
+
+  /// Pick a shopping scale from a card: confirm briefly, then advance to the
+  /// size step. A pick that no longer exists in the new band is dropped — an
+  /// unseen selection must never sit armed behind an enabled Save.
+  void _pickScale(String key) {
+    HapticFeedback.selectionClick();
     setState(() {
       _category = key;
-      _sizeKeys =
-          List.generate(customerEuSizesFor(key).length, (_) => GlobalKey());
+      _confirming = key;
       if (!sizeUnitsForCategory(key).contains(_unit)) {
         _unit = kSizeUnits.first;
       }
-      final eu = _sizeEu;
-      if (eu != null &&
-          !customerEuSizesFor(key)
-              .map(double.parse)
-              .any((option) => option == eu)) {
+      if (_indexOf(_sizeEu) == null) {
         _sizeEu = null;
       }
     });
-    WidgetsBinding.instance
-        .addPostFrameCallback((_) => _ensureSelectionVisible());
+    void advance() {
+      if (!mounted) return;
+      setState(() {
+        _confirming = null;
+        _step = 1;
+      });
+    }
+    if (MediaQuery.of(context).disableAnimations) {
+      advance();
+    } else {
+      Future.delayed(const Duration(milliseconds: 200), advance);
+    }
   }
 
   void _save() {
@@ -192,149 +167,438 @@ class _FootSizePickerPanelState extends State<FootSizePickerPanel> {
   }
 
   @override
-  void dispose() {
-    _stripController.dispose();
-    super.dispose();
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 220),
+        transitionBuilder: (child, animation) => FadeTransition(
+          opacity: animation,
+          child: SlideTransition(
+            position: Tween(begin: const Offset(0.12, 0), end: Offset.zero)
+                .animate(animation),
+            child: child,
+          ),
+        ),
+        child: _step == 0
+            ? _ScaleStep(
+                key: const ValueKey('scale-step'),
+                category: _category,
+                confirming: _confirming,
+                onPick: _pickScale,
+              )
+            : _SizeStep(
+                key: ValueKey(
+                    'size-step-${_category == 'kids' ? 'kids' : 'adult'}'),
+                euOptions: _euOptions,
+                units: _units,
+                unit: _unit,
+                sizeEu: _sizeEu,
+                width: _width,
+                category: _category,
+                isSaving: widget.isSaving,
+                labelFor: _labelFor,
+                onUnit: (unit) => setState(() => _unit = unit),
+                onSize: (eu) => setState(() => _sizeEu = eu),
+                onWidth: (width) => setState(() => _width = width),
+                onBack: () => setState(() => _step = 0),
+                onSave: _save,
+              ),
+      ),
+    );
   }
+}
+
+/// Step 1: the shopping-scale cards.
+///
+/// Two large cards — Men's and Women's — each naming its EU band. A legacy
+/// Kids' save is honoured by the size step, but new picks are men/women
+/// only: kids' shoppers use the camera scan flow.
+class _ScaleStep extends StatelessWidget {
+  final String? category;
+  final String? confirming;
+  final ValueChanged<String> onPick;
+
+  const _ScaleStep({
+    super.key,
+    required this.category,
+    required this.confirming,
+    required this.onPick,
+  });
+
+  static const _cards = [
+    ('men', "Men's", Icons.male_rounded, 'EU 35 – 48'),
+    ('women', "Women's", Icons.female_rounded, 'EU 35 – 48'),
+  ];
 
   @override
   Widget build(BuildContext context) {
-    final size = _sizeEu;
-    final units = _units;
-    final options = _euOptions;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+    return Column(
+      key: const ValueKey('scale-step-body'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Who are you shopping for?',
+          style: AppConstants.headlineStyle(
+            fontSize: 20,
+            color: AppConstants.secondary,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Men and women share EU sizes, but the US and UK charts differ — '
+          'picking the right scale keeps the label honest. Kids’ sizes live '
+          'in the camera scan flow.',
+          style: AppConstants.bodyStyle(
+            fontSize: 13,
+            color: AppConstants.secondary.withValues(alpha: 0.6),
+            height: 1.4,
+          ),
+        ),
+        const SizedBox(height: 24),
+        Row(
+          children: [
+            for (final (key, label, icon, hint) in _cards)
+              Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    right: key == _cards.last.$1 ? 0 : 12,
+                  ),
+                  child: _ScaleCard(
+                    label: label,
+                    icon: icon,
+                    hint: hint,
+                    selected: category == key || confirming == key,
+                    onTap: () => onPick(key),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// One scale card: icon, label and band hint with a confirmation fill on
+/// selection. At least a 44px touch target, the platform minimum.
+class _ScaleCard extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final String hint;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ScaleCard({
+    required this.label,
+    required this.icon,
+    required this.hint,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        constraints: const BoxConstraints(minHeight: 132),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? AppConstants.primary : AppConstants.sellerCardBg,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: selected
+                ? AppConstants.primary
+                : AppConstants.borderGray.withValues(alpha: 0.5),
+            width: 1.5,
+          ),
+        ),
+        child: Semantics(
+          button: true,
+          selected: selected,
+          label: label,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 32,
+                color: selected
+                    ? AppConstants.inkInverse
+                    : AppConstants.secondary,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                label,
+                style: AppConstants.bodyStyle(
+                  fontSize: 15,
+                  fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                  color: selected
+                      ? AppConstants.inkInverse
+                      : AppConstants.secondary,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                hint,
+                style: AppConstants.monoStyle(
+                  fontSize: 11,
+                  color: selected
+                      ? AppConstants.inkInverse.withValues(alpha: 0.8)
+                      : AppConstants.secondary.withValues(alpha: 0.5),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Step 2: unit switch, size wheel, width row, summary and save.
+///
+/// The wheel commits on every user change (tap/drag/scroll); programmatic
+/// shifts never commit, so mounting the wheel on a saved size — or
+/// repositioning it after a scale switch — cannot arm a size the customer
+/// did not choose.
+class _SizeStep extends StatelessWidget {
+  final List<String> euOptions;
+  final List<String> units;
+  final String unit;
+  final double? sizeEu;
+  final String width;
+  final String? category;
+  final bool isSaving;
+  final String Function(String eu) labelFor;
+  final ValueChanged<String> onUnit;
+  final ValueChanged<double> onSize;
+  final ValueChanged<String> onWidth;
+  final VoidCallback onBack;
+  final VoidCallback onSave;
+
+  const _SizeStep({
+    super.key,
+    required this.euOptions,
+    required this.units,
+    required this.unit,
+    required this.sizeEu,
+    required this.width,
+    required this.category,
+    required this.isSaving,
+    required this.labelFor,
+    required this.onUnit,
+    required this.onSize,
+    required this.onWidth,
+    required this.onBack,
+    required this.onSave,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final size = sizeEu;
+    final savedIndex = size == null
+        ? euOptions.length ~/ 2
+        : euOptions.indexWhere((eu) => double.parse(eu) == size);
+    // Scrollable so the step fits small screens (the wheel alone is 200
+    // tall, and the parent panel already scrolls for anything beyond that).
+    return SingleChildScrollView(
+      key: const ValueKey('size-step-body'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Enter your size',
-            style: AppConstants.headlineStyle(
-              fontSize: 20,
-              color: AppConstants.secondary,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Already know your size? Pick it here — we use it to show which '
-            'products actually stock it. Choose the scale you shop in: it sets '
-            'the size range, and enter your size in whichever unit you know — '
-            'EU, US or UK.',
-            style: AppConstants.bodyStyle(
-              fontSize: 13,
-              color: AppConstants.secondary.withValues(alpha: 0.6),
-              height: 1.4,
-            ),
-          ),
-          const SizedBox(height: 24),
-          _label('SHOPPING SIZE'),
-          Row(
-            children: [
-              for (final (key, label) in customerFootSizeCategories)
-                Expanded(
-                  child: Padding(
-                    padding: EdgeInsets.only(
-                      right: key == customerFootSizeCategories.last.$1 ? 0 : 8,
-                    ),
-                    child: _chip(
-                      label: label,
-                      selected: _category == key,
-                      vertical: 11,
-                      onTap: () => _selectCategory(key),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 22),
-          // 'SIZE', not 'EU SIZE': the chips are whatever unit is selected,
-          // and the switcher on this row is how a customer who knows only
-          // their US or UK size enters it.
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              _label('SIZE'),
-              const Spacer(),
-              if (units.length > 1)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    for (final unit in units)
-                      Padding(
-                        padding: EdgeInsets.only(
-                          left: unit == units.first ? 0 : 6,
-                        ),
-                        child: _chip(
-                          label: unit,
-                          selected: _unit == unit,
-                          vertical: 4,
-                          horizontal: 10,
-                          fontSize: 11,
-                          onTap: () => setState(() => _unit = unit),
+      children: [
+        Row(
+          children: [
+            GestureDetector(
+              onTap: () {
+                HapticFeedback.selectionClick();
+                onBack();
+              },
+              child: Semantics(
+                button: true,
+                label: 'Back to scale',
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.arrow_back_ios,
+                        size: 14,
+                        color:
+                            AppConstants.secondary.withValues(alpha: 0.7),
+                      ),
+                      Text(
+                        'Back',
+                        style: AppConstants.bodyStyle(
+                          fontSize: 13,
+                          color:
+                              AppConstants.secondary.withValues(alpha: 0.7),
                         ),
                       ),
-                  ],
-                ),
-            ],
-          ),
-          SizedBox(
-            height: 48,
-            child: ListView.separated(
-              controller: _stripController,
-              scrollDirection: Axis.horizontal,
-              itemCount: options.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 8),
-              itemBuilder: (context, index) {
-                final eu = options[index];
-                // The label moves with the unit; the selection stays pinned to
-                // the EU value, so switching US → EU never changes the size.
-                return KeyedSubtree(
-                  key: _sizeKeys[index],
-                  child: _chip(
-                    label: _labelFor(eu),
-                    selected: size != null && size == double.parse(eu),
-                    mono: true,
-                    onTap: () {
-                      setState(() => _sizeEu = double.parse(eu));
-                      WidgetsBinding.instance.addPostFrameCallback(
-                        (_) => _ensureSelectionVisible(),
-                      );
-                    },
+                    ],
                   ),
-                );
-              },
+                ),
+              ),
+            ),
+            const Spacer(),
+            if (category != null)
+              Text(
+                footSizeCategoryLabel(category) ?? category!,
+                style: AppConstants.bodyStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppConstants.secondary.withValues(alpha: 0.7),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        if (category == 'kids')
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              'Your saved scale is Kids’. New picks are Men’s or Women’s — '
+              'go back to switch scale, or keep editing this size.',
+              style: AppConstants.bodyStyle(
+                fontSize: 12,
+                color: AppConstants.secondary.withValues(alpha: 0.6),
+                height: 1.4,
+              ),
             ),
           ),
-          const SizedBox(height: 22),
-          _label('WIDTH'),
-          Row(
-            children: [
-              for (final option in customerFootWidths)
-                Expanded(
-                  child: Padding(
-                    padding: EdgeInsets.only(
-                      right: option == customerFootWidths.last ? 0 : 8,
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            _StepLabel('SIZE'),
+            const Spacer(),
+            if (units.length > 1)
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final entry in units)
+                    Padding(
+                      padding: EdgeInsets.only(
+                        left: entry == units.first ? 0 : 6,
+                      ),
+                      child: _UnitChip(
+                        label: entry,
+                        selected: unit == entry,
+                        onTap: () => onUnit(entry),
+                      ),
                     ),
-                    child: _chip(
-                      label: option,
-                      selected: _width == option,
-                      vertical: 11,
-                      onTap: () => setState(() => _width = option),
+                ],
+              ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        // The live readout: the committed size in the active unit, or an
+        // invitation until the wheel has been touched.
+        Center(
+          child: Text(
+            size == null
+                ? 'Spin the wheel to your size'
+                : labelFor(formatSizeNumber(size)),
+            style: size == null
+                ? AppConstants.bodyStyle(
+                    fontSize: 14,
+                    color: AppConstants.secondary.withValues(alpha: 0.55),
+                  )
+                : AppConstants.monoStyle(
+                    fontSize: 34,
+                    fontWeight: FontWeight.bold,
+                    color: AppConstants.secondary,
+                  ),
+          ),
+        ),
+        // Vertical is the wheel's native axis. The package renders
+        // horizontal by painting rotated content outside its layout box,
+        // where taps can never land (ancestors bounds-check hit tests),
+        // so horizontal neighbours are dead to touch on a real phone.
+        SizedBox(
+          height: 200,
+          child: WheelPicker(
+            itemCount: euOptions.length,
+            initialIndex:
+                savedIndex < 0 ? euOptions.length ~/ 2 : savedIndex,
+            looping: false,
+            scrollDirection: Axis.vertical,
+            enableTap: true,
+            selectedIndexColor: AppConstants.primary,
+            onIndexChanged: (index, interactionType) {
+              if (interactionType == WheelPickerInteractionType.control ||
+                  interactionType == WheelPickerInteractionType.mount) {
+                return;
+              }
+              final eu = double.parse(euOptions[index]);
+              if (eu != size) {
+                HapticFeedback.selectionClick();
+                onSize(eu);
+              }
+            },
+            style: WheelPickerStyle(
+              itemExtent: 64,
+              diameterRatio: 1.6,
+              squeeze: 1.0,
+              surroundingOpacity: 0.3,
+              magnification: 1.15,
+            ),
+            builder: (context, index) {
+              final eu = euOptions[index];
+              final committed =
+                  size != null && double.parse(eu) == size;
+              return Center(
+                child: Semantics(                      button: true,
+                      selected: committed,
+                      // Routed through formatSize: the repo guards against
+                      // hardcoded 'EU ' label literals (size_key_test).
+                      label: formatSize(eu),
+                  child: Text(
+                    labelFor(eu),
+                    style: AppConstants.monoStyle(
+                      fontSize: 20,
+                      fontWeight:
+                          committed ? FontWeight.bold : FontWeight.normal,
+                      color: AppConstants.secondary,
                     ),
                   ),
                 ),
-            ],
+              );
+            },
           ),
-          const SizedBox(height: 28),
-          _summaryOrHint(size),
-          SolePrimaryButton(
-            label: 'Save my size',
-            // Disabled until BOTH a size and a shopping scale are picked: a
-            // width or a size alone cannot be labelled honestly, and a
-            // guessed scale is exactly the mistake this field exists to stop.
-            isLoading: widget.isSaving,
-            onPressed: size == null || _category == null ? null : _save,
-          ),
+        ),
+        const SizedBox(height: 12),
+        _StepLabel('WIDTH'),
+        Row(
+          children: [
+            for (final option in customerFootWidths)
+              Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    right: option == customerFootWidths.last ? 0 : 8,
+                  ),
+                  child: _WidthChip(
+                    label: option,
+                    selected: width == option,
+                    onTap: () => onWidth(option),
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 28),
+        _summaryOrHint(size),
+        SolePrimaryButton(
+          label: 'Save my size',
+          // Disabled until BOTH a size and a shopping scale are picked: a
+          // width or a size alone cannot be labelled honestly, and a
+          // guessed scale is exactly the mistake this field exists to stop.
+          isLoading: isSaving,
+          onPressed: size == null || category == null ? null : onSave,
+        ),
         ],
       ),
     );
@@ -344,12 +608,11 @@ class _FootSizePickerPanelState extends State<FootSizePickerPanel> {
   /// and says what is still missing until then, so the disabled button is
   /// never a mystery.
   Widget _summaryOrHint(double? size) {
-    final category = _category;
     if (size == null || category == null) {
       return Padding(
         padding: const EdgeInsets.only(bottom: 14),
         child: Text(
-          'Choose a shopping size and your size to continue.',
+          'Choose a size to continue.',
           style: AppConstants.bodyStyle(
             fontSize: 12,
             color: AppConstants.secondary.withValues(alpha: 0.55),
@@ -379,7 +642,7 @@ class _FootSizePickerPanelState extends State<FootSizePickerPanel> {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              '${formatSize(formatSizeNumber(size))} · $_width · '
+              '${formatSize(formatSizeNumber(size))} · $width · '
               '${footSizeCategoryLabel(category) ?? category}',
               style: AppConstants.bodyStyle(
                 fontSize: 13,
@@ -392,8 +655,15 @@ class _FootSizePickerPanelState extends State<FootSizePickerPanel> {
       ),
     );
   }
+}
 
-  Widget _label(String text) {
+class _StepLabel extends StatelessWidget {
+  final String text;
+
+  const _StepLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Text(
@@ -407,28 +677,21 @@ class _FootSizePickerPanelState extends State<FootSizePickerPanel> {
       ),
     );
   }
+}
 
-  Widget _chip({
-    required String label,
-    required bool selected,
-    required VoidCallback onTap,
-    bool mono = false,
-    double vertical = 0,
-    double horizontal = 14,
-    double fontSize = 13,
-  }) {
-    final style = mono
-        ? AppConstants.monoStyle(
-            fontSize: fontSize,
-            fontWeight: FontWeight.bold,
-            color: selected ? AppConstants.inkInverse : AppConstants.secondary,
-          )
-        : AppConstants.bodyStyle(
-            fontSize: fontSize,
-            fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-            color: selected ? AppConstants.inkInverse : AppConstants.secondary,
-          );
+class _UnitChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
 
+  const _UnitChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () {
         HapticFeedback.selectionClick();
@@ -436,10 +699,8 @@ class _FootSizePickerPanelState extends State<FootSizePickerPanel> {
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        // At least a 44px touch target, the platform minimum.
-        constraints: const BoxConstraints(minHeight: 44),
-        padding:
-            EdgeInsets.symmetric(horizontal: horizontal, vertical: vertical),
+        constraints: const BoxConstraints(minHeight: 44, minWidth: 44),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: selected ? AppConstants.primary : AppConstants.sellerCardBg,
@@ -454,7 +715,67 @@ class _FootSizePickerPanelState extends State<FootSizePickerPanel> {
         child: Semantics(
           button: true,
           selected: selected,
-          child: Text(label, style: style),
+          child: Text(
+            label,
+            style: AppConstants.bodyStyle(
+              fontSize: 11,
+              fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+              color:
+                  selected ? AppConstants.inkInverse : AppConstants.secondary,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WidthChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _WidthChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        // At least a 44px touch target, the platform minimum.
+        constraints: const BoxConstraints(minHeight: 44),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? AppConstants.primary : AppConstants.sellerCardBg,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected
+                ? AppConstants.primary
+                : AppConstants.borderGray.withValues(alpha: 0.5),
+            width: 1.5,
+          ),
+        ),
+        child: Semantics(
+          button: true,
+          selected: selected,
+          child: Text(
+            label,
+            style: AppConstants.bodyStyle(
+              fontSize: 13,
+              fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+              color:
+                  selected ? AppConstants.inkInverse : AppConstants.secondary,
+            ),
+          ),
         ),
       ),
     );
