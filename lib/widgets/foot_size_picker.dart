@@ -19,7 +19,7 @@ typedef FootSizeSelection = ({
 /// Manual foot-size entry as a 2-step wizard panel.
 ///
 /// Step 1 (scale) offers two animated cards — Men's and Women's. Step 2
-/// (size) offers the EU/US/UK unit switch, a horizontal size wheel, the
+/// (size) offers the EU/US/UK unit switch, a vertical size wheel, the
 /// width row and the save CTA.
 ///
 /// The panel owns only the selection UI: it reports the choice through
@@ -27,14 +27,17 @@ typedef FootSizeSelection = ({
 /// in one place (`AuthProvider.saveFootProfile`). It renders no Scaffold, so
 /// it can sit inside a swipeable panel (`SizeYourFootScreen`).
 ///
-/// The adult band is 35 → 48 for both scales; the legacy Kids' band (22 → 35)
-/// is still honoured for a profile saved with it, but new picks are
-/// men/women only (kids' shoppers use the camera scan flow, which keeps the
-/// children's band).
+/// The wheel spans the full range ([customerWizardEuSizes]): toddler
+/// EU 16 → adult EU 48. The scale follows the size: anything under
+/// EU 20 ([kAutoKidsEuMax]) auto-saves under Kids' — no Kids' card, no
+/// guessing — while 35 and up uses the picked Men's/Women's scale.
 ///
 /// The size can be entered in EU, US or UK ([sizeUnitsForCategory]) so a
 /// customer who only knows "US 9" never has to translate: whatever unit is
 /// on screen, the value that leaves this panel is the canonical EU size.
+/// Below the adult band there is no US/UK chart (the offsets go zero or
+/// negative), so those entries stay in EU rather than showing a
+/// dishonest label.
 class FootSizePickerPanel extends StatefulWidget {
   /// The customer's saved EU size, preselected so "edit" opens on the truth.
   final double? initialEuSize;
@@ -93,42 +96,60 @@ class _FootSizePickerPanelState extends State<FootSizePickerPanel> {
         ? saved
         : customerFootWidths[1];
     // Carry over a scale we already know; otherwise leave it unanswered so
-    // the customer picks one rather than inheriting a wrong label.
+    // the customer picks one rather than inheriting a wrong label. A legacy
+    // Kids' save is not a picked scale — the size step resolves it through
+    // [effectiveFootSizeCategory].
     final category = widget.initialCategory;
-    _category = footSizeCategoryLabel(category) == null ? null : category;
-    // A known scale opens straight on the size step — including a legacy
-    // kids' save, which keeps its children's band there. Anything else
-    // starts on the scale cards.
-    _step = _category == null ? 0 : 1;
+    _category = (category == 'men' || category == 'women') ? category : null;
+    // A picked scale — or a legacy Kids' save — opens straight on the size
+    // step. Anything else starts on the scale cards.
+    _step = (_category != null || category == 'kids') ? 1 : 0;
   }
 
-  /// EU sizes the active band offers: the adult band for Men's/Women's (and
-  /// for an unpicked scale), the children's band for a legacy Kids' save.
-  List<String> get _euOptions => customerEuSizesFor(_category);
+  /// The scale the current pick saves under: below EU 20 always Kids',
+  /// otherwise the picked scale (or Kids' for a legacy save that never
+  /// picked one). Null only when neither the size nor a known scale can
+  /// name the pick honestly — then the CTA stays disabled.
+  String? get _effectiveCategory => effectiveFootSizeCategory(
+        sizeEu: _sizeEu,
+        pickedScale: _category,
+      );
 
-  /// Units the active scale can be labelled in. The legacy kids' band has no
-  /// US/UK chart, so the selector hides and EU is the only label.
-  List<String> get _units =>
-      _category == 'kids' ? const ['EU'] : sizeUnitsForCategory(_category);
+  /// Every size the wheel offers, toddler to adult: the scale follows the
+  /// size from here, so one band serves all shoppers.
+  List<String> get _euOptions => customerWizardEuSizes;
+
+  /// Units the pick can be labelled in. Kids' picks — auto or legacy — have
+  /// no US/UK chart, and neither does anything else below the adult band,
+  /// so the selector hides and EU is the only label there.
+  List<String> get _units {
+    if (_effectiveCategory == 'kids') return const ['EU'];
+    if (_sizeEu != null &&
+        _sizeEu! < double.parse(customerEuSizes.first)) {
+      return const ['EU'];
+    }
+    return sizeUnitsForCategory(_category);
+  }
 
   /// A wheel entry's label for an EU option, in the active unit: `'42'` in
-  /// EU, `'9'` in US for a man, `'10.5'` in US for a woman.
-  String _labelFor(String eu) => _unit == kSizeUnits.first
-      ? eu
-      : formatSizeNumber(convertSizeNumber(double.parse(eu), 'EU', _unit,
-          category: _category));
-
-  /// Index of [eu] in the active band, or null when the band has no such
-  /// size (e.g. a kids' size after switching to an adult scale).
-  int? _indexOf(double? eu) {
-    if (eu == null) return null;
-    final index = _euOptions.indexWhere((option) => double.parse(option) == eu);
-    return index < 0 ? null : index;
+  /// EU, `'9'` in US for a man, `'10.5'` in US for a woman. Sizes below the
+  /// adult band stay in EU in every mode — no chart covers them.
+  String _labelFor(String eu) {
+    final value = double.parse(eu);
+    final unit = _units.contains(_unit) ? _unit : kSizeUnits.first;
+    if (unit == kSizeUnits.first ||
+        value < double.parse(customerEuSizes.first)) {
+      return eu;
+    }
+    return formatSizeNumber(
+        convertSizeNumber(value, 'EU', unit, category: _effectiveCategory));
   }
 
   /// Pick a shopping scale from a card: confirm briefly, then advance to the
-  /// size step. A pick that no longer exists in the new band is dropped — an
-  /// unseen selection must never sit armed behind an enabled Save.
+  /// size step. An explicit scale claim needs a size that scale offers, so a
+  /// size below the adult band is dropped — an unseen selection must never
+  /// sit armed behind an enabled Save. (Spinning the wheel later is
+  /// exploratory and never clears: only auto-kids re-resolves the scale.)
   void _pickScale(String key) {
     HapticFeedback.selectionClick();
     setState(() {
@@ -137,7 +158,8 @@ class _FootSizePickerPanelState extends State<FootSizePickerPanel> {
       if (!sizeUnitsForCategory(key).contains(_unit)) {
         _unit = kSizeUnits.first;
       }
-      if (_indexOf(_sizeEu) == null) {
+      if (_sizeEu != null &&
+          _sizeEu! < double.parse(customerEuSizes.first)) {
         _sizeEu = null;
       }
     });
@@ -157,7 +179,9 @@ class _FootSizePickerPanelState extends State<FootSizePickerPanel> {
 
   void _save() {
     final size = _sizeEu;
-    final category = _category;
+    // The auto-kids rule lives here: a sub-20 pick saves to Kids' even
+    // though no card was ever tapped for it.
+    final category = _effectiveCategory;
     if (size == null || category == null) return;
     widget.onSave((
       euSize: size,
@@ -188,14 +212,14 @@ class _FootSizePickerPanelState extends State<FootSizePickerPanel> {
                 onPick: _pickScale,
               )
             : _SizeStep(
-                key: ValueKey(
-                    'size-step-${_category == 'kids' ? 'kids' : 'adult'}'),
+                key: const ValueKey('size-step'),
                 euOptions: _euOptions,
                 units: _units,
                 unit: _unit,
                 sizeEu: _sizeEu,
                 width: _width,
-                category: _category,
+                category: _effectiveCategory,
+                pickedScale: _category,
                 isSaving: widget.isSaving,
                 labelFor: _labelFor,
                 onUnit: (unit) => setState(() => _unit = unit),
@@ -211,9 +235,9 @@ class _FootSizePickerPanelState extends State<FootSizePickerPanel> {
 
 /// Step 1: the shopping-scale cards.
 ///
-/// Two large cards — Men's and Women's — each naming its EU band. A legacy
-/// Kids' save is honoured by the size step, but new picks are men/women
-/// only: kids' shoppers use the camera scan flow.
+/// Two large cards — Men's and Women's — each naming its EU band. Kids'
+/// needs no card: the size step spans down to toddler sizes, and anything
+/// under EU 20 auto-saves under Kids'.
 class _ScaleStep extends StatelessWidget {
   final String? category;
   final String? confirming;
@@ -247,8 +271,9 @@ class _ScaleStep extends StatelessWidget {
         const SizedBox(height: 6),
         Text(
           'Men and women share EU sizes, but the US and UK charts differ — '
-          'picking the right scale keeps the label honest. Kids’ sizes live '
-          'in the camera scan flow.',
+          'picking the right scale keeps the label honest. Small feet? Just '
+          'spin the wheel down: anything under EU 20 is saved to Kids’ '
+          'automatically.',
           style: AppConstants.bodyStyle(
             fontSize: 13,
             color: AppConstants.secondary.withValues(alpha: 0.6),
@@ -364,7 +389,8 @@ class _ScaleCard extends StatelessWidget {
 /// The wheel commits on every user change (tap/drag/scroll); programmatic
 /// shifts never commit, so mounting the wheel on a saved size — or
 /// repositioning it after a scale switch — cannot arm a size the customer
-/// did not choose.
+/// did not choose. Under EU 20 the scale re-resolves to Kids' on its own,
+/// with a notice — no Kids' card, no guessing.
 class _SizeStep extends StatelessWidget {
   final List<String> euOptions;
   final List<String> units;
@@ -372,6 +398,10 @@ class _SizeStep extends StatelessWidget {
   final double? sizeEu;
   final String width;
   final String? category;
+
+  /// The scale picked on the cards (men/women/null). Differs from [category]
+  /// exactly when auto-kids (or a legacy save) resolved somewhere else.
+  final String? pickedScale;
   final bool isSaving;
   final String Function(String eu) labelFor;
   final ValueChanged<String> onUnit;
@@ -388,6 +418,7 @@ class _SizeStep extends StatelessWidget {
     required this.sizeEu,
     required this.width,
     required this.category,
+    required this.pickedScale,
     required this.isSaving,
     required this.labelFor,
     required this.onUnit,
@@ -400,6 +431,12 @@ class _SizeStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final size = sizeEu;
+    // True only for a sub-20 pick on a picked scale: the toddler notice.
+    // A local (not the field) so the null check promotes.
+    final autoKids = category == 'kids' &&
+        pickedScale != null &&
+        size != null &&
+        size < kAutoKidsEuMax;
     final savedIndex = size == null
         ? euOptions.length ~/ 2
         : euOptions.indexWhere((eu) => double.parse(eu) == size);
@@ -457,12 +494,25 @@ class _SizeStep extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 4),
-        if (category == 'kids')
+        if (autoKids)
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: Text(
-              'Your saved scale is Kids’. New picks are Men’s or Women’s — '
-              'go back to switch scale, or keep editing this size.',
+              'Under EU 20 is toddler sizing — saving to Kids’ automatically. '
+              'Spin back up for the scale you picked.',
+              style: AppConstants.bodyStyle(
+                fontSize: 12,
+                color: AppConstants.secondary.withValues(alpha: 0.6),
+                height: 1.4,
+              ),
+            ),
+          ),
+        if (category == 'kids' && pickedScale == null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              'Your saved scale is Kids’. Go back to switch scale, or keep '
+              'editing this size.',
               style: AppConstants.bodyStyle(
                 fontSize: 12,
                 color: AppConstants.secondary.withValues(alpha: 0.6),

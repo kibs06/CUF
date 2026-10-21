@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:wheel_picker/wheel_picker.dart';
 
 import 'package:app/widgets/foot_size_picker.dart';
 import 'package:app/widgets/sole_primary_button.dart';
@@ -67,6 +68,14 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  /// Reads the committed size back out of the live summary
+  /// ('EU 18 - Regular - Kids' with middots -> 18). The summary is the
+  /// only widget joining the size with a middot, so it stays unique.
+  double wheelSummarySize(WidgetTester tester) {
+    final summary = tester.widget<Text>(find.textContaining('\u00b7')).data!;
+    return double.parse(summary.split(' ')[1]);
+  }
+
   testWidgets('the first step is the scale cards, with no save yet',
       (tester) async {
     await pumpPanel(tester);
@@ -130,17 +139,17 @@ void main() {
 
     expect(saveEnabled(tester), isFalse);
 
-    // The fresh wheel rests mid-band (41.5); the neighbour commits on tap.
-    await tapWheelUp(tester, '42');
+    // The fresh wheel rests mid-band (32); the neighbour commits on tap.
+    await tapWheelUp(tester, '32.5');
 
     expect(
-      find.text("EU 42 \u00b7 Regular \u00b7 Men's"),
+      find.text("EU 32.5 \u00b7 Regular \u00b7 Men's"),
       findsOneWidget,
     );
     expect(saveEnabled(tester), isTrue);
     await tapSave(tester);
 
-    expect(saved?.euSize, 42);
+    expect(saved?.euSize, 32.5);
     expect(saved?.sizeCategory, 'men');
   });
 
@@ -167,13 +176,15 @@ void main() {
 
   testWidgets('the size can be entered in US, but the pick stays EU',
       (tester) async {
-    await pumpPanel(tester, initialCategory: 'men');
+    await pumpPanel(tester, initialEuSize: 42, initialCategory: 'men');
 
-    await tapWheelUp(tester, '42');
     await tester.tap(find.text('US'));
     await tester.pump();
 
-    // EU 42 is US 9 on the men's chart; the summary still names the EU truth.
+    // EU 42 is US 9 on the men's chart, and the EU value is no longer
+    // shown on the wheel - one list, relabelled. The summary still
+    // names the EU truth, and the pick survives as EU 42.
+    expect(find.text('9'), findsWidgets);
     expect(
       find.text("EU 42 \u00b7 Regular \u00b7 Men's"),
       findsOneWidget,
@@ -181,6 +192,35 @@ void main() {
 
     await tapSave(tester);
     expect(saved?.euSize, 42);
+  });
+
+  testWidgets('sizes below the adult band stay in EU even in US mode',
+      (tester) async {
+    await pumpPanel(tester, initialEuSize: 36, initialCategory: 'men');
+
+    await tester.tap(find.text('US'));
+    await tester.pump();
+    // EU 36 is US 3 on the men's chart.
+    expect(find.text('3'), findsWidgets);
+
+    // Step down twice on the labelled wheel: 35.5 -> US 2.5, 35 -> US 2.
+    await tester.tap(find.text('2.5'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('2'));
+    await tester.pumpAndSettle();
+
+    // EU 34.5 has no US chart: the entry, the readout and the summary all
+    // stay in EU, and the unit switcher hides.
+    await tester.tap(find.text('34.5'));
+    await tester.pumpAndSettle();
+    expect(find.text('US'), findsNothing);
+    expect(
+      find.text("EU 34.5 \u00b7 Regular \u00b7 Men's"),
+      findsOneWidget,
+    );
+    await tapSave(tester);
+    expect(saved?.euSize, 34.5);
+    expect(saved?.sizeCategory, 'men');
   });
 
   testWidgets('the US labels follow the shopping scale', (tester) async {
@@ -248,21 +288,21 @@ void main() {
 
   testWidgets('picking from the US wheel stores the EU size',
       (tester) async {
-    await pumpPanel(tester, initialCategory: 'men');
+    await pumpPanel(tester, initialEuSize: 42, initialCategory: 'men');
 
     await tester.tap(find.text('US'));
     await tester.pump();
 
-    // The fresh wheel rests mid-band; the neighbour below centre reads
-    // US 9 (EU 42 on the men's chart). Tapping the label must store EU.
-    await tapWheelUp(tester, '9');
+    // The wheel rests on EU 42 (US 9); the neighbour below centre reads
+    // US 9.5 (EU 42.5 on the men's chart). Tapping the label must store EU.
+    await tapWheelUp(tester, '9.5');
 
     expect(
-      find.text("EU 42 \u00b7 Regular \u00b7 Men's"),
+      find.text("EU 42.5 \u00b7 Regular \u00b7 Men's"),
       findsOneWidget,
     );
     await tapSave(tester);
-    expect(saved?.euSize, 42);
+    expect(saved?.euSize, 42.5);
   });
 
   testWidgets('a kids size the adult band shares survives the switch',
@@ -310,16 +350,53 @@ void main() {
       findsOneWidget,
     );
 
-    await tapWheelUp(tester, '42');
+    await tapWheelUp(tester, '32.5');
 
     expect(
       find.text('Choose a size to continue.'),
       findsNothing,
     );
     expect(
-      find.text("EU 42 \u00b7 Regular \u00b7 Women's"),
+      find.text("EU 32.5 \u00b7 Regular \u00b7 Women's"),
       findsOneWidget,
     );
+  });
+
+  testWidgets('spinning below EU 20 auto-saves to Kids and back restores',
+      (tester) async {
+    await pumpPanel(tester, initialCategory: 'men');
+
+    // Spin down until the wheel drops below EU 20.
+    for (var i = 0; i < 40; i++) {
+      final armed = find.textContaining('\u00b7').evaluate().isNotEmpty &&
+          wheelSummarySize(tester) < 20;
+      if (find.text("Kids'").evaluate().isNotEmpty && armed) break;
+      await tester.fling(find.byType(WheelPicker), const Offset(0, 500), 3000);
+      await tester.pumpAndSettle();
+    }
+    expect(find.text("Kids'"), findsWidgets);
+    expect(wheelSummarySize(tester), lessThan(20));
+
+    // The toddler notice names the rule; US/UK hide; the save is armed.
+    expect(find.textContaining('Under EU 20'), findsOneWidget);
+    expect(find.text('US'), findsNothing);
+    expect(find.text('UK'), findsNothing);
+    expect(saveEnabled(tester), isTrue);
+    await tapSave(tester);
+    expect(saved?.euSize, lessThan(20));
+    expect(saved?.sizeCategory, 'kids');
+
+    // Spin back up: the picked scale returns with the size.
+    for (var i = 0; i < 40; i++) {
+      if (find.text("Men's").evaluate().isNotEmpty) break;
+      await tester.fling(
+          find.byType(WheelPicker), const Offset(0, -800), 4000);
+      await tester.pumpAndSettle();
+    }
+    expect(find.text("Men's"), findsWidgets);
+    await tapSave(tester);
+    expect(saved?.sizeCategory, 'men');
+    expect(saved?.euSize, greaterThanOrEqualTo(20));
   });
 
   testWidgets('a save in flight shows a spinner instead of the label',
