@@ -642,10 +642,9 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                               // +1: the poster is the grid's first cell, so the
                               // collection opens on its own name with the first
                               // product beside it.
-                              itemCount:
-                                  filteredProducts.length +
-                                  1 +
-                                  (showMoreLoader ? 1 : 0),
+                              // +1: the poster is the grid's first cell; +1 more
+                              // while the quiet append loader is showing.
+                              itemCount: filteredProducts.length + 1 + (showMoreLoader ? 1 : 0),
                               itemBuilder: (context, index) {
                                 if (index == 0) {
                                   return _workshopPoster(productProvider);
