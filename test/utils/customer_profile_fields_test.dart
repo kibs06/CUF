@@ -195,4 +195,73 @@ void main() {
       );
     });
   });
+
+  group('wizard band and auto-kids rule', () {
+    test('the wizard wheel spans toddler to adult in half steps', () {
+      expect(customerWizardEuSizes.first, '16');
+      expect(customerWizardEuSizes.last, '48');
+      expect(customerWizardEuSizes, contains('20'));
+      expect(customerWizardEuSizes, contains('40.5'));
+      // 65 values: (48 - 16) * 2 + 1, no gaps.
+      expect(customerWizardEuSizes.length, 65);
+      for (var i = 1; i < customerWizardEuSizes.length; i++) {
+        expect(
+          double.parse(customerWizardEuSizes[i]) -
+              double.parse(customerWizardEuSizes[i - 1]),
+          0.5,
+        );
+      }
+    });
+
+    test('anything under EU 20 is always kids', () {
+      expect(
+        effectiveFootSizeCategory(sizeEu: 16, pickedScale: 'men'),
+        'kids',
+      );
+      expect(
+        effectiveFootSizeCategory(sizeEu: 19.5, pickedScale: 'women'),
+        'kids',
+      );
+      expect(
+        effectiveFootSizeCategory(sizeEu: 10, pickedScale: null),
+        'kids',
+      );
+    });
+
+    test('the EU 20 boundary stays on the picked scale', () {
+      expect(
+        effectiveFootSizeCategory(sizeEu: 20, pickedScale: 'men'),
+        'men',
+      );
+      expect(
+        effectiveFootSizeCategory(sizeEu: 42, pickedScale: 'women'),
+        'women',
+      );
+    });
+
+    test('a legacy save without a scale stays honest', () {
+      // No scale on the books: kid sizes stay kids ...
+      expect(
+        effectiveFootSizeCategory(sizeEu: 28, pickedScale: null),
+        'kids',
+      );
+      expect(
+        effectiveFootSizeCategory(sizeEu: 35, pickedScale: null),
+        'kids',
+      );
+      // ... while adult sizes need a scale pick (null disables the CTA).
+      expect(
+        effectiveFootSizeCategory(sizeEu: 40, pickedScale: null),
+        isNull,
+      );
+      expect(
+        effectiveFootSizeCategory(sizeEu: null, pickedScale: null),
+        isNull,
+      );
+      expect(
+        effectiveFootSizeCategory(sizeEu: null, pickedScale: 'men'),
+        'men',
+      );
+    });
+  });
 }

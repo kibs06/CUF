@@ -36,6 +36,48 @@ const List<String> customerKidsEuSizes = [
 List<String> customerEuSizesFor(String? category) =>
     category == 'kids' ? customerKidsEuSizes : customerEuSizes;
 
+/// EU sizes below this are always a child's size: no adult scale offers
+/// them, so the wizard auto-saves them under Kids' without asking.
+///
+/// Chosen with the product owner: EU 20 is a toddler foot (~12 cm) and
+/// retail charts run infant/toddler sizing down to EU 16. Sizes 20–34 stay
+/// on the picked scale but render EU-only — the US/UK offsets would go zero
+/// or negative there, so no chart is drawn rather than a dishonest label.
+const double kAutoKidsEuMax = 20.0;
+
+/// The full span the manual wizard wheel offers, toddler to adult
+/// (EU 16 ‒ 48) in half-size steps.
+///
+/// Deliberately wider than either scale band: the wizard resolves the scale
+/// from the size ([effectiveFootSizeCategory]) instead of asking twice.
+/// The existing bands ([customerEuSizes], [customerKidsEuSizes]) are
+/// untouched — the scan, the audience warnings and their tests keep their
+/// 22/35 edges.
+List<String> get customerWizardEuSizes => [
+      for (var eu = 16.0; eu <= 48.0; eu += 0.5) formatSizeNumber(eu),
+    ];
+
+/// The scale a manual pick is saved under.
+///
+/// * below [kAutoKidsEuMax] → always `'kids'`, whatever the cards say: the
+///   wheel is exploratory, so spinning down never clears the picked scale
+///   — only the number follows the finger, and the category follows the
+///   number;
+/// * otherwise the picked scale;
+/// * with no picked scale (a legacy save), sizes the adult band doesn’t
+///   offer stay honest under `'kids'`; at/above the adult band the CTA stays
+///   disabled until a scale is picked (null).
+String? effectiveFootSizeCategory({
+  required double? sizeEu,
+  required String? pickedScale,
+}) {
+  if (sizeEu != null && sizeEu < kAutoKidsEuMax) return 'kids';
+  if (pickedScale != null) return pickedScale;
+  final kidsMax = double.parse(customerKidsEuSizes.last);
+  if (sizeEu != null && sizeEu <= kidsMax) return 'kids';
+  return null;
+}
+
 /// The width labels offered by the manual foot-profile picker. Stored
 /// verbatim in `profiles.foot_width` (see AppConstants.footWidthOptions).
 const List<String> customerFootWidths = AppConstants.footWidthOptions;
