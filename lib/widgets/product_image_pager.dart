@@ -95,6 +95,11 @@ class _ProductImagePagerState extends State<ProductImagePager> {
             fit: BoxFit.cover,
             width: double.infinity,
             height: double.infinity,
+            // Grid cells are ~170dp wide: decoding full multi-megapixel
+            // originals per card janks scrolling and wastes memory. 600px
+            // (≈3x DPR) stays crisp with bounded decode cost.
+            memCacheWidth: 600,
+            fadeInDuration: const Duration(milliseconds: 200),
             placeholder: (context, url) => Container(
               color: AppConstants.borderGray.withValues(alpha: 0.3),
               child: const Center(

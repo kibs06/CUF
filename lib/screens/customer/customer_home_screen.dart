@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:provider/provider.dart';
@@ -64,6 +65,10 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   StreamSubscription? _connectivitySub;
   bool _wasOffline = false;
 
+  /// Image URLs already warmed into the image cache — prefetch runs once per
+  /// URL per screen lifetime so scrolling back never re-warms what is cached.
+  final Set<String> _precachedUrls = {};
+
   @override
   void initState() {
     super.initState();
@@ -71,7 +76,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       Provider.of<ProductProvider>(
         context,
         listen: false,
-      ).loadProducts(hideOutOfStock: true);
+      ).loadFirstPage(hideOutOfStock: true).then((_) => _precacheLeadImages());
       // Load banners for the hero carousel
       Provider.of<BannerProvider>(context, listen: false).loadBanners();
       // Load conversations for the floating message button badge
@@ -92,7 +97,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         Provider.of<ProductProvider>(
           context,
           listen: false,
-        ).loadProducts(hideOutOfStock: true);
+        ).loadFirstPage(hideOutOfStock: true);
         Provider.of<BannerProvider>(context, listen: false).loadBanners();
       }
       _wasOffline = !isOnline;
@@ -115,6 +120,14 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     if (show != _isHeroVisible) {
       setState(() => _isHeroVisible = show);
     }
+    // Infinite scroll: prefetch the next catalog page before the customer
+    // reaches the bottom. Guarded inside the provider (single-flight,
+    // no-op at the end or while the first page loads), so firing it from a
+    // scroll listener every frame is cheap.
+    final position = _scrollController.position;
+    if (position.pixels > position.maxScrollExtent - 600) {
+      context.read<ProductProvider>().loadNextPage(hideOutOfStock: true);
+    }
   }
 
   /// Open the full-screen search page (suggestions, recent + discovery chips).
@@ -127,6 +140,32 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (_) => const ProductSearchScreen()));
+  }
+
+  /// Warm the image cache for the first few grid photos right after the
+  /// first page lands — so the initial scroll is over decoded bytes, not
+  /// network fetches. Bounded (4 photos, first image each, once per URL):
+  /// prefetching the whole catalog would burn bandwidth and memory.
+  void _precacheLeadImages() {
+    if (!mounted) return;
+    var warmed = 0;
+    for (final product in context.read<ProductProvider>().products) {
+      if (warmed >= 4) break;
+      final images = product['images'];
+      if (images is! List || images.isEmpty) continue;
+      final url = images.first?.toString() ?? '';
+      if (url.isEmpty || !_precachedUrls.add(url)) continue;
+      warmed++;
+      // Best-effort: a failed warm just means a normal lazy load later.
+      unawaited(() async {
+        try {
+          await precacheImage(
+            CachedNetworkImageProvider(url, maxWidth: 600),
+            context,
+          );
+        } catch (_) {}
+      }());
+    }
   }
 
   Future<void> _loadConversations() async {
@@ -286,6 +325,16 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     final showCatalogEndCap =
         isBrowsingWholeCatalog &&
         !productProvider.isLoading &&
+        !productProvider.hasMoreProducts &&
+        !productProvider.isLoadingMore &&
+        filteredProducts.isNotEmpty;
+    // Trailing append indicator while more pages exist: a quiet spinner cell
+    // at the grid's end (the scroll listener above is already fetching it).
+    // Hidden under a category filter — the filter narrows loaded pages, and
+    // a whole-catalog fetch indicator under a narrowed grid misleads.
+    final showMoreLoader =
+        isBrowsingWholeCatalog &&
+        (productProvider.hasMoreProducts || productProvider.isLoadingMore) &&
         filteredProducts.isNotEmpty;
     // Distinct workshops behind the catalog, derived from the products already
     // loaded (the same `store_id` the Store tab indexes on) — no second query.
@@ -312,7 +361,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 Provider.of<ProductProvider>(
                   context,
                   listen: false,
-                ).loadProducts(hideOutOfStock: true),
+                ).loadFirstPage(hideOutOfStock: true),
                 Provider.of<BannerProvider>(
                   context,
                   listen: false,
@@ -508,6 +557,13 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                             height: AppConstants.catalogLeadGap,
                           ),
 
+                          // ── Sync status (quiet) ──
+                          // A cached feed refreshing in the background — or
+                          // serving cache offline — says so in one small row
+                          // instead of flashing a shimmer over real products.
+                          // Renders nothing in the steady state.
+                          const _SyncStatusRow(),
+
                           // ── The Workshop Collection ──
                           // The heading IS the collection's grid now: the poster
                           // below opens it the way "Based on your size" opens
@@ -540,7 +596,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                                     onRetry: () => Provider.of<ProductProvider>(
                                       context,
                                       listen: false,
-                                    ).loadProducts(hideOutOfStock: true),
+                                    ).loadFirstPage(hideOutOfStock: true),
                                   )
                           else if (allProducts.isEmpty)
                             Padding(
@@ -586,10 +642,17 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                               // +1: the poster is the grid's first cell, so the
                               // collection opens on its own name with the first
                               // product beside it.
-                              itemCount: filteredProducts.length + 1,
+                              itemCount:
+                                  filteredProducts.length +
+                                  1 +
+                                  (showMoreLoader ? 1 : 0),
                               itemBuilder: (context, index) {
                                 if (index == 0) {
                                   return _workshopPoster(productProvider);
+                                }
+                                if (showMoreLoader &&
+                                    index == filteredProducts.length + 1) {
+                                  return const _MoreLoaderCell();
                                 }
                                 final prod = filteredProducts[index - 1];
                                 return SoleProductCard(
@@ -706,6 +769,107 @@ class _CatalogSkeletonGrid extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Trailing infinite-scroll cell: a quiet spinner reserving one grid cell
+/// while the next catalog page appends. Fixed height so the grid never jumps
+/// when it appears or leaves with the end-cap.
+class _MoreLoaderCell extends StatelessWidget {
+  const _MoreLoaderCell();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox(
+      height: 120,
+      child: Center(
+        child: SizedBox(
+          width: 22,
+          height: 22,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: AppConstants.primary,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Quiet sync-status row above the Workshop Collection grid.
+///
+/// The feed is cache-first: a background refresh (or an offline open serving
+/// cache) must never flash a shimmer over products already on screen. This
+/// row is the only visible trace — a small pill while [ProductProvider]
+/// reports [isRefreshing], or an offline notice when the connectivity stream
+/// says offline with cached rows showing. Nothing in every other state, so
+/// the steady feed gains no chrome.
+class _SyncStatusRow extends StatelessWidget {
+  const _SyncStatusRow();
+
+  @override
+  Widget build(BuildContext context) {
+    final isRefreshing = context.select<ProductProvider, bool>(
+      (p) => p.isRefreshing,
+    );
+    final hasProducts = context.select<ProductProvider, bool>(
+      (p) => p.products.isNotEmpty,
+    );
+    final isLoading = context.select<ProductProvider, bool>((p) => p.isLoading);
+    return StreamBuilder<bool>(
+      stream: ConnectivityService.instance.isOnlineStream,
+      initialData: ConnectivityService.instance.isOnline,
+      builder: (context, snapshot) {
+        final online = snapshot.data ?? true;
+        final String? label;
+        final IconData? icon;
+        if (!online && hasProducts && !isLoading) {
+          label = "You're offline \u2022 showing saved products";
+          icon = Icons.cloud_off_outlined;
+        } else if (isRefreshing && hasProducts) {
+          label = 'Updating products\u2026';
+          icon = Icons.sync_rounded;
+        } else {
+          return const SizedBox.shrink();
+        }
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: AppConstants.secondary.withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      icon,
+                      size: 12,
+                      color: AppConstants.secondary.withValues(alpha: 0.6),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      label,
+                      style: AppConstants.bodyStyle(
+                        fontSize: 11,
+                        color: AppConstants.secondary.withValues(alpha: 0.6),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

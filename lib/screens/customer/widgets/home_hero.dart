@@ -352,6 +352,10 @@ class _HomeHeroState extends State<HomeHero> {
           return CachedNetworkImage(
             imageUrl: imageUrl ?? '',
             fit: BoxFit.cover,
+            // Full-bleed hero (~390dp): cap decoded width instead of
+            // holding the raw upload in memory per carousel page.
+            memCacheWidth: 1080,
+            fadeInDuration: const Duration(milliseconds: 200),
             placeholder: (_, _) => _buildGradientFallback(),
             errorWidget: (_, _, _) => _buildGradientFallback(),
           );

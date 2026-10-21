@@ -103,54 +103,75 @@ Future<void> main() async {
     if (kDebugMode) debugPrint('Theme mode load failed: $e');
   }
 
+  // Cold-open critical path: theme + Supabase + Firebase are independent, so
+  // they initialize CONCURRENTLY instead of one-after-another. Everything
+  // else (connectivity listener, device-trust header, push service, seller
+  // widget) is best-effort and runs AFTER the first frame — it must never
+  // gate `runApp`. Total pre-frame wait ≈ the slowest of the three, not the
+  // sum (previously Theme → Supabase(≤10s) → DeviceTrust → Firebase).
   bool supabaseReady = false;
-  try {
-    await Supabase.initialize(
-      url: AppConstants.url,
-      publishableKey: AppConstants.publishableKey,
-    ).timeout(const Duration(seconds: 10));
-    supabaseReady = true;
-  } catch (e) {
-    if (kDebugMode) debugPrint('Supabase init failed: $e');
+  bool firebaseReady = false;
+  await Future.wait([
+    () async {
+      try {
+        initialThemeMode = await ThemeService.instance.load();
+      } catch (e) {
+        if (kDebugMode) debugPrint('Theme mode load failed: $e');
+      }
+    }(),
+    () async {
+      try {
+        await Supabase.initialize(
+          url: AppConstants.url,
+          publishableKey: AppConstants.publishableKey,
+        ).timeout(const Duration(seconds: 10));
+        supabaseReady = true;
+      } catch (e) {
+        if (kDebugMode) debugPrint('Supabase init failed: $e');
+      }
+    }(),
+    () async {
+      try {
+        await Firebase.initializeApp(
+          options: DefaultFirebaseOptions.currentPlatform,
+        );
+        firebaseReady = true;
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('Firebase init failed (push notifications disabled): $e');
+        }
+      }
+    }(),
+  ]);
+  if (firebaseReady) {
+    // Register background message handler (must be called before runApp).
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
   }
   if (supabaseReady) {
-    // Start the connectivity service after Supabase is ready
-    ConnectivityService.instance.start();
-
-    // Attach this install's step-up credential to outgoing requests before
-    // anything reads a device-gated table, and keep it pointed at whichever
-    // account is signed in (the secret is per (user, device), so an account
-    // switch must swap it). Both are best-effort: with the server gate
-    // switched off — the shipped default — nothing depends on this.
-    try {
-      await DeviceTrustService.instance.refreshRequestHeader();
-      DeviceTrustService.instance.startSyncWithAuthState();
-    } catch (e) {
-      if (kDebugMode) debugPrint('Device header setup failed: $e');
-    }
-
-    // Initialize Firebase for push notifications
-    try {
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
-      // Register background message handler (must be called before runApp)
-      FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-      // Initialize push notification service (after Firebase is ready)
-      PushNotificationService.instance.init();
-    } catch (e) {
-      if (kDebugMode) debugPrint('Firebase init failed (push notifications disabled): $e');
-    }
-
-    // Seller home-screen widget. Both calls are best-effort and deliberately
-    // not awaited into `runApp`: a widget that fails to schedule must not delay
-    // or block the first frame. The scheduled worker is what keeps the tile
-    // fresh, and a sync here only means a seller who just opened the app sees
-    // their own numbers rather than the last session's.
-    unawaited(SellerWidgetService.instance.registerBackgroundRefresh());
-    unawaited(SellerWidgetService.instance.syncForCurrentUser());
-
     runApp(CUFMAIApp(initialThemeMode: initialThemeMode));
+    // Post-first-frame deferred work: none of this may block the first
+    // frame. Ordered inside one task so the device-trust header still lands
+    // before AuthGate's profile fetch resolves (the gate's own fetch is a
+    // network round trip; this is local work queued ahead of its response).
+    // All best-effort: with the server gate switched off — the shipped
+    // default — nothing depends on the device header.
+    unawaited(() async {
+      ConnectivityService.instance.start();
+      try {
+        await DeviceTrustService.instance.refreshRequestHeader();
+        DeviceTrustService.instance.startSyncWithAuthState();
+      } catch (e) {
+        if (kDebugMode) debugPrint('Device header setup failed: $e');
+      }
+      // Initialize push notification service (after Firebase is ready).
+      if (firebaseReady) PushNotificationService.instance.init();
+      // Seller home-screen widget. A widget that fails to schedule must not
+      // delay or block the first frame; the scheduled worker is what keeps
+      // the tile fresh, and a sync here only means a seller who just opened
+      // the app sees their own numbers rather than the last session's.
+      unawaited(SellerWidgetService.instance.registerBackgroundRefresh());
+      unawaited(SellerWidgetService.instance.syncForCurrentUser());
+    }());
   } else {
     runApp(_SupabaseErrorApp());
   }

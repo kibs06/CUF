@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/catalog_cache_service.dart';
+
 /// App-root provider that manages the home-screen banner carousel.
 ///
 /// Banners are admin-managed rows in the `banners` table. The RLS policy
@@ -26,7 +28,23 @@ class BannerProvider extends ChangeNotifier {
   ///
   /// So we just select everything — the database handles visibility.
   Future<void> loadBanners() async {
-    _isLoading = true;
+    // Cache-first: paint the last saved banners instantly, then refresh
+    // quietly — the hero carousel no longer waits on the network.
+    if (_banners.isEmpty) {
+      try {
+        final cached = await CatalogCacheService.instance.loadBanners();
+        if (cached != null && cached.banners.isNotEmpty) {
+          _banners = cached.banners;
+          notifyListeners();
+        }
+      } catch (_) {
+        // Best-effort — fall through to the network fetch.
+      }
+    }
+
+    // Cache-first: with saved banners on screen this is a silent refresh —
+    // `isLoading` stays false, so the hero never flashes a skeleton.
+    if (_banners.isEmpty) _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
@@ -39,6 +57,7 @@ class BannerProvider extends ChangeNotifier {
 
       // PostgrestException is thrown on error — no .error getter on PostgrestList.
       _banners = (response as List).cast<Map<String, dynamic>>();
+      CatalogCacheService.instance.saveBanners(_banners);
     } catch (e) {
       debugPrint('[BannerProvider] loadBanners failed: $e');
       _errorMessage = e.toString();
