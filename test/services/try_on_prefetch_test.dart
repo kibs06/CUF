@@ -89,6 +89,52 @@ void main() {
       expect(source.downloadCalls, 1);
     });
 
+    test('a production-shaped row keeps its authoring fields', () async {
+      // The row a real partner handover produces: all twelve columns from
+      // SupabaseShoeModelDataSource._columns. The pipe must carry
+      // authored_length_mm (try-on scale + fit verdict), shoe_side (mirror),
+      // material_map/alignment_json (renderer) and the audit fields through
+      // to the spec — the 6-column fixture above cannot prove that.
+      final bytes = bytesOf(256);
+      final source = _FakeModelSource()
+        ..rows = [
+          {
+            'id': 42,
+            'variant_id': null,
+            'storage_path': 'store-9/jbc-crown/model.glb',
+            'sha256': shaOf(bytes),
+            'version': 3,
+            'authored_size_eu': 42,
+            'authored_length_mm': 285,
+            'shoe_side': 'right',
+            'material_map': {
+              'upper': {'baseColorHex': '#6B4226', 'metallic': 0.0},
+            },
+            'alignment_json': {'yawOffsetDeg': 0},
+            'triangle_count': 49954,
+            'file_size_bytes': bytes.length,
+          },
+        ]
+        ..files = {'store-9/jbc-crown/model.glb': bytes};
+
+      final result =
+          await prefetchWith(source).prefetch(productId: 'product-1');
+
+      expect(result.outcome, TryOnPrefetchOutcome.downloaded);
+      expect(result.hasLocalModel, isTrue);
+      final spec = result.spec!;
+      expect(spec.id, 42);
+      expect(spec.version, 3);
+      expect(spec.authoredSizeEu, 42);
+      expect(spec.authoredLengthMm, 285);
+      expect(spec.shoeSide, 'right');
+      expect(spec.triangleCount, 49954);
+      expect(spec.fileSizeBytes, bytes.length);
+      expect(spec.materialMap, isNotNull);
+      expect(spec.alignmentJson, isNotNull);
+      expect(File(result.path!).readAsBytesSync(), bytes);
+    });
+
     test('a second prefetch is a cache hit, not a second download', () async {
       final bytes = bytesOf(128);
       final source = _FakeModelSource()
