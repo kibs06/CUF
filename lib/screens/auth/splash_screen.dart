@@ -20,8 +20,12 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   void initState() {
     super.initState();
+    // Short brand flash only: the home feed paints from disk cache, so the
+    // splash must never waste the fast path. 900ms is enough for the
+    // wordmark to read; AuthGate (profile fetch) owns any further wait and
+    // shows its own loading state instead of holding branding on screen.
     _controller = AnimationController(
-      duration: const Duration(milliseconds: 1200),
+      duration: const Duration(milliseconds: 900),
       vsync: this,
     );
 
@@ -40,8 +44,8 @@ class _SplashScreenState extends State<SplashScreen>
       }
     });
 
-    // Auto-navigates to AuthGate after 2 seconds
-    Timer(const Duration(seconds: 2), () {
+    // Leaves for AuthGate after the brand flash — not a fixed 2s wait.
+    Timer(const Duration(milliseconds: 900), () {
       if (mounted) {
         Navigator.of(context).pushReplacement(
           PageRouteBuilder(

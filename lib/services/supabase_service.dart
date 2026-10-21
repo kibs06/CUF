@@ -263,6 +263,67 @@ class SupabaseService {
     return data == null ? null : _mapProduct(Map<String, dynamic>.from(data));
   }
 
+  /// Grid-page select: all base columns via `*` (future scalars ride along)
+  /// plus only the embeds the cards read — store name, images, and the raw
+  /// `inventory` stock rows that `totalStock`/`purchasableProducts`/
+  /// `stockByEuSize` require. Drops `product_variants` + `product_color_images`
+  /// (seller/detail/AR paths run on full rows or their own refetches).
+  static const String _gridPageSelect =
+      '*, stores(name), product_images(image_url, display_order, is_primary), inventory(size, stock)';
+
+  /// ONE customer-grid page (newest first) with a bounded payload: a single
+  /// [pageSize] `.range()` slice in stable `created_at` + `id` order, so rows
+  /// can't jump between appends. [hideOutOfStock] keeps the exact
+  /// `purchasableProducts` semantics, applied per slice with bounded
+  /// over-fetch (≤4 slices) — a server-side `inventory!inner` filter would
+  /// also strip zero-stock rows from the embedded `inventory` and silently
+  /// change size-shelf behavior downstream. Returns the filtered page plus
+  /// whether more pages may exist.
+  Future<({List<Map<String, dynamic>> products, bool hasMore})>
+  fetchProductPage({
+    String? storeId,
+    bool hideOutOfStock = false,
+    int page = 0,
+    int pageSize = 24,
+  }) async {
+    assert(page >= 0, 'fetchProductPage: page must be >= 0');
+    assert(pageSize > 0, 'fetchProductPage: pageSize must be > 0');
+
+    const maxSlices = 4;
+    final collected = <Map<String, dynamic>>[];
+    var hasMore = true;
+
+    for (var slice = 0; slice < maxSlices; slice++) {
+      final from = page * pageSize + slice * pageSize;
+      var query = _client.from('products').select(_gridPageSelect);
+      if (storeId != null) query = query.eq('store_id', storeId);
+
+      PerfTrace.mark(
+        'catalog:page p$page slice$slice start ($from-${from + pageSize - 1})',
+      );
+      final data = await query
+          .order('created_at', ascending: false)
+          .order('id', ascending: false)
+          .range(from, from + pageSize - 1)
+          .timeout(_defaultTimeout);
+      final rows = (data as List)
+          .map((row) => _mapProduct(Map<String, dynamic>.from(row)))
+          .toList();
+      PerfTrace.mark(
+        'catalog:page p$page slice$slice decoded (${rows.length} rows)',
+      );
+
+      if (rows.length < pageSize) hasMore = false;
+      collected.addAll(hideOutOfStock ? purchasableProducts(rows) : rows);
+      if (collected.length >= pageSize || !hasMore) break;
+    }
+
+    final products = collected.length > pageSize
+        ? collected.sublist(0, pageSize)
+        : collected;
+    return (products: products, hasMore: hasMore);
+  }
+
   /// Aggregate total units sold per product across completed purchases.
   ///
   /// Sums `order_items.quantity` for items belonging to orders that are

@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../constants/app_constants.dart';
+import '../services/catalog_cache_service.dart';
 import '../services/product_service.dart';
 import '../services/supabase_service.dart';
 import '../utils/nav_perf.dart';
@@ -162,6 +165,10 @@ class ProductProvider extends ChangeNotifier {
   String? _selectedCategory = 'All';
   SortMode _sortMode = SortMode.featured;
 
+  /// Quiet background refresh: rows are already on screen and a fresh fetch
+  /// is running. Screens show a subtle indicator, never a shimmer, while true.
+  bool _isRefreshing = false;
+
   /// product_id → total units sold across paid, non-cancelled orders.
   /// Loaded alongside the catalog; missing id = 0 units.
   Map<String, int> _unitsSold = const {};
@@ -173,6 +180,20 @@ class ProductProvider extends ChangeNotifier {
   /// — or the next account's seller session — from reading as a cache hit.
   String? _sellerCatalogUserId;
   String? _sellerCatalogStoreId;
+
+  /// Home-feed page size for [loadFirstPage]/[loadNextPage]. Small enough
+  /// that the first paint stays fast on a slow connection, large enough to
+  /// fill a few phone screens before the infinite-scroll trigger fires.
+  static const int catalogPageSize = 24;
+
+  /// Paged home-feed cursor: index of the last page in [_products] (-1 =
+  /// none), whether the server may hold more, and the in-flight append.
+  /// The seller/admin full-list path ([loadProducts]/[loadSellerProducts])
+  /// never touches these — paging is the home feed's own cursor.
+  int _currentPage = -1;
+  bool _hasMore = true;
+  bool _loadingMore = false;
+  Future<void>? _nextPageFetch;
 
   /// The seller-catalog fetch in flight, if any. The Dashboard, POS and
   /// Products tabs all ask for this one catalog and can ask in the same frame;
@@ -210,6 +231,9 @@ class ProductProvider extends ChangeNotifier {
 
   List<Map<String, dynamic>> get products => _products;
   bool get isLoading => _isLoading;
+  bool get isLoadingMore => _loadingMore;
+  bool get hasMoreProducts => _hasMore;
+  bool get isRefreshing => _isRefreshing;
   String? get selectedCategory => _selectedCategory;
   SortMode get sortMode => _sortMode;
 
@@ -453,7 +477,12 @@ class ProductProvider extends ChangeNotifier {
     bool reshuffle = true,
     bool hideOutOfStock = false,
   }) async {
-    _isLoading = true;
+    await _publishCachedCatalog(hideOutOfStock: hideOutOfStock);
+    if (_products.isEmpty) {
+      _isLoading = true;
+    } else {
+      _isRefreshing = true;
+    }
     notifyListeners();
 
     try {
@@ -475,12 +504,147 @@ class ProductProvider extends ChangeNotifier {
       if (reshuffle) {
         _products.shuffle();
       }
+      // Persist for the next cold open — fire-and-forget, never blocks UI.
+      CatalogCacheService.instance.saveCatalog(
+        hideOutOfStock: hideOutOfStock,
+        products: _products,
+        unitsSold: _unitsSold,
+      );
     } catch (_) {
-      // Gracefully handle empty
+      // Offline (or any fetch failure) with a cache on screen: keep the
+      // cached rows — the connectivity banner already explains the state.
+      // Only a cache-less open ends up with an empty grid, as before.
     }
 
     _isLoading = false;
+    _isRefreshing = false;
     notifyListeners();
+  }
+
+  /// Cache-first publish shared by [loadProducts] and [loadFirstPage]: when
+  /// the screen is empty, the last saved catalog paints instantly and the
+  /// network fetch below replaces it. Best-effort — failures fall through.
+  Future<void> _publishCachedCatalog({required bool hideOutOfStock}) async {
+    if (_products.isNotEmpty) return;
+    try {
+      final cached = await CatalogCacheService.instance.loadCatalog(
+        hideOutOfStock: hideOutOfStock,
+      );
+      if (cached != null && cached.products.isNotEmpty) {
+        _products = cached.products;
+        _unitsSold = cached.unitsSold;
+        _stampUnitsSold();
+        notifyListeners();
+      }
+    } catch (_) {
+      // Cache is best-effort — fall through to the network fetch.
+    }
+  }
+
+  /// Load the home feed's FIRST page (newest first, [catalogPageSize] rows).
+  ///
+  /// The paged replacement for [loadProducts] on customer surfaces: a bounded
+  /// slim query instead of the whole catalog, cache-first so the grid paints
+  /// instantly, then [loadNextPage] appends as the customer scrolls. Sold
+  /// counts stay LAZY (see [_refreshUnitsSold]); pages are never shuffled —
+  /// appends must be deterministic or rows jump between pages.
+  Future<void> loadFirstPage({bool hideOutOfStock = false}) async {
+    // Fresh feed, new cursor — but keep the old rows on screen until the new
+    // first page arrives (same non-destructive contract as the seller path).
+    _currentPage = -1;
+    _hasMore = true;
+
+    await _publishCachedCatalog(hideOutOfStock: hideOutOfStock);
+    if (_products.isEmpty) {
+      _isLoading = true;
+    } else {
+      _isRefreshing = true;
+    }
+    notifyListeners();
+
+    try {
+      final page = await _db.fetchProductPage(
+        hideOutOfStock: hideOutOfStock,
+        page: 0,
+        pageSize: catalogPageSize,
+      );
+      _products = page.products;
+      _currentPage = 0;
+      _hasMore = page.hasMore;
+      _sellerCatalogUserId = null;
+      _sellerCatalogStoreId = null;
+      _sellerCatalogError = null;
+      CatalogCacheService.instance.saveCatalog(
+        hideOutOfStock: hideOutOfStock,
+        products: _products,
+        unitsSold: _unitsSold,
+      );
+    } catch (_) {
+      // Offline with rows on screen: keep them. Cache-less open: empty grid.
+    }
+
+    _isLoading = false;
+    _isRefreshing = false;
+    notifyListeners();
+
+    // Lazy sold counts — never gates the first paint. Joins the live feed:
+    // a concurrent refresh supersedes rather than duplicates this fetch.
+    unawaited(_refreshUnitsSold(hideOutOfStock: hideOutOfStock));
+  }
+
+  /// Append the next home-feed page. No-op while a fetch is in flight, when
+  /// the server reported the end, or while the first page is still loading.
+  /// Concurrent callers (scroll trigger + retry) join the one fetch.
+  Future<void> loadNextPage({bool hideOutOfStock = false}) {
+    if (_loadingMore || !_hasMore || _isLoading || _currentPage < 0) {
+      return Future.value();
+    }
+    final inFlight = _nextPageFetch;
+    if (inFlight != null) return inFlight;
+    final fetch = _fetchNextPage(hideOutOfStock: hideOutOfStock);
+    _nextPageFetch = fetch;
+    return fetch.whenComplete(() {
+      if (identical(_nextPageFetch, fetch)) _nextPageFetch = null;
+    });
+  }
+
+  Future<void> _fetchNextPage({required bool hideOutOfStock}) async {
+    _loadingMore = true;
+    notifyListeners();
+    try {
+      final page = await _db.fetchProductPage(
+        hideOutOfStock: hideOutOfStock,
+        page: _currentPage + 1,
+        pageSize: catalogPageSize,
+      );
+      _products = [..._products, ...page.products];
+      _stampUnitsSold();
+      _currentPage += 1;
+      _hasMore = page.hasMore;
+    } catch (_) {
+      // A failed append keeps the rows already on screen; the next scroll
+      // trigger retries. Never clears the feed.
+    }
+    _loadingMore = false;
+    notifyListeners();
+  }
+
+  /// Background sold-count refresh for the paged feed. Stamps the live rows,
+  /// persists the cache, and notifies once — skipped silently on failure.
+  Future<void> _refreshUnitsSold({required bool hideOutOfStock}) async {
+    try {
+      final units = await _db.fetchUnitsSold();
+      _unitsSold = units;
+      _stampUnitsSold();
+      CatalogCacheService.instance.saveCatalog(
+        hideOutOfStock: hideOutOfStock,
+        products: _products,
+        unitsSold: _unitsSold,
+      );
+      notifyListeners();
+    } catch (_) {
+      // Counts are enrichment, not content — the feed stands without them.
+    }
   }
 
   /// Load only the current seller's products (POS / seller screens).
