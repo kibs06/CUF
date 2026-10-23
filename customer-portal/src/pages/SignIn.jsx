@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 
 import AuthShell from '../components/auth/AuthShell'
+import SocialButtons from '../components/auth/SocialButtons'
 import Field from '../components/ui/Field'
 import PasswordField from '../components/ui/PasswordField'
 import { useAuth } from '../hooks/useAuth.jsx'
@@ -86,6 +87,22 @@ export default function SignIn() {
       setFormError(error?.message ?? 'We could not send that e-mail.')
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const startSocial = async (provider) => {
+    setFormError(null)
+    setSocialPending(provider)
+    try {
+      // location.state.from does not survive leaving for the provider and
+      // coming back - stash it for /auth/callback.
+      rememberPostLoginDestination(destination)
+      await signInWithSocial(provider)
+    } catch (error) {
+      setFormError(
+        error?.message ?? 'Social sign-in failed. Please try again.',
+      )
+      setSocialPending(null)
     }
   }
 
@@ -210,43 +227,11 @@ export default function SignIn() {
             {submitting ? 'Signing in…' : 'Sign in'}
           </button>
 
-          <div className="flex items-center gap-3">
-            <div className="h-px flex-1 bg-hairline" />
-            <span className="text-xs text-muted">or</span>
-            <div className="h-px flex-1 bg-hairline" />
-          </div>
-
-          {[
-            { provider: 'google', label: 'Continue with Google' },
-            { provider: 'facebook', label: 'Continue with Facebook' },
-          ].map(({ provider, label }) => (
-            <button
-              key={provider}
-              type="button"
-              disabled={submitting || socialPending !== null}
-              onClick={async () => {
-                setFormError(null)
-                setSocialPending(provider)
-                try {
-                  // location.state.from does not survive leaving for the
-                  // provider and coming back - stash it for /auth/callback.
-                  rememberPostLoginDestination(destination)
-                  await signInWithSocial(provider)
-                } catch (error) {
-                  setFormError(
-                    error?.message ?? 'Social sign-in failed. Please try again.',
-                  )
-                  setSocialPending(null)
-                }
-              }}
-              className="btn btn-outline w-full disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {socialPending === provider && (
-                <Loader2 size={15} className="animate-spin" />
-              )}
-              {socialPending === provider ? 'Redirecting…' : label}
-            </button>
-          ))}
+          <SocialButtons
+            pendingProvider={socialPending}
+            disabled={submitting}
+            onSignIn={startSocial}
+          />
         </form>
       )}
     </AuthShell>
