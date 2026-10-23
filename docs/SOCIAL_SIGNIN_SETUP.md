@@ -35,14 +35,25 @@ Live before the public can use it).
 ## 2. Google Cloud
 
 - One **Web application** OAuth client (its ID doubles as `serverClientId`).
-- Android apps: package name + **SHA-1** for debug, release, AND the Play App
-  Signing certificate (a release built with the upload key but installed via
-  Play fails Google sign-in otherwise).
-- iOS app: bundle ID; put the iOS client ID in `ios/Runner/Info.plist` as
-  `GIDClientID` and register its **reversed** form in `CFBundleURLSchemes`
-  (merge with the existing `solvision` entry — do not replace it).
-- If the app has no `google-services` config with a Web client entry, pass the
-  Web client ID as `serverClientId` in `AuthService.signInWithGoogle`.
+  Pass it at build time — never commit it:
+  `flutter run --dart-define=GOOGLE_SERVER_CLIENT_ID=<web-client-id>`.
+  Until it is supplied the app keeps the dormant *"not switched on yet"*
+  copy (guard in `AuthService.signInWithGoogle`). `google-services.json`
+  carries no `oauth_client` entry, so the explicit ID is required.
+- Android: **3 clients**, all package `com.solevision.app`, one SHA-1 each:
+  - debug: `B2:CC:A2:B2:84:74:E6:67:C4:41:BC:78:88:C8:50:70:C3:5F:14:6E`
+  - release: extract locally with
+    `keytool -list -v -keystore android/app/cufmai-release.jks`
+    (password lives in your local `android/key.properties`, never committed).
+  - Play: **Play Console → Test and release → App signing** → App signing
+    key certificate (NOT the upload key — the store strips it, so a
+    Play-installed build fails without this client).
+- iOS: bundle ID `com.solevision.app`. Put the iOS client ID in
+  `ios/Runner/Info.plist` as `GIDClientID` (replacing
+  `REPLACE_WITH_GOOGLE_IOS_CLIENT_ID`) and its **reversed** form
+  (`com.googleusercontent.apps.…`, replacing
+  `REPLACE_WITH_REVERSED_IOS_CLIENT_ID`) in `CFBundleURLSchemes`
+  (merged with the existing `solvision` entry — do not replace it).
 
 ## 3. Meta (Facebook)
 

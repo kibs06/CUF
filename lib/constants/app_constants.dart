@@ -11,6 +11,23 @@ class AppConstants {
   static const String publishableKey =
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBzY3p2YmZveWJxaGplcXNzaW13Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3NjU2NDIsImV4cCI6MjA5NzM0MTY0Mn0.31zMQ2VbrcMLYBENzozBht5O7PFwV0JDWH1UQ2ba7W8';
 
+  // --- GOOGLE NATIVE SIGN-IN (Android + iOS) ---
+  //
+  // The Web OAuth client ID (…apps.googleusercontent.com). It is the
+  // audience for the native ID token, so Supabase accepts it. Public by
+  // design — the secret stays in Supabase Dashboard → Providers → Google.
+  //
+  // Supplied at build time so the repo never pins the project's real ID:
+  //   flutter run --dart-define=GOOGLE_SERVER_CLIENT_ID=<web-client-id>
+  // Until it is supplied this is empty and the Google button keeps the
+  // dormant setup copy (AuthService guard) instead of failing in the SDK.
+  // `android/app/google-services.json` carries no `oauth_client` entry, so
+  // passing null is NOT enough on this project — the explicit ID is required.
+  static const String googleServerClientId = String.fromEnvironment(
+    'GOOGLE_SERVER_CLIENT_ID',
+    defaultValue: '',
+  );
+
   // --- CUSTOMER PORTAL (the web build of the customer flows) ---
   //
   // Deployed to Vercel from `customer-portal/` in this repo (that README has

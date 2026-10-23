@@ -97,7 +97,14 @@ class _SocialSigninButtonsState extends State<SocialSigninButtons> {
           icon: Icons.g_mobiledata,
           busy: _pending == 'google',
           enabled: _pending == null,
-          onTap: () => _signIn('google', auth.signInWithGoogle),
+          onTap: () => _signIn(
+            'google',
+            () => auth.signInWithGoogle(
+              serverClientId: AppConstants.googleServerClientId.isEmpty
+                  ? null
+                  : AppConstants.googleServerClientId,
+            ),
+          ),
         ),
         const SizedBox(height: 10),
         _SocialButton(

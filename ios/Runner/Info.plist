@@ -26,13 +26,18 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
-	<!-- Facebook Login URL schemes (fbauth2 etc.). The fb<APP_ID> URL scheme,
-	     FacebookAppID / FacebookClientToken / FacebookDisplayName, and the
-	     Google GIDClientID + reversed-client-ID scheme all need REAL values
-	     from the Phase-0 console setup — see docs/SOCIAL_SIGNIN_SETUP.md.
-	     They are intentionally absent here (not placeholder zeros): a wrong
-	     ID fails only when that button is tapped, while a committed real ID
-	     would leak the project's credentials into the repo history. -->
+	<!-- GOOGLE NATIVE SIGN-IN (Phase 0 console setup).
+	     Replace the two REPLACE_WITH_… placeholders with the REAL iOS
+	     OAuth client values (Google Cloud → Credentials → iOS, bundle
+	     com.solevision.app) — see docs/SOCIAL_SIGNIN_SETUP.md.
+	     A wrong ID fails only when the Google button is tapped; the secret
+	     itself stays in Supabase Dashboard → Providers → Google, never here.
+	     Facebook keys (FacebookAppID etc.) stay intentionally absent until
+	     the Meta pass — placeholders would only invite a wrong-ID failure. -->
+	<!-- iOS OAuth client ID (Google Cloud → Credentials → iOS). Replace the
+	     placeholder with the real `…apps.googleusercontent.com` value. -->
+	<key>GIDClientID</key>
+	<string>REPLACE_WITH_GOOGLE_IOS_CLIENT_ID</string>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>fbapi</string>
@@ -48,6 +53,17 @@
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>solvision</string>
+			</array>
+		</dict>
+		<!-- Google redirect back into the app: the REVERSED iOS client ID
+		     (`com.googleusercontent.apps.…`). Merge with `solvision` above —
+		     do NOT replace it, or email + GCash deep links break. -->
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>google-signin</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>REPLACE_WITH_REVERSED_IOS_CLIENT_ID</string>
 			</array>
 		</dict>
 	</array>
