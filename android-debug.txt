@@ -1,0 +1,9 @@
+android-debug
+B2:CC:A2:B2:84:74:E6:67:C4:41:BC:78:88:C8:50:70:C3:5F:14:6E
+341957182481-h1oj9qnung1kbh6nc8pmt2g6547ihghn.apps.googleusercontent.com
+
+
+android-release
+E2:E9:20:EC:C3:CB:E0:83:73:06:FD:D0:6F:EC:AF:E0:22:BC:C9:14
+341957182481-utq37hc9ih8up8cmj1kr9g4guharbkej.apps.googleusercontent.com
+
