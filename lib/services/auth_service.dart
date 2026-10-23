@@ -188,7 +188,7 @@ class AuthService {
       );
       final user = response.user;
       if (user == null) throw Exception('Google sign-in failed.');
-      return _profileForSocialUser(user);
+      return await _profileForSocialUser(user);
     } on AuthException catch (e) {
       _throwIfSocialNotEnabled(e, 'Google');
       rethrow;
@@ -244,7 +244,7 @@ class AuthService {
       );
       final user = response.user;
       if (user == null) throw Exception('Facebook sign-in failed.');
-      return _profileForSocialUser(user);
+      return await _profileForSocialUser(user);
     } on AuthException catch (e) {
       _throwIfSocialNotEnabled(e, 'Facebook');
       rethrow;
