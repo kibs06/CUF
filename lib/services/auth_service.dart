@@ -1,4 +1,8 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/foundation.dart';
+import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../constants/app_constants.dart';
@@ -109,6 +113,157 @@ class AuthService {
       'user': {'id': user.id, 'email': user.email ?? email.trim()},
       'profile': profile,
     };
+  }
+
+  // ── Social sign-in (Google + Facebook) ─────────────────────────────
+  //
+  // Both go through the NATIVE provider SDKs, then prove the result to
+  // Supabase with signInWithIdToken — no passwords, no email OTP. A social
+  // identity only ever yields the default `customer` profile row (see
+  // writeProfileFromMetadata): sellers still complete the application flow,
+  // and admins are never provisioned by this path (the portal gate blocks
+  // non-admins; the app has no admin role at all).
+  //
+  // Both methods REQUIRE the Phase-0 console setup
+  // (docs/SOCIAL_SIGNIN_SETUP.md): enabling the provider in Supabase plus
+  // the Google OAuth client / Meta app. Until then the Supabase call throws
+  // and [_socialNotEnabled] turns it into setup copy instead of a dead end.
+
+  /// Shared tail for both social methods: profile row + return shape.
+  ///
+  /// `emailMissing` is true when the provider gave no email address
+  /// (common on Facebook) — the caller prompts for one so the profile row
+  /// is never stuck with an empty email.
+  Future<Map<String, dynamic>> _profileForSocialUser(User user) async {
+    final profile = await getProfile(user.id) ??
+        await writeProfileFromMetadata(user);
+    final email = user.email ?? '';
+    return {
+      'user': {'id': user.id, 'email': email},
+      'profile': profile,
+      'emailMissing': email.isEmpty,
+    };
+  }
+
+  /// Signs in with the native Google account picker.
+  ///
+  /// [serverClientId] is the Google Web OAuth client ID (used as the
+  /// audience for the ID token). Pass it explicitly when the app has no
+  /// `google-services` config carrying a Web client entry; otherwise the
+  /// native SDK resolves it from the platform configuration.
+  Future<Map<String, dynamic>> signInWithGoogle({
+    String? serverClientId,
+  }) async {
+    final existing = _client.auth.currentSession;
+    if (existing != null) {
+      await _client.auth.signOut();
+    }
+
+    final googleSignIn = GoogleSignIn.instance;
+    await googleSignIn.initialize(serverClientId: serverClientId);
+    final account = await googleSignIn.authenticate();
+    final idToken = account.authentication.idToken;
+    if (idToken == null) {
+      throw Exception(
+        'Google sign-in did not return an ID token. Please try again.',
+      );
+    }
+    // The auth token lives behind a separate authorization grant in
+    // google_sign_in 7.x — best-effort here, the ID token is what
+    // Supabase verifies.
+    String? accessToken;
+    try {
+      final authorization =
+          await account.authorizationClient.authorizationForScopes(const []);
+      accessToken = authorization?.accessToken;
+    } catch (_) {
+      // Optional grant — not worth failing the sign-in over.
+    }
+
+    try {
+      final response = await _client.auth.signInWithIdToken(
+        provider: OAuthProvider.google,
+        idToken: idToken,
+        accessToken: accessToken,
+      );
+      final user = response.user;
+      if (user == null) throw Exception('Google sign-in failed.');
+      return await _profileForSocialUser(user);
+    } on AuthException catch (e) {
+      _throwIfSocialNotEnabled(e, 'Google');
+      rethrow;
+    }
+  }
+
+  /// Signs in with the native Facebook Login SDK.
+  ///
+  //  iOS uses Limited Login; Android requests the `openid` scope via a
+  //  web-only flow so the SDK returns an OIDC ID token — Supabase's
+  //  signInWithIdToken verifies THAT token, not the classic access token,
+  //  so passing the access token as `idToken` is NOT equivalent.
+  Future<Map<String, dynamic>> signInWithFacebook() async {
+    final existing = _client.auth.currentSession;
+    if (existing != null) {
+      await _client.auth.signOut();
+    }
+
+    final LoginResult result;
+    if (Platform.isIOS) {
+      result = await FacebookAuth.instance.login(
+        permissions: const ['public_profile', 'email'],
+        loginTracking: LoginTracking.limited,
+      );
+    } else {
+      result = await FacebookAuth.instance.login(
+        permissions: const ['public_profile', 'email', 'openid'],
+        loginBehavior: LoginBehavior.webOnly,
+      );
+    }
+    if (result.status != LoginStatus.success) {
+      throw Exception(
+        result.message ?? 'Facebook sign-in was cancelled.',
+      );
+    }
+    final token = result.accessToken;
+    String? idToken;
+    if (token is LimitedToken) {
+      idToken = token.tokenString;
+    } else if (token is ClassicToken) {
+      idToken = token.authenticationToken;
+    }
+    if (idToken == null || idToken.isEmpty) {
+      throw Exception(
+        'Facebook did not return a sign-in token. Please try again.',
+      );
+    }
+
+    try {
+      final response = await _client.auth.signInWithIdToken(
+        provider: OAuthProvider.facebook,
+        idToken: idToken,
+      );
+      final user = response.user;
+      if (user == null) throw Exception('Facebook sign-in failed.');
+      return await _profileForSocialUser(user);
+    } on AuthException catch (e) {
+      _throwIfSocialNotEnabled(e, 'Facebook');
+      rethrow;
+    }
+  }
+
+  /// Replaces GoTrue's raw "provider not enabled" failure with the setup
+  /// copy. Message-sniffed deliberately: this is a CONSOLE state error, not
+  //  a credential rejection, and GoTrue gives it no stable per-provider code
+  /// — the alternative is the generic "Something went wrong" dead end.
+  void _throwIfSocialNotEnabled(AuthException e, String provider) {
+    final haystack = '${e.code} ${e.message}'.toLowerCase();
+    if (haystack.contains('not enabled') ||
+        haystack.contains('unsupported provider')) {
+      throw Exception(
+        '$provider sign-in is not switched on yet. Use your email and '
+        'password for now.',
+      );
+    }
   }
 
   /// Creates the Supabase auth user for a CUSTOMER signup.
