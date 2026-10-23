@@ -26,6 +26,32 @@ import 'auth/seller_approved_celebration_screen.dart';
 import 'customer/customer_shell.dart';
 import 'seller/seller_shell.dart';
 
+/// Pure routing rule for the one-time seller approval celebration.
+///
+/// Returns true only for an approved seller (`role == seller` +
+/// `seller_status == approved`) whose account has never confirmed the
+/// welcome — i.e. the server flag
+/// `profile['has_seen_approval_celebration']` is not true AND the device
+/// cache [celebratedIds] does not contain the user id. Every other case
+/// (customer, pending, rejected, admin, missing id, already seen on
+/// either source) returns false, meaning straight to the shell.
+///
+/// Extracted as a top-level pure function so the once-only contract is
+/// pinned by a unit test without pumping the full AuthGate harness.
+bool shouldShowApprovalCelebration(
+  Map<String, dynamic> profile,
+  Set<String> celebratedIds,
+) {
+  if (profile['role']?.toString() != AppConstants.roleSeller) return false;
+  if (profile['seller_status']?.toString() != AppConstants.statusApproved) {
+    return false;
+  }
+  if (profile['has_seen_approval_celebration'] == true) return false;
+  final userId = profile['id']?.toString() ?? '';
+  if (userId.isEmpty) return false;
+  return !celebratedIds.contains(userId);
+}
+
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
 
@@ -39,7 +65,9 @@ class _AuthGateState extends State<AuthGate> {
   String? _profileUserId;
 
   /// User ids that already saw the approval celebration — so the welcome
-  /// screen shows exactly once per account (persisted in prefs).
+  /// screen shows exactly once per account. Local write-through cache of
+  /// the server flag `profiles.has_seen_approval_celebration` (prefs key
+  /// `seller_celebration_seen_v1`); the server value is the source of truth.
   final Set<String> _celebratedUserIds = {};
 
   /// Whether [_celebratedUserIds] has been restored from prefs. Routing
@@ -80,15 +108,56 @@ class _AuthGateState extends State<AuthGate> {
   }
 
   /// Marks [userId] as having seen the celebration and persists it, so the
-  /// welcome screen never shows again for that account.
+  /// welcome screen never shows again for that account — on this device,
+  /// on a reinstall, or on a second device.
+  ///
+  /// Write-through: the local prefs set flips first (so the UI drops into
+  /// SellerShell immediately, even offline), then the server flag
+  /// `profiles.has_seen_approval_celebration` is set best-effort. A failed
+  /// server write never blocks routing — the local flag already routed to
+  /// the shell, and the next online launch retries via [_syncCelebrated].
   Future<void> _markCelebrated(String userId) async {
+    if (!_celebratedUserIds.contains(userId)) {
+      setState(() => _celebratedUserIds.add(userId));
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setStringList(
+          'seller_celebration_seen_v1',
+          _celebratedUserIds.toList(),
+        );
+      } catch (e) {
+        if (kDebugMode) debugPrint('[AuthGate] Celebration prefs save failed: $e');
+      }
+    }
+    try {
+      await Supabase.instance.client
+          .from('profiles')
+          .update({'has_seen_approval_celebration': true}).eq('id', userId);
+    } catch (e) {
+      // Fail OPEN: the local flag already routed to SellerShell. The
+      // server write is retried on the next online launch (see
+      // [_syncCelebrated] in _routeByRole).
+      if (kDebugMode) debugPrint('[AuthGate] Celebration server save failed: $e');
+    }
+  }
+
+  /// Best-effort catch-up: if the server already knows this account saw
+  /// the celebration but this device's prefs do not (second device,
+  /// reinstall, or a previous offline tap), backfill the local cache so
+  /// the decision stays instant even before the profile fetch resolves.
+  /// Fire-and-forget; never blocks routing.
+  Future<void> _syncCelebrated(String userId) async {
     if (_celebratedUserIds.contains(userId)) return;
-    setState(() => _celebratedUserIds.add(userId));
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(
-      'seller_celebration_seen_v1',
-      _celebratedUserIds.toList(),
-    );
+    _celebratedUserIds.add(userId);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(
+        'seller_celebration_seen_v1',
+        _celebratedUserIds.toList(),
+      );
+    } catch (e) {
+      if (kDebugMode) debugPrint('[AuthGate] Celebration sync failed: $e');
+    }
   }
 
   /// Wire up auth hooks so FollowProvider loads on login and resets on logout.
@@ -371,14 +440,23 @@ class _AuthGateState extends State<AuthGate> {
         sellerStatus == AppConstants.statusApproved) {
       // One-time welcome: the first launch after approval shows the
       // celebration screen instead of going straight into the dashboard.
-      // "Go to dashboard" marks the user seen and routes to SellerShell.
+      // "Go to dashboard" marks the user seen (local prefs + server
+      // flag) and routes to SellerShell. The server flag is the source
+      // of truth — it survives logout/login, reinstalls, and second
+      // devices — while prefs stays an instant offline-capable cache.
       final userId = profile['id']?.toString() ?? '';
-      if (userId.isNotEmpty && !_celebratedUserIds.contains(userId)) {
+      if (shouldShowApprovalCelebration(profile, _celebratedUserIds)) {
         target = SellerApprovedCelebrationScreen(
           userName: profile['full_name']?.toString() ?? '',
           onGoToDashboard: () => _markCelebrated(userId),
         );
       } else {
+        if (profile['has_seen_approval_celebration'] == true &&
+            userId.isNotEmpty) {
+          // Backfill the device cache fire-and-forget (no setState here:
+          // routing must stay pure inside build).
+          unawaited(_syncCelebrated(userId));
+        }
         target = const SellerShell();
       }
     } else if (sellerStatus == AppConstants.statusPending) {
