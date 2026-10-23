@@ -90,4 +90,72 @@ void main() {
       );
     });
   });
+
+  group('shouldRetryCelebrationPush — offline-tap convergence', () {
+    test('local hit + server false retries the push', () {
+      expect(
+        shouldRetryCelebrationPush(
+          approvedSeller(seenOnServer: false),
+          {'seller-1'},
+        ),
+        isTrue,
+      );
+    });
+
+    test('local hit + missing server key retries the push', () {
+      expect(
+        shouldRetryCelebrationPush(approvedSeller(), {'seller-1'}),
+        isTrue,
+      );
+    });
+
+    test('server true never retries (already converged)', () {
+      expect(
+        shouldRetryCelebrationPush(
+          approvedSeller(seenOnServer: true),
+          {'seller-1'},
+        ),
+        isFalse,
+      );
+    });
+
+    test('cache miss never retries (nothing to converge)', () {
+      expect(
+        shouldRetryCelebrationPush(
+          approvedSeller(seenOnServer: false),
+          <String>{},
+        ),
+        isFalse,
+      );
+    });
+
+    test('non-seller and empty id never retry', () {
+      expect(
+        shouldRetryCelebrationPush(
+          {
+            'id': 'customer-1',
+            'role': 'customer',
+            'seller_status': 'none',
+          },
+          {'customer-1'},
+        ),
+        isFalse,
+      );
+      expect(
+        shouldRetryCelebrationPush(approvedSeller(id: ''), {''}),
+        isFalse,
+      );
+      expect(
+        shouldRetryCelebrationPush(
+          {
+            'id': 'seller-1',
+            'role': 'seller',
+            'seller_status': 'pending',
+          },
+          {'seller-1'},
+        ),
+        isFalse,
+      );
+    });
+  });
 }
