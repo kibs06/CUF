@@ -22,9 +22,14 @@ Live before the public can use it).
    - Meta → Facebook Login → Valid OAuth Redirect URIs.
 3. Enable **Skip nonce check** for Google (the native `signInWithIdToken`
    flow needs it).
-4. Auth → URL Configuration: Site URL = production portal origin; add
-   `<portal-origin>/auth/callback` (prod + `http://localhost:5173`) to
-   Redirect URLs. Confirm `solvision://auth/confirm` + `solvision://auth/recovery`
+4. Auth → URL Configuration: Site URL = production portal origin. Add
+   EACH portal's callback (they are different deployments, so each origin
+   needs its own entry — same rule as `/auth/confirm`):
+   - Admin portal: `<admin-origin>/auth/callback` (prod + `http://localhost:5173` for dev).
+   - Customer storefront: `<storefront-origin>/auth/callback`
+     (prod, e.g. `https://cufmai-portal.vercel.app/auth/callback`, + the local
+     `vite dev` origin for dev).
+   Confirm `solvision://auth/confirm` + `solvision://auth/recovery`
    are still listed (email flows are untouched).
 
 ## 2. Google Cloud

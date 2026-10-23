@@ -6,19 +6,23 @@ import AuthShell from '../components/auth/AuthShell'
 import Field from '../components/ui/Field'
 import PasswordField from '../components/ui/PasswordField'
 import { useAuth } from '../hooks/useAuth.jsx'
+import {
+  rememberPostLoginDestination,
+} from '../lib/socialAuth'
 import { requestPasswordReset } from '../lib/auth'
 import { ROLES } from '../lib/constants'
 
 export default function SignIn() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { signIn } = useAuth()
+  const { signIn, signInWithSocial } = useAuth()
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [errors, setErrors] = useState({})
   const [formError, setFormError] = useState(null)
   const [submitting, setSubmitting] = useState(false)
+  const [socialPending, setSocialPending] = useState(null)
   const [resetting, setResetting] = useState(false)
   const [resetSent, setResetSent] = useState(false)
 
@@ -205,6 +209,44 @@ export default function SignIn() {
             {submitting && <Loader2 size={15} className="animate-spin" />}
             {submitting ? 'Signing in…' : 'Sign in'}
           </button>
+
+          <div className="flex items-center gap-3">
+            <div className="h-px flex-1 bg-hairline" />
+            <span className="text-xs text-muted">or</span>
+            <div className="h-px flex-1 bg-hairline" />
+          </div>
+
+          {[
+            { provider: 'google', label: 'Continue with Google' },
+            { provider: 'facebook', label: 'Continue with Facebook' },
+          ].map(({ provider, label }) => (
+            <button
+              key={provider}
+              type="button"
+              disabled={submitting || socialPending !== null}
+              onClick={async () => {
+                setFormError(null)
+                setSocialPending(provider)
+                try {
+                  // location.state.from does not survive leaving for the
+                  // provider and coming back - stash it for /auth/callback.
+                  rememberPostLoginDestination(destination)
+                  await signInWithSocial(provider)
+                } catch (error) {
+                  setFormError(
+                    error?.message ?? 'Social sign-in failed. Please try again.',
+                  )
+                  setSocialPending(null)
+                }
+              }}
+              className="btn btn-outline w-full disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {socialPending === provider && (
+                <Loader2 size={15} className="animate-spin" />
+              )}
+              {socialPending === provider ? 'Redirecting…' : label}
+            </button>
+          ))}
         </form>
       )}
     </AuthShell>
