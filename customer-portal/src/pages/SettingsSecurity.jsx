@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { ArrowLeft, AtSign, KeyRound, Smartphone } from 'lucide-react'
 
 import PasswordForm from '../components/account/PasswordForm'
@@ -40,6 +40,8 @@ export default function SettingsSecurity() {
   const [error, setError] = useState(null)
   const [sent, setSent] = useState(null)
   const [saving, setSaving] = useState(false)
+  const location = useLocation()
+  const socialEmailMissing = location.state?.socialEmailMissing === true
 
   const currentEmail = profile?.email || user?.email || ''
 
@@ -82,6 +84,16 @@ export default function SettingsSecurity() {
           Account &amp; Security
         </h1>
       </header>
+
+      {socialEmailMissing && !currentEmail && (
+        <p
+          role="status"
+          className="mt-6 rounded-card border border-clay/40 bg-clay/[0.07] px-4 py-3 text-sm leading-relaxed text-ink"
+        >
+          You signed in with a social account that did not share an email
+          address. Add one below so order updates can reach you.
+        </p>
+      )}
 
       {sent && (
         <p

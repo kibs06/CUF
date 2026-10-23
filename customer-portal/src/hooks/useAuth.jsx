@@ -19,6 +19,11 @@ import {
   uploadAvatar as uploadAvatarRequest,
 } from '../lib/profile'
 import { supabase } from '../lib/supabase'
+import {
+  isSocialProvider,
+  socialCallbackUrl,
+  socialStartErrorMessage,
+} from '../lib/socialAuth'
 
 const AuthContext = createContext(null)
 
@@ -105,6 +110,28 @@ export function AuthProvider({ children }) {
     const nextProfile = await signInRequest({ email, password })
     setProfile(nextProfile)
     return nextProfile
+  }, [])
+
+  /**
+   * Starts a social (OAuth) sign-in. This REDIRECTS the browser to the
+   * provider - there is no session yet when it resolves. The return leg
+   * (/auth/callback) plus the init/onAuthStateChange gate above applies the
+   * same suspension enforcement as passwords: suspended accounts are signed
+   * straight back out. A social login creates no more than a plain customer
+   * profile row - sellers still apply via /signup/seller.
+   */
+  const signInWithSocial = useCallback(async (provider) => {
+    if (!isSocialProvider(provider)) {
+      throw new Error('Unsupported sign-in provider: ' + provider)
+    }
+    setAccessDenied(false)
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: socialCallbackUrl(window.location.origin),
+      },
+    })
+    if (error) throw new Error(socialStartErrorMessage(error))
   }, [])
 
   const signUp = useCallback(async (fields) => {
@@ -270,6 +297,7 @@ export function AuthProvider({ children }) {
       deniedReason: accessDeniedReason(profile),
       signIn,
       signUp,
+      signInWithSocial,
       signOut,
       refreshProfile,
       updatePassword,
@@ -288,6 +316,7 @@ export function AuthProvider({ children }) {
       accessDenied,
       signIn,
       signUp,
+      signInWithSocial,
       signOut,
       refreshProfile,
       updatePassword,

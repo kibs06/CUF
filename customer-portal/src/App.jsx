@@ -8,6 +8,7 @@ import AppLayout from './components/layout/AppLayout.jsx'
 import RouteFallback from './components/ui/RouteFallback.jsx'
 import Account from './pages/Account.jsx'
 import AuthConfirm from './pages/AuthConfirm.jsx'
+import AuthCallback from './pages/AuthCallback.jsx'
 import Cart from './pages/Cart.jsx'
 import Checkout from './pages/Checkout.jsx'
 import GcashPay from './pages/GcashPay.jsx'
@@ -112,6 +113,7 @@ export default function App() {
         */}
         <Route path="signup/seller" element={<SellerSignUp />} />
         <Route path="auth/confirm" element={<AuthConfirm />} />
+        <Route path="auth/callback" element={<AuthCallback />} />
 
         <Route element={<RequireAuth />}>
           <Route path="account" element={<Account />} />

@@ -43,7 +43,7 @@ function isEmail(value) {
  */
 export default function SignUp() {
   const navigate = useNavigate()
-  const { signUp } = useAuth()
+  const { signUp, signInWithSocial } = useAuth()
 
   const [step, setStep] = useState(0)
 
@@ -61,6 +61,7 @@ export default function SignUp() {
   const [formError, setFormError] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [awaitingEmail, setAwaitingEmail] = useState(false)
+  const [socialPending, setSocialPending] = useState(null)
 
   const fail = (next) => {
     const ok = Object.keys(next).length === 0
@@ -245,6 +246,40 @@ export default function SignUp() {
           <button type="submit" className="btn btn-primary w-full">
             Continue
           </button>
+
+          <div className="flex items-center gap-3">
+            <div className="h-px flex-1 bg-hairline" />
+            <span className="text-xs text-muted">or</span>
+            <div className="h-px flex-1 bg-hairline" />
+          </div>
+
+          {[
+            { provider: 'google', label: 'Continue with Google' },
+            { provider: 'facebook', label: 'Continue with Facebook' },
+          ].map(({ provider, label }) => (
+            <button
+              key={provider}
+              type="button"
+              disabled={submitting || socialPending !== null}
+              onClick={async () => {
+                setFormError(null)
+                setSocialPending(provider)
+                try {
+                  // No password, no confirmation mail: Supabase creates the
+                  // user and the profile row follows on the return leg.
+                  await signInWithSocial(provider)
+                } catch (error) {
+                  setFormError(
+                    error?.message ?? 'Social sign-in failed. Please try again.',
+                  )
+                  setSocialPending(null)
+                }
+              }}
+              className="btn btn-outline w-full disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {socialPending === provider ? 'Redirecting…' : label}
+            </button>
+          ))}
 
           <p className="text-center text-xs leading-relaxed text-muted">
             A shoemaker or artisan?{' '}
