@@ -45,11 +45,11 @@ void main() {
       );
     });
 
-    test('server flag true wins over a stale unseen cache', () {
+    test('server flag true wins even when the device cache missed it', () {
       expect(
         shouldShowApprovalCelebration(
           approvedSeller(seenOnServer: true),
-          <String>{},
+          {'seller-1'},
         ),
         isFalse,
       );

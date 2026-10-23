@@ -26,48 +26,42 @@ import 'auth/seller_approved_celebration_screen.dart';
 import 'customer/customer_shell.dart';
 import 'seller/seller_shell.dart';
 
-/// Pure routing rule for the one-time seller approval celebration.
-///
-/// Returns true only for an approved seller (`role == seller` +
-/// `seller_status == approved`) whose account has never confirmed the
-/// welcome — i.e. the server flag
-/// `profile['has_seen_approval_celebration']` is not true AND the device
-/// cache [celebratedIds] does not contain the user id. Every other case
-/// (customer, pending, rejected, admin, missing id, already seen on
-/// either source) returns false, meaning straight to the shell.
-///
-/// Extracted as a top-level pure function so the once-only contract is
-/// pinned by a unit test without pumping the full AuthGate harness.
+/// Returns the user id when [profile] is an approved seller with a usable
+/// id, else null. Shared guard for the two celebration predicates below.
+String? _approvedSellerId(Map<String, dynamic> profile) {
+  if (profile['role']?.toString() != AppConstants.roleSeller) return null;
+  if (profile['seller_status']?.toString() != AppConstants.statusApproved) {
+    return null;
+  }
+  final userId = profile['id']?.toString() ?? '';
+  return userId.isEmpty ? null : userId;
+}
+
+/// Pure routing rule for the one-time seller approval celebration: true
+/// only for an approved seller whose account never confirmed the welcome
+/// (server flag not true AND device cache misses the id). Everything else
+/// returns false, meaning straight to the shell.
 bool shouldShowApprovalCelebration(
   Map<String, dynamic> profile,
   Set<String> celebratedIds,
 ) {
-  if (profile['role']?.toString() != AppConstants.roleSeller) return false;
-  if (profile['seller_status']?.toString() != AppConstants.statusApproved) {
-    return false;
-  }
+  final userId = _approvedSellerId(profile);
+  if (userId == null) return false;
   if (profile['has_seen_approval_celebration'] == true) return false;
-  final userId = profile['id']?.toString() ?? '';
-  if (userId.isEmpty) return false;
   return !celebratedIds.contains(userId);
 }
 
-/// True when this device already recorded the celebration locally but the
-/// server flag is still false — i.e. a previous "Go to dashboard" tap
-/// failed its server write (offline). The next online approved-seller
-/// launch must retry the push so the once-ever promise holds cross-device.
-/// Pure so it is unit-testable without Supabase.
+/// True when this device recorded the celebration locally but the server
+/// flag is still false — a previous "Go to dashboard" tap failed its
+/// server write (offline). The next online approved-seller launch retries
+/// the push so the once-ever promise holds cross-device.
 bool shouldRetryCelebrationPush(
   Map<String, dynamic> profile,
   Set<String> celebratedIds,
 ) {
-  if (profile['role']?.toString() != AppConstants.roleSeller) return false;
-  if (profile['seller_status']?.toString() != AppConstants.statusApproved) {
-    return false;
-  }
+  final userId = _approvedSellerId(profile);
+  if (userId == null) return false;
   if (profile['has_seen_approval_celebration'] == true) return false;
-  final userId = profile['id']?.toString() ?? '';
-  if (userId.isEmpty) return false;
   return celebratedIds.contains(userId);
 }
 
@@ -145,17 +139,23 @@ class _AuthGateState extends State<AuthGate> {
   Future<void> _markCelebrated(String userId) async {
     if (!_celebratedUserIds.contains(userId)) {
       setState(() => _celebratedUserIds.add(userId));
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setStringList(
-          'seller_celebration_seen_v1',
-          _celebratedUserIds.toList(),
-        );
-      } catch (e) {
-        if (kDebugMode) debugPrint('[AuthGate] Celebration prefs save failed: $e');
-      }
+      await _persistCelebratedLocally();
     }
     await _pushCelebratedFlag(userId);
+  }
+
+  /// Writes the in-memory set through to prefs. Best-effort: a failure
+  /// only risks re-showing the welcome, never a stuck shell.
+  Future<void> _persistCelebratedLocally() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(
+        'seller_celebration_seen_v1',
+        _celebratedUserIds.toList(),
+      );
+    } catch (e) {
+      if (kDebugMode) debugPrint('[AuthGate] Celebration prefs save failed: $e');
+    }
   }
 
   /// Best-effort server write of the celebration flag. Fail-open by design:
@@ -171,22 +171,12 @@ class _AuthGateState extends State<AuthGate> {
   }
 
   /// Best-effort catch-up: if the server already knows this account saw
-  /// the celebration but this device's prefs do not (second device,
-  /// reinstall, or a previous offline tap), backfill the local cache so
-  /// the decision stays instant even before the profile fetch resolves.
-  /// Fire-and-forget; never blocks routing.
+  /// the celebration but this device's prefs do not (second device or
+  /// reinstall), backfill the local cache. Fire-and-forget.
   Future<void> _syncCelebrated(String userId) async {
     if (_celebratedUserIds.contains(userId)) return;
     _celebratedUserIds.add(userId);
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setStringList(
-        'seller_celebration_seen_v1',
-        _celebratedUserIds.toList(),
-      );
-    } catch (e) {
-      if (kDebugMode) debugPrint('[AuthGate] Celebration sync failed: $e');
-    }
+    await _persistCelebratedLocally();
   }
 
   /// Wire up auth hooks so FollowProvider loads on login and resets on logout.
