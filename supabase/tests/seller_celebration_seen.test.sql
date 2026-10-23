@@ -91,7 +91,7 @@ select throws_ok(
   $$ update public.profiles
      set store_name = 'Sneaky Store', has_seen_approval_celebration = true
      where id = 'd0000000-0000-0000-0000-000000000001' $$,
-  'P0001', 'Application details are locked after submission.',
+  'P0001', 'Application details are locked after submission. Only an admin can change them.',
   '9: flipping the flag cannot smuggle a locked store_name change'
 );
 
