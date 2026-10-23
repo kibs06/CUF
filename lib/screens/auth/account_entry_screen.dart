@@ -13,6 +13,7 @@ import '../../widgets/auth/dev_mode_badge.dart';
 import '../../widgets/auth/dev_mode_swipe_detector.dart';
 import '../../widgets/auth/full_bleed_video_background.dart';
 import '../../widgets/auth/signup_scaffold.dart';
+import '../../widgets/auth/social_signin_buttons.dart';
 import '../../widgets/auth/sole_primary_auth_button.dart';
 import '../../widgets/lockout_overlay.dart';
 import 'customer_register_screen.dart';
@@ -615,6 +616,10 @@ class _AccountEntryScreenState extends State<AccountEntryScreen>
         const SizedBox(height: AuthSpacing.s16),
         _hairline(),
         const SizedBox(height: AuthSpacing.s16),
+        // Social sign-in lives in both modes: a new customer tapping one
+        // here gets the default customer profile row, no form needed.
+        const SocialSigninButtons(),
+        const SizedBox(height: AuthSpacing.s16),
         // Switch to sign-in mode — in-place state change, NOT navigation.
         _CenteredLinkRow(
           prefix: 'Already have an account? ',
@@ -707,6 +712,10 @@ class _AccountEntryScreenState extends State<AccountEntryScreen>
                 boxShadow: _heroButtonShadow,
               ),
             ),
+            const SizedBox(height: AuthSpacing.s16),
+            // Same social buttons as create mode — account linking and
+            // new-customer one-tap sign-up both land here.
+            const SocialSigninButtons(),
             // Biometric login — doubly gated (device support AND prior
             // enrollment), so most fresh installs never see this section.
             if (_biometricAvailable && _biometricEnabled) ...[

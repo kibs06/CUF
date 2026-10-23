@@ -124,6 +124,35 @@
                 android:resource="@xml/seller_widget_info" />
         </receiver>
 
+        <!-- Facebook Login (social sign-in). App ID / client token come from
+             @string/facebook_app_id / @string/facebook_client_token — replace
+             the placeholders per docs/SOCIAL_SIGNIN_SETUP.md. -->
+        <meta-data
+            android:name="com.facebook.sdk.ApplicationId"
+            android:value="@string/facebook_app_id" />
+        <meta-data
+            android:name="com.facebook.sdk.ClientToken"
+            android:value="@string/facebook_client_token" />
+        <activity
+            android:name="com.facebook.FacebookActivity"
+            android:configChanges="keyboard|keyboardHidden|screenLayout|screenSize|orientation"
+            android:exported="true" />
+        <activity
+            android:name="com.facebook.CustomTabActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="@string/fb_login_protocol_scheme" />
+            </intent-filter>
+        </activity>
+        <!-- Authorities MUST end with the real app ID once facebook_app_id
+             is replaced (…ProviderYOUR_REAL_ID) — see setup doc. -->
+        <provider
+            android:name="com.facebook.FacebookContentProvider"
+            android:authorities="com.facebook.app.FacebookContentProvider0"
+            android:exported="true" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
@@ -147,6 +176,11 @@
     <queries>
         <!-- Required for ARCore availability check on Android 11+ (package visibility) -->
         <package android:name="com.google.ar.core" />
+        <!-- Facebook Login needs to see the Facebook app + Custom Tabs browser -->
+        <package android:name="com.facebook.katana" />
+        <intent>
+            <action android:name="android.support.customtabs.action.CustomTabsService" />
+        </intent>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>

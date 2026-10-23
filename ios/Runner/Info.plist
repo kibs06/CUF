@@ -26,6 +26,20 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- Facebook Login URL schemes (fbauth2 etc.). The fb<APP_ID> URL scheme,
+	     FacebookAppID / FacebookClientToken / FacebookDisplayName, and the
+	     Google GIDClientID + reversed-client-ID scheme all need REAL values
+	     from the Phase-0 console setup — see docs/SOCIAL_SIGNIN_SETUP.md.
+	     They are intentionally absent here (not placeholder zeros): a wrong
+	     ID fails only when that button is tapped, while a committed real ID
+	     would leak the project's credentials into the repo history. -->
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>fbapi</string>
+		<string>fb-messenger-share-api</string>
+		<string>fbauth2</string>
+		<string>fbshareextension</string>
+	</array>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

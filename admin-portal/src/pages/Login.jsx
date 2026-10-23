@@ -5,11 +5,12 @@ import { useAuth } from '../hooks/useAuth.jsx'
 import { needsMfa } from '../lib/mfa'
 
 export default function Login() {
-  const { signIn, session, isAdmin, loading, accessDenied } = useAuth()
+  const { signIn, signInWithSocial, session, isAdmin, loading, accessDenied } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [socialPending, setSocialPending] = useState(null)
 
   if (!loading && session && isAdmin) {
     // Admins with 2FA land on the code step instead of the dashboard.
@@ -76,6 +77,41 @@ export default function Login() {
             {submitting ? 'Signing in…' : 'Sign In'}
           </button>
         </form>
+
+        <div className="my-4 flex items-center gap-3">
+          <div className="h-px flex-1 bg-border" />
+          <span className="text-xs text-secondary/50">or</span>
+          <div className="h-px flex-1 bg-border" />
+        </div>
+
+        <div className="space-y-2">
+          {[
+            { provider: 'google', label: 'Continue with Google' },
+            { provider: 'facebook', label: 'Continue with Facebook' },
+          ].map(({ provider, label }) => (
+            <button
+              key={provider}
+              type="button"
+              disabled={submitting || socialPending !== null}
+              onClick={async () => {
+                setError('')
+                setSocialPending(provider)
+                try {
+                  await signInWithSocial(provider)
+                } catch (err) {
+                  setError(err.message ?? 'Social sign-in failed')
+                  setSocialPending(null)
+                }
+              }}
+              className="w-full rounded-xl border border-border bg-white px-4 py-2.5 font-medium text-secondary hover:bg-surface disabled:opacity-60"
+            >
+              {socialPending === provider ? 'Redirecting…' : label}
+            </button>
+          ))}
+        </div>
+        <p className="mt-4 text-center text-xs text-secondary/50">
+          Social sign-in is for existing admin accounts only.
+        </p>
       </div>
     </div>
   )

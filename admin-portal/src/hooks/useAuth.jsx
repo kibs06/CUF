@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { ROLES } from '../lib/constants'
 import { needsMfa } from '../lib/mfa'
+import { isSocialProvider, socialCallbackUrl, socialStartErrorMessage } from '../lib/socialAuth'
 
 const AuthContext = createContext(null)
 
@@ -142,6 +143,27 @@ export function AuthProvider({ children }) {
     return userProfile
   }
 
+  /**
+   * Starts a social (OAuth) sign-in. This REDIRECTS the browser to the
+   * provider — there is no session yet when it resolves. The return leg
+   * (`/auth/callback`) plus the init/onAuthStateChange gate above applies
+   * the same `isBlocked` enforcement as passwords: non-admins are signed
+   * straight back out, so social login can never self-provision an admin.
+   */
+  const signInWithSocial = async (provider) => {
+    if (!isSocialProvider(provider)) {
+      throw new Error(`Unsupported sign-in provider: ${provider}`)
+    }
+    setAccessDenied(false)
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: socialCallbackUrl(window.location.origin),
+      },
+    })
+    if (error) throw new Error(socialStartErrorMessage(error))
+  }
+
   const signOut = async () => {
     const uid = session?.user?.id
     if (uid) await logSessionEvent(uid, 'sign_out', profile?.role)
@@ -166,6 +188,7 @@ export function AuthProvider({ children }) {
       isAdmin: profile?.role === ROLES.ADMIN,
       mfaRequired: needsMfa(session),
       signIn,
+      signInWithSocial,
       signOut,
       refreshProfile,
     }),

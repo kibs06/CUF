@@ -572,6 +572,69 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  // ── Social sign-in (Google / Facebook) ─────────────────────────────
+  //
+  // The provider SDK already verified the identity (and usually the email),
+  // so there is no password to count failures against and no email code to
+  // wait for: a social login skips the password lockout counters AND both
+  // step-ups (email verification + new-device OTP). The device-trust row is
+  // still recorded below via the shared session bookkeeping, and a social
+  // user is never granted anything beyond the default customer profile —
+  // sellers apply, admins do not exist on the app.
+  //
+  // Returns `emailMissing: true` when the provider gave no email (common
+  // on Facebook) — the UI then asks for one before continuing.
+  Future<Map<String, dynamic>> signInWithSocial(
+    Future<Map<String, dynamic>> Function() socialCall,
+  ) async {
+    _currentUser = null;
+    _profile = null;
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final res = await socialCall();
+      _currentUser = res['user'];
+      _profile = res['profile'];
+      onLoginHook?.call(_currentUser!['id'] as String);
+
+      try {
+        await AccountManager.instance.saveCurrentSession(profile: _profile);
+      } catch (_) {
+        // Best-effort — don't block login if account saving fails.
+      }
+
+      final loginUid = _currentUser?['id'] as String?;
+      if (loginUid != null) await _logSessionEvent(loginUid, 'sign_in');
+
+      _isLoading = false;
+      notifyListeners();
+      return {
+        'success': true,
+        'emailMissing': res['emailMissing'] == true,
+      };
+    } catch (e, st) {
+      _errorMessage = friendlyAuthErrorMessage(e, stackTrace: st);
+      _isLoading = false;
+      notifyListeners();
+      return {'success': false, 'emailMissing': false};
+    }
+  }
+
+  /// Google variant of [signInWithSocial] (kept separate so the UI can
+  /// offer per-provider buttons and pass the platform's server client ID).
+  Future<Map<String, dynamic>> signInWithGoogle({
+    String? serverClientId,
+  }) =>
+      signInWithSocial(() => _auth.signInWithGoogle(
+            serverClientId: serverClientId,
+          ));
+
+  /// Facebook variant of [signInWithSocial].
+  Future<Map<String, dynamic>> signInWithFacebook() =>
+      signInWithSocial(_auth.signInWithFacebook);
+
   // Register — customer (UC001, split from the legacy unified form)
   Future<bool> signUpCustomer({
     required String fullName,

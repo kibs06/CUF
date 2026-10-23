@@ -40,6 +40,10 @@ dependencies:
   flutter_svg: ^2.0.10
   fl_chart: ^0.70.2
   supabase_flutter: ^2.10.3
+  # Social sign-in (Google + Facebook via Supabase signInWithIdToken).
+  # google_sign_in 7.x is a singleton: initialize() once, then authenticate().
+  google_sign_in: ^7.2.0
+  flutter_facebook_auth: ^7.2.0
   image_picker: ^1.1.2
   uuid: ^4.5.1
   shimmer: ^3.0.0

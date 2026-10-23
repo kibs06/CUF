@@ -108,6 +108,20 @@
          would send them looking for a problem that is not theirs. -->
     <string name="customer_widget_empty_body">Nothing to show right now.</string>
 
+    <!-- ══════════════════════════════════════════════════════════════════════
+         Facebook Login placeholders (social sign-in, Phase 0 console setup).
+
+         Replace both values with the real Meta App ID / Client Token — see
+         docs/SOCIAL_SIGNIN_SETUP.md. "0" compiles and keeps every other
+         login path working; only the Facebook button fails (with setup copy,
+         not a crash) until the real values land.
+         ══════════════════════════════════════════════════════════════════════ -->
+    <string name="facebook_app_id">0</string>
+    <string name="facebook_client_token">REPLACE_WITH_FACEBOOK_CLIENT_TOKEN</string>
+    <!-- Custom Tab redirect scheme: "fb" + app ID. Replace together with
+         facebook_app_id above (real ID => fbYOUR_REAL_ID). -->
+    <string name="fb_login_protocol_scheme">fb0</string>
+
     <!-- Preview/placeholder text, always replaced by the provider. -->
     <string name="customer_widget_placeholder_group">New arrivals</string>
     <string name="customer_widget_placeholder_name">Product name</string>
