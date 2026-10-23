@@ -52,6 +52,25 @@ bool shouldShowApprovalCelebration(
   return !celebratedIds.contains(userId);
 }
 
+/// True when this device already recorded the celebration locally but the
+/// server flag is still false — i.e. a previous "Go to dashboard" tap
+/// failed its server write (offline). The next online approved-seller
+/// launch must retry the push so the once-ever promise holds cross-device.
+/// Pure so it is unit-testable without Supabase.
+bool shouldRetryCelebrationPush(
+  Map<String, dynamic> profile,
+  Set<String> celebratedIds,
+) {
+  if (profile['role']?.toString() != AppConstants.roleSeller) return false;
+  if (profile['seller_status']?.toString() != AppConstants.statusApproved) {
+    return false;
+  }
+  if (profile['has_seen_approval_celebration'] == true) return false;
+  final userId = profile['id']?.toString() ?? '';
+  if (userId.isEmpty) return false;
+  return celebratedIds.contains(userId);
+}
+
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
 
@@ -75,6 +94,12 @@ class _AuthGateState extends State<AuthGate> {
   /// fetch wins the race against the async prefs read would re-show the
   /// celebration on every login (the very bug this set exists to prevent).
   bool _celebrationPrefsLoaded = false;
+
+  /// User ids for which this widget lifetime already attempted the
+  /// celebration-flag server push. Guards the retry in [_routeByRole] so
+  /// repeat builds do not hammer Supabase; a fresh launch gets a fresh set
+  /// and retries once.
+  final Set<String> _celebrationPushAttempted = {};
 
   /// Whether we've set up the auth hooks (login/logout) already.
   bool _hooksWired = false;
@@ -115,7 +140,8 @@ class _AuthGateState extends State<AuthGate> {
   /// SellerShell immediately, even offline), then the server flag
   /// `profiles.has_seen_approval_celebration` is set best-effort. A failed
   /// server write never blocks routing — the local flag already routed to
-  /// the shell, and the next online launch retries via [_syncCelebrated].
+  /// the shell, and the next online approved-seller launch retries the push
+  /// via [shouldRetryCelebrationPush] in [_routeByRole].
   Future<void> _markCelebrated(String userId) async {
     if (!_celebratedUserIds.contains(userId)) {
       setState(() => _celebratedUserIds.add(userId));
@@ -129,14 +155,17 @@ class _AuthGateState extends State<AuthGate> {
         if (kDebugMode) debugPrint('[AuthGate] Celebration prefs save failed: $e');
       }
     }
+    await _pushCelebratedFlag(userId);
+  }
+
+  /// Best-effort server write of the celebration flag. Fail-open by design:
+  /// a throw only logs; routing already happened on the local flag.
+  Future<void> _pushCelebratedFlag(String userId) async {
     try {
       await Supabase.instance.client
           .from('profiles')
           .update({'has_seen_approval_celebration': true}).eq('id', userId);
     } catch (e) {
-      // Fail OPEN: the local flag already routed to SellerShell. The
-      // server write is retried on the next online launch (see
-      // [_syncCelebrated] in _routeByRole).
       if (kDebugMode) debugPrint('[AuthGate] Celebration server save failed: $e');
     }
   }
@@ -451,11 +480,17 @@ class _AuthGateState extends State<AuthGate> {
           onGoToDashboard: () => _markCelebrated(userId),
         );
       } else {
-        if (profile['has_seen_approval_celebration'] == true &&
-            userId.isNotEmpty) {
-          // Backfill the device cache fire-and-forget (no setState here:
-          // routing must stay pure inside build).
-          unawaited(_syncCelebrated(userId));
+        if (userId.isNotEmpty) {
+          if (profile['has_seen_approval_celebration'] == true) {
+            // Backfill the device cache fire-and-forget (no setState here:
+            // routing must stay pure inside build).
+            unawaited(_syncCelebrated(userId));
+          } else if (shouldRetryCelebrationPush(profile, _celebratedUserIds) &&
+              _celebrationPushAttempted.add(userId)) {
+            // Local tap happened but the server write failed (offline):
+            // retry the push once per launch, still without blocking routing.
+            unawaited(_pushCelebratedFlag(userId));
+          }
         }
         target = const SellerShell();
       }
