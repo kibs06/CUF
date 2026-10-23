@@ -1,5 +1,17 @@
 [
   {
+    "latest_version": "1.0.58",
+    "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.58/app-release-1.0.58.apk",
+    "released_at": "2026-10-23",
+    "notes": [
+      "Manual size entry is now a simple 2-step wizard (cards + wheel), and small picks auto-save to Kids",
+      "Home opens instantly — your saved products show right away while fresh ones load",
+      "The catalog loads in pages as you scroll, so a growing catalog won't slow the app down",
+      "Faster app start with a shorter splash screen",
+      "More reliable 3D and try-on views"
+    ]
+  },
+  {
     "latest_version": "1.0.57",
     "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.57/app-release-1.0.57.apk",
     "released_at": "2026-10-20",
