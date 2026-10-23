@@ -154,13 +154,25 @@ class AuthService {
   Future<Map<String, dynamic>> signInWithGoogle({
     String? serverClientId,
   }) async {
+    // `google-services.json` carries no `oauth_client` entry on this
+    // project, and iOS has no GoogleService-Info.plist — so the explicit
+    // Web client ID is required. Empty means Phase-0 console setup has not
+    // landed: keep the dormant setup copy instead of failing inside the SDK.
+    final effectiveServerClientId =
+        (serverClientId ?? AppConstants.googleServerClientId).trim();
+    if (effectiveServerClientId.isEmpty) {
+      throw Exception(
+        'Google sign-in is not switched on yet. Use your email and '
+        'password for now.',
+      );
+    }
     final existing = _client.auth.currentSession;
     if (existing != null) {
       await _client.auth.signOut();
     }
 
     final googleSignIn = GoogleSignIn.instance;
-    await googleSignIn.initialize(serverClientId: serverClientId);
+    await googleSignIn.initialize(serverClientId: effectiveServerClientId);
     final account = await googleSignIn.authenticate();
     final idToken = account.authentication.idToken;
     if (idToken == null) {
