@@ -1,5 +1,16 @@
 [
   {
+    "latest_version": "1.0.59",
+    "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.59/app-release-1.0.59.apk",
+    "released_at": "2026-10-23",
+    "notes": [
+      "Native Google sign-in wiring (Android+iOS, Google-only)",
+      "Server client ID via --dart-define through to AuthService",
+      "Staged iOS GIDClientID + reversed-scheme placeholders",
+      "Setup docs with exact package, bundle, and SHA-1 values"
+    ]
+  },
+  {
     "latest_version": "1.0.58",
     "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.58/app-release-1.0.58.apk",
     "released_at": "2026-10-23",
