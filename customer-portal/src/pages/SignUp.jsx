@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import AuthErrorSummary from '../components/auth/AuthErrorSummary'
 import AuthShell from '../components/auth/AuthShell'
 import StepIndicator from '../components/auth/StepIndicator'
+import SocialButtons from '../components/auth/SocialButtons'
 import Field from '../components/ui/Field'
 import PasswordField from '../components/ui/PasswordField'
 import { useAuth } from '../hooks/useAuth.jsx'
@@ -96,6 +97,21 @@ export default function SignUp() {
     if (genderError) next.gender = genderError
 
     return fail(next)
+  }
+
+  const startSocial = async (provider) => {
+    setFormError(null)
+    setSocialPending(provider)
+    try {
+      // No password, no confirmation mail: Supabase creates the user and
+      // the profile row follows on the return leg.
+      await signInWithSocial(provider)
+    } catch (error) {
+      setFormError(
+        error?.message ?? 'Social sign-in failed. Please try again.',
+      )
+      setSocialPending(null)
+    }
   }
 
   const goNext = () => {
@@ -247,39 +263,11 @@ export default function SignUp() {
             Continue
           </button>
 
-          <div className="flex items-center gap-3">
-            <div className="h-px flex-1 bg-hairline" />
-            <span className="text-xs text-muted">or</span>
-            <div className="h-px flex-1 bg-hairline" />
-          </div>
-
-          {[
-            { provider: 'google', label: 'Continue with Google' },
-            { provider: 'facebook', label: 'Continue with Facebook' },
-          ].map(({ provider, label }) => (
-            <button
-              key={provider}
-              type="button"
-              disabled={submitting || socialPending !== null}
-              onClick={async () => {
-                setFormError(null)
-                setSocialPending(provider)
-                try {
-                  // No password, no confirmation mail: Supabase creates the
-                  // user and the profile row follows on the return leg.
-                  await signInWithSocial(provider)
-                } catch (error) {
-                  setFormError(
-                    error?.message ?? 'Social sign-in failed. Please try again.',
-                  )
-                  setSocialPending(null)
-                }
-              }}
-              className="btn btn-outline w-full disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {socialPending === provider ? 'Redirecting…' : label}
-            </button>
-          ))}
+          <SocialButtons
+            pendingProvider={socialPending}
+            disabled={submitting}
+            onSignIn={startSocial}
+          />
 
           <p className="text-center text-xs leading-relaxed text-muted">
             A shoemaker or artisan?{' '}
