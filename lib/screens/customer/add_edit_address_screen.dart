@@ -52,6 +52,8 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
   String? _searchError;
   Timer? _searchDebounce;
   bool _showPredictions = false;
+  Timer? _reverseDebounce;
+  String? _readableAddress;
 
   // ── Form state ────────────────────────────────────────────────
   final _formKey = GlobalKey<FormState>();
@@ -84,6 +86,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
   @override
   void dispose() {
     _searchDebounce?.cancel();
+    _reverseDebounce?.cancel();
     _searchController.dispose();
     _recipientNameController.dispose();
     _recipientPhoneController.dispose();
@@ -203,13 +206,24 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
     }
   }
 
+  void _scheduleReverseGeocode() {
+    _reverseDebounce?.cancel();
+    _reverseDebounce = Timer(const Duration(milliseconds: 600), () {
+      if (mounted && !_isReverseGeocoding && !_isLocating) {
+        _reverseGeocode();
+      }
+    });
+  }
+
   void _onPredictionSelected(Map<String, dynamic> prediction) {
     // Dismiss keyboard and dropdown
     FocusScope.of(context).unfocus();
+    final placeName = prediction['place_name'] as String? ?? '';
     if (mounted) {
       setState(() {
         _showPredictions = false;
-        _searchController.text = prediction['place_name'] as String? ?? '';
+        _searchController.text = placeName;
+        if (placeName.isNotEmpty) _readableAddress = placeName;
       });
     }
 
@@ -351,15 +365,16 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
 
       _currentCenter = LatLng(position.latitude, position.longitude);
       if (mounted) {
+        setState(() {
+          if (_locationMessage != null) _locationMessage = null;
+        });
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
             _mapController.move(_currentCenter, _mapController.camera.zoom);
           }
         });
-        if (_locationMessage != null) {
-          setState(() => _locationMessage = null);
-        }
       }
+      await _reverseGeocode();
     } catch (e) {
       debugPrint('Error getting current location: $e');
       if (mounted) {
@@ -381,6 +396,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
     if (!mounted) return;
     setState(() => _isReverseGeocoding = true);
 
+    String? readable;
     try {
       final geocoding = Geocoding();
       final placemarks = await geocoding.placemarkFromCoordinates(
@@ -396,12 +412,34 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
         _barangayController.text = place.thoroughfare ?? '';
         // Pre-fill street with name + subThoroughfare if available
         final streetParts = <String>[
+          if (place.name != null &&
+              place.name!.isNotEmpty &&
+              place.name != place.thoroughfare &&
+              place.name != place.locality)
+            place.name!,
           if (place.subThoroughfare != null) place.subThoroughfare!,
           if (place.thoroughfare != null) place.thoroughfare!,
         ];
         if (streetParts.isNotEmpty) {
           _streetController.text = streetParts.join(' ');
         }
+        final parts = <String>[
+          _streetController.text.trim(),
+          _barangayController.text.trim(),
+          _cityController.text.trim(),
+          _provinceController.text.trim(),
+        ].where((s) => s.isNotEmpty).toList();
+        if (parts.isEmpty) {
+          parts.addAll(<String>[
+            if ((place.locality ?? '').isNotEmpty) place.locality!,
+            if ((place.subLocality ?? '').isNotEmpty &&
+                place.subLocality != place.locality)
+              place.subLocality!,
+            if ((place.administrativeArea ?? '').isNotEmpty)
+              place.administrativeArea!,
+          ]);
+        }
+        if (parts.isNotEmpty) readable = parts.join(', ');
       }
     } catch (e) {
       debugPrint('Reverse geocoding error: $e');
@@ -409,7 +447,12 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
     }
 
     if (mounted) {
-      setState(() => _isReverseGeocoding = false);
+      setState(() {
+        _isReverseGeocoding = false;
+        if (readable != null && readable.isNotEmpty) {
+          _readableAddress = readable;
+        }
+      });
     }
   }
 
@@ -505,6 +548,7 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
                 onPositionChanged: (position, hasGesture) {
                   if (hasGesture && mounted) {
                     setState(() => _currentCenter = position.center);
+                    _scheduleReverseGeocode();
                   }
                 },
               ),
@@ -701,6 +745,35 @@ class _AddEditAddressScreenState extends State<AddEditAddressScreen> {
                   ),
                 ),
                 const SizedBox(height: 4),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    if (_isReverseGeocoding)
+                      const Padding(
+                        padding: EdgeInsets.only(right: 8),
+                        child: SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
+                    Expanded(
+                      child: Text(
+                        _readableAddress ??
+                            (_isLocating
+                                ? 'Finding your location…'
+                                : 'Locating address — drag the pin'),
+                        style: AppConstants.bodyStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
                 Text(
                   '${_currentCenter.latitude.toStringAsFixed(5)}, '
                   '${_currentCenter.longitude.toStringAsFixed(5)}',
