@@ -32,12 +32,20 @@
 	     com.solevision.app) — see docs/SOCIAL_SIGNIN_SETUP.md.
 	     A wrong ID fails only when the Google button is tapped; the secret
 	     itself stays in Supabase Dashboard → Providers → Google, never here.
-	     Facebook keys (FacebookAppID etc.) stay intentionally absent until
-	     the Meta pass — placeholders would only invite a wrong-ID failure. -->
+	     Facebook keys below are the real Meta values (App ID
+	     2848991990701177); the App Secret stays in Supabase Dashboard →
+	     Providers → Facebook, never here. -->
 	<!-- iOS OAuth client ID (Google Cloud → Credentials → iOS). Replace the
 	     placeholder with the real `…apps.googleusercontent.com` value. -->
 	<key>GIDClientID</key>
 	<string>REPLACE_WITH_GOOGLE_IOS_CLIENT_ID</string>
+	<!-- FACEBOOK LOGIN (Meta pass). -->
+	<key>FacebookAppID</key>
+	<string>2848991990701177</string>
+	<key>FacebookClientToken</key>
+	<string>a1a2d1a0f3613fbe5eb754ba3c92eccb</string>
+	<key>FacebookDisplayName</key>
+	<string>CUFMAI</string>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>fbapi</string>
@@ -64,6 +72,16 @@
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>REPLACE_WITH_REVERSED_IOS_CLIENT_ID</string>
+			</array>
+		</dict>
+		<!-- Facebook redirect back into the app (`fb` + App ID). Merged with
+		     the entries above — do NOT replace them. -->
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>facebook-login</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>fb2848991990701177</string>
 			</array>
 		</dict>
 	</array>
