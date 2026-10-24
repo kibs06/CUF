@@ -26,7 +26,11 @@ import 'foot_profile_onboarding_screen.dart';
 /// next) and the user is handed off to [FootProfileOnboardingScreen] — a
 /// separate, always-skippable step that introduces the AR foot scan.
 class CustomerRegisterScreen extends StatefulWidget {
-  const CustomerRegisterScreen({super.key});
+  const CustomerRegisterScreen({super.key, this.emailExistsOverride});
+
+  /// Test seam for the pre-submit duplicate-email check: production passes
+  /// null and the check hits Supabase via [AuthService.emailExists].
+  final Future<bool> Function(String email)? emailExistsOverride;
 
   @override
   State<CustomerRegisterScreen> createState() => _CustomerRegisterScreenState();
@@ -118,8 +122,9 @@ class _CustomerRegisterScreenState extends State<CustomerRegisterScreen> {
     try {
       // Duplicate email check FIRST — surface it inline before the account
       // is created (same behavior as before, but clearer placement).
-      final exists =
-          await AuthService.instance.emailExists(_emailController.text.trim());
+      final exists = await (widget.emailExistsOverride ??
+              AuthService.instance.emailExists)(
+          _emailController.text.trim());
       if (!mounted) return;
       if (exists) {
         setState(() {
@@ -340,6 +345,11 @@ class _CustomerRegisterScreenState extends State<CustomerRegisterScreen> {
               onChanged: (_) {
                 if (_emailExistsError != null) {
                   setState(() => _emailExistsError = null);
+                  // Re-run validation so the field's own Form error text
+                  // clears with this keystroke instead of lingering until
+                  // the next submit (only runs post-submit, which is the
+                  // sole way this error gets set).
+                  _formKey.currentState?.validate();
                 }
               },
               validator: (val) {
