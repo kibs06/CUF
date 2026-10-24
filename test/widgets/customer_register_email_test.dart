@@ -1,5 +1,7 @@
 import 'package:app/providers/auth_provider.dart';
 import 'package:app/screens/auth/customer_register_screen.dart';
+import 'package:app/screens/shared/terms_privacy_screen.dart';
+import 'package:app/widgets/sole_primary_button.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -22,11 +24,18 @@ void main() {
     return auth;
   }
 
-  Future<void> pumpRegister(WidgetTester tester) async {
+  Future<void> pumpRegister(
+    WidgetTester tester, {
+    Future<bool> Function(String email)? emailExistsOverride,
+  }) async {
     await tester.pumpWidget(
       ChangeNotifierProvider<AuthProvider>.value(
         value: stubAuth(),
-        child: const MaterialApp(home: CustomerRegisterScreen()),
+        child: MaterialApp(
+          home: CustomerRegisterScreen(
+            emailExistsOverride: emailExistsOverride,
+          ),
+        ),
       ),
     );
     await tester.pump();
@@ -78,6 +87,85 @@ void main() {
 
     expect(find.byIcon(Icons.error_outline_rounded), findsNothing);
     expect(find.text('Please enter a valid email'), findsNothing);
+    expect(find.textContaining('already exists'), findsNothing);
+  });
+
+  testWidgets('duplicate submit shows the error, next keystroke clears it', (
+    tester,
+  ) async {
+    // Force the duplicate path without Supabase: the exact bug report — a
+    // taken address submits, the inline error appears, then typing a new
+    // address must clear it (fails without the `onChanged` clear).
+    await pumpRegister(
+      tester,
+      emailExistsOverride: (_) async => true,
+    );
+
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'e.g. Maria Cobarrubias'),
+      'Test User',
+    );
+    await tester.enterText(emailField(), 'taken@gmail.com');
+
+    // Birthday is required: pick the default (25 years ago) from the picker.
+    final birthday = find.widgetWithText(
+      TextFormField,
+      'Tap to select your date of birth',
+    );
+    await tester.ensureVisible(birthday);
+    await tester.tap(birthday);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'At least 6 characters'),
+      'password123',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Re-enter your password'),
+      'password123',
+    );
+
+    // Terms require the read-and-agree flow: open the policy, scroll to the
+    // bottom to unlock the button, agree, back on the form.
+    final termsTile = find.bySemanticsLabel(
+      'I agree to the Customer Terms & Privacy Policy of CUFMAI.',
+    );
+    await tester.ensureVisible(termsTile);
+    await tester.tap(termsTile);
+    await tester.pumpAndSettle();
+    // The read-and-agree policy screen must have opened.
+    expect(find.byType(TermsPrivacyScreen), findsOneWidget);
+    final policyScroll = find.descendant(
+      of: find.byType(TermsPrivacyScreen),
+      matching: find.byType(SingleChildScrollView),
+    );
+    // Fling until the bottom unlocks the agree button (one drag may not
+    // reach the end of the full document).
+    for (var i = 0; i < 6; i++) {
+      if (find.text('I have read and I agree').evaluate().isNotEmpty) break;
+      await tester.fling(policyScroll, const Offset(0, -2000), 4000);
+      await tester.pumpAndSettle();
+    }
+    await tester.tap(find.text('I have read and I agree'));
+    await tester.pumpAndSettle();
+
+    // The scaffold header shares the title text — target the button itself.
+    final createAccount = find.widgetWithText(
+      SolePrimaryButton,
+      'Create account',
+    );
+    await tester.ensureVisible(createAccount);
+    await tester.tap(createAccount);
+    await tester.pumpAndSettle();
+
+    // The duplicate submit surfaces the inline error on the email field…
+    expect(find.textContaining('already exists'), findsOneWidget);
+
+    // …and the very next keystroke — a brand-new address — clears it.
+    await tester.enterText(emailField(), 'brandnew9247@gmail.com');
+    await tester.pumpAndSettle();
     expect(find.textContaining('already exists'), findsNothing);
   });
 }
