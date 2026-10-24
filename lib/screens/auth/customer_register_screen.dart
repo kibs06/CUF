@@ -337,6 +337,11 @@ class _CustomerRegisterScreenState extends State<CustomerRegisterScreen> {
               keyboardType: TextInputType.emailAddress,
               prefixIcon: Icons.email_outlined,
               autofillHints: const [AutofillHints.email],
+              onChanged: (_) {
+                if (_emailExistsError != null) {
+                  setState(() => _emailExistsError = null);
+                }
+              },
               validator: (val) {
                 if (val == null || val.trim().isEmpty) {
                   return 'Please enter your email';
