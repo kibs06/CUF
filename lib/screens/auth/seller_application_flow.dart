@@ -10,6 +10,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/seller_application_controller.dart';
 import '../../screens/shared/terms_privacy_screen.dart';
 import '../../services/auth_service.dart';
+import '../../utils/auth_error_messages.dart';
 import '../../services/email_otp_service.dart';
 import '../../services/seller_application_draft_store.dart';
 import '../shared/email_otp_screen.dart';
@@ -266,6 +267,13 @@ class _SellerApplicationFlowState extends State<SellerApplicationFlow> {
         return;
       }
       _controller.nextStep();
+    } catch (e) {
+      // The check never reached a verdict (offline, DNS failure, timeout,
+      // server 5xx) — say so instead of silently resetting the spinner on
+      // a step that did not advance. Mirrors the customer register submit,
+      // which toasts the same mapped message on the same failures.
+      if (!mounted) return;
+      _showError(friendlyAuthErrorMessage(e));
     } finally {
       if (mounted) setState(() => _checkingEmail = false);
     }
