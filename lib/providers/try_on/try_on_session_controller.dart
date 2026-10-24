@@ -555,6 +555,40 @@ class TryOnSessionController extends ChangeNotifier {
     );
   }
 
+  /// Whether a failed AR start may be attempted again.
+  ///
+  /// True only when a model is staged and the failure is one a second attempt
+  /// could undo: a refused or timed-out session, a declined AR install, or a
+  /// start refused because the view was not ready yet. A missing or
+  /// unavailable model, a switched-off build, or an unsupported renderer has
+  /// no retry that helps, so those stay on the fallback.
+  bool get canRetryAr =>
+      !_disposed &&
+      _modelPath != null &&
+      (_degradeReason == TryOnDegradeReason.arFailed ||
+          _degradeReason == TryOnDegradeReason.arNeedsInstall ||
+          _degradeReason == TryOnDegradeReason.arOptedOut ||
+          _degradeReason == TryOnDegradeReason.arViewNotReady);
+
+  /// Resets a failed AR start back to staged so the screen can start it again
+  /// once the platform view is (re)created.
+  ///
+  /// Returns false when there is nothing staged to retry. Never starts the
+  /// session itself: the screen's `_startArIfReady` path owns the camera
+  /// request and the `arViewReady` proof, so a retry that started here could
+  /// run before the remounted view exists (F17).
+  bool prepareArRetry() {
+    if (!canRetryAr) return false;
+    _arStarted = false;
+    _degradeReason = TryOnDegradeReason.none;
+    _failureReason = null;
+    _failureMessage = null;
+    _lastDegradeKey = null;
+    _phase = TryOnPhase.modelReady;
+    notifyListeners();
+    return true;
+  }
+
   /// **V4.9: the night-aid torch** — the AR screen's flash toggle, forwarded
   /// to the native view. Only a real session has a camera to flash; a build
   /// running the simulated feed keeps zero channel traffic (the controller's

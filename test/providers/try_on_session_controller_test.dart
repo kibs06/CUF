@@ -529,6 +529,51 @@ void main() {
       expect(controller.mode, TryOnMode.real);
     });
   });
+
+  group('prepareArRetry — one more attempt after a failed start', () {
+    test('false when nothing is staged', () {
+      final controller = controllerFor(sourceWith([]), _FakeChannel());
+      expect(controller.prepareArRetry(), isFalse);
+      expect(controller.canRetryAr, isFalse);
+    });
+
+    test('a refused session re-stages and the retry starts it', () async {
+      final bytes = bytesOf(64);
+      final source = sourceWith([rowFor(bytes)]);
+      source.files['store-1/product-1/model.glb'] = bytes;
+      final channel = _FakeChannel()
+        ..nextStart = const TryOnStartResult(
+          started: false,
+          reason: 'error',
+          message: 'denied',
+        );
+      final controller = controllerFor(source, channel);
+      await controller.prepareModel();
+      await flush();
+      expect(controller.phase, TryOnPhase.modelReady);
+
+      await controller.startAr(arViewReady: true);
+      expect(controller.degradeReason, TryOnDegradeReason.arFailed);
+      expect(controller.canRetryAr, isTrue);
+
+      expect(controller.prepareArRetry(), isTrue);
+      expect(controller.phase, TryOnPhase.modelReady);
+      expect(controller.degradeReason, TryOnDegradeReason.none);
+
+      channel.nextStart = const TryOnStartResult(started: true);
+      await controller.startAr(arViewReady: true);
+      expect(controller.degradeReason, TryOnDegradeReason.none);
+      expect(controller.phase, TryOnPhase.searching);
+    });
+
+    test('a missing model has no retry', () async {
+      final controller = controllerFor(sourceWith([]), _FakeChannel());
+      await controller.prepareModel();
+      await flush();
+      expect(controller.degradeReason, TryOnDegradeReason.modelMissing);
+      expect(controller.prepareArRetry(), isFalse);
+    });
+  });
 }
 
 /// The channel, faked: records the calls the controller makes and lets a test
