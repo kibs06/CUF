@@ -80,6 +80,10 @@ Live before the public can use it).
 - The app's Sign in screen does NOT auto-provision: a Gmail with no
   `profiles` row is routed to the Create panel (`requireExistingAccount`),
   while the Create panel's Google button still registers instantly.
+- First-time social customers see the Terms & Privacy read-and-agree
+  screen once before the home screen (tracked by
+  `profiles.terms_accepted_at`); email registrants accepted the checkbox
+  and never see it. Declining signs back out.
 - Facebook often returns **no email** — the app signs the user in anyway and
   asks them to add one in Edit Profile (the `emailMissing` return).
 - Email/password is untouched and stays: every social button is an *extra*

@@ -16,6 +16,7 @@ import '../services/email_otp_service.dart';
 import '../widgets/error_retry_widget.dart';
 import 'shared/email_otp_screen.dart';
 import 'shared/mfa_verify_screen.dart';
+import 'shared/terms_privacy_screen.dart';
 import 'admin/admin_shell.dart';
 import 'auth/account_entry_screen.dart';
 import 'auth/foot_profile_onboarding_screen.dart';
@@ -65,6 +66,26 @@ bool shouldRetryCelebrationPush(
   return celebratedIds.contains(userId);
 }
 
+/// Pure routing rule for the one-time Terms & Privacy gate: true only for
+/// a customer whose current session is social (Google/Facebook) and whose
+/// account never recorded acceptance (server timestamp missing AND this
+/// launch hasn't recorded it). Email/password users accepted via the
+/// register-screen checkbox, and sellers via the application flow, so the
+/// provider check keeps them out; legacy social accounts that predate the
+/// flag correctly see it once.
+bool shouldShowFirstTimeTerms(
+  Map<String, dynamic> profile,
+  String? provider,
+  Set<String> acceptedIds,
+) {
+  if (profile['role']?.toString() != AppConstants.roleCustomer) return false;
+  if (provider != 'google' && provider != 'facebook') return false;
+  if (profile['terms_accepted_at'] != null) return false;
+  final userId = profile['id']?.toString() ?? '';
+  if (userId.isEmpty) return false;
+  return !acceptedIds.contains(userId);
+}
+
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
 
@@ -94,6 +115,12 @@ class _AuthGateState extends State<AuthGate> {
   /// repeat builds do not hammer Supabase; a fresh launch gets a fresh set
   /// and retries once.
   final Set<String> _celebrationPushAttempted = {};
+
+  /// User ids that already cleared the one-time Terms gate in this widget
+  /// lifetime. Covers the refetch race between tapping "agree" and the
+  /// profile reload carrying the new server timestamp; the server flag is
+  /// the cross-launch source of truth.
+  final Set<String> _termsAcceptedUserIds = {};
 
   /// Whether we've set up the auth hooks (login/logout) already.
   bool _hooksWired = false;
@@ -487,7 +514,36 @@ class _AuthGateState extends State<AuthGate> {
     } else if (sellerStatus == AppConstants.statusPending) {
       target = const PendingApprovalScreen();
     } else {
-      target = const CustomerShell();
+      // One-time Terms gate for first-time SOCIAL customers (see
+      // shouldShowFirstTimeTerms): email registrants accepted the
+      // checkbox, sellers accepted in the application flow. Agree stamps
+      // the server timestamp and routes to the shell; decline or back
+      // signs out. The server flag is the cross-device truth, the
+      // in-memory set covers the refetch race inside this launch.
+      final userId = profile['id']?.toString() ?? '';
+      final provider = Supabase.instance.client.auth.currentUser?.appMetadata['provider']
+          ?.toString();
+      if (shouldShowFirstTimeTerms(profile, provider, _termsAcceptedUserIds)) {
+        target = _FirstTimeTermsGate(
+          onAgreed: () async {
+            try {
+              await _authService.markTermsAccepted();
+            } catch (e) {
+              // Fail OPEN (logged): a missing column (migration not yet
+              // applied) must never brick first login into a stuck
+              // loading screen. The gate re-shows next launch until the
+              // write succeeds — consent is retried, not skipped forever.
+              if (kDebugMode) debugPrint('[AuthGate] Terms accept failed: $e');
+            }
+            _resetProfileCache();
+            if (!mounted) return;
+            setState(() => _termsAcceptedUserIds.add(userId));
+          },
+          onDeclined: () => context.read<AuthProvider>().logout(),
+        );
+      } else {
+        target = const CustomerShell();
+      }
     }
 
     // Every shell (customer, seller, admin) sits behind the same MFA
@@ -506,6 +562,58 @@ class _AuthGateState extends State<AuthGate> {
       ),
     );
   }
+}
+
+/// One-time Terms & Privacy gate for first-time social customers. Pushes
+/// the read-and-agree Terms screen once (its agree button stays disabled
+/// until the user scrolls to the bottom); agree records acceptance via
+/// [onAgreed] and the parent routes to the shell, decline or back-button
+/// dismissal signs out via [onDeclined]. Shows loading underneath while
+/// the push is in flight. The `_prompted` flag guards repeat pushes
+/// across rebuilds within this widget lifetime.
+class _FirstTimeTermsGate extends StatefulWidget {
+  const _FirstTimeTermsGate({
+    required this.onAgreed,
+    required this.onDeclined,
+  });
+
+  final Future<void> Function() onAgreed;
+  final VoidCallback onDeclined;
+
+  @override
+  State<_FirstTimeTermsGate> createState() => _FirstTimeTermsGateState();
+}
+
+class _FirstTimeTermsGateState extends State<_FirstTimeTermsGate> {
+  bool _prompted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _prompt());
+  }
+
+  Future<void> _prompt() async {
+    if (_prompted || !mounted) return;
+    _prompted = true;
+    final agreed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => const TermsPrivacyScreen(
+          readAndAgree: true,
+          policy: CUFMAITermsPolicy.customer,
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (agreed == true) {
+      await widget.onAgreed();
+    } else {
+      widget.onDeclined();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => const _LoadingScreen();
 }
 
 /// MFA step-up gate: shows [MfaVerifyScreen] when the session is still
