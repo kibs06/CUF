@@ -463,6 +463,66 @@ void main() {
     expect(channel.calls, isEmpty);
   });
 
+  // ── The fallback names itself, and a failed start can be retried ────────
+  testWidgets('the switch off names itself instead of a silent placeholder',
+      (tester) async {
+    await pump(tester, screen(tryOnEnabled: false, modelAvailable: true));
+
+    expect(find.byKey(const ValueKey('try-on-fallback')), findsOneWidget);
+    expect(
+      find.text('Live try-on is not enabled in this build.'),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('try-on-fallback-retry')),
+      findsNothing,
+      reason: 'a switched-off build has no second attempt that helps',
+    );
+    await settle(tester);
+  });
+
+  testWidgets('a refused session explains itself and Retry restores the view',
+      (tester) async {
+    final bytes =
+        Uint8List.fromList(List<int>.generate(64, (i) => (i * 7) % 256));
+    final source = _GatedRowSource(bytes);
+    final controller = TryOnSessionController(
+      productId: 'product-1',
+      enabled: true,
+      channel: _FailOnceChannel(),
+      models: _MemoryModelService(source, bytes),
+    );
+
+    await pump(
+      tester,
+      screen(tryOnEnabled: true, modelAvailable: true, controller: controller),
+    );
+    // The first-run tutorial overlay covers the whole screen: dismiss it so
+    // the Retry tap below reaches the banner instead of the overlay.
+    await tester.tap(find.text('Got It'));
+    await tester.pump();
+    source.gate.complete();
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 100));
+    await settle(tester);
+
+    expect(find.text('The live camera could not start.'), findsOneWidget);
+    final retry = find.byKey(const ValueKey('try-on-fallback-retry'));
+    expect(retry, findsOneWidget);
+
+    await tester.tap(retry);
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 100));
+    await settle(tester);
+
+    expect(find.byKey(fakeViewKey), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('try-on-fallback')),
+      findsNothing,
+      reason: 'the retried session is real, so the sentence goes away',
+    );
+  });
+
   // ── V4.1's switch, pinned as source because no test can define it ────────
   //
   // `AppConstants.tryOnFootTrackEnabled` is a `bool.fromEnvironment`, so the
@@ -555,6 +615,31 @@ class _EmptyRowsSource implements ShoeModelDataSource {
 
   @override
   Future<Uint8List> download(String storagePath) async => Uint8List(0);
+}
+
+/// Fails the first `startSession` and answers the rest: the refused session
+/// the fallback banner explains, and the Retry it offers, in one object.
+class _FailOnceChannel extends ArTryOnChannel {
+  int starts = 0;
+
+  @override
+  Future<void> setModel(TryOnModelSpec spec) async {}
+
+  @override
+  Future<TryOnStartResult> startSession() async {
+    starts++;
+    if (starts == 1) {
+      return const TryOnStartResult(
+        started: false,
+        reason: 'error',
+        message: 'denied',
+      );
+    }
+    return const TryOnStartResult(started: true);
+  }
+
+  @override
+  void attach() {}
 }
 
 /// The channel for tests where no session may start: `startSession` answers a

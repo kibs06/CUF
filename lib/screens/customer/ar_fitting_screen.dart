@@ -125,7 +125,14 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen>
 
   /// Whether the camera request and the AR start have been made for this screen.
   /// Set once, so a second view creation or a phase change does not ask again.
+  /// Cleared by the fallback banner's Retry alongside the controller's
+  /// `prepareArRetry`, so a failed start gets exactly one more attempt.
   bool _cameraRequested = false;
+
+  /// The last fallback reason written to the log, so a rebuild storm does not
+  /// become a log storm: the answer changes at most a handful of times per
+  /// visit — the same rule the product page's `_loggedPreviewReason` follows.
+  String? _fallbackLoggedKey;
 
   /// **V4.8's rotation lock.** While this screen is open the app is pinned to
   /// portrait: the AR surface, the camera projection and the coaching column are
@@ -319,7 +326,12 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen>
         _tryOnShowingView = desired;
         // V4.22: the native view dies with the old session and a fresh view starts
         // at 1x — reset the slider with it so the two never disagree on reopen.
-        if (!desired) _cameraZoom = 1.0;
+        if (!desired) {
+          _cameraZoom = 1.0;
+          // The view is gone with the session: a Retry remounts a fresh one,
+          // and the fresh creation is what `_startArIfReady` waits for (F17).
+          _tryOnViewCreated = false;
+        }
       });
     }
     if (_tryOnShowingView && controller.phase == TryOnPhase.searching) {
@@ -378,6 +390,121 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen>
     }
     if (!mounted) return;
     await controller.startAr(arViewReady: true);
+  }
+
+  /// Why the camera-feed slot is showing the placeholder instead of the real
+  /// view, or null while the real view owns the slot.
+  ///
+  /// Null also covers "still preparing": the view is mounted while the model
+  /// resolves, so the first frames belong to it rather than to a sentence.
+  /// The screen owns the English here — the controller and the gate say *what*
+  /// happened, never how to phrase it — and `_logFallback` carries the same
+  /// answer to the log, so a release build's screenshot and its `nav_diag`
+  /// export tell the flag-off / no-model / refused-session cases apart.
+  ({String key, String message, bool retryable})? _fallback() {
+    if (_tryOnShowingView) return null;
+    final controller = _tryOn;
+    if (!widget.tryOnEnabled) {
+      return (
+        key: 'featureOff',
+        message: 'Live try-on is not enabled in this build.',
+        retryable: false,
+      );
+    }
+    if (controller == null || !widget.modelAvailable) {
+      return (
+        key: 'noModel',
+        message: 'No 3D model is available for this product yet.',
+        retryable: false,
+      );
+    }
+    switch (controller.degradeReason) {
+      case TryOnDegradeReason.none:
+        // Still preparing with the view mounted: no sentence yet.
+        return null;
+      case TryOnDegradeReason.modelMissing:
+      case TryOnDegradeReason.modelUnavailable:
+        return (
+          key: controller.degradeReason.name,
+          message: 'No 3D model is available for this product yet.',
+          retryable: false,
+        );
+      case TryOnDegradeReason.arUnsupported:
+        return (
+          key: 'arUnsupported',
+          message: 'This phone does not support AR try-on.',
+          retryable: false,
+        );
+      case TryOnDegradeReason.rendererUnsupported:
+        return (
+          key: 'rendererUnsupported',
+          message: 'This phone cannot render the 3D shoe.',
+          retryable: false,
+        );
+      case TryOnDegradeReason.arNeedsInstall:
+        return (
+          key: 'arNeedsInstall',
+          message:
+              'AR support needs to be installed before the live camera can start.',
+          retryable: true,
+        );
+      case TryOnDegradeReason.arOptedOut:
+        return (
+          key: 'arOptedOut',
+          message: 'AR setup was skipped — showing the preview instead.',
+          retryable: true,
+        );
+      case TryOnDegradeReason.arViewNotReady:
+        return (
+          key: 'arViewNotReady',
+          message: 'The AR view was not ready. Retry to start the camera.',
+          retryable: true,
+        );
+      case TryOnDegradeReason.featureOff:
+        return (
+          key: 'featureOff',
+          message: 'Live try-on is not enabled in this build.',
+          retryable: false,
+        );
+      case TryOnDegradeReason.arFailed:
+        if (controller.failureReason == 'camera_permission_denied') {
+          return (
+            key: 'cameraPermission',
+            message: 'Camera permission is needed for the live try-on.',
+            retryable: true,
+          );
+        }
+        return (
+          key: 'arFailed',
+          message: 'The live camera could not start.',
+          retryable: controller.canRetryAr,
+        );
+    }
+  }
+
+  /// Logs the fallback reason once per change — the release-visible line that
+  /// tells a placeholder-flag-off apart from a placeholder-no-model apart
+  /// from a refused AR session. Called from `build`, like the 3D box's own
+  /// `_logPreviewReason`: the answer changes a handful of times per visit.
+  void _logFallback(
+      ({String key, String message, bool retryable})? fallback) {
+    final key = fallback?.key;
+    if (key == _fallbackLoggedKey) return;
+    _fallbackLoggedKey = key;
+    if (fallback == null) return;
+    final detail = _tryOn?.failureReason;
+    debugPrint('[TryOn] fallback: ${fallback.key} — ${fallback.message}'
+        '${detail != null ? ' (native: $detail)' : ''}');
+  }
+
+  /// The fallback banner's Retry: re-stages a failed AR start and lets the
+  /// remounted platform view start it again through `_startArIfReady`.
+  void _retryTryOn() {
+    final controller = _tryOn;
+    if (controller == null) return;
+    if (!controller.prepareArRetry()) return;
+    _cameraRequested = false;
+    _startArIfReady();
   }
 
   /// The real renderer, or null so [ARViewPlaceholder] keeps its simulated feed.
@@ -546,6 +673,8 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen>
     final otherProducts = productProvider.products;
     final coach = _tryOn;
     final sizesMap = Map<String, dynamic>.from(_activeProduct['sizes'] ?? {});
+    final fallback = _fallback();
+    _logFallback(fallback);
 
     return Scaffold(
       backgroundColor: AppConstants.surfaceDark,
@@ -555,6 +684,47 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen>
           SizedBox.expand(
             child: ARViewPlaceholder(arView: _tryOnArView()),
           ),
+
+          // Why the slot is a placeholder, when it is one — and a Retry when
+          // a second attempt could undo it. Hidden while the real view owns
+          // the slot or the model is still staging.
+          if (fallback != null)
+            Positioned(
+              top: 190,
+              left: 20,
+              right: 20,
+              child: Container(
+                key: const ValueKey('try-on-fallback'),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.55),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        fallback.message,
+                        style: AppConstants.bodyStyle(
+                          fontSize: 12,
+                          color:
+                              AppConstants.inkInverse.withValues(alpha: 0.85),
+                        ),
+                      ),
+                    ),
+                    if (fallback.retryable) ...[
+                      const SizedBox(width: 8),
+                      TextButton(
+                        key: const ValueKey('try-on-fallback-retry'),
+                        onPressed: _retryTryOn,
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
 
           // Animated particle scatter effect at borders
           Positioned.fill(

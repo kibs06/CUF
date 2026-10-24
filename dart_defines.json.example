@@ -9,6 +9,10 @@
   "SHOE_MODEL_REQUEST": true,
   "ADMIN_MODEL_UPLOAD": true,
 
+  "TRY_ON_V3": false,
+  "TRY_ON_FOOT_TRACK": false,
+  "TRY_ON_PLACEHOLDER_MODEL": false,
+
   "SHOE_PREVIEW": false,
 
   "SHOE_PREVIEW_DIAGNOSTICS": false,
