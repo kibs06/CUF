@@ -21,8 +21,11 @@
   symptom in the brown-sandal screenshots.
 - `placeholder_shoe.glb` splits 1-vs-2 (height says low, width+density say
   high) → needs owner eyeball in "View in 3D" before assigning.
-- Brown slide sandal (production `shoe-models` bucket) **not yet audited** —
-  needs its public URL or `storage_path`. Owner: which product is it?
+- Brown slide sandal (production `shoe-models` bucket) **audited 2026-10-24**:
+  it is JBC Crown Leather Sandals — `inspect-glb.mjs` on the live bucket
+  bytes agrees toe at low end on all 3 signals → `-z`, and the live row
+  was set to `-z` (was the `+z` default). Owner's screenshot confirmed
+  the heel/toe-swapped render.
 
 ## Open questions for owner (STOP AND ASK)
 

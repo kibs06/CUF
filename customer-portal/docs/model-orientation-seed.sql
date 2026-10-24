@@ -5,10 +5,12 @@
 -- "View in 3D" (Phase 2.1 gate). Each block reports what it changed via
 -- the trailing SELECT. Re-run safe (idempotent by product name).
 --
--- STATUS:
---   JBC Crown Leather Sandals → '-z' PROVISIONAL (audit: all 3 signals
---     agree toe at low end on the byte-identical qa_partner_shoe_v1.glb;
---     awaiting the owner's 3D-view screenshot).
+-- STATUS (2026-10-24: APPLIED live and verified):
+--   JBC Crown Leather Sandals → '-z' (audit: all 3 signals agree toe at
+--     low end on the byte-identical qa_partner_shoe_v1.glb, re-confirmed
+--     with inspect-glb.mjs on the LIVE bucket bytes; owner's phone
+--     screenshot showed the heel/toe-swapped (upside-down) render that
+--     the wrong default predicted; live row re-read as '-z' after apply).
 --   HABÍ Woven Slides → not audited (asset not in repo); left at default.
 --   placeholder_shoe.glb → audit split 1-vs-2; left at default pending eyeball.
 
