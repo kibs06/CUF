@@ -327,6 +327,18 @@ class AuthService {
     }
   }
 
+  /// Records the first-time Terms & Privacy acceptance for the current
+  /// user (AuthGate's once-ever social gate). Idempotent: re-stamping the
+  /// timestamp is a harmless no-op, so retries are safe. Throws only when
+  /// there is no session — callers fail open and retry next launch.
+  Future<void> markTermsAccepted() async {
+    final user = _client.auth.currentUser;
+    if (user == null) throw Exception('Not signed in.');
+    await _client.from('profiles').update({
+      'terms_accepted_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', user.id);
+  }
+
   /// Creates the Supabase auth user for a CUSTOMER signup.
   ///
   /// ⚠️ Ordering contract: `public.profiles` has no `on auth.users` trigger —
