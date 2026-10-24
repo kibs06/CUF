@@ -614,6 +614,17 @@ class AuthProvider extends ChangeNotifier {
         'success': true,
         'emailMissing': res['emailMissing'] == true,
       };
+    } on UnregisteredSocialAccountException catch (e) {
+      // Sign-in screen rule: this Gmail is not registered — NOT an error.
+      // Report it to the UI so it can route to create-account instead.
+      _isLoading = false;
+      notifyListeners();
+      return {
+        'success': false,
+        'emailMissing': false,
+        'needsRegistration': true,
+        'email': e.email,
+      };
     } catch (e, st) {
       _errorMessage = friendlyAuthErrorMessage(e, stackTrace: st);
       _isLoading = false;
@@ -626,9 +637,11 @@ class AuthProvider extends ChangeNotifier {
   /// offer per-provider buttons and pass the platform's server client ID).
   Future<Map<String, dynamic>> signInWithGoogle({
     String? serverClientId,
+    bool requireExistingAccount = false,
   }) =>
       signInWithSocial(() => _auth.signInWithGoogle(
             serverClientId: serverClientId,
+            requireExistingAccount: requireExistingAccount,
           ));
 
   /// Facebook variant of [signInWithSocial].

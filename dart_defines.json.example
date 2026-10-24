@@ -3,6 +3,7 @@
   "SUPABASE_ANON_KEY": "your-anon-key-here",
   "MAPTILER_KEY": "your-maptiler-key-here",
   "SENTRY_DSN": "https://YOUR_DSN@sentry.io/PROJECT_ID",
+  "GOOGLE_SERVER_CLIENT_ID": "YOUR-WEB-CLIENT-ID.apps.googleusercontent.com",
 
   "SHOE_MODEL_UPLOAD": true,
   "SHOE_MODEL_REQUEST": true,

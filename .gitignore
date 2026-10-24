@@ -47,6 +47,7 @@ app.*.map.json
 # API keys and secrets (never commit!)
 dart_defines.json
 *.env
+docs/secrets/
 nul
 
 # Android release signing. `android/.gitignore` already excludes what the

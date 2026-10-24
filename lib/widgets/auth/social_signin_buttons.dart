@@ -20,7 +20,20 @@ import '../app_error_toast.dart';
 /// A provider account with no email (common on Facebook) still signs in —
 /// the user is asked to add one in Edit Profile afterwards.
 class SocialSigninButtons extends StatefulWidget {
-  const SocialSigninButtons({super.key});
+  const SocialSigninButtons({
+    super.key,
+    this.requireExistingAccount = false,
+    this.onNeedsRegistration,
+  });
+
+  /// When true (the Sign in screen), a Gmail with no account routes to
+  /// account creation instead of auto-provisioning a customer. The Create
+  /// screen leaves this false so one tap still registers instantly.
+  final bool requireExistingAccount;
+
+  /// Called with the Gmail address when [requireExistingAccount] bounces an
+  /// unknown address — the host switches to create mode and explains why.
+  final ValueChanged<String?>? onNeedsRegistration;
 
   @override
   State<SocialSigninButtons> createState() => _SocialSigninButtonsState();
@@ -40,6 +53,10 @@ class _SocialSigninButtonsState extends State<SocialSigninButtons> {
       final auth = Provider.of<AuthProvider>(context, listen: false);
       final result = await call();
       if (!mounted) return;
+      if (result['needsRegistration'] == true) {
+        widget.onNeedsRegistration?.call(result['email'] as String?);
+        return;
+      }
       if (result['success'] == true) {
         // AuthGate owns the post-login swap — nothing to push here.
         if (result['emailMissing'] == true) {
@@ -113,6 +130,7 @@ class _SocialSigninButtonsState extends State<SocialSigninButtons> {
                   serverClientId: AppConstants.googleServerClientId.isEmpty
                       ? null
                       : AppConstants.googleServerClientId,
+                  requireExistingAccount: widget.requireExistingAccount,
                 ),
               ),
               child: SvgPicture.string(

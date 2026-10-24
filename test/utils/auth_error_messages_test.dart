@@ -172,6 +172,34 @@ void main() {
       expect(message, isNot(contains('file.dart')));
     });
 
+    test('social setup copy passes through instead of the generic fallback',
+        () {
+      // AuthService throws these as plain Exceptions, so without an explicit
+      // pass-through the Google button can only ever read "something went
+      // wrong" — hiding the actual cause (setup not landed) from the user.
+      expect(
+        friendlyAuthErrorMessage(
+          Exception(
+            'Google sign-in is not switched on yet. Use your email and '
+            'password for now.',
+          ),
+        ),
+        'Google sign-in is not switched on yet. Use your email and '
+        'password for now.',
+      );
+      expect(
+        friendlyAuthErrorMessage(Exception('Facebook sign-in failed.')),
+        'Facebook sign-in failed.',
+      );
+    });
+
+    test('a cancelled picker reads as cancelled, not as a failure', () {
+      expect(
+        friendlyAuthErrorMessage(Exception('sign_in_canceled')),
+        'Sign-in was cancelled.',
+      );
+    });
+
     test('a transport failure never reads as a rejected password', () {
       // Measured on the emulator: with the device offline, five taps on
       // "Log In" locked the account out for 30 minutes. The copy the user

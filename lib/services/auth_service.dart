@@ -24,6 +24,22 @@ class EnsureUserResult {
   });
 }
 
+/// Thrown by [AuthService.signInWithGoogle] when `requireExistingAccount` is
+/// set and the Google account's email has no row in `profiles` yet.
+///
+/// A typed signal (not a message string) so the UI can ROUTE — switch to the
+/// create-account panel — instead of showing an error toast. It is
+/// intercepted in `AuthProvider.signInWithSocial` before the error mapper,
+/// so it never reaches `friendlyAuthErrorMessage` or the generic fallback.
+class UnregisteredSocialAccountException implements Exception {
+  final String email;
+
+  const UnregisteredSocialAccountException(this.email);
+
+  @override
+  String toString() => 'UnregisteredSocialAccountException($email)';
+}
+
 class AuthService {
   AuthService._();
 
@@ -151,8 +167,15 @@ class AuthService {
   /// audience for the ID token). Pass it explicitly when the app has no
   /// `google-services` config carrying a Web client entry; otherwise the
   /// native SDK resolves it from the platform configuration.
+  ///
+  /// When [requireExistingAccount] is true (the Sign in screen), a Google
+  /// account whose email has no `profiles` row throws
+  /// [UnregisteredSocialAccountException] BEFORE any Supabase call — so no
+  /// auth user is created and the UI can route to account creation instead
+  /// of silently provisioning a customer.
   Future<Map<String, dynamic>> signInWithGoogle({
     String? serverClientId,
+    bool requireExistingAccount = false,
   }) async {
     // `google-services.json` carries no `oauth_client` entry on this
     // project, and iOS has no GoogleService-Info.plist — so the explicit
@@ -174,6 +197,23 @@ class AuthService {
     final googleSignIn = GoogleSignIn.instance;
     await googleSignIn.initialize(serverClientId: effectiveServerClientId);
     final account = await googleSignIn.authenticate();
+    // Sign-in mode only: an unknown Gmail must NOT auto-provision a
+    // customer — bounce to the create-account panel instead. Checked here,
+    // before signInWithIdToken, so the attempt leaves no auth user behind.
+    // A failed lookup fails OPEN (normal flow): the Supabase call below
+    // surfaces a real outage as its own error rather than this blocking it.
+    if (requireExistingAccount) {
+      final googleEmail = account.email.trim();
+      if (googleEmail.isNotEmpty) {
+        bool known = true;
+        try {
+          known = await emailExists(googleEmail);
+        } catch (_) {
+          known = true;
+        }
+        if (!known) throw UnregisteredSocialAccountException(googleEmail);
+      }
+    }
     final idToken = account.authentication.idToken;
     if (idToken == null) {
       throw Exception(

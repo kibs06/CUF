@@ -77,6 +77,9 @@ Live before the public can use it).
 
 - Social proves **identity**, never **role**: new app users are `customer`s;
   sellers still apply; the portal signs non-admins straight back out.
+- The app's Sign in screen does NOT auto-provision: a Gmail with no
+  `profiles` row is routed to the Create panel (`requireExistingAccount`),
+  while the Create panel's Google button still registers instantly.
 - Facebook often returns **no email** — the app signs the user in anyway and
   asks them to add one in Edit Profile (the `emailMissing` return).
 - Email/password is untouched and stays: every social button is an *extra*
