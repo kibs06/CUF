@@ -86,7 +86,9 @@ export function useUpdateUserRole() {
  * the profile, the auth account, and owned stores/products in FK-safe order;
  * customer orders placed at a deleted store are kept with store_id = NULL;
  * line items for the deleted seller's products are removed first (live
- * order_items.product_id is NOT NULL, so SET NULL cannot preserve them).
+ * order_items.product_id is NOT NULL, so SET NULL cannot preserve them);
+ * the user's own customer orders are removed too (live
+ * orders_customer_id_fkey is NO ACTION, not CASCADE).
  * Only offer this for suspended accounts, and always confirm first.
  */
 export function useDeleteUser() {
