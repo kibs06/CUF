@@ -648,6 +648,31 @@ class AuthProvider extends ChangeNotifier {
   Future<Map<String, dynamic>> signInWithFacebook() =>
       signInWithSocial(_auth.signInWithFacebook);
 
+  /// Facebook via Supabase hosted browser OAuth (the working path — the
+  /// native SDK cannot mint the OIDC token this project requires).
+  ///
+  /// Launches the browser and returns `browserLaunched: true`; the session
+  /// arrives later on `solvision://auth/callback`, adopted by
+  /// supabase_flutter's observer, and AuthGate routes to the shell — the
+  /// same division of labour as the e-mail confirmation link. Never throws
+  /// the native "no sign-in token" error because no OIDC token is needed.
+  Future<Map<String, dynamic>> signInWithFacebookOAuth() async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      final launched = await _auth.signInWithFacebookOAuth();
+      _isLoading = false;
+      notifyListeners();
+      return {'success': false, 'browserLaunched': launched};
+    } catch (e, st) {
+      _errorMessage = friendlyAuthErrorMessage(e, stackTrace: st);
+      _isLoading = false;
+      notifyListeners();
+      return {'success': false, 'browserLaunched': false};
+    }
+  }
+
   // Register — customer (UC001, split from the legacy unified form)
   Future<bool> signUpCustomer({
     required String fullName,

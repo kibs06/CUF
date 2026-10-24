@@ -118,6 +118,45 @@ void main() {
       );
     });
 
+    test('the OAuth callback link is only the auth/callback path', () {
+      expect(
+        DeepLinkService.isOAuthCallbackLink(
+          uri('solvision://auth/callback'),
+        ),
+        isTrue,
+      );
+      // PKCE returns the code in the query; implicit in the fragment — both
+      // must still route here.
+      expect(
+        DeepLinkService.isOAuthCallbackLink(
+          uri('solvision://auth/callback?code=abc'),
+        ),
+        isTrue,
+      );
+      expect(
+        DeepLinkService.isOAuthCallbackLink(
+          uri('solvision://auth/callback#access_token=t'),
+        ),
+        isTrue,
+      );
+      expect(
+        DeepLinkService.isOAuthCallbackLink(uri('solvision://auth/confirm')),
+        isFalse,
+      );
+      expect(
+        DeepLinkService.isOAuthCallbackLink(uri('solvision://auth/recovery')),
+        isFalse,
+      );
+      expect(
+        DeepLinkService.isAuthConfirmLink(uri('solvision://auth/callback')),
+        isFalse,
+      );
+      expect(
+        DeepLinkService.isAuthRecoveryLink(uri('solvision://auth/callback')),
+        isFalse,
+      );
+    });
+
     test('the two auth e-mail links never match each other', () {
       // Same scheme, same host, different path — so a predicate that matched on
       // the scheme (or on the host alone) would send a reset into the sign-up
@@ -216,6 +255,24 @@ void main() {
         contains('redirectTo: DeepLinkService.authRecoveryRedirect'),
         reason: 'without a redirect the mailed link carries the Site URL and '
             'the app never sees the tap',
+      );
+    });
+
+    test('the OAUTH-CALLBACK constant is the scheme/host/path Android declares',
+        () {
+      final redirect = uri(DeepLinkService.oauthCallbackRedirect);
+      expect(redirect.scheme, 'solvision');
+      expect(redirect.host, 'auth');
+      expect(redirect.path, '/callback');
+      expect(
+        manifest,
+        contains(
+          'android:scheme="${redirect.scheme}" '
+          'android:host="${redirect.host}" '
+          'android:pathPrefix="${redirect.path}"',
+        ),
+        reason: 'without this path the OAuth browser return opens a browser '
+            'instead of the app',
       );
     });
 

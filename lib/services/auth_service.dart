@@ -258,6 +258,42 @@ class AuthService {
     }
   }
 
+  /// Signs in with Facebook via Supabase's hosted browser OAuth.
+  ///
+  /// Opens the provider's login page in a browser and returns `true` once
+  /// the browser is launched — the session itself arrives LATER, on the
+  /// `solvision://auth/callback` return link, which supabase_flutter's own
+  /// deep-link observer adopts automatically (PKCE `code` or implicit
+  /// `#access_token`). AuthGate's auth-state stream then routes to the
+  /// shell; nothing here waits for the return, so there is no result map.
+  ///
+  /// Why hosted instead of the native SDK: Meta's app mints the classic
+  /// OAuth session (granted scopes come back) but withholds the OIDC
+  /// AuthenticationToken this app's GoTrue project requires for
+  /// signInWithIdToken — on webOnly AND native flows. The hosted flow is
+  /// the classic server-side exchange, which needs no OIDC token.
+  ///
+  /// The Create screen calls this directly (auto-provision); the Sign-in
+  /// screen's unknown-account bounce cannot pre-check an email that only
+  /// exists AFTER the browser return, so that case is handled by matching
+  /// the returned session's email against `profiles` at the gate.
+  Future<bool> signInWithFacebookOAuth() async {
+    final existing = _client.auth.currentSession;
+    if (existing != null) {
+      await _client.auth.signOut();
+    }
+    try {
+      return await _client.auth.signInWithOAuth(
+        OAuthProvider.facebook,
+        redirectTo: DeepLinkService.oauthCallbackRedirect,
+        authScreenLaunchMode: LaunchMode.externalApplication,
+      );
+    } on AuthException catch (e) {
+      _throwIfSocialNotEnabled(e, 'Facebook');
+      rethrow;
+    }
+  }
+
   /// Signs in with the native Facebook Login SDK.
   ///
   //  iOS uses Limited Login; Android requests the `openid` scope via a
