@@ -57,6 +57,26 @@ class DeepLinkService {
   /// `test/services/password_reset_redirect_test.dart` pin the three.
   static const String authRecoveryRedirect = 'solvision://auth/recovery';
 
+  /// Where a Supabase hosted-OAuth return lands (`solvision://auth/callback`).
+  ///
+  /// Same three-place contract as the e-mail links: this constant, the
+  /// `solvision`/`auth` intent-filter in `AndroidManifest.xml` (iOS matches
+  /// the `solvision` scheme alone), and the LIVE project's Authentication →
+  /// URL Configuration → **Redirect URLs** allow-list. Supabase's own
+  /// deep-link observer adopts the session from the link's `code` (PKCE) or
+  /// `#access_token` fragment — this constant is only the routing predicate
+  /// so the app knows a social return arrived.
+  static const String oauthCallbackRedirect = 'solvision://auth/callback';
+
+  /// Whether [uri] is a Supabase hosted-OAuth return (see
+  /// [oauthCallbackRedirect]).
+  static bool isOAuthCallbackLink(Uri uri) {
+    final expected = Uri.parse(oauthCallbackRedirect);
+    return uri.scheme == expected.scheme &&
+        uri.host == expected.host &&
+        uri.path.startsWith(expected.path);
+  }
+
   /// Whether a link is one of our GCash return links.
   static bool isGcashReturn(Uri uri) =>
       uri.scheme == 'solvision' &&

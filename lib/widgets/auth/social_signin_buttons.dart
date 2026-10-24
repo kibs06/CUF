@@ -57,6 +57,17 @@ class _SocialSigninButtonsState extends State<SocialSigninButtons> {
         widget.onNeedsRegistration?.call(result['email'] as String?);
         return;
       }
+      if (result['browserLaunched'] == true) {
+        // Hosted OAuth: the browser now owns the login. The session arrives
+        // on solvision://auth/callback and AuthGate routes to the shell —
+        // nothing more to do here but release the button and say so.
+        AppErrorToast.show(
+          context,
+          message: 'Continue signing in with Facebook in your browser — '
+              'you will return here automatically.',
+        );
+        return;
+      }
       if (result['success'] == true) {
         // AuthGate owns the post-login swap — nothing to push here.
         if (result['emailMissing'] == true) {
@@ -145,7 +156,8 @@ class _SocialSigninButtonsState extends State<SocialSigninButtons> {
               busy: _pending == 'facebook',
               enabled: _pending == null,
               background: const Color(0xFF1877F2),
-              onTap: () => _signIn('facebook', auth.signInWithFacebook),
+              onTap: () =>
+                  _signIn('facebook', auth.signInWithFacebookOAuth),
               child: const Icon(
                 Icons.facebook,
                 color: Colors.white,

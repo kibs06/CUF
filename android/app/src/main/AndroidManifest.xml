@@ -79,6 +79,7 @@
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data android:scheme="solvision" android:host="auth" android:pathPrefix="/confirm"/>
                 <data android:scheme="solvision" android:host="auth" android:pathPrefix="/recovery"/>
+                <data android:scheme="solvision" android:host="auth" android:pathPrefix="/callback"/>
             </intent-filter>
             <!-- App Links for product shares (Phase B — DISABLED until a
                  custom domain exists). Shared product links open the app
