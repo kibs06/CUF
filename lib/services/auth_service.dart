@@ -278,18 +278,23 @@ class AuthService {
       );
     } else {
       // Android ONLY issues the OIDC AuthenticationToken when the login
-      // uses a LoginConfiguration, which the native plugin builds only
-      // when `nonce` is non-empty (see FacebookAuth.java login()). Without
-      // this, ClassicToken.authenticationToken is always null and every
-      // login dies at the "did not return a sign-in token" guard below.
+      // uses a LoginConfiguration (non-empty `nonce`, see FacebookAuth.java
+      // login()) AND goes through the native app/dialog handlers — the
+      // WEB_ONLY Custom-Tab flow completes classic OAuth (granted scopes
+      // come back) but never mints the OIDC token, so every webOnly login
+      // died at the "did not return a sign-in token" guard below even with
+      // openid granted. Native-with-fallback uses the installed Facebook
+      // app (key hashes are whitelisted in Meta) and falls back to a dialog
+      // that supports OIDC. Nonce padding is stripped: raw base64Url can
+      // end in '=' which some OIDC verifiers reject.
       final nonceBytes = List<int>.generate(
         16,
         (_) => Random.secure().nextInt(256),
       );
-      final nonce = base64Url.encode(nonceBytes);
+      final nonce = base64Url.encode(nonceBytes).replaceAll('=', '');
       result = await FacebookAuth.instance.login(
         permissions: const ['public_profile', 'email', 'openid'],
-        loginBehavior: LoginBehavior.webOnly,
+        loginBehavior: LoginBehavior.nativeWithFallback,
         nonce: nonce,
       );
     }
