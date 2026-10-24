@@ -227,9 +227,44 @@ String friendlyAuthErrorMessage(Object error, {StackTrace? stackTrace}) {
     debugPrint('[AuthError] Transport failure: $error');
     return authErrorNetwork;
   }
+  // Social sign-in (Google / Facebook) throws plain Exceptions whose text IS
+  // the user-safe copy — the native SDKs are not AuthExceptions, so without
+  // this they all collapse into the generic fallback and the user can never
+  // tell "not switched on yet" apart from a real failure. Only the exact
+  // copy our own AuthService throws is passed through; everything else stays
+  // generic so internal paths never leak to the UI.
+  final socialMessage = _socialUserSafeMessage(error);
+  if (socialMessage != null) return socialMessage;
   debugPrint('[AuthError] Non-auth error: $error');
   if (stackTrace != null) {
     debugPrint('[AuthError] $stackTrace');
   }
   return 'Something went wrong. Please try again.';
+}
+
+/// Returns the user-safe copy for a social-sign-in failure, or null when
+/// [error] is not one of the known user-safe social failures.
+///
+/// Pass-through is deliberately narrow: only messages constructed by
+/// `AuthService` ("Google/Facebook sign-in …") plus a user-cancelled sign-in
+/// (which every provider SDK can produce) are shown. Anything else keeps the
+/// generic fallback so SDK internals never reach the UI.
+String? _socialUserSafeMessage(Object error) {
+  final text = error.toString();
+  final lower = text.toLowerCase();
+  // The user backed out of the account picker / Login dialog. Not a failure:
+  // say so instead of "something went wrong". Checked first so a cancelled
+  // flow never matches anything below it.
+  if (lower.contains('cancel')) return 'Sign-in was cancelled.';
+  // Strip the "Exception: " prefix so the UI reads clean copy.
+  final stripped =
+      text.replaceFirst(RegExp(r'^[\w.]*Exception:\s*'), '').trim();
+  if (stripped.isEmpty) return null;
+  final strippedLower = stripped.toLowerCase();
+  if (strippedLower.startsWith('google sign-in') ||
+      strippedLower.startsWith('facebook sign-in') ||
+      strippedLower.startsWith('facebook did not')) {
+    return stripped;
+  }
+  return null;
 }

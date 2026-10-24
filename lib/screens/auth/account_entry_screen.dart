@@ -282,6 +282,23 @@ class _AccountEntryScreenState extends State<AccountEntryScreen>
     );
   }
 
+  /// A Google tap on the Sign in screen with an unregistered Gmail: switch
+  /// to create mode and say why, so the bounce never reads as a bug.
+  void _routeToCreateFor(String? email) {
+    _switchMode(AuthEntryMode.create);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          email == null || email.isEmpty
+              ? 'No account found — create one to continue.'
+              : 'No account found for $email — create one to continue.',
+        ),
+        backgroundColor: AppConstants.primary,
+      ),
+    );
+  }
+
   void _showError(String message) {
     // Root-overlay toast — floats above the video/content and the keyboard.
     AppErrorToast.show(context, message: message);
@@ -614,10 +631,11 @@ class _AccountEntryScreenState extends State<AccountEntryScreen>
           onTap: _openSeller,
         ),
         const SizedBox(height: AuthSpacing.s16),
-        _hairline(),
-        const SizedBox(height: AuthSpacing.s16),
         // Social sign-in lives in both modes: a new customer tapping one
         // here gets the default customer profile row, no form needed.
+        // No hairline above it — SocialSigninButtons already opens with its
+        // own OR divider, and a second plain line stacked above it read as a
+        // double rule.
         const SocialSigninButtons(),
         const SizedBox(height: AuthSpacing.s16),
         // Switch to sign-in mode — in-place state change, NOT navigation.
@@ -713,9 +731,13 @@ class _AccountEntryScreenState extends State<AccountEntryScreen>
               ),
             ),
             const SizedBox(height: AuthSpacing.s16),
-            // Same social buttons as create mode — account linking and
-            // new-customer one-tap sign-up both land here.
-            const SocialSigninButtons(),
+            // Same social buttons as create mode, but unknown Gmails bounce
+            // to create mode instead of auto-provisioning (sign-in is for
+            // returning users only).
+            SocialSigninButtons(
+              requireExistingAccount: true,
+              onNeedsRegistration: (email) => _routeToCreateFor(email),
+            ),
             // Biometric login — doubly gated (device support AND prior
             // enrollment), so most fresh installs never see this section.
             if (_biometricAvailable && _biometricEnabled) ...[
