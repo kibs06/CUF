@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'dart:io' show Platform;
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
@@ -275,9 +277,20 @@ class AuthService {
         loginTracking: LoginTracking.limited,
       );
     } else {
+      // Android ONLY issues the OIDC AuthenticationToken when the login
+      // uses a LoginConfiguration, which the native plugin builds only
+      // when `nonce` is non-empty (see FacebookAuth.java login()). Without
+      // this, ClassicToken.authenticationToken is always null and every
+      // login dies at the "did not return a sign-in token" guard below.
+      final nonceBytes = List<int>.generate(
+        16,
+        (_) => Random.secure().nextInt(256),
+      );
+      final nonce = base64Url.encode(nonceBytes);
       result = await FacebookAuth.instance.login(
         permissions: const ['public_profile', 'email', 'openid'],
         loginBehavior: LoginBehavior.webOnly,
+        nonce: nonce,
       );
     }
     if (result.status != LoginStatus.success) {
