@@ -147,11 +147,11 @@
                 <data android:scheme="@string/fb_login_protocol_scheme" />
             </intent-filter>
         </activity>
-        <!-- Authorities MUST end with the real app ID once facebook_app_id
-             is replaced (…ProviderYOUR_REAL_ID) — see setup doc. -->
+        <!-- Authorities end with the real app ID, matching @string/facebook_app_id
+             above — see docs/SOCIAL_SIGNIN_SETUP.md. -->
         <provider
             android:name="com.facebook.FacebookContentProvider"
-            android:authorities="com.facebook.app.FacebookContentProvider0"
+            android:authorities="com.facebook.app.FacebookContentProvider2848991990701177"
             android:exported="true" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
