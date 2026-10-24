@@ -203,12 +203,21 @@ class AuthService {
     // A failed lookup fails OPEN (normal flow): the Supabase call below
     // surfaces a real outage as its own error rather than this blocking it.
     if (requireExistingAccount) {
+      // CONTRACT: `emailExists` reads the world-readable `profiles` table
+      // with no session (any existing session was signed out above), so this
+      // check only answers correctly while that SELECT stays public. If RLS
+      // ever closes it, the lookup throws and we fail OPEN below — an
+      // unknown Gmail would auto-provision again, the exact behavior this
+      // flag exists to prevent. The debugPrint keeps that degradation
+      // visible in device logs instead of silent.
       final googleEmail = account.email.trim();
       if (googleEmail.isNotEmpty) {
         bool known = true;
         try {
           known = await emailExists(googleEmail);
-        } catch (_) {
+        } catch (e) {
+          debugPrint('[AuthError] requireExistingAccount lookup failed ($e) '
+              '— proceeding with normal sign-in.');
           known = true;
         }
         if (!known) throw UnregisteredSocialAccountException(googleEmail);
