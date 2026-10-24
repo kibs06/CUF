@@ -33,7 +33,7 @@
 	     A wrong ID fails only when the Google button is tapped; the secret
 	     itself stays in Supabase Dashboard → Providers → Google, never here.
 	     Facebook keys below are the real Meta values (App ID
-	     2848991990701177); the App Secret stays in Supabase Dashboard →
+	     28489991990701177); the App Secret stays in Supabase Dashboard →
 	     Providers → Facebook, never here. -->
 	<!-- iOS OAuth client ID (Google Cloud → Credentials → iOS). Replace the
 	     placeholder with the real `…apps.googleusercontent.com` value. -->
@@ -41,7 +41,7 @@
 	<string>REPLACE_WITH_GOOGLE_IOS_CLIENT_ID</string>
 	<!-- FACEBOOK LOGIN (Meta pass). -->
 	<key>FacebookAppID</key>
-	<string>2848991990701177</string>
+	<string>28489991990701177</string>
 	<key>FacebookClientToken</key>
 	<string>a1a2d1a0f3613fbe5eb754ba3c92eccb</string>
 	<key>FacebookDisplayName</key>
@@ -81,7 +81,7 @@
 			<string>facebook-login</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>fb2848991990701177</string>
+				<string>fb28489991990701177</string>
 			</array>
 		</dict>
 	</array>

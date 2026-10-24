@@ -151,7 +151,7 @@
              above — see docs/SOCIAL_SIGNIN_SETUP.md. -->
         <provider
             android:name="com.facebook.FacebookContentProvider"
-            android:authorities="com.facebook.app.FacebookContentProvider2848991990701177"
+            android:authorities="com.facebook.app.FacebookContentProvider28489991990701177"
             android:exported="true" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
