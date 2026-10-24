@@ -304,10 +304,22 @@ class AuthService {
       idToken = token.tokenString;
     } else if (token is ClassicToken) {
       idToken = token.authenticationToken;
+      if (idToken == null || idToken.isEmpty) {
+        // Diagnostic: Meta returned a session but no OIDC token. Surface
+        // what WAS granted so the dashboard fix is exact, not a guess.
+        debugPrint(
+          '[AuthGate] Facebook OIDC missing: granted=${token.grantedPermissions} '
+          'declined=${token.declinedPermissions} userId=${token.userId}',
+        );
+      }
     }
     if (idToken == null || idToken.isEmpty) {
+      final granted = token is ClassicToken
+          ? (token.grantedPermissions?.join(',') ?? '?')
+          : '?';
       throw Exception(
-        'Facebook did not return a sign-in token. Please try again.',
+        'Facebook did not return a sign-in token (granted: $granted). '
+        'Please try again.',
       );
     }
 
