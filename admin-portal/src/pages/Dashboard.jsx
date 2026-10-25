@@ -3,13 +3,10 @@ import { Link } from 'react-router-dom'
 import {
   AreaChart,
   Area,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
   ResponsiveContainer,
 } from 'recharts'
 import StatCard from '../components/ui/StatCard.jsx'
+import TrendPanel from '../components/ui/TrendPanel.jsx'
 import { StatCardSkeleton, TableSkeleton } from '../components/ui/Skeleton.jsx'
 import Badge from '../components/ui/Badge.jsx'
 import AvatarInitials from '../components/ui/AvatarInitials.jsx'
@@ -36,6 +33,9 @@ import {
   Truck,
   CheckCheck,
 } from 'lucide-react'
+
+const peso = String.fromCharCode(0x20B1)
+const pesoTick = (v) => (v >= 1000 ? `${peso}${Math.round(v / 100) / 10}k` : `${peso}${v}`)
 
 function MiniSpark({ data, color = '#8B5A2B' }) {
   if (!data?.length) return null
@@ -92,24 +92,13 @@ export default function Dashboard() {
     }
   }
 
-  const chartData = (() => {
-    if (!spark?.current?.length) return []
-    const prev = spark.previous ?? []
-    const half = spark.current.length
-    const prevTail = prev.slice(-half)
-    return spark.current.map((c, i) => ({
-      date: c.date,
-      count: c.count,
-      previous: prevTail[i]?.count ?? null,
-    }))
+  const trend = (() => {
+    const current = spark?.current ?? []
+    const tail = (spark?.previous ?? []).slice(-current.length)
+    const series = (key) => current.map((c, i) => ({ date: c.date, value: c[key] ?? 0, previous: tail[i]?.[key] ?? null }))
+    return { orders: series('count'), revenue: series('revenue') }
   })()
   const chartTotal = spark?.total ?? 0
-  const revenueTail = (spark?.previous ?? []).slice(-(spark?.current?.length ?? 0))
-  const revenueData = (spark?.current ?? []).map((c, i) => ({
-    date: c.date,
-    revenue: c.revenue,
-    previous: revenueTail[i]?.revenue ?? null,
-  }))
   const revenueTotal = spark?.totalRevenue ?? 0
 
   const pipe = [
@@ -361,97 +350,31 @@ export default function Dashboard() {
 
       {/* Trend charts */}
       <div className="grid gap-6 xl:grid-cols-2">
-      <section className="rounded-2xl border border-border bg-white p-6 shadow-card">
-        <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
-          <div>
-            <h2 className="text-[15px] font-bold text-ink">Orders, last 7 days</h2>
-            <p className="mt-0.5 text-[13px] text-muted">
-              {chartTotal} orders total
-              {chartData.some((d) => d.previous) ? ' (dashed line shows the week before)' : ' (not enough history yet for a comparison)'}
-            </p>
-          </div>
-          <span className="tnum font-mono text-sm font-semibold text-ink">
-            {formatCurrency(spark?.totalRevenue ?? 0)} revenue
-          </span>
-        </div>
-        <div className="h-60">
-          {chartTotal === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center rounded-xl bg-canvas px-6 text-center">
-              <p className="text-sm font-semibold text-ink">Nothing to plot yet</p>
-              <p className="mt-1 max-w-sm text-[13px] text-muted">
-                This chart fills in once storefront orders arrive. The pipeline above stays useful even on quiet days.
-              </p>
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
-                <defs>
-                  <linearGradient id="ordersFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#8B5A2B" stopOpacity={0.22} />
-                    <stop offset="100%" stopColor="#8B5A2B" stopOpacity={0.02} />
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="date" tick={{ fontSize: 12, fill: '#6B5C4E' }} tickLine={false} axisLine={{ stroke: '#EDE5DB' }} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 12, fill: '#6B5C4E' }} tickLine={false} axisLine={false} width={36} />
-                <Tooltip
-                  contentStyle={{ fontFamily: 'DM Sans, sans-serif', borderRadius: '12px', border: '1px solid #D9D0C7', fontSize: 13 }}
-                  labelFormatter={(v) => `Oct ${v}`}
-                />
-                {chartData.some((d) => d.previous != null) && (
-                  <Line type="monotone" dataKey="previous" stroke="#B9AE9F" strokeDasharray="5 4" strokeWidth={1.5} dot={false} />
-                )}
-                <Area type="monotone" dataKey="count" stroke="#8B5A2B" strokeWidth={2.25} fill="url(#ordersFill)" dot={false} />
-              </AreaChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-border bg-white p-6 shadow-card">
-        <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
-          <div>
-            <h2 className="text-[15px] font-bold text-ink">Revenue, last 7 days</h2>
-            <p className="mt-0.5 text-[13px] text-muted">
-              {revenueData.some((d) => d.previous != null) ? '(dashed line shows the week before)' : '(not enough history yet for a comparison)'}
-            </p>
-          </div>
-          <span className="tnum font-mono text-sm font-semibold text-ink">
-            {formatCurrency(revenueTotal)} total
-          </span>
-        </div>
-        <div className="h-60">
-          {revenueTotal === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center rounded-xl bg-canvas px-6 text-center">
-              <p className="text-sm font-semibold text-ink">No revenue yet</p>
-              <p className="mt-1 max-w-sm text-[13px] text-muted">
-                Paid orders will draw the revenue curve here.
-              </p>
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={revenueData} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
-                <defs>
-                  <linearGradient id="revenueFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#0E7C7B" stopOpacity={0.22} />
-                    <stop offset="100%" stopColor="#0E7C7B" stopOpacity={0.02} />
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="date" tick={{ fontSize: 12, fill: '#6B5C4E' }} tickLine={false} axisLine={{ stroke: '#EDE5DB' }} />
-                <YAxis tick={{ fontSize: 12, fill: '#6B5C4E' }} tickLine={false} axisLine={false} width={52} tickFormatter={(v) => (v >= 1000 ? `\u20B1${Math.round(v / 100) / 10}k` : `\u20B1${v}`)} />
-                <Tooltip
-                  contentStyle={{ fontFamily: 'DM Sans, sans-serif', borderRadius: '12px', border: '1px solid #D9D0C7', fontSize: 13 }}
-                  labelFormatter={(v) => `Oct ${v}`}
-                  formatter={(v) => [formatCurrency(v), 'Revenue']}
-                />
-                {revenueData.some((d) => d.previous != null) && (
-                  <Line type="monotone" dataKey="previous" stroke="#B9AE9F" strokeDasharray="5 4" strokeWidth={1.5} dot={false} />
-                )}
-                <Area type="monotone" dataKey="revenue" stroke="#0E7C7B" strokeWidth={2.25} fill="url(#revenueFill)" dot={false} />
-              </AreaChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-      </section>
+        <TrendPanel
+          title="Orders, last 7 days"
+          lead={`${chartTotal} orders total`}
+          total={`${formatCurrency(spark?.totalRevenue ?? 0)} revenue`}
+          data={trend.orders}
+          stroke="#8B5A2B"
+          gradientId="ordersFill"
+          isEmpty={chartTotal === 0}
+          emptyTitle="Nothing to plot yet"
+          emptyBody="This chart fills in once storefront orders arrive. The pipeline above stays useful on quiet days."
+          integerAxis
+        />
+        <TrendPanel
+          title="Revenue, last 7 days"
+          total={`${formatCurrency(revenueTotal)} total`}
+          data={trend.revenue}
+          stroke="#0E7C7B"
+          gradientId="revenueFill"
+          isEmpty={revenueTotal === 0}
+          emptyTitle="No revenue yet"
+          emptyBody="Paid orders will draw the revenue curve here."
+          yAxisWidth={52}
+          yTickFormatter={pesoTick}
+          tooltipFormatter={(v) => [formatCurrency(v), 'Revenue']}
+        />
       </div>
     </div>
   )
