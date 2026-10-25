@@ -14,6 +14,7 @@ import {
   isFrameUsable,
   isSweepUsable,
   lumaStats,
+  pickWidestRearLens,
   sweepFailureMessage,
 } from '../lib/footScanCapture.js'
 import {
@@ -141,10 +142,49 @@ export default function FootScan() {
     setError(null)
     setPhase(PHASES.camera)
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: false,
+      const openStream = (video) =>
+        navigator.mediaDevices.getUserMedia({ video, audio: false })
+      let stream = await openStream({
+        facingMode: 'environment',
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
       })
+      // Phones love the tight lens: the default rear camera is often the
+      // telephoto, so the foot fills the frame before the user is in
+      // position. Prefer the widest rear lens (same trick as the try-on
+      // viewer), then pin zoom to its minimum. Every step is best-effort:
+      // a refusal keeps the base stream, never a black screen.
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices()
+        const wideId = pickWidestRearLens(
+          devices.map((d) => ({ deviceId: d.deviceId, label: d.label || '', kind: d.kind })),
+        )
+        const currentId = stream.getVideoTracks()[0]?.getSettings?.().deviceId ?? null
+        if (wideId && wideId !== currentId) {
+          try {
+            const wide = await openStream({
+              deviceId: { exact: wideId },
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            })
+            stream.getTracks().forEach((t) => t.stop())
+            stream = wide
+          } catch {
+            // Requested lens refused - stay on the default lens.
+          }
+        }
+        const track = stream.getVideoTracks()[0]
+        const minZoom = track?.getCapabilities?.()?.zoom?.min
+        if (track && Number.isFinite(minZoom)) {
+          try {
+            await track.applyConstraints({ advanced: [{ zoom: minZoom }] })
+          } catch {
+            // Zoom is advisory - a refusal keeps the current framing.
+          }
+        }
+      } catch {
+        // Lens probing failed - the base stream already works.
+      }
       streamRef.current = stream
       // Wait a frame so the ref is mounted before assigning.
       requestAnimationFrame(() => {
@@ -341,24 +381,41 @@ export default function FootScan() {
       {(phase === PHASES.camera ||
         phase === PHASES.capturing ||
         phase === PHASES.reviewing) && (
-        <div className="mt-6 overflow-hidden rounded-card border border-hairline bg-black shadow-card">
+        <div className="fixed inset-0 z-40 bg-black">
           <video
             ref={videoRef}
             autoPlay
             playsInline
             muted
-            className="aspect-[4/3] w-full object-cover"
+            className="absolute inset-0 h-full w-full object-cover"
           />
-          <div className="space-y-3 bg-raised p-4">
+          {/* Top scrim: title stays readable over a bright floor. The page
+              header scrolls away underneath - this is the fullscreen one. */}
+          <div className="pointer-events-none absolute inset-x-0 top-0 bg-gradient-to-b from-black/70 to-transparent px-4 pb-10 pt-[max(1rem,env(safe-area-inset-top))]">
+            <Link
+              to="/settings/foot-size"
+              className="pointer-events-auto inline-flex items-center gap-1.5 text-xs font-semibold text-white/90"
+            >
+              <ArrowLeft size={14} strokeWidth={2} />
+              Foot size
+            </Link>
+            <p className="mt-3 text-[11px] font-semibold uppercase tracking-widest text-white/70">
+              3D foot scan
+            </p>
+            <h1 className="mt-1 font-display text-2xl font-semibold text-white">
+              Walk around your foot
+            </h1>
+          </div>
+          <div className="absolute inset-x-0 bottom-0 space-y-3 bg-gradient-to-t from-black/70 to-transparent p-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-10">
             {phase === PHASES.capturing && (
               <div>
-                <div className="h-2 overflow-hidden rounded-full bg-hairline">
+                <div className="h-2 overflow-hidden rounded-full bg-white/20">
                   <div
-                    className="h-full rounded-full bg-ink transition-[width]"
+                    className="h-full rounded-full bg-white transition-[width]"
                     style={{ width: `${Math.round(progress * 100)}%` }}
                   />
                 </div>
-                <p className="mt-2 text-xs text-muted">
+                <p className="mt-2 text-xs text-white/90">
                   {frameCount} frames · {coverage}° covered — keep going around
                 </p>
               </div>
@@ -367,35 +424,35 @@ export default function FootScan() {
               <button
                 type="button"
                 onClick={beginSweep}
-                className="inline-flex items-center gap-2 rounded-premium bg-ink px-5 py-3 text-sm font-semibold text-white"
+                className="inline-flex items-center gap-2 rounded-premium bg-white px-5 py-3 text-sm font-semibold text-black"
               >
                 Start the sweep
               </button>
             )}
             {phase === PHASES.reviewing && (
               <div className="flex flex-wrap items-center gap-3">
-                <p className="text-sm text-ink">
+                <p className="text-sm text-white">
                   {frameCount} frames · {coverage}° covered
                   {compassTracked ? ' · compass-tracked' : ' · timer-tracked'}
                 </p>
                 <button
                   type="button"
                   onClick={uploadSweep}
-                  className="inline-flex items-center gap-2 rounded-premium bg-ink px-5 py-3 text-sm font-semibold text-white"
+                  className="inline-flex items-center gap-2 rounded-premium bg-white px-5 py-3 text-sm font-semibold text-black"
                 >
                   Upload sweep
                 </button>
                 <button
                   type="button"
                   onClick={retry}
-                  className="inline-flex items-center gap-2 rounded-premium border border-hairline px-4 py-3 text-sm font-semibold text-ink"
+                  className="inline-flex items-center gap-2 rounded-premium border border-white/40 px-4 py-3 text-sm font-semibold text-white"
                 >
                   <RotateCcw size={14} strokeWidth={2} />
                   Sweep again
                 </button>
               </div>
             )}
-            {error && <p className="text-sm text-red-600">{error}</p>}
+            {error && <p className="text-sm text-red-300">{error}</p>}
           </div>
         </div>
       )}
