@@ -91,7 +91,6 @@ describe('openWidestLensStream', () => {
       enumerate: async () => DEVICES,
       stream: base,
     })
-    assert.equal(result.switched, true)
     assert.deepEqual(opened[0].deviceId, { exact: 'ultra' })
     assert.equal(base.stopped.length, 1)
   })
@@ -104,8 +103,7 @@ describe('openWidestLensStream', () => {
       enumerate: async () => DEVICES,
       stream: base,
     })
-    assert.equal(result.switched, false)
-    assert.equal(result.stream, base)
+    assert.equal(result, base)
     assert.equal(opened, 0)
   })
 

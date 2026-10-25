@@ -153,14 +153,13 @@ export default function FootScan() {
       // surfaces use. Best-effort: a refusal keeps the base stream,
       // never a black screen.
       try {
-        const switched = await openWidestLensStream({
+        stream = await openWidestLensStream({
           open: openStream,
           enumerate: () => navigator.mediaDevices.enumerateDevices(),
           stream,
           width: 1280,
           height: 720,
         })
-        stream = switched.stream
       } catch {
         // Requested lens refused - stay on the default lens.
       }
