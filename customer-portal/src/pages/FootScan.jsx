@@ -16,7 +16,7 @@ import {
   lumaStats,
   sweepFailureMessage,
 } from '../lib/footScanCapture.js'
-import { openWidestLensStream, pinMinZoom } from '../lib/wideLens.js'
+import { getZoomRange, openWidestLensStream, pinMinZoom } from '../lib/wideLens.js'
 import {
   bytesProgress,
   createFootScanJob,
@@ -88,6 +88,11 @@ export default function FootScan() {
   const [compassTracked, setCompassTracked] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [queuedJobId, setQueuedJobId] = useState(null)
+  // User-adjustable zoom for the live preview. Null range = the hardware
+  // reports no zoom control, so no slider is shown. Set when the camera
+  // starts, cleared when it stops.
+  const [zoomRange, setZoomRange] = useState(null)
+  const [zoom, setZoom] = useState(null)
 
   const videoRef = useRef(null)
   const streamRef = useRef(null)
@@ -108,6 +113,8 @@ export default function FootScan() {
     timerRef.current = null
     streamRef.current?.getTracks().forEach((t) => t.stop())
     streamRef.current = null
+    setZoomRange(null)
+    setZoom(null)
   }, [])
 
   useEffect(() => stopCamera, [stopCamera])
@@ -164,6 +171,24 @@ export default function FootScan() {
         // Requested lens refused - stay on the default lens.
       }
       await pinMinZoom(stream.getVideoTracks()[0])
+      // Expose the hardware zoom to the user: start wide (min), let
+      // them push toward 1x if the foot is too small in frame.
+      const track = stream.getVideoTracks()[0] ?? null
+      const range = getZoomRange(track)
+      if (range) {
+        setZoomRange(range)
+        let current = range.min
+        try {
+          const reported = track.getSettings?.()?.zoom
+          if (Number.isFinite(reported)) current = reported
+        } catch {
+          // Unreadable setting — the pinned min is the truth.
+        }
+        setZoom(current)
+      } else {
+        setZoomRange(null)
+        setZoom(null)
+      }
       streamRef.current = stream
       // Wait a frame so the ref is mounted before assigning.
       requestAnimationFrame(() => {
@@ -171,9 +196,27 @@ export default function FootScan() {
       })
     } catch {
       setError('Camera unavailable — allow camera access and try again.')
+      setZoomRange(null)
+      setZoom(null)
       setPhase(PHASES.intro)
     }
   }, [])
+
+  // User-driven zoom for the live preview only — the sweep keeps
+  // whatever zoom is set when it starts. Best-effort: a refusal keeps
+  // the previous zoom, never a black screen.
+  const applyZoom = useCallback(async (value) => {
+    if (!zoomRange) return
+    const clamped = Math.min(zoomRange.max, Math.max(zoomRange.min, value))
+    const track = streamRef.current?.getVideoTracks()[0] ?? null
+    if (!track) return
+    try {
+      await track.applyConstraints({ advanced: [{ zoom: clamped }] })
+      setZoom(clamped)
+    } catch {
+      // Hardware refused — stay where we are.
+    }
+  }, [zoomRange])
 
   const beginSweep = useCallback(async () => {
     framesRef.current = []
@@ -397,6 +440,43 @@ export default function FootScan() {
                 <p className="mt-2 text-xs text-white/90">
                   {frameCount} frames · {coverage}° covered — keep going around
                 </p>
+              </div>
+            )}
+            {phase === PHASES.camera && zoomRange && (
+              <div>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-muted">
+                    Zoom {zoom != null ? `${zoom.toFixed(1)}×` : ''} — locks when the sweep starts
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => applyZoom(zoomRange.min)}
+                      className="rounded-premium border border-hairline px-3 py-1.5 text-xs font-semibold text-ink"
+                    >
+                      Wide
+                    </button>
+                    {zoomRange.max >= 1 && (
+                      <button
+                        type="button"
+                        onClick={() => applyZoom(1)}
+                        className="rounded-premium border border-hairline px-3 py-1.5 text-xs font-semibold text-ink"
+                      >
+                        1×
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <input
+                  type="range"
+                  aria-label="Camera zoom"
+                  min={zoomRange.min}
+                  max={zoomRange.max}
+                  step={Math.max(0.05, Number(((zoomRange.max - zoomRange.min) / 20).toFixed(2)))}
+                  value={zoom ?? zoomRange.min}
+                  onChange={(e) => applyZoom(Number(e.target.value))}
+                  className="mt-2 w-full"
+                />
               </div>
             )}
             {phase === PHASES.camera && (
