@@ -293,7 +293,7 @@ export default function AuditLogs() {
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           {stats.map((s) => (
-            <StatCard key={s.label} label={s.label} value={s.value} icon={<FileClock size={18} />} />
+            <StatCard key={s.label} label={s.label} value={s.value} tone="neutral" Icon={FileClock} />
           ))}
         </div>
       )}

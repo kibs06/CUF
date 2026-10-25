@@ -528,13 +528,12 @@ export default function Transactions() {
             >
               <StatCard
                 label={card.label}
+                value={card.value}
                 tone={card.tone}
                 Icon={card.Icon}
                 highlight={card.highlight}
                 sparkline={card.sparkline}
-              >
-                {card.value}
-              </StatCard>
+              />
             </motion.div>
           ))
         )}

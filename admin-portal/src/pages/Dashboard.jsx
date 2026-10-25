@@ -57,12 +57,6 @@ function MiniSpark({ data, color = '#8B5A2B' }) {
   )
 }
 
-function fmtDelta(n) {
-  if (n == null) return null
-  if (n === 0) return 0
-  return (n > 0 ? '+' : '') + n
-}
-
 export default function Dashboard() {
   const { showToast } = useToast()
   const { data: stats, isLoading: statsLoading } = useDashboardStats()
@@ -156,7 +150,7 @@ export default function Dashboard() {
               Icon={ShoppingCart}
               label="Orders, last 7 days"
               value={stats?.orders7d ?? 0}
-              delta={fmtDelta(stats?.ordersDelta)}
+              delta={stats?.ordersDelta ?? null}
               caption={`${stats?.totalOrders ?? 0} all time`}
               sparkline={<MiniSpark data={spark?.current} color="#8B5A2B" />}
             />
