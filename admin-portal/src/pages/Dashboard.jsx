@@ -113,7 +113,7 @@ export default function Dashboard() {
   ]
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Summary row: what happened + where to go */}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="max-w-xl">
@@ -140,7 +140,7 @@ export default function Dashboard() {
       </div>
 
       {/* KPI row */}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
         {statsLoading ? (
           Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)
         ) : (
@@ -353,7 +353,7 @@ export default function Dashboard() {
       </div>
 
       {/* Trend chart */}
-      <section className="rounded-2xl border border-border bg-white p-5 shadow-card">
+      <section className="rounded-2xl border border-border bg-white p-6 shadow-card">
         <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
           <div>
             <h2 className="text-[15px] font-bold text-ink">Orders, last 7 days</h2>
@@ -366,7 +366,7 @@ export default function Dashboard() {
             {formatCurrency(spark?.totalRevenue ?? 0)} revenue
           </span>
         </div>
-        <div className="h-52">
+        <div className="h-60">
           {chartTotal === 0 ? (
             <div className="flex h-full flex-col items-center justify-center rounded-xl bg-canvas px-6 text-center">
               <p className="text-sm font-semibold text-ink">Nothing to plot yet</p>
