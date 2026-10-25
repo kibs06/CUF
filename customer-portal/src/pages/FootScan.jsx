@@ -14,9 +14,9 @@ import {
   isFrameUsable,
   isSweepUsable,
   lumaStats,
-  pickWidestRearLens,
   sweepFailureMessage,
 } from '../lib/footScanCapture.js'
+import { openWidestLensStream, pinMinZoom } from '../lib/wideLens.js'
 import {
   bytesProgress,
   createFootScanJob,
@@ -149,42 +149,22 @@ export default function FootScan() {
         width: { ideal: 1280 },
         height: { ideal: 720 },
       })
-      // Phones love the tight lens: the default rear camera is often the
-      // telephoto, so the foot fills the frame before the user is in
-      // position. Prefer the widest rear lens (same trick as the try-on
-      // viewer), then pin zoom to its minimum. Every step is best-effort:
-      // a refusal keeps the base stream, never a black screen.
+      // Widest lens + min zoom via the shared helper both camera
+      // surfaces use. Best-effort: a refusal keeps the base stream,
+      // never a black screen.
       try {
-        const devices = await navigator.mediaDevices.enumerateDevices()
-        const wideId = pickWidestRearLens(
-          devices.map((d) => ({ deviceId: d.deviceId, label: d.label || '', kind: d.kind })),
-        )
-        const currentId = stream.getVideoTracks()[0]?.getSettings?.().deviceId ?? null
-        if (wideId && wideId !== currentId) {
-          try {
-            const wide = await openStream({
-              deviceId: { exact: wideId },
-              width: { ideal: 1280 },
-              height: { ideal: 720 },
-            })
-            stream.getTracks().forEach((t) => t.stop())
-            stream = wide
-          } catch {
-            // Requested lens refused - stay on the default lens.
-          }
-        }
-        const track = stream.getVideoTracks()[0]
-        const minZoom = track?.getCapabilities?.()?.zoom?.min
-        if (track && Number.isFinite(minZoom)) {
-          try {
-            await track.applyConstraints({ advanced: [{ zoom: minZoom }] })
-          } catch {
-            // Zoom is advisory - a refusal keeps the current framing.
-          }
-        }
+        const switched = await openWidestLensStream({
+          open: openStream,
+          enumerate: () => navigator.mediaDevices.enumerateDevices(),
+          stream,
+          width: 1280,
+          height: 720,
+        })
+        stream = switched.stream
       } catch {
-        // Lens probing failed - the base stream already works.
+        // Requested lens refused - stay on the default lens.
       }
+      await pinMinZoom(stream.getVideoTracks()[0])
       streamRef.current = stream
       // Wait a frame so the ref is mounted before assigning.
       requestAnimationFrame(() => {

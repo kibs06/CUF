@@ -76,29 +76,11 @@ export function unwrapDelta(prevDeg, nextDeg) {
 export const HEADING_DEADBAND_DEG = 1
 
 /**
- * Widest rear lens picker - pure over an enumerated device list.
- *
- * Phones love the tight lens: the default rear camera is often the
- * telephoto, so the foot fills the frame two steps too early. Given
- * `enumerateDevices()` output as plain `{ deviceId, label, kind }`
- * objects, this picks the ultrawide rear lens when its label says so
- * and otherwise the first rear lens - never a front/selfie lens unless
- * the phone exposes nothing else. Returns a deviceId or null.
+ * Widest-lens picking lives in `wideLens.js` alongside the stream open +
+ * min-zoom pin both camera surfaces share; re-exported here so existing
+ * imports (and their tests) keep working.
  */
-export function pickWidestRearLens(devices) {
-  const videos = (Array.isArray(devices) ? devices : []).filter(
-    (d) => d && d.kind === 'videoinput' && d.deviceId,
-  )
-  if (!videos.length) return null
-  const rear = videos.filter(
-    (d) => !/front|user|selfie|internal/i.test(d.label ?? ''),
-  )
-  const pool = rear.length ? rear : videos
-  const ultra = pool.find((d) =>
-    /ultra|0\.5|0\.6|wide[\s_-]*angle/i.test(d.label ?? ''),
-  )
-  return (ultra ?? pool[0]).deviceId ?? null
-}
+export { pickWidestRearLens } from './wideLens.js';
 
 /**
  * Fused orbit tracker — one per sweep, pure (no browser APIs).
