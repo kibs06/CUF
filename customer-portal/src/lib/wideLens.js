@@ -55,9 +55,11 @@ export function getZoomRange(track) {
 
 /**
  * Open the widest rear lens, stopping the current stream on success.
- * `open` is `(constraints) => Promise<MediaStream>` (page passes a
- * `getUserMedia` wrapper), `enumerate` lists devices. Throws on failure
- * so the caller can keep its base stream - refusal is routine.
+ * Returns the live stream - the opened wide stream, or the base stream
+ * when already widest. `open` is `(constraints) => Promise<MediaStream>`
+ * (page passes a `getUserMedia` wrapper), `enumerate` lists devices.
+ * Throws on failure so the caller can keep its base stream - refusal
+ * is routine.
  */
 export async function openWidestLensStream({ open, enumerate, stream, width = 1280, height = 720 }) {
   const devices = await enumerate()
