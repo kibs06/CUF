@@ -14,9 +14,9 @@ import {
   isFrameUsable,
   isSweepUsable,
   lumaStats,
+  pickWidestRearLens,
   sweepFailureMessage,
 } from '../lib/footScanCapture.js'
-import { getZoomRange, openWidestLensStream, pinMinZoom } from '../lib/wideLens.js'
 import {
   bytesProgress,
   createFootScanJob,
@@ -75,18 +75,6 @@ async function snapshotFrame(video) {
   return blob ? { blob } : { skipped: true }
 }
 
-/**
- * Short lens names for the switcher. The 1x guess is the plain rear
- * lens — phone labels rarely say "main", so the non-ultra, non-tele
- * rear lens is it. Duplicates are numbered at list build time.
- */
-function lensDisplayName(label, total) {
-  const l = label ?? ''
-  if (/ultra|0\.5|0\.6|wide[\s_-]*angle/i.test(l)) return 'Ultra-wide'
-  if (/tele|periscope|[2-9]\s?[x×]/i.test(l)) return 'Tele'
-  return total > 1 ? '1×' : 'Rear camera'
-}
-
 export default function FootScan() {
   const { session } = useAuth()
   const navigate = useNavigate()
@@ -100,15 +88,6 @@ export default function FootScan() {
   const [compassTracked, setCompassTracked] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [queuedJobId, setQueuedJobId] = useState(null)
-  // User-adjustable zoom for the live preview. Null range = the hardware
-  // reports no zoom control, so no slider is shown. Set when the camera
-  // starts, cleared when it stops.
-  const [zoomRange, setZoomRange] = useState(null)
-  const [zoom, setZoom] = useState(null)
-  // Rear lens list for the switcher + which one is live. Empty = the
-  // phone exposed one lens (or labels unreadable), so no switcher.
-  const [rearCams, setRearCams] = useState([])
-  const [camIdx, setCamIdx] = useState(0)
 
   const videoRef = useRef(null)
   const streamRef = useRef(null)
@@ -129,10 +108,6 @@ export default function FootScan() {
     timerRef.current = null
     streamRef.current?.getTracks().forEach((t) => t.stop())
     streamRef.current = null
-    setZoomRange(null)
-    setZoom(null)
-    setRearCams([])
-    setCamIdx(0)
   }, [])
 
   useEffect(() => stopCamera, [stopCamera])
@@ -174,68 +149,41 @@ export default function FootScan() {
         width: { ideal: 1280 },
         height: { ideal: 720 },
       })
-      // Widest lens + min zoom via the shared helper both camera
-      // surfaces use. Best-effort: a refusal keeps the base stream,
-      // never a black screen.
-      try {
-        stream = await openWidestLensStream({
-          open: openStream,
-          enumerate: () => navigator.mediaDevices.enumerateDevices(),
-          stream,
-          width: 1280,
-          height: 720,
-        })
-      } catch {
-        // Requested lens refused - stay on the default lens.
-      }
-      await pinMinZoom(stream.getVideoTracks()[0])
-      // Expose the hardware zoom to the user: start wide (min), let
-      // them push toward 1x if the foot is too small in frame.
-      const track = stream.getVideoTracks()[0] ?? null
-      const range = getZoomRange(track)
-      if (range) {
-        setZoomRange(range)
-        let current = range.min
-        try {
-          const reported = track.getSettings?.()?.zoom
-          if (Number.isFinite(reported)) current = reported
-        } catch {
-          // Unreadable setting — the pinned min is the truth.
-        }
-        setZoom(current)
-      } else {
-        setZoomRange(null)
-        setZoom(null)
-      }
-      // Rear lens list for the switcher: permission is granted by now,
-      // so labels are visible. Failures hide the switcher, never the feed.
+      // Phones love the tight lens: the default rear camera is often the
+      // telephoto, so the foot fills the frame before the user is in
+      // position. Prefer the widest rear lens (same trick as the try-on
+      // viewer), then pin zoom to its minimum. Every step is best-effort:
+      // a refusal keeps the base stream, never a black screen.
       try {
         const devices = await navigator.mediaDevices.enumerateDevices()
-        const videos = devices.filter(
-          (d) => d.kind === 'videoinput' && d.deviceId,
+        const wideId = pickWidestRearLens(
+          devices.map((d) => ({ deviceId: d.deviceId, label: d.label || '', kind: d.kind })),
         )
-        const rear = videos.filter(
-          (d) => !/front|user|selfie|internal/i.test(d.label ?? ''),
-        )
-        const pool = rear.length ? rear : videos
-        const counts = {}
-        const list = pool.map((d) => {
-          let name = lensDisplayName(d.label, pool.length)
-          if (counts[name]) {
-            counts[name] += 1
-            name = `${name} ${counts[name]}`
-          } else {
-            counts[name] = 1
+        const currentId = stream.getVideoTracks()[0]?.getSettings?.().deviceId ?? null
+        if (wideId && wideId !== currentId) {
+          try {
+            const wide = await openStream({
+              deviceId: { exact: wideId },
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            })
+            stream.getTracks().forEach((t) => t.stop())
+            stream = wide
+          } catch {
+            // Requested lens refused - stay on the default lens.
           }
-          return { deviceId: d.deviceId, label: d.label || 'Camera', name }
-        })
-        if (list.length) {
-          setRearCams(list)
-          const currentId = track.getSettings?.()?.deviceId ?? null
-          setCamIdx(Math.max(0, list.findIndex((d) => d.deviceId === currentId)))
+        }
+        const track = stream.getVideoTracks()[0]
+        const minZoom = track?.getCapabilities?.()?.zoom?.min
+        if (track && Number.isFinite(minZoom)) {
+          try {
+            await track.applyConstraints({ advanced: [{ zoom: minZoom }] })
+          } catch {
+            // Zoom is advisory - a refusal keeps the current framing.
+          }
         }
       } catch {
-        // Labels unavailable — single-lens path still works.
+        // Lens probing failed - the base stream already works.
       }
       streamRef.current = stream
       // Wait a frame so the ref is mounted before assigning.
@@ -244,75 +192,9 @@ export default function FootScan() {
       })
     } catch {
       setError('Camera unavailable — allow camera access and try again.')
-      setZoomRange(null)
-      setZoom(null)
-      setRearCams([])
-      setCamIdx(0)
       setPhase(PHASES.intro)
     }
   }, [])
-
-  // User-driven zoom for the live preview only — the sweep keeps
-  // whatever zoom is set when it starts. Best-effort: a refusal keeps
-  // the previous zoom, never a black screen.
-  const applyZoom = useCallback(async (value) => {
-    if (!zoomRange) return
-    const clamped = Math.min(zoomRange.max, Math.max(zoomRange.min, value))
-    const track = streamRef.current?.getVideoTracks()[0] ?? null
-    if (!track) return
-    try {
-      await track.applyConstraints({ advanced: [{ zoom: clamped }] })
-      setZoom(clamped)
-    } catch {
-      // Hardware refused — stay where we are.
-    }
-  }, [zoomRange])
-
-  // Lens switcher — the real de-magnifier. The zoom slider only moves
-  // within one physical lens, so a tele default can never reach the
-  // main-camera 1x view; switching the lens can. Best-effort with
-  // fallback to the current lens, and the previous zoom carries over
-  // clamped into the new lens's range. Preview only — the sweep keeps
-  // whatever lens is live when it starts.
-  const switchLens = useCallback(async (index) => {
-    const next = rearCams[index]
-    if (!next || index === camIdx) return
-    setError(null)
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          deviceId: { exact: next.deviceId },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-        audio: false,
-      })
-      const old = streamRef.current
-      streamRef.current = stream
-      if (videoRef.current) videoRef.current.srcObject = stream
-      old?.getTracks().forEach((t) => t.stop())
-      const track = stream.getVideoTracks()[0] ?? null
-      const range = getZoomRange(track)
-      if (range) {
-        setZoomRange(range)
-        const target = zoom != null
-          ? Math.min(range.max, Math.max(range.min, zoom))
-          : range.min
-        try {
-          await track.applyConstraints({ advanced: [{ zoom: target }] })
-          setZoom(target)
-        } catch {
-          setZoom(range.min)
-        }
-      } else {
-        setZoomRange(null)
-        setZoom(null)
-      }
-      setCamIdx(index)
-    } catch {
-      setError('That lens refused — staying on the current one.')
-    }
-  }, [rearCams, camIdx, zoom])
 
   const beginSweep = useCallback(async () => {
     framesRef.current = []
@@ -505,7 +387,7 @@ export default function FootScan() {
             autoPlay
             playsInline
             muted
-            className="absolute inset-0 h-full w-full bg-black object-contain"
+            className="absolute inset-0 h-full w-full object-cover"
           />
           {/* Top scrim: title stays readable over a bright floor. The page
               header scrolls away underneath - this is the fullscreen one. */}
@@ -536,67 +418,6 @@ export default function FootScan() {
                 <p className="mt-2 text-xs text-white/90">
                   {frameCount} frames · {coverage}° covered — keep going around
                 </p>
-              </div>
-            )}
-            {phase === PHASES.camera && rearCams.length > 1 && (
-              <div>
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs text-white/90">
-                    Lens — 1× matches your camera app&apos;s main camera
-                  </p>
-                  <div className="flex items-center gap-2">
-                    {rearCams.map((c, i) => (
-                      <button
-                        key={c.deviceId}
-                        type="button"
-                        title={c.label}
-                        onClick={() => switchLens(i)}
-                        className={i === camIdx
-                          ? 'rounded-premium bg-white px-3 py-1.5 text-xs font-semibold text-black'
-                          : 'rounded-premium border border-white/40 px-3 py-1.5 text-xs font-semibold text-white'}
-                      >
-                        {c.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-            {phase === PHASES.camera && zoomRange && (
-              <div>
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs text-white/90">
-                    Zoom {zoom != null ? `${zoom.toFixed(1)}×` : ''} — locks when the sweep starts
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => applyZoom(zoomRange.min)}
-                      className="rounded-premium border border-white/40 px-3 py-1.5 text-xs font-semibold text-white"
-                    >
-                      Wide
-                    </button>
-                    {zoomRange.max >= 1 && (
-                      <button
-                        type="button"
-                        onClick={() => applyZoom(1)}
-                        className="rounded-premium border border-white/40 px-3 py-1.5 text-xs font-semibold text-white"
-                      >
-                        1×
-                      </button>
-                    )}
-                  </div>
-                </div>
-                <input
-                  type="range"
-                  aria-label="Camera zoom"
-                  min={zoomRange.min}
-                  max={zoomRange.max}
-                  step={Math.max(0.05, Number(((zoomRange.max - zoomRange.min) / 20).toFixed(2)))}
-                  value={zoom ?? zoomRange.min}
-                  onChange={(e) => applyZoom(Number(e.target.value))}
-                  className="mt-2 w-full accent-white"
-                />
               </div>
             )}
             {phase === PHASES.camera && (
