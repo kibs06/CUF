@@ -18,7 +18,6 @@ import {
   Settings,
   LogOut,
   Image,
-  Sparkles,
 } from 'lucide-react'
 
 const GROUPS = [
@@ -50,7 +49,6 @@ const GROUPS = [
     label: 'System',
     items: [
       { to: '/banners', label: 'Banners', icon: Image },
-      { to: '/ai', label: 'AI', icon: Sparkles },
       { to: '/audit-logs', label: 'Audit Logs', icon: ScrollText },
       { to: '/settings', label: 'Settings', icon: Settings },
     ],
