@@ -15,7 +15,7 @@ export default function DataTable({ columns, rows, rowKey = 'id', onRowClick, em
             {columns.map((col) => (
               <th
                 key={col.key}
-                className="whitespace-nowrap px-6 py-4 text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]"
+                className="whitespace-nowrap px-6 py-3 text-[13px] font-semibold text-muted"
               >
                 {col.header}
               </th>
