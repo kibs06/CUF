@@ -17,9 +17,14 @@ import {
   sweepFailureMessage,
 } from '../lib/footScanCapture.js'
 import {
+  bytesProgress,
   createFootScanJob,
   failFootScanJob,
   finishFootScanUpload,
+  listUploadedFrames,
+  retryable,
+  setFootScanUploading,
+  uploadedFrameSizes,
   uploadScanFrame,
 } from '../lib/footScanJobs.js'
 
@@ -93,6 +98,9 @@ export default function FootScan() {
   // state: it updates ~60 Hz and must never re-render the page.
   const headingRef = useRef(null)
   const trackerRef = useRef(null)
+  // The in-progress upload's job row — retained across interruptions so
+  // a retry resumes the same job instead of starting a second one.
+  const uploadJobRef = useRef(null)
 
   const stopCamera = useCallback(() => {
     window.clearInterval(timerRef.current)
@@ -150,6 +158,8 @@ export default function FootScan() {
 
   const beginSweep = useCallback(async () => {
     framesRef.current = []
+    // A new sweep is a new job: never pour fresh frames into the old row.
+    uploadJobRef.current = null
     setFrameCount(0)
     setCoverage(0)
     setProgress(0)
@@ -211,20 +221,50 @@ export default function FootScan() {
     }
     setError(null)
     setPhase(PHASES.uploading)
-    setUploadProgress(0)
-    let jobId = null
+    // Resume, not restart: the same sweep keeps its job row, and frames
+    // the bucket already holds are skipped. A drop at frame 49 resumes
+    // at frame 49 — `uploadJobRef` is what survives the interruption.
+    let jobId = uploadJobRef.current
+    const totalBytes = frames.reduce((sum, f) => sum + (f.blob?.size ?? 0), 0)
     try {
-      const job = await createFootScanJob(supabase, userId)
-      jobId = job.id
+      if (jobId) {
+        await setFootScanUploading(supabase, jobId)
+      } else {
+        const job = await createFootScanJob(supabase, userId)
+        jobId = job.id
+        uploadJobRef.current = jobId
+      }
+      // The receipt of what is already there: one listing, then skip.
+      // Remote sizes count toward progress — the bar shows bytes the
+      // bucket actually holds, never bytes the page hopes are there.
+      let doneBytes = 0
+      try {
+        const remote = uploadedFrameSizes(await listUploadedFrames(supabase, userId, jobId))
+        for (const [index, size] of remote) {
+          if (index < frames.length) doneBytes += size || frames[index].blob?.size || 0
+        }
+        var present = remote
+      } catch {
+        // Listing failed — upload everything; skips are an optimization,
+        // and upsert makes repeats harmless.
+        var present = new Map()
+      }
+      setUploadProgress(bytesProgress(doneBytes, totalBytes))
       for (let i = 0; i < frames.length; i++) {
-        await uploadScanFrame(supabase, userId, jobId, i, frames[i].angle, frames[i].blob)
-        setUploadProgress((i + 1) / frames.length)
+        if (present.has(i)) continue
+        await retryable(
+          () => uploadScanFrame(supabase, userId, jobId, i, frames[i].angle, frames[i].blob),
+          { attempts: 3 },
+        )
+        doneBytes += frames[i].blob?.size ?? 0
+        setUploadProgress(bytesProgress(doneBytes, totalBytes))
       }
       await finishFootScanUpload(supabase, jobId, {
         frameCount: frames.length,
         coverageDeg,
         headingShare: trackerRef.current?.headingShare() ?? 0,
       })
+      uploadJobRef.current = null
       // Fire-and-forget: the job row is the truth and the results page
       // polls it, so a trigger failure here must not fail the upload.
       try {
@@ -238,12 +278,17 @@ export default function FootScan() {
     } catch (err) {
       if (jobId) {
         try {
-          await failFootScanJob(supabase, jobId, 'upload_failed', err?.message ?? 'Upload failed')
+          await failFootScanJob(
+            supabase,
+            jobId,
+            'upload_interrupted',
+            'Upload paused — your frames so far are saved. Retry to resume where it stopped.',
+          )
         } catch {
           // The row update is best-effort; the message below is the truth.
         }
       }
-      setError(err?.message ?? 'Upload failed — check your connection and retry.')
+      setError('Upload paused — your frames so far are saved. Retry to resume where it stopped.')
       setPhase(PHASES.reviewing)
     }
   }, [stopCamera, userId])

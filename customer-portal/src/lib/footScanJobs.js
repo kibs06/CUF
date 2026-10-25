@@ -86,6 +86,76 @@ export async function failFootScanJob(supabase, jobId, errorCode, errorMessage) 
   if (error) throw new Error(error.message)
 }
 
+/**
+ * Run an async operation with per-frame retry (exponential backoff).
+ * Pure orchestration — `sleep` is injectable so tests never wait.
+ * Throws the last error after `attempts` tries.
+ */
+export async function retryable(operation, { attempts = 3, baseDelayMs = 500, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
+  let lastError = null
+  for (let attempt = 1; attempt <= Math.max(1, attempts); attempt++) {
+    try {
+      return await operation(attempt)
+    } catch (err) {
+      lastError = err
+      if (attempt < attempts) await sleep(baseDelayMs * 2 ** (attempt - 1))
+    }
+  }
+  throw lastError
+}
+
+/**
+ * Reopen an interrupted job for resume: `failed`/`uploading` → `uploading`.
+ * The already-uploaded frames stay in the bucket; the uploader skips them.
+ */
+export async function setFootScanUploading(supabase, jobId) {
+  const { error } = await supabase
+    .from('foot_scan_jobs')
+    .update({
+      status: 'uploading',
+      error_code: null,
+      error_message: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', jobId)
+  if (error) throw new Error(error.message)
+}
+
+/**
+ * Frames already in the bucket for this job: `[{ name, size }]`.
+ * Sizes come from the remote listing, so progress can count bytes the
+ * bucket actually holds — not bytes the page hopes are there.
+ */
+export async function listUploadedFrames(supabase, userId, jobId) {
+  const { data, error } = await supabase.storage
+    .from(FOOT_SCANS_BUCKET)
+    .list(jobFramesPrefix(userId, jobId), { limit: 100 })
+  if (error) throw new Error(error.message)
+  return (data ?? []).map((f) => ({
+    name: f.name,
+    size: Number(f.metadata?.size) || 0,
+  }))
+}
+
+/**
+ * Index → remote byte size for listed frame objects.
+ * Names are `frame-<NNN>-a<AAA>.jpg`; anything else is not ours.
+ */
+export function uploadedFrameSizes(files) {
+  const sizes = new Map()
+  for (const file of files ?? []) {
+    const match = /^frame-(\d{3})-a\d{3}\.jpg$/.exec(file?.name ?? '')
+    if (match) sizes.set(Number(match[1]), file.size || 0)
+  }
+  return sizes
+}
+
+/** Byte progress 0–1, clamped — the bar counts confirmed bytes only. */
+export function bytesProgress(doneBytes, totalBytes) {
+  if (!Number.isFinite(doneBytes) || !Number.isFinite(totalBytes) || totalBytes <= 0) return 0
+  return Math.min(1, Math.max(0, doneBytes / totalBytes))
+}
+
 /** Poll the job row (results page) — single read, caller schedules. */
 export async function getFootScanJob(supabase, jobId) {
   const { data, error } = await supabase
