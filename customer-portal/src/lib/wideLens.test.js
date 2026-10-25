@@ -83,16 +83,18 @@ describe('openWidestLensStream', () => {
   it('switches to the ultrawide and stops the old stream', async () => {
     const base = fakeStream('tele')
     const opened = []
+    const wide = fakeStream('ultra')
     const result = await openWidestLensStream({
       open: async (c) => {
         opened.push(c)
-        return fakeStream('ultra')
+        return wide
       },
       enumerate: async () => DEVICES,
       stream: base,
     })
     assert.deepEqual(opened[0].deviceId, { exact: 'ultra' })
     assert.equal(base.stopped.length, 1)
+    assert.equal(result, wide)
   })
 
   it('keeps the base stream when already widest', async () => {
