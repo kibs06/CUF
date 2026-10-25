@@ -7,14 +7,21 @@ const TILE = {
   neutral: 'bg-[#EDE5DB] text-[#6B5C4E]',
 }
 
-function Delta({ delta, invert = false }) {
+function Delta({ delta, invert = false, formatDelta }) {
   const n = Number(delta)
   if (delta == null || Number.isNaN(n)) return null
   const up = n > 0
   const flat = n === 0
   const good = invert ? !up : up
   const color = flat ? 'text-muted' : good ? 'text-[#0E7C7B]' : 'text-[#B3261E]'
-  const copy = flat ? 'No change from last week' : up ? `Up ${Math.abs(n)} from last week` : `Down ${Math.abs(n)} from last week`
+  const copy =
+    typeof formatDelta === 'function'
+      ? formatDelta(n)
+      : flat
+        ? 'No change from last week'
+        : up
+          ? `Up ${Math.abs(n)} from last week`
+          : `Down ${Math.abs(n)} from last week`
   return <span className={`tnum text-xs font-semibold ${color}`}>{copy}</span>
 }
 
@@ -34,6 +41,7 @@ export default function StatCard({
   onClick,
   active = false,
   invertDelta = false,
+  formatDelta,
 }) {
   const tile = TILE[tone] ?? TILE.neutral
   const clickable = typeof onClick === 'function'
@@ -71,7 +79,7 @@ export default function StatCard({
       <p className="mt-1.5 text-[13px] font-medium text-muted">{label}</p>
       {(delta != null || caption) && (
         <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted">
-          {delta != null && <Delta delta={delta} invert={invertDelta} />}
+          {delta != null && <Delta delta={delta} invert={invertDelta} formatDelta={formatDelta} />}
           {caption && <span className="truncate">{caption}</span>}
         </p>
       )}

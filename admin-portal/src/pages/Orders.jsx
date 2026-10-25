@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import Badge from '../components/ui/Badge.jsx'
 import Modal from '../components/ui/Modal.jsx'
 import { TableSkeleton } from '../components/ui/Skeleton.jsx'
@@ -11,16 +11,58 @@ import { Search } from 'lucide-react'
 
 const PAGE_SIZE = 20
 
+// Dashboard pipeline slugs map onto the real order statuses, so a click on
+// "Needs action" shows pending + placed + confirmed instead of just pending.
+// Anything else filters by exact status; unknown values fall back to 'all'.
+const STATUS_GROUPS = {
+  pending: ['pending', 'placed', 'confirmed'],
+  preparing: ['preparing', 'ready'],
+  shipped: ['shipped'],
+  delivered: ['received', 'delivered'],
+}
+
+const KNOWN_STATUS_FILTERS = new Set([
+  'all',
+  ...Object.keys(STATUS_GROUPS),
+  ...ORDER_STATUSES,
+])
+
+function matchesStatus(orderStatus, filter) {
+  if (!filter || filter === 'all') return true
+  const group = STATUS_GROUPS[filter]
+  if (group) return group.includes(orderStatus)
+  return orderStatus === filter
+}
+
 export default function Orders() {
   const { showToast } = useToast()
   const { data, isLoading, isError, error } = useOrders()
   const updateStatus = useUpdateOrderStatus()
+  const [searchParams, setSearchParams] = useSearchParams()
 
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState(() => {
+    const initial = searchParams.get('status') ?? 'all'
+    return KNOWN_STATUS_FILTERS.has(initial) ? initial : 'all'
+  })
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [page, setPage] = useState(1)
+  // Stay in sync when arriving via a dashboard pipeline link (or back/forward)
+  // while already on this page — the URL is the source of truth for status.
+  useEffect(() => {
+    const fromUrl = searchParams.get('status') ?? 'all'
+    const next = KNOWN_STATUS_FILTERS.has(fromUrl) ? fromUrl : 'all'
+    setStatusFilter((prev) => (prev === next ? prev : next))
+    setPage(1)
+  }, [searchParams])
+
+  const applyStatus = (value) => {
+    const next = KNOWN_STATUS_FILTERS.has(value) ? value : 'all'
+    setStatusFilter(next)
+    setPage(1)
+    setSearchParams(next === 'all' ? {} : { status: next }, { replace: true })
+  }
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [newStatus, setNewStatus] = useState('')
   const [saving, setSaving] = useState(false)
@@ -35,7 +77,7 @@ export default function Orders() {
           o.customer_name?.toLowerCase().includes(q),
       )
     }
-    if (statusFilter !== 'all') rows = rows.filter((o) => o.status === statusFilter)
+    if (statusFilter !== 'all') rows = rows.filter((o) => matchesStatus(o.status, statusFilter))
     if (dateFrom) {
       const from = new Date(dateFrom)
       rows = rows.filter((o) => new Date(o.created_at) >= from)
@@ -88,10 +130,9 @@ export default function Orders() {
           />
         </div>
         <select
-          value={statusFilter}
+          value={ORDER_STATUSES.includes(statusFilter) ? statusFilter : 'all'}
           onChange={(e) => {
-            setStatusFilter(e.target.value)
-            setPage(1)
+            applyStatus(e.target.value)
           }}
           className="rounded-xl border border-[#D9D0C7] bg-white px-4 py-2.5 text-sm text-[#3B2314] outline-none focus:border-[#8B5A2B]"
         >
