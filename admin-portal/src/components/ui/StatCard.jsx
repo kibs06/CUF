@@ -51,21 +51,23 @@ export default function StatCard({
         active ? 'border-primary ring-1 ring-primary/40' : ''
       }`}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${tile}`}>
-          {Icon ? <Icon size={18} strokeWidth={2} /> : null}
-        </div>
-        {sparkline ? <div className="h-9 w-24 shrink-0">{sparkline}</div> : null}
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[13px] font-medium text-muted">{label}</p>
+        {Icon ? (
+          <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${tile}`}>
+            <Icon size={15} strokeWidth={2} />
+          </div>
+        ) : null}
       </div>
 
-      <p className="tnum mt-4 font-mono text-[28px] font-semibold leading-none text-ink">{value}</p>
-      <p className="mt-1.5 text-[13px] font-medium text-muted">{label}</p>
+      <p className="tnum mt-2 font-mono text-[40px] font-semibold leading-none tracking-tight text-ink">{value}</p>
       {(delta != null || caption) && (
-        <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted">
+        <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted">
           {delta != null && <Delta delta={delta} invert={invertDelta} formatDelta={formatDelta} />}
           {caption && <span className="truncate">{caption}</span>}
         </p>
       )}
+      {sparkline ? <div className="mt-3 h-10 w-full">{sparkline}</div> : null}
     </Tag>
   )
 }
