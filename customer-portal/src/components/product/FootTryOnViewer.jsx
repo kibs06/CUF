@@ -25,7 +25,6 @@ import {
   normalizeForwardAxis,
   normalizeModelScale,
 } from '../../lib/modelNormalization.js'
-import { getZoomRange, pickWidestRearLens } from '../../lib/wideLens.js'
 
 /**
  * **Foot-tracked try-on (beta)** — the shoe stuck to the foot, in the browser.
@@ -363,8 +362,9 @@ export default function FootTryOnViewer({ open, url, name, onClose, forwardAxis 
           const currentId =
             track.camTrack?.getSettings?.().deviceId ?? null
           if (!track.wantDeviceId) {
-            const wideId = pickWidestRearLens(devices)
-            const ultra = wideId ? list.find((d) => d.deviceId === wideId) : undefined
+            const ultra = list.find((d) =>
+              /ultra|0\.5|0\.6|wide.*angle/i.test(d.label),
+            )
             if (ultra && ultra.deviceId !== currentId) {
               try {
                 const wide = await openStream({
@@ -406,12 +406,16 @@ export default function FootTryOnViewer({ open, url, name, onClose, forwardAxis 
       // cameras open part-way into their zoom range, which reads as a
       // broken zoomed-in feed next to the camera app.
       try {
-        const range = getZoomRange(track.camTrack)
-        if (range && range.max > range.min) {
-          await track.camTrack
-            ?.applyConstraints({ advanced: [{ zoom: range.min }] })
-            .catch(() => {})
-          if (!cancelled) setZoom({ value: range.min, min: range.min, max: range.max })
+        const caps = track.camTrack?.getCapabilities?.()
+        if (caps?.zoom && Number.isFinite(caps.zoom.min)) {
+          const min = caps.zoom.min
+          const max = caps.zoom.max ?? min
+          if (max > min) {
+            await track.camTrack
+              ?.applyConstraints({ advanced: [{ zoom: min }] })
+              .catch(() => {})
+            if (!cancelled) setZoom({ value: min, min, max })
+          }
         }
       } catch {
         // No zoom capability on this camera — the slider stays hidden.
