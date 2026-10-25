@@ -280,12 +280,24 @@ export default function SettingsFootSize() {
         </div>
       </form>
 
-      <div className="mt-6 flex items-start gap-2.5 rounded-card border border-hairline bg-subtle/60 p-4">
+      <Link
+        to="/foot-scan"
+        className="mt-6 flex items-start gap-2.5 rounded-card border border-hairline bg-subtle/60 p-4 transition-colors duration-200 hover:border-card-edge"
+      >
+        <Ruler size={16} strokeWidth={2} className="mt-0.5 shrink-0 text-clay-ink" />
+        <p className="text-xs leading-relaxed text-muted">
+          <span className="font-semibold text-ink">New: 3D foot scan (beta).</span>{' '}
+          Walk your phone once around your foot and get a real measurement —
+          no app needed.
+        </p>
+      </Link>
+
+      <div className="mt-4 flex items-start gap-2.5 rounded-card border border-hairline bg-subtle/60 p-4">
         <Info size={16} strokeWidth={2} className="mt-0.5 shrink-0 text-clay-ink" />
         <p className="text-xs leading-relaxed text-muted">
-          Measuring instead of choosing? The CUFMAI app can scan your foot and
-          fill this in for you — it stores the measurement as an AR scan, and
-          this page will show it the next time it loads.
+          Prefer the app? The CUFMAI app can scan your foot and fill this in
+          for you — it stores the measurement as an AR scan, and this page
+          will show it the next time it loads.
         </p>
       </div>
     </div>
