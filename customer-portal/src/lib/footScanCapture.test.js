@@ -14,7 +14,6 @@ import {
   isSweepUsable,
   lumaStats,
   orbitAngleFor,
-  pickWidestRearLens,
   sweepFailureMessage,
   unwrapDelta,
 } from './footScanCapture.js'
@@ -172,35 +171,6 @@ describe('createOrbitTracker', () => {
     assert.equal(crossed.angle, 20)
     const still = tracker.push({ elapsedMs: 800, headingDeg: 10 + HEADING_DEADBAND_DEG / 2 })
     assert.equal(still.angle, 20)
-  })
-})
-
-describe('pickWidestRearLens', () => {
-  it('prefers the ultrawide rear lens', () => {
-    const devices = [
-      { deviceId: 'tele', label: 'Back Tele Camera', kind: 'videoinput' },
-      { deviceId: 'ultra', label: 'Back Ultra Wide Camera', kind: 'videoinput' },
-      { deviceId: 'front', label: 'Front Camera', kind: 'videoinput' },
-      { deviceId: 'mic', label: '', kind: 'audioinput' },
-    ]
-    assert.equal(pickWidestRearLens(devices), 'ultra')
-  })
-
-  it('falls back to the first rear lens, never front unless forced', () => {
-    const devices = [
-      { deviceId: 'main', label: 'Back Camera', kind: 'videoinput' },
-      { deviceId: 'front', label: 'Front Camera', kind: 'videoinput' },
-    ]
-    assert.equal(pickWidestRearLens(devices), 'main')
-    assert.equal(
-      pickWidestRearLens([{ deviceId: 'f', label: 'Front', kind: 'videoinput' }]),
-      'f',
-    )
-  })
-
-  it('returns null with no usable camera', () => {
-    assert.equal(pickWidestRearLens([]), null)
-    assert.equal(pickWidestRearLens([{ deviceId: '', label: 'x', kind: 'videoinput' }]), null)
   })
 })
 

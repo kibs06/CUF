@@ -75,12 +75,6 @@ export function unwrapDelta(prevDeg, nextDeg) {
 /** Yaw steps smaller than this are sensor jitter, not walking. */
 export const HEADING_DEADBAND_DEG = 1
 
-/**
- * Widest-lens picking lives in `wideLens.js` alongside the stream open +
- * min-zoom pin both camera surfaces share; re-exported here so existing
- * imports (and their tests) keep working.
- */
-export { pickWidestRearLens } from './wideLens.js';
 
 /**
  * Fused orbit tracker — one per sweep, pure (no browser APIs).
