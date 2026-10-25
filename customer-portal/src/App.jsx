@@ -11,6 +11,8 @@ import AuthConfirm from './pages/AuthConfirm.jsx'
 import AuthCallback from './pages/AuthCallback.jsx'
 import Cart from './pages/Cart.jsx'
 import Checkout from './pages/Checkout.jsx'
+import FootScan from './pages/FootScan.jsx'
+import FootScanResult from './pages/FootScanResult.jsx'
 import GcashPay from './pages/GcashPay.jsx'
 import Home from './pages/Home.jsx'
 import MessageThread from './pages/MessageThread.jsx'
@@ -151,6 +153,8 @@ export default function App() {
           */}
           <Route path="messages" element={<Messages />} />
           <Route path="messages/:conversationId" element={<MessageThread />} />
+          <Route path="foot-scan" element={<FootScan />} />
+          <Route path="foot-scan/:jobId" element={<FootScanResult />} />
           <Route path="cart" element={<Cart />} />
           <Route path="checkout" element={<Checkout />} />
           <Route path="checkout/pay/:orderId" element={<GcashPay />} />
