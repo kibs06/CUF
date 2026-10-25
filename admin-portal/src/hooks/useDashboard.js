@@ -156,7 +156,6 @@ export function useOrdersSparkline(days = 14) {
       return {
         current: cur,
         previous: prev,
-        chart: [...prev.slice(-half), ...cur].map((e) => ({ date: e.date, count: e.count })),
         total: cur.reduce((s, e) => s + e.count, 0),
         totalRevenue: cur.reduce((s, e) => s + e.revenue, 0),
       }
