@@ -14,6 +14,17 @@
 4. Cover the lens mid-sweep → dark frames are skipped, count stalls
    instead of banking bad frames.
 
+## 1b. Upload resume (no backend needed)
+
+1. Throttle or drop the connection mid-upload (devtools offline at ~50%).
+2. Expect: per-frame retries (3× backoff), then "Upload paused — your
+   frames so far are saved." The job row stays `failed/uploading` with
+   code `upload_interrupted` — frames already in the bucket are kept.
+3. Reconnect and tap Upload again → the page lists the prefix, skips
+   present frames, and the byte bar jumps straight to the true position.
+4. A fresh sweep ("Sweep again") always starts a NEW job — never pours
+   new frames into the old row.
+
 ## 2. Job lifecycle (worker unconfigured)
 
 Until `RECONSTRUCT_WORKER_URL` is set, the honest path is:
