@@ -11,6 +11,12 @@
  * Quality gates reuse the portal's existing foot detector upstream
  * (`footDetectorOnnx.js`); what lives here is the timing/geometry math
  * that decides WHEN to capture and WHETHER the sweep covered the foot.
+ *
+ * Orbit angles are fused, not timed: the page feeds compass headings
+ * (deviceorientation) into `createOrbitTracker`, which accumulates real
+ * yaw travel and falls back to the time-linear prior only where the
+ * sensor is absent. A fast-then-slow walker gets truthful tags either
+ * way — the receipt records how many tags came from the compass.
  */
 
 /** Expected full-sweep duration (ms) — a slow walk around a foot. */
@@ -38,6 +44,96 @@ export function orbitAngleFor(elapsedMs, sweepDurationMs = SWEEP_DURATION_MS) {
   if (!Number.isFinite(sweepDurationMs) || sweepDurationMs <= 0) return 0
   const t = Math.min(elapsedMs / sweepDurationMs, 1)
   return Math.round(t * 360)
+}
+
+/**
+ * Compass heading (0–360, clockwise from north) from a sensor sample.
+ * Prefers iOS `webkitCompassHeading`; otherwise uses the absolute-frame
+ * `alpha` (Android), which runs counterclockwise and needs mirroring.
+ * Anything else — relative-only alphas, garbage — is null, and the
+ * tracker treats null as "fall back to time" rather than as zero.
+ */
+export function compassHeadingFrom({ webkitCompassHeading, alpha, absolute } = {}) {
+  if (Number.isFinite(webkitCompassHeading)) {
+    return ((webkitCompassHeading % 360) + 360) % 360
+  }
+  if (absolute === true && Number.isFinite(alpha)) {
+    return ((360 - (alpha % 360)) + 360) % 360
+  }
+  return null
+}
+
+/**
+ * Signed shortest yaw step between two headings, in (−180, 180].
+ * The wrap-crossing case is the whole point: 350° → 10° is +20°, not −340°.
+ */
+export function unwrapDelta(prevDeg, nextDeg) {
+  if (!Number.isFinite(prevDeg) || !Number.isFinite(nextDeg)) return 0
+  return ((((nextDeg - prevDeg) % 360) + 540) % 360) - 180
+}
+
+/** Yaw steps smaller than this are sensor jitter, not walking. */
+export const HEADING_DEADBAND_DEG = 1
+
+/**
+ * Fused orbit tracker — one per sweep, pure (no browser APIs).
+ *
+ * The phone's yaw IS the orbit: walking around the foot turns the phone
+ * with the walker, so accumulated heading travel is the angle. Each
+ * `push({ elapsedMs, headingDeg })` returns `{ angle, source }` where
+ * source is 'heading' when the compass moved the tag and 'time' when the
+ * linear prior did (sensor absent or dropped). `headingShare()` says how
+ * much of the receipt the compass vouches for — the truthfulness number
+ * the review screen shows next to coverage.
+ *
+ * Uneven pace is exactly what this fixes: a 180° sprint in 5 s tags 180°
+ * of travel, where the old time-linear `orbitAngleFor` would have stamped
+ * 90°. No heading at all (old phone, denied permission) degrades to the
+ * old behavior exactly — time tags, share 0, same gates.
+ */
+export function createOrbitTracker({ sweepDurationMs = SWEEP_DURATION_MS } = {}) {
+  const duration = Number.isFinite(sweepDurationMs) && sweepDurationMs > 0
+    ? sweepDurationMs
+    : SWEEP_DURATION_MS
+  const rate = 360 / duration // deg per ms, the time-prior fill rate
+  let accDeg = 0
+  let lastHeading = null
+  let lastElapsed = null
+  let headingTags = 0
+  let totalTags = 0
+
+  const norm = (deg) => ((Math.round(deg) % 360) + 360) % 360
+
+  return {
+    push({ elapsedMs = 0, headingDeg = null } = {}) {
+      const t = Number.isFinite(elapsedMs) && elapsedMs > 0 ? elapsedMs : 0
+      let source = 'time'
+      if (Number.isFinite(headingDeg)) {
+        const heading = ((headingDeg % 360) + 360) % 360
+        if (lastHeading !== null) {
+          const step = unwrapDelta(lastHeading, heading)
+          if (Math.abs(step) >= HEADING_DEADBAND_DEG) accDeg += step
+        }
+        lastHeading = heading
+        source = 'heading'
+        headingTags += 1
+      } else if (lastElapsed !== null && t > lastElapsed) {
+        accDeg += rate * (t - lastElapsed)
+        // The clock filled the gap, so the next heading re-anchors
+        // instead of re-adding the same travel as a yaw step.
+        lastHeading = null
+      }
+      // First tick with neither signal still tags angle 0 — the sweep start.
+      if (lastElapsed === null && !Number.isFinite(headingDeg)) accDeg = 0
+      lastElapsed = t
+      totalTags += 1
+      return { angle: norm(accDeg), source }
+    },
+    /** Share of tags the compass (not the clock) vouches for, 0–1. */
+    headingShare() {
+      return totalTags === 0 ? 0 : headingTags / totalTags
+    },
+  }
 }
 
 /**

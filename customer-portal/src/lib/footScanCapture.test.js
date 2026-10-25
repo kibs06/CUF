@@ -3,15 +3,19 @@ import assert from 'node:assert/strict'
 
 import {
   CAPTURE_INTERVAL_MS,
+  HEADING_DEADBAND_DEG,
   MIN_COVERAGE_DEG,
   MIN_FRAME_COUNT,
   TARGET_FRAME_COUNT,
   angleCoverageDeg,
+  compassHeadingFrom,
+  createOrbitTracker,
   isFrameUsable,
   isSweepUsable,
   lumaStats,
   orbitAngleFor,
   sweepFailureMessage,
+  unwrapDelta,
 } from './footScanCapture.js'
 
 describe('orbitAngleFor', () => {
@@ -86,6 +90,87 @@ describe('isSweepUsable', () => {
 
   it('capture interval matches the frame budget', () => {
     assert.equal(CAPTURE_INTERVAL_MS * TARGET_FRAME_COUNT <= 20000, true)
+  })
+})
+
+describe('compassHeadingFrom', () => {
+  it('prefers the iOS compass heading and normalizes it', () => {
+    assert.equal(compassHeadingFrom({ webkitCompassHeading: 370 }), 10)
+    assert.equal(
+      compassHeadingFrom({ webkitCompassHeading: 90, alpha: 270, absolute: true }),
+      90,
+    )
+  })
+
+  it('mirrors absolute Android alpha, rejects relative alphas', () => {
+    assert.equal(compassHeadingFrom({ alpha: 90, absolute: true }), 270)
+    assert.equal(compassHeadingFrom({ alpha: 90, absolute: false }), null)
+    assert.equal(compassHeadingFrom({}), null)
+  })
+})
+
+describe('unwrapDelta', () => {
+  it('takes the short way across north', () => {
+    assert.equal(unwrapDelta(350, 10), 20)
+    assert.equal(unwrapDelta(10, 350), -20)
+    assert.equal(unwrapDelta(90, 180), 90)
+  })
+
+  it('treats garbage as no motion', () => {
+    assert.equal(unwrapDelta(NaN, 10), 0)
+    assert.equal(unwrapDelta(10, null), 0)
+  })
+})
+
+describe('createOrbitTracker', () => {
+  it('degrades to the time prior when the compass is absent', () => {
+    const tracker = createOrbitTracker({ sweepDurationMs: 20000 })
+    const tags = [0, 5000, 10000, 20000].map((t) =>
+      tracker.push({ elapsedMs: t, headingDeg: null }),
+    )
+    assert.deepEqual(tags.map((r) => r.angle), [0, 90, 180, 360 % 360])
+    assert.ok(tags.every((r) => r.source === 'time'))
+    assert.equal(tracker.headingShare(), 0)
+  })
+
+  it('tags uneven pace truthfully where time tags lie', () => {
+    // Realistic 400 ms ticks. Fast first quarter (180° of travel in 5 s),
+    // slow remainder — the walker the time prior mislabels.
+    const headingAt = (t) => (t <= 5000 ? 180 * (t / 5000) : 180 + 180 * ((t - 5000) / 15000))
+    const tracker = createOrbitTracker({ sweepDurationMs: 20000 })
+    const tagged = []
+    for (let t = 0; t <= 20000; t += CAPTURE_INTERVAL_MS) {
+      tagged.push(tracker.push({ elapsedMs: t, headingDeg: headingAt(t) }).angle)
+    }
+    // Mid-sprint the feet are at ~86° while the clock would claim ~43°.
+    const sprintTick = tagged[Math.round(2400 / CAPTURE_INTERVAL_MS)]
+    assert.ok(Math.abs(sprintTick - 86) <= 3, `got ${sprintTick}`)
+    assert.ok(Math.abs(orbitAngleFor(2400, 20000) - headingAt(2400)) > 35)
+    // Full circle travelled at capture density → the 300° gate passes.
+    assert.ok(angleCoverageDeg(tagged) >= MIN_COVERAGE_DEG, `coverage ${angleCoverageDeg(tagged)}`)
+    assert.equal(tracker.headingShare(), 1)
+  })
+
+  it('fills compass gaps with time and re-anchors without double counting', () => {
+    const tracker = createOrbitTracker({ sweepDurationMs: 20000 })
+    tracker.push({ elapsedMs: 0, headingDeg: 0 })
+    tracker.push({ elapsedMs: 1000, headingDeg: 18 })
+    // Compass drops for 1 s: the clock advances ~18° at the prior rate,
+    // then the heading re-anchors — counted once, never doubled.
+    tracker.push({ elapsedMs: 2000, headingDeg: null })
+    const resumed = tracker.push({ elapsedMs: 3000, headingDeg: 54 })
+    assert.ok(Math.abs(resumed.angle - 36) <= 1, `got ${resumed.angle}`)
+    assert.equal(resumed.source, 'heading')
+    assert.ok(tracker.headingShare() < 1 && tracker.headingShare() > 0)
+  })
+
+  it('wraps across north and ignores sub-deadband jitter', () => {
+    const tracker = createOrbitTracker({ sweepDurationMs: 20000 })
+    tracker.push({ elapsedMs: 0, headingDeg: 350 })
+    const crossed = tracker.push({ elapsedMs: 400, headingDeg: 10 })
+    assert.equal(crossed.angle, 20)
+    const still = tracker.push({ elapsedMs: 800, headingDeg: 10 + HEADING_DEADBAND_DEG / 2 })
+    assert.equal(still.angle, 20)
   })
 })
 

@@ -55,13 +55,14 @@ export async function uploadScanFrame(supabase, userId, jobId, index, angleDeg, 
  * Mark the upload finished: frame count + coverage, back to `queued`
  * for the reconstruction worker to pick up.
  */
-export async function finishFootScanUpload(supabase, jobId, { frameCount, coverageDeg }) {
+export async function finishFootScanUpload(supabase, jobId, { frameCount, coverageDeg, headingShare = 0 }) {
   const { data, error } = await supabase
     .from('foot_scan_jobs')
     .update({
       status: 'queued',
       frame_count: frameCount,
       angle_coverage_deg: coverageDeg,
+      heading_share: headingShare,
       updated_at: new Date().toISOString(),
     })
     .eq('id', jobId)
