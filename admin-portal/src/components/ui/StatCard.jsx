@@ -1,62 +1,80 @@
-import { motion, useReducedMotion } from 'framer-motion'
+const TILE = {
+  primary: 'bg-[#8B5A2B]/10 text-[#8B5A2B]',
+  amber: 'bg-[#FFF4D6] text-[#9A6B0A]',
+  teal: 'bg-[#E0F2F1] text-[#0E7C7B]',
+  cocoa: 'bg-[#3B2314]/8 text-[#3B2314]',
+  red: 'bg-[#FDECEA] text-[#B3261E]',
+  neutral: 'bg-[#EDE5DB] text-[#6B5C4E]',
+}
 
-const TONES = {
-  primary: { bar: 'bg-primary', wash: 'from-primary/10', badge: 'bg-primary text-white', hover: 'hover:shadow-primary/20' },
-  accent: { bar: 'bg-accent', wash: 'from-accent/10', badge: 'bg-accent text-[#12413D]', hover: 'hover:shadow-accent/20' },
-  pending: { bar: 'bg-pending', wash: 'from-pending/10', badge: 'bg-pending text-white', hover: 'hover:shadow-pending/20' },
-  error: { bar: 'bg-error', wash: 'from-error/10', badge: 'bg-error text-white', hover: 'hover:shadow-error/20' },
-  neutral: { bar: 'bg-gray-400', wash: 'from-gray-400/20', badge: 'bg-gray-500 text-white', hover: 'hover:shadow-gray-500/20' },
+function Delta({ delta, invert = false }) {
+  const n = Number(delta)
+  if (delta == null || Number.isNaN(n)) return null
+  const up = n > 0
+  const flat = n === 0
+  const good = invert ? !up : up
+  const color = flat ? 'text-muted' : good ? 'text-[#0E7C7B]' : 'text-[#B3261E]'
+  const copy = flat ? 'No change from last week' : up ? `Up ${Math.abs(n)} from last week` : `Down ${Math.abs(n)} from last week`
+  return <span className={`tnum text-xs font-semibold ${color}`}>{copy}</span>
 }
 
 export default function StatCard({
   icon,
   label,
   value,
+  caption,
+  delta,
   highlight = false,
-  iconBg = 'rgba(139,90,43,0.1)',
-  iconColor = '#8B5A2B',
+  iconBg,
+  iconColor,
   children,
-  tone,
+  tone = 'neutral',
   Icon,
   sparkline,
+  onClick,
+  active = false,
+  invertDelta = false,
 }) {
-  const reduceMotion = useReducedMotion()
-  const t = tone ? TONES[tone] : null
+  const tile = TILE[tone] ?? TILE.neutral
+  const clickable = typeof onClick === 'function'
+  const Tag = clickable ? 'button' : 'div'
 
   return (
-    <motion.div
-      whileHover={reduceMotion ? undefined : { y: -3 }}
-      transition={{ type: 'spring', stiffness: 320, damping: 24 }}
-      className={`relative overflow-hidden rounded-2xl border border-[#D9D0C7] bg-white p-6 shadow-sm transition-shadow hover:shadow-lg ${
-        highlight ? 'ring-2 ring-[#E8A020]/40' : ''
-      } ${t ? `bg-gradient-to-br ${t.wash} to-white ${t.hover}` : ''}`}
+    <Tag
+      type={clickable ? 'button' : undefined}
+      onClick={onClick}
+      className={`rounded-2xl border bg-white p-5 text-left shadow-card transition-colors ${
+        highlight ? 'border-[#E8A020]/60 ring-1 ring-[#E8A020]/40' : 'border-border'
+      } ${clickable ? 'w-full cursor-pointer hover:border-primary/50 hover:shadow-pop' : ''} ${
+        active ? 'border-primary ring-1 ring-primary/40' : ''
+      }`}
     >
-      {/* Left accent bar */}
-      {t && <div className={`absolute inset-y-0 left-0 w-1 ${t.bar}`} />}
-
-      <div className="flex items-start justify-between gap-4">
-        {t && Icon ? (
-          <div className={`mb-4 flex h-12 w-12 items-center justify-center rounded-full shadow-sm ${t.badge}`}>
-            <Icon size={20} strokeWidth={2} />
-          </div>
-        ) : (
-          <div
-            className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl"
-            style={{ background: iconBg }}
-          >
-            <span style={{ color: iconColor }} className="text-lg">
+      <div className="flex items-start justify-between gap-3">
+        <div
+          className={`flex h-10 w-10 items-center justify-center rounded-xl ${tile}`}
+          style={iconBg ? { background: iconBg } : undefined}
+        >
+          {Icon ? (
+            <Icon size={18} strokeWidth={2} />
+          ) : (
+            <span style={iconColor ? { color: iconColor } : undefined} className="text-base leading-none">
               {icon}
             </span>
-          </div>
-        )}
-        {sparkline}
+          )}
+        </div>
+        {sparkline ? <div className="h-9 w-24 shrink-0">{sparkline}</div> : null}
       </div>
 
-      {/* Number in JetBrains Mono */}
-      <p className="mb-1 font-mono text-3xl font-bold text-[#3B2314]">{children ?? value}</p>
-
-      {/* Label */}
-      <p className="text-sm font-medium text-[#6B5C4E]">{label}</p>
-    </motion.div>
+      <p className="tnum mt-4 font-mono text-[28px] font-semibold leading-none text-ink">
+        {children ?? value}
+      </p>
+      <p className="mt-1.5 text-[13px] font-medium text-muted">{label}</p>
+      {(delta != null || caption) && (
+        <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted">
+          {delta != null && <Delta delta={delta} invert={invertDelta} />}
+          {caption && <span className="truncate">{caption}</span>}
+        </p>
+      )}
+    </Tag>
   )
 }

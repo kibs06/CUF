@@ -1,11 +1,22 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 
+function startOfDay(d) {
+  const c = new Date(d)
+  c.setHours(0, 0, 0, 0)
+  return c
+}
+
 export function useDashboardStats() {
   return useQuery({
     queryKey: ['dashboard-stats'],
     queryFn: async () => {
-      const [users, pending, products, orders] = await Promise.all([
+      const now = new Date()
+      const curStart = startOfDay(new Date(now.getTime() - 6 * 86400000))
+      const prevStart = startOfDay(new Date(now.getTime() - 13 * 86400000))
+      const prevEnd = startOfDay(new Date(now.getTime() - 7 * 86400000))
+
+      const [users, pending, products, orders, curOrders, prevOrders] = await Promise.all([
         supabase.from('profiles').select('*', { count: 'exact', head: true }),
         supabase
           .from('profiles')
@@ -13,18 +24,39 @@ export function useDashboardStats() {
           .eq('seller_status', 'pending'),
         supabase.from('products').select('*', { count: 'exact', head: true }),
         supabase.from('orders').select('*', { count: 'exact', head: true }),
+        supabase
+          .from('orders')
+          .select('total_amount, created_at')
+          .gte('created_at', curStart.toISOString()),
+        supabase
+          .from('orders')
+          .select('total_amount, created_at')
+          .gte('created_at', prevStart.toISOString())
+          .lt('created_at', prevEnd.toISOString()),
       ])
 
       if (users.error) throw users.error
       if (pending.error) throw pending.error
       if (products.error) throw products.error
       if (orders.error) throw orders.error
+      if (curOrders.error) throw curOrders.error
+      if (prevOrders.error) throw prevOrders.error
+
+      const curRows = curOrders.data ?? []
+      const prevRows = prevOrders.data ?? []
+      const curRevenue = curRows.reduce((s, r) => s + (Number(r.total_amount) || 0), 0)
+      const prevRevenue = prevRows.reduce((s, r) => s + (Number(r.total_amount) || 0), 0)
 
       return {
         totalUsers: users.count ?? 0,
         pendingApplications: pending.count ?? 0,
         totalProducts: products.count ?? 0,
         totalOrders: orders.count ?? 0,
+        orders7d: curRows.length,
+        ordersPrev7d: prevRows.length,
+        ordersDelta: curRows.length - prevRows.length,
+        revenue7d: curRevenue,
+        revenueDelta: curRevenue - prevRevenue,
       }
     },
   })
@@ -47,7 +79,7 @@ export function useRecentPendingApplications(limit = 5) {
   })
 }
 
-export function useRecentOrders(limit = 5) {
+export function useRecentOrders(limit = 6) {
   return useQuery({
     queryKey: ['recent-orders', limit],
     queryFn: async () => {
@@ -65,7 +97,25 @@ export function useRecentOrders(limit = 5) {
   })
 }
 
-export function useOrdersSparkline(days = 7) {
+export function useOrderPipeline() {
+  return useQuery({
+    queryKey: ['order-pipeline'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('orders').select('status')
+      if (error) throw error
+      const rows = data ?? []
+      const count = (list) => rows.filter((r) => list.includes((r.status ?? '').toLowerCase())).length
+      return {
+        needsAction: count(['pending', 'placed', 'confirmed']),
+        inKitchen: count(['preparing', 'ready']),
+        onTheWay: count(['shipped']),
+        done: count(['received', 'delivered']),
+      }
+    },
+  })
+}
+
+export function useOrdersSparkline(days = 14) {
   return useQuery({
     queryKey: ['orders-sparkline', days],
     queryFn: async () => {
@@ -75,29 +125,41 @@ export function useOrdersSparkline(days = 7) {
 
       const { data, error } = await supabase
         .from('orders')
-        .select('created_at')
+        .select('created_at, total_amount')
         .gte('created_at', since.toISOString())
         .order('created_at', { ascending: true })
 
       if (error) throw error
 
-      const counts = {}
+      const half = Math.ceil(days / 2)
+      const cur = []
+      const prev = []
       for (let i = 0; i < days; i++) {
         const d = new Date()
         d.setDate(d.getDate() - (days - 1 - i))
         const key = d.toISOString().slice(0, 10)
-        counts[key] = 0
+        const entry = { date: key.slice(5), full: key, count: 0, revenue: 0 }
+        if (i < days - half) prev.push(entry)
+        else cur.push({ ...entry })
       }
-
+      const curMap = Object.fromEntries(cur.map((e) => [e.full, e]))
+      const prevMap = Object.fromEntries(prev.map((e) => [e.full, e]))
       for (const order of data ?? []) {
         const key = order.created_at?.slice(0, 10)
-        if (key && counts[key] !== undefined) counts[key] += 1
+        const target = curMap[key] ?? prevMap[key]
+        if (target) {
+          target.count += 1
+          target.revenue += Number(order.total_amount) || 0
+        }
       }
 
-      return Object.entries(counts).map(([date, count]) => ({
-        date: date.slice(5),
-        count,
-      }))
+      return {
+        current: cur,
+        previous: prev,
+        chart: [...prev.slice(-half), ...cur].map((e) => ({ date: e.date, count: e.count })),
+        total: cur.reduce((s, e) => s + e.count, 0),
+        totalRevenue: cur.reduce((s, e) => s + e.revenue, 0),
+      }
     },
   })
 }

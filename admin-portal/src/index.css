@@ -3,7 +3,32 @@
 @tailwind utilities;
 
 body {
-  @apply bg-surface text-secondary;
+  @apply bg-canvas text-ink;
+  font-feature-settings: 'cv05', 'ss01';
+}
+
+::selection {
+  background: rgba(139, 90, 43, 0.22);
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Quiet focus ring used by sidebar links, buttons and table rows */
+:where(a, button, [tabindex]):focus-visible {
+  outline: 2px solid #0e7c7b;
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Slim sidebar scroll */
+.sole-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.sole-scroll::-webkit-scrollbar-thumb {
+  background: rgba(196, 168, 130, 0.28);
+  border-radius: 8px;
 }
 
 /* The voice orb's bars (components/ai/AiFluidBlob.jsx).

@@ -1,60 +1,53 @@
 const VARIANTS = {
-  customer: 'bg-amber-50 text-amber-700 border border-amber-200',
-  seller: 'bg-teal-50 text-teal-700 border border-teal-200',
-  admin: 'bg-red-50 text-red-700 border border-red-200',
-  pending: 'bg-amber-50 text-amber-700 border border-amber-200',
-  approved: 'bg-teal-50 text-teal-700 border border-teal-200',
-  rejected: 'bg-red-50 text-red-700 border border-red-200',
-  active: 'bg-teal-50 text-teal-700 border border-teal-200',
-  inactive: 'bg-red-50 text-red-700 border border-red-200',
-  placed: 'bg-amber-50 text-amber-700 border border-amber-200',
-  confirmed: 'bg-blue-50 text-blue-700 border border-blue-200',
-  preparing: 'bg-blue-50 text-blue-700 border border-blue-200',
-  ready: 'bg-amber-50 text-amber-700 border border-amber-200',
-  shipped: 'bg-purple-50 text-purple-700 border border-purple-200',
-  received: 'bg-teal-50 text-teal-700 border border-teal-200',
-  delivered: 'bg-teal-50 text-teal-700 border border-teal-200',
-  cancelled: 'bg-red-50 text-red-700 border border-red-200',
-  suspended: 'bg-red-50 text-red-700 border border-red-200',
-  under_review: 'bg-blue-50 text-blue-700 border border-blue-200',
-  dismissed: 'bg-gray-50 text-gray-500 border border-gray-200',
-  resolved: 'bg-teal-50 text-teal-700 border border-teal-200',
-  none: 'bg-gray-50 text-gray-500 border border-gray-200',
-  // Payment intent statuses (Transactions page) — reuse existing tones:
-  // succeeded → teal, failed → red, pending → amber, expired → neutral gray.
-  succeeded: 'bg-teal-50 text-teal-700 border border-teal-200',
-  failed: 'bg-red-50 text-red-700 border border-red-200',
-  expired: 'bg-gray-100 text-gray-600 border border-gray-200',
-  // 3D model requests (ModelRequests page) — three of the table's five states.
-  // `requested` is amber because it is the one an admin has to act on, and
-  // `in_progress` is blue because somebody already has. The other two are reused
-  // rather than declared: `cancelled` is already the order-status red, and a
-  // seller withdrawing an ask is not the same news as a decline, so the page
-  // sends that one to `dismissed` (neutral) instead.
-  requested: 'bg-amber-50 text-amber-700 border border-amber-200',
-  in_progress: 'bg-blue-50 text-blue-700 border border-blue-200',
-  fulfilled: 'bg-teal-50 text-teal-700 border border-teal-200',
-  declined: 'bg-red-50 text-red-700 border border-red-200',
-  // Webhook event processing statuses (timeline). NOTE: do not add a key
-  // that already exists above (e.g. 'received' is the order status) — the
-  // duplicate would silently override the order status tone.
-  processed: 'bg-teal-50 text-teal-700 border border-teal-200',
-  processing: 'bg-blue-50 text-blue-700 border border-blue-200',
-  amount_mismatch: 'bg-red-50 text-red-700 border border-red-200',
-  stock_conflict: 'bg-red-50 text-red-700 border border-red-200',
-  rejected_signature: 'bg-red-50 text-red-700 border border-red-200',
+  customer: 'bg-[#EDE5DB] text-[#3B2314] border border-[#D9D0C7]',
+  seller: 'bg-[#E0F2F1] text-[#0E7C7B] border border-[#0E7C7B]/25',
+  admin: 'bg-[#FDECEA] text-[#B3261E] border border-[#B3261E]/25',
+  pending: 'bg-[#FFF4D6] text-[#7A5600] border border-[#E8A020]/40',
+  approved: 'bg-[#E0F2F1] text-[#0E7C7B] border border-[#0E7C7B]/25',
+  rejected: 'bg-[#FDECEA] text-[#B3261E] border border-[#B3261E]/25',
+  active: 'bg-[#E0F2F1] text-[#0E7C7B] border border-[#0E7C7B]/25',
+  inactive: 'bg-[#EDE5DB] text-[#6B5C4E] border border-[#D9D0C7]',
+  placed: 'bg-[#FFF4D6] text-[#7A5600] border border-[#E8A020]/40',
+  confirmed: 'bg-[#E4EBFF] text-[#2B4BCB] border border-[#2B4BCB]/25',
+  preparing: 'bg-[#E4EBFF] text-[#2B4BCB] border border-[#2B4BCB]/25',
+  ready: 'bg-[#FFF4D6] text-[#7A5600] border border-[#E8A020]/40',
+  shipped: 'bg-[#E9E4FB] text-[#5B3DF0] border border-[#5B3DF0]/25',
+  received: 'bg-[#E0F2F1] text-[#0E7C7B] border border-[#0E7C7B]/25',
+  delivered: 'bg-[#E0F2F1] text-[#0E7C7B] border border-[#0E7C7B]/25',
+  cancelled: 'bg-[#FDECEA] text-[#B3261E] border border-[#B3261E]/25',
+  suspended: 'bg-[#FDECEA] text-[#B3261E] border border-[#B3261E]/25',
+  under_review: 'bg-[#E4EBFF] text-[#2B4BCB] border border-[#2B4BCB]/25',
+  dismissed: 'bg-[#EDE5DB] text-[#6B5C4E] border border-[#D9D0C7]',
+  resolved: 'bg-[#E0F2F1] text-[#0E7C7B] border border-[#0E7C7B]/25',
+  none: 'bg-[#EDE5DB] text-[#6B5C4E] border border-[#D9D0C7]',
+  succeeded: 'bg-[#E0F2F1] text-[#0E7C7B] border border-[#0E7C7B]/25',
+  failed: 'bg-[#FDECEA] text-[#B3261E] border border-[#B3261E]/25',
+  expired: 'bg-[#EDE5DB] text-[#6B5C4E] border border-[#D9D0C7]',
+  requested: 'bg-[#FFF4D6] text-[#7A5600] border border-[#E8A020]/40',
+  in_progress: 'bg-[#E4EBFF] text-[#2B4BCB] border border-[#2B4BCB]/25',
+  fulfilled: 'bg-[#E0F2F1] text-[#0E7C7B] border border-[#0E7C7B]/25',
+  declined: 'bg-[#FDECEA] text-[#B3261E] border border-[#B3261E]/25',
+  processed: 'bg-[#E0F2F1] text-[#0E7C7B] border border-[#0E7C7B]/25',
+  processing: 'bg-[#E4EBFF] text-[#2B4BCB] border border-[#2B4BCB]/25',
+  amount_mismatch: 'bg-[#FDECEA] text-[#B3261E] border border-[#B3261E]/25',
+  stock_conflict: 'bg-[#FDECEA] text-[#B3261E] border border-[#B3261E]/25',
+  rejected_signature: 'bg-[#FDECEA] text-[#B3261E] border border-[#B3261E]/25',
+}
+
+function humanize(label) {
+  return String(label ?? '').replace(/_/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
 export default function Badge({ label, variant, dot = false }) {
   const key = (variant ?? label ?? '').toLowerCase()
-  const classes = VARIANTS[key] ?? 'bg-gray-50 text-gray-600 border border-gray-200'
+  const classes = VARIANTS[key] ?? 'bg-[#EDE5DB] text-[#6B5C4E] border border-[#D9D0C7]'
 
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ${classes}`}
+      className={`inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold ${classes}`}
     >
-      {dot && <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-current opacity-80" />}
-      {label}
+      {dot && <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-current opacity-70" />}
+      {humanize(label)}
     </span>
   )
 }

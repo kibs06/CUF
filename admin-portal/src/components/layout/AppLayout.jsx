@@ -21,7 +21,7 @@ export default function AppLayout() {
   const title = TITLES[pathname] ?? 'Admin'
 
   return (
-    <div className="flex min-h-screen bg-surface">
+    <div className="flex min-h-screen bg-canvas">
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <main className="flex-1 overflow-x-hidden p-4 lg:p-8">
         <TopBar title={title} onMenuClick={() => setSidebarOpen(true)} />
