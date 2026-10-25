@@ -9,10 +9,11 @@ import {
   SWEEP_DURATION_MS,
   TARGET_FRAME_COUNT,
   angleCoverageDeg,
+  compassHeadingFrom,
+  createOrbitTracker,
   isFrameUsable,
   isSweepUsable,
   lumaStats,
-  orbitAngleFor,
   sweepFailureMessage,
 } from '../lib/footScanCapture.js'
 import {
@@ -78,6 +79,7 @@ export default function FootScan() {
   const [progress, setProgress] = useState(0)
   const [frameCount, setFrameCount] = useState(0)
   const [coverage, setCoverage] = useState(0)
+  const [compassTracked, setCompassTracked] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [queuedJobId, setQueuedJobId] = useState(null)
 
@@ -86,6 +88,11 @@ export default function FootScan() {
   const framesRef = useRef([])
   const timerRef = useRef(null)
   const startRef = useRef(0)
+  // Latest compass heading (degrees) or null — written by the
+  // deviceorientation listener, read by the capture tick. A ref, not
+  // state: it updates ~60 Hz and must never re-render the page.
+  const headingRef = useRef(null)
+  const trackerRef = useRef(null)
 
   const stopCamera = useCallback(() => {
     window.clearInterval(timerRef.current)
@@ -95,6 +102,32 @@ export default function FootScan() {
   }, [])
 
   useEffect(() => stopCamera, [stopCamera])
+
+  // Compass feed for the orbit tracker: absolute-frame alpha (Android)
+  // or the iOS compass heading. Relative-only alphas read null and the
+  // tracker falls back to time tags — same behavior as before.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('DeviceOrientationEvent' in window)) {
+      return undefined
+    }
+    const onOrientation = (event) => {
+      const heading = compassHeadingFrom({
+        webkitCompassHeading: event.webkitCompassHeading,
+        alpha: event.alpha,
+        absolute: event.absolute,
+      })
+      if (heading !== null) {
+        headingRef.current = heading
+        setCompassTracked(true)
+      }
+    }
+    window.addEventListener('deviceorientationabsolute', onOrientation)
+    window.addEventListener('deviceorientation', onOrientation)
+    return () => {
+      window.removeEventListener('deviceorientationabsolute', onOrientation)
+      window.removeEventListener('deviceorientation', onOrientation)
+    }
+  }, [])
 
   const startCamera = useCallback(async () => {
     setError(null)
@@ -115,24 +148,39 @@ export default function FootScan() {
     }
   }, [])
 
-  const beginSweep = useCallback(() => {
+  const beginSweep = useCallback(async () => {
     framesRef.current = []
     setFrameCount(0)
     setCoverage(0)
     setProgress(0)
     setError(null)
+    // iOS gates the compass behind a permission prompt, and it must be
+    // requested from a user gesture — this tap is that gesture. Denial
+    // is not an error: the tracker falls back to time tags.
+    try {
+      const requestPermission = DeviceOrientationEvent?.requestPermission
+      if (typeof requestPermission === 'function') {
+        await requestPermission.call(DeviceOrientationEvent)
+      }
+    } catch {
+      // Compass unavailable — time fallback covers the sweep.
+    }
+    trackerRef.current = createOrbitTracker({ sweepDurationMs: SWEEP_DURATION_MS })
     setPhase(PHASES.capturing)
     startRef.current = Date.now()
     timerRef.current = window.setInterval(async () => {
       const video = videoRef.current
       if (!video) return
       const elapsed = Date.now() - startRef.current
-      const angle = orbitAngleFor(elapsed)
       setProgress(Math.min(1, elapsed / SWEEP_DURATION_MS))
       try {
         const shot = await snapshotFrame(video)
         if (shot && !shot.skipped) {
-          framesRef.current.push({ blob: shot.blob, angle })
+          const { angle, source } = trackerRef.current.push({
+            elapsedMs: elapsed,
+            headingDeg: headingRef.current,
+          })
+          framesRef.current.push({ blob: shot.blob, angle, source })
           setFrameCount(framesRef.current.length)
           setCoverage(angleCoverageDeg(framesRef.current.map((f) => f.angle)))
         }
@@ -175,6 +223,7 @@ export default function FootScan() {
       await finishFootScanUpload(supabase, jobId, {
         frameCount: frames.length,
         coverageDeg,
+        headingShare: trackerRef.current?.headingShare() ?? 0,
       })
       // Fire-and-forget: the job row is the truth and the results page
       // polls it, so a trigger failure here must not fail the upload.
@@ -282,6 +331,7 @@ export default function FootScan() {
               <div className="flex flex-wrap items-center gap-3">
                 <p className="text-sm text-ink">
                   {frameCount} frames · {coverage}° covered
+                  {compassTracked ? ' · compass-tracked' : ' · timer-tracked'}
                 </p>
                 <button
                   type="button"
