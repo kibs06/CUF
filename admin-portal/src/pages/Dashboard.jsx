@@ -165,7 +165,12 @@ export default function Dashboard() {
               Icon={Wallet}
               label="Revenue, last 7 days"
               value={formatCurrency(stats?.revenue7d ?? 0)}
-              delta={stats?.revenueDelta === 0 ? 0 : fmtDelta(Math.round(stats?.revenueDelta ?? 0))}
+              delta={stats?.revenueDelta ?? null}
+              formatDelta={(n) => {
+                if (n === 0) return 'No change from last week'
+                const arrow = n > 0 ? 'Up' : 'Down'
+                return `${arrow} ${formatCurrency(Math.abs(Math.round(n)))} from last week`
+              }}
               caption="Paid + pending orders"
             />
             <StatCard
