@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { NavLink } from 'react-router-dom'
-import { Bell, LogOut, MessageSquare, UserCircle } from 'lucide-react'
+import { Bell, LogOut, MessageSquare, ShieldCheck, UserCircle } from 'lucide-react'
 
 import CountBadge from '../ui/CountBadge.jsx'
 import { useAuth } from '../../hooks/useAuth.jsx'
@@ -27,7 +27,10 @@ import { waitingCount } from '../../lib/badgeRules.js'
  * **Alerts, then the account, then the way out.** Notifications and Messages sit
  * at the top with their unread counts, exactly as they do in the shop's menu,
  * because both are "someone is waiting on you" — the reason a person opens this
- * menu on a second visit. Then the account page, then Sign out under a hairline.
+ * menu on a second visit. A standing row follows the alerts - the admin side's
+ * verdict on the seller's application, which is the one piece of admin state
+ * a seller cannot see anywhere else. Then the account page, then Sign out
+ * under a hairline.
  *
  * Those two rows **open the side panel** and do not navigate, which is the whole
  * reason they are `button`s: nothing about them changes the URL, and a link that
@@ -280,7 +283,30 @@ export function SellerAccountPanel({
         </PanelRow>
       </div>
 
+      {/*
+        The admin side's verdict on this seller's application, read from the
+        same `profiles.seller_status` the admin portal's queue decides on - so
+        the two can never disagree. A seller who is waiting sees *Pending
+        review* here instead of silence; an approved seller sees *Approved*.
+      */}
       <div className="border-t border-hairline py-1">
+        <NavLink
+          to="/seller/account"
+          role="menuitem"
+          onClick={onNavigate}
+          className={({ isActive }) =>
+            [
+              'flex items-center gap-2.5 px-4 py-2.5 text-sm transition-colors duration-200 ease-out-cubic',
+              isActive
+                ? 'bg-clay/10 font-medium text-clay-ink'
+                : 'text-muted-strong hover:bg-subtle hover:text-ink',
+            ].join(' ')
+          }
+        >
+          <ShieldCheck size={16} strokeWidth={2} />
+          <span className="min-w-0 flex-1 truncate">Application status</span>
+          <StandingPill status={profile?.seller_status} />
+        </NavLink>
         <MenuRow to="/seller/account" icon={UserCircle} onNavigate={onNavigate}>
           Account settings
         </MenuRow>
@@ -311,6 +337,23 @@ export function SellerAccountPanel({
  * menu is already this one — so the rows cannot drift apart, and so the badge
  * appears on exactly the same place on every one of them.
  */
+const STANDING = {
+  approved: { label: 'Approved', dot: 'bg-olive' },
+  pending: { label: 'Pending review', dot: 'bg-amber' },
+  rejected: { label: 'Not approved', dot: 'bg-crimson' },
+  none: { label: 'Not applied', dot: 'bg-muted' },
+}
+
+function StandingPill({ status }) {
+  const standing = STANDING[status] ?? STANDING.none
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-muted">
+      <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${standing.dot}`} />
+      {standing.label}
+    </span>
+  )
+}
+
 function PanelRow({ panel, icon, badge = 0, badgeLabel, onNavigate, children }) {
   const { panel: openPanel, toggle } = useSellerPanel()
 

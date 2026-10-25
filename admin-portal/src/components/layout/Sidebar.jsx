@@ -59,6 +59,10 @@ export default function Sidebar({ open, onClose }) {
   const { profile, signOut } = useAuth()
   const [highPriorityCount, setHighPriorityCount] = useState(0)
   const [waitingModelRequests, setWaitingModelRequests] = useState(0)
+  const [hovered, setHovered] = useState(false)
+  // The drawer is always full-width: on touch screens there is no hover, so an
+  // open drawer is expanded by definition and hover only matters on desktop.
+  const expanded = hovered || open
 
   useEffect(() => {
     const fetchCount = async () => {
@@ -106,18 +110,22 @@ export default function Sidebar({ open, onClose }) {
       )}
 
       <aside
-        className={`sole-scroll fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-[#2E1C10] text-[#C4A882] transition-transform lg:sticky lg:top-0 lg:h-screen lg:bottom-auto lg:translate-x-0 ${
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        className={`sole-scroll fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-[#2E1C10] text-[#C4A882] transition-[transform,width] duration-200 ease-out motion-reduce:transition-none ${
           open ? 'translate-x-0' : '-translate-x-full'
+        } lg:translate-x-0 ${expanded ? '' : 'lg:w-[76px]'} ${
+          expanded ? 'shadow-pop' : ''
         }`}
       >
         {/* Brand */}
         <div className="border-b border-white/10 px-5 py-4">
-          <div className="flex items-center gap-3">
+          <div className={`flex items-center gap-3 ${expanded ? '' : 'lg:justify-center'}`}>
             <div
-              className="h-9 w-9 rounded-lg bg-white/8 p-1.5 text-[#E8C99A]"
+              className="h-9 w-9 shrink-0 rounded-lg bg-white/8 p-1.5 text-[#E8C99A]"
               dangerouslySetInnerHTML={{ __html: SHOE_SOLE_SVG }}
             />
-            <div>
+            <div className={`whitespace-nowrap ${expanded ? '' : 'lg:hidden'}`}>
               <p className="font-display text-[17px] font-bold leading-tight text-white">SoleVision</p>
               <p className="text-xs text-[#C4A882]/70">Admin portal</p>
             </div>
@@ -125,10 +133,10 @@ export default function Sidebar({ open, onClose }) {
         </div>
 
         {/* Grouped nav */}
-        <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
+        <nav className="flex-1 space-y-5 overflow-y-auto overflow-x-hidden px-3 py-4">
           {GROUPS.map((group) => (
             <div key={group.label}>
-              <p className="px-2 pb-1.5 text-xs font-medium text-[#C4A882]/50">{group.label}</p>
+              <p className={`whitespace-nowrap px-2 pb-1.5 text-xs font-medium text-[#C4A882]/50 ${expanded ? '' : 'lg:hidden'}`}>{group.label}</p>
               <div className="space-y-0.5">
                 {group.items.map((item) => {
                   const Icon = item.icon
@@ -138,9 +146,12 @@ export default function Sidebar({ open, onClose }) {
                       key={item.to}
                       to={item.to}
                       end={item.to === '/'}
-                      onClick={onClose}
+                      onClose={onClose}
+                      title={expanded ? undefined : item.label}
                       className={({ isActive }) =>
-                        `group relative flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13.5px] transition-colors ${
+                        `group relative flex items-center gap-2.5 rounded-lg py-2 text-[13.5px] transition-colors ${
+                          expanded ? 'px-2.5' : 'px-2.5 lg:justify-center lg:px-2'
+                        } ${
                           isActive
                             ? 'bg-[#8B5A2B] font-semibold text-white'
                             : 'text-[#C4A882]/90 hover:bg-white/6 hover:text-white'
@@ -148,14 +159,20 @@ export default function Sidebar({ open, onClose }) {
                       }
                     >
                       <Icon size={17} strokeWidth={2} className="shrink-0 opacity-90" />
-                      <span className="flex-1 truncate">{item.label}</span>
-                      {badge && (
-                        <span
-                          className={`flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold text-white ${badge.tone}`}
-                        >
-                          {badge.value}
-                        </span>
-                      )}
+                      <span className={`flex-1 truncate whitespace-nowrap ${expanded ? '' : 'lg:hidden'}`}>{item.label}</span>
+                      {badge &&
+                        (expanded ? (
+                          <span
+                            className={`flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold text-white ${badge.tone}`}
+                          >
+                            {badge.value}
+                          </span>
+                        ) : (
+                          <span
+                            aria-hidden="true"
+                            className={`absolute right-1.5 top-1.5 hidden h-2 w-2 rounded-full lg:block ${badge.tone}`}
+                          />
+                        ))}
                     </NavLink>
                   )
                 })}
@@ -166,9 +183,9 @@ export default function Sidebar({ open, onClose }) {
 
         {/* User footer */}
         <div className="border-t border-white/10 p-3">
-          <div className="mb-2 flex items-center gap-2.5 rounded-lg px-1.5 py-1.5">
+          <div className={`mb-2 flex items-center gap-2.5 rounded-lg px-1.5 py-1.5 ${expanded ? '' : 'lg:justify-center'}`}>
             <AvatarInitials name={profile?.full_name} email={profile?.email} />
-            <div className="min-w-0 flex-1">
+            <div className={`min-w-0 flex-1 whitespace-nowrap ${expanded ? '' : 'lg:hidden'}`}>
               <p className="truncate text-[13px] font-semibold text-white">{profile?.full_name ?? 'Admin'}</p>
               <p className="truncate text-xs text-[#C4A882]/60">{profile?.email}</p>
             </div>
@@ -176,10 +193,11 @@ export default function Sidebar({ open, onClose }) {
           <button
             type="button"
             onClick={signOut}
+            title={expanded ? undefined : 'Log out'}
             className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/15 px-3 py-2 text-[13px] font-medium text-[#C4A882] transition-colors hover:bg-white/6 hover:text-white"
           >
             <LogOut size={15} />
-            Log out
+            <span className={`whitespace-nowrap ${expanded ? '' : 'lg:hidden'}`}>Log out</span>
           </button>
         </div>
       </aside>
