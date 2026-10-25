@@ -63,14 +63,14 @@ export async function openWidestLensStream({ open, enumerate, stream, width = 12
   const devices = await enumerate()
   const currentId = stream.getVideoTracks()[0]?.getSettings?.()?.deviceId ?? null
   const wideId = pickWidestRearLens(devices)
-  if (!wideId || wideId === currentId) return { stream, switched: false }
+  if (!wideId || wideId === currentId) return stream
   const wide = await open({
     deviceId: { exact: wideId },
     width: { ideal: width },
     height: { ideal: height },
   })
   stream.getTracks().forEach((t) => t.stop())
-  return { stream: wide, switched: true }
+  return wide
 }
 
 /**
