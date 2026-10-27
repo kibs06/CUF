@@ -26,6 +26,7 @@ import { useCart } from '../hooks/useCart.jsx'
 import { useMySize } from '../hooks/useMySize.js'
 import { useProduct, useProducts, useStore } from '../hooks/useCatalog'
 import useProductModel from '../hooks/useProductModel'
+import { getLensEnv, lensConfigStatus } from '../lib/lensConfig.js'
 import { availableSizes, stockForSize } from '../lib/stock'
 import { salePercent } from '../lib/pricing'
 import { sellerProductPreviewPath } from '../lib/sellerPaths.js'
@@ -329,6 +330,19 @@ export default function ProductDetail({ preview = false }) {
                   <Footprints size={16} strokeWidth={2} />
                   Try on feet (Beta)
                 </button>
+                {/* Lens entry: only when a Lens is published AND this product
+                    has a model. Unconfigured → no button, no gap (same rule
+                    as the 3D entry above). The Lens shoes are per-product in
+                    Lens Studio; this link just carries which product. */}
+                {lensConfigStatus(getLensEnv()).ready && (
+                  <Link
+                    to={`/try-lens?product=${product.id}`}
+                    className="btn btn-outline w-full gap-2"
+                  >
+                    <Footprints size={16} strokeWidth={2} />
+                    Try in Snapchat
+                  </Link>
+                )}
               </div>
             )}
           </div>

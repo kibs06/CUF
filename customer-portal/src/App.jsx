@@ -22,6 +22,7 @@ import Notifications from './pages/Notifications.jsx'
 import OrderDetail from './pages/OrderDetail.jsx'
 import Orders from './pages/Orders.jsx'
 import ProductDetail from './pages/ProductDetail.jsx'
+import TryLens from './pages/TryLens.jsx'
 import Settings from './pages/Settings.jsx'
 import SettingsAbout from './pages/SettingsAbout.jsx'
 import SettingsAddresses from './pages/SettingsAddresses.jsx'
@@ -162,6 +163,10 @@ export default function App() {
 
         <Route path="*" element={<NotFound />} />
       </Route>
+
+      {/* Hidden Lens Studio spike outside AppLayout: full-bleed camera page,
+          no shop header/footer, no nav link. QA entry at /try-lens?product=<id>. */}
+      <Route path="try-lens" element={<TryLens />} />
 
       {/*
         The seller portal.
