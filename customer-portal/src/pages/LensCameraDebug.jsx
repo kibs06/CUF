@@ -33,11 +33,42 @@ export default function LensCameraDebug() {
         const c = track?.getCapabilities?.() ?? {}
         track?.stop()
         if (cancelled) return
-        setLines([
+        const base = [
           `stream: ${s.width ?? '?'}x${s.height ?? '?'} zoom=${s.zoom ?? 'n/a'} facing=${s.facingMode ?? 'n/a'}`,
           `label: ${(track?.label ?? '').slice(0, 42) || 'n/a'}`,
           `zoom cap: ${c.zoom ? `${c.zoom.min}–${c.zoom.max}` : 'none (browser exposes no zoom)'}`,
-        ])
+        ]
+        // Inventory every physical camera so we can pick the ultrawide
+        // (0.5x) instead of the default wide. Labels need the granted
+        // permission above, which is why this runs second.
+        try {
+          const devices = (await navigator.mediaDevices.enumerateDevices()).filter(
+            (d) => d.kind === 'videoinput',
+          )
+          const rows = []
+          for (let i = 0; i < devices.length; i += 1) {
+            const dev = devices[i]
+            const shortLabel = (dev.label || `camera ${i}`).slice(0, 40)
+            try {
+              const ds = await navigator.mediaDevices.getUserMedia({
+                video: { deviceId: { exact: dev.deviceId }, width: { ideal: 1280 } },
+                audio: false,
+              })
+              const dt = ds.getVideoTracks()[0]
+              const dset = dt?.getSettings?.() ?? {}
+              const dcap = dt?.getCapabilities?.() ?? {}
+              dt?.stop()
+              const z = dcap.zoom ? `zoom ${dcap.zoom.min}–${dcap.zoom.max}` : 'zoom n/a'
+              rows.push(`cam${i}: ${shortLabel} ${dset.width ?? '?'}x${dset.height ?? '?'} ${z}`)
+            } catch {
+              rows.push(`cam${i}: ${shortLabel} (unavailable)`)
+            }
+            if (cancelled) return
+          }
+          setLines([...base, ...rows])
+        } catch {
+          setLines(base)
+        }
       } catch (e) {
         if (!cancelled) setLines([`probe failed: ${e?.name ?? 'error'} ${e?.message ?? ''}`.slice(0, 120)])
       }
