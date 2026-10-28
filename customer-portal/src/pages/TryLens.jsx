@@ -13,6 +13,9 @@ const CameraKitProvider = lazy(() =>
 const LensPlayer = lazy(() =>
   import('@snap/react-camera-kit').then((m) => ({ default: m.LensPlayer })),
 )
+// Status pill (sdk / camera-source / lens phases) — lazy for the same reason:
+// `useCameraKit` lives in the same package, so it shares the split chunk.
+const LensSessionState = lazy(() => import('./LensSessionState.jsx'))
 
 /**
  * Hidden QA route: `/try-lens?product=<id>`.
@@ -71,13 +74,18 @@ export default function TryLens() {
             }
           >
             <CameraKitProvider apiToken={env.apiToken}>
+              {/* Rear camera: feet are in front of the phone, not the user.
+                  The wrapper defaults to the selfie camera, which is why the
+                  mount stayed black — a working pipeline pointed at no feet. */}
               <LensPlayer
                 key={refreshKey}
                 lensId={env.lensId}
                 lensGroupId={env.lensGroupId}
+                source={{ kind: 'camera', options: { cameraFacing: 'environment' } }}
                 className="h-full w-full"
                 onError={(error) => setLensError(error?.message ?? String(error))}
               />
+              <LensSessionState />
             </CameraKitProvider>
           </Suspense>
           {lensError && (
