@@ -20,6 +20,9 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
   const sessionRef = useRef(null)
   const kitRef = useRef(null)
   const streamRef = useRef(null)
+  const lensRef = useRef(null)
+  const [lensOn, setLensOn] = useState(true)
+  const [dbg, setDbg] = useState('')
   const [status, setStatus] = useState('Starting camera session…')
   const [cameras, setCameras] = useState([])
   const [activeId, setActiveId] = useState(null)
@@ -60,6 +63,8 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
       } else {
         setZoomCaps(null)
       }
+      const canvas = session.output.live
+      setDbg('src ' + w + 'x' + h + ' canvas ' + canvas.width + 'x' + canvas.height)
       setStatus('')
     } catch (e) {
       fail(
@@ -94,6 +99,7 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
         const lens = await kit.lensRepository.loadLens(lensId, lensGroupId)
         if (cancelled) return
         await session.applyLens(lens)
+        lensRef.current = lens
         if (cancelled) return
         await startCamera(null)
         if (cancelled) return
@@ -147,6 +153,22 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const toggleLens = async () => {
+    const session = sessionRef.current
+    if (!session) return
+    try {
+      if (lensOn) {
+        await session.removeLens()
+        setLensOn(false)
+      } else if (lensRef.current) {
+        await session.applyLens(lensRef.current)
+        setLensOn(true)
+      }
+    } catch (e) {
+      fail('Lens toggle failed: ' + (e?.message ?? 'unknown error'))
+    }
+  }
+
   const applyZoom = async (value) => {
     setZoom(value)
     try {
@@ -166,6 +188,18 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
       )}
       {cameras.length > 1 && (
         <div className="absolute inset-x-0 bottom-3 flex flex-col items-center gap-2 px-3">
+          {dbg !== '' && (
+            <div className="rounded-full bg-stone-950/80 px-3 py-1 font-mono text-[11px] text-lime-200">
+              {dbg}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={toggleLens}
+            className="rounded-full bg-stone-950/80 px-3 py-1.5 text-xs text-stone-100"
+          >
+            {lensOn ? 'Lens: ON (tap for raw camera)' : 'Lens: OFF (raw camera)'}
+          </button>
           {zoomCaps && (
             <div className="flex w-full max-w-xs items-center gap-2 rounded-full bg-stone-950/80 px-3 py-2">
               <span className="text-[11px] text-stone-300">Wide</span>
