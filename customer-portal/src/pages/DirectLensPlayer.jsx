@@ -54,10 +54,19 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
       const caps = track?.getCapabilities?.() ?? {}
       const source = createMediaStreamSource(stream, { cameraType: 'environment' })
       await session.setSource(source)
-      await source.setTransform(Transform2D.Identity)
+      // Phones flip between portrait and landscape buffers between launches.
+      // If the track is landscape while the screen is portrait, the raw frame
+      // is a sideways sensor image: rotate the texture to upright portrait
+      // and render portrait, otherwise identity + native size.
+      const trackW = settings.width ?? 720
+      const trackH = settings.height ?? 1280
+      const portraitScreen = window.innerHeight >= window.innerWidth
+      const needRotate = portraitScreen && trackW > trackH
+      const ROT_NEG_90 = new Transform2D([0, -1, 0, 1, 0, 0, 0, 1, 1])
+      await source.setTransform(needRotate ? ROT_NEG_90 : Transform2D.Identity)
       await session.play('live')
-      const w = settings.width ?? 720
-      const h = settings.height ?? 1280
+      const w = needRotate ? trackH : trackW
+      const h = needRotate ? trackW : trackH
       await source.setRenderSize(w, h).catch(() => {})
       streamRef.current?.getTracks().forEach((t) => t.stop())
       streamRef.current = stream
@@ -70,7 +79,7 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
         setZoomCaps(null)
       }
       const canvas = session.output.live
-      setDbg('src ' + w + 'x' + h + ' canvas ' + canvas.width + 'x' + canvas.height)
+      setDbg('src ' + trackW + 'x' + trackH + (needRotate ? ' rot' : '') + ' canvas ' + canvas.width + 'x' + canvas.height)
       setStatus('')
     } catch (e) {
       fail(
