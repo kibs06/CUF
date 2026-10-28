@@ -20,8 +20,9 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
   const sessionRef = useRef(null)
   const kitRef = useRef(null)
   const streamRef = useRef(null)
+  const sourceRef = useRef(null)
   const lensRef = useRef(null)
-  const [lensOn, setLensOn] = useState(true)
+  const [lensOn, setLensOn] = useState(false)
   const [dbg, setDbg] = useState('')
   const [status, setStatus] = useState('Starting camera session…')
   const [cameras, setCameras] = useState([])
@@ -53,6 +54,8 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
       const settings = track?.getSettings?.() ?? {}
       const caps = track?.getCapabilities?.() ?? {}
       const source = createMediaStreamSource(stream, { cameraType: 'environment' })
+      try { await sourceRef.current?.detach(() => {}) } catch {}
+      sourceRef.current = source
       await session.setSource(source)
       // Phones flip between portrait and landscape buffers between launches.
       // If the track is landscape while the screen is portrait, the raw frame
@@ -113,11 +116,24 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
         containerRef.current?.appendChild(canvas)
         const lens = await kit.lensRepository.loadLens(lensId, lensGroupId)
         if (cancelled) return
-        await session.applyLens(lens)
         lensRef.current = lens
-        if (cancelled) return
         await startCamera(null)
         if (cancelled) return
+        if (streamRef.current) {
+          const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+          for (let i = 4; i > 0; i -= 1) {
+            setStatus('Raw camera — lens in ' + i + 's — watch if it zooms')
+            await sleep(1000)
+            if (cancelled) return
+          }
+          try {
+            await session.applyLens(lensRef.current)
+            setLensOn(true)
+          } catch (e) {
+            fail('Lens failed: ' + (e?.message ?? 'unknown error'))
+            return
+          }
+        }
         try {
           const devices = (await navigator.mediaDevices.enumerateDevices()).filter(
             (d) => d.kind === 'videoinput',
