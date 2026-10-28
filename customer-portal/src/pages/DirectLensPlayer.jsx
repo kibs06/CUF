@@ -27,6 +27,25 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
     let cancelled = false
     const openStream = (constraints) =>
       navigator.mediaDevices.getUserMedia({ video: constraints, audio: false })
+    // Prefer the first rear camera in enumeration order ("cam1" on the test
+    // phone): the browser's default `environment` pick is not always the
+    // widest rear sensor. Only switches on an explicit rear label match;
+    // otherwise keeps the already-open default stream.
+    const preferRearCamera = async (stream) => {
+      try {
+        const devices = (await navigator.mediaDevices.enumerateDevices()).filter(
+          (d) => d.kind === 'videoinput',
+        )
+        const rear = devices.find((d) => /back|rear|environment/i.test(d.label || ''))
+        const currentId = stream.getVideoTracks()[0]?.getSettings?.().deviceId
+        if (!rear || !rear.deviceId || rear.deviceId === currentId) return stream
+        const next = await openStream({ deviceId: { exact: rear.deviceId }, width: { ideal: 1280 } })
+        stream.getTracks().forEach((tr) => tr.stop())
+        return next
+      } catch {
+        return stream
+      }
+    }
     ;(async () => {
       try {
         const kit = await bootstrapCameraKit({ apiToken })
@@ -48,11 +67,12 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
         canvas.style.background = '#000'
         containerRef.current?.appendChild(canvas)
         setStatus('Opening camera…')
-        const stream = await openStream({
+        const initial = await openStream({
           facingMode: 'environment',
           width: { ideal: 960 },
           height: { ideal: 1280 },
         })
+        const stream = await preferRearCamera(initial)
         if (cancelled) {
           stream.getTracks().forEach((t) => t.stop())
           return
