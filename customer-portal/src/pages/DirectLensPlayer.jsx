@@ -52,7 +52,9 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
       await session.setSource(source)
       await source.setTransform(Transform2D.Identity)
       await session.play('live')
-      await source.setRenderSize(settings.width ?? 720, settings.height ?? 1280).catch(() => {})
+      const w = settings.width ?? 720
+      const h = settings.height ?? 1280
+      await source.setRenderSize(w, h).catch(() => {})
       streamRef.current?.getTracks().forEach((t) => t.stop())
       streamRef.current = stream
       setActiveId(deviceId ?? settings.deviceId ?? null)
