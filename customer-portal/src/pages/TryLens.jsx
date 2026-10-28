@@ -16,6 +16,9 @@ const LensPlayer = lazy(() =>
 // Status pill (sdk / camera-source / lens phases) — lazy for the same reason:
 // `useCameraKit` lives in the same package, so it shares the split chunk.
 const LensSessionState = lazy(() => import('./LensSessionState.jsx'))
+// Camera un-zoomer: dials an over-zoomed track back to 1x once the session
+// is live. Same chunk as the pill — `useCameraKit` already splits it out.
+const LensZoomNormalizer = lazy(() => import('./LensZoomNormalizer.jsx'))
 
 /**
  * Hidden QA route: `/try-lens?product=<id>`.
@@ -81,11 +84,23 @@ export default function TryLens() {
                 key={refreshKey}
                 lensId={env.lensId}
                 lensGroupId={env.lensGroupId}
-                source={{ kind: 'camera', options: { cameraFacing: 'environment' } }}
+                source={{
+                  kind: 'camera',
+                  options: {
+                    cameraFacing: 'environment',
+                    // Widest capture the lens supports: 4:3 matches the mount
+                    // (`aspect-[3/4]`) so the box shows the frame, not a crop.
+                    cameraConstraints: {
+                      width: { ideal: 1280 },
+                      height: { ideal: 960 },
+                    },
+                  },
+                }}
                 className="h-full w-full"
                 onError={(error) => setLensError(error?.message ?? String(error))}
               />
               <LensSessionState />
+              <LensZoomNormalizer />
             </CameraKitProvider>
           </Suspense>
           {lensError && (
