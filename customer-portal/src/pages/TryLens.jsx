@@ -84,6 +84,13 @@ export default function TryLens() {
               kind: 'camera',
               options: {
                 cameraFacing: 'environment',
+                // The wrapper treats ALL mobile capture as rotated and
+                // sizes the render target landscape — but this phone's
+                // track is true portrait (probe: 960x1280), so the portrait
+                // texture was cover-cropped into a landscape target: the
+                // "zoom". Rotating the texture to landscape fits the
+                // target with no crop. Sign is trial: report orientation.
+                cameraRotation: -90,
                 // Widest 4:3 capture so the frame holds the whole foot.
                 // `zoom ideal 1` asks for 1x at creation — the only zoom
                 // hook that works, since the wrapper owns the live track
