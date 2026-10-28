@@ -26,7 +26,7 @@ import { useCart } from '../hooks/useCart.jsx'
 import { useMySize } from '../hooks/useMySize.js'
 import { useProduct, useProducts, useStore } from '../hooks/useCatalog'
 import useProductModel from '../hooks/useProductModel'
-import { getLensEnv, lensConfigStatus } from '../lib/lensConfig.js'
+import { getLensEnv, lensAvailableForProduct, lensConfigStatus } from '../lib/lensConfig.js'
 import { availableSizes, stockForSize } from '../lib/stock'
 import { salePercent } from '../lib/pricing'
 import { sellerProductPreviewPath } from '../lib/sellerPaths.js'
@@ -331,10 +331,12 @@ export default function ProductDetail({ preview = false }) {
                   Try on feet (Beta)
                 </button>
                 {/* Lens entry: only when a Lens is published AND this product
-                    has a model. Unconfigured → no button, no gap (same rule
-                    as the 3D entry above). The Lens shoes are per-product in
-                    Lens Studio; this link just carries which product. */}
-                {lensConfigStatus(getLensEnv()).ready && (
+                    has a model AND this product has its own published lens.
+                    Unconfigured → no button, no gap (same rule as the 3D
+                    entry above). Lenses are per-product in Lens Studio; the
+                    single global lens ID must never load for another shoe. */}
+                {lensConfigStatus(getLensEnv()).ready &&
+                  lensAvailableForProduct(getLensEnv(), product.id) && (
                   <Link
                     to={`/try-lens?product=${product.id}`}
                     className="btn btn-outline w-full gap-2"

@@ -2,7 +2,7 @@ import { Suspense, lazy, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { RotateCcw } from 'lucide-react'
 
-import { getLensEnv, lensConfigStatus } from '../lib/lensConfig.js'
+import { getLensEnv, lensAvailableForProduct, lensConfigStatus } from '../lib/lensConfig.js'
 
 // Direct player owns its own MediaStream, so it can open any physical
 // camera by deviceId (the wrapper drops deviceId on all mobile) and dial
@@ -31,6 +31,26 @@ export default function TryLens() {
   const status = lensConfigStatus(env)
   const [lensError, setLensError] = useState(null)
   const [refreshKey, setRefreshKey] = useState(0)
+
+  // Direct links carry ?product=<id>, but lenses are per-product in Lens
+  // Studio: refuse to load the (wrong) global lens for a product that has
+  // none published, instead of showing another shoe's try-on.
+  if (status.ready && productId && !lensAvailableForProduct(env, productId)) {
+    return (
+      <div className="mx-auto max-w-2xl px-4 py-10">
+        <p className="text-sm font-medium text-stone-500">Hidden spike · /try-lens</p>
+        <h1 className="mt-2 text-2xl font-semibold">No Snapchat lens for this product yet</h1>
+        <p className="mt-4 text-sm text-stone-600">
+          This shoe doesn&apos;t have a published lens — try the in-app 3D viewer instead.
+        </p>
+        <p className="mt-4 text-sm">
+          <Link to={`/product/${productId}`} className="underline">
+            ← Back to product
+          </Link>
+        </p>
+      </div>
+    )
+  }
 
   if (!status.ready) {
     return (
