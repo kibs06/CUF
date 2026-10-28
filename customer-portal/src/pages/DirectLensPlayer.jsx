@@ -112,7 +112,11 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
         const canvas = session.output.live
         canvas.style.width = '100%'
         canvas.style.height = '100%'
-        canvas.style.objectFit = 'cover'
+        // Contain, not cover: show every pixel the camera delivers
+        // (letterboxed) instead of cropping sides to fill the screen.
+        // Widest possible view of the frame by construction.
+        canvas.style.objectFit = 'contain'
+        canvas.style.background = '#000'
         containerRef.current?.appendChild(canvas)
         const lens = await kit.lensRepository.loadLens(lensId, lensGroupId)
         if (cancelled) return
