@@ -79,7 +79,7 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
         setZoomCaps(null)
       }
       const canvas = session.output.live
-      setDbg('src ' + trackW + 'x' + trackH + (needRotate ? ' rot' : '') + ' canvas ' + canvas.width + 'x' + canvas.height)
+      setDbg('[b89] src ' + trackW + 'x' + trackH + (needRotate ? ' rot' : '') + ' canvas ' + canvas.width + 'x' + canvas.height)
       setStatus('')
     } catch (e) {
       fail(
