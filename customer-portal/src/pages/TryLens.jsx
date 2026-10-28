@@ -15,6 +15,10 @@ const LensPlayer = lazy(() =>
 // Status pill (sdk / camera-source / lens phases) — lazy for the same reason:
 // `useCameraKit` lives in the same package, so it shares the split chunk.
 const LensSessionState = lazy(() => import('./LensSessionState.jsx'))
+// Throwaway probe overlay (same constraints, reports real track settings).
+// Decides whether the tight framing is browser camera selection or the
+// Lens render path. Hidden QA route only — delete before public launch.
+const LensCameraDebug = lazy(() => import('./LensCameraDebug.jsx'))
 
 /**
  * Hidden QA route: `/try-lens?product=<id>`.
@@ -98,6 +102,7 @@ export default function TryLens() {
             onError={(error) => setLensError(error?.message ?? String(error))}
           />
           <LensSessionState />
+          <LensCameraDebug />
         </CameraKitProvider>
       </Suspense>
       {/* The only chrome: a floating back button. Everything else is feed. */}
