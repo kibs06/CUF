@@ -41,6 +41,10 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
     const session = sessionRef.current
     if (!session) return
     setStatus('Opening camera…')
+    if (deviceId) {
+      streamRef.current?.getTracks().forEach((tr) => tr.stop())
+      streamRef.current = null
+    }
     try {
       const stream = deviceId
         ? await openStream({ deviceId: { exact: deviceId }, width: { ideal: 1280 } })
@@ -188,21 +192,20 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
           {status}
         </div>
       )}
-      {cameras.length > 1 && (
-        <div className="absolute inset-x-0 bottom-3 flex flex-col items-center gap-2 px-3">
-          {dbg !== '' && (
-            <div className="rounded-full bg-stone-950/80 px-3 py-1 font-mono text-[11px] text-lime-200">
-              {dbg}
-            </div>
-          )}
-          <button
-            type="button"
-            onClick={toggleLens}
-            className="rounded-full bg-stone-950/80 px-3 py-1.5 text-xs text-stone-100"
-          >
-            {lensOn ? 'Lens: ON (tap for raw camera)' : 'Lens: OFF (raw camera)'}
-          </button>
-          {zoomCaps && (
+      <div className="absolute inset-x-0 bottom-3 flex flex-col items-center gap-2 px-3">
+        {dbg !== '' && (
+          <div className="rounded-full bg-stone-950/80 px-3 py-1 font-mono text-[11px] text-lime-200">
+            {dbg}
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={toggleLens}
+          className="rounded-full bg-stone-950/80 px-3 py-1.5 text-xs text-stone-100"
+        >
+          {lensOn ? 'Lens: ON (tap for raw camera)' : 'Lens: OFF (raw camera)'}
+        </button>
+        {cameras.length > 1 && zoomCaps && (
             <div className="flex w-full max-w-xs items-center gap-2 rounded-full bg-stone-950/80 px-3 py-2">
               <span className="text-[11px] text-stone-300">Wide</span>
               <input
@@ -218,6 +221,7 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
               <span className="font-mono text-[11px] text-stone-300">{zoom.toFixed(1)}x</span>
             </div>
           )}
+        {cameras.length > 1 && (
           <div className="flex max-w-full gap-1.5 overflow-x-auto rounded-full bg-stone-950/80 p-1.5">
             {cameras.map((c, i) => {
               const isActive = activeId != null && c.deviceId === activeId
@@ -238,8 +242,8 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
               )
             })}
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }
