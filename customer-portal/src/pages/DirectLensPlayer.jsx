@@ -28,6 +28,7 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
   const [cameras, setCameras] = useState([])
   const [activeId, setActiveId] = useState(null)
   const [zoom, setZoom] = useState(1)
+  const [fps, setFps] = useState(null)
   const [zoomCaps, setZoomCaps] = useState(null)
 
   const fail = (message) => {
@@ -49,7 +50,7 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
     try {
       const stream = deviceId
         ? await openStream({ deviceId: { exact: deviceId }, width: { ideal: 1280 } })
-        : await openStream({ facingMode: 'environment', width: { ideal: 960 }, height: { ideal: 1280 } })
+        : await openStream({ facingMode: 'environment', width: { ideal: 960 }, height: { ideal: 1280 }, frameRate: { ideal: 60 } })
       const track = stream.getVideoTracks()[0]
       const settings = track?.getSettings?.() ?? {}
       const caps = track?.getCapabilities?.() ?? {}
@@ -65,8 +66,11 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
       const portraitScreen = window.innerHeight >= window.innerWidth
       const needRotate = portraitScreen && trackW > trackH
       const ROT_NEG_90 = new Transform2D([0, -1, 0, 1, 0, 0, 0, 1, 1])
-      const w = needRotate ? trackH : trackW
-      const h = needRotate ? trackW : trackH
+      const w0 = needRotate ? trackH : trackW
+      const h0 = needRotate ? trackW : trackH
+      const fit = Math.min(1, 720 / Math.max(w0, h0))
+      const w = Math.round(w0 * fit)
+      const h = Math.round(h0 * fit)
       // Pause first: setRenderSize silently no-ops when issued right after
       // play (canvas stayed 1280x960 landscape while the texture rotated
       // into it = the crop-zoom). The wrapper pauses around this too.
@@ -113,6 +117,7 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
           return
         }
         sessionRef.current = session
+        await session.setFPSLimit(60).catch(() => {})
         const canvas = session.output.live
         canvas.style.width = '100%'
         canvas.style.height = '100%'
@@ -192,6 +197,25 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  useEffect(() => {
+    let frames = 0
+    let raf = 0
+    let last = performance.now()
+    let alive = true
+    const tick = (now) => {
+      if (!alive) return
+      frames += 1
+      if (now - last >= 1000) {
+        setFps(Math.round((frames * 1000) / (now - last)))
+        frames = 0
+        last = now
+      }
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => { alive = false; cancelAnimationFrame(raf) }
+  }, [])
+
   const toggleLens = async () => {
     const session = sessionRef.current
     if (!session) return
@@ -226,9 +250,9 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
         </div>
       )}
       <div className="absolute inset-x-0 bottom-3 flex flex-col items-center gap-2 px-3">
-        {dbg !== '' && (
+        {(dbg !== '' || fps != null) && (
           <div className="rounded-full bg-stone-950/80 px-3 py-1 font-mono text-[11px] text-lime-200">
-            {dbg}
+            {dbg}{fps != null ? ` ${fps}fps` : ''}
           </div>
         )}
         <button
