@@ -56,7 +56,6 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
       const source = createMediaStreamSource(stream, { cameraType: 'environment' })
       try { await sourceRef.current?.detach(() => {}) } catch {}
       sourceRef.current = source
-      await session.setSource(source)
       // Phones flip between portrait and landscape buffers between launches.
       // If the track is landscape while the screen is portrait, the raw frame
       // is a sideways sensor image: rotate the texture to upright portrait
@@ -66,11 +65,16 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
       const portraitScreen = window.innerHeight >= window.innerWidth
       const needRotate = portraitScreen && trackW > trackH
       const ROT_NEG_90 = new Transform2D([0, -1, 0, 1, 0, 0, 0, 1, 1])
-      await source.setTransform(needRotate ? ROT_NEG_90 : Transform2D.Identity)
-      await session.play('live')
       const w = needRotate ? trackH : trackW
       const h = needRotate ? trackW : trackH
-      await source.setRenderSize(w, h).catch(() => {})
+      // Pause first: setRenderSize silently no-ops when issued right after
+      // play (canvas stayed 1280x960 landscape while the texture rotated
+      // into it = the crop-zoom). The wrapper pauses around this too.
+      try { await session.pause('live') } catch {}
+      await session.setSource(source)
+      await source.setTransform(needRotate ? ROT_NEG_90 : Transform2D.Identity)
+      await source.setRenderSize(w, h)
+      await session.play('live')
       streamRef.current?.getTracks().forEach((t) => t.stop())
       streamRef.current = stream
       setActiveId(deviceId ?? settings.deviceId ?? null)
@@ -82,7 +86,7 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
         setZoomCaps(null)
       }
       const canvas = session.output.live
-      setDbg('[b89] src ' + trackW + 'x' + trackH + (needRotate ? ' rot' : '') + ' canvas ' + canvas.width + 'x' + canvas.height)
+      setDbg('[rs1] src ' + trackW + 'x' + trackH + (needRotate ? ' rot' : '') + ' canvas ' + canvas.width + 'x' + canvas.height)
       setStatus('')
     } catch (e) {
       fail(
@@ -115,7 +119,7 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
         // Contain, not cover: show every pixel the camera delivers
         // (letterboxed) instead of cropping sides to fill the screen.
         // Widest possible view of the frame by construction.
-        canvas.style.objectFit = 'contain'
+        canvas.style.objectFit = 'cover'
         canvas.style.background = '#000'
         containerRef.current?.appendChild(canvas)
         const lens = await kit.lensRepository.loadLens(lensId, lensGroupId)
