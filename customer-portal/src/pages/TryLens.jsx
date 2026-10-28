@@ -16,9 +16,6 @@ const LensPlayer = lazy(() =>
 // Status pill (sdk / camera-source / lens phases) — lazy for the same reason:
 // `useCameraKit` lives in the same package, so it shares the split chunk.
 const LensSessionState = lazy(() => import('./LensSessionState.jsx'))
-// Camera un-zoomer: dials an over-zoomed track back to 1x once the session
-// is live. Same chunk as the pill — `useCameraKit` already splits it out.
-const LensZoomNormalizer = lazy(() => import('./LensZoomNormalizer.jsx'))
 
 /**
  * Hidden QA route: `/try-lens?product=<id>`.
@@ -88,19 +85,25 @@ export default function TryLens() {
                   kind: 'camera',
                   options: {
                     cameraFacing: 'environment',
-                    // Widest capture the lens supports: 4:3 matches the mount
-                    // (`aspect-[3/4]`) so the box shows the frame, not a crop.
+                    // Widest 4:3 capture matches the mount (`aspect-[3/4]`)
+                    // so the box shows the frame, not a crop. `zoom ideal 1`
+                    // asks for 1x at creation — the only zoom hook that
+                    // works, since the wrapper owns the live track and
+                    // exposes no session handle for post-hoc dialing.
                     cameraConstraints: {
                       width: { ideal: 1280 },
                       height: { ideal: 960 },
+                      zoom: { ideal: 1 },
                     },
                   },
                 }}
+                // Render at the input's own size: a fixed output size crops
+                // the frame, which reads as extra magnification on phones.
+                outputSize={{ mode: 'match-input' }}
                 className="h-full w-full"
                 onError={(error) => setLensError(error?.message ?? String(error))}
               />
               <LensSessionState />
-              <LensZoomNormalizer />
             </CameraKitProvider>
           </Suspense>
           {lensError && (
