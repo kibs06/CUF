@@ -164,33 +164,25 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
             return
           }
         }
+        // Instant inventory: enumerate only, never open. Opening each
+        // camera to probe it serializes slow hardware handshakes (and can
+        // block while the session stream is live), which is why the pills
+        // used to arrive seconds late. Labels alone are enough to pick.
         try {
           const devices = (await navigator.mediaDevices.enumerateDevices()).filter(
             (d) => d.kind === 'videoinput',
           )
-          const rows = []
-          for (const dev of devices) {
-            try {
-              const ds = await openStream({ deviceId: { exact: dev.deviceId }, width: { ideal: 1280 } })
-              const dt = ds.getVideoTracks()[0]
-              const dset = dt?.getSettings?.() ?? {}
-              const dcap = dt?.getCapabilities?.() ?? {}
-              ds.getTracks().forEach((t) => t.stop())
-              rows.push({
-                deviceId: dev.deviceId,
-                label: dev.label || 'camera',
-                width: dset.width ?? null,
-                height: dset.height ?? null,
-                facing: dset.facingMode ?? '',
-                zoomMin: dcap.zoom?.min ?? null,
-              })
-            } catch {
-              rows.push({ deviceId: dev.deviceId, label: dev.label || 'camera', width: null, height: null, facing: '', zoomMin: null })
-            }
-            if (cancelled) return
-          }
+          if (cancelled) return
+          const rows = devices.map((dev) => ({
+            deviceId: dev.deviceId,
+            label: dev.label || 'camera',
+            width: null,
+            height: null,
+            facing: '',
+            zoomMin: null,
+          }))
           rows.sort((a, b) => {
-            const back = (r) => (/back|rear|environment/i.test(r.label) || r.facing === 'environment' ? 0 : 1)
+            const back = (r) => (/back|rear|environment/i.test(r.label) ? 0 : 1)
             return back(a) - back(b)
           })
           setCameras(rows)
