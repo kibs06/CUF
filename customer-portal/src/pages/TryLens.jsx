@@ -4,21 +4,11 @@ import { RotateCcw } from 'lucide-react'
 
 import { getLensEnv, lensConfigStatus } from '../lib/lensConfig.js'
 
-// Lazy so the stub stays light until a published Lens is configured:
-// the Camera Kit runtime only downloads when env is ready.
-const CameraKitProvider = lazy(() =>
-  import('@snap/react-camera-kit').then((m) => ({ default: m.CameraKitProvider })),
-)
-const LensPlayer = lazy(() =>
-  import('@snap/react-camera-kit').then((m) => ({ default: m.LensPlayer })),
-)
-// Status pill (sdk / camera-source / lens phases) — lazy for the same reason:
-// `useCameraKit` lives in the same package, so it shares the split chunk.
-const LensSessionState = lazy(() => import('./LensSessionState.jsx'))
-// Throwaway probe overlay (same constraints, reports real track settings).
-// Decides whether the tight framing is browser camera selection or the
-// Lens render path. Hidden QA route only — delete before public launch.
-const LensCameraDebug = lazy(() => import('./LensCameraDebug.jsx'))
+// Direct player owns its own MediaStream, so it can open any physical
+// camera by deviceId (the wrapper drops deviceId on all mobile) and dial
+// zoom to minimum. Lazy so the Camera Kit runtime stays out of the main
+// bundle until this hidden route mounts.
+const DirectLensPlayer = lazy(() => import('./DirectLensPlayer.jsx'))
 
 /**
  * Hidden QA route: `/try-lens?product=<id>`.
@@ -72,42 +62,14 @@ export default function TryLens() {
           </div>
         }
       >
-        <CameraKitProvider apiToken={env.apiToken}>
-          {/* Rear camera: feet are in front of the phone, not the user.
-              The wrapper defaults to the selfie camera, which is why the
-              mount stayed black — a working pipeline pointed at no feet. */}
-          <LensPlayer
+          {/* Direct player: rear camera by default, feet in front of the phone. */}
+          <DirectLensPlayer
             key={refreshKey}
+            apiToken={env.apiToken}
             lensId={env.lensId}
             lensGroupId={env.lensGroupId}
-            source={{
-              kind: 'camera',
-              options: {
-                cameraFacing: 'environment',
-                // Portrait end-to-end: this phone's track is true portrait
-                // (probe: 960x1280 zoom=1). The wrapper swaps w/h on ALL
-                // mobile, so match-input sized the render target landscape
-                // and cover-cropped the portrait texture = the zoom.
-                // Fixed portrait render keeps texture:target:screen all
-                // portrait. No cameraRotation: texture is already portrait.
-                // zoom ideal 1 asks for 1x at creation — the only zoom hook
-                // that works, since the wrapper owns the live track.
-                cameraConstraints: {
-                  width: { ideal: 960 },
-                  height: { ideal: 1280 },
-                  zoom: { ideal: 1 },
-                },
-              },
-            }}
-            // Fixed portrait render matching probe track: avoids wrapper
-            // mobile w/h swap that made match-input landscape.
-            outputSize={{ mode: 'fixed', width: 960, height: 1280 }}
-            className="h-full w-full [&_canvas]:h-full [&_canvas]:w-full [&_canvas]:object-cover"
-            onError={(error) => setLensError(error?.message ?? String(error))}
+            onError={(message) => setLensError(message)}
           />
-          <LensSessionState />
-          <LensCameraDebug />
-        </CameraKitProvider>
       </Suspense>
       {/* The only chrome: a floating back button. Everything else is feed. */}
       <Link
