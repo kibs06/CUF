@@ -84,28 +84,25 @@ export default function TryLens() {
               kind: 'camera',
               options: {
                 cameraFacing: 'environment',
-                // The wrapper treats ALL mobile capture as rotated and
-                // sizes the render target landscape — but this phone's
-                // track is true portrait (probe: 960x1280), so the portrait
-                // texture was cover-cropped into a landscape target: the
-                // "zoom". Rotating the texture to landscape fits the
-                // target with no crop. Sign is trial: report orientation.
-                cameraRotation: -90,
-                // Widest 4:3 capture so the frame holds the whole foot.
-                // `zoom ideal 1` asks for 1x at creation — the only zoom
-                // hook that works, since the wrapper owns the live track
-                // and exposes no session handle for post-hoc dialing.
+                // Portrait end-to-end: this phone's track is true portrait
+                // (probe: 960x1280 zoom=1). The wrapper swaps w/h on ALL
+                // mobile, so match-input sized the render target landscape
+                // and cover-cropped the portrait texture = the zoom.
+                // Fixed portrait render keeps texture:target:screen all
+                // portrait. No cameraRotation: texture is already portrait.
+                // zoom ideal 1 asks for 1x at creation — the only zoom hook
+                // that works, since the wrapper owns the live track.
                 cameraConstraints: {
-                  width: { ideal: 1280 },
-                  height: { ideal: 960 },
+                  width: { ideal: 960 },
+                  height: { ideal: 1280 },
                   zoom: { ideal: 1 },
                 },
               },
             }}
-            // Render at the input's own size: a fixed output size crops
-            // the frame, which reads as extra magnification on phones.
-            outputSize={{ mode: 'match-input' }}
-            className="h-full w-full"
+            // Fixed portrait render matching probe track: avoids wrapper
+            // mobile w/h swap that made match-input landscape.
+            outputSize={{ mode: 'fixed', width: 960, height: 1280 }}
+            className="h-full w-full [&_canvas]:h-full [&_canvas]:w-full [&_canvas]:object-cover"
             onError={(error) => setLensError(error?.message ?? String(error))}
           />
           <LensSessionState />

@@ -22,8 +22,8 @@ export default function LensCameraDebug() {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: 'environment',
-            width: { ideal: 1280 },
-            height: { ideal: 960 },
+            width: { ideal: 960 },
+            height: { ideal: 1280 },
             zoom: { ideal: 1 },
           },
           audio: false,
