@@ -100,6 +100,7 @@ class ShoePreviewScreen extends StatefulWidget {
     this.viewBuilder,
     this.events,
     this.storagePath,
+    this.launchExternal,
   }) : productId = null;
 
   /// The seller door: nothing is resolved yet, so this screen resolves it.
@@ -118,6 +119,7 @@ class ShoePreviewScreen extends StatefulWidget {
     this.channel,
     this.viewBuilder,
     this.events,
+    this.launchExternal,
   })  : model = null,
         modelAvailable = false,
         storagePath = null;
@@ -165,6 +167,12 @@ class ShoePreviewScreen extends StatefulWidget {
 
   /// Test seam: the preview's native event stream, instead of the channel's own.
   final Stream<Map<String, dynamic>>? events;
+
+  /// Test seam: where an external URL goes instead of the phone browser —
+  /// `launchUrl` cannot be observed under `flutter test`, so the Snap pill
+  /// takes this when it is given (same injectable shape as
+  /// `launchSpaceView`'s `launch`). Null opens the real browser.
+  final Future<bool> Function(Uri uri)? launchExternal;
 
   /// The bucket path of the live model (`product_models.storage_path`), so
   /// the space view can point Scene Viewer at the same public file the
@@ -289,11 +297,10 @@ class _ShoePreviewScreenState extends State<ShoePreviewScreen> {
   Future<void> _openSnapLens() async {
     final productId = _productId;
     if (productId == null) return;
+    final launch = widget.launchExternal ??
+        (Uri uri) => launchUrl(uri, mode: LaunchMode.externalApplication);
     try {
-      final ok = await launchUrl(
-        Uri.parse(AppConstants.snapLensUrl(productId)),
-        mode: LaunchMode.externalApplication,
-      );
+      final ok = await launch(Uri.parse(AppConstants.snapLensUrl(productId)));
       if (!mounted || ok) return;
     } catch (_) {
       if (!mounted) return;
