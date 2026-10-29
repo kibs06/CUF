@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:app/constants/app_constants.dart';
 import 'package:app/screens/shared/shoe_preview_screen.dart';
 import 'package:app/services/ar_try_on_channel.dart';
 import 'package:app/services/shoe_model_service.dart';
@@ -293,12 +294,34 @@ void main() {
 
       expect(find.byKey(const Key('fake-3d')), findsOneWidget);
       expect(find.text('Try On in AR'), findsNothing);
+      expect(find.text('Try on Snap'), findsNothing);
       expect(
         find.text('Change it any time from the product form.'),
         findsOneWidget,
         reason: 'the sentence the deleted ready sheet carried, where the seller '
             'now actually is',
       );
+    });
+
+    testWidgets('hides Try on Snap on the seller\'s door even for a lensed product',
+        (tester) async {
+      // A seller cannot try the pair on — same reason the AR entry stays out.
+      final lunaId = AppConstants.snapLensProductIds.single;
+      final luna = <String, dynamic>{'id': lunaId, 'name': 'Luna Loafers'};
+      await tester.pumpWidget(MaterialApp(
+        home: ShoePreviewScreen.forProduct(
+          productId: lunaId,
+          product: luna,
+          prefetch: prefetchThat(resolved: spec()),
+          note: 'Change it any time from the product form.',
+          viewBuilder: () => const SizedBox(key: Key('fake-3d'), height: 240),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('fake-3d')), findsOneWidget);
+      expect(find.text('Try on Snap'), findsNothing);
+      expect(find.text('Try On in AR'), findsNothing);
     });
 
     testWidgets('and none appears when the renderer refuses either',
@@ -374,6 +397,40 @@ void main() {
         reason: 'a viewer the customer cannot leave in one tap is a trap on the '
             'page they were comparing sizes on',
       );
+    });
+
+    test('snapLensUrl points at the portal try-lens page', () {
+      expect(
+        AppConstants.snapLensUrl('abc'),
+        '${AppConstants.customerPortalUrl}/try-lens?product=abc',
+      );
+    });
+
+    testWidgets('shows Try on Snap only for a product with a lens',
+        (tester) async {
+      // Luna Loafers has the only published lens: all three pills.
+      final luna = <String, dynamic>{
+        'id': AppConstants.snapLensProductIds.single,
+        'name': 'Luna Loafers',
+      };
+      await tester.pumpWidget(MaterialApp(
+        home: ShoePreviewScreen(
+          model: model,
+          product: luna,
+          viewBuilder: () =>
+              const SizedBox(key: Key('fake-3d'), height: 240),
+        ),
+      ));
+      expect(find.text('Capture to fit'), findsOneWidget);
+      expect(find.text('Try on Snap'), findsOneWidget);
+      expect(find.text('Try On in AR'), findsOneWidget);
+
+      // Any other product keeps capture + AR, no Snap entry.
+      await tester.pumpWidget(harness());
+      await tester.pumpAndSettle();
+      expect(find.text('Capture to fit'), findsOneWidget);
+      expect(find.text('Try on Snap'), findsNothing);
+      expect(find.text('Try On in AR'), findsOneWidget);
     });
   });
 
