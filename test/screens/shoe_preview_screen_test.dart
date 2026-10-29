@@ -432,6 +432,67 @@ void main() {
       expect(find.text('Try on Snap'), findsNothing);
       expect(find.text('Try On in AR'), findsOneWidget);
     });
+
+    testWidgets('tapping Try on Snap opens the try-lens page for the product',
+        (tester) async {
+      // The pill's whole job is one URL in the phone browser: the exact
+      // try-lens page for this product, nothing else. `launchExternal` stands
+      // in for the browser the way `viewBuilder` stands in for the renderer.
+      final lunaId = AppConstants.snapLensProductIds.single;
+      final launched = <Uri>[];
+      await tester.pumpWidget(MaterialApp(
+        home: ShoePreviewScreen(
+          model: model,
+          product: <String, dynamic>{'id': lunaId, 'name': 'Luna Loafers'},
+          viewBuilder: () =>
+              const SizedBox(key: Key('fake-3d'), height: 240),
+          launchExternal: (uri) async {
+            launched.add(uri);
+            return true;
+          },
+        ),
+      ));
+
+      await tester.tap(find.text('Try on Snap'));
+      await tester.pump();
+
+      expect(
+        launched,
+        [Uri.parse(AppConstants.snapLensUrl(lunaId))],
+        reason: 'one launch, at the try-lens page for this product',
+      );
+      expect(
+        find.text('Could not open the Snap try-on just now.'),
+        findsNothing,
+        reason: 'a launch the phone took needs no apology',
+      );
+    });
+
+    testWidgets('a refused Try on Snap launch says so instead of throwing',
+        (tester) async {
+      // The other half of the pill's contract: a phone that refuses the
+      // browser gets one honest sentence, never a throw — same rule as the
+      // space-view entry.
+      final lunaId = AppConstants.snapLensProductIds.single;
+      await tester.pumpWidget(MaterialApp(
+        home: ShoePreviewScreen(
+          model: model,
+          product: <String, dynamic>{'id': lunaId, 'name': 'Luna Loafers'},
+          viewBuilder: () =>
+              const SizedBox(key: Key('fake-3d'), height: 240),
+          launchExternal: (_) async => false,
+        ),
+      ));
+
+      await tester.tap(find.text('Try on Snap'));
+      await tester.pump();
+
+      expect(
+        find.text('Could not open the Snap try-on just now.'),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    });
   });
 
   group('the seller\'s door', () {
