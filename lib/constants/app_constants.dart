@@ -51,6 +51,19 @@ class AppConstants {
   // `docs/fixes/GO_LIVE_PRELAUNCH_CHECKLIST.md`.
   static const String customerPortalUrl = 'https://cufmai-portal.vercel.app';
 
+  // --- SNAP LENS (web try-on) ---
+  // Products with a published Snap lens. Lenses are per-product in Lens
+  // Studio, so the single global lens must never load for another shoe.
+  // Mirrors the portal's `VITE_CAMERAKIT_LENS_PRODUCT_IDS`. Append IDs as new
+  // lenses publish; until then the product keeps 3D + AR, no Snap entry.
+  static const Set<String> snapLensProductIds = {
+    '0aebaa64-4d9e-44f8-8876-6b3ee9855fae', // Luna Loafers
+  };
+
+  /// Web Snap try-on URL for a product (opened in the phone browser).
+  static String snapLensUrl(String productId) =>
+      '$customerPortalUrl/try-lens?product=$productId';
+
   // --- PRODUCT SHARING (rich link previews) ---
   // Server-rendered Open Graph endpoint (Supabase Edge Function
   // `product-preview`, see supabase/functions/product-preview/index.ts).

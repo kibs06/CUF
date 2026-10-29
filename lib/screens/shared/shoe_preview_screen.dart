@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../constants/app_constants.dart';
 import '../../services/ar_try_on_channel.dart';
@@ -267,6 +268,43 @@ class _ShoePreviewScreenState extends State<ShoePreviewScreen> {
     await _openAr();
   }
 
+  /// The product this viewer is showing, either door: the customer door hands
+  /// the row over, the seller door hands the id over.
+  String? get _productId =>
+      widget.productId ?? widget.product['id']?.toString();
+
+  /// Whether the **"Try on Snap"** pill is offered: customer door only, and
+  /// only for a product with a published Snap lens (see
+  /// [AppConstants.snapLensProductIds] — the portal gates the same way, so a
+  /// drift between the two lists still lands on its "no lens yet" note rather
+  /// than the wrong shoe).
+  bool get _showSnapLens =>
+      widget.showTryOn &&
+      _productId != null &&
+      AppConstants.snapLensProductIds.contains(_productId);
+
+  /// **"Try on Snap"** — the web lens, opened in the phone browser where the
+  /// camera permissions are clean. A refused launch is a sentence, never a
+  /// throw (same rule as [_openSpaceView]).
+  Future<void> _openSnapLens() async {
+    final productId = _productId;
+    if (productId == null) return;
+    try {
+      final ok = await launchUrl(
+        Uri.parse(AppConstants.snapLensUrl(productId)),
+        mode: LaunchMode.externalApplication,
+      );
+      if (!mounted || ok) return;
+    } catch (_) {
+      if (!mounted) return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Could not open the Snap try-on just now.'),
+      ),
+    );
+  }
+
   /// The bucket path Scene Viewer should fetch: handed over on the customer
   /// door, resolved on the seller door. Null while the seller resolve is in
   /// flight, and the entry stays hidden until it lands.
@@ -504,23 +542,30 @@ class _ShoePreviewScreenState extends State<ShoePreviewScreen> {
                               ),
                             ),
                           ),
-                        // Side by side: the two actions are alternatives on the
-                        // same fit, so they share a row. The 2:3 flex gives
-                        // "Try On in AR" the larger slot.
+                        // Three equal pills: capture, Snap, AR. Snap sits in
+                        // the middle with the primary fill so the main action
+                        // reads first despite the equal width.
                         Row(
                           children: [
                             Expanded(
-                              flex: 2,
                               child: SoleARPill(
                                 onPressed: _captureFit,
                                 label: 'Capture to fit',
-                                background: AppConstants.primary,
-                                foreground: AppConstants.inkInverse,
                               ),
                             ),
-                            const SizedBox(width: 12),
+                            if (_showSnapLens) ...[
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: SoleARPill(
+                                  onPressed: _openSnapLens,
+                                  label: 'Try on Snap',
+                                  background: AppConstants.primary,
+                                  foreground: AppConstants.inkInverse,
+                                ),
+                              ),
+                            ],
+                            const SizedBox(width: 8),
                             Expanded(
-                              flex: 3,
                               child: SoleARPill(onPressed: _openArTryOn),
                             ),
                           ],
