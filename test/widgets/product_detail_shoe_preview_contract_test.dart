@@ -349,24 +349,32 @@ void main() {
     });
   });
 
-  group('there are two AR entries on the page, both at the foot', () {
-    test('the viewer draws the AR pill and the capture pill, both at the foot', () {
+  group('there are three entries on the page, all at the foot', () {
+    test('the viewer draws the AR, capture and Snap pills, all at the foot', () {
       // ⚠️ The pill lived inside the section from 2026-10-01 to 2026-10-03, in
       // the flow directly under the box. The owner asked for it at the bottom of
       // the screen — with a box that fills most of the page, the button left a
       // dead half-page beneath it. What the move must not cost is the reason the
       // two used to be one widget (one entry, present exactly when the box is,
       // surviving a renderer that refuses), so each half of that is pinned here.
-      // Two entries into the same camera, by design: "Capture to fit" opens AR and closes it on the
-      // foot's first capture, and "Try On in AR" is the plain session. Anything beyond these two
-      // would be a third way in and needs its own reason.
+      // Three entries by design: "Capture to fit" opens AR and closes it on the
+      // foot's first capture, "Try On in AR" is the plain session, and
+      // "Try on Snap" is the web lens — the third way in, gated to products
+      // with a published lens so it can never show the wrong shoe.
       expect(
         'SoleARPill('.allMatches(previewScreen).length,
-        2,
-        reason: 'two entries: plain AR, and capture-to-fit',
+        3,
+        reason: 'three entries: plain AR, capture-to-fit, and Snap',
       );
       expect(previewScreen, contains('SoleARPill(onPressed: _openArTryOn)'));
       expect(previewScreen, contains('onPressed: _captureFit'));
+      expect(previewScreen, contains("label: 'Try on Snap'"));
+      expect(
+        previewScreen,
+        contains('if (_showSnapLens)'),
+        reason: 'Snap is the lensed-products-only entry, never the seller\'s '
+            'or an unlensed shoe\'s',
+      );
       // Drawn after the scroll body — the bottom bar is the page's own slot, not
       // a child of the box — and only on the door that has someone to try the
       // pair on.
