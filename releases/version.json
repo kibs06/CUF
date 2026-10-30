@@ -1,10 +1,9 @@
 {
-  "latest_version": "1.0.60",
-  "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.60/app-release-1.0.60.apk",
-  "released_at": "2026-10-24",
+  "latest_version": "1.0.61",
+  "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.61/app-release-1.0.61.apk",
+  "released_at": "2026-10-30",
   "notes": [
-    "Register no longer flags a brand-new email as already registered",
-    "Duplicate inline error clears and re-validates on the next keystroke",
-    "Regression test forcing the duplicate path, verified red-without/green-with the fix"
+    "Color swatches show seller photos",
+    "Detail page fetches per-color photo rows so Select Color renders seller leather thumbnails instead of flat dots"
   ]
 }
