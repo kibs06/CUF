@@ -15,6 +15,7 @@ import 'package:app/services/shoe_model_service.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:provider/provider.dart';
 
@@ -31,7 +32,14 @@ void main() {
   // Staging touches the real filesystem (model bytes in a temp cache dir),
   // which cannot run in `testWidgets`' fake-async zone — so setup and
   // teardown run in the real zone via `runAsync`, and only the pumped
-  // assertions stay fake.
+  // assertions stay fake. Opening the real zone also lets `google_fonts`
+  // attempt its runtime fetch (the families are downloaded, not bundled),
+  // which CI's sandbox fails as a test error — fetching is off here, so
+  // text still renders and `find.text` still matches.
+  setUp(() {
+    GoogleFonts.config.allowRuntimeFetching = false;
+  });
+
   late Directory tempRoot;
   late Directory cacheDir;
 
