@@ -712,15 +712,59 @@ class _ProductDetailViewState extends State<_ProductDetailView>
 
   /// Get the first image URL for a color from product_color_images.
   /// Returns null if no color images exist for this color.
+  ///
+  /// Matches on the TRIMMED name (seller sheets and variant rows do not
+  /// always agree on surrounding whitespace) and prefers the lowest
+  /// `display_order`, mirroring the gallery sort in [_sortedImageUrls].
   String? _colorThumbnailUrl(String colorName) {
+    final want = colorName.trim();
     final colorImagesRaw = widget.product['product_color_images'] as List? ?? [];
+    final matches = <Map<String, dynamic>>[];
     for (final img in colorImagesRaw) {
-      if (img is Map && (img['color_name']?.toString() ?? '') == colorName) {
-        final url = img['url']?.toString();
-        if (url != null && url.isNotEmpty) return url;
-      }
+      if (img is! Map) continue;
+      if ((img['color_name']?.toString() ?? '').trim() != want) continue;
+      final url = img['url']?.toString();
+      if (url == null || url.isEmpty) continue;
+      matches.add(Map<String, dynamic>.from(img));
     }
-    return null;
+    if (matches.isEmpty) return null;
+    matches.sort((a, b) =>
+        (a['display_order'] as int? ?? 0).compareTo(b['display_order'] as int? ?? 0));
+    return matches.first['url']?.toString();
+  }
+
+  /// Lazily loads `product_color_images` when the payload that opened this
+  /// page did not carry them.
+  ///
+  /// Grid / search / rail payloads select only images + inventory, so a
+  /// product WITH seller colour photos still arrives with `variants` (colour
+  /// names → swatches render) but WITHOUT `product_color_images` (thumbnail
+  /// URLs → every swatch falls back to a flat dot). Neither [_fetchInventory]
+  /// nor [_fetchVariantColors] can heal that: the first only runs when sizes
+  /// are missing, the second only fetches variants. This fills the gap —
+  /// one bounded select, no loading skeleton, silent on failure.
+  Future<void> _ensureColorImages() async {
+    final existing = widget.product['product_color_images'];
+    if (existing is List && existing.isNotEmpty) return;
+    if (_variantColorNames.isEmpty) return;
+    try {
+      final productId = widget.product['id']?.toString() ?? '';
+      if (productId.isEmpty) return;
+      final data = await Supabase.instance.client
+          .from('products')
+          .select('product_color_images(url, color_name, display_order)')
+          .eq('id', productId)
+          .single();
+      if (!mounted) return;
+      final fetched = data['product_color_images'];
+      if (fetched is List) {
+        setState(() {
+          widget.product['product_color_images'] = fetched;
+        });
+      }
+    } catch (_) {
+      // Swatches keep their flat-dot fallback — never a crash.
+    }
   }
 
   /// Map a variant color NAME (free text from sellers) to a swatch color.
@@ -912,6 +956,12 @@ class _ProductDetailViewState extends State<_ProductDetailView>
       // Inventory data missing — fetch it from Supabase
       _fetchInventory();
     }
+
+    // Grid / search payloads carry colour NAMES but not the per-colour
+    // photo rows — without this the swatches sit on flat dots even though
+    // the seller uploaded images. Runs on every open; no-ops when the
+    // payload already has them.
+    unawaited(_ensureColorImages());
 
     _prefetchTryOnModel();
     unawaited(_checkLiveModelRow());
@@ -1220,7 +1270,8 @@ class _ProductDetailViewState extends State<_ProductDetailView>
       final productId = widget.product['id'].toString();
       final data = await Supabase.instance.client
           .from('products')
-          .select('inventory(*), product_variants(*)')
+          .select(
+            'inventory(*), product_variants(*), product_color_images(url, color_name, display_order)')
           .eq('id', productId)
           .single();
 
@@ -1229,6 +1280,9 @@ class _ProductDetailViewState extends State<_ProductDetailView>
       setState(() {
         widget.product['inventory'] = data['inventory'];
         widget.product['product_variants'] = data['product_variants'];
+        if (data['product_color_images'] is List) {
+          widget.product['product_color_images'] = data['product_color_images'];
+        }
         _isLoadingSizes = false;
       });
 
@@ -1258,12 +1312,16 @@ class _ProductDetailViewState extends State<_ProductDetailView>
       final productId = widget.product['id'].toString();
       final data = await Supabase.instance.client
           .from('products')
-          .select('product_variants(*)')
+          .select(
+            'product_variants(*), product_color_images(url, color_name, display_order)')
           .eq('id', productId)
           .single();
       if (!mounted) return;
       setState(() {
         widget.product['product_variants'] = data['product_variants'];
+        if (data['product_color_images'] is List) {
+          widget.product['product_color_images'] = data['product_color_images'];
+        }
       });
     } catch (_) {
       // Keep whatever variants we have — the swatch section hides when
@@ -1460,7 +1518,9 @@ class _ProductDetailViewState extends State<_ProductDetailView>
     if (color != null) {
       final colorImagesRaw = widget.product['product_color_images'] as List? ?? [];
       final colorImages = colorImagesRaw
-          .where((img) => img is Map && (img['color_name']?.toString() ?? '') == color)
+          .where((img) =>
+              img is Map &&
+              (img['color_name']?.toString() ?? '').trim() == color.trim())
           .toList();
       if (colorImages.isNotEmpty) {
         final images = List<Map<String, dynamic>>.from(colorImages.map((e) => Map<String, dynamic>.from(e as Map)));
