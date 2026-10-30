@@ -34,6 +34,9 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
   const [activeId, setActiveId] = useState(null)
   const [zoom, setZoom] = useState(1)
   const [zoomCaps, setZoomCaps] = useState(null)
+  const [quality, setQuality] = useState('720p')
+  const qualityRef = useRef('720p')
+  const activeIdRef = useRef(null)
 
   const fail = (message) => {
     setStatus(message)
@@ -43,11 +46,24 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
   const openStream = (constraints) =>
     navigator.mediaDevices.getUserMedia({ video: constraints, audio: false })
 
+  // Quality toggle: '720p' opens the sensor ~1280 wide (current
+  // behavior), '1080p' ~1920. Everything downstream (render size,
+  // perf pill) reads the actual track settings, so it adapts alone.
+  const widthIdeal = (q) => (q === '1080p' ? 1920 : 1280)
+  const deviceConstraints = (deviceId, q) => ({
+    deviceId: { exact: deviceId },
+    width: { ideal: widthIdeal(q) },
+  })
+  const defaultConstraints = (q) =>
+    q === '1080p'
+      ? { facingMode: 'environment', width: { ideal: 1080 }, height: { ideal: 1920 } }
+      : { facingMode: 'environment', width: { ideal: 960 }, height: { ideal: 1280 } }
+
   // Default to the first rear camera ("cam1" on the test phone): the
   // browser's `environment` pick is not always the widest rear sensor.
   // Only switches on an explicit rear label match; otherwise keeps the
   // already-open default stream.
-  const preferRearCamera = async (stream) => {
+  const preferRearCamera = async (stream, q) => {
     try {
       const devices = (await navigator.mediaDevices.enumerateDevices()).filter(
         (d) => d.kind === 'videoinput',
@@ -55,7 +71,7 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
       const rear = devices.find((d) => /back|rear|environment/i.test(d.label || ''))
       const currentId = stream.getVideoTracks()[0]?.getSettings?.().deviceId
       if (!rear || !rear.deviceId || rear.deviceId === currentId) return stream
-      const next = await openStream({ deviceId: { exact: rear.deviceId }, width: { ideal: 1280 } })
+      const next = await openStream(deviceConstraints(rear.deviceId, q))
       stream.getTracks().forEach((tr) => tr.stop())
       return next
     } catch {
@@ -63,7 +79,7 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
     }
   }
 
-  const startCamera = async (deviceId) => {
+  const startCamera = async (deviceId, q = qualityRef.current) => {
     const session = sessionRef.current
     if (!session) return
     setStatus('Opening camera…')
@@ -73,9 +89,10 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
     }
     try {
       const stream = deviceId
-        ? await openStream({ deviceId: { exact: deviceId }, width: { ideal: 1280 } })
+        ? await openStream(deviceConstraints(deviceId, q))
         : await preferRearCamera(
-            await openStream({ facingMode: 'environment', width: { ideal: 960 }, height: { ideal: 1280 } }),
+            await openStream(defaultConstraints(q)),
+            q,
           )
       const track = stream.getVideoTracks()[0]
       const settings = track?.getSettings?.() ?? {}
@@ -105,6 +122,7 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
       streamRef.current?.getTracks().forEach((t) => t.stop())
       streamRef.current = stream
       setActiveId(deviceId ?? settings.deviceId ?? null)
+      activeIdRef.current = deviceId ?? settings.deviceId ?? null
       if (caps.zoom && caps.zoom.max > caps.zoom.min) {
         setZoomCaps({ min: caps.zoom.min, max: caps.zoom.max })
         setZoom(caps.zoom.min)
@@ -261,6 +279,16 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
     }
   }
 
+  // Quality toggle: reopen the CURRENT camera at the new resolution.
+  // Reuses the whole startCamera path, so zoom caps, rotation fix and
+  // the perf pill all refresh from the new track.
+  const switchQuality = async (q) => {
+    if (q === qualityRef.current) return
+    qualityRef.current = q
+    setQuality(q)
+    await startCamera(activeIdRef.current, q)
+  }
+
   return (
     <div className="relative h-full w-full">
       <div ref={containerRef} className="h-full w-full" />
@@ -275,6 +303,22 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
             {dbg}
           </div>
         )}
+        <div className="flex gap-1.5 rounded-full bg-stone-950/80 p-1.5">
+          {['720p', '1080p'].map((q) => (
+            <button
+              key={q}
+              type="button"
+              onClick={() => switchQuality(q)}
+              className={
+                quality === q
+                  ? 'shrink-0 rounded-full bg-lime-200 px-2.5 py-1 font-mono text-[11px] text-stone-950'
+                  : 'shrink-0 rounded-full bg-stone-800 px-2.5 py-1 font-mono text-[11px] text-stone-200'
+              }
+            >
+              {q}
+            </button>
+          ))}
+        </div>
         <button
           type="button"
           onClick={toggleLens}
