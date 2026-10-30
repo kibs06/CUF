@@ -55,9 +55,7 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
       const rear = devices.find((d) => /back|rear|environment/i.test(d.label || ''))
       const currentId = stream.getVideoTracks()[0]?.getSettings?.().deviceId
       if (!rear || !rear.deviceId || rear.deviceId === currentId) return stream
-      // Perf cap: 720p is plenty for a foot lens. `max` (not just
-      // `ideal`) so a generous camera can't negotiate its way back up.
-      const next = await openStream({ deviceId: { exact: rear.deviceId }, width: { ideal: 1280, max: 1280 }, height: { ideal: 720, max: 720 } })
+      const next = await openStream({ deviceId: { exact: rear.deviceId }, width: { ideal: 1280 } })
       stream.getTracks().forEach((tr) => tr.stop())
       return next
     } catch {
@@ -75,9 +73,9 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
     }
     try {
       const stream = deviceId
-        ? await openStream({ deviceId: { exact: deviceId }, width: { ideal: 1280, max: 1280 }, height: { ideal: 720, max: 720 } })
+        ? await openStream({ deviceId: { exact: deviceId }, width: { ideal: 1280 } })
         : await preferRearCamera(
-            await openStream({ facingMode: 'environment', width: { ideal: 1280, max: 1280 }, height: { ideal: 720, max: 720 } }),
+            await openStream({ facingMode: 'environment', width: { ideal: 960 }, height: { ideal: 1280 } }),
           )
       const track = stream.getVideoTracks()[0]
       const settings = track?.getSettings?.() ?? {}
@@ -96,21 +94,13 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
       const ROT_NEG_90 = new Transform2D([0, -1, 0, 1, 0, 0, 0, 1, 1])
       const w = needRotate ? trackH : trackW
       const h = needRotate ? trackW : trackH
-      // Perf cap: the lens engine bills per rendered pixel. Cap the long
-      // side at 720 — the canvas is CSS-scaled back to fullscreen, so the
-      // view stays full-bleed while the engine does ~1/4 the work of 1080p.
-      const MAX_RENDER_LONG_SIDE = 720
-      const longSide = Math.max(w, h)
-      const renderScale = longSide > MAX_RENDER_LONG_SIDE ? MAX_RENDER_LONG_SIDE / longSide : 1
-      const rw = Math.round(w * renderScale)
-      const rh = Math.round(h * renderScale)
       // Pause first: setRenderSize silently no-ops when issued right after
       // play (canvas stayed 1280x960 landscape while the texture rotated
       // into it = the crop-zoom). The wrapper pauses around this too.
       try { await session.pause('live') } catch {}
       await session.setSource(source)
       await source.setTransform(needRotate ? ROT_NEG_90 : Transform2D.Identity)
-      await source.setRenderSize(rw, rh)
+      await source.setRenderSize(w, h)
       await session.play('live')
       streamRef.current?.getTracks().forEach((t) => t.stop())
       streamRef.current = stream
@@ -122,7 +112,7 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
       } else {
         setZoomCaps(null)
       }
-      renderInfoRef.current = 'src ' + trackW + 'x' + trackH + ' → ' + rw + 'x' + rh + (needRotate ? ' rot' : '')
+      renderInfoRef.current = 'src ' + trackW + 'x' + trackH + ' → ' + w + 'x' + h + (needRotate ? ' rot' : '')
       setDbg('[perf] ' + renderInfoRef.current)
       setStatus('')
     } catch (e) {
