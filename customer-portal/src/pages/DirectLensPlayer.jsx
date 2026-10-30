@@ -22,6 +22,11 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
   const streamRef = useRef(null)
   const sourceRef = useRef(null)
   const lensRef = useRef(null)
+  // Perf readout: render-size summary (set per camera open) + rolling
+  // 1s lens metrics (started once the lens is applied).
+  const renderInfoRef = useRef('')
+  const perfRef = useRef(null)
+  const perfTimerRef = useRef(null)
   const [lensOn, setLensOn] = useState(false)
   const [dbg, setDbg] = useState('')
   const [status, setStatus] = useState('Starting camera session…')
@@ -50,7 +55,9 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
       const rear = devices.find((d) => /back|rear|environment/i.test(d.label || ''))
       const currentId = stream.getVideoTracks()[0]?.getSettings?.().deviceId
       if (!rear || !rear.deviceId || rear.deviceId === currentId) return stream
-      const next = await openStream({ deviceId: { exact: rear.deviceId }, width: { ideal: 1280 } })
+      // Perf cap: 720p is plenty for a foot lens. `max` (not just
+      // `ideal`) so a generous camera can't negotiate its way back up.
+      const next = await openStream({ deviceId: { exact: rear.deviceId }, width: { ideal: 1280, max: 1280 }, height: { ideal: 720, max: 720 } })
       stream.getTracks().forEach((tr) => tr.stop())
       return next
     } catch {
@@ -68,9 +75,9 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
     }
     try {
       const stream = deviceId
-        ? await openStream({ deviceId: { exact: deviceId }, width: { ideal: 1280 } })
+        ? await openStream({ deviceId: { exact: deviceId }, width: { ideal: 1280, max: 1280 }, height: { ideal: 720, max: 720 } })
         : await preferRearCamera(
-            await openStream({ facingMode: 'environment', width: { ideal: 960 }, height: { ideal: 1280 } }),
+            await openStream({ facingMode: 'environment', width: { ideal: 1280, max: 1280 }, height: { ideal: 720, max: 720 } }),
           )
       const track = stream.getVideoTracks()[0]
       const settings = track?.getSettings?.() ?? {}
@@ -89,13 +96,21 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
       const ROT_NEG_90 = new Transform2D([0, -1, 0, 1, 0, 0, 0, 1, 1])
       const w = needRotate ? trackH : trackW
       const h = needRotate ? trackW : trackH
+      // Perf cap: the lens engine bills per rendered pixel. Cap the long
+      // side at 720 — the canvas is CSS-scaled back to fullscreen, so the
+      // view stays full-bleed while the engine does ~1/4 the work of 1080p.
+      const MAX_RENDER_LONG_SIDE = 720
+      const longSide = Math.max(w, h)
+      const renderScale = longSide > MAX_RENDER_LONG_SIDE ? MAX_RENDER_LONG_SIDE / longSide : 1
+      const rw = Math.round(w * renderScale)
+      const rh = Math.round(h * renderScale)
       // Pause first: setRenderSize silently no-ops when issued right after
       // play (canvas stayed 1280x960 landscape while the texture rotated
       // into it = the crop-zoom). The wrapper pauses around this too.
       try { await session.pause('live') } catch {}
       await session.setSource(source)
       await source.setTransform(needRotate ? ROT_NEG_90 : Transform2D.Identity)
-      await source.setRenderSize(w, h)
+      await source.setRenderSize(rw, rh)
       await session.play('live')
       streamRef.current?.getTracks().forEach((t) => t.stop())
       streamRef.current = stream
@@ -107,8 +122,8 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
       } else {
         setZoomCaps(null)
       }
-      const canvas = session.output.live
-      setDbg('[rs1] src ' + trackW + 'x' + trackH + (needRotate ? ' rot' : '') + ' canvas ' + canvas.width + 'x' + canvas.height)
+      renderInfoRef.current = 'src ' + trackW + 'x' + trackH + ' → ' + rw + 'x' + rh + (needRotate ? ' rot' : '')
+      setDbg('[perf] ' + renderInfoRef.current)
       setStatus('')
     } catch (e) {
       fail(
@@ -163,6 +178,27 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
             fail('Lens failed: ' + (e?.message ?? 'unknown error'))
             return
           }
+          // Rolling perf meter: avg FPS + avg lens frame time over the last
+          // second, so a phone in hand reports what it actually sustains.
+          try {
+            const perf = session.metrics.beginMeasurement()
+            try { perfRef.current?.end() } catch {}
+            perfRef.current = perf
+            if (perfTimerRef.current) clearInterval(perfTimerRef.current)
+            perfTimerRef.current = setInterval(() => {
+              try {
+                const m = perf.measure()
+                perf.reset()
+                const fps = Number.isFinite(m.avgFps) ? m.avgFps.toFixed(0) : '?'
+                const ms = Number.isFinite(m.lensFrameProcessingTimeMsAvg)
+                  ? m.lensFrameProcessingTimeMsAvg.toFixed(0)
+                  : '?'
+                setDbg('[perf] ' + renderInfoRef.current + ' · ' + fps + 'fps · lens ' + ms + 'ms')
+              } catch {}
+            }, 1000)
+          } catch {
+            // Metrics are best-effort; the feed runs without them.
+          }
         }
         // Instant inventory: enumerate only, never open. Opening each
         // camera to probe it serializes slow hardware handshakes (and can
@@ -195,6 +231,10 @@ export default function DirectLensPlayer({ apiToken, lensId, lensGroupId, onErro
     })()
     return () => {
       cancelled = true
+      if (perfTimerRef.current) clearInterval(perfTimerRef.current)
+      perfTimerRef.current = null
+      try { perfRef.current?.end() } catch {}
+      perfRef.current = null
       streamRef.current?.getTracks().forEach((t) => t.stop())
       streamRef.current = null
       const canvas = sessionRef.current?.output.live
