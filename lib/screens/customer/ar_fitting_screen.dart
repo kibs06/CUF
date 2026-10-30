@@ -25,6 +25,8 @@ import '../../widgets/try_on/try_on_coach_card.dart';
 import '../../widgets/try_on/try_on_fit_card.dart';
 import '../../widgets/try_on/try_on_saved_size_card.dart';
 import '../../services/try_on_placeholder_model.dart';
+import '../../models/card_fit_result.dart';
+import 'foot_capture_screen.dart';
 
 class ARVirtualFitScreen extends StatefulWidget {
   final Map<String, dynamic>? preselectedProduct;
@@ -495,6 +497,55 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen>
     final detail = _tryOn?.failureReason;
     debugPrint('[TryOn] fallback: ${fallback.key} — ${fallback.message}'
         '${detail != null ? ' (native: $detail)' : ''}');
+  }
+
+  /// Card-calibrated Capture-to-Fit: one card-framed capture, then the shoe
+  /// fits itself.
+  ///
+  /// Pushes the capture screen in instant mode (card reference forced, single
+  /// foot, no results flow). A [CardFitResult] auto-selects the size — exact
+  /// in-stock match, else the nearest within half a size, else the selection
+  /// stays and the snackbar says so — and seeds the controller's live
+  /// reading, which the verdict and saved-size cards grade like any tracker
+  /// reading. A dismissed capture (null) changes nothing.
+  Future<void> _captureCardFit() async {
+    final result = await Navigator.of(context).push<CardFitResult>(
+      MaterialPageRoute(
+        builder: (_) => FootCaptureScreen(
+          paperSize: 'card',
+          footCondition: 'bare',
+          singleFootInstant: true,
+          footSide: _tryOn?.footSide ?? 'left',
+        ),
+      ),
+    );
+    if (!mounted || result == null) return;
+    final sizesMap = Map<String, dynamic>.from(_activeProduct['sizes'] ?? {});
+    final fitted = pickStockSizeForFit(
+      sizes: sizesMap,
+      recommendedEu: result.sizeEu,
+    );
+    if (fitted != null && mounted) {
+      setState(() => _activeSize = fitted);
+    }
+    _tryOn?.applyCardCalibration(
+      lengthMm: result.compensatedLengthMm,
+      quality: result.liveQuality,
+    );
+    if (!mounted) return;
+    final exact =
+        fitted != null && sizeKey(fitted) == sizeKey(result.sizeEu);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          fitted == null
+              ? 'Card fit measured EU ${result.sizeEu} — not in stock for this shoe'
+              : exact
+                  ? 'Card fit applied: EU ${formatSize(fitted)}'
+                  : 'Card fit measured EU ${result.sizeEu} — nearest in stock is ${formatSize(fitted)}',
+        ),
+      ),
+    );
   }
 
   /// The fallback banner's Retry: re-stages a failed AR start and lets the
@@ -1010,25 +1061,52 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen>
                               );
                             },
                           ),
-                          // Size availability button
-                          GestureDetector(
-                            onTap: _checkSizeAvailability,
-                            child: Row(
-                              children: [
-                                Text(
-                                  'Availability',
-                                  style: AppConstants.bodyStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppConstants.surfaceLight.withValues(alpha: 0.8),
-                                  ),
+                          // Card fit + size availability buttons
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              GestureDetector(
+                                onTap: _captureCardFit,
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.straighten,
+                                      size: 14,
+                                      color: AppConstants.accent,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Card fit',
+                                      style: AppConstants.bodyStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppConstants.accent,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                Icon(
-                                  Icons.arrow_drop_up,
-                                  color: AppConstants.surfaceLight.withValues(alpha: 0.8),
+                              ),
+                              const SizedBox(width: 16),
+                              GestureDetector(
+                                onTap: _checkSizeAvailability,
+                                child: Row(
+                                  children: [
+                                    Text(
+                                      'Availability',
+                                      style: AppConstants.bodyStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppConstants.surfaceLight.withValues(alpha: 0.8),
+                                      ),
+                                    ),
+                                    Icon(
+                                      Icons.arrow_drop_up,
+                                      color: AppConstants.surfaceLight.withValues(alpha: 0.8),
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
                         ],
                       ),

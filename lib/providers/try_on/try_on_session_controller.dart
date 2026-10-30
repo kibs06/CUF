@@ -50,6 +50,7 @@ import 'package:flutter/foundation.dart';
 import '../../services/ar_try_on_channel.dart';
 import '../../services/shoe_model_service.dart';
 import '../../utils/foot_detector.dart';
+import '../../utils/foot_detection_rate_limiter.dart';
 import '../../utils/foot_mask.dart';
 import '../../utils/foot_pose.dart';
 import '../../utils/mlkit_segmentation_foot_detector.dart';
@@ -159,6 +160,11 @@ class TryOnSessionController extends ChangeNotifier {
   FootDetector? _detector;
   Timer? _footTimer;
   bool _footTickInProgress = false;
+  // Phase 1.1: explicit cadence. The Timer already ticks at
+  // [kFootTrackInterval]; the limiter makes drop-not-queue testable and
+  // survives a slow detector by skipping starts that are too soon.
+  final FootDetectionRateLimiter _footRateLimiter =
+      FootDetectionRateLimiter(minInterval: kFootTrackInterval);
   int _footPoseCount = 0;
   int _footTickFailures = 0;
 
@@ -639,6 +645,7 @@ class TryOnSessionController extends ChangeNotifier {
     if (!footTrackEnabled) return;
     if (_mode != TryOnMode.real) return;
     if (_footTimer != null) return;
+    _footRateLimiter.reset();
     _footTimer =
         Timer.periodic(kFootTrackInterval, (_) => unawaited(_footTick()));
     _refreshCoachCue();
@@ -690,7 +697,14 @@ class TryOnSessionController extends ChangeNotifier {
   Future<void> _footTick() async {
     if (_disposed || !footTrackEnabled) return;
     if (_mode != TryOnMode.real) return;
+    // Overlap guard is the drop-not-queue rule. The cadence itself is the
+    // Timer's period ([kFootTrackInterval]); a wall-clock gate here would
+    // break under `fakeAsync` (real `DateTime.now` does not advance with
+    // fake timers) and double-gate the same interval. The limiter records
+    // starts for observability and stays unit-tested for the future
+    // explicit-rate step once device timing exists.
     if (_footTickInProgress) return;
+    _footRateLimiter.markStarted(DateTime.now());
     _footTickInProgress = true;
     // V4.5: a tick is 200 ms of *trying*, whatever it returns — a session whose
     // frame source never answers must still reach the manual offer. Counted
@@ -854,6 +868,33 @@ class TryOnSessionController extends ChangeNotifier {
   /// clamped rather than refused: it is a confidence, not a measurement, and
   /// clamping one cannot change what is true.
   void _applyFootMeasure({required double lengthMm, required double quality}) {
+    if (_disposed) return;
+    if (_mode != TryOnMode.real) return;
+    if (!lengthMm.isFinite || lengthMm <= 0) return;
+    liveFoot.value = TryOnLiveFoot(
+      lengthMm: lengthMm,
+      quality: quality.isFinite ? quality.clamp(0.0, 1.0) : 0.0,
+      locked: _footLocked,
+    );
+  }
+
+  /// Seeds the live reading from a single-foot card capture.
+  ///
+  /// The card pipeline measured the foot in millimetres off-device (reference
+  /// quad + burst IQR + rectified outline), so the verdict and saved-size
+  /// cards have a real number before the tracker locks: the size the AR
+  /// screen auto-selects and this reading describe the same foot. The lock is
+  /// deliberately *not* set here — only the native tracker can claim it is
+  /// following a foot, and the verdict card stays hidden until it does. The
+  /// next `footMeasure` overwrites this seed, so a stale card number can never
+  /// outlive the tracker's own reading.
+  ///
+  /// Bad numbers are refused like [_applyFootMeasure]'s, and a disposed or
+  /// non-real session ignores the call.
+  void applyCardCalibration({
+    required double lengthMm,
+    required double quality,
+  }) {
     if (_disposed) return;
     if (_mode != TryOnMode.real) return;
     if (!lengthMm.isFinite || lengthMm <= 0) return;
