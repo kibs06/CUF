@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/product_provider.dart';
 import '../../providers/cart_provider.dart';
+import '../../providers/foot_measurement_provider.dart';
 import '../../utils/cart_helpers.dart';
 import '../../utils/size_key.dart';
 import '../../widgets/ar_view_placeholder.dart';
@@ -503,46 +504,61 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen>
   /// fits itself.
   ///
   /// Pushes the capture screen in instant mode (card reference forced, single
-  /// foot, no results flow). A [CardFitResult] auto-selects the size — exact
-  /// in-stock match, else the nearest within half a size, else the selection
-  /// stays and the snackbar says so — and seeds the controller's live
-  /// reading, which the verdict and saved-size cards grade like any tracker
-  /// reading. A dismissed capture (null) changes nothing.
+  /// foot, no results flow), carrying this customer's own scan inputs — the
+  /// saved measurement's sock condition and shopping scale, falling back to
+  /// bare/men only for a customer with no scan yet. A [CardFitResult] is
+  /// applied by [applyCardFitResult]; a dismissed capture (null) changes
+  /// nothing.
   Future<void> _captureCardFit() async {
+    final saved = Provider.of<FootMeasurementProvider>(context, listen: false)
+        .latestMeasurement;
     final result = await Navigator.of(context).push<CardFitResult>(
       MaterialPageRoute(
         builder: (_) => FootCaptureScreen(
           paperSize: 'card',
-          footCondition: 'bare',
+          footCondition: saved?.footCondition ?? 'bare',
+          shoeCategory: saved?.shoeCategory ?? 'men',
           singleFootInstant: true,
           footSide: _tryOn?.footSide ?? 'left',
         ),
       ),
     );
     if (!mounted || result == null) return;
+    await applyCardFitResult(result);
+  }
+
+  /// Applies a card result to this screen: the testable half of
+  /// [_captureCardFit], without the navigation.
+  ///
+  /// Picks the size (exact in stock, else nearest within half a size, else
+  /// the selection stays), rescales the rendered shoe through the session
+  /// ([TryOnSessionController.selectSize] reaches the renderer even before
+  /// the tracker locks), seeds the live reading, and says which outcome
+  /// landed. Every failure below the pick is silent by design: scale and
+  /// seed are auxiliary to a session that is already drawing.
+  @visibleForTesting
+  Future<void> applyCardFitResult(CardFitResult result) async {
     final sizesMap = Map<String, dynamic>.from(_activeProduct['sizes'] ?? {});
     final fitted = pickStockSizeForFit(
       sizes: sizesMap,
       recommendedEu: result.sizeEu,
     );
-    if (fitted != null && mounted) {
-      setState(() => _activeSize = fitted);
+    if (fitted != null) {
+      if (mounted) setState(() => _activeSize = fitted);
+      await _tryOn?.selectSize(sizeEu: fitted, product: _activeProduct);
     }
     _tryOn?.applyCardCalibration(
       lengthMm: result.compensatedLengthMm,
       quality: result.liveQuality,
     );
     if (!mounted) return;
-    final exact =
-        fitted != null && sizeKey(fitted) == sizeKey(result.sizeEu);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          fitted == null
-              ? 'Card fit measured EU ${result.sizeEu} — not in stock for this shoe'
-              : exact
-                  ? 'Card fit applied: EU ${formatSize(fitted)}'
-                  : 'Card fit measured EU ${result.sizeEu} — nearest in stock is ${formatSize(fitted)}',
+          CardFitResult.appliedMessage(
+            recommendedEu: result.sizeEu,
+            fitted: fitted,
+          ),
         ),
       ),
     );
@@ -1163,6 +1179,13 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen>
                                       setState(() {
                                         _activeSize = size;
                                       });
+                                      // The chip always rescales the shoe —
+                                      // native `setSize` answers from the
+                                      // first frame, no tracker lock needed.
+                                      unawaited(_tryOn?.selectSize(
+                                        sizeEu: size,
+                                        product: _activeProduct,
+                                      ));
                                     }
                                   : null,
                               child: Container(

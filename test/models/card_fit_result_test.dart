@@ -63,6 +63,23 @@ void main() {
     });
   });
 
+  group('appliedMessage', () {
+    test('exact, nearest and out-of-stock each say their outcome', () {
+      expect(
+        CardFitResult.appliedMessage(recommendedEu: '42', fitted: '42'),
+        'Card fit applied: EU 42',
+      );
+      expect(
+        CardFitResult.appliedMessage(recommendedEu: '42', fitted: '42.5'),
+        'Card fit measured EU 42 — nearest in stock is EU 42.5',
+      );
+      expect(
+        CardFitResult.appliedMessage(recommendedEu: '42', fitted: null),
+        'Card fit measured EU 42 — not in stock for this shoe',
+      );
+    });
+  });
+
   group('pickStockSizeForFit', () {
     test('exact in-stock match wins', () {
       expect(

@@ -73,6 +73,23 @@ class CardFitResult {
         footSide: footSide,
       );
 
+  /// The snackbar sentence for an applied result: exact, nearest in stock,
+  /// or an honest out-of-stock — the three outcomes the try-on screen must
+  /// tell apart, in one tested place instead of a widget.
+  static String appliedMessage({
+    required String recommendedEu,
+    required String? fitted,
+  }) {
+    if (fitted == null) {
+      return 'Card fit measured EU $recommendedEu — not in stock for this shoe';
+    }
+    if (sizeKey(fitted) == sizeKey(recommendedEu)) {
+      return 'Card fit applied: ${formatSize(fitted)}';
+    }
+    return 'Card fit measured EU $recommendedEu — '
+        'nearest in stock is ${formatSize(fitted)}';
+  }
+
   /// Live-reading quality (0.0–1.0) derived from the burst confidence label.
   ///
   /// A steady burst earns a reading the verdict card can grade; a shaky one

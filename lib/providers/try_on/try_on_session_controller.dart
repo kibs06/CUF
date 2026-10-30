@@ -49,12 +49,14 @@ import 'package:flutter/foundation.dart';
 
 import '../../services/ar_try_on_channel.dart';
 import '../../services/shoe_model_service.dart';
+import '../../utils/fit_engine.dart';
 import '../../utils/foot_detector.dart';
 import '../../utils/foot_detection_rate_limiter.dart';
 import '../../utils/foot_mask.dart';
 import '../../utils/foot_pose.dart';
 import '../../utils/mlkit_segmentation_foot_detector.dart';
 import '../../utils/shoe_model_resolver.dart';
+import '../../utils/size_key.dart';
 import '../../utils/try_on_coach.dart';
 import '../../utils/try_on_fit.dart';
 import 'try_on_mode.dart';
@@ -903,6 +905,37 @@ class TryOnSessionController extends ChangeNotifier {
       quality: quality.isFinite ? quality.clamp(0.0, 1.0) : 0.0,
       locked: _footLocked,
     );
+  }
+
+  /// Rescales the rendered shoe for the selected size — the call the size
+  /// chips and card auto-fit share.
+  ///
+  /// Native `effectiveScaleFor` multiplies the size factor with the authored
+  /// correction even before the first pose (the frame factor answers ×1 with
+  /// no measurement), so this visibly rescales the shoe from the first frame
+  /// with no lock needed; the tracker then tunes it per-frame. `setSize`
+  /// needs the product's last spec — without one there is nothing honest to
+  /// scale by, and the size change stays a chip. A non-real session, a bad
+  /// size, or a channel fault all end in silence: scale is auxiliary, and a
+  /// dropped rescale must never become the session's failure.
+  Future<void> selectSize({
+    required String sizeEu,
+    required Map<String, dynamic> product,
+  }) async {
+    if (_disposed) return;
+    if (_mode != TryOnMode.real) return;
+    if (sizeNumberInEu(sizeEu) == null) return;
+    final specs = FitSpecs.fromProduct(product);
+    if (specs == null) return;
+    try {
+      await _channel.setSize(
+        sizeEu: sizeEu,
+        refSizeEu: specs.refSizeEu,
+        lastLengthMm: specs.lastLengthMm,
+      );
+    } catch (e) {
+      debugPrint('[TryOn] setSize failed — shoe keeps its scale: $e');
+    }
   }
 
   /// Applies a native `footLock` event to the phase machine.

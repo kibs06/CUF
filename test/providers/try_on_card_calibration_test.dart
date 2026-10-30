@@ -64,6 +64,64 @@ void main() {
     return controller;
   }
 
+  Map<String, dynamic> productWithSpecs() => <String, dynamic>{
+        'last_length_mm': 276.0,
+        'fit_ref_size_eu': 42.0,
+      };
+
+  group('selectSize', () {
+    test('forwards the fitted size with the last spec', () async {
+      final channel = _FakeChannel();
+      final controller = await realController(channel, bytesOf(64));
+
+      await controller.selectSize(sizeEu: '43', product: productWithSpecs());
+
+      expect(channel.sizes, hasLength(1));
+      expect(channel.sizes.single['sizeEu'], '43');
+      expect(channel.sizes.single['refSizeEu'], 42.0);
+      expect(channel.sizes.single['lastLengthMm'], 276.0);
+      controller.dispose();
+    });
+
+    test('refuses a bad size, a spec-less product and a non-real session',
+        () async {
+      final channel = _FakeChannel();
+      final controller = await realController(channel, bytesOf(64));
+
+      await controller.selectSize(sizeEu: 'Other', product: productWithSpecs());
+      await controller.selectSize(sizeEu: '42', product: const {});
+      expect(channel.sizes, isEmpty);
+      controller.dispose();
+
+      final simChannel = _FakeChannel();
+      final source = _FakeSource()..rows = [];
+      final sim = TryOnSessionController(
+        productId: 'product-1',
+        enabled: true,
+        channel: simChannel,
+        models: ShoeModelService(
+          dataSource: source,
+          cacheDirectoryProvider: () async => cacheDir,
+        ),
+      );
+      await sim.prepareModel();
+      await sim.selectSize(sizeEu: '42', product: productWithSpecs());
+      expect(simChannel.sizes, isEmpty);
+      sim.dispose();
+    });
+
+    test('a channel fault never becomes the session failure', () async {
+      final channel = _FakeChannel()..failSetSize = true;
+      final controller = await realController(channel, bytesOf(64));
+
+      await controller.selectSize(sizeEu: '42', product: productWithSpecs());
+
+      expect(controller.mode, TryOnMode.real);
+      expect(controller.degradeReason, TryOnDegradeReason.none);
+      controller.dispose();
+    });
+  });
+
   group('applyCardCalibration', () {
     test('seeds the live reading without claiming a lock', () async {
       final channel = _FakeChannel();
@@ -143,6 +201,23 @@ class _FakeChannel extends ArTryOnChannel {
 
   @override
   Future<void> setModel(TryOnModelSpec spec) async {}
+
+  final List<Map<String, Object?>> sizes = [];
+  bool failSetSize = false;
+
+  @override
+  Future<void> setSize({
+    required String sizeEu,
+    num? refSizeEu,
+    num? lastLengthMm,
+  }) async {
+    if (failSetSize) throw Exception('no native view');
+    sizes.add({
+      'sizeEu': sizeEu,
+      'refSizeEu': refSizeEu,
+      'lastLengthMm': lastLengthMm,
+    });
+  }
 }
 
 /// The read seam in memory — the same fake the prefetch suite uses.
