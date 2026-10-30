@@ -6,9 +6,12 @@ import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../constants/app_constants.dart';
+import '../../models/card_fit_result.dart';
 import '../../utils/card_capture_coach.dart';
+import '../../utils/card_measurement_pipeline.dart';
 import '../../utils/foot_measurement_utils.dart';
 import '../../utils/reference_detector.dart';
+import '../../utils/still_foot_segmentation.dart';
 import 'foot_processing_screen.dart';
 
 /// TODO(paper-scan): Foot-outline segmentation is still simulated
@@ -31,11 +34,24 @@ class FootCaptureScreen extends StatefulWidget {
   /// Shopping preference for EU→US conversion ('men', 'women', 'kids').
   final String shoeCategory;
 
+  /// Instant single-foot mode for card-calibrated Capture-to-Fit.
+  ///
+  /// When true the screen captures one foot (no left→right pass), measures it
+  /// through the same validator-gated pipeline, and pops a [CardFitResult]
+  /// instead of pushing the results flow. The reference is forced to the
+  /// ID-1 card and [footSide] names the pass for the result's provenance.
+  final bool singleFootInstant;
+
+  /// `'left'` | `'right'` — provenance label for the instant result.
+  final String footSide;
+
   const FootCaptureScreen({
     super.key,
     required this.paperSize,
     required this.footCondition,
     this.shoeCategory = 'men',
+    this.singleFootInstant = false,
+    this.footSide = 'left',
   });
 
   @override
@@ -66,6 +82,16 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
   int _burstTaken = 0;
   bool get _inBurst => _burstTaken > 0 && _isCapturing;
 
+  // Burst stills of the current pass: file paths plus the reference corners
+  // detected in each (full-resolution pixels). Instant mode replays them
+  // through segmentation + the gated pipeline; the sizing flow ignores them.
+  final List<String> _burstPaths = [];
+  final List<StillDetection> _burstStills = [];
+
+  /// True once the instant result has been popped (or the screen disposed),
+  /// so a late async finish can never pop the route below this one.
+  bool _instantDone = false;
+
   // Per-frame mm/px scales of the current burst (summarized via IQR).
   final List<double> _burstScales = [];
 
@@ -83,8 +109,14 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
   CameraImage? _latestFrame;
   bool _streamActive = false;
 
-  PaperDimensions get _reference => PaperDimensions.fromKey(widget.paperSize);
-  String get _footLabel => _currentFoot == 0 ? 'left' : 'right';
+  /// Instant mode always calibrates off the wallet card, whatever the entry
+  /// passed — the card is the scale anchor the try-on trusts.
+  PaperDimensions get _reference => widget.singleFootInstant
+      ? PaperDimensions.card
+      : PaperDimensions.fromKey(widget.paperSize);
+  String get _footLabel => widget.singleFootInstant
+      ? widget.footSide
+      : (_currentFoot == 0 ? 'left' : 'right');
   String get _refNoun => _reference.isCard ? 'card' : 'paper';
 
   // Scan animation
@@ -110,6 +142,7 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
 
   @override
   void dispose() {
+    _instantDone = true;
     _detectionTimer?.cancel();
     _stopFrameStream();
     _cameraController?.dispose();
@@ -321,6 +354,8 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
       _burstScales.clear();
       _guidanceStatus = 'burst';
     });
+    _burstPaths.clear();
+    _burstStills.clear();
 
     String? firstPath;
     // takePicture and the image stream are mutually exclusive: stop the
@@ -330,6 +365,7 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
       for (var i = 0; i < cardBurstFrameCount; i++) {
         final XFile image = await _cameraController!.takePicture();
         firstPath ??= image.path;
+        _burstPaths.add(image.path);
         // Real per-frame evidence: decode this still and detect (isolate),
         // so the burst IQR reflects actual frame-to-frame spread.
         final bytes = await image.readAsBytes();
@@ -337,6 +373,7 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
           decodeAndDetectStill,
           {'bytes': bytes, 'maxSide': 320},
         );
+        _burstStills.add(still);
         if (still.corners.isNotEmpty) {
           final scale = computeScaleFactor(
             paperCorners: still.corners,
@@ -382,6 +419,12 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
       return;
     }
 
+    // Instant Capture-to-Fit: one foot, measured now, popped as a result.
+    if (widget.singleFootInstant) {
+      await _finishInstantFit(summary);
+      return;
+    }
+
     if (_currentFoot == 0) {
       // Left done → guide the right foot through the same flow.
       final detector = _detector;
@@ -421,6 +464,92 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
         ),
       ),
     );
+  }
+
+  /// Instant-mode finish: segment the burst stills and run the gated
+  /// pipeline, then pop the [CardFitResult].
+  ///
+  /// Each still already carries its reference corners (real CV output from
+  /// the burst loop); segmentation supplies the missing outline in the same
+  /// still's pixels. At most three plausible stills are segmented — a fourth
+  /// attempt is latency, not luck. No still measuring means no number: the
+  /// dominant refusal becomes the next coaching line and detection restarts.
+  Future<void> _finishInstantFit(BurstScaleSummary summary) async {
+    if (!mounted || _instantDone) return;
+    setState(() {
+      _isCapturing = true;
+      _burstTaken = 0;
+      _guidanceStatus = 'measuring';
+      _guidanceText = 'Measuring your foot…';
+    });
+    final confidence = burstConfidenceLevel(
+      scaleMedian: summary.medianScale,
+      scaleIqr: summary.iqrScale,
+    );
+    CardMeasurementFailure? dominant;
+    var sawReferenceIssue = false;
+    var tried = 0;
+    for (var i = 0; i < _burstStills.length && tried < 3; i++) {
+      final still = _burstStills[i];
+      if (still.corners.isEmpty ||
+          !isPlausibleReferenceQuad(still.corners, _reference)) {
+        continue;
+      }
+      tried++;
+      final outline = await segmentFootOutlineInStill(_burstPaths[i]);
+      if (!mounted || _instantDone) return;
+      final outcome = measureCardCapture(
+        refCorners: still.corners,
+        footOutline: outline,
+        paper: _reference,
+        isSocks: widget.footCondition == 'socks',
+        measurementSource: 'paper',
+        confidenceLevel: confidence,
+        shoeCategory: widget.shoeCategory,
+        scaleMedian: summary.medianScale,
+        scaleIqrMmPerPx: summary.iqrScale,
+        burstFrames: summary.keptCount,
+      );
+      if (outcome.isOk) {
+        final result = CardFitResult.fromSuccess(
+          outcome.success!,
+          footSide: widget.footSide,
+          burstConfidenceLevel: confidence,
+        );
+        _instantDone = true;
+        if (mounted) Navigator.of(context).pop(result);
+        return;
+      }
+      if (outcome.failure == CardMeasurementFailure.referenceInvalid) {
+        sawReferenceIssue = true;
+      }
+      dominant ??= outcome.failure;
+    }
+    if (!mounted || _instantDone) return;
+    setState(() {
+      _isCapturing = false;
+      _holdTicks = 0;
+      _guidanceStatus = 'searching';
+      _guidanceText = sawReferenceIssue
+          ? 'The card shifted mid-capture — lay it flat and hold the phone straight above it'
+          : _instantFailureCopy(dominant);
+    });
+    await _startFrameStream();
+    _startPaperDetection();
+  }
+
+  /// Retake coaching for an instant-mode refusal that produced no number.
+  String _instantFailureCopy(CardMeasurementFailure? failure) {
+    switch (failure) {
+      case CardMeasurementFailure.outlineInvalid:
+        return 'We couldn\'t isolate the foot outline — frame the whole foot with the card in good light';
+      case CardMeasurementFailure.implausibleMeasurement:
+        return 'That didn\'t look like a foot beside the card — reframe both fully visible and hold still';
+      case CardMeasurementFailure.sizingOutOfRange:
+        return 'That foot falls outside our size chart — try our in-store fitting';
+      default:
+        return 'That burst was shaky — hold still and we\'ll retry your $_footLabel foot';
+    }
   }
 
   @override
@@ -667,7 +796,9 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  _currentFoot == 0 ? 'Left Foot' : 'Right Foot',
+                  widget.singleFootInstant
+                      ? 'Single foot'
+                      : (_currentFoot == 0 ? 'Left Foot' : 'Right Foot'),
                   style: AppConstants.bodyStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
