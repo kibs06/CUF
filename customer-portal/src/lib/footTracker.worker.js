@@ -158,7 +158,10 @@ async function detectOnnx(bitmap) {
   const out = await onnxSession.run({ images: tensor })
   const first = Object.values(out)[0]
   const rows = []
-  // Ultralytics pose output: [1, 11, N] (cx,cy,w,h,heel..,toe..,conf).
+  // Ultralytics pose output: [1, 11, N] laid out as
+  // (cx,cy,w,h, box_conf, heel_x,heel_y,heel_c, toe_x,toe_y,toe_c) —
+  // the class confidence sits between the box and the keypoints
+  // (final Concat in the exported graph), NOT after them.
   // Normalize box + keypoints back to 0–1 UV of the SOURCE frame by
   // inverting the letterbox above.
   const arr = first.data
@@ -177,9 +180,10 @@ async function detectOnnx(bitmap) {
         const sy = (ly - (ONNX_SIZE - dh) / 2) / scale / bh
         return [sx, sy]
       }
-      const [hx, hy] = toUV(arr[4 * n + i] / ONNX_SIZE, arr[5 * n + i] / ONNX_SIZE)
-      const [tx, ty] = toUV(arr[7 * n + i] / ONNX_SIZE, arr[8 * n + i] / ONNX_SIZE)
-      rows.push([cx, cy, w, h, hx, hy, arr[6 * n + i], tx, ty, arr[9 * n + i], arr[10 * n + i]])
+      const conf = arr[4 * n + i]
+      const [hx, hy] = toUV(arr[5 * n + i] / ONNX_SIZE, arr[6 * n + i] / ONNX_SIZE)
+      const [tx, ty] = toUV(arr[8 * n + i] / ONNX_SIZE, arr[9 * n + i] / ONNX_SIZE)
+      rows.push([cx, cy, w, h, hx, hy, arr[7 * n + i], tx, ty, arr[10 * n + i], conf])
     }
   }
   return decodeOnnxProposals(rows)
