@@ -163,6 +163,11 @@ internal object DetectionDots {
      * Camera-space ray direction through an image pixel, in the same OpenGL convention
      * [unprojectToCameraSpace][com.solevision.app.arfoot.unprojectToCameraSpace] uses
      * (x right, y up, −z forward). Unit depth: scale with [pointAlongRay].
+     *
+     * ⚠️ Legacy, unrotated: correct only when the sensor axes already match the
+     * screen axes (landscape display). Portrait callers must use
+     * [rotatedRayDir] — the P30 Pro's dots-check proved the difference
+     * (503 px mismatch on the same frame/pose). Kept for the JVM pin below.
      */
     fun rayDirection(
         imageX: Float,
@@ -172,6 +177,37 @@ internal object DetectionDots {
         cx: Float,
         cy: Float,
     ): FloatArray = floatArrayOf((imageX - cx) / fx, -(imageY - cy) / fy, -1f)
+
+    /**
+     * **Rotation-aware camera-space ray (V4.24 device fix).**
+     *
+     * The intrinsics describe the landscape sensor, but the display shows it
+     * rotated — so the focal-normalized offsets `(ox, oy)` (y-down-positive)
+     * are NOT camera-space `(x, y)`. The P30 Pro measured it: a ray through
+     * sensor pixel (421.7, 252.3) of 640×480 (`f=500,508 c=325,241`, i.e.
+     * `(ox,oy)=(0.1934,0.02225)`) must reproject to view pixel (495, 1542) of
+     * 1080×2340 — the unrotated pairing reprojected to (890, 1230), 503 px
+     * off, which parked every dot and the shoe off-screen while the 2D overlay
+     * sat on the foot.
+     *
+     * `surfaceRotation` is the raw `display.rotation` int (`Surface.ROTATION_*`:
+     * 0/1/2/3, unknown defaults to 0 — portrait natural, the fitting pose).
+     * Verified for 0: `(ox,oy)→(−oy,−ox)` reprojects to (499, 1523) — residual
+     * is rounding. 180 is its negation (safe by symmetry); 90/270 are the two
+     * landscape senses — the dots-check (`projection-ok` ≤ 30 px) names the
+     * winner per orientation in the log if a guess is ever wrong.
+     *
+     * Pure like the rest of this file: pinned on the JVM, no Android imports.
+     */
+    fun rotatedRayDir(oxN: Float, oyN: Float, surfaceRotation: Int): FloatArray {
+        val (dx, dy) = when (surfaceRotation) {
+            1 -> Pair(oyN, -oxN)
+            2 -> Pair(oyN, oxN)
+            3 -> Pair(-oyN, oxN)
+            else -> Pair(-oyN, -oxN)
+        }
+        return floatArrayOf(dx, dy, -1f)
+    }
 
     /** Camera-space point at [distM] metres along [dir]. */
     fun pointAlongRay(dir: FloatArray, distM: Float): FloatArray {

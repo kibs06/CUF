@@ -39,6 +39,47 @@ class DetectionDotsTest {
     }
 
     @Test
+    fun rotatedRayPortraitMatchesTheMeasuredDevice() {
+        // P30 Pro session: sensor pixel (421.7, 252.3) of 640x480, f=500,508
+        // c=325,241 → (ox,oy)=(0.1934,0.02225). Portrait natural (rotation 0)
+        // must answer (−oy,−ox): the pairing that reprojects to (499, 1523),
+        // residual rounding — the legacy unrotated pairing erred 503 px.
+        val dir = DetectionDots.rotatedRayDir(0.1934f, 0.02225f, 0)
+        assertNear(-0.02225f, dir[0])
+        assertNear(-0.1934f, dir[1])
+        assertNear(-1f, dir[2])
+    }
+
+    @Test
+    fun rotatedRayUpsideDownIsThePortraitNegation() {
+        val a = DetectionDots.rotatedRayDir(0.1934f, 0.02225f, 0)
+        val b = DetectionDots.rotatedRayDir(0.1934f, 0.02225f, 2)
+        assertNear(-a[0], b[0])
+        assertNear(-a[1], b[1])
+        assertNear(a[2], b[2])
+    }
+
+    @Test
+    fun rotatedRayLandscapesAreOrthogonalSenses() {
+        val a = DetectionDots.rotatedRayDir(0.1934f, 0.02225f, 1)
+        val b = DetectionDots.rotatedRayDir(0.1934f, 0.02225f, 3)
+        assertNear(-a[0], b[0])
+        assertNear(-a[1], b[1])
+        val c = DetectionDots.rotatedRayDir(0f, 0f, 1)
+        assertNear(0f, c[0])
+        assertNear(0f, c[1])
+        assertNear(-1f, c[2])
+    }
+
+    @Test
+    fun rotatedRayUnknownRotationFallsBackToPortrait() {
+        val a = DetectionDots.rotatedRayDir(0.1934f, 0.02225f, 0)
+        val b = DetectionDots.rotatedRayDir(0.1934f, 0.02225f, 99)
+        assertNear(a[0], b[0])
+        assertNear(a[1], b[1])
+    }
+
+    @Test
     fun pointAlongRayReachesTheRequestedDistance() {
         val dir = DetectionDots.rayDirection(320f, 240f, 500f, 500f, 320f, 240f)
         val p = DetectionDots.pointAlongRay(dir, 0.6f)

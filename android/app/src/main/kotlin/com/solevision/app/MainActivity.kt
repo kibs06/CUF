@@ -1,5 +1,6 @@
 package com.solevision.app
 
+import android.content.Intent
 import android.os.Bundle
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -7,6 +8,8 @@ import com.solevision.app.arfoot.ArFootSizingPlugin
 import com.solevision.app.arfoot.DiagRelay
 import com.solevision.app.artryon.ArTryOnSpikePlugin
 import com.solevision.app.tryon.ArTryOnPlugin
+import com.solevision.app.snaptryon.SnapTryOnPlugin
+import com.solevision.app.footdetector.OnnxFootDetectorPlugin
 
 class MainActivity : FlutterActivity() {
 
@@ -23,6 +26,15 @@ class MainActivity : FlutterActivity() {
     // but the registration — there is no Dart call site until the flag is on.
     private var arTryOnPlugin: ArTryOnPlugin? = null
 
+    // Native Snap try-on (Phase 1): full-screen Camera Kit activity for the
+    // customer's "Try on Snap" pill. Own channel, own slot — see ArTryOnPlugin's
+    // header for why it is not another method on the AR channel.
+    private var snapTryOnPlugin: SnapTryOnPlugin? = null
+
+    // Custom foot detector (Android-only): YOLO11n-pose ONNX. Own channel so
+    // the scan/try-on Dart detectors can prefer it with an ML Kit fallback.
+    private var onnxFootDetectorPlugin: OnnxFootDetectorPlugin? = null
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
@@ -35,6 +47,10 @@ class MainActivity : FlutterActivity() {
 
         arTryOnPlugin = ArTryOnPlugin(this)
         arTryOnPlugin!!.registerWith(flutterEngine)
+        snapTryOnPlugin = SnapTryOnPlugin(this)
+        snapTryOnPlugin!!.registerWith(flutterEngine)
+        onnxFootDetectorPlugin = OnnxFootDetectorPlugin(this)
+        onnxFootDetectorPlugin!!.registerWith(flutterEngine)
         // TEMPORARY (Phase 1b diagnostics) — remove with DiagRelay.kt.
         DiagRelay.log("activity", "configureFlutterEngine")
     }
@@ -48,6 +64,10 @@ class MainActivity : FlutterActivity() {
         arTryOnSpikePlugin = null
         arTryOnPlugin?.unregister()
         arTryOnPlugin = null
+        snapTryOnPlugin?.unregister()
+        snapTryOnPlugin = null
+        onnxFootDetectorPlugin?.unregister()
+        onnxFootDetectorPlugin = null
         super.cleanUpFlutterEngine(flutterEngine)
     }
 
@@ -61,6 +81,15 @@ class MainActivity : FlutterActivity() {
     // @hide/@FlaggedApi in this SDK level (not callable from app code), and
     // registering a regular back callback could compete with Flutter's own
     // and CHANGE dispatch behavior during diagnosis — which is off-limits.
+
+    // LEGACY result API (not the Activity Result API): FlutterActivity extends
+    // android.app.Activity rather than ComponentActivity, so there is no
+    // registerForActivityResult here — see SnapTryOnPlugin's header.
+    @Suppress("DEPRECATION", "OverridingDeprecatedMember")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (snapTryOnPlugin?.handleActivityResult(requestCode, resultCode, data) == true) return
+        super.onActivityResult(requestCode, resultCode, data)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
