@@ -58,7 +58,6 @@ import com.solevision.app.arfoot.DiagRelay
 import com.solevision.app.arfoot.depthMmFromRaw16
 import com.solevision.app.arfoot.nearestPlausibleDepthMm
 import com.solevision.app.arfoot.planarFootAxisMeters
-import com.solevision.app.arfoot.unprojectToCameraSpace
 import com.google.ar.core.exceptions.UnavailableApkTooOldException
 import com.google.ar.core.exceptions.UnavailableArcoreNotInstalledException
 import com.google.ar.core.exceptions.UnavailableDeviceNotCompatibleException
@@ -394,6 +393,7 @@ class ArTryOnView(
      * the shoe. Plain Android views rather than Filament geometry on purpose: a dot needs no
      * material, so it cannot trip the ubershader mismatch abort (F16).
      */
+    private val dotViews = mutableListOf<android.view.View>()
     private var heelDotView: android.view.View? = null
     private var toeDotView: android.view.View? = null
 
@@ -841,12 +841,14 @@ class ArTryOnView(
         // the UI thread (this init runs there), positioned per frame by [placeDetectionDots].
         if (mode == Mode.AR) {
             val dotPx = (12 * resources.displayMetrics.density).toInt()
-            heelDotView = makeDetectionDot(dotPx).also {
-                addView(it, LayoutParams(dotPx, dotPx))
+            repeat(8) {
+                makeDetectionDot(dotPx).also {
+                    dotViews.add(it)
+                    addView(it, LayoutParams(dotPx, dotPx))
+                }
             }
-            toeDotView = makeDetectionDot(dotPx).also {
-                addView(it, LayoutParams(dotPx, dotPx))
-            }
+            heelDotView = dotViews.getOrNull(0)
+            toeDotView = dotViews.getOrNull(1)
             // V4.15: the presence ring — larger than the dots, a ring rather than a disc.
             val ringPx = (28 * resources.displayMetrics.density).toInt()
             presenceRingView = makePresenceRing(ringPx).also {
@@ -2962,7 +2964,15 @@ class ArTryOnView(
         relay("load: entities added — applying the transform")
 
         pendingAuthoredLengthMm = spec.authoredLengthMm
-        yawOffsetDeg = spec.yawOffsetDeg ?: 0.0
+        // V4.9: the mesh's own box decides the yaw — Luna is X-long with no
+        // per-model override, and the old unconditional 0° put it 90° off.
+        // An explicit `yawOffsetDeg` (alignment_json) always wins.
+        val loadBox = createdAsset.boundingBox
+        yawOffsetDeg = ModelAlignment.autoYawFromExtents(
+            spec.yawOffsetDeg,
+            loadBox.halfExtent[0],
+            loadBox.halfExtent[2],
+        )
         modelSide = spec.shoeSide
         // The drawn side is re-derived from the *new* mesh on the next frame — carrying the
         // previous model's mirror across a swap is how a shoe flips inside out for one frame.
@@ -2995,7 +3005,8 @@ class ArTryOnView(
         )
         relay(
             "model ${spec.modelId} loaded in ${loadMs}ms: " +
-                "renderables=${createdAsset.renderableEntities.size}",
+                "renderables=${createdAsset.renderableEntities.size}, " +
+                "yawOffset=%.1f correction=%.3f".format(yawOffsetDeg, authoredLengthCorrection()),
         )
         listener.onEvent("modelLoaded", mapOf("loadMs" to loadMs, "triangles" to -1))
     }
@@ -3243,6 +3254,45 @@ class ArTryOnView(
      * anchor cannot be read as a live measurement. Assigned only on change: this runs at the
      * projection throttle.
      */
+    private var dotOutlineWorlds: Array<FloatArray?> = Array(8) { null }
+
+    private fun eightFootUvs(heelU: Double, heelV: Double, toeU: Double, toeV: Double): Array<DoubleArray> {
+        val dx = toeU - heelU
+        val dy = toeV - heelV
+        val len = kotlin.math.sqrt(dx * dx + dy * dy)
+        if (!len.isFinite() || len < 1e-6) {
+            val r = 0.03
+            return arrayOf(
+                doubleArrayOf(heelU, heelV),
+                doubleArrayOf(heelU, heelV),
+                doubleArrayOf(heelU - r, heelV),
+                doubleArrayOf(heelU + r, heelV),
+                doubleArrayOf(heelU, heelV - r),
+                doubleArrayOf(heelU, heelV + r),
+                doubleArrayOf(heelU - r, heelV - r),
+                doubleArrayOf(heelU + r, heelV + r),
+            )
+        }
+        val nx = -dy / len
+        val ny = dx / len
+        val halfW = len * 0.30
+        fun at(t: Double, side: Double, widthScale: Double): DoubleArray {
+            val cx = heelU + dx * t
+            val cy = heelV + dy * t
+            return doubleArrayOf(cx + nx * halfW * side * widthScale, cy + ny * halfW * side * widthScale)
+        }
+        return arrayOf(
+            doubleArrayOf(heelU, heelV),
+            doubleArrayOf(toeU, toeV),
+            at(0.25, 1.0, 0.75),
+            at(0.50, 1.0, 1.0),
+            at(0.75, 1.0, 0.9),
+            at(0.25, -1.0, 0.75),
+            at(0.50, -1.0, 1.0),
+            at(0.75, -1.0, 0.9),
+        )
+    }
+
     private fun placeDetectionDots(
         heelX: Float,
         heelY: Float,
@@ -3250,19 +3300,27 @@ class ArTryOnView(
         toeY: Float,
         held: Boolean,
     ) {
-        val heel = heelDotView
-        val toe = toeDotView
-        if (heel == null || toe == null) return
-        val half = heel.layoutParams.width / 2f
-        heel.x = heelX - half
-        heel.y = heelY - half
-        toe.x = toeX - half
-        toe.y = toeY - half
+        placeEightDots(listOf(Pair(heelX, heelY), Pair(toeX, toeY)), held)
+    }
+
+    private fun placeEightDots(points: List<Pair<Float, Float>>, held: Boolean) {
+        if (dotViews.size < 8) return
         val alpha = if (held) DetectionDots.HELD_ALPHA else 1f
-        if (heel.alpha != alpha) heel.alpha = alpha
-        if (toe.alpha != alpha) toe.alpha = alpha
-        if (heel.visibility != android.view.View.VISIBLE) heel.visibility = android.view.View.VISIBLE
-        if (toe.visibility != android.view.View.VISIBLE) toe.visibility = android.view.View.VISIBLE
+        for (i in 0 until 8) {
+            val v = dotViews[i]
+            val p = points.getOrNull(i)
+            if (p == null) {
+                if (v.visibility != android.view.View.GONE) v.visibility = android.view.View.GONE
+                continue
+            }
+            val half = v.layoutParams.width / 2f
+            v.x = p.first - half
+            v.y = p.second - half
+            if (v.alpha != alpha) v.alpha = alpha
+            if (v.visibility != android.view.View.VISIBLE) v.visibility = android.view.View.VISIBLE
+        }
+        heelDotView = dotViews.getOrNull(0)
+        toeDotView = dotViews.getOrNull(1)
         dotsVisible = true
     }
 
@@ -3367,8 +3425,9 @@ class ArTryOnView(
         }
     }
 
-    /** UI-thread hide for both dots. */
+    /** UI-thread hide for all 8 dots. */
     private fun hideDetectionDots() {
+        for (v in dotViews) v.visibility = android.view.View.GONE
         heelDotView?.visibility = android.view.View.GONE
         toeDotView?.visibility = android.view.View.GONE
         dotsVisible = false
@@ -3580,34 +3639,43 @@ class ArTryOnView(
                     " err=%.0fpx %s".format(errPx, if (errPx >= 0 && errPx > 30) "PROJECTION-MISMATCH" else "projection-ok"),
             )
         }
-        val heelPx = DetectionDots.projectToPixels(heelWorld, viewProj, surfaceWidth, surfaceHeight)
-        val toePx = DetectionDots.projectToPixels(toeWorld, viewProj, surfaceWidth, surfaceHeight)
-        // Throttled placement readout: the one line that says whether the dots are on the foot,
-        // off-screen, or behind the camera — the distinction "dots=on but nothing seen" turns on.
+        // 8 dots around the foot: heel + toe + 3 per side from the ONNX axis.
+        val eightUvs = eightFootUvs(dotHeelU, dotHeelV, dotToeU, dotToeV)
+        val eightWorlds: Array<FloatArray?> = Array(8) { null }
+        if (fix == DetectionDots.Fix.LIVE) {
+            if (eightUvs[0][0] == dotHeelU && eightUvs[0][1] == dotHeelV) {
+                eightWorlds[0] = heelWorld
+                eightWorlds[1] = toeWorld
+            }
+            for (i in 0 until 8) {
+                if (eightWorlds[i] != null) continue
+                val uv = eightUvs[i]
+                eightWorlds[i] = depthWorldPoint(frame, uv[0], uv[1])
+                    ?: rayPointAtDistance(frame, uv[0], uv[1], DetectionDots.FALLBACK_DISTANCE_M)
+            }
+            dotOutlineWorlds = eightWorlds.map { it?.copyOf() }.toTypedArray()
+        } else {
+            for (i in 0 until 8) eightWorlds[i] = dotOutlineWorlds[i]
+            eightWorlds[0] = heelWorld
+            eightWorlds[1] = toeWorld
+        }
+        val eightPx = Array<Pair<Float, Float>?>(8) { null }
+        for (i in 0 until 8) {
+            val w = eightWorlds[i] ?: continue
+            eightPx[i] = DetectionDots.projectToPixels(w, viewProj, surfaceWidth, surfaceHeight)
+        }
         if (nowMs - dotLastRelayMs >= 1_000L) {
             dotLastRelayMs = nowMs
-            fun fmt(w: FloatArray, p: Pair<Float, Float>?, src: String): String {
-                val onScreen = p != null && p.first in 0f..surfaceWidth.toFloat() &&
-                    p.second in 0f..surfaceHeight.toFloat()
-                return "$src world=(%.2f,%.2f,%.2f)".format(w[0], w[1], w[2]) + " px=" +
-                    (p?.let { "%.0f,%.0f".format(it.first, it.second) } ?: "behind-camera") +
-                    (if (onScreen) " on-screen" else " OFF-SCREEN") +
-                    " (surface=${surfaceWidth}x$surfaceHeight)"
+            var onScreen = 0
+            for (p in eightPx) {
+                if (p != null && p.first in 0f..surfaceWidth.toFloat() && p.second in 0f..surfaceHeight.toFloat()) onScreen++
             }
-            relay("dots: heel " + fmt(heelWorld, heelPx, heelSrc) +
-                " | toe " + fmt(toeWorld, toePx, toeSrc))
+            relay("dots: 8-outline $onScreen/8 on-screen heel=$heelSrc toe=$toeSrc (surface=${surfaceWidth}x$surfaceHeight)")
         }
-        if (heelPx == null) return
+        if (eightPx[0] == null) return
         val held = fix == DetectionDots.Fix.COAST
-        // One anchor is better than none: a toe behind the camera must not take the heel dot down.
-        mainHandler.post {
-            if (toePx != null) {
-                placeDetectionDots(heelPx.first, heelPx.second, toePx.first, toePx.second, held)
-            } else {
-                // Toe unprojectable: park it off-screen, keep the heel.
-                placeDetectionDots(heelPx.first, heelPx.second, -100f, -100f, held)
-            }
-        }
+        val placed = eightPx.map { it ?: Pair(-100f, -100f) }
+        mainHandler.post { placeEightDots(placed, held) }
     }
 
     /**
@@ -3640,14 +3708,13 @@ class ArTryOnView(
         val intrinsics = frame.camera.imageIntrinsics
         val focal = intrinsics.focalLength
         val principal = intrinsics.principalPoint
-        val dir = DetectionDots.rayDirection(
-            imagePoint[0],
-            imagePoint[1],
-            focal[0],
-            focal[1],
-            principal[0],
-            principal[1],
-        )
+        // V4.24: the intrinsics describe the landscape sensor, but the display
+        // shows it rotated — the unrotated pairing below projected every dot
+        // 503 px off on the P30 Pro (dots-check PROJECTION-MISMATCH) and parked
+        // the shoe off-screen with it. Offsets rotate into camera space first.
+        val oxN = (imagePoint[0] - principal[0]) / focal[0]
+        val oyN = (imagePoint[1] - principal[1]) / focal[1]
+        val dir = DetectionDots.rotatedRayDir(oxN, oyN, surfaceRotationNow())
         val cameraPoint = DetectionDots.pointAlongRay(dir, distM)
         return runCatching { frame.camera.pose.transformPoint(cameraPoint) }.getOrNull()
     }
@@ -3956,12 +4023,17 @@ class ArTryOnView(
             rejectPose("axis %.0fmm < min".format(axis * 1000))
             return null
         }
-        // V4.12: the sample gate. A length that is not a foot, or a heel that jumped further than a
-        // foot moves between samples, is a bad read, and it must not reach the shoe's size or position.
-        if (axis < MIN_PLAUSIBLE_FOOT_M || axis > MAX_PLAUSIBLE_FOOT_M) {
-            rejectPose("length %.0fmm outside the foot range".format(axis * 1000))
-            return null
-        }
+        // V4.12 was a plausibility window here (200–340 mm, later 110–360 mm):
+        // a length outside it refused the whole sample, so no shoe drew. That
+        // window is gone on purpose — the trained detector plus the tracker's
+        // lock hysteresis (0.7 enter / 0.45 leave) are what decide foot vs not
+        // foot, and a millimetre window kept overruling them on real feet
+        // (an EU 30 foot under the old min; 370 mm overshoot reads over the
+        // old max). What remains is the degeneracy check above (no axis at
+        // all) and the heel-jump guard below (a bad depth read mid-stream).
+        // Sizing stays safe without this gate: `FootScaleCorrection`
+        // independently refuses an implausible length and answers ×1, so a
+        // bad read can misplace the shoe but never inflate it.
         val previousHeel = lastAcceptedHeel
         if (previousHeel != null) {
             val dx = heelPos[0] - previousHeel[0]
@@ -4145,16 +4217,15 @@ class ArTryOnView(
         val intrinsics = camera.imageIntrinsics
         val focal = intrinsics.focalLength
         val principal = intrinsics.principalPoint
-        val cameraPoint =
-            unprojectToCameraSpace(
-                imagePoint[0],
-                imagePoint[1],
-                depthMm / 1000f,
-                focal[0],
-                focal[1],
-                principal[0],
-                principal[1],
-            )
+        // V4.24: same rotation as the ray fallback — the depth texel is right
+        // (ARCore transform), but the unprojection below aimed it as if the
+        // sensor axes matched the screen, so depth anchors landed off the foot
+        // and the shoe drew off-screen. Shared `unprojectToCameraSpace` is the
+        // scan's (which works) and stays untouched; the try-on rotates first.
+        val oxN = (imagePoint[0] - principal[0]) / focal[0]
+        val oyN = (imagePoint[1] - principal[1]) / focal[1]
+        val dir = DetectionDots.rotatedRayDir(oxN, oyN, surfaceRotationNow())
+        val cameraPoint = DetectionDots.pointAlongRay(dir, depthMm / 1000f)
         return camera.pose.transformPoint(cameraPoint)
     }
 
@@ -4433,7 +4504,15 @@ class ArTryOnView(
      * first time the tracker took over — the one thing an anchor swap must not do.
      */
     private fun authoredLengthCorrection(): Float {
-        val authoredExtent = asset?.boundingBox?.halfExtent?.get(2)?.times(2f) ?: 0f
+        // V4.9: the declared length runs on the longer horizontal axis, not
+        // unconditionally on Z — Luna's 270 mm run on X, so the Z-only read
+        // corrected 270 mm against a ~102 mm extent (≈2.65× oversize).
+        val halfExtent = asset?.boundingBox?.halfExtent
+        val authoredExtent = if (halfExtent != null) {
+            ModelAlignment.authoredLengthExtent(halfExtent[0], halfExtent[2]) * 2f
+        } else {
+            0f
+        }
         val declaredMm = pendingAuthoredLengthMm
         if (declaredMm != null && declaredMm > 0 && authoredExtent > 1e-6f) {
             return (declaredMm / 1000.0).toFloat() / authoredExtent
@@ -4507,6 +4586,16 @@ class ArTryOnView(
      * It is used here only to decide which of the cached frame's dimensions are its *upright*
      * ones; the value never leaves this view.
      */
+    /**
+     * Raw surface rotation for [DetectionDots.rotatedRayDir] (V4.24) — the
+     * `display.rotation` constant (0/1/2/3), NOT [currentDisplayRotationDegrees]
+     * (which folds in the 90° sensor orientation for the CPU image path).
+     * The ray rotation is sensor→display; the 90 belongs to the image, and
+     * passing it here would double-rotate every ray.
+     */
+    private fun surfaceRotationNow(): Int =
+        runCatching { display?.rotation }.getOrDefault(0) ?: 0
+
     private fun currentDisplayRotationDegrees(): Int {
         val displayDegrees = when (runCatching { display?.rotation }.getOrNull()) {
             Surface.ROTATION_90 -> 90
@@ -5048,11 +5137,19 @@ class ArTryOnView(
         const val FLOW_CONFIDENCE_DECAY = 0.9
 
         /**
-         * Foot-length gate, in metres. A horizontal heel-to-toe length outside this range is not a foot:
-         * the floor fallback read about 1.2 m on the device, and that is what made the shoe too big.
+         * Depth-vs-floor source selection, in metres — **not** a sample gate.
+         * The sample gate that refused whole poses on length is gone (the
+         * detector + lock hysteresis decide foot vs not foot); this window
+         * only picks which 3D source a sample is measured from. The min stays
+         * at the fit engine's 110 mm so depth off the foot's surface (the
+         * floor or the background) still falls through to the floor path —
+         * but the max is 500 mm, not the engine's 360: the P30 Pro's ToF
+         * reads a real foot at ~373–383 mm, and discarding that for 13 mm
+         * over the line left every frame with no anchor and no shoe. A
+         * 1.2 m background read still falls through; a real foot never does.
          */
-        const val MIN_PLAUSIBLE_FOOT_M = 0.20
-        const val MAX_PLAUSIBLE_FOOT_M = 0.34
+        const val MIN_PLAUSIBLE_FOOT_M = 0.11
+        const val MAX_PLAUSIBLE_FOOT_M = 0.50
 
         /**
          * Largest heel move between accepted samples, in metres. Real movement at the sample rate stays
