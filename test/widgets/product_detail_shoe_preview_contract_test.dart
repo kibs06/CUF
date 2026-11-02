@@ -349,21 +349,31 @@ void main() {
     });
   });
 
-  group('there are two entries on the page, all at the foot', () {
-    test('the viewer draws the AR and Snap pills, all at the foot', () {
+  group('there are three entries on the page, all at the foot', () {
+    test('the viewer draws the DeepAR, AR and Snap pills, all at the foot', () {
       // ⚠️ The pill lived inside the section from 2026-10-01 to 2026-10-03, in
       // the flow directly under the box. The owner asked for it at the bottom of
       // the screen — with a box that fills most of the page, the button left a
       // dead half-page beneath it. What the move must not cost is the reason the
       // two used to be one widget (one entry, present exactly when the box is,
       // surviving a renderer that refuses), so each half of that is pinned here.
-      // Two entries: "Try On in AR" is the plain session, and "Try on Snap"
-      // is the web lens, gated to products with a published lens so it can
-      // never show the wrong shoe. ("Capture to fit" hidden for now, logic kept.)
+      // Three entries: "Try on DeepAR" is the web DeepAR page, gated to
+      // products with a bundled effect so it can never show the wrong shoe;
+      // "Try On in AR" is the plain session, and "Try on Snap" is the web
+      // lens, gated to products with a published lens. ("Capture to fit"
+      // hidden for now, logic kept.)
       expect(
         'SoleARPill('.allMatches(previewScreen).length,
-        2,
-        reason: 'two entries: plain AR and Snap (capture-to-fit hidden)',
+        3,
+        reason: 'three entries: DeepAR and plain AR and Snap '
+            '(capture-to-fit hidden)',
+      );
+      expect(previewScreen, contains("label: 'Try on DeepAR'"));
+      expect(
+        previewScreen,
+        contains('if (_showDeepAr)'),
+        reason: 'DeepAR is the bundled-effect-products-only entry, never the '
+            'seller\'s or an uneffected shoe\'s',
       );
       expect(previewScreen, contains('SoleARPill(onPressed: _openArTryOn)'));
       expect(

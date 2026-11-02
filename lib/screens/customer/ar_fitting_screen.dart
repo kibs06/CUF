@@ -150,7 +150,6 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen>
   /// holds this screen to leaving nothing armed when it unmounts, and a
   /// `Future.delayed` cannot be cancelled out of one.
   Timer? _simulatedLockTimer;
-  Timer? _relockTimer;
 
   // GlobalKeys for the fly-to-cart overlay animation (Add to Cart → cart icon)
   final GlobalKey _addToCartButtonKey = GlobalKey();
@@ -272,7 +271,6 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen>
     // V4.8: the rotation lock lives and dies with this route.
     SystemChrome.setPreferredOrientations(DeviceOrientation.values);
     _simulatedLockTimer?.cancel();
-    _relockTimer?.cancel();
     _pulseController.dispose();
     _particleController.dispose();
     // D1: the platform view owns native teardown; disposing the controller cancels

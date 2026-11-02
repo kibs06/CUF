@@ -227,42 +227,6 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('a product switch arms its relock timer through the cancelling '
-        'field too', (tester) async {
-      await tester.pumpWidget(wrap(screen(), products: const [_otherProduct]));
-      await tester.pump(const Duration(milliseconds: 100));
-
-      // The first-run guide overlays the whole screen; dismiss it before trying
-      // to reach the switcher underneath.
-      await tester.tap(find.text('Got It'));
-      await tester.pump();
-      expect(find.text('Test Oxford'), findsOneWidget);
-
-      // The bottom panel's variant switcher: the screen's first ListView.
-      final switcher = find.descendant(
-        of: find.byType(ListView).first,
-        matching: find.byType(GestureDetector),
-      );
-      expect(switcher, findsOneWidget);
-
-      await tester.tap(switcher);
-      await tester.pump();
-      expect(find.text('Test Derby'), findsOneWidget,
-          reason: 'the tap must really switch products — the relock timer is '
-              'only armed by a real switch, and a missed tap would make this '
-              'test vacuous');
-      // The thumbnail is a `NetworkImage` and `flutter_test`'s HTTP client
-      // answers 400 for it; that load failure belongs to the harness, not the
-      // screen.
-      tester.takeException();
-
-      // Close before the 1.8 s relock deadline: a `Future.delayed` regression
-      // leaves a timer the binding reports at teardown, exactly like the
-      // simulated lock above.
-      await tester.pumpWidget(const SizedBox());
-      await tester.pump();
-      expect(tester.takeException(), isNull);
-    });
   });
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -301,15 +265,6 @@ const Map<String, dynamic> _product = {
   'sizes': <String, int>{'39': 5},
 };
 
-/// A second product for the switcher, so `_switchProduct` is reachable from the
-/// UI rather than only from the source.
-const Map<String, dynamic> _otherProduct = {
-  'id': 'product-2',
-  'name': 'Test Derby',
-  'price': 1299.0,
-  'images': <String>[],
-  'sizes': <String, int>{'40': 3},
-};
 
 /// The screen's controller, watched: lifecycle calls recorded, and the listener
 /// count on both sides of [ChangeNotifier].
