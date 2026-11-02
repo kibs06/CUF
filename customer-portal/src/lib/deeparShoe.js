@@ -28,10 +28,13 @@ export function deepArEffectForProduct(productId) {
   ) {
     return '/effects/luna_loafers.deepar'
   }
-  // Luxe by slug: the app links `?product=<uuid>`, and the effect was filed
-  // by product name, so the page resolves the name (see DeepArShoe) and the
-  // direct slug still works for shared links.
-  if (id === 'luxe-cross-strap-sandals') {
+  // Luxe Cross-Strap Sandals, same as Luna: row id first (Caramel colourway),
+  // slug for shared links. The product-name fallback below stays as cover for
+  // sibling colourways whose row ids were never recorded.
+  if (
+    id === '77b8c0a3-0f09-41a6-aa70-fc1db04e4cc1' ||
+    id === 'luxe-cross-strap-sandals'
+  ) {
     return '/effects/luxe_cross_strap_sandals.deepar'
   }
   return null

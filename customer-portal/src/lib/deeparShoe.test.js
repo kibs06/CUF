@@ -7,7 +7,11 @@ import {
   deepArSlugForName,
 } from './deeparShoe.js'
 
-test('Luxe resolves by slug, any row id by name', () => {
+test('Luxe resolves by row id and slug, any row id by name', () => {
+  assert.equal(
+    deepArEffectForProduct('77b8c0a3-0f09-41a6-aa70-fc1db04e4cc1'),
+    '/effects/luxe_cross_strap_sandals.deepar',
+  )
   assert.equal(deepArEffectForProduct('luxe-cross-strap-sandals'), '/effects/luxe_cross_strap_sandals.deepar')
   assert.equal(
     deepArEffectForProductName('Luxe Cross-Strap Sandals'),

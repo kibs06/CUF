@@ -20,7 +20,11 @@ void main() {
       );
     });
 
-    test('Luxe resolves by slug and by product name, without a row id', () {
+    test('Luxe resolves by row id, slug, and product name', () {
+      expect(
+        deepArEffectForProduct('77b8c0a3-0f09-41a6-aa70-fc1db04e4cc1'),
+        'assets/effects/luxe_cross_strap_sandals.deepar',
+      );
       expect(
         deepArEffectForProduct('luxe-cross-strap-sandals'),
         'assets/effects/luxe_cross_strap_sandals.deepar',

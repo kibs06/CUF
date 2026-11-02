@@ -48,6 +48,11 @@ const Map<String, String> kDeepArBundledEffects = {
   '0aebaa64-4d9e-44f8-8876-6b3ee9855fae':
       'assets/effects/luna_loafers.deepar',
   'luna-loafers': 'assets/effects/luna_loafers.deepar',
+  // Luxe Cross-Strap Sandals, same as Luna: row id first (Caramel colourway),
+  // slug for shared links. The product-name fallback below stays as cover for
+  // sibling colourways whose row ids were never recorded.
+  '77b8c0a3-0f09-41a6-aa70-fc1db04e4cc1':
+      'assets/effects/luxe_cross_strap_sandals.deepar',
   'luxe-cross-strap-sandals':
       'assets/effects/luxe_cross_strap_sandals.deepar',
 };
