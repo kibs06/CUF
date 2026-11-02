@@ -68,6 +68,16 @@ String deepArSlugForName(String name) => name
     .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
     .replaceAll(RegExp(r'^-+|-+$'), '');
 
+/// Convention asset path without touching the hardcoded map: drops a Studio
+/// export at `assets/effects/<snake>.deepar` (declared in `pubspec.yaml`) and
+/// ships the app — the pill appears with no Dart edit. (`JBC Crown Leather
+/// Sandals` → `assets/effects/jbc_crown_leather_sandals.deepar`.)
+String? deepArConventionAssetForName(String name) {
+  final snake = deepArSlugForName(name).replaceAll('-', '_');
+  if (snake.isEmpty) return null;
+  return 'assets/effects/$snake.deepar';
+}
+
 /// Whether a product name is the Luxe Cross-Strap Sandals pair. Name-based
 /// rather than id-based on purpose: the effect was handed over as a file for
 /// a named product, and its row id was never recorded — matching the id would

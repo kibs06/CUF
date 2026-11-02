@@ -27,7 +27,12 @@ import { useMySize } from '../hooks/useMySize.js'
 import { useProduct, useProducts, useStore } from '../hooks/useCatalog'
 import useProductModel from '../hooks/useProductModel'
 import { getLensEnv, lensAvailableForProduct, lensConfigStatus } from '../lib/lensConfig.js'
-import { deepArEffectForProduct, deepArEffectForProductName } from '../lib/deeparShoe.js'
+import {
+  checkDeepArConventionExists,
+  deepArConventionEffectForName,
+  deepArEffectForProduct,
+  deepArEffectForProductName,
+} from '../lib/deeparShoe.js'
 import { supabase } from '../lib/supabase.js'
 import { availableSizes, stockForSize } from '../lib/stock'
 import { salePercent } from '../lib/pricing'
@@ -104,6 +109,10 @@ export default function ProductDetail({ preview = false }) {
   // `product_ar_effects` row gets the entry even when its uuid is in neither
   // hardcoded list. A missing table answers false, never a throw.
   const [hasDbArEffect, setHasDbArEffect] = useState(false)
+  // Convention probe: `/effects/<snake>.deepar` shipped with this deploy.
+  // Hidden until the HEAD answers 200 — this is what makes a new effect
+  // automatic: commit the file, deploy to Vercel, the button appears.
+  const [hasConventionArEffect, setHasConventionArEffect] = useState(false)
   useEffect(() => {
     if (!productId) return
     let cancelled = false
@@ -122,6 +131,24 @@ export default function ProductDetail({ preview = false }) {
       cancelled = true
     }
   }, [productId])
+  // Probe the convention file only when nothing else already answers: the
+  // hardcoded map and the DB row stay the fast path, the probe is the
+  // automatic one for the next shoe.
+  useEffect(() => {
+    setHasConventionArEffect(false)
+    const name = product?.name
+    if (!name) return
+    if (deepArEffectForProductName(name) || hasDbArEffect) return
+    const url = deepArConventionEffectForName(name)
+    if (!url) return
+    let cancelled = false
+    checkDeepArConventionExists(url).then((ok) => {
+      if (!cancelled) setHasConventionArEffect(ok)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [product?.name, hasDbArEffect])
   const [selectedSize, setSelectedSize] = useState(null)
   const [adding, setAdding] = useState(false)
   const [added, setAdded] = useState(false)
@@ -374,7 +401,8 @@ export default function ProductDetail({ preview = false }) {
                     row id — e.g. 77b8c0a3…), or a live uploaded effect row. */}
                 {(deepArEffectForProduct(product.id) ||
                   deepArEffectForProductName(product.name) ||
-                  hasDbArEffect) && (
+                  hasDbArEffect ||
+                  hasConventionArEffect) && (
                   <Link
                     to={`/deepar-shoe?product=${product.id}`}
                     className="btn btn-outline w-full gap-2"

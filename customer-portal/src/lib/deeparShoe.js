@@ -59,6 +59,44 @@ export function deepArEffectForProductName(name) {
   return deepArEffectForProduct(slug)
 }
 
+/** Convention URL: `JBC Crown Leather Sandals` → `/effects/jbc_crown_leather_sandals.deepar`.
+ *
+ *  This is what makes the button automatic: drop a Studio export at
+ *  `customer-portal/public/effects/<snake>.deepar`, deploy to Vercel, and the
+ *  entry appears with no map edit — the page probes this URL (see
+ *  `checkDeepArConventionExists`) and shows the button on a 200. */
+export function deepArSnakeForName(name) {
+  return deepArSlugForName(name).replace(/-/g, '_')
+}
+
+export function deepArConventionEffectForName(name) {
+  const snake = deepArSnakeForName(name)
+  if (!snake) return null
+  return `/effects/${snake}.deepar`
+}
+
+const conventionProbeCache = new Map()
+
+/** HEAD-probe for a convention effect URL. Cached per URL: a 200 (or opaque
+ *  success) means the file shipped with this deploy, so the button shows;
+ *  anything else keeps it hidden exactly as before. Never throws. */
+export async function checkDeepArConventionExists(url) {
+  if (!url) return false
+  if (conventionProbeCache.has(url)) return conventionProbeCache.get(url)
+  const promise = (async () => {
+    try {
+      const res = await fetch(url, { method: 'HEAD' })
+      return res.ok
+    } catch {
+      return false
+    }
+  })()
+  conventionProbeCache.set(url, promise)
+  const ok = await promise
+  conventionProbeCache.set(url, ok)
+  return ok
+}
+
 export function deepArShoeStatus(env = getDeepArShoeEnv(), productId) {
   const missing = []
   if (!env.webKey) missing.push('VITE_DEEPAR_WEB_KEY')

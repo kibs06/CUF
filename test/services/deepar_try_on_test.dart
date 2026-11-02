@@ -52,6 +52,14 @@ void main() {
       );
     });
 
+    test('convention asset path needs no map edit', () {
+      expect(
+        deepArConventionAssetForName('JBC Crown Leather Sandals'),
+        'assets/effects/jbc_crown_leather_sandals.deepar',
+      );
+      expect(deepArConventionAssetForName('  '), isNull);
+    });
+
     test('unknown product has no effect yet', () {
       expect(deepArEffectForProduct('abc123'), isNull);
     });

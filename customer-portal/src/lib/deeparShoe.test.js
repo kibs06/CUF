@@ -2,9 +2,12 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import {
+  checkDeepArConventionExists,
+  deepArConventionEffectForName,
   deepArEffectForProduct,
   deepArEffectForProductName,
   deepArSlugForName,
+  deepArSnakeForName,
 } from './deeparShoe.js'
 
 test('Luxe resolves by row id and slug, any row id by name', () => {
@@ -28,6 +31,14 @@ test('JBC resolves by slug, any row id by name', () => {
     '/effects/jbc_crown_leather_sandals.deepar',
   )
   assert.equal(deepArSlugForName('JBC Crown Leather Sandals'), 'jbc-crown-leather-sandals')
+})
+
+test('convention URL needs no map edit', async () => {
+  assert.equal(deepArSnakeForName('JBC Crown Leather Sandals'), 'jbc_crown_leather_sandals')
+  assert.equal(deepArConventionEffectForName('Some Future Shoe'), '/effects/some_future_shoe.deepar')
+  assert.equal(deepArConventionEffectForName('  '), null)
+  // Unreachable host never throws — hidden stays hidden.
+  assert.equal(await checkDeepArConventionExists('http://127.0.0.1:1/nope.deepar'), false)
 })
 
 test('Luna mapping is unchanged', () => {

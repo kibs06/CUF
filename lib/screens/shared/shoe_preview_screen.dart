@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -237,6 +238,12 @@ class _ShoePreviewScreenState extends State<ShoePreviewScreen> {
   /// ones, and a missing table or row answers false, never a throw.
   bool _hasUploadedArEffect = false;
 
+  /// Whether the convention asset (`assets/effects/<snake>.deepar`) ships in
+  /// this build. Probed from the asset manifest on open: a new shoe goes live
+  /// with just the file + `pubspec.yaml` entry + store release — no Dart edit.
+  /// Stays hidden when the file is absent, exactly as before.
+  bool _hasConventionArEffect = false;
+
   /// What the resolve answered, kept so the screen can say *which* silence this
   /// is. Null while it is still running.
   TryOnPrefetchResult? _resolution;
@@ -254,6 +261,35 @@ class _ShoePreviewScreenState extends State<ShoePreviewScreen> {
     _model = widget.model;
     if (_model == null) _resolve();
     _checkUploadedArEffect();
+    _checkConventionArEffect();
+  }
+
+  /// One manifest read: does `assets/effects/<snake>.deepar` ship in this
+  /// build? Skipped when the hardcoded map already answers — the map stays
+  /// the fast path, this is the automatic one for the next shoe. Any failure
+  /// is a "no" and the pill stays hidden exactly as before.
+  Future<void> _checkConventionArEffect() async {
+    final name = widget.product['name']?.toString().trim() ?? '';
+    if (name.isEmpty) return;
+    if (deepArEffectForProduct(
+          widget.product['id']?.toString() ?? '',
+          productName: name,
+        ) !=
+        null) {
+      return;
+    }
+    final asset = deepArConventionAssetForName(name);
+    if (asset == null) return;
+    try {
+      final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
+      if (!mounted) return;
+      if (manifest.listAssets().contains(asset)) {
+        setState(() => _hasConventionArEffect = true);
+      }
+    } catch (_) {
+      // A missing manifest entry reads as no effect — bundled map + uploaded
+      // row still decide for Luna/Luxe/JBC.
+    }
   }
 
   /// One quiet read: is there a live uploaded effect for this product? Any
@@ -331,8 +367,10 @@ class _ShoePreviewScreenState extends State<ShoePreviewScreen> {
 
   /// Whether the **"Try on DeepAR"** pill is offered: customer door only,
   /// and only for a product with an effect — an uploaded row (any product,
-  /// published from the admin shelf) or a bundled `.deepar` (see
-  /// [kDeepArBundledEffects]). Luna Loafers first, Luxe Cross-Strap Sandals
+  /// published from the admin shelf), a bundled `.deepar` (see
+  /// [kDeepArBundledEffects]), or the convention asset
+  /// (`assets/effects/<snake>.deepar` shipping in this build, probed from
+  /// the manifest). Luna Loafers first, Luxe Cross-Strap Sandals
   /// by product name — its effect arrived filed by name, not by row id.
   bool get _showDeepAr =>
       widget.showTryOn &&
@@ -342,7 +380,8 @@ class _ShoePreviewScreenState extends State<ShoePreviewScreen> {
                 productName: widget.product['name']?.toString(),
               ) !=
               null ||
-          _hasUploadedArEffect);
+          _hasUploadedArEffect ||
+          _hasConventionArEffect);
 
   /// **"Try on DeepAR"** — always the live web page in the phone browser.
   /// Native SDKs dropped foot tracking, and an in-app WebView leaves the

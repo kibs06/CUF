@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
+  checkDeepArConventionExists,
+  deepArConventionEffectForName,
   deepArEffectForProductName,
   deepArShoeStatus,
   getDeepArShoeEnv,
@@ -29,6 +31,10 @@ export default function DeepArShoe() {
   // (Luna ids, Luxe slug), then the product-name fallback for a bare uuid.
   const [dbEffect, setDbEffect] = useState(null)
   const [namedEffect, setNamedEffect] = useState(null)
+  // Convention fallback: the `/effects/<snake>.deepar` file shipped with
+  // this deploy. Probed (HEAD) only when nothing else answered, so a new
+  // shoe goes live with just the file + deploy — no map edit.
+  const [conventionEffect, setConventionEffect] = useState(null)
   useEffect(() => {
     if (!productId) return
     let cancelled = false
@@ -68,10 +74,30 @@ export default function DeepArShoe() {
       cancelled = true
     }
   }, [direct.effect, dbEffect, productId])
+  useEffect(() => {
+    if (direct.effect || dbEffect || namedEffect || !productId) return
+    let cancelled = false
+    supabase
+      .from('products')
+      .select('name')
+      .eq('id', productId)
+      .maybeSingle()
+      .then(async ({ data }) => {
+        if (cancelled || !data?.name) return
+        const url = deepArConventionEffectForName(data.name)
+        if (!url) return
+        if (await checkDeepArConventionExists(url)) {
+          if (!cancelled) setConventionEffect(url)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [direct.effect, dbEffect, namedEffect, productId])
   // The first resolution that answers wins; when one does, the only honest
   // missing entry is the key — the effect question is answered, and the stub
   // must not still claim it.
-  const resolved = dbEffect ?? direct.effect ?? namedEffect
+  const resolved = dbEffect ?? direct.effect ?? namedEffect ?? conventionEffect
   const status = resolved
     ? {
         ...direct,
