@@ -127,6 +127,83 @@ export function useModelledProducts() {
   })
 }
 
+// ─── Delete a live model ───────────────────────────────────────────
+
+// Removes the version the 3D shelf shows, file and row. Two guards, in order:
+//
+//   1. **A closed ask that names this model blocks the delete.** `model_id`
+//      has no `ON DELETE` clause, so the database would refuse with 23503 —
+//      and rightly so: a fulfilled request is history, and history that names
+//      a missing file reads as a broken promise. The check runs first so the
+//      refusal arrives as a sentence, not a constraint code.
+//   2. **The row goes before the object.** A row that survives its file renders
+//      as "no model" at best; an object that survives its row is simply
+//      invisible. So the row is deleted first, and a file removal that fails
+//      afterwards is reported as the harmless orphan it is.
+export function useDeleteProductModel() {
+  const qc = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ modelId, storagePath }) => {
+      if (modelId == null) throw new Error('That model has no row to delete.')
+
+      const { data: refs, error: refsError } = await supabase
+        .from('shoe_model_requests')
+        .select('id, status')
+        .eq('model_id', modelId)
+        .limit(5)
+
+      if (refsError) throw toPortalError(refsError, 'Could not check what names this model.')
+      if ((refs ?? []).length > 0) {
+        const n = refs.length
+        throw new Error(
+          `${n === 1 ? 'A closed request names' : `${n} closed requests name`} this model as the ` +
+          `one that answered them — deleting it would leave that history pointing at a missing ` +
+          `file. Reject or supersede those asks first (a newer live version closes new asks, ` +
+          `but history keeps pointing at this one).`,
+        )
+      }
+
+      const { error: rowError } = await supabase
+        .from('product_models')
+        .delete()
+        .eq('id', modelId)
+
+      if (rowError) {
+        // The FK has no ON DELETE, so a raced-in reference lands here rather
+        // than in the check above — same news, same sentence.
+        if (rowError.code === '23503') {
+          throw new Error(
+            'A request names this model as the one that answered it, so the database refused ' +
+            'the delete. History keeps pointing at this file.',
+          )
+        }
+        throw toPortalError(rowError, 'That model could not be deleted.')
+      }
+
+      if (storagePath) {
+        const { error: objectError } = await supabase.storage
+          .from('shoe-models')
+          .remove([storagePath])
+
+        if (objectError) {
+          throw toPortalError(
+            objectError,
+            'The model row is deleted, but its file could not be removed — the file is ' +
+              'invisible to customers and safe to leave, or delete it from the bucket by hand.',
+          )
+        }
+      }
+
+      return { modelId }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['modelled-products'] })
+      qc.invalidateQueries({ queryKey: ['product-models'] })
+    },
+  })
+}
+
 // ─── The three closing RPCs ────────────────────────────────────────
 
 // ⚠️ These RPCs signal a business refusal by RETURNING `{success:false}` — a row

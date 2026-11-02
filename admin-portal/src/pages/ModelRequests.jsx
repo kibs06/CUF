@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { AlertTriangle, Check, Cuboid, Hand, Loader2, Package, Ruler, Upload } from 'lucide-react'
+import { AlertTriangle, Check, Cuboid, Hand, Loader2, MoreVertical, Package, Ruler, Upload } from 'lucide-react'
 import Badge from '../components/ui/Badge.jsx'
 import EmptyState from '../components/ui/EmptyState.jsx'
 import Modal from '../components/ui/Modal.jsx'
@@ -10,6 +10,7 @@ import {
   REQUEST_STATUS,
   useClaimModelRequest,
   useDeclineModelRequest,
+  useDeleteProductModel,
   useFulfilModelRequest,
   useModelRequests,
   useModelledProducts,
@@ -17,6 +18,9 @@ import {
 } from '../hooks/useModelRequests.js'
 import UploadModelModal from '../components/model-requests/UploadModelModal.jsx'
 import ProductPhotosDialog, { orderedPhotos } from '../components/model-requests/ProductPhotosDialog.jsx'
+import ModelledProductMenu from '../components/model-requests/ModelledProductMenu.jsx'
+import { supabase } from '../lib/supabase.js'
+import { MODEL_BUCKET } from '../lib/modelPublish.js'
 import ModelViewerDialog from '../components/products/ModelViewerDialog.jsx'
 import { useDeviceGate } from '../hooks/useDeviceGate.js'
 import { describeError } from '../lib/errors.js'
@@ -104,6 +108,12 @@ export default function ModelRequests() {
   const decline = useDeclineModelRequest()
   const modelledQuery = useModelledProducts()
   const [viewingModel, setViewingModel] = useState(null)
+  // The shelf's right-click menu, and the delete it can ask for. The menu
+  // only points; the page owns every action, so `menu` is just coordinates
+  // plus the entry under the cursor.
+  const [menu, setMenu] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const del = useDeleteProductModel()
 
   const rows = useMemo(() => data ?? [], [data])
   const modelled = useMemo(() => modelledQuery.data ?? [], [modelledQuery.data])
@@ -133,6 +143,90 @@ export default function ModelRequests() {
   )
 
   const isModelsTab = tab === MODELS_TAB.key
+
+  // ─── The shelf menu's actions ───────────────────────────────────
+  // View and photos reuse the dialogs the queue rows open; download and copy
+  // work on the live file (the same public object customers fetch); delete
+  // goes through its own confirm first.
+  const openViewerFor = (entry) =>
+    setViewingModel({
+      title: entry.name,
+      storagePath: entry.model.storage_path,
+      status: entry.model.status,
+      version: entry.model.version,
+    })
+
+  const openPhotosFor = (entry) =>
+    setPhotoTarget({
+      id: `model-${entry.productId}`,
+      products: { name: entry.name, product_images: entry.images },
+    })
+
+  const downloadForEdit = async (entry) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from(MODEL_BUCKET)
+        .download(entry.model.storage_path)
+      if (error) throw error
+      const url = URL.createObjectURL(data)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${entry.name} v${entry.model.version}.glb`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+      showToast(
+        'Downloaded — edit it in Blender, then re-upload the fixed file from a request’s “Upload a model”.',
+      )
+    } catch (e) {
+      showToast(describeError(e, 'That file could not be downloaded.').message, 'error')
+    }
+  }
+
+  const copyPublicLink = async (entry) => {
+    const url = supabase.storage.from(MODEL_BUCKET).getPublicUrl(entry.model.storage_path)
+      .data.publicUrl
+    // The async clipboard API needs a focused tab with permission; the
+    // textarea fallback covers the cases where it refuses.
+    try {
+      await navigator.clipboard.writeText(url)
+    } catch {
+      const area = document.createElement('textarea')
+      area.value = url
+      document.body.appendChild(area)
+      area.select()
+      document.execCommand('copy')
+      area.remove()
+    }
+    showToast('Public link copied — it downloads the exact file customers get.')
+  }
+
+  const handleMenuPick = (action, entry) => {
+    setMenu(null)
+    if (!entry) return
+    if (action === 'view') openViewerFor(entry)
+    else if (action === 'photos') openPhotosFor(entry)
+    else if (action === 'download') void downloadForEdit(entry)
+    else if (action === 'copy') void copyPublicLink(entry)
+    else if (action === 'delete') setDeleteTarget(entry)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return
+    try {
+      await del.mutateAsync({
+        modelId: deleteTarget.model.id,
+        storagePath: deleteTarget.model.storage_path,
+      })
+      showToast(
+        `Version ${deleteTarget.model.version} of ${deleteTarget.name} deleted — file and row.`,
+      )
+      setDeleteTarget(null)
+    } catch (e) {
+      showToast(describeError(e, 'That model could not be deleted.').message, 'error')
+    }
+  }
 
   const activeTab = TABS.find((t) => t.key === tab) ?? TABS[0]
   const visible = byStatus(activeTab.statuses)
@@ -485,6 +579,10 @@ export default function ModelRequests() {
               return (
                 <div
                   key={entry.productId}
+                  onContextMenu={(e) => {
+                    e.preventDefault()
+                    setMenu({ entry, x: e.clientX, y: e.clientY })
+                  }}
                   className="rounded-2xl border border-[#D9D0C7] bg-white p-5 transition-shadow hover:shadow-md"
                 >
                   <div className="flex min-w-0 items-start gap-3">
@@ -530,25 +628,77 @@ export default function ModelRequests() {
                       </p>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setViewingModel({
-                        title: entry.name,
-                        storagePath: entry.model.storage_path,
-                        status: entry.model.status,
-                        version: entry.model.version,
-                      })
-                    }
-                    className="mt-4 w-full rounded-lg border border-[#8B5A2B] px-3 py-1.5 text-xs font-semibold text-[#8B5A2B] transition-colors hover:bg-[#8B5A2B]/10"
-                  >
-                    View 3D
-                  </button>
+                  <div className="mt-4 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => openViewerFor(entry)}
+                      className="flex-1 rounded-lg border border-[#8B5A2B] px-3 py-1.5 text-xs font-semibold text-[#8B5A2B] transition-colors hover:bg-[#8B5A2B]/10"
+                    >
+                      View 3D
+                    </button>
+                    {/* The same menu as right-click, for trackpads and touch:
+                        no admin should need to discover a hidden gesture. */}
+                    <button
+                      type="button"
+                      aria-label={`More actions for ${entry.name}`}
+                      title="More actions"
+                      onClick={(e) => setMenu({ entry, x: e.clientX, y: e.clientY })}
+                      className="shrink-0 rounded-lg border border-[#D9D0C7] px-2.5 py-1.5 text-[#6B5C4E] transition-colors hover:bg-[#F5F0EB] hover:text-[#3B2314]"
+                    >
+                      <MoreVertical size={15} />
+                    </button>
+                  </div>
                 </div>
               )
             })}
           </div>
         </div>
+      )}
+
+      {/* The shelf's right-click menu: photos, file, link, and — at the bottom,
+          behind a confirm — the delete. */}
+      <ModelledProductMenu menu={menu} onPick={handleMenuPick} onClose={() => setMenu(null)} />
+
+      {/* Delete is the one menu action that asks first: the file and its row go
+          together, and a closed ask that names this version blocks it rather
+          than dangling. */}
+      {!!deleteTarget && (
+        <Modal
+          open
+          onClose={() => !del.isPending && setDeleteTarget(null)}
+          title="Delete this 3D model"
+          footer={
+            <>
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                disabled={del.isPending}
+                className="rounded-xl border border-[#D9D0C7] px-4 py-2 text-sm text-[#6B5C4E] hover:bg-[#F5F0EB] disabled:opacity-50"
+              >
+                Keep it
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteConfirm}
+                disabled={del.isPending}
+                className="rounded-xl bg-[#D64545] px-5 py-2 text-sm font-semibold text-white shadow-md transition-colors hover:bg-[#B83535] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {del.isPending ? 'Deleting…' : 'Delete file and row'}
+              </button>
+            </>
+          }
+        >
+          <p className="mb-3 text-sm text-[#6B5C4E]">
+            Version <strong className="text-[#3B2314]">{deleteTarget.model.version}</strong> of{' '}
+            <strong className="text-[#3B2314]">{deleteTarget.name}</strong> will be removed — the
+            uploaded file and its database row, together.
+          </p>
+          <p className="rounded-xl border border-[#D9CD9A] bg-[#FFF8E5] px-3 py-2 text-xs leading-relaxed text-[#6B5C4E]">
+            If this product has older live versions, the previous one becomes the current model on
+            the shelf; otherwise the product leaves the 3D shelf. A closed request that names
+            this version blocks the delete instead of dangling.
+          </p>
+        </Modal>
       )}
 
       {/* The shelf's viewer: the same dialog the fulfil picker opens, so a model
