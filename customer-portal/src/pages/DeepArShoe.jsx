@@ -83,12 +83,23 @@ export default function DeepArShoe() {
   const canvasRef = useRef(null)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
+  // Which effect URL the live DeepAR instance was started for. The effect
+  // often resolves *after* first paint (uploaded-row read, then the
+  // product-name fallback for a bare uuid like Luxe) — without this the
+  // one-shot `[productId]` init ran while `status.ready` was still false,
+  // the canvas then mounted with no instance behind it: a pure black
+  // screen with no error.
+  const startedForRef = useRef(null)
 
   useEffect(() => {
     if (!status.ready) {
       setLoading(false)
       return
     }
+    if (startedForRef.current === status.effect) return
+    startedForRef.current = status.effect
+    setError(null)
+    setLoading(true)
     let cancelled = false
     let deepAR = null
 
@@ -139,14 +150,17 @@ export default function DeepArShoe() {
     start()
     return () => {
       cancelled = true
+      // Only tear down the instance this run created: the ready→not-ready
+      // flip unmounts the canvas anyway, and clearing the ref lets a later
+      // effect URL start fresh.
+      startedForRef.current = null
       try {
         deepAR?.shutdown?.()
       } catch {
         // ignore teardown errors in the spike
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [productId])
+  }, [productId, status.ready, status.effect])
 
   if (!status.ready) {
     return (

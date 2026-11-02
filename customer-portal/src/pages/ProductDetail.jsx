@@ -27,7 +27,8 @@ import { useMySize } from '../hooks/useMySize.js'
 import { useProduct, useProducts, useStore } from '../hooks/useCatalog'
 import useProductModel from '../hooks/useProductModel'
 import { getLensEnv, lensAvailableForProduct, lensConfigStatus } from '../lib/lensConfig.js'
-import { deepArEffectForProduct } from '../lib/deeparShoe.js'
+import { deepArEffectForProduct, deepArEffectForProductName } from '../lib/deeparShoe.js'
+import { supabase } from '../lib/supabase.js'
 import { availableSizes, stockForSize } from '../lib/stock'
 import { salePercent } from '../lib/pricing'
 import { sellerProductPreviewPath } from '../lib/sellerPaths.js'
@@ -99,6 +100,28 @@ export default function ProductDetail({ preview = false }) {
   const [activeImage, setActiveImage] = useState(0)
   const [viewerOpen, setViewerOpen] = useState(false)
   const [footTryOnOpen, setFootTryOnOpen] = useState(false)
+  // Uploaded `.deepar` wins over the bundled map: any product with a live
+  // `product_ar_effects` row gets the entry even when its uuid is in neither
+  // hardcoded list. A missing table answers false, never a throw.
+  const [hasDbArEffect, setHasDbArEffect] = useState(false)
+  useEffect(() => {
+    if (!productId) return
+    let cancelled = false
+    supabase
+      .from('product_ar_effects')
+      .select('id')
+      .eq('product_id', productId)
+      .eq('status', 'active')
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled) setHasDbArEffect(!!data)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [productId])
   const [selectedSize, setSelectedSize] = useState(null)
   const [adding, setAdding] = useState(false)
   const [added, setAdded] = useState(false)
@@ -346,9 +369,12 @@ export default function ProductDetail({ preview = false }) {
                     Try in Snapchat
                   </Link>
                 )}
-                {/* DeepAR Web shoe spike (5.6.3 pinned): only for products
-                    with a bundled .deepar effect (Luna Loafers first). */}
-                {deepArEffectForProduct(product.id) && (
+                {/* DeepAR Web shoe spike (5.6.3 pinned): bundled map, the
+                    Luxe-by-name fallback (its effect was filed by name, not
+                    row id — e.g. 77b8c0a3…), or a live uploaded effect row. */}
+                {(deepArEffectForProduct(product.id) ||
+                  deepArEffectForProductName(product.name) ||
+                  hasDbArEffect) && (
                   <Link
                     to={`/deepar-shoe?product=${product.id}`}
                     className="btn btn-outline w-full gap-2"

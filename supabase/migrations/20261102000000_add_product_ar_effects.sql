@@ -168,7 +168,7 @@ DO $$ BEGIN
                     OR EXISTS (
                         SELECT 1 FROM public.products p
                         JOIN public.stores s ON s.id = p.store_id
-                        WHERE p.id::text = (storage.foldername(name))[1]
+                        WHERE p.id::text = (storage.foldername(storage.objects.name))[1]
                           AND s.owner_id = auth.uid()
                     )
                 )
@@ -190,7 +190,7 @@ DO $$ BEGIN
                     OR EXISTS (
                         SELECT 1 FROM public.products p
                         JOIN public.stores s ON s.id = p.store_id
-                        WHERE p.id::text = (storage.foldername(name))[1]
+                        WHERE p.id::text = (storage.foldername(storage.objects.name))[1]
                           AND s.owner_id = auth.uid()
                     )
                 )
@@ -212,7 +212,7 @@ DO $$ BEGIN
                     OR EXISTS (
                         SELECT 1 FROM public.products p
                         JOIN public.stores s ON s.id = p.store_id
-                        WHERE p.id::text = (storage.foldername(name))[1]
+                        WHERE p.id::text = (storage.foldername(storage.objects.name))[1]
                           AND s.owner_id = auth.uid()
                     )
                 )

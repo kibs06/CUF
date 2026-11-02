@@ -59,19 +59,14 @@ void main() {
     return source.substring(from, to);
   }
 
-  group('the switch ships off and is the whole rollback', () {
-    test('it is an environment switch with no default', () {
+  group('the switch defaults on and false is the rollback', () {
+    test('it is an environment switch defaulting on', () {
       expect(
         constants,
-        contains("bool.fromEnvironment('SHOE_PREVIEW')"),
-        reason: 'nobody has looked at a render on a device yet, so this must be '
-            'opt-in until a device session says the framing is right',
-      );
-      expect(
-        constants,
-        isNot(contains("bool.fromEnvironment('SHOE_PREVIEW', defaultValue: true)")),
-        reason: 'this one must not default on: the two-surface split and the '
-            'preview camera are untested on hardware',
+        contains("bool.fromEnvironment('SHOE_PREVIEW', defaultValue: true)"),
+        reason: 'the renderer has drawn on hardware (Redmi FEATURE_LEVEL_2, '
+            '2026-10-01), so a local debug install shows the icon with no '
+            'dart-define; rollback is an explicit SHOE_PREVIEW=false',
       );
     });
 

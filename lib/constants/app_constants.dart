@@ -1020,12 +1020,12 @@ class AppConstants {
   /// (`beginFail` in the heartbeat): presenting stalls and recovers, and the owner's
   /// phone has not been re-run since the level fix.
   ///
-  /// **The compile-time default stays `off`, and that is about *this* build rather
-  /// than about customers.** The release channel passes `SHOE_PREVIEW=true` in
-  /// `RELEASE_DART_DEFINES` (measured 2026-10-01 with `gh variable list`), which is
-  /// why the owner's shipped 1.0.38 already had the icon and the refusal sentence on
-  /// the sandal. Keeping the default off leaves one define — or, for a release, one
-  /// variable — as the whole rollback.
+  /// **The compile-time default is `on` so a local debug install shows the icon
+  /// with no `--dart-define` to remember.** The renderer has drawn on hardware
+  /// (Redmi 24094RAD4G at `FEATURE_LEVEL_2`, 2026-10-01), so the old opt-in
+  /// default only hid the entry from the test phone. Release builds still pass
+  /// `SHOE_PREVIEW=true` via `RELEASE_DART_DEFINES`; the rollback is now an
+  /// explicit `--dart-define=SHOE_PREVIEW=false`.
   ///
   /// **What the emulator run on 2026-09-29 did settle.** The box mounts, the
   /// handover works, and on a renderer below Filament's `FEATURE_LEVEL_2` the
@@ -1039,7 +1039,8 @@ class AppConstants {
   /// **How it is turned off:** `--dart-define=SHOE_PREVIEW=false`, or by clearing
   /// the define from `RELEASE_DART_DEFINES`. A build that passes nothing gets the
   /// default above (off in the code, on in a release).
-  static const bool shoePreviewEnabled = bool.fromEnvironment('SHOE_PREVIEW');
+  static const bool shoePreviewEnabled =
+      bool.fromEnvironment('SHOE_PREVIEW', defaultValue: true);
 
   /// Whether the 3D box's refusal line also prints **the measured renderer
   /// facts** underneath the honest sentence.
