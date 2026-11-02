@@ -15,7 +15,9 @@ import {
 } from '../../lib/modelPublish.js'
 import {
   FILE_SIZE_BUDGET_BYTES,
+  MAX_TRIANGLES,
   MIN_TARGET_TRIANGLES,
+  SIMPLIFY_ERROR_LADDER,
   TARGET_TRIANGLES,
   compressFailureMessage,
   compressionSummary,
@@ -186,10 +188,16 @@ export default function UploadModelModal({ request, onClose, onDone }) {
   // is why the notice below points at the button above instead.
   const outgoingOverBudget =
     outgoingBytes !== null && outgoingBytes > FILE_SIZE_BUDGET_BYTES
+  // Triangles are the loop's second quarry: a result under the budget can
+  // still be refused on the cap, so Publish stays off for it the same way. A
+  // raw picked file's count is unknown without planning it, so only a result
+  // in hand is judged — anything else and the server decides.
+  const overTris =
+    compressedMatchesFile && (compressed.after?.triangles ?? 0) > MAX_TRIANGLES
   // Publish needs everything above, plus bytes the bucket will take and the
   // server will pass. A link's size is unknown, so a link-only publish stays
   // enabled and the server judges it.
-  const ready = baseReady && !overCap && !outgoingOverBudget
+  const ready = baseReady && !overCap && !outgoingOverBudget && !overTris
 
   const reset = () => {
     setLink('')
@@ -218,11 +226,12 @@ export default function UploadModelModal({ request, onClose, onDone }) {
     // rendered under "That did not publish", which would be a lie about a
     // compression that never reached the server. The hook keeps its own.
     //
-    // One click runs the whole ladder without stopping: each over-budget
-    // result feeds the next pass with half the triangle target (20k, 10k, 5k),
-    // so the first press already lands under the budget whenever the file can
-    // get there at all. The picked file itself is never touched: pass 1 reads
-    // it, later passes read the previous pass's bytes.
+    // One click runs the whole ladder without stopping: each failing result
+    // feeds the next pass with half the triangle target (20k, 10k, 5k) AND the
+    // next rung of shape deviation, so the first press lands inside the
+    // contract whenever the file can get there at all. The picked file itself
+    // is never touched: pass 1 reads it, later passes read the previous
+    // pass's bytes.
     const myLoop = ++loopRef.current
     compress.clear()
 
@@ -232,6 +241,8 @@ export default function UploadModelModal({ request, onClose, onDone }) {
     let sourceBytes = new Uint8Array(await file.arrayBuffer())
     let extras = 0
     let baseTriangles = null
+    let prevTris = null
+    let prevBytes = file.size
 
     while (loopRef.current === myLoop) {
       setPasses(extras)
@@ -244,6 +255,8 @@ export default function UploadModelModal({ request, onClose, onDone }) {
         declaredLengthMm: declaration.externalLengthMm,
         authoredSizeEu: declaration.authoredSizeEu,
         ...(targetTriangles === undefined ? {} : { targetTriangles }),
+        simplifyError:
+          SIMPLIFY_ERROR_LADDER[Math.min(extras, SIMPLIFY_ERROR_LADDER.length - 1)],
       })
 
       // Retired mid-pass (modal closed, file re-picked): leave nothing behind.
@@ -251,7 +264,17 @@ export default function UploadModelModal({ request, onClose, onDone }) {
       if (!outcome.ok) return
 
       if (baseTriangles === null) baseTriangles = outcome.plan.triangleCount
-      const stillOver = outcome.result.bytes.length > FILE_SIZE_BUDGET_BYTES
+      const afterBytes = outcome.result.bytes.length
+      const afterTris = outcome.result.after?.triangles ?? null
+      const sizeOver = afterBytes > FILE_SIZE_BUDGET_BYTES
+      const trisOver = afterTris !== null && afterTris > MAX_TRIANGLES
+      // Stuck means another pass would bill thirty seconds for the same file:
+      // under 2% movement on a number neither yields to a smaller target — a
+      // mesh sitting on the deviation bound, or weight living in the textures.
+      // One side still moving is reason to continue.
+      const trisStuck = prevTris !== null && afterTris !== null && afterTris >= prevTris * 0.98
+      const bytesStuck = afterBytes >= prevBytes * 0.98
+      const keepGoing = (sizeOver && !bytesStuck) || (trisOver && !trisStuck)
 
       setCompressed({
         forFile: file,
@@ -263,20 +286,23 @@ export default function UploadModelModal({ request, onClose, onDone }) {
         // The story is always original → latest, whatever the pass: the triangle
         // count the first pass started from, and the count the latest produced.
         trianglesBefore: baseTriangles,
-        overBudgetAfter: stillOver,
+        overBudgetAfter: sizeOver,
+        overTrisAfter: trisOver,
         summary: compressionSummary({
           beforeBytes: file.size,
-          afterBytes: outcome.result.bytes.length,
+          afterBytes,
           triangleCount: baseTriangles,
-          triangleCountAfter: outcome.result.after?.triangles ?? null,
+          triangleCountAfter: afterTris,
         }),
       })
 
-      if (!stillOver || extras >= MAX_EXTRA_PASSES) return
+      if (!keepGoing || extras >= MAX_EXTRA_PASSES) return
 
       // Next pass reads this pass's bytes. `.slice()` copies because the hook
       // transfers (detaches) the buffer to the worker.
       extras += 1
+      prevTris = afterTris
+      prevBytes = afterBytes
       sourceBytes = outcome.result.bytes.slice()
     }
   }
@@ -478,8 +504,8 @@ export default function UploadModelModal({ request, onClose, onDone }) {
                 <Sparkles size={14} className="text-[#8B5A2B]" />
                 {!compressedMatchesFile
                   ? 'This file is over the authoring budget'
-                  : compressed.overBudgetAfter
-                    ? 'Compressed, but still over the budget'
+                  : compressed.overBudgetAfter || compressed.overTrisAfter
+                    ? 'Compressed, but still over the contract'
                     : 'Compressed and ready to upload'}
               </p>
               <p className="mt-1 text-xs leading-relaxed text-[#6B5C4E]">
@@ -491,8 +517,10 @@ export default function UploadModelModal({ request, onClose, onDone }) {
                     'decimates the mesh and re-bakes the textures to 1024², then runs the same ' +
                     'normalizer the CLI runs: re-aimed axes, grounded, scaled to the declared ' +
                     'length, parts renamed. One press runs up to four passes on its own — each ' +
-                    'over-budget result halves the triangle target for the next — a minute or so ' +
-                    'per pass for a file this size, and the tab stays usable while it does.'}
+                    'failing result halves the triangle target and allows a little more shape ' +
+                    'deviation for the next, until the bytes and the triangle count both fit — ' +
+                    'a minute or so per pass for a file this size, and the tab stays usable ' +
+                    'while it does.'}
               </p>
             </div>
             {/* The loop runs itself to the budget or the floor — there is no
@@ -544,12 +572,20 @@ export default function UploadModelModal({ request, onClose, onDone }) {
             <div className="mt-2">
               <p className="text-xs font-semibold text-[#3B2314]">
                 {compressed.summary}
-                {/* Reachable only when the loop ran all four passes: anything
-                    else fits the budget and lands on Publish instead. */}
+                {/* Reachable only when the loop gave up: anything else fits the
+                    contract and lands on Publish instead. */}
                 {compressed.overBudgetAfter && (
                   <>
-                    {' '}Four passes and still over: the weight is in the textures, not the mesh.
-                    Re-bake them and re-export (guide §C5/C7), or run the CLI.
+                    {' '}Four passes and still over size: the weight is in the textures, not the
+                    mesh. Re-bake them and re-export (guide §C5/C7), or run the CLI.
+                  </>
+                )}
+                {compressed.overTrisAfter && (
+                  <>
+                    {' '}Still {(compressed.after?.triangles ?? 0).toLocaleString('en-US')}{' '}
+                    triangles against the {MAX_TRIANGLES.toLocaleString('en-US')} cap: the mesh
+                    sits on the shape-deviation bound, and a smaller target returns the same
+                    mesh. Decimate in the modelling tool before export (guide §C5/C7).
                   </>
                 )}
               </p>
@@ -604,6 +640,17 @@ export default function UploadModelModal({ request, onClose, onDone }) {
         />
         <p className="mt-1 text-xs text-[#6B5C4E]">{noteReachesSeller()}</p>
       </div>
+
+      {!overCap && !outgoingOverBudget && overTris && file && !compress.isRunning && (
+        <div className="mt-3">
+          <Notice tone="warn" title={`Over the ${MAX_TRIANGLES.toLocaleString('en-US')} triangle cap`}>
+            {(compressed.after?.triangles ?? 0).toLocaleString('en-US')} triangles — the server
+            refuses the mesh, so Publish stays off. The loop already ran every pass it has:
+            the mesh will not decimate further without losing its shape, so decimate in the
+            modelling tool before export (guide §C5/C7).
+          </Notice>
+        </div>
+      )}
 
       {overCap && file && !compress.isRunning && (
         <div className="mt-3">

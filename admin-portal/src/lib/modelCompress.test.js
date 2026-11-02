@@ -4,6 +4,8 @@ import assert from 'node:assert/strict'
 import {
   MATERIAL_PLAN,
   MAX_TRIANGLES,
+  SIMPLIFY_ERROR,
+  SIMPLIFY_ERROR_LADDER,
   TARGET_TRIANGLES,
   compressFailureMessage,
   compressionSummary,
@@ -219,6 +221,21 @@ test('a follow-up pass plans against the smaller target', () => {
   assert.equal(result.ok, true)
   assert.equal(result.plan.ratio, 20000 / 1500000)
   assert.equal(result.plan.targetTriangles, 20000)
+})
+
+test('the first pass keeps the CLI error bound; later passes may relax it', () => {
+  const first = planCompression({
+    bytes: buildGlb(shoeJson({ triangles: 1500000, materials: [{ name: 'Material.001' }] })),
+    declaredLengthMm: 270,
+  })
+  assert.equal(first.plan.simplifyError, SIMPLIFY_ERROR)
+
+  const later = planCompression({
+    bytes: buildGlb(shoeJson({ triangles: 1500000, materials: [{ name: 'Material.001' }] })),
+    declaredLengthMm: 270,
+    simplifyError: SIMPLIFY_ERROR_LADDER[2],
+  })
+  assert.equal(later.plan.simplifyError, 0.025)
 })
 
 test('the refusal names the parts and the way out', () => {

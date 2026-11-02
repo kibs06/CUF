@@ -71,6 +71,15 @@ export const REQUIRED_PART_NAMES = ['upper', 'sole']
  *  radius (the CLI's `--error 0.01`). */
 export const SIMPLIFY_ERROR = 0.01
 
+/** The deviation ladder for follow-up passes. The first pass keeps the CLI's
+ *  bound; later passes relax it a rung at a time, because a mesh that is
+ *  stuck far above the triangle cap is not asking for a smaller target — it
+ *  is hitting the error bound, and a smaller target alone returns the same
+ *  mesh for another thirty seconds. Capped at 0.04: past that the shoe keeps
+ *  its footprint but loses the silhouette the fitting is judged on, and the
+ *  reviewer (§5.2) cannot approve a likeness the tool deformed. */
+export const SIMPLIFY_ERROR_LADDER = [0.01, 0.015, 0.025, 0.04]
+
 /** Sizes, the way the rest of the portal writes them — `tooLargeMessage` in
  *  `modelPublish.js` uses the same two decimal places. */
 export function formatBytes(bytes) {
@@ -278,6 +287,7 @@ export function planCompression({
   declaredLengthMm,
   authoredSizeEu = null,
   targetTriangles = TARGET_TRIANGLES,
+  simplifyError = SIMPLIFY_ERROR,
 }) {
   const plan = readGlbPlan(bytes)
   const materials = planMaterials({ materialNames: plan.materialNames })
@@ -305,6 +315,7 @@ export function planCompression({
       materials,
       ratio,
       targetTriangles,
+      simplifyError,
       options: {
         externalLengthMm: declaredLengthMm,
         authoredSizeEu,

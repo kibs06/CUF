@@ -61,7 +61,7 @@ export function useCompressModel() {
    * `{ ok, plan, result }` or `{ ok: false, message }`.
    */
   const compress = useCallback(
-    async ({ bytes, declaredLengthMm, authoredSizeEu = null, targetTriangles }) => {
+    async ({ bytes, declaredLengthMm, authoredSizeEu = null, targetTriangles, simplifyError }) => {
       setError(null)
 
       const planned = planCompression({
@@ -69,8 +69,10 @@ export function useCompressModel() {
         declaredLengthMm,
         authoredSizeEu,
         // `undefined` keeps the default aim; a follow-up pass halves it so the
-        // loop converges instead of returning the same too-big file.
+        // loop converges instead of returning the same too-big file. Same for
+        // the error bound: relaxing it is what moves a mesh sitting on it.
         ...(targetTriangles === undefined ? {} : { targetTriangles }),
+        ...(simplifyError === undefined ? {} : { simplifyError }),
       })
     setPlan(planned.ok ? planned.plan : null)
 

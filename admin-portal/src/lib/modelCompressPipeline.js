@@ -131,9 +131,13 @@ export async function compressShoeModel({ bytes, plan, io = null, onStage = () =
 
   if (ratio !== null) {
     onStage('simplifying')
+    // The error bound travels in the plan: follow-up passes relax it a rung
+    // (see `SIMPLIFY_ERROR_LADDER`) when the triangle cap is what fails, since
+    // a smaller ratio alone cannot move a mesh sitting on the bound.
+    const error = plan?.simplifyError ?? SIMPLIFY_ERROR
     await document.transform(
       weld(),
-      simplify({ simplifier: MeshoptSimplifier, ratio, error: SIMPLIFY_ERROR }),
+      simplify({ simplifier: MeshoptSimplifier, ratio, error }),
     )
   }
 
