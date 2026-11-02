@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Eye, Image, Link2, Download, Trash2 } from 'lucide-react'
+import { Eye, Image, Link2, Download, Sparkles, Trash2 } from 'lucide-react'
 
 // ─── The 3D shelf's right-click menu ───────────────────────────────
 //
@@ -25,6 +25,13 @@ const items = [
     hint: 'Edit in Blender, re-upload as a new version',
   },
   { action: 'copy', label: 'Copy public link', Icon: Link2, hint: 'The file customers download' },
+  {
+    action: 'upload-ar',
+    label: 'Upload AR effect (.deepar)',
+    Icon: Sparkles,
+    // Filled in per product below: live version when there is one.
+    hint: 'The Studio file customers fit in',
+  },
 ]
 
 export default function ModelledProductMenu({ menu, onPick, onClose }) {
@@ -57,22 +64,30 @@ export default function ModelledProductMenu({ menu, onPick, onClose }) {
         className="absolute overflow-hidden rounded-xl border border-[#D9D0C7] bg-white py-1 shadow-xl"
         style={{ left, top, width: MENU_WIDTH }}
       >
-        {items.map(({ action, label, Icon, hint }) => (
-          <button
-            key={action}
-            type="button"
-            role="menuitem"
-            title={hint}
-            onClick={() => choose(action)}
-            className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-[#F5F0EB]"
-          >
-            <Icon size={15} className="shrink-0 text-[#8B5A2B]" />
-            <span>
-              <span className="block text-sm font-medium text-[#3B2314]">{label}</span>
-              <span className="block text-[11px] text-[#6B5C4E]">{hint}</span>
-            </span>
-          </button>
-        ))}
+        {items.map(({ action, label, Icon, hint }) => {
+          // The AR row names the live version when there is one, so the admin
+          // can see at a glance whether this upload replaces or introduces.
+          const text =
+            action === 'upload-ar' && menu.ar
+              ? `Live: v${menu.ar.version} — replaces it`
+              : hint
+          return (
+            <button
+              key={action}
+              type="button"
+              role="menuitem"
+              title={text}
+              onClick={() => choose(action)}
+              className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-[#F5F0EB]"
+            >
+              <Icon size={15} className="shrink-0 text-[#8B5A2B]" />
+              <span>
+                <span className="block text-sm font-medium text-[#3B2314]">{label}</span>
+                <span className="block text-[11px] text-[#6B5C4E]">{text}</span>
+              </span>
+            </button>
+          )
+        })}
         <div className="my-1 border-t border-[#F5F0EB]" />
         <button
           type="button"

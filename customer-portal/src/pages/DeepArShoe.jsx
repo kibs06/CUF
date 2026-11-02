@@ -23,12 +23,38 @@ export default function DeepArShoe() {
   const productId = params.get('product')
   const env = getDeepArShoeEnv()
   const direct = deepArShoeStatus(env, productId)
-  // A bare row uuid (what the app links) carries no name — resolve it to the
-  // Luxe effect once the product row names it, rather than hardcoding an id
-  // the effect handover never recorded.
+  // An uploaded effect wins over every bundled one: it is the product's own
+  // Studio file, published from the admin shelf, and it works for any row id
+  // without hardcoding. Below it, the old resolutions in order — direct map
+  // (Luna ids, Luxe slug), then the product-name fallback for a bare uuid.
+  const [dbEffect, setDbEffect] = useState(null)
   const [namedEffect, setNamedEffect] = useState(null)
   useEffect(() => {
-    if (direct.effect || !productId) return
+    if (!productId) return
+    let cancelled = false
+    supabase
+      .from('product_ar_effects')
+      .select('storage_path')
+      .eq('product_id', productId)
+      .eq('status', 'active')
+      .order('version', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (cancelled) return
+        if (data?.storage_path) {
+          const { data: pub } = supabase.storage
+            .from('shoe-ar-effects')
+            .getPublicUrl(data.storage_path)
+          if (pub?.publicUrl) setDbEffect(pub.publicUrl)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [productId])
+  useEffect(() => {
+    if (direct.effect || dbEffect || !productId) return
     let cancelled = false
     supabase
       .from('products')
@@ -41,19 +67,19 @@ export default function DeepArShoe() {
     return () => {
       cancelled = true
     }
-  }, [direct.effect, productId])
-  // When the name resolves, the only honest missing entry is the key — the
-  // effect question is answered, and the stub must not still claim it.
-  const status = direct.effect
-    ? direct
-    : {
+  }, [direct.effect, dbEffect, productId])
+  // The first resolution that answers wins; when one does, the only honest
+  // missing entry is the key — the effect question is answered, and the stub
+  // must not still claim it.
+  const resolved = dbEffect ?? direct.effect ?? namedEffect
+  const status = resolved
+    ? {
         ...direct,
-        ready: Boolean(namedEffect && env.webKey),
-        effect: namedEffect,
-        missing: (direct.missing ?? []).filter((m) =>
-          namedEffect ? m !== 'no-effect-for-product' : true,
-        ),
+        ready: Boolean(env.webKey),
+        effect: resolved,
+        missing: (direct.missing ?? []).filter((m) => m !== 'no-effect-for-product'),
       }
+    : direct
   const canvasRef = useRef(null)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)

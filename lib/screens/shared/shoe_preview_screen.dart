@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../constants/app_constants.dart';
@@ -231,6 +232,11 @@ class _ShoePreviewScreenState extends State<ShoePreviewScreen> {
   /// True while the seller door's resolve is in flight.
   bool _resolving = false;
 
+  /// Whether an uploaded AR effect row exists for this product. One read on
+  /// open: the pill must appear for uploaded effects too, not just bundled
+  /// ones, and a missing table or row answers false, never a throw.
+  bool _hasUploadedArEffect = false;
+
   /// What the resolve answered, kept so the screen can say *which* silence this
   /// is. Null while it is still running.
   TryOnPrefetchResult? _resolution;
@@ -247,6 +253,28 @@ class _ShoePreviewScreenState extends State<ShoePreviewScreen> {
     super.initState();
     _model = widget.model;
     if (_model == null) _resolve();
+    _checkUploadedArEffect();
+  }
+
+  /// One quiet read: is there a live uploaded effect for this product? Any
+  /// failure is a "no" — the bundled map below still decides for Luna/Luxe,
+  /// and the pill simply stays hidden exactly as before.
+  Future<void> _checkUploadedArEffect() async {
+    final productId = widget.productId ?? widget.product['id']?.toString();
+    if (productId == null || productId.isEmpty) return;
+    try {
+      final rows = await Supabase.instance.client
+          .from('product_ar_effects')
+          .select('id')
+          .eq('product_id', productId)
+          .eq('status', 'active')
+          .limit(1);
+      if (!mounted) return;
+      setState(() => _hasUploadedArEffect = (rows as List).isNotEmpty);
+    } catch (_) {
+      // A missing table (migration not pushed) or no network reads as no
+      // uploaded effect — bundled effects still show the pill.
+    }
   }
 
   /// One read, and a download if the bytes are not cached yet.
@@ -302,17 +330,19 @@ class _ShoePreviewScreenState extends State<ShoePreviewScreen> {
       AppConstants.snapLensProductIds.contains(_productId);
 
   /// Whether the **"Try on DeepAR"** pill is offered: customer door only,
-  /// and only for a product with a bundled `.deepar` effect (see
+  /// and only for a product with an effect — an uploaded row (any product,
+  /// published from the admin shelf) or a bundled `.deepar` (see
   /// [kDeepArBundledEffects]). Luna Loafers first, Luxe Cross-Strap Sandals
   /// by product name — its effect arrived filed by name, not by row id.
   bool get _showDeepAr =>
       widget.showTryOn &&
       _productId != null &&
-      deepArEffectForProduct(
-            _productId!,
-            productName: widget.product['name']?.toString(),
-          ) !=
-          null;
+      (deepArEffectForProduct(
+                _productId!,
+                productName: widget.product['name']?.toString(),
+              ) !=
+              null ||
+          _hasUploadedArEffect);
 
   /// **"Try on DeepAR"** — always the live web page in the phone browser.
   /// Native SDKs dropped foot tracking, and an in-app WebView leaves the

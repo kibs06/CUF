@@ -17,8 +17,10 @@ import {
   useProductModels,
 } from '../hooks/useModelRequests.js'
 import UploadModelModal from '../components/model-requests/UploadModelModal.jsx'
+import UploadArEffectModal from '../components/model-requests/UploadArEffectModal.jsx'
 import ProductPhotosDialog, { orderedPhotos } from '../components/model-requests/ProductPhotosDialog.jsx'
 import ModelledProductMenu from '../components/model-requests/ModelledProductMenu.jsx'
+import { useArEffects } from '../hooks/useArEffects.js'
 import { supabase } from '../lib/supabase.js'
 import { MODEL_BUCKET } from '../lib/modelPublish.js'
 import ModelViewerDialog from '../components/products/ModelViewerDialog.jsx'
@@ -113,7 +115,18 @@ export default function ModelRequests() {
   // plus the entry under the cursor.
   const [menu, setMenu] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
+  const [arTarget, setArTarget] = useState(null)
   const del = useDeleteProductModel()
+  // One read for the whole shelf: which products carry a live uploaded
+  // effect, so the menu can name the version it would replace.
+  const arEffectsQuery = useArEffects()
+  const arByProduct = useMemo(() => {
+    const map = new Map()
+    for (const row of arEffectsQuery.data ?? []) {
+      if (!map.has(row.product_id)) map.set(row.product_id, row)
+    }
+    return map
+  }, [arEffectsQuery.data])
 
   const rows = useMemo(() => data ?? [], [data])
   const modelled = useMemo(() => modelledQuery.data ?? [], [modelledQuery.data])
@@ -203,12 +216,14 @@ export default function ModelRequests() {
   }
 
   const handleMenuPick = (action, entry) => {
+    const ar = menu?.ar ?? null
     setMenu(null)
     if (!entry) return
     if (action === 'view') openViewerFor(entry)
     else if (action === 'photos') openPhotosFor(entry)
     else if (action === 'download') void downloadForEdit(entry)
     else if (action === 'copy') void copyPublicLink(entry)
+    else if (action === 'upload-ar') setArTarget({ entry, current: ar })
     else if (action === 'delete') setDeleteTarget(entry)
   }
 
@@ -581,7 +596,7 @@ export default function ModelRequests() {
                   key={entry.productId}
                   onContextMenu={(e) => {
                     e.preventDefault()
-                    setMenu({ entry, x: e.clientX, y: e.clientY })
+                    setMenu({ entry, x: e.clientX, y: e.clientY, ar: arByProduct.get(entry.productId) ?? null })
                   }}
                   className="rounded-2xl border border-[#D9D0C7] bg-white p-5 transition-shadow hover:shadow-md"
                 >
@@ -616,6 +631,11 @@ export default function ModelRequests() {
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="text-sm font-semibold text-[#3B2314]">{entry.name}</h3>
                         <Badge label={entry.model.status} variant={entry.model.status} />
+                        {arByProduct.has(entry.productId) && (
+                          <span className="inline-flex items-center rounded-full bg-[#4ECDC4]/15 px-2 py-0.5 text-[10px] font-semibold text-teal-700">
+                            AR live
+                          </span>
+                        )}
                       </div>
                       <p className="mt-1 text-xs text-[#6B5C4E]">
                         Version {entry.model.version}
@@ -642,7 +662,7 @@ export default function ModelRequests() {
                       type="button"
                       aria-label={`More actions for ${entry.name}`}
                       title="More actions"
-                      onClick={(e) => setMenu({ entry, x: e.clientX, y: e.clientY })}
+                      onClick={(e) => setMenu({ entry, x: e.clientX, y: e.clientY, ar: arByProduct.get(entry.productId) ?? null })}
                       className="shrink-0 rounded-lg border border-[#D9D0C7] px-2.5 py-1.5 text-[#6B5C4E] transition-colors hover:bg-[#F5F0EB] hover:text-[#3B2314]"
                     >
                       <MoreVertical size={15} />
@@ -658,6 +678,17 @@ export default function ModelRequests() {
       {/* The shelf's right-click menu: photos, file, link, and — at the bottom,
           behind a confirm — the delete. */}
       <ModelledProductMenu menu={menu} onPick={handleMenuPick} onClose={() => setMenu(null)} />
+
+      {/* The AR upload: picked here, live for every customer straight away. */}
+      <UploadArEffectModal
+        entry={arTarget?.entry ?? null}
+        current={arTarget?.current ?? null}
+        onClose={() => setArTarget(null)}
+        onDone={(message) => {
+          setArTarget(null)
+          showToast(message, 'success')
+        }}
+      />
 
       {/* Delete is the one menu action that asks first: the file and its row go
           together, and a closed ask that names this version blocks it rather
