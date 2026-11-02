@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { toPortalError } from '../lib/errors.js'
+import { pickModelledProducts } from '../lib/modelledProducts.js'
 import { ASK_ENDING } from '../lib/askDelivery.js'
 import { sendAskEndingPush } from '../lib/askPush.js'
 
@@ -11,7 +12,7 @@ import { sendAskEndingPush } from '../lib/askPush.js'
 // (`lib/services/shoe_model_request_service.dart`), so both surfaces show the
 // same two names beside a row instead of one of them showing a bare uuid.
 const QUEUE_SELECT =
-  '*, products!shoe_model_requests_product_id_fkey(name), ' +
+  '*, products!shoe_model_requests_product_id_fkey(name, product_images(image_url, display_order, is_primary)), ' +
   'stores!shoe_model_requests_store_id_fkey(name)'
 
 // The five states the table's CHECK admits.
@@ -93,6 +94,35 @@ export function useProductModels(productId) {
 
       if (error) throw toPortalError(error, 'Could not read that product’s models.')
       return data ?? []
+    },
+  })
+}
+
+// ─── The 3D-products shelf ─────────────────────────────────────────
+
+// Every product with a live model, one entry per product — the admin's answer
+// to "what can customers spin and fit right now". The products embed names
+// the FK explicitly the way the queue select does, so a second FK to products
+// can never silently re-point this list.
+// `!inner` drops models whose product is gone (or hidden from this session)
+// at the database, so the shelf helper only ever defends against a transport
+// surprise, never a real ghost.
+const MODELLED_SELECT =
+  'id, product_id, status, version, authored_length_mm, authored_size_eu, storage_path, created_at, ' +
+  'products!product_models_product_id_fkey!inner(id, name, product_images(image_url, display_order, is_primary))'
+
+export function useModelledProducts() {
+  return useQuery({
+    queryKey: ['modelled-products'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('product_models')
+        .select(MODELLED_SELECT)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+
+      if (error) throw toPortalError(error, 'Could not load the products with 3D models.')
+      return pickModelledProducts(data ?? [])
     },
   })
 }

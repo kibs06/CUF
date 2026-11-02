@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { AlertTriangle, Check, Cuboid, Hand, Loader2, Ruler, Upload } from 'lucide-react'
+import { AlertTriangle, Check, Cuboid, Hand, Loader2, Package, Ruler, Upload } from 'lucide-react'
 import Badge from '../components/ui/Badge.jsx'
 import EmptyState from '../components/ui/EmptyState.jsx'
 import Modal from '../components/ui/Modal.jsx'
@@ -12,9 +12,11 @@ import {
   useDeclineModelRequest,
   useFulfilModelRequest,
   useModelRequests,
+  useModelledProducts,
   useProductModels,
 } from '../hooks/useModelRequests.js'
 import UploadModelModal from '../components/model-requests/UploadModelModal.jsx'
+import ProductPhotosDialog, { orderedPhotos } from '../components/model-requests/ProductPhotosDialog.jsx'
 import ModelViewerDialog from '../components/products/ModelViewerDialog.jsx'
 import { useDeviceGate } from '../hooks/useDeviceGate.js'
 import { describeError } from '../lib/errors.js'
@@ -39,6 +41,11 @@ const TABS = [
   { key: 'fulfilled', label: 'Fulfilled', statuses: [REQUEST_STATUS.FULFILLED] },
   { key: 'closed', label: 'Closed', statuses: CLOSED_STATUSES },
 ]
+
+// Not a queue: every product with a live model, the admin's answer to "what can
+// customers spin and fit right now". Rendered beside the queues because the two
+// halves of this page are one workflow — a fulfilled ask lands its product here.
+const MODELS_TAB = { key: 'models', label: '3D products' }
 
 // ─── Small display helpers ─────────────────────────────────────────
 
@@ -84,6 +91,7 @@ function Measurement({ label, value, icon: Icon }) {
 export default function ModelRequests() {
   const [tab, setTab] = useState('waiting')
   const [fulfilTarget, setFulfilTarget] = useState(null)
+  const [photoTarget, setPhotoTarget] = useState(null)
   const [uploadTarget, setUploadTarget] = useState(null)
   const [declineTarget, setDeclineTarget] = useState(null)
   const [declineReason, setDeclineReason] = useState('')
@@ -94,8 +102,11 @@ export default function ModelRequests() {
   const claim = useClaimModelRequest()
   const fulfil = useFulfilModelRequest()
   const decline = useDeclineModelRequest()
+  const modelledQuery = useModelledProducts()
+  const [viewingModel, setViewingModel] = useState(null)
 
   const rows = useMemo(() => data ?? [], [data])
+  const modelled = useMemo(() => modelledQuery.data ?? [], [modelledQuery.data])
 
   // ⚠️ There are two ways to see nothing here and they are not the same news.
   // The device gate hides ROWS rather than raising, so an empty queue is
@@ -116,9 +127,12 @@ export default function ModelRequests() {
       waiting: rows.filter((r) => OPEN_STATUSES.includes(r.status)).length,
       fulfilled: rows.filter((r) => r.status === REQUEST_STATUS.FULFILLED).length,
       closed: rows.filter((r) => CLOSED_STATUSES.includes(r.status)).length,
+      models: modelled.length,
     }),
-    [rows],
+    [rows, modelled],
   )
+
+  const isModelsTab = tab === MODELS_TAB.key
 
   const activeTab = TABS.find((t) => t.key === tab) ?? TABS[0]
   const visible = byStatus(activeTab.statuses)
@@ -196,7 +210,7 @@ export default function ModelRequests() {
         aria-label="Request queues"
         className="inline-flex flex-wrap gap-1 rounded-2xl border border-[#D9D0C7] bg-white p-1"
       >
-        {TABS.map((t) => {
+        {[...TABS, MODELS_TAB].map((t) => {
           const selected = tab === t.key
           return (
             <button
@@ -257,7 +271,7 @@ export default function ModelRequests() {
       )}
 
       {/* Empty for the ordinary reason */}
-      {!isLoading && !isError && visible.length === 0 && !gatedEmpty && (
+      {!isModelsTab && !isLoading && !isError && visible.length === 0 && !gatedEmpty && (
         <EmptyState
           Icon={Cuboid}
           title={tab === 'waiting' ? 'Nothing waiting' : 'Nothing here yet'}
@@ -270,11 +284,18 @@ export default function ModelRequests() {
       )}
 
       {/* Rows */}
-      {!isLoading && !isError && visible.length > 0 && (
+      {!isModelsTab && !isLoading && !isError && visible.length > 0 && (
         <div className="space-y-3">
           {visible.map((row) => {
             const isOpen = OPEN_STATUSES.includes(row.status)
             const claimed = !!row.assigned_to
+            // The admin models from this photo, so the row carries the
+            // product's own primary image (first image when none is marked
+            // primary) — the same pick the product list uses.
+            const productImage =
+              row.products?.product_images?.find((i) => i.is_primary)?.image_url ??
+              row.products?.product_images?.[0]?.image_url ??
+              null
             return (
               <div
                 key={row.id}
@@ -283,7 +304,29 @@ export default function ModelRequests() {
                 }`}
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
+                  <div className="flex min-w-0 items-start gap-3">
+                    {productImage ? (
+                      <button
+                        type="button"
+                        onClick={() => setPhotoTarget(row)}
+                        title="View all product photos"
+                        aria-label={`View photos of ${row.products?.name ?? 'this product'}`}
+                        className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl bg-[#E8DDD5] transition-shadow hover:shadow-md hover:ring-2 hover:ring-[#8B5A2B]/40"
+                      >
+                        <img
+                          src={productImage}
+                          className="h-full w-full object-cover"
+                          alt={row.products?.name ?? 'Product photo'}
+                        />
+                      </button>
+                    ) : (
+                      <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl bg-[#E8DDD5]">
+                        <div className="flex h-full w-full items-center justify-center">
+                          <Package size={20} className="text-[#8B5A2B]/30" />
+                        </div>
+                      </div>
+                    )}
+                    <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="text-sm font-semibold text-[#3B2314]">
                         {row.products?.name ?? 'Product removed'}
@@ -299,6 +342,7 @@ export default function ModelRequests() {
                     <p className="mt-1 text-xs text-[#6B5C4E]">
                       {row.stores?.name ?? 'Unknown store'} · asked {formatDateTime(row.created_at)}
                     </p>
+                    </div>
                   </div>
 
                   {isOpen && (
@@ -393,6 +437,126 @@ export default function ModelRequests() {
           })}
         </div>
       )}
+
+      {/* ─── 3D products: every product with a live model ─────────────
+          The shelf beside the queue: a fulfilled ask lands its product here,
+          and this is the same live file the app's preview renders — drag to
+          turn, scroll to zoom, exactly what a customer gets. */}
+      {isModelsTab && modelledQuery.isLoading && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="space-y-3 rounded-2xl border border-[#D9D0C7] bg-white p-5">
+              <div className="h-14 w-14 animate-pulse rounded-xl bg-[#E8DDD5]" />
+              <div className="h-4 w-40 animate-pulse rounded bg-[#E8DDD5]" />
+              <div className="h-3 w-56 animate-pulse rounded bg-[#E8DDD5]" />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {isModelsTab && modelledQuery.isError && (
+        <div className="rounded-2xl border border-[#D9D0C7] bg-white p-8 text-center">
+          <p className="text-sm font-semibold text-[#D64545]">
+            {describeError(modelledQuery.error, 'Could not load the products with 3D models.')
+              .message}
+          </p>
+        </div>
+      )}
+
+      {isModelsTab && !modelledQuery.isLoading && !modelledQuery.isError && modelled.length === 0 && (
+        <EmptyState
+          Icon={Cuboid}
+          title="No live 3D models yet"
+          description="Publish a model against a request and its product lands here. This shelf is every product customers can spin and fit in the app right now."
+        />
+      )}
+
+      {isModelsTab && !modelledQuery.isLoading && !modelledQuery.isError && modelled.length > 0 && (
+        <div>
+          <p className="mb-3 text-sm text-[#6B5C4E]">
+            Every product customers can spin and fit right now — the same live file the app
+            renders. The photo opens all of the product&apos;s pictures;{' '}
+            <strong className="text-[#3B2314]">View 3D</strong> opens the model itself.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {modelled.map((entry) => {
+              const image =
+                orderedPhotos(entry.images).find((p) => p?.image_url)?.image_url ?? null
+              return (
+                <div
+                  key={entry.productId}
+                  className="rounded-2xl border border-[#D9D0C7] bg-white p-5 transition-shadow hover:shadow-md"
+                >
+                  <div className="flex min-w-0 items-start gap-3">
+                    {image ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPhotoTarget({
+                            id: `model-${entry.productId}`,
+                            products: { name: entry.name, product_images: entry.images },
+                          })
+                        }
+                        title="View all product photos"
+                        aria-label={`View photos of ${entry.name}`}
+                        className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl bg-[#E8DDD5] transition-shadow hover:shadow-md hover:ring-2 hover:ring-[#8B5A2B]/40"
+                      >
+                        <img
+                          src={image}
+                          className="h-full w-full object-cover"
+                          alt={entry.name}
+                        />
+                      </button>
+                    ) : (
+                      <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl bg-[#E8DDD5]">
+                        <div className="flex h-full w-full items-center justify-center">
+                          <Package size={20} className="text-[#8B5A2B]/30" />
+                        </div>
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-sm font-semibold text-[#3B2314]">{entry.name}</h3>
+                        <Badge label={entry.model.status} variant={entry.model.status} />
+                      </div>
+                      <p className="mt-1 text-xs text-[#6B5C4E]">
+                        Version {entry.model.version}
+                        {entry.model.authored_length_mm
+                          ? ` · ${Number(entry.model.authored_length_mm).toFixed(1)} mm`
+                          : ''}
+                        {entry.model.authored_size_eu
+                          ? ` · EU ${Number(entry.model.authored_size_eu)}`
+                          : ''}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setViewingModel({
+                        title: entry.name,
+                        storagePath: entry.model.storage_path,
+                        status: entry.model.status,
+                        version: entry.model.version,
+                      })
+                    }
+                    className="mt-4 w-full rounded-lg border border-[#8B5A2B] px-3 py-1.5 text-xs font-semibold text-[#8B5A2B] transition-colors hover:bg-[#8B5A2B]/10"
+                  >
+                    View 3D
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* The shelf's viewer: the same dialog the fulfil picker opens, so a model
+          looks identical wherever an admin opens it. */}
+      <ModelViewerDialog target={viewingModel} onClose={() => setViewingModel(null)} />
+
+      {/* ─── All product photos, for modelling reference ────────────── */}
+      <ProductPhotosDialog request={photoTarget} onClose={() => setPhotoTarget(null)} />
 
       {/* ─── Close as done ────────────────────────────────────────── */}
       <FulfilModal
