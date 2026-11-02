@@ -881,7 +881,7 @@ class AppConstants {
   /// and there is **nothing to download yet**: the table holds 0 rows, so the
   /// live effect on today's catalogue is one extra table read per product page
   /// view, which finds nothing and stops. The day a seller publishes a model,
-  /// that read starts warming up to ~5 MB **per product page viewed**, on
+  /// that read starts warming up to ~6 MB **per product page viewed**, on
   /// whatever connection the customer is on, for a cache nothing reads until V3.
   ///
   /// **The hardening to land before models exist in numbers** is the

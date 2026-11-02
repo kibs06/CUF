@@ -135,8 +135,8 @@ class ShoeModelService {
             cacheDirectoryProvider ?? _defaultCacheDirectory;
 
   /// Total `.glb` bytes allowed on disk before eviction starts. The
-  /// roadmap's V2 budget is 50 MB (~10 superhero models at the authoring
-  /// guide's < 5 MB target).
+  /// roadmap's V2 budget is 50 MB (~8 models at the authoring
+  /// guide's < 6 MB target).
   static const int kShoeModelCacheBudgetBytes = 50 * 1024 * 1024;
 
   /// Folder under the app support directory that holds every cached model.

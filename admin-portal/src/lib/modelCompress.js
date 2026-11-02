@@ -36,13 +36,13 @@
 // reported back as a change line and shown to the admin rather than applied
 // quietly.
 
-/** The guide's authoring budget ("≤ 5 MB", §C7). A file over this uploads and
- *  is then refused by the server, which costs a round trip and a download —
- *  which is why it is the number the compress offer appears above, not the
- *  bucket's larger cap. Mirrors `FILE_SIZE_BUDGET_BYTES` in
- *  `supabase/functions/_shared/glb_validator.ts`; the contract test reads that
- *  file rather than trusting this comment. */
-export const FILE_SIZE_BUDGET_BYTES = 5 * 1024 * 1024
+/** The guide's authoring budget ("≤ 6 MB", §C7 — raised from 5 MB on
+ *  2026-11-02). A file over this uploads and is then refused by the server,
+ *  which costs a round trip and a download — which is why it is the number the
+ *  compress offer appears above, not the bucket's larger cap. Mirrors
+ *  `FILE_SIZE_BUDGET_BYTES` in `supabase/functions/_shared/glb_validator.ts`;
+ *  the contract test reads that file rather than trusting this comment. */
+export const FILE_SIZE_BUDGET_BYTES = 6 * 1024 * 1024
 
 /** The triangle cap (§C4). Over this, decimation runs. */
 export const MAX_TRIANGLES = 60000

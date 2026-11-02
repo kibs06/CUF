@@ -30,7 +30,7 @@
 /// feature whose renderer (V3) does not exist. It shipped behind
 /// `AppConstants.tryOnPrefetchEnabled` (**off**) for exactly that reason, and
 /// that switch was flipped **on** on 2026-09-28, once the table it reads was
-/// verified applied — so the `connectivity_plus` check that keeps a 5 MB model
+/// verified applied — so the `connectivity_plus` check that keeps a 6 MB model
 /// off a cellular link is the next hardening step instead of a precondition.
 /// The pressure is not immediate: `product_models` is empty, so the only traffic
 /// today is one read per product page view that returns nothing. It becomes real

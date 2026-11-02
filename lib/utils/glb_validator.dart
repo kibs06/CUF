@@ -42,11 +42,13 @@ const int kBinChunkType = 0x004E4942;
 /// Triangle budget — guide §C4/§C7 / architecture §2.5.1.
 const int kMaxTriangles = 60000;
 
-/// The guide's file budget ("≤ 5 MB"). The bucket's hard cap is 8 MiB
-/// (`product_models` migration / architecture §2.7.1); the contract is the
-/// smaller number, so a file between the two is a contract failure that
-/// would still upload.
-const int kFileSizeBudgetBytes = 5 * 1024 * 1024;
+/// The guide's file budget ("≤ 6 MB", raised from 5 MB on 2026-11-02:
+/// near-budget team-modelled files were being refused for a few hundred KB
+/// while the device/download rationale still holds with headroom). The
+/// bucket's hard cap is 8 MiB (`product_models` migration / architecture
+/// §2.7.1); the contract is the smaller number, so a file between the two is
+/// a contract failure that would still upload.
+const int kFileSizeBudgetBytes = 6 * 1024 * 1024;
 
 /// The `shoe-models` bucket's `file_size_limit`.
 const int kFileSizeHardCapBytes = 8 * 1024 * 1024;

@@ -284,7 +284,7 @@ TryOnMode resolveTryOnMode({required bool arSupported, required bool modelAvaila
 | Dimensions | **True measurements** — and this is where two different lengths live. **(a) External length** (`product_models.authored_length_mm`): the shoe's outside heel-to-toe length, the mesh's Z-bbox target (±5 mm). It drives **rendering scale**. **(b) Internal last length** (`products.last_length_mm`, §2.7.3): how long the inside is, what a foot actually sits in. It drives the **fit verdict**. For a leather shoe the internal last is typically **8–15 mm shorter** than the external length; never substitute one for the other |
 | Side | **One shoe per asset**, declared in `product_models.shoe_side` (default `right`); the renderer mirrors it for the other foot. Visibly asymmetric designs (a single outer strap) get a second asset per product |
 | Materials | PBR metallic-roughness, part-named (`upper`, `sole`, `laces`, `lining`, `heel`) so colour swaps can target parts |
-| Budget | ≤ 60 k triangles, ≤ 2 texture sets at ≤ 1024², ≤ 5 MB total file |
+| Budget | ≤ 60 k triangles, ≤ 2 texture sets at ≤ 1024², ≤ 6 MB total file (raised from 5 MB on 2026-11-02 — near-budget team-modelled files, device/download rationale holds with headroom) |
 | Compression | **Draco / meshopt geometry compression and KTX2 textures are not approved until roadmap V0.7 proves the renderer decodes them.** Ship uncompressed until then |
 | Alignment escape hatch | Optional `alignment_json` per model (heel offset mm, yaw offset deg) for exports that fight the contract |
 
@@ -613,7 +613,7 @@ Calibration invariants:
 | Sustained render fps (mid device: Snapdragon 6xx/7xx class) | ≥ 30 | Below 30 the tracking feels broken |
 | Frame time (ARCore + Filament) | ≤ 33 ms | 30 fps floor |
 | Model parse + first frame | ≤ 1.5 s warm cache / ≤ 4 s cold (network) | Prefetch on product detail hides most of it |
-| GLB file | ≤ 5 MB (8 MB hard bucket limit) | Mobile data in Cebu |
+| GLB file | ≤ 6 MB (8 MB hard bucket limit) | Mobile data in Cebu |
 | Triangles on screen | ≤ 60 k | Filament mid-tier budget |
 | APK size delta (Filament + SceneView + loader) | ≤ 8 MB | **MEASURED AND FAILED (2026-09-27):** +27,716,757 B (+26.4 MiB) all-ABI, ≈+15.7 MB per device — same commit built with and without the dependency (`AR_TRY_ON_SPIKE_FINDINGS.md` §5.3). Composition: native libs 19.1 MB, Compose dex 15.8 MB uncompressed, SceneView Filament assets 11.8 MB uncompressed. The budget must be re-decided or the renderer route changed (findings D3/D4) |
 | Session memory | ≤ 250 MB, no leak across 20 open/close cycles | Device QA matrix |

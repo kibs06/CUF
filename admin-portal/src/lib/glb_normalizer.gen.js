@@ -13,7 +13,7 @@
 // The stamp below is verified by `modelCompress.contract.test.js`, which
 // fails with the rebuild command if the Dart has moved on without this file.
 //
-// dart-source-sha256: 42e1504af534c9a97e07dd4aed4614d953e33416a21481f12c3ff518abafaeaa
+// dart-source-sha256: 44168a7cffe5fdebf6da6a3428edce2ea85354f6fff590ef17e166f49c7a0e47
 // dart-sdk: 3.12.2
 (function dartProgram(){function copyProperties(a,b){var t=Object.keys(a)
 for(var s=0;s<t.length;s++){var r=t[s]

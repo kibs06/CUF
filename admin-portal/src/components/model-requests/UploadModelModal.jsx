@@ -460,7 +460,7 @@ export default function UploadModelModal({ request, onClose, onDone }) {
 
       {/* ── The compress step ────────────────────────────────────────
           Offered only when there is something to fix, and it is the *budget*
-          (5 MB) rather than the bucket cap (8 MB) that raises it: a file
+          (6 MB) rather than the bucket cap (8 MB) that raises it: a file
           between the two uploads and is then refused by the server, which
           costs a round trip and a download to be told what this button
           already knows.

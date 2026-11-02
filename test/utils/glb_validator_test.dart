@@ -131,10 +131,10 @@ void main() {
       expect(_check(report, 'triangles')!.detail, contains('60,001'));
     });
 
-    test('over the 5 MiB budget fails but over the 8 MiB cap says so', () {
+    test('over the 6 MiB budget fails but over the 8 MiB cap says so', () {
       final overBudget = _buildGlb(
         _baseJson(),
-        bin: Uint8List(5 * 1024 * 1024 + 512),
+        bin: Uint8List(6 * 1024 * 1024 + 512),
       );
       expect(_check(validateGlb(overBudget), 'file size')!.status,
           GlbCheckStatus.fail);

@@ -51,8 +51,11 @@ export const BIN_CHUNK_TYPE = 0x004e4942;
 /** Triangle budget — guide §C4/§C7 / architecture §2.5.1. */
 export const MAX_TRIANGLES = 60000;
 
-/** The guide's file budget ("≤ 5 MB"). The bucket's hard cap is 8 MiB. */
-export const FILE_SIZE_BUDGET_BYTES = 5 * 1024 * 1024;
+/** The guide's file budget ("≤ 6 MB", raised from 5 MB on 2026-11-02: near-budget
+ *  team-modelled files were being refused for a few hundred KB while the
+ *  device/download rationale still holds with headroom). The bucket's hard cap
+ *  is 8 MiB. */
+export const FILE_SIZE_BUDGET_BYTES = 6 * 1024 * 1024;
 
 /** The `shoe-models` bucket's `file_size_limit`. */
 export const FILE_SIZE_HARD_CAP_BYTES = 8 * 1024 * 1024;

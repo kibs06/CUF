@@ -25,11 +25,11 @@ One `.glb` per product colourway: a faithful, measured, lightweight 3D copy of t
 | Reference size | Declared (e.g. EU 42) and the **physical sample you scanned must be that size** | Scale math grades from the reference size (6.67 mm per EU step) |
 | Dimensions | **True measurements**, mesh length = measured external length ±5 mm | A wrongly scaled shoe is worse than no shoe |
 | Parts / materials | Named exactly: `upper`, `sole`, `laces`, `lining`, `heel` (add `midsole` if used) | Colour swapping targets parts by name |
-| Budget | ≤ 60 k triangles (target 25–45 k) · ≤ 2 texture sets at ≤ 1024² · ≤ **5 MB** file (8 MB hard bucket limit) | Mid-range Android fps and Cebu mobile data |
+| Budget | ≤ 60 k triangles (target 25–45 k) · ≤ 2 texture sets at ≤ 1024² · ≤ **6 MB** file (8 MB hard bucket limit) | Mid-range Android fps and Cebu mobile data (raised from 5 MB on 2026-11-02 — near-budget team-modelled files were refused for a few hundred KB; rationale holds with headroom) |
 | Compression | **Off by default** — see the warning below | Renderer support is unverified until roadmap V0.7 |
 | Shoes in the file | **One shoe**, declared side (default right) | The app renders one foot at a time; the left is mirrored |
 
-> ⚠️ **Compression warning.** Draco / meshopt geometry compression and KTX2 textures are **not** approved yet — roadmap **V0.7** checks whether the renderer decodes them. Until that check passes, export **uncompressed** and stay under the 5 MB budget with geometry count and texture size. A file the renderer cannot decode is a dead product.
+> ⚠️ **Compression warning.** Draco / meshopt geometry compression and KTX2 textures are **not** approved yet — roadmap **V0.7** checks whether the renderer decodes them. Until that check passes, export **uncompressed** and stay under the 6 MB budget with geometry count and texture size. A file the renderer cannot decode is a dead product.
 >
 > **Where that check stands (2026-09-27):** the renderer we ship (`gltfio-android` 1.72.1, the **non-lite** artifact — note there is a `gltfio-android-lite` that drops these decoders, so never swap that dependency casually) carries real Draco decode paths — `Cannot decompress mesh, Draco decoding error`, `Failed to parse Draco header` — plus a BasisU transcoder and `EXT_meshopt_compression` handling. So the answer is *probably* yes, but it is **not proven** until `GltfioDecodeTest` runs on a physical phone; an emulator cannot load any model at all (`AR_TRY_ON_SPIKE_FINDINGS.md` F14). **Keep compression off until that run lands.**
 >
@@ -215,7 +215,7 @@ Rules: one Principled BSDF per material; no procedural node trees that the expor
 |---|---|---|
 | Triangles | ≤ 60 k | Blender statistics overlay |
 | Textures | ≤ 2 sets, ≤ 1024² | Image list |
-| Exported file | ≤ 5 MB | After export (C8) |
+| Exported file | ≤ 6 MB | After export (C8) |
 
 ### C8 — Export the GLB
 
@@ -246,7 +246,7 @@ It takes the declared external length from `declaration.txt` beside the model (o
 |---|---|
 | format | not a GLB, glTF ≠ 2.0, a truncated file, or a chunk that runs past the end of the file |
 | single file | any `buffers[]`/`images[]` entry has a `uri` — export with textures embedded |
-| file size | over **5 MB** (a file between 5 and 8 MB would still upload — the bucket's cap is 8 MB — but it breaks the contract) |
+| file size | over **6 MB** (a file between 6 and 8 MB would still upload — the bucket's cap is 8 MB — but it breaks the contract) |
 | triangles | over **60 k** |
 | materials | a missing or unnamed part, a duplicate name, a name outside the six approved, or no `upper`/`sole` (see §C6) |
 | textures | any image over **1024²** (past 8 images the tool only *warns*, because image count cannot be turned into "sets" — a reviewer confirms §C7) |
@@ -285,7 +285,7 @@ Do not treat C9.1 as a replacement for §C1–C3. A file that needed the normali
 
 #### C9.1b — The same repair, from the admin queue (no terminal)
 
-Since 2026-10-03 the portal's `/model-requests` queue runs the same normaliser in the browser, so an admin answering a request no longer needs a shell. When a picked `.glb` is over the 5 MiB authoring budget, the upload dialog offers **Compress it**; it decimates the mesh and then runs **the same `normalizeShoeModel` this guide's CLI runs** — `lib/utils/glb_normalizer.dart`, compiled to JavaScript by `tool/build_shoe_model_normalizer_web.mjs` rather than reimplemented, so there is still exactly one copy of the rules.
+Since 2026-10-03 the portal's `/model-requests` queue runs the same normaliser in the browser, so an admin answering a request no longer needs a shell. When a picked `.glb` is over the 6 MiB authoring budget, the upload dialog offers **Compress it**; it decimates the mesh and then runs **the same `normalizeShoeModel` this guide's CLI runs** — `lib/utils/glb_normalizer.dart`, compiled to JavaScript by `tool/build_shoe_model_normalizer_web.mjs` rather than reimplemented, so there is still exactly one copy of the rules.
 
 What that adds over the CLI, and what it does not:
 
@@ -347,7 +347,7 @@ notes:                <holes filled, laces rebuilt, anything a reviewer should k
 | 1 | File opens in a glTF viewer without errors | No console errors | Reviewer |
 | 2 | Origin / orientation | Heel-bottom-centre at origin, toe +Z, sole on the ground plane | Reviewer |
 | 3 | Scale | Mesh external length = calipers ±5 mm, at the declared reference size | Reviewer + validator |
-| 4 | Budget | ≤ 60 k tris, ≤ 5 MB, ≤ 2 texture sets at ≤ 1024² | Validator |
+| 4 | Budget | ≤ 60 k tris, ≤ 6 MB, ≤ 2 texture sets at ≤ 1024² | Validator |
 | 5 | Parts | Exactly the required material names | Validator |
 | 6 | Albedo de-lit | No baked light source visible under neutral lighting | Reviewer |
 | 7 | Likeness | Side-by-side with the reference photos, a reviewer says "that is the shoe" | Artisan partner + reviewer |

@@ -36,7 +36,7 @@ Options:
   --json                      print the machine-readable report instead of the table
   -h, --help                  this text
 
-Checks: GLB structure and single-file embedding · file size (5 MiB budget,
+Checks: GLB structure and single-file embedding · file size (6 MiB budget,
 8 MiB bucket cap) · triangles (60,000 cap) · material part names
 (${kApprovedPartNames.join(', ')}) · texture dimensions (1024² max) ·
 compression gate (Draco / meshopt / KTX2 rejected until V0.7) · units

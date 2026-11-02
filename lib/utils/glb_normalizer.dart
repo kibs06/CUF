@@ -50,7 +50,7 @@ const int kNormalizerTextureSize = 1024;
 
 /// JPEG quality used when textures are re-encoded. High enough that a leather
 /// albedo keeps its stitching, low enough that three 1024² maps leave room for
-/// the geometry inside the 5 MiB budget.
+/// the geometry inside the 6 MiB budget.
 const int kNormalizerJpegQuality = 88;
 
 /// Material extensions the shipped renderer has no proven support for
