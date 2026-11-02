@@ -285,7 +285,7 @@ Do not treat C9.1 as a replacement for §C1–C3. A file that needed the normali
 
 #### C9.1b — The same repair, from the admin queue (no terminal)
 
-Since 2026-10-03 the portal's `/model-requests` queue runs the same normaliser in the browser, so an admin answering a request no longer needs a shell. When a picked `.glb` is over the 6 MiB authoring budget, the upload dialog offers **Compress it**; it decimates the mesh and then runs **the same `normalizeShoeModel` this guide's CLI runs** — `lib/utils/glb_normalizer.dart`, compiled to JavaScript by `tool/build_shoe_model_normalizer_web.mjs` rather than reimplemented, so there is still exactly one copy of the rules.
+Since 2026-10-03 the portal's `/model-requests` queue runs the same normaliser in the browser, so an admin answering a request no longer needs a shell. The upload dialog offers **Compress it** for any picked `.glb` — an over-budget file is decimated first, an already-small file with broken export rows gets a normalize-only run; it decimates the mesh and then runs **the same `normalizeShoeModel` this guide's CLI runs** — `lib/utils/glb_normalizer.dart`, compiled to JavaScript by `tool/build_shoe_model_normalizer_web.mjs` rather than reimplemented, so there is still exactly one copy of the rules.
 
 What that adds over the CLI, and what it does not:
 

@@ -164,10 +164,13 @@ export default function UploadModelModal({ request, onClose, onDone }) {
   // quiet mistake. So the result is dropped whenever the picked file changes.
   const compressedMatchesFile = compressed !== null && compressed.forFile === file
 
-  // Offered when a picked file is over the authoring budget, or when the last
-  // run left its result in hand (so the admin can see it, and re-run it).
+  // Offered for ANY picked file, not just an over-budget one: a small file can
+  // still break export rows (names, textures, axes, origin, scale — the 60k
+  // file that prompted this), and the normalizer fixes those without
+  // decimating a mesh that is already inside the cap. Plus the last run's
+  // result, so the admin can see what is in hand.
   const overBudget = Boolean(file) && file.size > FILE_SIZE_BUDGET_BYTES
-  const showCompress = Boolean(file) && (overBudget || compressedMatchesFile)
+  const showCompress = Boolean(file)
 
   // The bytes Publish would upload, whatever the source: the compressed
   // result when it is about the picked file, else the picked file itself. A
@@ -503,7 +506,9 @@ export default function UploadModelModal({ request, onClose, onDone }) {
               <p className="flex items-center gap-2 text-sm font-semibold text-[#3B2314]">
                 <Sparkles size={14} className="text-[#8B5A2B]" />
                 {!compressedMatchesFile
-                  ? 'This file is over the authoring budget'
+                  ? overBudget
+                    ? 'This file is over the authoring budget'
+                    : 'Normalize this file'
                   : compressed.overBudgetAfter || compressed.overTrisAfter
                     ? 'Compressed, but still over the contract'
                     : 'Compressed and ready to upload'}
@@ -512,15 +517,22 @@ export default function UploadModelModal({ request, onClose, onDone }) {
                 {compressedMatchesFile
                   ? 'The compressed bytes are in hand and are what Publish will upload — the ' +
                     'picked file itself is left alone.'
-                  : `${formatBytes(file.size)} against a ${formatBytes(FILE_SIZE_BUDGET_BYTES)} ` +
-                    'budget — the bucket takes it, but the server will refuse it. Compressing ' +
-                    'decimates the mesh and re-bakes the textures to 1024², then runs the same ' +
-                    'normalizer the CLI runs: re-aimed axes, grounded, scaled to the declared ' +
-                    'length, parts renamed. One press runs up to four passes on its own — each ' +
-                    'failing result halves the triangle target and allows a little more shape ' +
-                    'deviation for the next, until the bytes and the triangle count both fit — ' +
-                    'a minute or so per pass for a file this size, and the tab stays usable ' +
-                    'while it does.'}
+                  : overBudget
+                    ? `${formatBytes(file.size)} against a ${formatBytes(FILE_SIZE_BUDGET_BYTES)} ` +
+                      'budget — the bucket takes it, but the server will refuse it. Compressing ' +
+                      'decimates the mesh and re-bakes the textures to 1024², then runs the same ' +
+                      'normalizer the CLI runs: re-aimed axes, grounded, scaled to the declared ' +
+                      'length, parts renamed. One press runs up to four passes on its own — each ' +
+                      'failing result halves the triangle target and allows a little more shape ' +
+                      'deviation for the next, until the bytes and the triangle count both fit — ' +
+                      'a minute or so per pass for a file this size, and the tab stays usable ' +
+                      'while it does.'
+                    : `${formatBytes(file.size)} is inside the budget, but the export itself can ` +
+                      'still break contract rows — names, textures, axes, origin, scale. Normalize ' +
+                      'runs the same fixer the CLI runs (re-aimed axes, grounded, scaled to the ' +
+                      'declared length, textures re-baked to 1024², parts renamed) without ' +
+                      'decimating a mesh that is already inside the cap. One press, a few seconds ' +
+                      'for a file this size.'}
               </p>
             </div>
             {/* The loop runs itself to the budget or the floor — there is no

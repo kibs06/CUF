@@ -84,7 +84,7 @@ It is **not** a third implementation of the 11-check authoring contract: the Dar
 
 The queue used to assume the model arrived ready. A partner's raw export does not: the file this was written against was 90.1 MB, 1.5 million triangles, three 4096² textures, one material called `Material.001`, and authored 4.37× life size. Every one of those is a refusal, and the only route to a fixed file was `dart run tool/prepare_shoe_model.dart` in a shell — which is exactly the gap the Flutter screen's own header describes ("only ever be filled by someone with a terminal").
 
-So when a picked file is over the **6 MB authoring budget**, the modal offers **Compress it**, and it runs in the browser:
+So when a picked file needs work — over the **6 MB authoring budget**, or a small file with broken export rows — the modal offers **Compress it**, and it runs in the browser:
 
 1. **Decimate** (`@gltf-transform/core` + `functions` with `meshoptimizer`'s WASM simplifier) — the one stage the Dart normalizer cannot do at all. A ratio is picked to land the mesh near 40,000 triangles, and no decimation runs when the mesh is already inside the cap.
 2. **Normalize** — the *compiled reference normalizer*, not a port of it: `lib/utils/glb_normalizer.dart`, built to JavaScript by `tool/build_shoe_model_normalizer_web.mjs`. Re-aimed axes, grounded at the heel-bottom-centre, scaled to the declared length, textures re-baked to 1024², materials renamed, sole band cut.
