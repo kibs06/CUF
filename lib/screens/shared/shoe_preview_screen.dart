@@ -303,11 +303,16 @@ class _ShoePreviewScreenState extends State<ShoePreviewScreen> {
 
   /// Whether the **"Try on DeepAR"** pill is offered: customer door only,
   /// and only for a product with a bundled `.deepar` effect (see
-  /// [kDeepArBundledEffects]). Luna Loafers first.
+  /// [kDeepArBundledEffects]). Luna Loafers first, Luxe Cross-Strap Sandals
+  /// by product name — its effect arrived filed by name, not by row id.
   bool get _showDeepAr =>
       widget.showTryOn &&
       _productId != null &&
-      deepArEffectForProduct(_productId!) != null;
+      deepArEffectForProduct(
+            _productId!,
+            productName: widget.product['name']?.toString(),
+          ) !=
+          null;
 
   /// **"Try on DeepAR"** — always the live web page in the phone browser.
   /// Native SDKs dropped foot tracking, and an in-app WebView leaves the

@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-
-import { deepArShoeStatus, getDeepArShoeEnv } from '../lib/deeparShoe.js'
+import {
+  deepArEffectForProductName,
+  deepArShoeStatus,
+  getDeepArShoeEnv,
+} from '../lib/deeparShoe.js'
+import { supabase } from '../lib/supabase.js'
 
 /**
  * Hidden QA route: `/deepar-shoe?product=<id>`.
@@ -9,13 +13,47 @@ import { deepArShoeStatus, getDeepArShoeEnv } from '../lib/deeparShoe.js'
  * Enter from the app's DeepAR entry or directly in mobile Chrome.
  *
  * Needs (never commit): VITE_DEEPAR_WEB_KEY (Web App key, NOT the Android key).
- * Effect: /effects/luna_loafers.deepar (Studio export, bundled in public/).
+ * Effects live in public/effects/ (Studio exports, bundled): Luna Loafers +
+ * Luxe Cross-Strap Sandals (the latter filed by product name — the page reads
+ * `products.name` for a bare uuid and slug-matches it).
  */
+
 export default function DeepArShoe() {
   const [params] = useSearchParams()
   const productId = params.get('product')
   const env = getDeepArShoeEnv()
-  const status = deepArShoeStatus(env, productId)
+  const direct = deepArShoeStatus(env, productId)
+  // A bare row uuid (what the app links) carries no name — resolve it to the
+  // Luxe effect once the product row names it, rather than hardcoding an id
+  // the effect handover never recorded.
+  const [namedEffect, setNamedEffect] = useState(null)
+  useEffect(() => {
+    if (direct.effect || !productId) return
+    let cancelled = false
+    supabase
+      .from('products')
+      .select('name')
+      .eq('id', productId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled && data?.name) setNamedEffect(deepArEffectForProductName(data.name))
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [direct.effect, productId])
+  // When the name resolves, the only honest missing entry is the key — the
+  // effect question is answered, and the stub must not still claim it.
+  const status = direct.effect
+    ? direct
+    : {
+        ...direct,
+        ready: Boolean(namedEffect && env.webKey),
+        effect: namedEffect,
+        missing: (direct.missing ?? []).filter((m) =>
+          namedEffect ? m !== 'no-effect-for-product' : true,
+        ),
+      }
   const canvasRef = useRef(null)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)

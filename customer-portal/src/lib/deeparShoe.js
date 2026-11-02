@@ -10,6 +10,14 @@ export function getDeepArShoeEnv() {
   }
 }
 
+/** `Luxe Cross-Strap Sandals` → `luxe-cross-strap-sandals`. */
+export function deepArSlugForName(name) {
+  return String(name ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
 export function deepArEffectForProduct(productId) {
   const id = String(productId ?? '').trim()
   if (!id) return null
@@ -20,7 +28,24 @@ export function deepArEffectForProduct(productId) {
   ) {
     return '/effects/luna_loafers.deepar'
   }
+  // Luxe by slug: the app links `?product=<uuid>`, and the effect was filed
+  // by product name, so the page resolves the name (see DeepArShoe) and the
+  // direct slug still works for shared links.
+  if (id === 'luxe-cross-strap-sandals') {
+    return '/effects/luxe_cross_strap_sandals.deepar'
+  }
   return null
+}
+
+/** Name-based fallback: any Luxe Cross-Strap Sandals row id resolves once the
+ *  page has read its `products.name` (see DeepArShoe). */
+export function deepArEffectForProductName(name) {
+  const slug = deepArSlugForName(name)
+  if (!slug) return null
+  if (slug.includes('luxe') && slug.includes('cross') && slug.includes('strap')) {
+    return '/effects/luxe_cross_strap_sandals.deepar'
+  }
+  return deepArEffectForProduct(slug)
 }
 
 export function deepArShoeStatus(env = getDeepArShoeEnv(), productId) {

@@ -20,6 +20,20 @@ void main() {
       );
     });
 
+    test('Luxe resolves by slug and by product name, without a row id', () {
+      expect(
+        deepArEffectForProduct('luxe-cross-strap-sandals'),
+        'assets/effects/luxe_cross_strap_sandals.deepar',
+      );
+      expect(
+        deepArEffectForProduct(
+          'some-uuid-nobody-recorded',
+          productName: 'Luxe Cross-Strap Sandals',
+        ),
+        'assets/effects/luxe_cross_strap_sandals.deepar',
+      );
+    });
+
     test('unknown product has no effect yet', () {
       expect(deepArEffectForProduct('abc123'), isNull);
     });
