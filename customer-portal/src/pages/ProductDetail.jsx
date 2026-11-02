@@ -27,6 +27,7 @@ import { useMySize } from '../hooks/useMySize.js'
 import { useProduct, useProducts, useStore } from '../hooks/useCatalog'
 import useProductModel from '../hooks/useProductModel'
 import { getLensEnv, lensAvailableForProduct, lensConfigStatus } from '../lib/lensConfig.js'
+import { deepArEffectForProduct } from '../lib/deeparShoe.js'
 import { availableSizes, stockForSize } from '../lib/stock'
 import { salePercent } from '../lib/pricing'
 import { sellerProductPreviewPath } from '../lib/sellerPaths.js'
@@ -343,6 +344,17 @@ export default function ProductDetail({ preview = false }) {
                   >
                     <Footprints size={16} strokeWidth={2} />
                     Try in Snapchat
+                  </Link>
+                )}
+                {/* DeepAR Web shoe spike (5.6.3 pinned): only for products
+                    with a bundled .deepar effect (Luna Loafers first). */}
+                {deepArEffectForProduct(product.id) && (
+                  <Link
+                    to={`/deepar-shoe?product=${product.id}`}
+                    className="btn btn-outline w-full gap-2"
+                  >
+                    <Footprints size={16} strokeWidth={2} />
+                    Try on DeepAR
                   </Link>
                 )}
               </div>

@@ -24,6 +24,7 @@ import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:google_mlkit_selfie_segmentation/google_mlkit_selfie_segmentation.dart';
 
 import 'foot_detector.dart';
+import 'foot_mask_isolate.dart';
 import 'mlkit_input_helper.dart';
 
 /// [FootDetector] implementation backed by ML Kit Selfie Segmentation.
@@ -76,7 +77,12 @@ class MlKitSegmentationFootDetector implements FootDetector {
       final uprightW = sideways ? height : width;
       final uprightH = sideways ? width : height;
 
-      final result = evaluateFootMask(
+      // Phase 1.1: heavy PCA/component math runs off the main isolate.
+      // `processImage` above stays on main (platform channel); only the
+      // pure `evaluateFootMask` moves. Falls back to sync on isolate error.
+      // NOTE: per-frame `[SAMPLE-DEBUG]` stage trace is skipped on the
+      // isolate path (closure not sendable); sync fallback keeps it.
+      final result = await evaluateFootMaskOffMain(
         confidences: mask.confidences,
         width: mask.width,
         height: mask.height,
@@ -84,9 +90,6 @@ class MlKitSegmentationFootDetector implements FootDetector {
         guideRect: guideRect,
         frameWidth: uprightW,
         frameHeight: uprightH,
-        // TEMP-DEBUG: stage-by-stage pipeline trace for the 0-samples
-        // diagnosis (ZERO_SAMPLES_DIAGNOSTIC_PROMPT). Remove after.
-        onStageLog: (trace) => debugPrint('[SAMPLE-DEBUG] $trace'),
       );
 
       if (result.footDetected) {

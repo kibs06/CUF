@@ -1,0 +1,53 @@
+- !<AssetImportMetadata/cb22b85a-67ca-4476-bc79-1c623d9bf832>
+  ImportedAssetIds:
+    JavaScriptAsset: !<reference> 697dd7ca-0e99-46fc-aeac-3971ba343205
+  ImporterName: JavaScriptAssetImporter
+  PrimaryAsset: !<reference> 697dd7ca-0e99-46fc-aeac-3971ba343205
+  PackageType: NotAPackage
+  LegacyPackagePolicy: ~
+  ExtraData:
+    {}
+  AssetDataMap:
+    JavaScriptAsset: !<own> 8f49c98e-0e25-4511-9e1c-4cc016028556
+  DependentFiles:
+    []
+  ImporterSettings: !<AssetImporterSettings>
+    {}
+  CompressionSettings: !<own> 00000000-0000-0000-0000-000000000000
+- !<ScriptAssetData/8f49c98e-0e25-4511-9e1c-4cc016028556>
+  SvgIcon: ""
+  SetupScript:
+    code: ""
+  Description: ""
+  VersionMajor: 1
+  VersionMinor: 0
+  VersionPatch: 0
+  VersionPrerelease: ""
+  UpdateOrder: 0
+  ComponentUid: 675f76a5-3b5a-41f5-b866-3d74b62708c9
+  ExportUid: 00000000-0000-0000-0000-000000000000
+  PackagePolicy: CanBeUnpacked
+  ScriptInputsHidden:
+    cameraHint: false
+    enableVisualization: false
+    footHint: false
+    shoeSceneObjects: false
+    visualizationRoot: false
+  ScriptTypesHidden:
+    {}
+  ReadMe: !<reference> 00000000-0000-0000-0000-000000000000
+  DeclarationFile: !<reference> 00000000-0000-0000-0000-000000000000
+  Tags:
+    []
+  Attachments:
+    []
+  DefaultScriptInputs:
+    - shoeSceneObjects: !<reference.SceneObject[]>
+        []
+      footHint: !<reference.SceneObject> 00000000-0000-0000-0000-000000000000
+      enableVisualization: true
+      visualizationRoot: !<reference.SceneObject> 00000000-0000-0000-0000-000000000000
+      cameraHint: !<reference.SceneObject> 00000000-0000-0000-0000-000000000000
+  ScriptTypes:
+    -
+      {}

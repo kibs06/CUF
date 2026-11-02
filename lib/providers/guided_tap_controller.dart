@@ -9,7 +9,7 @@ import '../screens/customer/foot_floor_detection_screen.dart' show FloorReferenc
 import '../services/ar_core_channel.dart';
 import '../utils/foot_detector.dart';
 import '../utils/foot_measurement_utils.dart';
-import '../utils/mlkit_segmentation_foot_detector.dart';
+import '../utils/onnx_foot_detector.dart';
 
 // ═══════════════════════════════════════════════════════════════
 // ONE-SHOT OUTCOME EVENTS
@@ -275,7 +275,7 @@ class GuidedTapController extends ChangeNotifier {
     this.floorReference,
   })  : _arCore = arCore ?? ArCoreChannel.instance,
         _detectorFactory =
-            detectorFactory ?? MlKitSegmentationFootDetector.new {
+            detectorFactory ?? OnnxFirstFootDetector.new {
     // The screen's State used to log this first thing in initState; the
     // controller is constructed there, so the moment (and elapsed value) match.
     _logTiming('screen_opened');

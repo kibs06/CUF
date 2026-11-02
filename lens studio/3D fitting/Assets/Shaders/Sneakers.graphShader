@@ -1,0 +1,944 @@
+SchemaVersion: 1
+Nodes:
+  ChildNodes:
+    Node0:
+      CommentSizeX: 0
+      CommentSizeY: 0
+      DependencyIndex: 0
+      LevelID: 11
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Index:
+          Variable: 0
+        UVCoord:
+          IOType: 1
+          Variable: [0.0, 0.0]
+      PositionX: -1042
+      PositionY: 137
+      TemplateID: node_effect_global_surface_uvcoord0
+      Title1: Surface UV Coord
+    Node1:
+      CommentSizeX: 0
+      CommentSizeY: 0
+      DependencyIndex: 1
+      LevelID: 1
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Coords:
+          ItemIndex: 2
+          ItemList: "UV Coord 0 : UV Coord 1 : Custom"
+        Depth:
+          IOType: 1
+          Variable: 0.0
+        ExtraOutputs:
+          Variable: false
+        Group:
+          String: ""
+        LODMode:
+          ItemIndex: 0
+          ItemList: "Auto : Custom"
+        LODValue:
+          Variable: 0.0
+        Output:
+          ClassType1: COLOR
+          IOType: 1
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        PixelSize:
+          IOType: 1
+          Variable: [0.0, 0.0]
+        ScriptName:
+          String: baseTex
+        SortIndex:
+          Variable: 0
+        TextureSize:
+          IOType: 1
+          Variable: [0.0, 0.0]
+        Title:
+          String: Base Texture
+        Tooltip:
+          String: ""
+        Type:
+          ItemIndex: 0
+          ItemList: "2D Map : Normal Map : View Space Depth Map"
+        UVCoord:
+          Connection0:
+            NodeLevelID: 11
+            PortID: UVCoord
+          Variable: [0.0, 0.0]
+      PositionX: -502
+      PositionY: 163
+      TemplateID: nodes_inputs_parameters_image
+      Title1: Texture 2D Parameter
+      Title2: Base Texture
+    Node10:
+      DependencyIndex: 10
+      LevelID: 22
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Channels:
+          ItemIndex: 5
+          ItemList: "xyzw : rgba : xyz : rgb : xy : x"
+        Default:
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        EnableMax:
+          Variable: true
+        EnableMin:
+          Variable: true
+        Group:
+          String: ""
+        Max:
+          Variable: 20.0
+        Min:
+          Variable: 1.0
+        Output:
+          IOType: 1
+          Variable: [0.0, 0.0, 0.0, 0.0]
+        ScriptName:
+          String: Tweak_N22
+        SortIndex:
+          Variable: 0
+        Step:
+          Variable: 0.1
+        Title:
+          String: fabric_scale
+        Tooltip:
+          String: ""
+      PositionX: -1085
+      PositionY: -89
+      TemplateID: nodes_inputs_parameters_float
+      Title1: Float Parameter
+      Title2: fabric_scale
+    Node11:
+      CommentSizeX: 0
+      CommentSizeY: 0
+      DependencyIndex: 11
+      LevelID: 15
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Center:
+          Variable: [0.0, 0.0]
+        CoordsIn:
+          Connection0:
+            NodeLevelID: 11
+            PortID: UVCoord
+          Variable: [0.0, 0.0]
+        CoordsOut:
+          IOType: 1
+          Variable: [0.0, 0.0]
+        Scale:
+          Connection0:
+            NodeLevelID: 22
+            PortID: Output
+          Variable: [2.0, 2.0]
+      PositionX: -866
+      PositionY: -172
+      TemplateID: nodes_functions_coords_scale
+      Title1: Scale Coords
+    Node12:
+      CommentSizeX: 0
+      CommentSizeY: 0
+      DependencyIndex: 12
+      LevelID: 17
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Coords:
+          ItemIndex: 2
+          ItemList: "UV Coord 0 : UV Coord 1 : Custom"
+        Depth:
+          IOType: 1
+          Variable: 0.0
+        ExtraOutputs:
+          Variable: false
+        Group:
+          String: ""
+        LODMode:
+          ItemIndex: 0
+          ItemList: "Auto : Custom"
+        LODValue:
+          Variable: 0.0
+        Output:
+          ClassType1: COLOR
+          IOType: 1
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        PixelSize:
+          IOType: 1
+          Variable: [0.0, 0.0]
+        ScriptName:
+          String: Tweak_N17
+        SortIndex:
+          Variable: 1
+        TextureSize:
+          IOType: 1
+          Variable: [0.0, 0.0]
+        Title:
+          String: Normal_fabric
+        Tooltip:
+          String: ""
+        Type:
+          ItemIndex: 1
+          ItemList: "2D Map : Normal Map : View Space Depth Map"
+        UVCoord:
+          Connection0:
+            NodeLevelID: 15
+            PortID: CoordsOut
+          Variable: [0.0, 0.0]
+      PositionX: -686
+      PositionY: -185
+      TemplateID: nodes_inputs_parameters_image
+      Title1: Texture 2D Parameter
+      Title2: Normal_fabric
+    Node13:
+      DependencyIndex: 13
+      LevelID: 21
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Channels:
+          ItemIndex: 5
+          ItemList: "xyzw : rgba : xyz : rgb : xy : x"
+        Default:
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        EnableMax:
+          Variable: true
+        EnableMin:
+          Variable: true
+        Group:
+          String: ""
+        Max:
+          Variable: 20.0
+        Min:
+          Variable: 1.0
+        Output:
+          IOType: 1
+          Variable: [0.0, 0.0, 0.0, 0.0]
+        ScriptName:
+          String: Tweak_N21
+        SortIndex:
+          Variable: 0
+        Step:
+          Variable: 0.1
+        Title:
+          String: dots_scale
+        Tooltip:
+          String: ""
+      PositionX: -1063
+      PositionY: 10
+      TemplateID: nodes_inputs_parameters_float
+      Title1: Float Parameter
+      Title2: dots_scale
+    Node14:
+      CommentSizeX: 0
+      CommentSizeY: 0
+      DependencyIndex: 14
+      LevelID: 19
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Center:
+          Variable: [0.0, 0.0]
+        CoordsIn:
+          Connection0:
+            NodeLevelID: 11
+            PortID: UVCoord
+          Variable: [0.0, 0.0]
+        CoordsOut:
+          IOType: 1
+          Variable: [0.0, 0.0]
+        Scale:
+          Connection0:
+            NodeLevelID: 21
+            PortID: Output
+          Variable: [2.0, 2.0]
+      PositionX: -810
+      PositionY: 31
+      TemplateID: nodes_functions_coords_scale
+      Title1: Scale Coords
+    Node15:
+      CommentSizeX: 0
+      CommentSizeY: 0
+      DependencyIndex: 15
+      LevelID: 20
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Coords:
+          ItemIndex: 2
+          ItemList: "UV Coord 0 : UV Coord 1 : Custom"
+        Depth:
+          IOType: 1
+          Variable: 0.0
+        ExtraOutputs:
+          Variable: false
+        Group:
+          String: ""
+        LODMode:
+          ItemIndex: 0
+          ItemList: "Auto : Custom"
+        LODValue:
+          Variable: 0.0
+        Output:
+          ClassType1: COLOR
+          IOType: 1
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        PixelSize:
+          IOType: 1
+          Variable: [0.0, 0.0]
+        ScriptName:
+          String: Tweak_N20
+        SortIndex:
+          Variable: 1
+        TextureSize:
+          IOType: 1
+          Variable: [0.0, 0.0]
+        Title:
+          String: Normal_dots
+        Tooltip:
+          String: ""
+        Type:
+          ItemIndex: 1
+          ItemList: "2D Map : Normal Map : View Space Depth Map"
+        UVCoord:
+          Connection0:
+            NodeLevelID: 19
+            PortID: CoordsOut
+          Variable: [0.0, 0.0]
+      PositionX: -621
+      PositionY: 22
+      TemplateID: nodes_inputs_parameters_image
+      Title1: Texture 2D Parameter
+      Title2: Normal_dots
+    Node16:
+      DependencyIndex: 16
+      LevelID: 8
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Channels:
+          ItemIndex: 0
+          ItemList: "xyzw : rgba : xyz : rgb : xy : x"
+        Count:
+          ItemIndex: 2
+          ItemList: "1 : 2 : 3 : 4 : 5 : 6 : 7 : 8 : 9 : 10 : 11 : 12 : 13 : 14 : 15 : 16"
+        Default:
+          Connection0:
+            NodeLevelID: 20
+            PortID: Output
+          Variable: [0.0, 0.0, 0.0, 0.0]
+        Result:
+          IOType: 1
+          Variable: [0.0, 0.0, 0.0, 0.0]
+        Switch:
+          Connection0:
+            NodeLevelID: 12
+            PortID: Output
+          Variable: 0.0
+        Title0:
+          String: ""
+        Title1:
+          String: ""
+        Title2:
+          String: ""
+        Value0:
+          Connection0:
+            NodeLevelID: 9
+            PortID: Output
+          Variable: [0.0, 0.0, 0.0, 0.0]
+        Value1:
+          Connection0:
+            NodeLevelID: 13
+            PortID: Output
+          Variable: [0.0, 0.0, 0.0, 0.0]
+        Value2:
+          Connection0:
+            NodeLevelID: 17
+            PortID: Output
+          Variable: [0.0, 0.0, 0.0, 0.0]
+      PositionX: -200
+      PositionY: -270
+      TemplateID: nodes_main_switch
+      Title1: Switch
+    Node17:
+      CommentSizeX: 0
+      CommentSizeY: 0
+      DependencyIndex: 17
+      LevelID: 2
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Coords:
+          ItemIndex: 2
+          ItemList: "UV Coord 0 : UV Coord 1 : Custom"
+        Depth:
+          IOType: 1
+          Variable: 0.0
+        ExtraOutputs:
+          Variable: false
+        Group:
+          String: ""
+        LODMode:
+          ItemIndex: 0
+          ItemList: "Auto : Custom"
+        LODValue:
+          Variable: 0.0
+        Output:
+          ClassType1: COLOR
+          IOType: 1
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        PixelSize:
+          IOType: 1
+          Variable: [0.0, 0.0]
+        ScriptName:
+          String: materialParamsTex
+        SortIndex:
+          Variable: 2
+        TextureSize:
+          IOType: 1
+          Variable: [0.0, 0.0]
+        Title:
+          String: Material Params
+        Tooltip:
+          String: ""
+        Type:
+          ItemIndex: 0
+          ItemList: "2D Map : Normal Map : View Space Depth Map"
+        UVCoord:
+          Connection0:
+            NodeLevelID: 11
+            PortID: UVCoord
+          Variable: [0.0, 0.0]
+      PositionX: -527
+      PositionY: 304
+      TemplateID: nodes_inputs_parameters_image
+      Title1: Texture 2D Parameter
+      Title2: Material Params
+    Node18:
+      DependencyIndex: 18
+      LevelID: 3
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Dimension1:
+          ItemIndex: 0
+          ItemList: "1 : 2 : 3"
+        Dimension2:
+          ItemIndex: 0
+          ItemList: "1 : 2 : 3 : disabled"
+        Dimension3:
+          ItemIndex: 0
+          ItemList: "1 : 2 : disabled"
+        Dimension4:
+          ItemIndex: 0
+          ItemList: "1 : disabled"
+        Value:
+          Connection0:
+            NodeLevelID: 2
+            PortID: Output
+          Variable: [0.0, 0.0, 0.0, 0.0]
+        Value1:
+          IOType: 1
+          Variable: [0.0, 0.0, 0.0, 0.0]
+        Value2:
+          IOType: 1
+          Variable: [0.0, 0.0, 0.0, 0.0]
+        Value3:
+          IOType: 1
+          Variable: [0.0, 0.0, 0.0, 0.0]
+        Value4:
+          IOType: 1
+          Variable: [0.0, 0.0, 0.0, 0.0]
+      PositionX: -270
+      PositionY: 230
+      TemplateID: node_channels_split
+      Title1: Split Vector
+    Node19:
+      CommentSizeX: 0
+      CommentSizeY: 0
+      DependencyIndex: 19
+      LevelID: 6
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        AO:
+          ClassType1: COLOR
+          Connection0:
+            NodeLevelID: 3
+            PortID: Value3
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        Albedo:
+          ClassType1: COLOR
+          Connection0:
+            NodeLevelID: 7
+            PortID: Output
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        Emissive:
+          ClassType1: COLOR
+          Variable: [0.0, 0.0, 0.0, 1.0]
+        Metallic:
+          Connection0:
+            NodeLevelID: 3
+            PortID: Value1
+          Variable: 0.0
+        Mode:
+          ItemIndex: 0
+          ItemList: "Diffuse and Specular : Diffuse Only : Specular Only"
+        Normal:
+          ClassType1: COLOR
+          Connection0:
+            NodeLevelID: 8
+            PortID: Result
+          Variable: [0.0, 1.0, 0.0, 1.0]
+        NormalSpace:
+          ItemIndex: 0
+          ItemList: "Tangent : World"
+        Opacity:
+          Connection0:
+            NodeLevelID: 5
+            PortID: Output
+          Variable: 1.0
+        Output:
+          ClassType1: COLOR
+          IOType: 1
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        Roughness:
+          Connection0:
+            NodeLevelID: 3
+            PortID: Value2
+          Variable: 0.0
+        SpecularAO:
+          ClassType1: COLOR
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        ToneMapping:
+          Variable: true
+      PositionX: -65
+      PositionY: 87
+      TemplateID: nodes_main_material_brdf
+      Title1: PBR ( Lighting )
+      Title2: Diffuse and Specular
+    Node2:
+      DependencyIndex: 2
+      LevelID: 7
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Input0:
+          ClassType1: COLOR
+          Connection0:
+            NodeLevelID: 1
+            PortID: Output
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        Output:
+          ClassType1: COLOR
+          IOType: 1
+          Variable: [1.0, 1.0, 1.0, 1.0]
+      PositionX: -185
+      PositionY: 176
+      RedirectClassTypeA1: COLOR
+      RedirectClassTypeB1: COLOR
+      TemplateID: nodes_math_passthrough
+      Title1: Passthrough
+    Node20:
+      DependencyIndex: 20
+      LevelID: 16
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Input0:
+          Connection0:
+            NodeLevelID: 7
+            PortID: Output
+          Variable: [0.0, 0.0, 0.0, 0.0]
+        Input1:
+          Connection0:
+            NodeLevelID: 6
+            PortID: Output
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        Input2:
+          Connection0:
+            NodeLevelID: 3
+            PortID: Value3
+          Variable: [0.5, 0.5, 0.5, 0.5]
+        Output:
+          IOType: 1
+          Variable: [0.0, 0.0, 0.0, 0.0]
+        Type0:
+          ItemIndex: 0
+          ItemList: "auto : xyzw : rgba : xyz : rgb : xy : x"
+        Type1:
+          ItemIndex: 0
+          ItemList: "auto : xyzw : rgba : xyz : rgb : xy : x"
+        Type2:
+          ItemIndex: 0
+          ItemList: "auto : xyzw : rgba : xyz : rgb : xy : x"
+      PositionX: 210
+      PositionY: -60
+      TemplateID: nodes_math_mix
+      Title1: Mix
+    Node21:
+      CommentSizeX: 0
+      CommentSizeY: 0
+      DependencyIndex: 21
+      LevelID: 4
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Depth:
+          Variable: 1.0
+        DepthMode:
+          ItemIndex: 0
+          ItemList: |2-
+            		Non-Linear - Normalized [0 to 1] ) :		Linear - Normalized [-1 to 1] :		View Space - Non-Normalized [-near to -far]	
+        DontFreezeSpec:
+          Variable: false
+        FinalColor:
+          ClassType1: COLOR
+          Connection0:
+            NodeLevelID: 16
+            PortID: Output
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        FinalColor1:
+          ClassType1: COLOR
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        FinalColor2:
+          ClassType1: COLOR
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        FinalColor3:
+          ClassType1: COLOR
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        GSplatPointSize:
+          Variable: 0.0
+        Negative:
+          Variable: false
+        RayDirection:
+          Variable: [0.0, 1.0, 0.0]
+        RayOrigin:
+          Variable: [0.0, 0.0, 0.0]
+        Targets:
+          ItemIndex: 0
+          ItemList: "1 : 2 : 3 : 4"
+        Type:
+          ItemIndex: 0
+          ItemList: "3D : Post Effect : Hair : Gaussian Splatting"
+        WorldNormal:
+          Variable: [0.0, 1.0, 0.0]
+        WorldPosition:
+          Variable: [0.0, 0.0, 0.0]
+        WorldTangent:
+          Variable: [0.0, 0.0, 1.0]
+        WriteDepth:
+          Variable: false
+      PositionX: 450
+      PositionY: -60
+      TemplateID: nodes_main_graph
+      Title1: Shader
+      Title2: 3D
+    Node22:
+      DependencyIndex: 22
+      LevelID: 18
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Count:
+          Variable: 2
+        Normal:
+          IOType: 1
+          Variable: [0.0, 0.0, 0.0]
+        Normal1:
+          Variable: [0.0, 0.0, 1.0]
+        Normal2:
+          Variable: [0.0, 0.0, 1.0]
+        Strength1:
+          Variable: 1.0
+        Strength2:
+          Variable: 1.0
+      PositionX: -693
+      PositionY: -672
+      TemplateID: node_math_combinenormals
+      Title1: Combine Normals
+    Node3:
+      DependencyIndex: 3
+      LevelID: 5
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Input:
+          Connection0:
+            NodeLevelID: 1
+            PortID: Output
+          Variable: [0.0, 0.0, 0.0, 0.0]
+        Output:
+          IOType: 1
+          Variable: [0.0, 0.0, 0.0, 0.0]
+        Swizzle:
+          String: a
+      PositionX: -300
+      PositionY: 53
+      TemplateID: node_channels_swizzle
+      Title1: Swizzle
+    Node4:
+      DependencyIndex: 4
+      LevelID: 10
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Coords:
+          ItemIndex: 0
+          ItemList: "UV Coord 0 : UV Coord 1 : Custom"
+        Depth:
+          IOType: 1
+          Variable: 0.0
+        ExtraOutputs:
+          Variable: false
+        Group:
+          String: ""
+        LODMode:
+          ItemIndex: 0
+          ItemList: "Auto : Custom"
+        LODValue:
+          Variable: 0.0
+        Output:
+          ClassType1: COLOR
+          IOType: 1
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        PixelSize:
+          IOType: 1
+          Variable: [0.0, 0.0]
+        ScriptName:
+          String: Tweak_N10
+        SortIndex:
+          Variable: 0
+        TextureSize:
+          IOType: 1
+          Variable: [0.0, 0.0]
+        Title:
+          String: ID Map
+        Tooltip:
+          String: ""
+        Type:
+          ItemIndex: 0
+          ItemList: "2D Map : Normal Map : View Space Depth Map"
+        UVCoord:
+          Variable: [0.0, 0.0]
+      PositionX: -698
+      PositionY: -437
+      TemplateID: nodes_inputs_parameters_image
+      Title1: Texture 2D Parameter
+      Title2: ID Map
+    Node5:
+      DependencyIndex: 5
+      LevelID: 12
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Input0:
+          Connection0:
+            NodeLevelID: 10
+            PortID: Output
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        Input1:
+          Variable: [4.0, 1.0, 1.0, 1.0]
+        Inputs:
+          ItemIndex: 0
+          ItemList: "2 : 3 : 4 : 5 : 6"
+        Output:
+          IOType: 1
+          Variable: [0.0, 0.0, 0.0, 0.0]
+        Type0:
+          ItemIndex: 0
+          ItemList: "auto : xyzw : rgba : xyz : rgb : xy : x"
+        Type1:
+          ItemIndex: 6
+          ItemList: "auto : xyzw : rgba : xyz : rgb : xy : x"
+      PositionX: -461
+      PositionY: -434
+      TemplateID: nodes_math_multiply
+      Title1: Multiply
+    Node6:
+      CommentSizeX: 0
+      CommentSizeY: 0
+      DependencyIndex: 6
+      LevelID: 9
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Coords:
+          ItemIndex: 2
+          ItemList: "UV Coord 0 : UV Coord 1 : Custom"
+        Depth:
+          IOType: 1
+          Variable: 0.0
+        ExtraOutputs:
+          Variable: false
+        Group:
+          String: ""
+        LODMode:
+          ItemIndex: 0
+          ItemList: "Auto : Custom"
+        LODValue:
+          Variable: 0.0
+        Output:
+          ClassType1: COLOR
+          IOType: 1
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        PixelSize:
+          IOType: 1
+          Variable: [0.0, 0.0]
+        ScriptName:
+          String: normalTex
+        SortIndex:
+          Variable: 1
+        TextureSize:
+          IOType: 1
+          Variable: [0.0, 0.0]
+        Title:
+          String: Normal basic
+        Tooltip:
+          String: ""
+        Type:
+          ItemIndex: 1
+          ItemList: "2D Map : Normal Map : View Space Depth Map"
+        UVCoord:
+          Connection0:
+            NodeLevelID: 11
+            PortID: UVCoord
+          Variable: [0.0, 0.0]
+      PositionX: -670
+      PositionY: 130
+      TemplateID: nodes_inputs_parameters_image
+      Title1: Texture 2D Parameter
+      Title2: Normal basic
+    Node7:
+      DependencyIndex: 7
+      LevelID: 0
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Channels:
+          ItemIndex: 5
+          ItemList: "xyzw : rgba : xyz : rgb : xy : x"
+        Default:
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        EnableMax:
+          Variable: true
+        EnableMin:
+          Variable: true
+        Group:
+          String: ""
+        Max:
+          Variable: 20.0
+        Min:
+          Variable: 1.0
+        Output:
+          IOType: 1
+          Variable: [0.0, 0.0, 0.0, 0.0]
+        ScriptName:
+          String: Tweak_N0
+        SortIndex:
+          Variable: 0
+        Step:
+          Variable: 0.1
+        Title:
+          String: leather_scale
+        Tooltip:
+          String: ""
+      PositionX: -1120
+      PositionY: -230
+      TemplateID: nodes_inputs_parameters_float
+      Title1: Float Parameter
+      Title2: leather_scale
+    Node8:
+      CommentSizeX: 0
+      CommentSizeY: 0
+      DependencyIndex: 8
+      LevelID: 14
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Center:
+          Variable: [0.0, 0.0]
+        CoordsIn:
+          Connection0:
+            NodeLevelID: 11
+            PortID: UVCoord
+          Variable: [0.0, 0.0]
+        CoordsOut:
+          IOType: 1
+          Variable: [0.0, 0.0]
+        Scale:
+          Connection0:
+            NodeLevelID: 0
+            PortID: Output
+          Variable: [2.0, 2.0]
+      PositionX: -865
+      PositionY: -317
+      TemplateID: nodes_functions_coords_scale
+      Title1: Scale Coords
+    Node9:
+      CommentSizeX: 0
+      CommentSizeY: 0
+      DependencyIndex: 9
+      LevelID: 13
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Coords:
+          ItemIndex: 2
+          ItemList: "UV Coord 0 : UV Coord 1 : Custom"
+        Depth:
+          IOType: 1
+          Variable: 0.0
+        ExtraOutputs:
+          Variable: false
+        Group:
+          String: ""
+        LODMode:
+          ItemIndex: 0
+          ItemList: "Auto : Custom"
+        LODValue:
+          Variable: 0.0
+        Output:
+          ClassType1: COLOR
+          IOType: 1
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        PixelSize:
+          IOType: 1
+          Variable: [0.0, 0.0]
+        ScriptName:
+          String: Tweak_N13
+        SortIndex:
+          Variable: 1
+        TextureSize:
+          IOType: 1
+          Variable: [0.0, 0.0]
+        Title:
+          String: Normal_leather
+        Tooltip:
+          String: ""
+        Type:
+          ItemIndex: 1
+          ItemList: "2D Map : Normal Map : View Space Depth Map"
+        UVCoord:
+          Connection0:
+            NodeLevelID: 14
+            PortID: CoordsOut
+          Variable: [0.0, 0.0]
+      PositionX: -684
+      PositionY: -319
+      TemplateID: nodes_inputs_parameters_image
+      Title1: Texture 2D Parameter
+      Title2: Normal_leather
+  IsSubGraph0: true
+  IsSubGraph1: true
+  IsSubGraph2: true
+  IsSubGraph3: true
+  LevelID: 0
+  NodeType: 3
+  PositionX: 0
+  PositionY: 0
+  TemplateID: nodes_main_subgraph
+  Title1: ""
+SystemID: dev.snap.shaders

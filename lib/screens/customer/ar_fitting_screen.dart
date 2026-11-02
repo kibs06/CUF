@@ -11,6 +11,7 @@ import '../../providers/product_provider.dart';
 import '../../providers/cart_provider.dart';
 import '../../providers/foot_measurement_provider.dart';
 import '../../utils/cart_helpers.dart';
+import '../../utils/foot_measurement_utils.dart' show mapNormalizedToView;
 import '../../utils/size_key.dart';
 import '../../widgets/ar_view_placeholder.dart';
 import '../../widgets/cart_icon_button.dart';
@@ -509,6 +510,7 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen>
   /// bare/men only for a customer with no scan yet. A [CardFitResult] is
   /// applied by [applyCardFitResult]; a dismissed capture (null) changes
   /// nothing.
+  // ignore: unused_element
   Future<void> _captureCardFit() async {
     final saved = Provider.of<FootMeasurementProvider>(context, listen: false)
         .latestMeasurement;
@@ -595,24 +597,6 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen>
         _startArIfReady();
       },
     );
-  }
-
-  void _switchProduct(Map<String, dynamic> product) {
-    setState(() {
-      _activeProduct = product;
-      final sizesMap = Map<String, dynamic>.from(product['sizes'] ?? {});
-      _activeSize = sizesMap.keys.firstWhere((s) => sizesMap[s] > 0, orElse: () => '39');
-      
-      // Simulate tracking relocking on shoe change — re-armed, so the previous
-      // shoe's timer is cancelled first rather than firing under the new one.
-      _isTracking.value = false;
-      _relockTimer?.cancel();
-      _relockTimer = Timer(const Duration(milliseconds: 1800), () {
-        if (mounted) {
-          _isTracking.value = true;
-        }
-      });
-    });
   }
 
   void _checkSizeAvailability() {
@@ -736,8 +720,6 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen>
 
   @override
   Widget build(BuildContext context) {
-    final productProvider = context.watch<ProductProvider>();
-    final otherProducts = productProvider.products;
     final coach = _tryOn;
     final sizesMap = Map<String, dynamic>.from(_activeProduct['sizes'] ?? {});
     final fallback = _fallback();
@@ -751,6 +733,21 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen>
           SizedBox.expand(
             child: ARViewPlaceholder(arView: _tryOnArView()),
           ),
+
+          // Test box: foot detection overlay (box + status) driven by the
+          // live detection ticks. Painted with TextPainter (no Text widgets)
+          // so widget tests are unaffected. Hidden when no session exists.
+          if (coach != null)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: ValueListenableBuilder<TryOnDetectionFrame?>(
+                  valueListenable: coach.lastDetection,
+                  builder: (context, frame, _) => CustomPaint(
+                    painter: _TryOnDetectionPainter(frame: frame),
+                  ),
+                ),
+              ),
+            ),
 
           // Why the slot is a placeholder, when it is one — and a Retry when
           // a second attempt could undo it. Hidden while the real view owns
@@ -918,7 +915,7 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen>
             Positioned(
               left: 20,
               right: 20,
-              bottom: 232,
+              bottom: 168,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(20),
                 child: BackdropFilter(
@@ -980,8 +977,8 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen>
             Positioned(
               left: 20,
               right: 20,
-              // V4.22: lifted to clear the zoom bar (232 + pill height).
-              bottom: 292,
+              // V4.22: lifted to clear the zoom bar (168 + pill height).
+              bottom: 228,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -1016,7 +1013,8 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen>
               ),
             ),
 
-          // Bottom overlay: Glassmorphism menu box (~210px tall)
+          // Bottom overlay: Glassmorphism menu box (status + sizes + cart;
+          // the other-products carousel was removed to give the camera room).
           Positioned(
             bottom: 20,
             left: 16,
@@ -1077,32 +1075,10 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen>
                               );
                             },
                           ),
-                          // Card fit + size availability buttons
+                          // Size availability button (Card fit hidden)
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              GestureDetector(
-                                onTap: _captureCardFit,
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.straighten,
-                                      size: 14,
-                                      color: AppConstants.accent,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      'Card fit',
-                                      style: AppConstants.bodyStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                        color: AppConstants.accent,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 16),
                               GestureDetector(
                                 onTap: _checkSizeAvailability,
                                 child: Row(
@@ -1125,41 +1101,6 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen>
                             ],
                           ),
                         ],
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Horizontal shoe variants/colors list
-                      SizedBox(
-                        height: 52,
-                        child: ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: otherProducts.length,
-                          itemBuilder: (context, index) {
-                            final prod = otherProducts[index];
-                            final isCurrent = prod['id'] == _activeProduct['id'];
-                            final String img = (prod['images'] as List).isNotEmpty ? prod['images'][0] : '';
-                            
-                            return GestureDetector(
-                              onTap: () => _switchProduct(prod),
-                              child: Container(
-                                width: 52,
-                                height: 52,
-                                margin: const EdgeInsets.only(right: 10),
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: isCurrent ? AppConstants.accent : Colors.white24,
-                                    width: isCurrent ? 2 : 1,
-                                  ),
-                                  image: DecorationImage(
-                                    image: NetworkImage(img),
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
                       ),
                       const SizedBox(height: 12),
 
@@ -1315,7 +1256,7 @@ class _ARVirtualFitScreenState extends State<ARVirtualFitScreen>
                       _buildTutorialStep(
                         icon: Icons.checkroom_outlined,
                         title: '2. Select a shoe',
-                        desc: 'Tap the circular thumbnails below to swap shoe models in real time.',
+                        desc: 'Pick your size below — the shoe rescales live on your foot.'
                       ),
                       const SizedBox(height: 20),
                       _buildTutorialStep(
@@ -1411,6 +1352,125 @@ class _TryOnStatusLine extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Test box: paints the latest foot detection over the try-on camera feed —
+/// a box around the foot plus heel/toe dots and a status line naming the
+/// backend (`onnx` / `mlkit-seg`) and the outcome (foot ✓ + confidence vs
+/// searching). TextPainter-based so widget tests are unaffected.
+///
+/// Points are normalized upright-frame coordinates mapped through the same
+/// center-crop transform as the scan overlay, so the box sits on the real
+/// foot pixels (approximately — the native view's exact crop is its own).
+class _TryOnDetectionPainter extends CustomPainter {
+  final TryOnDetectionFrame? frame;
+
+  _TryOnDetectionPainter({required this.frame});
+
+  Offset _toView(Offset normalized, Size size, int fw, int fh) =>
+      mapNormalizedToView(normalized, size,
+          frameWidth: fw, frameHeight: fh);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final f = frame;
+    final status = f == null
+        ? 'detector starting…'
+        : (f.result.footDetected
+            ? '${f.result.detectorBackend ?? 'detector'} · foot ✓ '
+                '${(f.result.confidence * 100).toStringAsFixed(0)}%'
+            : '${f.result.detectorBackend ?? 'detector'} · searching for foot…');
+    final tp = TextPainter(
+      text: TextSpan(
+        text: status,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+          shadows: [Shadow(color: Colors.black, blurRadius: 4)],
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    tp.paint(canvas, const Offset(12, 170));
+    if (f == null) return;
+    final uprightW = (f.rotationDegrees % 180) == 90
+        ? f.frameHeight
+        : f.frameWidth;
+    final uprightH = (f.rotationDegrees % 180) == 90
+        ? f.frameWidth
+        : f.frameHeight;
+    if (uprightW <= 0 || uprightH <= 0) return;
+    final box = f.result.boundingBox;
+    if (box != null) {
+      final tl = _toView(Offset(box.left, box.top), size, uprightW, uprightH);
+      final br =
+          _toView(Offset(box.right, box.bottom), size, uprightW, uprightH);
+      canvas.drawRect(
+        Rect.fromPoints(tl, br),
+        Paint()
+          ..color = f.result.footDetected
+              ? const Color(0xFF4CAF50)
+              : const Color(0xFFFFC107)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3,
+      );
+    }
+    final heel = f.result.heelPoint;
+    final toe = f.result.toePoint;
+    // Foot outline anchors: corners + edge midpoints of the detection box,
+    // so the foot reads as outlined rather than two floating dots. Gated on
+    // the box existing — no retraining, the ONNX box is already here.
+    if (box != null && f.result.footDetected) {
+      final tl = _toView(Offset(box.left, box.top), size, uprightW, uprightH);
+      final br =
+          _toView(Offset(box.right, box.bottom), size, uprightW, uprightH);
+      final tr = Offset(br.dx, tl.dy);
+      final bl = Offset(tl.dx, br.dy);
+      final midTop = Offset((tl.dx + tr.dx) / 2, (tl.dy + tr.dy) / 2);
+      final midBottom = Offset((bl.dx + br.dx) / 2, (bl.dy + br.dy) / 2);
+      final midLeft = Offset((tl.dx + bl.dx) / 2, (tl.dy + bl.dy) / 2);
+      final midRight = Offset((tr.dx + br.dx) / 2, (tr.dy + br.dy) / 2);
+      final outlinePaint = Paint()..color = const Color(0xFF4DD0E1);
+      for (final p in [tl, tr, bl, br, midTop, midBottom, midLeft, midRight]) {
+        canvas.drawCircle(p, 5, outlinePaint);
+      }
+    }
+    if (heel != null) {
+      canvas.drawCircle(
+          _toView(heel.asOffset, size, uprightW, uprightH), 8,
+          Paint()..color = const Color(0xFF4CAF50));
+    }
+    if (toe != null) {
+      canvas.drawCircle(
+          _toView(toe.asOffset, size, uprightW, uprightH), 8,
+          Paint()..color = const Color(0xFFF44336));
+    }
+    // Shoe anchors: white (heel) / teal (toe) rings drawn at the same
+    // heel/toe the shoe attaches to, visible only while a foot is detected —
+    // the "if the lens sees a foot it will appear" markers. Rings rather
+    // than fills so foot dots stay readable underneath.
+    if (f.result.footDetected) {
+      final ringHeel = Paint()
+        ..color = const Color(0xFFFFFFFF)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.5;
+      final ringToe = Paint()
+        ..color = const Color(0xFF26C6DA)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.5;
+      if (heel != null) {
+        canvas.drawCircle(_toView(heel.asOffset, size, uprightW, uprightH), 13, ringHeel);
+      }
+      if (toe != null) {
+        canvas.drawCircle(_toView(toe.asOffset, size, uprightW, uprightH), 13, ringToe);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _TryOnDetectionPainter oldDelegate) =>
+      oldDelegate.frame != frame;
 }
 
 // Custom painter for ambient scatter edge particles

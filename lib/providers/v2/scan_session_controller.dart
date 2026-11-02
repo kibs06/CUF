@@ -11,7 +11,7 @@ import '../../utils/floor_tracker.dart';
 import '../../utils/low_light_tracker.dart';
 import '../../utils/foot_follow_rect.dart';
 import '../../utils/frame_sharpness.dart';
-import '../../utils/mlkit_segmentation_foot_detector.dart';
+import '../../utils/onnx_foot_detector.dart';
 import '../../utils/try_on_coach.dart';
 import 'scan_phase.dart';
 
@@ -301,7 +301,7 @@ class ScanSessionController extends ChangeNotifier {
     this.footMode = 'both',
   })  : _arCore = arCore ?? ArCoreChannel.instance,
         _detectorFactory =
-            detectorFactory ?? MlKitSegmentationFootDetector.new {
+            detectorFactory ?? OnnxFirstFootDetector.new {
     _currentStep = planSteps.first;
   }
 

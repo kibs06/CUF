@@ -8,7 +8,7 @@ import '../services/ar_core_channel.dart';
 import '../utils/ar_foot_measurement_pipeline.dart';
 import '../utils/foot_detector.dart';
 import '../utils/foot_measurement_utils.dart';
-import '../utils/mlkit_segmentation_foot_detector.dart';
+import '../utils/onnx_foot_detector.dart';
 
 // ═══════════════════════════════════════════════════════════════
 // ONE-SHOT OUTCOME EVENTS
@@ -272,7 +272,7 @@ class AutoScanController extends ChangeNotifier {
     this.shoeCategory = 'men',
   })  : _arCore = arCore ?? ArCoreChannel.instance,
         _detectorFactory =
-            detectorFactory ?? MlKitSegmentationFootDetector.new;
+            detectorFactory ?? OnnxFirstFootDetector.new;
 
   // ── Read-only state for rendering ──
   ArTrackingState get trackingState => _trackingState;

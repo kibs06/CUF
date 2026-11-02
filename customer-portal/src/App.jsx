@@ -23,6 +23,7 @@ import OrderDetail from './pages/OrderDetail.jsx'
 import Orders from './pages/Orders.jsx'
 import ProductDetail from './pages/ProductDetail.jsx'
 import TryLens from './pages/TryLens.jsx'
+import DeepArShoe from './pages/DeepArShoe.jsx'
 import Settings from './pages/Settings.jsx'
 import SettingsAbout from './pages/SettingsAbout.jsx'
 import SettingsAddresses from './pages/SettingsAddresses.jsx'
@@ -167,6 +168,8 @@ export default function App() {
       {/* Hidden Lens Studio spike outside AppLayout: full-bleed camera page,
           no shop header/footer, no nav link. QA entry at /try-lens?product=<id>. */}
       <Route path="try-lens" element={<TryLens />} />
+      {/* DeepAR Web shoe spike (5.3.0 pinned): /deepar-shoe?product=<id>. */}
+      <Route path="deepar-shoe" element={<DeepArShoe />} />
 
       {/*
         The seller portal.

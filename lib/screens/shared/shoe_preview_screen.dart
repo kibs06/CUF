@@ -4,6 +4,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../constants/app_constants.dart';
 import '../../services/ar_try_on_channel.dart';
 import '../../services/shoe_preview_channel.dart';
+import '../../services/deepar_try_on.dart';
+import '../../services/snap_try_on_channel.dart';
 import '../../services/space_view_service.dart';
 import '../../services/try_on_prefetch.dart';
 import '../../utils/shoe_fit_view.dart';
@@ -101,6 +103,7 @@ class ShoePreviewScreen extends StatefulWidget {
     this.events,
     this.storagePath,
     this.launchExternal,
+    this.snapTryOn,
   }) : productId = null;
 
   /// The seller door: nothing is resolved yet, so this screen resolves it.
@@ -120,6 +123,7 @@ class ShoePreviewScreen extends StatefulWidget {
     this.viewBuilder,
     this.events,
     this.launchExternal,
+    this.snapTryOn,
   })  : model = null,
         modelAvailable = false,
         storagePath = null;
@@ -173,6 +177,12 @@ class ShoePreviewScreen extends StatefulWidget {
   /// takes this when it is given (same injectable shape as
   /// `launchSpaceView`'s `launch`). Null opens the real browser.
   final Future<bool> Function(Uri uri)? launchExternal;
+
+  /// Test seam: the native Snap camera instead of the real one — the channel
+  /// cannot answer under `flutter test` (`MissingPluginException`), so the
+  /// pill takes this when it is given. Null uses the real plugin, whose
+  /// refusal falls back to the web lens exactly like an unconfigured build.
+  final SnapTryOnChannel? snapTryOn;
 
   /// The bucket path of the live model (`product_models.storage_path`), so
   /// the space view can point Scene Viewer at the same public file the
@@ -291,14 +301,66 @@ class _ShoePreviewScreenState extends State<ShoePreviewScreen> {
       _productId != null &&
       AppConstants.snapLensProductIds.contains(_productId);
 
-  /// **"Try on Snap"** — the web lens, opened in the phone browser where the
-  /// camera permissions are clean. A refused launch is a sentence, never a
-  /// throw (same rule as [_openSpaceView]).
-  Future<void> _openSnapLens() async {
+  /// Whether the **"Try on DeepAR"** pill is offered: customer door only,
+  /// and only for a product with a bundled `.deepar` effect (see
+  /// [kDeepArBundledEffects]). Luna Loafers first.
+  bool get _showDeepAr =>
+      widget.showTryOn &&
+      _productId != null &&
+      deepArEffectForProduct(_productId!) != null;
+
+  /// **"Try on DeepAR"** — always the live web page in the phone browser.
+  /// Native SDKs dropped foot tracking, and an in-app WebView leaves the
+  /// camera stretched / permission-blocked, so this just redirects to the
+  /// portal's `/deepar-shoe` page (DeepAR Web 5.6.3, feet still there).
+  /// A refused launch is a sentence, never a throw (same rule as
+  /// [_openSpaceView]).
+  Future<void> _openDeepAr() async {
     final productId = _productId;
     if (productId == null) return;
     final launch = widget.launchExternal ??
         (Uri uri) => launchUrl(uri, mode: LaunchMode.externalApplication);
+    try {
+      final ok = await launch(
+        Uri.parse(AppConstants.deepArShoeUrl(productId)),
+      );
+      if (!mounted || ok) return;
+    } catch (_) {
+      if (!mounted) return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Could not open the DeepAR try-on just now.'),
+      ),
+    );
+  }
+
+  /// **"Try on Snap"** — the native in-app Camera Kit camera when the plugin
+  /// answers, else the web lens in the phone browser where the camera
+  /// permissions are clean. A refused launch is a sentence, never a throw
+  /// (same rule as [_openSpaceView]).
+  Future<void> _openSnapLens() async {
+    final productId = _productId;
+    if (productId == null) return;
+    // Read off `widget` before the first await: both entries are needed
+    // after it, and a State must not touch `widget` across an async gap.
+    final snap = widget.snapTryOn ?? const SnapTryOnChannel();
+    final launch = widget.launchExternal ??
+        (Uri uri) => launchUrl(uri, mode: LaunchMode.externalApplication);
+    try {
+      if (await snap.launchSnapTryOn(
+        apiToken: kCameraKitApiToken,
+        lensGroupId: kCameraKitLensGroupId,
+        lensId: kCameraKitLensId,
+      )) {
+        if (!mounted) return;
+        return;
+      }
+    } on SnapTryOnUnavailable {
+      // No native camera (iOS, unconfigured build, or it refused): the web
+      // lens below is the fallback, not a second attempt.
+    }
+    if (!mounted) return;
     try {
       final ok = await launch(Uri.parse(AppConstants.snapLensUrl(productId)));
       if (!mounted || ok) return;
@@ -337,6 +399,7 @@ class _ShoePreviewScreenState extends State<ShoePreviewScreen> {
   /// **"Capture to fit": the AR screen, closed by the foot's first capture.** The pose it hands back
   /// sets the viewer's orientation, top-down camera and size. A capture with no usable pose leaves
   /// the viewer on its current fit.
+  // ignore: unused_element
   Future<void> _captureFit() async {
     final pose = await _openAr(captureFit: true);
     if (!mounted || pose == null) return;
@@ -549,19 +612,22 @@ class _ShoePreviewScreenState extends State<ShoePreviewScreen> {
                               ),
                             ),
                           ),
-                        // Three equal pills: capture, Snap, AR. Snap sits in
-                        // the middle with the primary fill so the main action
-                        // reads first despite the equal width.
+                        // AR + Snap (lensed products only). Capture to fit is
+                        // hidden for now; _captureFit stays for re-enable.
                         Row(
                           children: [
-                            Expanded(
-                              child: SoleARPill(
-                                onPressed: _captureFit,
-                                label: 'Capture to fit',
+                            if (_showDeepAr) ...[
+                              Expanded(
+                                child: SoleARPill(
+                                  onPressed: _openDeepAr,
+                                  label: 'Try on DeepAR',
+                                  background: AppConstants.accent,
+                                  foreground: AppConstants.inkInverse,
+                                ),
                               ),
-                            ),
-                            if (_showSnapLens) ...[
                               const SizedBox(width: 8),
+                            ],
+                            if (_showSnapLens) ...[
                               Expanded(
                                 child: SoleARPill(
                                   onPressed: _openSnapLens,
@@ -570,8 +636,8 @@ class _ShoePreviewScreenState extends State<ShoePreviewScreen> {
                                   foreground: AppConstants.inkInverse,
                                 ),
                               ),
+                              const SizedBox(width: 8),
                             ],
-                            const SizedBox(width: 8),
                             Expanded(
                               child: SoleARPill(onPressed: _openArTryOn),
                             ),

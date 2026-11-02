@@ -1,6 +1,8 @@
 # Ultralytics YOLO-pose dataset config: portal foot detector.
-# One class (foot) with two keypoints (heel, toe). Paths are relative to
-# this file's directory.
+# One class (foot) with two keypoints (heel, toe).
+# NOTE: Ultralytics resolves a relative `path:` against its own datasets_dir,
+# not against this file — on Colab rewrite it to the absolute VM path
+# (like the SynFoot notebooks do) before training.
 
 path: datasets/foot
 train: images/train

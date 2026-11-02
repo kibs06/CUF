@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.62+70
+version: 1.0.63+71
 
 environment:
   sdk: ^3.12.1
@@ -74,7 +74,7 @@ dependencies:
   app_badge_plus: 1.3.2
   mobile_scanner: ^7.4.0
   camera: ^0.12.0+2
-  permission_handler: ^12.0.3
+  permission_handler: ^11.4.0
   google_mlkit_pose_detection: ^0.14.0
   google_mlkit_selfie_segmentation: ^0.10.1
   google_mlkit_commons: ^0.11.0
@@ -105,6 +105,8 @@ dependencies:
   workmanager: ^0.10.10
   # Manual foot-size wizard: horizontal wheel for the EU half-size list.
   wheel_picker: ^0.4.0
+  deepar_flutter_plus: ^0.2.1
+  webview_flutter: ^4.10.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -163,6 +165,10 @@ flutter:
     # wants, drawn rather than described (lib/widgets/shoe_model_request_tile.dart).
     - assets/images/measure_shoe.svg
     - video/locals.mp4
+    # DeepAR shoe spike (Step 1): Studio-exported foot-tracking effect for
+    # Luna Loafers (7.2 MiB, DA01 binary). Loaded via deepar_flutter_plus
+    # once keys + deepar.aar land; see docs/DEEPAR_SHOE_TRY_ON_SPIKE.md.
+    - assets/effects/luna_loafers.deepar
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

@@ -5,6 +5,13 @@
   "SENTRY_DSN": "https://YOUR_DSN@sentry.io/PROJECT_ID",
   "GOOGLE_SERVER_CLIENT_ID": "YOUR-WEB-CLIENT-ID.apps.googleusercontent.com",
 
+  "CAMERAKIT_API_TOKEN": "",
+  "CAMERAKIT_LENS_GROUP_ID": "",
+  "CAMERAKIT_LENS_ID": "",
+
+  "DEEPAR_ANDROID_KEY": "",
+  "DEEPAR_IOS_KEY": "",
+
   "SHOE_MODEL_UPLOAD": true,
   "SHOE_MODEL_REQUEST": true,
   "ADMIN_MODEL_UPLOAD": true,

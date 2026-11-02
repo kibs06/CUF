@@ -59,6 +59,11 @@ android/key.properties
 *.jks
 *.keystore
 
+# DeepAR native SDK (36 MB, downloaded per machine from developer.deepar.ai).
+# The Flutter side (`deepar_flutter_plus`) needs android/app/libs/deepar.aar
+# to build; the spike doc tells where it comes from. Do not commit it.
+android/app/libs/deepar.aar
+
 # Local backup secrets + outputs (see backup/README)
 backup/config.ps1
 backup/backups/
@@ -81,3 +86,4 @@ skills-lock.json
 # Freebuff session transcripts — a local record of one conversation, not
 # documentation for the project.
 freebuff-chat-*.md
+.vercel

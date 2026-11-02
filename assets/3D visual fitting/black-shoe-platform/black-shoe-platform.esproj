@@ -1,0 +1,54 @@
+studioVersion:
+  major: 5
+  minor: 24
+  patch: 1
+  build: 26100516
+  type: Public
+coreVersion: 377
+clientVersion: 14.21
+updateCheckpoint: 107
+sceneId: 0a1ccb1a-fe88-4fbb-9883-e3af3c75fd99
+metaInfo:
+  hints:
+    []
+  tags:
+    []
+  lensName: Luna Loafers
+  lensDescriptors:
+    - GEN_AI_ICON
+  lensApplicableContext:
+    - live_camera
+    - reply_camera
+    - video_chat
+  lensApplicability:
+    - Back
+  lensClientCompatibilities:
+    - Mobile
+    - CameraKit
+  platformBundlesEnabled: false
+  iconHash: ea75e764e89632eff4bf71cdd8259be3
+  videoPreviewHash: 726341c8043b80003a24e78f6db7c666
+  localizationsHash: ""
+  fromTemplateName: Footwear Try On
+  fromTemplateUrl: Lens Studio 5.24.1.26100516
+  activationCamera: Rear
+  sourceMapEnabled: false
+  shaderCacheInvalidationEnabled: false
+  usingMinClientVersions: false
+  androidMinClientVersion:
+    major: 0
+    minor: 0
+    patch: 0
+    build: 0
+  iOSMinClientVersion:
+    major: 0
+    minor: 0
+    patch: 0
+    build: 0
+  documentId: 20c3d729-4049-405a-b1ae-99d2f42b6596
+  originalDocumentId: 872e2021-fd0d-41cc-a1ff-2d9b34af7ac7
+  packageId: ""
+  packageVersion: ""
+  spkPrivilegeLevel: Generic
+  gluboEnabled: false
+targetPlatform: Snapchat

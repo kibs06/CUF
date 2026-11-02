@@ -4,6 +4,8 @@
 datasets/raw/
 datasets/foot/
 datasets/public/
+datasets/synfoot/
 runs/
 *.pt
 *.onnx
+*.zip

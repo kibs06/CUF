@@ -324,9 +324,13 @@ class _FootArScanScreenState extends State<FootArScanScreen>
     );
   }
 
-  /// Debug overlay that draws the extracted heel/toe/width points on the
-  /// camera preview so on-device testing can verify the segmentation mask
-  /// coordinates align with the real foot (the §6/§8 validation step).
+  /// Test overlay: draws a box around the detected foot plus the extracted
+  /// heel/toe/width points, so on-device testing can see whether the
+  /// detector fires and where it thinks the foot is.
+  ///
+  /// Always draws the status line (backend + foot found / searching) while
+  /// the toggle is on — a blank screen never tells a tester whether the
+  /// loop runs. Points/box paint only when the latest frame produced them.
   ///
   /// The native AR preview renders the camera with center-crop (fill): the
   /// full frame is scaled to cover the view, cropping the excess on one axis.
@@ -335,12 +339,6 @@ class _FootArScanScreenState extends State<FootArScanScreen>
   /// from the real foot pixels near the cropped edges.
   Widget _buildDebugOverlay() {
     final detection = _scan.lastDetection;
-    if (detection == null ||
-        !detection.footDetected ||
-        detection.heelPoint == null ||
-        detection.toePoint == null) {
-      return const SizedBox.shrink();
-    }
 
     final uprightW = (_scan.lastFrameRotation % 180) == 90
         ? _scan.lastFrameHeight
@@ -349,7 +347,7 @@ class _FootArScanScreenState extends State<FootArScanScreen>
         ? _scan.lastFrameWidth
         : _scan.lastFrameHeight;
 
-    // Draw the confidence readout below the top bar (which occupies
+    // Draw the status readout below the top bar (which occupies
     // padding.top + 12, roughly 40px tall) so it isn't obscured.
     final textTop = MediaQuery.of(context).padding.top + 64;
 
@@ -357,10 +355,13 @@ class _FootArScanScreenState extends State<FootArScanScreen>
       child: IgnorePointer(
         child: CustomPaint(
           painter: _DebugDetectionPainter(
-            heel: detection.heelPoint!,
-            toe: detection.toePoint!,
-            widthPoints: detection.widthPoints,
-            confidence: detection.confidence,
+            heel: detection?.heelPoint,
+            toe: detection?.toePoint,
+            widthPoints: detection?.widthPoints,
+            boundingBox: detection?.boundingBox,
+            backend: detection?.detectorBackend,
+            footFound: detection?.footDetected ?? false,
+            confidence: detection?.confidence ?? 0.0,
             frameWidth: uprightW,
             frameHeight: uprightH,
             textTop: textTop,
@@ -863,20 +864,26 @@ class _FootArScanScreenState extends State<FootArScanScreen>
 /// the drawn markers should sit on the actual foot pixels (the whole point
 /// of this debug view).
 class _DebugDetectionPainter extends CustomPainter {
-  final FootPoint heel;
-  final FootPoint toe;
+  final FootPoint? heel;
+  final FootPoint? toe;
   final List<FootPoint>? widthPoints;
+  final Rect? boundingBox;
+  final String? backend;
+  final bool footFound;
   final double confidence;
   final int frameWidth;
   final int frameHeight;
 
-  /// Y position of the confidence readout (below the top bar).
+  /// Y position of the status readout (below the top bar).
   final double textTop;
 
   const _DebugDetectionPainter({
     required this.heel,
     required this.toe,
     required this.widthPoints,
+    required this.boundingBox,
+    required this.backend,
+    required this.footFound,
     required this.confidence,
     required this.frameWidth,
     required this.frameHeight,
@@ -895,14 +902,31 @@ class _DebugDetectionPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final heelPos = _toView(heel.asOffset, size);
-    final toePos = _toView(toe.asOffset, size);
+    // ── Foot bounding box (the test signal: box on foot = detector fires) ──
+    if (boundingBox != null) {
+      final tl = _toView(
+          Offset(boundingBox!.left, boundingBox!.top), size);
+      final br = _toView(
+          Offset(boundingBox!.right, boundingBox!.bottom), size);
+      final boxPaint = Paint()
+        ..color = footFound
+            ? const Color(0xFF4CAF50)
+            : const Color(0xFFFFC107)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3;
+      canvas.drawRect(Rect.fromPoints(tl, br), boxPaint);
+    }
+
+    final heelPos = heel == null ? null : _toView(heel!.asOffset, size);
+    final toePos = toe == null ? null : _toView(toe!.asOffset, size);
 
     // ── Heel→toe axis line (length) ──
-    final axisPaint = Paint()
-      ..color = const Color(0xAA4CAF50)
-      ..strokeWidth = 2.5;
-    canvas.drawLine(heelPos, toePos, axisPaint);
+    if (heelPos != null && toePos != null) {
+      final axisPaint = Paint()
+        ..color = const Color(0xAA4CAF50)
+        ..strokeWidth = 2.5;
+      canvas.drawLine(heelPos, toePos, axisPaint);
+    }
 
     // ── Width pair line ──
     if (widthPoints != null && widthPoints!.length >= 2) {
@@ -922,35 +946,42 @@ class _DebugDetectionPainter extends CustomPainter {
     }
 
     // ── Heel marker (green) + label ──
-    final heelFill = Paint()..color = const Color(0xFF4CAF50);
-    canvas.drawCircle(heelPos, 8, heelFill);
-    canvas.drawCircle(
-      heelPos,
-      8,
-      Paint()
-        ..color = Colors.white
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2,
-    );
-    _drawLabel(canvas, heelPos, 'H');
+    if (heelPos != null) {
+      final heelFill = Paint()..color = const Color(0xFF4CAF50);
+      canvas.drawCircle(heelPos, 8, heelFill);
+      canvas.drawCircle(
+        heelPos,
+        8,
+        Paint()
+          ..color = Colors.white
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2,
+      );
+      _drawLabel(canvas, heelPos, 'H');
+    }
 
     // ── Toe marker (orange/red) + label ──
-    final toeFill = Paint()..color = const Color(0xFFF44336);
-    canvas.drawCircle(toePos, 8, toeFill);
-    canvas.drawCircle(
-      toePos,
-      8,
-      Paint()
-        ..color = Colors.white
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2,
-    );
-    _drawLabel(canvas, toePos, 'T');
+    if (toePos != null) {
+      final toeFill = Paint()..color = const Color(0xFFF44336);
+      canvas.drawCircle(toePos, 8, toeFill);
+      canvas.drawCircle(
+        toePos,
+        8,
+        Paint()
+          ..color = Colors.white
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2,
+      );
+      _drawLabel(canvas, toePos, 'T');
+    }
 
-    // ── Confidence text (top-left) ──
+    // ── Status text (top-left): backend + foot found / searching ──
+    final status = footFound
+        ? '${backend ?? 'detector'} · foot ✓ ${(confidence * 100).toStringAsFixed(0)}%'
+        : '${backend ?? 'detector'} · searching for foot…';
     final confidenceText = TextPainter(
       text: TextSpan(
-        text: 'conf ${(confidence * 100).toStringAsFixed(0)}%',
+        text: status,
         style: const TextStyle(
           color: Colors.white,
           fontSize: 12,
@@ -996,6 +1027,9 @@ class _DebugDetectionPainter extends CustomPainter {
         oldDelegate.frameWidth != frameWidth ||
         oldDelegate.frameHeight != frameHeight ||
         oldDelegate.widthPoints != widthPoints ||
+        oldDelegate.boundingBox != boundingBox ||
+        oldDelegate.backend != backend ||
+        oldDelegate.footFound != footFound ||
         oldDelegate.textTop != textTop;
   }
 }

@@ -1,0 +1,60 @@
+import 'package:app/services/deepar_try_on.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  group('deepArEffectForProduct', () {
+    test('blank product id has no effect', () {
+      expect(deepArEffectForProduct('  '), isNull);
+    });
+
+    test('returns Luna effect for known product', () {
+      expect(
+        deepArEffectForProduct(
+          '0aebaa64-4d9e-44f8-8876-6b3ee9855fae',
+        ),
+        'assets/effects/luna_loafers.deepar',
+      );
+      expect(
+        deepArEffectForProduct('luna-loafers'),
+        'assets/effects/luna_loafers.deepar',
+      );
+    });
+
+    test('unknown product has no effect yet', () {
+      expect(deepArEffectForProduct('abc123'), isNull);
+    });
+
+    test('respects published allow-list', () {
+      const luna = '0aebaa64-4d9e-44f8-8876-6b3ee9855fae';
+      expect(
+        deepArEffectForProduct(luna, published: {luna}),
+        isNotNull,
+      );
+      expect(
+        deepArEffectForProduct(luna, published: {'other'}),
+        isNull,
+      );
+    });
+  });
+
+  group('deepArUnavailableMessage', () {
+    test('unconfigured build names setup', () {
+      expect(
+        deepArUnavailableMessage(configured: false),
+        contains('not set up'),
+      );
+    });
+
+    test('configured build without effect names product', () {
+      expect(
+        deepArUnavailableMessage(configured: true),
+        contains('No DeepAR shoe effect'),
+      );
+    });
+  });
+
+  test('deepArConfigured is false without dart-defines', () {
+    // No --dart-define passed under flutter test, so both keys are empty.
+    expect(deepArConfigured, isFalse);
+  });
+}

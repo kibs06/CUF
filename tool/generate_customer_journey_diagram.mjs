@@ -40,17 +40,19 @@ const CIRCLE = 48;
 const lineH = (lines) => lines.length * LINE;
 
 // ------------------------------------------------------------------ styles --
+const ADAPT = 'strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);';
 const S = {
-  proc: 'rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;',
-  decision: 'rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=13;fontColor=#000000;perimeter=rhombusPerimeter;',
-  terminator: 'ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=14;fontStyle=1;fontColor=#000000;',
-  offpage: 'shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=12;fontStyle=1;fontColor=#000000;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;',
-  onpage: 'ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;fontSize=15;fontStyle=1;fontColor=#000000;aspect=fixed;perimeter=ellipsePerimeter;',
-  note: 'rounded=0;whiteSpace=wrap;html=1;dashed=1;dashPattern=4 4;fillColor=none;strokeColor=#000000;fontSize=12;fontColor=#000000;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=10;',
-  title: 'text;html=1;fontSize=22;fontStyle=1;align=left;verticalAlign=middle;fontColor=#000000;',
-  subtitle: 'text;html=1;fontSize=12;align=left;verticalAlign=middle;fontColor=#000000;',
+  proc: `rounded=0;whiteSpace=wrap;html=1;fillColor=none;${ADAPT}fontSize=13;`,
+  decision: `rhombus;whiteSpace=wrap;html=1;fillColor=none;${ADAPT}fontSize=13;perimeter=rhombusPerimeter;`,
+  terminator: `ellipse;whiteSpace=wrap;html=1;fillColor=none;${ADAPT}fontSize=14;fontStyle=1;`,
+  offpage: `shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;${ADAPT}fontSize=12;fontStyle=1;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;`,
+  onpage: `ellipse;whiteSpace=wrap;html=1;fillColor=none;${ADAPT}fontSize=15;fontStyle=1;aspect=fixed;perimeter=ellipsePerimeter;`,
+  db: `shape=cylinder;whiteSpace=wrap;html=1;fillColor=none;${ADAPT}fontSize=13;fontStyle=1;`,
+  note: `rounded=0;whiteSpace=wrap;html=1;dashed=1;dashPattern=4 4;fillColor=none;${ADAPT}fontSize=12;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=10;`,
+  title: 'text;html=1;fontSize=22;fontStyle=1;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);',
+  subtitle: 'text;html=1;fontSize=12;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);',
 };
-const EDGE = 'edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=classic;endFill=1;strokeColor=#000000;strokeWidth=1.5;fontSize=11;fontColor=#000000;labelBackgroundColor=none;';
+const EDGE = 'edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=11;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;';
 
 // ------------------------------------------------------------------- pages --
 const META = [
@@ -62,12 +64,11 @@ const META = [
   { n: 6, name: 'Home', slug: 'home' },
   { n: 7, name: 'Browse the shops', slug: 'browse-the-shops' },
   { n: 8, name: 'Try the shoes on', slug: 'try-the-shoes-on' },
-  { n: 9, name: 'Make it their own', slug: 'make-it-their-own' },
-  { n: 10, name: 'Cart and payment', slug: 'cart-and-payment' },
-  { n: 11, name: 'Track the order', slug: 'track-the-order' },
-  { n: 12, name: 'Talk to the shop', slug: 'talk-to-the-shop' },
-  { n: 13, name: 'Profile and settings', slug: 'profile-and-settings' },
-  { n: 14, name: 'Settings in detail', slug: 'settings-in-detail' },
+  { n: 9, name: 'Cart and payment', slug: 'cart-and-payment' },
+  { n: 10, name: 'Track the order', slug: 'track-the-order' },
+  { n: 11, name: 'Talk to the shop', slug: 'talk-to-the-shop' },
+  { n: 12, name: 'Profile and settings', slug: 'profile-and-settings' },
+  { n: 13, name: 'Settings in detail', slug: 'settings-in-detail' },
 ];
 const byNumber = (n) => META.find((m) => m.n === n);
 const listNumbers = (list) =>
@@ -90,6 +91,7 @@ class PageBuilder {
     this.pendingEntries = null;
     this.pendingSpineLabel = null;
     this.pendingCircles = [];
+    this.pendingSocial = [];
     this.counter = 0;
     this.noteCount = 0;
   }
@@ -341,8 +343,105 @@ class PageBuilder {
     return prev;
   }
 
+  /** Paper-style: proc with an inline DB1 circle below it in the spine flow,
+   *  like "Save Customer to Database -> DB1 -> next". The DB1 becomes the
+   *  new spine tail so the next step connects from DB1, exactly on paper. */
+  procDB(name, lines, opts = {}) {
+    const proc = this.proc(name, lines, opts);
+    const size = 48;
+    const x = Math.round(proc.x + proc.w / 2 - size / 2);
+    const y = proc.y + proc.h + 12;
+    const c = this.add('onpage', `db1-${name}`, ['DB1'], x, y, size, size);
+    this.edge(proc.id, c.id, { fromSide: 'bottom', toSide: 'top' });
+    this.spineLast = c;
+    this.spineY = y + size + GAP;
+    return proc;
+  }
+
+  /** Paper-style: decision with an inline DB1 circle on its spine answer,
+   *  e.g. "Check in Database -> DB1 -> Does it exist?". Branch edge still
+   *  leaves from the decision; the down spine path goes via DB1. */
+  decisionDB(name, lines, opts = {}) {
+    const d = this.decision(name, lines, opts);
+    const label = this.pendingSpineLabel;
+    this.pendingSpineLabel = null;
+    const size = 48;
+    const x = Math.round(d.x + d.w / 2 - size / 2);
+    const y = d.y + d.h + 12;
+    const c = this.add('onpage', `db1-${name}`, ['DB1'], x, y, size, size);
+    this.edge(d.id, c.id, { fromSide: 'bottom', toSide: 'top', label });
+    this.spineLast = c;
+    this.spineY = y + size + GAP;
+    return d;
+  }
+
+  /** Paper-style social login choice after a plain spine decision
+   *  ("How do they sign up / sign in?"). Adds two narrow Google and
+   *  Facebook boxes on the left plus a DB1 circle each, with short links
+   *  from the decision. Trunk edges from each DB1 down to `trunkTo` (a
+   *  spine box defined later on the page) are materialised in finish(),
+   *  like the on-page circles. Staggered lanes keep every connector clear. */
+  socialPair(trunkToName) {
+    const d = this.lastDecision;
+    if (!d) throw new Error('socialPair() without a decision');
+    const midY = Math.round(d.y + d.h / 2);
+    const W = 170;
+    const gLines = ['Continue with', 'Google — pick', 'an account.', 'Saved to the Database.'];
+    const fLines = ['Continue with', 'Facebook — pick', 'an account.', 'Saved to the Database.'];
+    const gh = lineH(gLines) + PROC_PAD;
+    const fh = lineH(fLines) + PROC_PAD;
+    const gy = Math.round(midY - gh / 2);
+    const g = this.add('proc', 'social-google', gLines, 30, gy, W, gh);
+    this.edge(d.id, g.id, { fromSide: 'left', toSide: 'right', label: 'Google' });
+    const dg = this.add('onpage', 'db1-social-google', ['DB1'], 340, gy - 60, 48, 48);
+    this.edge(g.id, dg.id, { fromSide: 'top', toSide: 'bottom' });
+    const fy = gy + gh + GAP;
+    const f = this.add('proc', 'social-facebook', fLines, 30, fy, W, fh);
+    this.edge(d.id, f.id, { fromSide: 'left', toSide: 'right' });
+    const df = this.add('onpage', 'db1-social-facebook', ['DB1'], 292, Math.round(fy + fh / 2 - 24), 48, 48);
+    this.edge(f.id, df.id, { fromSide: 'right', toSide: 'left' });
+    this.pendingSocial.push({ trunkTo: this.id(trunkToName), from: [dg.id, df.id] });
+    return [g, f];
+  }
+
+  /** Paper-style legend footer: DB pentagon <-> Database cylinder <-> DB1
+   *  circle with double-headed arrows, plus the meaning note. Placed below
+   *  all content. Short 20px links are skipped by the crossing check. */
+  databaseFooter() {
+    const bottom = Math.max(...this.shapes.map((s) => s.y + s.h), this.spineY);
+    const y = bottom + GAP;
+    const h = 72;
+    const pent = this.add('offpage', 'db', ['DB'], 50, y, 120, h);
+    const cyl = this.add('db', 'database', ['Database'], 190, y, 200, h);
+    const size = 48;
+    const c = this.add('onpage', 'db1-legend', ['DB1'], 410, y + (h - size) / 2, size, size);
+    this.edge(pent.id, cyl.id, { fromSide: 'right', toSide: 'left', double: true });
+    this.edge(cyl.id, c.id, { fromSide: 'right', toSide: 'left', double: true });
+    const noteLines = ['DB steps touch the Database;', 'DB1 marks where in the flow.'];
+    const nh = lineH(noteLines) + 34;
+    const ny = y + (h - nh) / 2;
+    this.noteCount += 1;
+    const note = this.add('note', 'db-note', noteLines, 480, ny, 330, nh);
+    this.edge(c.id, note.id, { fromSide: 'right', toSide: 'left' });
+    this.spineY = Math.max(this.spineY, y + h + GAP);
+    return cyl;
+  }
+
   finish() {
     this._materialiseCircles();
+    for (const spec of this.pendingSocial) {
+      const target = this.shapes.find((s) => s.id === spec.trunkTo);
+      if (!target) throw new Error(`page ${this.meta.n}: socialPair trunk missing ${spec.trunkTo}`);
+      const fracs = [0.8, 0.6];
+      spec.from.forEach((fid, i) => {
+        this.edge(fid, spec.trunkTo, {
+          fromSide: 'bottom',
+          toSide: 'left',
+          toFrac: fracs[i],
+          waypoints: 'mid',
+        });
+      });
+    }
     const bottom = Math.max(...this.shapes.map((s) => s.y + s.h), this.spineY);
     return {
       meta: this.meta,
@@ -373,23 +472,27 @@ page(1, (b) => {
   b.decision('firsttime', ['First time', 'opening it?'], { down: 'No' });
   b.branch('right', 'slides', ['Show the three welcome', 'slides — they can skip them.'], { label: 'Yes' });
   b.circleJump('right', 'A', 'screen', 0.5);
-  b.proc('screen', ['Show the Sign up and Sign in', 'screen. One screen — the video', 'keeps playing.']);
-  b.decision('whichtap', ['What do they tap?']);
+  b.proc('screen', ['Show the Sign up and Sign in', 'screen with Continue with', 'Google and Facebook buttons.', 'One screen — the video', 'keeps playing.']);
+  b.decision('whichtap', ['What do they tap?', 'Sign up, Sign in,', 'Google or Facebook?']);
   b.branchExit('right', 2, { label: 'Sign up' });
   b.branchExit('left', 5, { label: 'Sign in' });
   b.note('left', ['Shop owners tap Apply to sell', 'and fill in a different form.']);
   b.note('right', ['Sign in is a switch on the', 'same screen — the video', 'never restarts.']);
+  b.databaseFooter();
   b.legend = [
     'How to read this chart:',
     'oval = the start or the end  ·  rectangle = a step  ·  diamond = a question',
     'pentagon = the story continues on the page written inside it',
     'small circle with a letter = the flow jumps back to the same letter',
+    'DB pentagon = go to the Database  ·  DB1 circle = Database step in the flow',
   ];
 });
 
 // 2 — Create an account
 page(2, (b) => {
-  b.entry(1, ['they tapped Sign up']);
+  b.entry(1, ['they tapped Sign up,', 'Google or Facebook']);
+  b.decision('method', ['How do they sign up?'], { down: 'Fill in the form' });
+  b.socialPair('create');
   b.proc('form', ['They fill in the Create Account form:',
     'name · email · phone if they like,',
     'birthday by picking a date —',
@@ -401,13 +504,16 @@ page(2, (b) => {
   b.decision('filled', ['Is every box filled', 'in right, Terms accepted?'], { down: 'Yes' });
   b.branch('right', 'fixbox', ['Show a message on the box', 'that needs fixing.'], { label: 'No' });
   b.circleJump('right', 'A', 'form', 0.28);
-  b.decision('emailused', ['Is this email', 'already registered?'], { down: 'No' });
+  b.decisionDB('emailused', ['Is this email', 'already registered?', 'in the Database?'], { down: 'No' });
   b.branch('right', 'used', ['Tell them the email is already',
     'in use — they can sign in or',
     'use another one.'], { label: 'Yes' });
   b.circleJump('right', 'B', 'form', 0.78);
-  b.proc('create', ['Create the account.']);
+  b.procDB('create', ['Create the account.', 'Saved to the Database.']);
+  b.decision('verified', ['Did they use', 'Google or Facebook', 'with a verified email?'], { down: 'No' });
+  b.branchExit('left', 4, { label: 'Yes' });
   b.decision('confirmneed', ['Must the email', 'be confirmed? Usual is yes.'], { down: 'Yes' });
+  { const e = b.edges.find((v) => v.from === b.id('verified') && v.to === b.id('confirmneed')); if (e) e.label = 'No, email form'; }
   b.branchExit('right', 4, { label: 'No' });
   b.exit(3);
   b.note('left', ['The new account cannot be used',
@@ -416,27 +522,29 @@ page(2, (b) => {
   b.note('right', ['When no confirm is needed,',
     'they skip the code and',
     'go straight to foot size.']);
+  b.databaseFooter();
 });
 
 // 3 — Confirm the email
 page(3, (b) => {
   b.entry(2, ['the account was created']);
-  b.proc('send', ['We email a 6-digit code', 'plus a Confirm button.', 'The code shows a countdown.']);
+  b.procDB('send', ['We email a 6-digit code', 'plus a Confirm button.', 'The code shows a countdown.', 'Saved to the Database.']);
   b.decision('howconfirm', ['How do they', 'confirm it?'], { down: 'Type the code' });
   b.branch('left', 'button', ['They tap the button in the',
     'email — it opens the app',
     'and confirms the account.'], { label: 'The email' });
   b.branchExit('right', 5, { label: 'Back to sign in' });
   b.proc('typecode', ['They type the 6-digit code', 'in the app.']);
-  b.decision('correct', ['Is the code right', 'and still valid?'], { down: 'Yes' });
+  b.decisionDB('correct', ['Is the code right', 'and still valid?', 'in the Database?'], { down: 'Yes' });
   b.branch('right', 'wrong', ['Show an error message.'], { label: 'No' });
   b.branchNext('right', 'resend', ['They can ask for a new code —', 'a minute has to pass first.', 'Too many tries are flagged.']);
   b.circleJump('right', 'A', 'typecode', 0.5);
-  b.proc('done', ['Account confirmed —', 'they are signed in.']);
+  b.procDB('done', ['Account confirmed —', 'they are signed in.', 'Saved to the Database.']);
   b.merge('left', 'done');
   b.exit(4);
   b.note('left', ['They can close the app and', 'confirm later — it is asked', 'again next time.']);
   b.note('right', ['Back to sign in stops here —', 'the account stays unconfirmed', 'until they confirm.']);
+  b.databaseFooter();
 });
 
 // 4 — Add their foot size
@@ -447,31 +555,34 @@ page(4, (b) => {
   b.branch('left', 'scan', ['Scan feet with the phone', 'camera. Best pick.', 'If it fails or access is denied,', 'they land back here.'], { label: 'Scan' });
   b.branch('right', 'manual', ['Type size and width', 'themselves. Must pick', 'a size first or it asks again.'], { label: 'Type it in' });
   b.proc('skip', ['Or skip for now. Instant —', 'we remind them on Home later.']);
-  b.proc('saved', ['Size saved — or we remind', 'them on the Home screen later.']);
+  b.procDB('saved', ['Size saved to the Database —', 'or we remind them', 'on the Home screen later.']);
   b.merge('left', 'saved', { frac: 0.32 });
   b.merge('right', 'saved', { frac: 0.68 });
   b.exit(6);
   b.note('right', ['The scan opens on top,', 'so backing out lands', 'exactly back here.']);
+  b.databaseFooter();
 });
 
 // 5 — Sign in
 page(5, (b) => {
-  b.entry([1, 3], ['they want to sign in']);
+  b.entry([1, 3], ['they want to sign in,', 'with email, Google or Facebook']);
+  b.decision('method', ['How do they sign in?'], { down: 'With email' });
+  b.socialPair('signedin');
   b.proc('creds', ['They type email and password.', 'Empty boxes or a short password', 'are flagged first.']);
   b.decision('forgot', ['Forgot password', 'tapped?'], { down: 'No' });
   b.branch('right', 'resetlink', ['We email a link to set', 'a new one.'], { label: 'Yes' });
   b.branchNext('right', 'resetdone', ['They open the link on the phone,', 'set a new password —', 'they are signed in.']);
   b.circleJump('right', 'C', 'signedin', 0.2);
-  b.decision('password', ['Is the password', 'correct?'], { down: 'Yes' });
+  b.decisionDB('password', ['Is the password', 'correct in the Database?'], { down: 'Yes' });
   b.branch('right', 'error', ['Show the same error for a wrong', 'email or password —', 'they can try again.'], { label: 'No' });
   b.circleJump('right', 'A', 'creds', 0.5);
   b.decision('newdevice', ['Is this a phone the', 'app already knows?'], { down: 'Yes' });
   b.branch('left', 'code', ['We email a 6-digit code.', 'They type it to prove it is', 'really them. If the mail fails,', 'the reason shows on the', 'same screen.'], { label: 'No' });
-  b.proc('signedin', ['They are signed in.', 'Checks below still apply —', 'new accounts skip them.']);
+  b.procDB('signedin', ['They are signed in.', 'Saved to the Database.', 'Checks below still apply —', 'new accounts skip them.']);
   b.merge('left', 'signedin');
   b.decision('blocked', ['Is the account', 'suspended?'], { down: 'No' });
   b.branch('right', 'stopped', ['They see why it is closed.', 'Signing out leaves the screen.'], { label: 'Yes' });
-  b.decision('profile', ['Does the profile', 'load?'], { down: 'Yes' });
+  b.decisionDB('profile', ['Does the profile', 'load from the Database?'], { down: 'Yes' });
   b.branch('right', 'retry', ['Show Retry. They can try', 'again or sign out.'], { label: 'No' });
   b.circleJump('right', 'B', 'signedin', 0.8);
   b.decision('mfa', ['Is an extra code', 'needed? New accounts skip.'], { down: 'No' });
@@ -481,6 +592,7 @@ page(5, (b) => {
   b.exit(6);
   b.note('left', ['Too many wrong tries locks', 'the screen for a while.']);
   b.note('right', ['On their own phone they can sign', 'in with a fingerprint next time.', 'First sign in offers', 'to turn it on.']);
+  b.databaseFooter();
 });
 
 // 6 — Home (hub)
@@ -489,35 +601,40 @@ page(6, (b) => {
     { from: [1], phrase: ['already signed in'] },
     { from: [4], phrase: ['foot size is set'] },
     { from: [5], phrase: ['they signed in'] },
-    { from: [11], phrase: ['order is done'] },
-    { from: [12], phrase: ['shop replied'] },
+    { from: [10], phrase: ['order is done'] },
+    { from: [11], phrase: ['shop replied'] },
   ]);
   b.wideProc('home', ['The Home screen shows a search box, the cart,',
     'Men’s · Women’s · Kids’, picks in their size,',
     'items on sale and a grid of products.']);
   b.wideProc('tabs', ['Four tabs sit at the bottom of every screen:',
     'Home · Store · Notifications · Profile.']);
-  b.wideProc('go', ['From Home they can go anywhere:']);
-  b.exitRow([7, 12, 10, 11, 13]);
+  b.procDB('featured', ['Tap a featured product', 'to open its details: photos,', 'price, sizes in stock,', 'top reviews with see-all.', 'Loaded from the Database.']);
+  b.decision('action', ['What do they do', 'with this product?'], { down: 'Buy it now' });
+  b.branch('right', 'addbox', ['Add it to the cart.', 'Saved to the Database.'], { label: 'Add to cart' });
+  b.circleJump('right', 'A', 'featured', 0.5);
+  b.procDB('buynow', ['Buy it now — straight to checkout.', 'Saved to the Database.']);
+  b.wideProc('go', ['From Home they can also go anywhere:']);
+  b.exitRow([7, 11, 9, 10, 12]);
+  b.databaseFooter();
 });
 
 // 7 — Browse the shops
 page(7, (b) => {
   b.entry(6, ['they tapped Store']);
-  b.proc('shops', ['The Store tab shows every shop,', 'with its name, rating and what it sells.']);
+  b.procDB('shops', ['The Store tab shows every shop,', 'with its name, rating and what it sells.', 'Loaded from the Database.']);
   b.proc('open', ['Open a shop to see its products,', 'or search for a pair.']);
   b.decision('narrow', ['Do they want to', 'narrow it down?'], { down: 'No' });
   b.branch('right', 'filters', ['Search, or filter by size,', 'colour, price or shop.'], { label: 'Yes' });
-  b.proc('product', ['They open a product: photos, the 3D view,',
-    'the sizes still in stock and the reviews.']);
+  b.procDB('product', ['They open a product: photos, the 3D view,', 'the sizes still in stock and the reviews.', 'Loaded from the Database.']);
   b.decision('next', ['What do they do next?'], { down: 'Add it to the cart' });
   b.branchExit('right', 8, { label: 'Try it on' });
-  b.branchExit('left', 9, { label: 'Design it' });
-  b.proc('cart', ['Add it to the cart.']);
-  b.exit(10);
+  b.procDB('cart', ['Add it to the cart.', 'Saved to the Database.']);
+  b.exit(9);
   b.note('right', ['They can also reserve a pair',
     'to collect at the shop — free,',
     'held for 24 hours.']);
+  b.databaseFooter();
 });
 
 // 8 — Try the shoes on
@@ -525,52 +642,24 @@ page(8, (b) => {
   b.entry(7, ['they tapped Try on']);
   b.proc('camera', ['Point the camera at their feet.']);
   b.proc('appears', ['The shoe appears on their feet and', 'moves with them.']);
-  b.proc('swap', ['They can swap shoes while the camera',
-    'is on. The app shows the size that fits.']);
+  b.procDB('swap', ['They can swap shoes while the camera', 'is on. The app shows the size that fits.', 'Sizes come from the Database.']);
   b.decision('looks', ['Does it look right?'], { down: 'Yes' });
   b.branch('right', 'another', ['Try another shoe or size.'], { label: 'No' });
-  b.circleJump('right', 'A', 'swap', 0.5);
-  b.proc('tocart', ['Add it to the cart.']);
-  b.exit(10);
-  b.note('right', ['The fitting is a guide — the size',
-    'shown is what the app suggests.']);
+  b.circleJump('right', 'A', 'swap', 0.5);  b.procDB('tocart', ['Add it to the cart.', 'Saved to the Database.']);
+  b.exit(9);
+  b.note('right', ['The fitting is a guide — the size', 'shown is what the app suggests.']);
+  b.databaseFooter();
 });
 
-// 9 — Make it their own
+// 9 — Cart and payment
 page(9, (b) => {
-  b.entry(7, ['they tapped Make it their own']);
-  b.proc('two', ['Two ways to make it their own: pick the',
-    'ready-made options, or design a pair.']);
-  b.decision('which', ['Which one?'], { down: 'Design a pair' });
-  b.branch('left', 'ready', ['Ready-made: choose the colour',
-    'and material the shop offers',
-    'for that shoe, then add it',
-    'to the cart.'], { label: 'Ready-made' });
-  const readyExit = b.add('offpage', 'exit-10-left', exitLines(10), LEFT.x + 20, b.col.left, LEFT.w - 40, lineH(exitLines(10)) + OFF_PAD);
-  b.edge('ready', 'exit-10-left', { fromSide: 'bottom', toSide: 'top' });
-  b.exitSpecs.push({ to: 10, id: readyExit.id });
-  b.proc('design', ['Design a pair of their own: base shoe,',
-    'colour and dye, upper material, engraving',
-    'and sizing notes.']);
-  b.proc('review', ['Review the choices and submit the design.']);
-  b.proc('shop', ['The shop gets the request and asks',
-    'them about the price and when',
-    'it will be ready.']);
-  b.end('end', ['END']);
-  b.note('right', ['The shop checks every custom',
-    'pair by hand, so it is not',
-    'added to the cart.']);
-});
-
-// 10 — Cart and payment
-page(10, (b) => {
-  b.entry([6, 7, 8, 9], ['they opened the Cart']);
-  b.proc('cart', ['The Cart lists what they picked:', 'the item, the size and how many.']);
+  b.entry([6, 7, 8], ['they opened the Cart']);
+  b.procDB('cart', ['The Cart lists what they picked:', 'the item, the size and how many.', 'Loaded from the Database.']);
   b.decision('right', ['Is everything right?'], { down: 'Yes' });
   b.branch('right', 'change', ['Change the size or the number,', 'or remove an item.'], { label: 'No' });
   b.circleJump('right', 'A', 'cart', 0.5);
   b.proc('checkout', ['Tap Check Out — review the order', 'and choose where it goes.']);
-  b.decision('address', ['Do they have an', 'address saved?'], { down: 'Yes' });
+  b.decisionDB('address', ['Do they have an', 'address saved in the Database?'], { down: 'Yes' });
   b.branch('left', 'addaddress', ['Add their address, then come', 'back to check out.'], { label: 'No' });
   b.circleJump('left', 'B', 'checkout', 0.5);
   b.decision('payhow', ['How do they pay?'], { down: 'Cash on pickup' });
@@ -578,24 +667,22 @@ page(10, (b) => {
     'to pay. The order waits until',
     'the payment is confirmed.'], { label: 'GCash' });
   b.proc('cash', ['Cash on pickup — they pay at the shop', 'when they collect it.']);
-  b.proc('placed', ['The order is placed — the shop sees it', 'right away.']);
+  b.procDB('placed', ['The order is placed — the shop sees it', 'right away.', 'Saved to the Database.']);
   b.merge('left', 'placed', { frac: 0.32 });
-  b.exit(11);
+  b.exit(10);
   b.note('right', ['The delivery fee and the',
     'GCash fee are shown before',
     'they confirm.']);
   b.note('right', ['If a GCash payment fails or',
     'runs out of time, the order is',
     'not placed — they can try again.']);
+  b.databaseFooter();
 });
 
-// 11 — Track the order
-page(11, (b) => {
-  b.entry([6, 10], ['they opened My Orders']);
-  b.proc('list', ['My Orders lists every order,',
-    'newest first: unpaid · being',
-    'prepared · ready · to review ·',
-    'cancelled.']);
+// 10 — Track the order
+page(10, (b) => {
+  b.entry([6, 9], ['they opened My Orders']);
+  b.procDB('list', ['My Orders lists every order,', 'newest first: unpaid · being', 'prepared · ready · to review ·', 'cancelled.', 'Loaded from the Database.']);
   b.decision('cancel', ['Do they want to', 'cancel it?'], { down: 'No' });
   b.branch('right', 'cancelflow', ['Before the shop starts: cancel',
     'straight away. While it is being',
@@ -607,47 +694,46 @@ page(11, (b) => {
   b.branch('right', 'wait', ['Wait for the shop’s update —',
     'they get a notification.'], { label: 'Not yet' });
   b.circleJump('right', 'A', 'follow', 0.5);
-  b.proc('confirm', ['Tap Confirm receipt — the order is done.']);
-  b.proc('review', ['Rate each pair in the order:', 'stars are a must, a few words', 'and up to 5 photos. One review', 'per pair — it can be edited later.']);
+  b.procDB('confirm', ['Tap Confirm receipt — the order is done.', 'Saved to the Database.']);
+  b.procDB('review', ['Rate each pair in the order:', 'stars are a must, a few words', 'and up to 5 photos. One review', 'per pair — saved to the Database.']);
   b.exit(6, { extra: 'they can shop again' });
   b.note('right', ['An unpaid order can be paid', 'from the same screen.']);
   b.note('left', ['Only pairs from a delivered', 'order can be reviewed.']);
+  b.databaseFooter();
 });
 
-// 12 — Talk to the shop
-page(12, (b) => {
+// 11 — Talk to the shop
+page(11, (b) => {
   b.entry(6, ['they tapped the messages icon']);
-  b.proc('list', ['Messages shows one conversation', 'per shop.']);  b.proc('start', ['They can start from a shop,', 'a product, an order,', 'or the messages list.']);
-  b.proc('type', ['They type their question,', 'or pick a ready note for', 'a first order message.']);
+  b.procDB('list', ['Messages shows one conversation', 'per shop.', 'Loaded from the Database.']);  b.proc('start', ['They can start from a shop,', 'a product, an order,', 'or the messages list.']);
+  b.procDB('type', ['They type their question,', 'or pick a ready note for', 'a first order message.', 'Saved to the Database.']);
   b.proc('extras', ['Photos and short clips can go', 'with the words. Own messages', 'can be taken back.']);
-  b.proc('reply', ['The shop replies in the same', 'conversation — typing dots show', 'while they write. Ticks turn', 'once the shop has read.']);
+  b.procDB('reply', ['The shop replies in the same', 'conversation — typing dots show', 'while they write. Ticks turn', 'once the shop has read.', 'Loaded from the Database.']);
   b.proc('know', ['A notification and a badge on the bell', 'let them know a reply is waiting.']);
   b.exit(6, { extra: 'they can shop again' });
-  b.note('right', ['Custom pairs are usually', 'arranged here, with photos', 'of the design.']);
+  b.note('right', ['Photos of the pair', 'help the shop answer', 'faster.']);
   b.note('left', ['Help and support chats live', 'under Profile, not here.']);
+  b.databaseFooter();
 });
 
-// 13 — Profile and settings
-page(13, (b) => {
+// 12 — Profile and settings
+page(12, (b) => {
   b.entry(6, ['they tapped Profile']);
-  b.proc('who', ['Their name, photo, phone and email —',
-    'name and phone can be edited,',
-    'a new email needs its link opened',
-    'before it counts.']);
+  b.procDB('who', ['Their name, photo, phone and email —', 'name and phone can be edited,', 'a new email needs its link opened', 'before it counts.', 'Loaded from the Database.']);
   b.proc('orders', ['My Orders shortcuts: unpaid ·',
     'being prepared · ready ·',
     'to review · cancelled.']);
-  b.proc('foot', ['Foot size — check it, scan again,',
-    'or type a new size.']);
+  b.procDB('foot', ['Foot size — check it, scan again,', 'or type a new size.', 'Loaded from the Database.']);
   b.proc('holds', ['Their pickup reservations — pairs they',
     'are holding at a shop.']);  b.proc('gear', ['The gear opens the full', 'Settings screen.']);
-  b.exit(14);
+  b.exit(13);
+  b.databaseFooter();
 });
 
-// 14 — Settings in detail
-page(14, (b) => {
-  b.entry(13, ['they tapped the gear', 'for Settings']);
-  b.proc('account', ['Account and Security holds', 'name, phone and email,', 'the password link, fingerprint', 'switch, 2-step codes, devices.']);
+// 13 — Settings in detail
+page(13, (b) => {
+  b.entry(12, ['they tapped the gear', 'for Settings']);
+  b.procDB('account', ['Account and Security holds', 'name, phone and email,', 'the password link, fingerprint', 'switch, 2-step codes, devices.', 'Loaded from the Database.']);
   b.proc('switch', ['Extra sign-ins can be kept', 'here to jump between accounts.']);
   b.proc('look', ['Theme sheet: follow the device,', 'or pin Light or Dark.']);
   b.proc('addrs', ['Size Your Foot and My Addresses', 'live here too.']);
@@ -658,8 +744,9 @@ page(14, (b) => {
   b.decision('confirm', ['Do they confirm it?'], { down: 'Yes' });
   b.branch('right', 'keep', ['They stay — nothing changes.'], { label: 'No' });
   b.circleJump('right', 'A', 'del', 0.5);
-  b.proc('gone', ['The request is sent and', 'they are signed out.']);
+  b.procDB('gone', ['The request is sent and', 'they are signed out.', 'Saved to the Database.']);
   b.end('end', ['END']);
+  b.databaseFooter();
 });
 
 // page 1 gets a legend box under everything else
@@ -677,7 +764,7 @@ const pages = builders.map((b) => b.finish());
 const problems = [];
 const fail = (msg) => problems.push(msg);
 const BANNED = ['supabase', 'authprovider', 'authgate', 'rls', 'otp', 'session', 'token',
-  'payload', 'metadata', 'database', 'endpoint', 'webhook', 'api ', 'backend', 'frontend',
+  'payload', 'metadata', 'endpoint', 'webhook', 'api ', 'backend', 'frontend',
   'uuid', 'sql', 'query', 'provider', 'migration', 'bucket', 'jsonb', 'commit', 'deploy',
   'repo', 'dart', 'flutter', 'widget', 'null', 'boolean', 'json'];
 
@@ -847,6 +934,7 @@ function edgeXml(e) {
     `entryX=${e.toSide === 'right' ? 1 : e.toSide === 'left' ? 0 : 0.5}`,
     `entryY=${e.toSide === 'bottom' ? 1 : e.toSide === 'top' ? 0 : 0.5}`,
     'entryPerimeter=0');
+  if (e.double) bits.push('startArrow=classic', 'startFill=1');
   const style = bits.join(';') + ';';
   const pts = e.__waypoints.length
     ? `\n            <Array as="points">\n${e.__waypoints.map((p) => `              <mxPoint x="${Math.round(p.x)}" y="${Math.round(p.y)}" />`).join('\n')}\n            </Array>`
@@ -897,8 +985,8 @@ function svgText(lines, cx, cy, fontSize, opts = {}) {
   return `<text font-family="Helvetica, Arial, sans-serif" font-size="${fontSize}"${opts.bold ? ' font-weight="bold"' : ''} fill="#000000" text-anchor="${anchor}">${spans}</text>`;
 }
 
-const SVG_FILL = { proc: 'none', decision: 'none', terminator: 'none', offpage: 'none', onpage: 'none', note: 'none' };
-const SVG_STROKE = { proc: '#000000', decision: '#000000', terminator: '#000000', offpage: '#000000', onpage: '#000000', note: '#000000' };
+const SVG_FILL = { proc: 'none', decision: 'none', terminator: 'none', offpage: 'none', onpage: 'none', db: 'none', note: 'none' };
+const SVG_STROKE = { proc: '#000000', decision: '#000000', terminator: '#000000', offpage: '#000000', onpage: '#000000', db: '#000000', note: '#000000' };
 
 function svgShape(s) {
   const { x, y, w, h } = s;
@@ -914,6 +1002,9 @@ function svgShape(s) {
     shape = `<ellipse cx="${x + w / 2}" cy="${y + h / 2}" rx="${w / 2}" ry="${h / 2}" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>`;
   } else if (s.kind === 'onpage') {
     shape = `<circle cx="${x + w / 2}" cy="${y + h / 2}" r="${w / 2}" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>`;
+  } else if (s.kind === 'db') {
+    const ry = Math.min(14, h / 2);
+    shape = `<path d="M${x},${y + ry} L${x},${y + h - ry} A${w / 2},${ry} 0 0,0 ${x + w},${y + h - ry} L${x + w},${y + ry} A${w / 2},${ry} 0 0,0 ${x},${y + ry} Z" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>` + `<ellipse cx="${x + w / 2}" cy="${y + ry}" rx="${w / 2}" ry="${ry}" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>`;
   } else if (s.kind === 'offpage') {
     const tail = y + h * 0.74;
     shape = `<polygon points="${x},${y} ${x + w},${y} ${x + w},${tail} ${x + w / 2},${y + h} ${x},${tail}" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>`;

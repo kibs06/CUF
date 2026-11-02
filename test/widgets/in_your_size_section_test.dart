@@ -25,7 +25,7 @@ import 'package:app/widgets/two_column_masonry.dart';
 ///
 /// What is pinned here is the absent-safety (no size on file, nothing in the
 /// catalog in that size, and no size data on a product must all render
-/// NOTHING — never a guessed size, never a near size offered as theirs) and the
+/// NOTHING — never a guessed size, only exact or half-size-away stock) and the
 /// shape: it is The Workshop Collection's 2-column grid, not a horizontal
 /// strip, so
 /// it must lay out on the feed's own geometry and take the catalog's per-product
@@ -154,7 +154,8 @@ void main() {
     final provider = ProductProvider.seeded(
       products: [
         product(id: 'sold-out', name: 'Sold Out', stock: [('EU 42', 0)]),
-        product(id: 'near', name: 'Nearly', stock: [('EU 41.5', 4)]),
+        // A whole size away is a different fit, not an allowance.
+        product(id: 'far', name: 'Far', stock: [('EU 41', 4)]),
       ],
       unitsSold: const {},
     );

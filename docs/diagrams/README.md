@@ -41,6 +41,16 @@ draw.io (`1 Open the app` … `14 Settings in detail`).
 per page, named `01-open-the-app.png` … `14-settings-in-detail.png`. They are rendered
 from the same coordinates the `.drawio` stores, so the drawing does not move.
 
+## `in-store-customer-journey.drawio` — the manual in-store purchase flow
+
+A one-page replica of the reference flowchart: Start → enters store → browses →
+inquires → owner checks stocks manually → availability decision (No → ask about
+another size/design/price → still-browsing decision) → present shoe → fit/inspect →
+purchase decision (No exits down the left side; Yes → confirm price → pay → change →
+receipt → manual inventory update → logbook) → End. Black page, white boxes with
+black text, white arrows. Wording (including the reference's own spellings) is
+transcribed verbatim — edit the `.drawio`, not the picture.
+
 ## `customer-signup-flow.drawio` — the one-page sign-up view
 
 The earlier single-page version of just the account-creation part, kept as the

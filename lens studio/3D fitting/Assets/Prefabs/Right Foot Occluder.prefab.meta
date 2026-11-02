@@ -1,0 +1,75 @@
+- !<AssetImportMetadata/043c610e-2422-4c2f-a28e-1367dc08de7e>
+  ImportedAssetIds:
+    ObjectPrefab: !<reference> e9f57e42-59f3-41f7-94f2-e8de1f09612d
+  ImporterName: ObjectPrefabImporter
+  PrimaryAsset: !<reference> e9f57e42-59f3-41f7-94f2-e8de1f09612d
+  PackageType: NotAPackage
+  LegacyPackagePolicy: ~
+  ExtraData:
+    {}
+  AssetDataMap:
+    ObjectPrefab: !<own> c82b2901-9ca8-4237-adf4-6aa717521b1d
+  DependentFiles:
+    []
+  ImporterSettings: !<AssetImporterSettings>
+    {}
+  CompressionSettings: !<own> 00000000-0000-0000-0000-000000000000
+- !<RenderMeshVisual/42c729e9-0c26-49a0-4ab8-ab08208db4cc>
+  PrefabRemaps:
+    []
+  Name: component_0
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Stretch
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> 5800c69f-ebcf-40ba-bffd-af8df21a09b4
+  Mesh: !<reference> 9bfba065-974b-446e-a11d-f4196bc8e540
+  Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  BlendShapesEnabled: true
+  BlendNormals: false
+  BlendShapes:
+    {}
+  RayTracing: !<RayTracingVisualSettings>
+    Reflections:
+      caster: false
+      receiver: false
+      receiverLayers: 1
+      planar:
+        enabled: true
+        roughHarden: 0.500000
+        roughCurve: 2.000000
+    GlobalIllumination:
+      caster: false
+      receiver: false
+      receiverLayers: 1
+    Shadows:
+      caster: false
+      receiver: false
+      receiverLayers: 1
+    Material: !<reference> 00000000-0000-0000-0000-000000000000
+    HideFromCamera: false
+- !<SceneObject/a4cfc849-6926-4316-4521-de7682973c92>
+  PrefabRemaps:
+    []
+  Name: Right Foot Occluder
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> 42c729e9-0c26-49a0-4ab8-ab08208db4cc
+- !<ObjectPrefabAssetData/c82b2901-9ca8-4237-adf4-6aa717521b1d>
+  Prototype: !<ObjectOwner/4bbd9c9b-cb58-4a4e-91ad-cf8526d5234c>
+    PackagePath: ""
+    objects:
+      - !<own> a4cfc849-6926-4316-4521-de7682973c92

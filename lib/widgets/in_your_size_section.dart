@@ -84,9 +84,9 @@ const int kHomePreviewCount = 10;
 /// carries its own bottom spacing (via [ProductGridSection]), so a hidden
 /// section leaves no gap behind.
 ///
-/// The match rule is not local: it is [stocksMySize] via
-/// [ProductProvider.productsInSize], so this section and any later size surface
-/// agree by construction. Availability follows the same authoritative
+/// The match rule is not local: it is [ProductProvider.productsInSize] (exact
+/// size in stock, or stocked within half a size), so this section and any later
+/// size surface agree by construction. Availability follows the same authoritative
 /// `inventory` source as the buy button, so a card here can never turn out to
 /// be unbuyable (plan §8 R4).
 ///

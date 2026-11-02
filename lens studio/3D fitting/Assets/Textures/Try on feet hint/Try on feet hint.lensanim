@@ -1,0 +1,988 @@
+{
+
+"images": [
+    "LPD_341_try_on_your_feet_v01.png"
+],
+
+"frames": [
+{
+    "name": "LPD_236_try_on_feet_v0100.png",
+    "texture": 0,
+    "samplingRect": {
+        "objectName": "",
+        "x": 3,
+        "y": 3,
+        "width": 132,
+        "height": 237
+    },
+    "rotated": false,
+    "trimmed": true,
+    "sourceSize": {
+        "objectName": "",
+        "width": 251,
+        "height": 268
+    },
+    "clipping": {
+        "left": 116,
+        "top": 2,
+        "right": 248,
+        "bottom": 239
+    }
+},{
+    "name": "LPD_236_try_on_feet_v0101.png",
+    "texture": 0,
+    "samplingRect": {
+        "objectName": "",
+        "x": 139,
+        "y": 3,
+        "width": 132,
+        "height": 237
+    },
+    "rotated": false,
+    "trimmed": true,
+    "sourceSize": {
+        "objectName": "",
+        "width": 251,
+        "height": 268
+    },
+    "clipping": {
+        "left": 109,
+        "top": 0,
+        "right": 241,
+        "bottom": 237
+    }
+},{
+    "name": "LPD_236_try_on_feet_v0102.png",
+    "texture": 0,
+    "samplingRect": {
+        "objectName": "",
+        "x": 275,
+        "y": 3,
+        "width": 132,
+        "height": 236
+    },
+    "rotated": false,
+    "trimmed": true,
+    "sourceSize": {
+        "objectName": "",
+        "width": 251,
+        "height": 268
+    },
+    "clipping": {
+        "left": 92,
+        "top": 0,
+        "right": 224,
+        "bottom": 236
+    }
+},{
+    "name": "LPD_236_try_on_feet_v0103.png",
+    "texture": 0,
+    "samplingRect": {
+        "objectName": "",
+        "x": 411,
+        "y": 3,
+        "width": 132,
+        "height": 237
+    },
+    "rotated": false,
+    "trimmed": true,
+    "sourceSize": {
+        "objectName": "",
+        "width": 251,
+        "height": 268
+    },
+    "clipping": {
+        "left": 63,
+        "top": 3,
+        "right": 195,
+        "bottom": 240
+    }
+},{
+    "name": "LPD_236_try_on_feet_v0104.png",
+    "texture": 0,
+    "samplingRect": {
+        "objectName": "",
+        "x": 547,
+        "y": 3,
+        "width": 132,
+        "height": 237
+    },
+    "rotated": false,
+    "trimmed": true,
+    "sourceSize": {
+        "objectName": "",
+        "width": 251,
+        "height": 268
+    },
+    "clipping": {
+        "left": 34,
+        "top": 11,
+        "right": 166,
+        "bottom": 248
+    }
+},{
+    "name": "LPD_236_try_on_feet_v0105.png",
+    "texture": 0,
+    "samplingRect": {
+        "objectName": "",
+        "x": 683,
+        "y": 3,
+        "width": 132,
+        "height": 237
+    },
+    "rotated": false,
+    "trimmed": true,
+    "sourceSize": {
+        "objectName": "",
+        "width": 251,
+        "height": 268
+    },
+    "clipping": {
+        "left": 17,
+        "top": 18,
+        "right": 149,
+        "bottom": 255
+    }
+},{
+    "name": "LPD_236_try_on_feet_v0106.png",
+    "texture": 0,
+    "samplingRect": {
+        "objectName": "",
+        "x": 819,
+        "y": 3,
+        "width": 132,
+        "height": 237
+    },
+    "rotated": false,
+    "trimmed": true,
+    "sourceSize": {
+        "objectName": "",
+        "width": 251,
+        "height": 268
+    },
+    "clipping": {
+        "left": 9,
+        "top": 23,
+        "right": 141,
+        "bottom": 260
+    }
+},{
+    "name": "LPD_236_try_on_feet_v0107.png",
+    "texture": 0,
+    "samplingRect": {
+        "objectName": "",
+        "x": 955,
+        "y": 3,
+        "width": 132,
+        "height": 237
+    },
+    "rotated": false,
+    "trimmed": true,
+    "sourceSize": {
+        "objectName": "",
+        "width": 251,
+        "height": 268
+    },
+    "clipping": {
+        "left": 5,
+        "top": 26,
+        "right": 137,
+        "bottom": 263
+    }
+},{
+    "name": "LPD_236_try_on_feet_v0108.png",
+    "texture": 0,
+    "samplingRect": {
+        "objectName": "",
+        "x": 1091,
+        "y": 3,
+        "width": 132,
+        "height": 237
+    },
+    "rotated": false,
+    "trimmed": true,
+    "sourceSize": {
+        "objectName": "",
+        "width": 251,
+        "height": 268
+    },
+    "clipping": {
+        "left": 4,
+        "top": 27,
+        "right": 136,
+        "bottom": 264
+    }
+},{
+    "name": "LPD_236_try_on_feet_v0109.png",
+    "texture": 0,
+    "samplingRect": {
+        "objectName": "",
+        "x": 1227,
+        "y": 3,
+        "width": 132,
+        "height": 237
+    },
+    "rotated": false,
+    "trimmed": true,
+    "sourceSize": {
+        "objectName": "",
+        "width": 251,
+        "height": 268
+    },
+    "clipping": {
+        "left": 3,
+        "top": 27,
+        "right": 135,
+        "bottom": 264
+    }
+},{
+    "name": "LPD_236_try_on_feet_v0110.png",
+    "texture": 0,
+    "samplingRect": {
+        "objectName": "",
+        "x": 1363,
+        "y": 3,
+        "width": 132,
+        "height": 237
+    },
+    "rotated": false,
+    "trimmed": true,
+    "sourceSize": {
+        "objectName": "",
+        "width": 251,
+        "height": 268
+    },
+    "clipping": {
+        "left": 3,
+        "top": 28,
+        "right": 135,
+        "bottom": 265
+    }
+},{
+    "name": "LPD_236_try_on_feet_v0111.png",
+    "texture": 0,
+    "samplingRect": {
+        "objectName": "",
+        "x": 1499,
+        "y": 3,
+        "width": 132,
+        "height": 237
+    },
+    "rotated": false,
+    "trimmed": true,
+    "sourceSize": {
+        "objectName": "",
+        "width": 251,
+        "height": 268
+    },
+    "clipping": {
+        "left": 2,
+        "top": 28,
+        "right": 134,
+        "bottom": 265
+    }
+},{
+    "name": "LPD_236_try_on_feet_v0112.png",
+    "texture": 0,
+    "samplingRect": {
+        "objectName": "",
+        "x": 1635,
+        "y": 3,
+        "width": 131,
+        "height": 237
+    },
+    "rotated": false,
+    "trimmed": true,
+    "sourceSize": {
+        "objectName": "",
+        "width": 251,
+        "height": 268
+    },
+    "clipping": {
+        "left": 2,
+        "top": 28,
+        "right": 133,
+        "bottom": 265
+    }
+},{
+    "name": "LPD_236_try_on_feet_v0113.png",
+    "texture": 0,
+    "samplingRect": {
+        "objectName": "",
+        "x": 3,
+        "y": 244,
+        "width": 132,
+        "height": 237
+    },
+    "rotated": false,
+    "trimmed": true,
+    "sourceSize": {
+        "objectName": "",
+        "width": 251,
+        "height": 268
+    },
+    "clipping": {
+        "left": 1,
+        "top": 28,
+        "right": 133,
+        "bottom": 265
+    }
+},{
+    "name": "LPD_236_try_on_feet_v0114.png",
+    "texture": 0,
+    "samplingRect": {
+        "objectName": "",
+        "x": 139,
+        "y": 244,
+        "width": 132,
+        "height": 236
+    },
+    "rotated": false,
+    "trimmed": true,
+    "sourceSize": {
+        "objectName": "",
+        "width": 251,
+        "height": 268
+    },
+    "clipping": {
+        "left": 1,
+        "top": 29,
+        "right": 133,
+        "bottom": 265
+    }
+},{
+    "name": "LPD_236_try_on_feet_v0115.png",
+    "texture": 0,
+    "samplingRect": {
+        "objectName": "",
+        "x": 275,
+        "y": 244,
+        "width": 132,
+        "height": 236
+    },
+    "rotated": false,
+    "trimmed": true,
+    "sourceSize": {
+        "objectName": "",
+        "width": 251,
+        "height": 268
+    },
+    "clipping": {
+        "left": 0,
+        "top": 29,
+        "right": 132,
+        "bottom": 265
+    }
+},{
+    "name": "LPD_236_try_on_feet_v0116.png",
+    "texture": 0,
+    "samplingRect": {
+        "objectName": "",
+        "x": 411,
+        "y": 244,
+        "width": 132,
+        "height": 237
+    },
+    "rotated": false,
+    "trimmed": true,
+    "sourceSize": {
+        "objectName": "",
+        "width": 251,
+        "height": 268
+    },
+    "clipping": {
+        "left": 0,
+        "top": 29,
+        "right": 132,
+        "bottom": 266
+    }
+},{
+    "name": "LPD_236_try_on_feet_v0117.png",
+    "texture": 0,
+    "samplingRect": {
+        "objectName": "",
+        "x": 547,
+        "y": 244,
+        "width": 132,
+        "height": 237
+    },
+    "rotated": false,
+    "trimmed": true,
+    "sourceSize": {
+        "objectName": "",
+        "width": 251,
+        "height": 268
+    },
+    "clipping": {
+        "left": 0,
+        "top": 29,
+        "right": 132,
+        "bottom": 266
+    }
+},{
+    "name": "LPD_236_try_on_feet_v0118.png",
+    "texture": 0,
+    "samplingRect": {
+        "objectName": "",
+        "x": 683,
+        "y": 244,
+        "width": 132,
+        "height": 237
+    },
+    "rotated": false,
+    "trimmed": true,
+    "sourceSize": {
+        "objectName": "",
+        "width": 251,
+        "height": 268
+    },
+    "clipping": {
+        "left": 0,
+        "top": 29,
+        "right": 132,
+        "bottom": 266
+    }
+},{
+    "name": "LPD_236_try_on_feet_v0119.png",
+    "texture": 0,
+    "samplingRect": {
+        "objectName": "",
+        "x": 819,
+        "y": 244,
+        "width": 132,
+        "height": 237
+    },
+    "rotated": false,
+    "trimmed": true,
+    "sourceSize": {
+        "objectName": "",
+        "width": 251,
+        "height": 268
+    },
+    "clipping": {
+        "left": 1,
+        "top": 29,
+        "right": 133,
+        "bottom": 266
+    }
+},{
+    "name": "LPD_236_try_on_feet_v0120.png",
+    "texture": 0,
+    "samplingRect": {
+        "objectName": "",
+        "x": 955,
+        "y": 244,
+        "width": 132,
+        "height": 237
+    },
+    "rotated": false,
+    "trimmed": true,
+    "sourceSize": {
+        "objectName": "",
+        "width": 251,
+        "height": 268
+    },
+    "clipping": {
+        "left": 1,
+        "top": 29,
+        "right": 133,
+        "bottom": 266
+    }
+},{
+    "name": "LPD_236_try_on_feet_v0121.png",
+    "texture": 0,
+    "samplingRect": {
+        "objectName": "",
+        "x": 1091,
+        "y": 244,
+        "width": 132,
+        "height": 237
+    },
+    "rotated": false,
+    "trimmed": true,
+    "sourceSize": {
+        "objectName": "",
+        "width": 251,
+        "height": 268
+    },
+    "clipping": {
+        "left": 1,
+        "top": 29,
+        "right": 133,
+        "bottom": 266
+    }
+},{
+    "name": "LPD_236_try_on_feet_v0122.png",
+    "texture": 0,
+    "samplingRect": {
+        "objectName": "",
+        "x": 1227,
+        "y": 244,
+        "width": 131,
+        "height": 237
+    },
+    "rotated": false,
+    "trimmed": true,
+    "sourceSize": {
+        "objectName": "",
+        "width": 251,
+        "height": 268
+    },
+    "clipping": {
+        "left": 2,
+        "top": 29,
+        "right": 133,
+        "bottom": 266
+    }
+},{
+    "name": "LPD_236_try_on_feet_v0123.png",
+    "texture": 0,
+    "samplingRect": {
+        "objectName": "",
+        "x": 1362,
+        "y": 244,
+        "width": 132,
+        "height": 237
+    },
+    "rotated": false,
+    "trimmed": true,
+    "sourceSize": {
+        "objectName": "",
+        "width": 251,
+        "height": 268
+    },
+    "clipping": {
+        "left": 2,
+        "top": 29,
+        "right": 134,
+        "bottom": 266
+    }
+},{
+    "name": "LPD_236_try_on_feet_v0124.png",
+    "texture": 0,
+    "samplingRect": {
+        "objectName": "",
+        "x": 1498,
+        "y": 244,
+        "width": 131,
+        "height": 237
+    },
+    "rotated": false,
+    "trimmed": true,
+    "sourceSize": {
+        "objectName": "",
+        "width": 251,
+        "height": 268
+    },
+    "clipping": {
+        "left": 3,
+        "top": 29,
+        "right": 134,
+        "bottom": 266
+    }
+},{
+    "name": "LPD_236_try_on_feet_v0125.png",
+    "texture": 0,
+    "samplingRect": {
+        "objectName": "",
+        "x": 1633,
+        "y": 244,
+        "width": 132,
+        "height": 237
+    },
+    "rotated": false,
+    "trimmed": true,
+    "sourceSize": {
+        "objectName": "",
+        "width": 251,
+        "height": 268
+    },
+    "clipping": {
+        "left": 3,
+        "top": 29,
+        "right": 135,
+        "bottom": 266
+    }
+},{
+    "name": "LPD_236_try_on_feet_v0126.png",
+    "texture": 0,
+    "samplingRect": {
+        "objectName": "",
+        "x": 3,
+        "y": 485,
+        "width": 132,
+        "height": 237
+    },
+    "rotated": false,
+    "trimmed": true,
+    "sourceSize": {
+        "objectName": "",
+        "width": 251,
+        "height": 268
+    },
+    "clipping": {
+        "left": 3,
+        "top": 29,
+        "right": 135,
+        "bottom": 266
+    }
+},{
+    "name": "LPD_236_try_on_feet_v0127.png",
+    "texture": 0,
+    "samplingRect": {
+        "objectName": "",
+        "x": 139,
+        "y": 485,
+        "width": 131,
+        "height": 237
+    },
+    "rotated": false,
+    "trimmed": true,
+    "sourceSize": {
+        "objectName": "",
+        "width": 251,
+        "height": 268
+    },
+    "clipping": {
+        "left": 4,
+        "top": 29,
+        "right": 135,
+        "bottom": 266
+    }
+},{
+    "name": "LPD_236_try_on_feet_v0128.png",
+    "texture": 0,
+    "samplingRect": {
+        "objectName": "",
+        "x": 274,
+        "y": 485,
+        "width": 132,
+        "height": 237
+    },
+    "rotated": false,
+    "trimmed": true,
+    "sourceSize": {
+        "objectName": "",
+        "width": 251,
+        "height": 268
+    },
+    "clipping": {
+        "left": 4,
+        "top": 29,
+        "right": 136,
+        "bottom": 266
+    }
+},{
+    "name": "LPD_236_try_on_feet_v0129.png",
+    "texture": 0,
+    "samplingRect": {
+        "objectName": "",
+        "x": 410,
+        "y": 485,
+        "width": 132,
+        "height": 237
+    },
+    "rotated": false,
+    "trimmed": true,
+    "sourceSize": {
+        "objectName": "",
+        "width": 251,
+        "height": 268
+    },
+    "clipping": {
+        "left": 4,
+        "top": 29,
+        "right": 136,
+        "bottom": 266
+    }
+},{
+    "name": "LPD_236_try_on_feet_v0130.png",
+    "texture": 0,
+    "samplingRect": {
+        "objectName": "",
+        "x": 546,
+        "y": 485,
+        "width": 132,
+        "height": 236
+    },
+    "rotated": false,
+    "trimmed": true,
+    "sourceSize": {
+        "objectName": "",
+        "width": 251,
+        "height": 268
+    },
+    "clipping": {
+        "left": 4,
+        "top": 29,
+        "right": 136,
+        "bottom": 265
+    }
+},{
+    "name": "LPD_236_try_on_feet_v0131.png",
+    "texture": 0,
+    "samplingRect": {
+        "objectName": "",
+        "x": 682,
+        "y": 485,
+        "width": 132,
+        "height": 237
+    },
+    "rotated": false,
+    "trimmed": true,
+    "sourceSize": {
+        "objectName": "",
+        "width": 251,
+        "height": 268
+    },
+    "clipping": {
+        "left": 7,
+        "top": 26,
+        "right": 139,
+        "bottom": 263
+    }
+},{
+    "name": "LPD_236_try_on_feet_v0132.png",
+    "texture": 0,
+    "samplingRect": {
+        "objectName": "",
+        "x": 818,
+        "y": 485,
+        "width": 132,
+        "height": 237
+    },
+    "rotated": false,
+    "trimmed": true,
+    "sourceSize": {
+        "objectName": "",
+        "width": 251,
+        "height": 268
+    },
+    "clipping": {
+        "left": 17,
+        "top": 20,
+        "right": 149,
+        "bottom": 257
+    }
+},{
+    "name": "LPD_236_try_on_feet_v0133.png",
+    "texture": 0,
+    "samplingRect": {
+        "objectName": "",
+        "x": 954,
+        "y": 485,
+        "width": 131,
+        "height": 237
+    },
+    "rotated": false,
+    "trimmed": true,
+    "sourceSize": {
+        "objectName": "",
+        "width": 251,
+        "height": 268
+    },
+    "clipping": {
+        "left": 40,
+        "top": 10,
+        "right": 171,
+        "bottom": 247
+    }
+},{
+    "name": "LPD_236_try_on_feet_v0134.png",
+    "texture": 0,
+    "samplingRect": {
+        "objectName": "",
+        "x": 1089,
+        "y": 485,
+        "width": 131,
+        "height": 237
+    },
+    "rotated": false,
+    "trimmed": true,
+    "sourceSize": {
+        "objectName": "",
+        "width": 251,
+        "height": 268
+    },
+    "clipping": {
+        "left": 73,
+        "top": 2,
+        "right": 204,
+        "bottom": 239
+    }
+},{
+    "name": "LPD_236_try_on_feet_v0135.png",
+    "texture": 0,
+    "samplingRect": {
+        "objectName": "",
+        "x": 1224,
+        "y": 485,
+        "width": 132,
+        "height": 236
+    },
+    "rotated": false,
+    "trimmed": true,
+    "sourceSize": {
+        "objectName": "",
+        "width": 251,
+        "height": 268
+    },
+    "clipping": {
+        "left": 97,
+        "top": 0,
+        "right": 229,
+        "bottom": 236
+    }
+},{
+    "name": "LPD_236_try_on_feet_v0136.png",
+    "texture": 0,
+    "samplingRect": {
+        "objectName": "",
+        "x": 1360,
+        "y": 485,
+        "width": 132,
+        "height": 237
+    },
+    "rotated": false,
+    "trimmed": true,
+    "sourceSize": {
+        "objectName": "",
+        "width": 251,
+        "height": 268
+    },
+    "clipping": {
+        "left": 110,
+        "top": 0,
+        "right": 242,
+        "bottom": 237
+    }
+},{
+    "name": "LPD_236_try_on_feet_v0137.png",
+    "texture": 0,
+    "samplingRect": {
+        "objectName": "",
+        "x": 1496,
+        "y": 485,
+        "width": 132,
+        "height": 237
+    },
+    "rotated": false,
+    "trimmed": true,
+    "sourceSize": {
+        "objectName": "",
+        "width": 251,
+        "height": 268
+    },
+    "clipping": {
+        "left": 116,
+        "top": 2,
+        "right": 248,
+        "bottom": 239
+    }
+},{
+    "name": "LPD_236_try_on_feet_v0138.png",
+    "texture": 0,
+    "samplingRect": {
+        "objectName": "",
+        "x": 1632,
+        "y": 485,
+        "width": 131,
+        "height": 237
+    },
+    "rotated": false,
+    "trimmed": true,
+    "sourceSize": {
+        "objectName": "",
+        "width": 251,
+        "height": 268
+    },
+    "clipping": {
+        "left": 118,
+        "top": 3,
+        "right": 249,
+        "bottom": 240
+    }
+},{
+    "name": "LPD_236_try_on_feet_v0139.png",
+    "texture": 0,
+    "samplingRect": {
+        "objectName": "",
+        "x": 1767,
+        "y": 485,
+        "width": 131,
+        "height": 237
+    },
+    "rotated": false,
+    "trimmed": true,
+    "sourceSize": {
+        "objectName": "",
+        "width": 251,
+        "height": 268
+    },
+    "clipping": {
+        "left": 118,
+        "top": 3,
+        "right": 249,
+        "bottom": 240
+    }
+},{
+    "name": "LPD_236_try_on_feet_v0140.png",
+    "texture": 0,
+    "samplingRect": {
+        "objectName": "",
+        "x": 1767,
+        "y": 485,
+        "width": 131,
+        "height": 237
+    },
+    "rotated": false,
+    "trimmed": true,
+    "sourceSize": {
+        "objectName": "",
+        "width": 251,
+        "height": 268
+    },
+    "clipping": {
+        "left": 118,
+        "top": 3,
+        "right": 249,
+        "bottom": 240
+    }
+},{
+    "name": "LPD_236_try_on_feet_v0141.png",
+    "texture": 0,
+    "samplingRect": {
+        "objectName": "",
+        "x": 1767,
+        "y": 485,
+        "width": 131,
+        "height": 237
+    },
+    "rotated": false,
+    "trimmed": true,
+    "sourceSize": {
+        "objectName": "",
+        "width": 251,
+        "height": 268
+    },
+    "clipping": {
+        "left": 118,
+        "top": 3,
+        "right": 249,
+        "bottom": 240
+    }
+}
+],
+
+"animations": {
+    "default": { "frames": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41] }
+},
+
+"meta": {
+        "app": "http://www.codeandweb.com/texturepacker",
+        "description": "Json file for Lens Studio Framework",
+        "version": "1.0",
+        "smartupdate": "$TexturePacker:SmartUpdate:34eb07e11a305d88fdc5094bda99a8b4:b9e1f3fb4e7a21297676654b8c632c81:db5563a58a486953e4f99bf8d6dec0a4$"
+        "Created with TexturePacker (https://www.codeandweb.com/texturepacker) for Lens Studio"
+    }
+}

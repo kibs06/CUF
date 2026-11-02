@@ -1,0 +1,1731 @@
+- !<AssetImportMetadata/c2cac879-1c4e-4e5e-b468-1af5c0d55ace>
+  ImportedAssetIds:
+    .hidden/Material_tripo_part_0: !<reference> 2799cc26-5c38-4bcd-b4d6-ec34353afc2e
+    0e79d14fab023464: !<reference> c030211b-3865-40b1-9647-7862ad88ae42
+    11541ab7b90e5b17: !<reference> 93777498-b23f-4669-beb6-6f3b7b0fcaa9
+    12df272403492cbf: !<reference> e4297b94-7a07-4e58-a434-be76d00cc3d7
+    162e7cbd4719ff0a: !<reference> d2b6c1cf-aa3b-4076-9978-fafe3fe3e875
+    21aeed2cf5b7efdc: !<reference> e692e88e-fd2d-46ed-9526-e477ddc339ff
+    262da1d8eca45ca7: !<reference> 5066b9bf-a3e2-4b59-9b01-95a7cb906980
+    26ba073d67b9d0dd: !<reference> 615819c5-93fd-4081-ac0e-c58fa51b05bd
+    2aaf1f91dc972dd5: !<reference> c852d7dc-0e31-476a-88be-6170e00a2943
+    30b82d41e6e68c99: !<reference> 6e7d26a5-325c-4a8f-a252-54ff4eddea79
+    394c6292f8076396: !<reference> 2065e353-99c5-4bde-b6e2-e814ce1da083
+    3adb0dc9c1c52d70: !<reference> 8291eada-2261-4e13-b27a-b064ac30f346
+    3bbce603a4d60dcf: !<reference> 0cff4b69-27fb-49fb-82e3-5ab08d667631
+    3c912129878b330e: !<reference> 4be87f47-62e7-425d-a873-ba3e86552290
+    41921e58c84257df: !<reference> 991fe077-cce5-46d3-892b-0df087900838
+    44fcd5d837478860: !<reference> 66313eec-a81c-4631-8f5a-555741838ffc
+    4538707b509293fd: !<reference> eeae4f15-9d40-4709-9d55-f3de1594bdae
+    4a45a58a5f6fcd59: !<reference> da3c41c5-0db8-4984-80d3-184a3fcf00c7
+    4da11d2ee3ae69e2: !<reference> fc4f6b14-f904-4c8b-93d6-0bf8bea2a010
+    4e1ea55c23f3e599: !<reference> f099c922-5d25-47d8-bde3-ee7044c5e9d8
+    4e39ca4c2da0b7a8: !<reference> a0d85a5e-0270-4b03-945f-62f15fbb4d5a
+    4f47b4f82c7be7f9: !<reference> a5c39c6a-b92a-4040-b9e8-f2623ee2b878
+    50d3e83c2e506054: !<reference> 9ac63033-9b7d-4445-882c-ab063003ffaa
+    5183efecbab211eb: !<reference> 3070c698-0f0c-4365-8c2d-22860c7c6bbf
+    53681b9695ac6987: !<reference> b54aa308-02f8-49fb-8751-3430fd186fbe
+    56dd4ecbb2f822e1: !<reference> 33d91267-b9e4-4eba-af75-844316910edd
+    599e315e08154c85: !<reference> 914cab83-a99e-44f1-8721-03865ad19d0d
+    5a7132383eb4a133: !<reference> b6da8884-2c6e-41ae-a356-6a31404d9c7f
+    5e4f473548d339e9: !<reference> df0b4f99-6ed3-4571-a790-1fec219d7a2f
+    657c264db4d38ac9: !<reference> 945e5794-6a1c-4808-8af7-a703dcce6175
+    659d4acf0b3fa724: !<reference> fdeb46c9-e182-497a-82f6-0bd131319f55
+    6746b51ca77b0004: !<reference> b9254eed-9c99-4f99-8070-9b55bd0ab5e4
+    69b2ed5916a303a9: !<reference> 3e47ae0b-d7a4-469a-86b8-dc6e1fef3902
+    6ad163dfa8e81fcc: !<reference> bb448f43-87bc-4e0d-95ff-710648bfafaf
+    70faabf9f3651352: !<reference> 27d9d12f-c10d-498f-a76b-9c98fb182bd2
+    72c81e9d86825ba3: !<reference> a7656ece-5600-4e59-b207-f1898bed104c
+    73d1990596b312af: !<reference> e7ef7969-edb7-4e69-86c5-0ac662d4c172
+    79c6264ba2c497a9: !<reference> becfb473-a7fc-48c0-8fc5-26d3457146d2
+    7ad836acd3ca46d6: !<reference> c9c1c2aa-8462-4569-9d46-7337da4ec3bb
+    7ce8b414f8ec9831: !<reference> 7bbb0fa2-888b-42ea-a835-fbf26133258e
+    8000c2bf8495791a: !<reference> bb67b386-fcf1-4d96-901a-f7646e9224ce
+    816a4c954fd1f81e: !<reference> eebbe7aa-7034-46ab-a8f3-7064f1c6c330
+    839ec3829c7af3b6: !<reference> a6dfb08a-d78e-421f-aac2-d21722605f80
+    844e9c32eb35f90a: !<reference> 188b9a26-d823-45da-bcdd-89a1794f1efc
+    85142446602df97d: !<reference> 20f531c0-a924-4c87-b7db-097fd490acb9
+    889216f5b08cf956: !<reference> 0ac93021-ad50-4a10-8dbd-84d98f6cb144
+    88ab437fd121cc69: !<reference> 25510bf5-39af-4e58-9bff-e0aea45f8623
+    8db82ceb73cef986: !<reference> da7f35d9-27b4-4eb2-b4ce-97f429406f3b
+    8db96ff9427abb66: !<reference> a4f0d491-6814-4fb9-8d1d-5792811ff6d4
+    8f6502c6ef6690dd: !<reference> cb8290ab-1155-4c1f-877f-123e548d99ad
+    8fc27578f197a219: !<reference> ac478a40-14eb-4db8-8588-8409173302c6
+    93b9fdf1bf671033: !<reference> bd9f5dd6-44d8-487a-a474-d7a50e9e67f8
+    9791ef7efab8d768: !<reference> d0b2a6b6-5900-41f6-a04e-51422c33033f
+    9a4b36d1edb30280: !<reference> 1edb376a-0d97-43a3-a2e8-860895ab74d5
+    9c90922ddb1b898a: !<reference> 01893884-2d88-4e20-b760-93bd8901319b
+    9f87ed8f0c37a6c5: !<reference> de591cc1-ce0a-409d-86b9-e1199fd52b7e
+    9fd9af507974a3ab: !<reference> d305f0f1-64ea-465a-b629-bbceb199b7da
+    Materials/Material_tripo_part_0: !<reference> d92ffba2-d6a6-440b-9ad7-29711c3f68d9
+    Materials/Material_tripo_part_0|Material_tripo_part_0|GraphPassInfo: !<reference> 4738ef73-d232-48a3-bc4d-bfc97231ff5a
+    Materials/Material_tripo_part_1: !<reference> 7bf56802-c3d7-48e3-badb-ecab46d67fa8
+    Materials/Material_tripo_part_10: !<reference> d2ec9c60-7fe2-4cb2-8104-05f6b18c2721
+    Materials/Material_tripo_part_10|Material_tripo_part_10|GraphPassInfo: !<reference> 28780d53-f7b8-4eb1-9aed-ffbbedb34ffd
+    Materials/Material_tripo_part_11: !<reference> a7e1f0b4-1381-4de7-8acc-3a9c7232d577
+    Materials/Material_tripo_part_11|Material_tripo_part_11|GraphPassInfo: !<reference> 16fe7115-afa2-4578-a564-cc18ec046dc4
+    Materials/Material_tripo_part_12: !<reference> 0c5a803d-b7a9-4815-a362-c4f92353b59a
+    Materials/Material_tripo_part_12|Material_tripo_part_12|GraphPassInfo: !<reference> 10925fe1-a2ac-43c4-a858-33310340c763
+    Materials/Material_tripo_part_13: !<reference> 17ffce17-4283-495b-a0e5-28408de17b1b
+    Materials/Material_tripo_part_13|Material_tripo_part_13|GraphPassInfo: !<reference> d76468fb-770d-400e-954b-88c61cf0facb
+    Materials/Material_tripo_part_14: !<reference> c5cfa4da-6545-4718-8ece-e2fdff03b6ff
+    Materials/Material_tripo_part_14|Material_tripo_part_14|GraphPassInfo: !<reference> 5eeead43-9f8f-4816-95a8-c8cdf7d00d29
+    Materials/Material_tripo_part_15: !<reference> a67e9692-18dc-405f-83e0-40f31fce772d
+    Materials/Material_tripo_part_15|Material_tripo_part_15|GraphPassInfo: !<reference> 2f6962a8-d61d-4c15-8649-534fb067d19b
+    Materials/Material_tripo_part_16: !<reference> 16ff589e-52ae-42b2-965b-37815d6cc74b
+    Materials/Material_tripo_part_16|Material_tripo_part_16|GraphPassInfo: !<reference> 17c124ad-0574-4174-994a-a89bb0d45fdc
+    Materials/Material_tripo_part_17: !<reference> 97dfbea5-efac-420f-be05-aa0434ea3f58
+    Materials/Material_tripo_part_17|Material_tripo_part_17|GraphPassInfo: !<reference> 262e8883-46ac-4f9e-8dc2-41dee2879521
+    Materials/Material_tripo_part_18: !<reference> 9946acc3-447e-4053-954f-9de52cd1cfe7
+    Materials/Material_tripo_part_18|Material_tripo_part_18|GraphPassInfo: !<reference> 244551b0-8833-412d-b8c9-6b74258e314f
+    Materials/Material_tripo_part_19: !<reference> 57975276-5789-40c7-b58f-1ee0269fe477
+    Materials/Material_tripo_part_19|Material_tripo_part_19|GraphPassInfo: !<reference> e2d16de4-3d17-4283-a54d-428756c19221
+    Materials/Material_tripo_part_1|Material_tripo_part_1|GraphPassInfo: !<reference> 7cec865d-afe0-45cd-bffc-bb84b23e1a47
+    Materials/Material_tripo_part_2: !<reference> 918e624d-fbfc-4ebb-b737-b4cc6964eb9e
+    Materials/Material_tripo_part_20: !<reference> 25db740b-f956-4e91-a940-2871a621b9aa
+    Materials/Material_tripo_part_20|Material_tripo_part_20|GraphPassInfo: !<reference> b865b0ce-96c9-4c49-af9d-c8d95932dccd
+    Materials/Material_tripo_part_21: !<reference> fee5fc43-7389-4cc9-ab16-6c698c4ef467
+    Materials/Material_tripo_part_21|Material_tripo_part_21|GraphPassInfo: !<reference> cda4edea-d1dc-4070-b58d-1cdeb7a5b843
+    Materials/Material_tripo_part_22: !<reference> 294ad089-cdc0-4cd7-8a11-e7a33aa7ec99
+    Materials/Material_tripo_part_22|Material_tripo_part_22|GraphPassInfo: !<reference> 8a6908bb-788c-42ae-ba14-029f86bf46c9
+    Materials/Material_tripo_part_23: !<reference> 016d485c-ebdc-4e79-ba59-1a97e1f211ae
+    Materials/Material_tripo_part_23|Material_tripo_part_23|GraphPassInfo: !<reference> 6b7dccf4-9fa8-4fab-84c7-56e3b2ad64e1
+    Materials/Material_tripo_part_24: !<reference> 17bce0ef-ddc0-4cee-bb85-f38cb694f934
+    Materials/Material_tripo_part_24|Material_tripo_part_24|GraphPassInfo: !<reference> 9362cafc-a264-4297-abdd-4adfa7826d81
+    Materials/Material_tripo_part_25: !<reference> d6fda868-4e2e-44ed-8e4e-dac10d84d1f1
+    Materials/Material_tripo_part_25|Material_tripo_part_25|GraphPassInfo: !<reference> 5d529b23-d07e-4acf-8910-e2748a0049b8
+    Materials/Material_tripo_part_26: !<reference> e125311a-6a88-4a27-92cc-1dd40b57c8b4
+    Materials/Material_tripo_part_26|Material_tripo_part_26|GraphPassInfo: !<reference> 1fd9d9f1-ed8d-4e7b-a752-1c46c41cf90d
+    Materials/Material_tripo_part_27: !<reference> 9ec7e388-2fdf-4514-8b20-9ab20b1bce9d
+    Materials/Material_tripo_part_27|Material_tripo_part_27|GraphPassInfo: !<reference> ab253018-0016-4832-8020-18bc8f6b2156
+    Materials/Material_tripo_part_28: !<reference> cd315ccc-d23c-41b4-bd64-69f1539ebd54
+    Materials/Material_tripo_part_28|Material_tripo_part_28|GraphPassInfo: !<reference> 8570e524-c56b-4184-8348-a6eff4feeced
+    Materials/Material_tripo_part_29: !<reference> fd25547f-4f93-4c7d-9998-131356dbf356
+    Materials/Material_tripo_part_29|Material_tripo_part_29|GraphPassInfo: !<reference> 77e5eac5-5283-4a19-8fe3-fc23a5f4423a
+    Materials/Material_tripo_part_2|Material_tripo_part_2|GraphPassInfo: !<reference> 95d89913-45e7-427c-9903-b37d335e7cd1
+    Materials/Material_tripo_part_3: !<reference> b091b7df-5453-401f-80c3-97349fbbf5f5
+    Materials/Material_tripo_part_30: !<reference> c68c8734-1708-4d36-ae1f-19b4da397450
+    Materials/Material_tripo_part_30|Material_tripo_part_30|GraphPassInfo: !<reference> ab2de61c-8fa1-41b6-9b3e-bd59ffbdc53c
+    Materials/Material_tripo_part_31: !<reference> 8c039b07-67ad-467e-b6b9-1faf57ae0abc
+    Materials/Material_tripo_part_31|Material_tripo_part_31|GraphPassInfo: !<reference> eef729ba-3617-4fd4-9d7c-60491865f749
+    Materials/Material_tripo_part_32: !<reference> 4fb076ea-a2cb-4b0c-a689-90617a58ff73
+    Materials/Material_tripo_part_32|Material_tripo_part_32|GraphPassInfo: !<reference> ca3e2bef-7e14-4f7a-be6a-90f0ea5ec49b
+    Materials/Material_tripo_part_33: !<reference> b734b94f-7f82-47c8-8016-bf0107e026bd
+    Materials/Material_tripo_part_33|Material_tripo_part_33|GraphPassInfo: !<reference> 793c2cb3-757d-469f-9fe7-0b3876ab616f
+    Materials/Material_tripo_part_34: !<reference> 2944d5ef-0107-4776-be1e-04464f51d8ae
+    Materials/Material_tripo_part_34|Material_tripo_part_34|GraphPassInfo: !<reference> eefd53ef-a50b-4f0e-b37e-22df7b724221
+    Materials/Material_tripo_part_35: !<reference> 4ac008d8-04bd-42e0-aa77-b4724f097c68
+    Materials/Material_tripo_part_35|Material_tripo_part_35|GraphPassInfo: !<reference> 279669ff-8715-4c92-8506-e1dd554828fd
+    Materials/Material_tripo_part_3|Material_tripo_part_3|GraphPassInfo: !<reference> aecd9b6e-2ab0-44f7-803f-a7330fd723fb
+    Materials/Material_tripo_part_4: !<reference> e71b1350-204a-49ae-9340-879c42241e8e
+    Materials/Material_tripo_part_4|Material_tripo_part_4|GraphPassInfo: !<reference> 76d62b25-e446-4e86-8abe-86edd977761d
+    Materials/Material_tripo_part_5: !<reference> c7a3eb45-31a0-495d-8e5f-58ceab405e91
+    Materials/Material_tripo_part_5|Material_tripo_part_5|GraphPassInfo: !<reference> 97be6ca2-11ea-426c-88cd-fe732ce15c6e
+    Materials/Material_tripo_part_6: !<reference> 10ea8e9d-6c3f-430f-bb9d-49d892c10c93
+    Materials/Material_tripo_part_6|Material_tripo_part_6|GraphPassInfo: !<reference> 716840ca-8038-471c-a212-e3ea5e3f3ef1
+    Materials/Material_tripo_part_7: !<reference> 19b26b10-562f-496a-80ba-da6e70a28c11
+    Materials/Material_tripo_part_7|Material_tripo_part_7|GraphPassInfo: !<reference> e7ee333b-e02c-480a-90a7-4d92be18d772
+    Materials/Material_tripo_part_8: !<reference> f4d88332-1280-418f-8179-a9bc359ebfde
+    Materials/Material_tripo_part_8|Material_tripo_part_8|GraphPassInfo: !<reference> 53791aa5-b641-40a0-8e96-cd954676aec9
+    Materials/Material_tripo_part_9: !<reference> a3633a3a-8201-4bc5-b08e-8b4ada9c547d
+    Materials/Material_tripo_part_9|Material_tripo_part_9|GraphPassInfo: !<reference> 2a38027c-c76d-4c35-8e0b-aec6326367c8
+    "Meshes/meshes[0]": !<reference> 87d1eb03-4824-4eab-b3f3-313c55e71e9e
+    "Meshes/meshes[10]": !<reference> c3255254-2112-4105-95f5-250644cbc77a
+    "Meshes/meshes[11]": !<reference> 14937bc6-6780-47d5-a6e9-756e4fbe26b3
+    "Meshes/meshes[12]": !<reference> 4e418bbc-f7da-4744-962b-9e8ec6a0ed44
+    "Meshes/meshes[13]": !<reference> 0f0b7f3b-aeac-4a85-ae14-1914b4dd802c
+    "Meshes/meshes[14]": !<reference> 2b534c8e-e694-49aa-89d6-f36589a33f3f
+    "Meshes/meshes[15]": !<reference> 85924116-b704-48ac-bd83-9c2fee2f8d26
+    "Meshes/meshes[16]": !<reference> 2f575458-e5d6-47a7-89eb-aaa2df4fd526
+    "Meshes/meshes[17]": !<reference> d5ba49c3-3187-4927-af05-2a25ea68d48a
+    "Meshes/meshes[18]": !<reference> 9bfb6583-2e33-48fc-a9af-c12f0b099fd0
+    "Meshes/meshes[19]": !<reference> c7674318-ebd5-44e8-80fe-f46294a066fa
+    "Meshes/meshes[1]": !<reference> d181f783-b977-4a79-9084-4d45be6b4fc5
+    "Meshes/meshes[20]": !<reference> b82e9337-26ea-49b3-b5ea-6eadd3e53eec
+    "Meshes/meshes[21]": !<reference> 561da0e5-aeb9-47f9-b83b-52d77ff2bef9
+    "Meshes/meshes[22]": !<reference> 62b7b047-5032-4f85-9ab2-6db5a23657f9
+    "Meshes/meshes[23]": !<reference> 045f2169-5ceb-4635-89f5-b982eccead6f
+    "Meshes/meshes[24]": !<reference> 7a65dc6f-9c53-4f74-84b9-960c7878ab7c
+    "Meshes/meshes[25]": !<reference> 7332047e-4e05-4eaf-9eaa-d31e30d52bb3
+    "Meshes/meshes[26]": !<reference> c393fbb5-57bc-432b-85bd-972297d56e9a
+    "Meshes/meshes[27]": !<reference> 60ddfad5-9a46-45fc-82ef-c8af19854224
+    "Meshes/meshes[28]": !<reference> f70c499e-3bf2-4ada-929f-d15fe57353a7
+    "Meshes/meshes[29]": !<reference> b74eea86-256c-4f63-b654-26f2fec4f664
+    "Meshes/meshes[2]": !<reference> 22c3b462-166e-4191-ab83-f3e62b98a2eb
+    "Meshes/meshes[30]": !<reference> db8a1e43-b86c-40fe-81bf-e2eee1f068e7
+    "Meshes/meshes[31]": !<reference> 16904d11-d18f-4738-a6a7-cbc873481120
+    "Meshes/meshes[32]": !<reference> 5070f076-d7e1-413d-a8c3-328a8b803f59
+    "Meshes/meshes[33]": !<reference> ef53b789-c09b-4d8e-8376-75a212be84de
+    "Meshes/meshes[34]": !<reference> 9e70a565-47b3-43aa-adc2-2cafb2cf6724
+    "Meshes/meshes[35]": !<reference> f8686249-fdb1-4927-80a4-9e3c03ccf4ea
+    "Meshes/meshes[3]": !<reference> f25b346b-603c-4704-af2c-ea5c9537105b
+    "Meshes/meshes[4]": !<reference> e4ef88c3-4d1a-4ef9-be5d-31a069f254e6
+    "Meshes/meshes[5]": !<reference> e4ece5ed-2377-42fb-8d2e-9adf97a9d382
+    "Meshes/meshes[6]": !<reference> dd6d44a3-5e56-4284-9ef6-f4de3b624be3
+    "Meshes/meshes[7]": !<reference> f97fcb7d-e4af-4f19-8639-c9a6f0bb75e0
+    "Meshes/meshes[8]": !<reference> af61a0ba-28d8-4fa6-b7f2-f3f732a8a630
+    "Meshes/meshes[9]": !<reference> de70d8ff-80ad-4757-8d0d-746992da2d4f
+    Meshes/occluder_left: !<reference> 4d3c97db-19da-4a81-a5aa-de6b1e90c82f
+    Scene: !<reference> 72c8411f-31c9-4316-a033-7f767aac453a
+    Textures/black_shoe_-_segmented_tripo_part_0_basecolor: !<reference> c7ed0f01-3b5d-44c5-b990-9a8aaf06d7ff
+    Textures/black_shoe_-_segmented_tripo_part_0_normal: !<reference> fa7ee03c-cc37-4419-97d2-adae9ad8f4b1
+    Textures/black_shoe_-_segmented_tripo_part_0_rm: !<reference> b6a245f7-2089-4129-a581-c78c35a4a8c4
+    Textures/black_shoe_-_segmented_tripo_part_10_basecolor: !<reference> 927f2f56-ac0e-48df-b931-c305154efc84
+    Textures/black_shoe_-_segmented_tripo_part_10_normal: !<reference> a11782f7-53ca-44d9-8b5a-2e2529991494
+    Textures/black_shoe_-_segmented_tripo_part_10_rm: !<reference> 704614cc-f0c1-420a-ae72-a3b6fb41b448
+    Textures/black_shoe_-_segmented_tripo_part_11_basecolor: !<reference> 6c231108-754e-44ef-8361-1c3299f0b9a7
+    Textures/black_shoe_-_segmented_tripo_part_11_normal: !<reference> 59331753-1bed-4c24-a14d-9cc75479fd52
+    Textures/black_shoe_-_segmented_tripo_part_11_rm: !<reference> c6c2632a-eb6f-4cff-a741-df7d4eea6e52
+    Textures/black_shoe_-_segmented_tripo_part_12_basecolor: !<reference> ca686015-5cf3-4370-b41e-33501501a715
+    Textures/black_shoe_-_segmented_tripo_part_12_normal: !<reference> 0ee90602-a26d-4308-8480-1a2229122ff7
+    Textures/black_shoe_-_segmented_tripo_part_12_rm: !<reference> 7b2760e1-0c20-4d0e-94f8-935e828539c1
+    Textures/black_shoe_-_segmented_tripo_part_13_basecolor: !<reference> ba66d2ee-b336-4e87-93f4-963883686a8a
+    Textures/black_shoe_-_segmented_tripo_part_13_normal: !<reference> eac98813-7eac-40bf-abbe-c55e7a631179
+    Textures/black_shoe_-_segmented_tripo_part_13_rm: !<reference> 5f30a012-2c5e-48cb-add8-ae5d0bfcf49a
+    Textures/black_shoe_-_segmented_tripo_part_14_basecolor: !<reference> 8fa2d574-9912-4eb1-af10-afde9d177648
+    Textures/black_shoe_-_segmented_tripo_part_14_normal: !<reference> 8c825b4f-bb41-4121-b1f5-4c72f08e5666
+    Textures/black_shoe_-_segmented_tripo_part_14_rm: !<reference> 3d6c9820-9fcd-4edb-9535-eb8ef8d78739
+    Textures/black_shoe_-_segmented_tripo_part_15_basecolor: !<reference> d2c48a6f-63e8-4451-900c-3b34e5fb5cc4
+    Textures/black_shoe_-_segmented_tripo_part_15_normal: !<reference> 7be96d68-8a20-4ef6-a0b3-6e8c3c8b7ca5
+    Textures/black_shoe_-_segmented_tripo_part_15_rm: !<reference> 49e5c20b-6465-4ee1-8144-8980e5205315
+    Textures/black_shoe_-_segmented_tripo_part_16_basecolor: !<reference> 555b63f4-080a-41c6-be39-ada2915012b7
+    Textures/black_shoe_-_segmented_tripo_part_16_normal: !<reference> ea26c533-44cd-4352-8639-9c7135399f6e
+    Textures/black_shoe_-_segmented_tripo_part_16_rm: !<reference> ed5f6a49-824e-4879-9845-27b1373360d1
+    Textures/black_shoe_-_segmented_tripo_part_17_basecolor: !<reference> 08abbe2c-f1fd-4bba-8718-32b3070f3d4c
+    Textures/black_shoe_-_segmented_tripo_part_17_normal: !<reference> cd212b73-fb33-44ea-b61e-5e545aa4c35c
+    Textures/black_shoe_-_segmented_tripo_part_17_rm: !<reference> 3f624028-e0d4-4ba6-a1e7-e2cd249a1308
+    Textures/black_shoe_-_segmented_tripo_part_18_basecolor: !<reference> c5e65de4-889f-48bd-82c4-b72aa73b674e
+    Textures/black_shoe_-_segmented_tripo_part_18_normal: !<reference> 69e97ea7-bf8a-439d-b294-ecad4e32e4e8
+    Textures/black_shoe_-_segmented_tripo_part_18_rm: !<reference> f99b175e-7e0f-4ef2-9a77-e0c6ee5a7836
+    Textures/black_shoe_-_segmented_tripo_part_19_basecolor: !<reference> c3b3a865-c646-4b6c-8439-0667dc68ea21
+    Textures/black_shoe_-_segmented_tripo_part_19_normal: !<reference> 53282093-8404-49b7-bfdd-170f0755e693
+    Textures/black_shoe_-_segmented_tripo_part_19_rm: !<reference> fc484ac1-4ee6-4702-be7a-6269420dc846
+    Textures/black_shoe_-_segmented_tripo_part_1_basecolor: !<reference> 00cef841-18a1-479b-b5f0-00f765e4d9f5
+    Textures/black_shoe_-_segmented_tripo_part_1_normal: !<reference> 158477b5-c46e-4aac-a70a-1443bd331c39
+    Textures/black_shoe_-_segmented_tripo_part_1_rm: !<reference> 976930e9-5655-44b4-a60b-a85a4a34b1b7
+    Textures/black_shoe_-_segmented_tripo_part_20_basecolor: !<reference> 87d6c29e-e17e-406f-b0b7-2126d9f0510c
+    Textures/black_shoe_-_segmented_tripo_part_20_normal: !<reference> 6de4c01a-51e1-42cb-a750-ae68600e84f0
+    Textures/black_shoe_-_segmented_tripo_part_20_rm: !<reference> a4517e0a-2f98-4ecf-ae21-10a444a0cb5c
+    Textures/black_shoe_-_segmented_tripo_part_21_basecolor: !<reference> 282c0ce5-ce75-4a72-9916-9d281cb4b984
+    Textures/black_shoe_-_segmented_tripo_part_21_normal: !<reference> 382d9d49-3af6-41b2-ae37-3ee5211e12af
+    Textures/black_shoe_-_segmented_tripo_part_21_rm: !<reference> 0391676f-2ceb-4341-8b15-a7bcbc0cc21d
+    Textures/black_shoe_-_segmented_tripo_part_22_basecolor: !<reference> ed9452b6-d3e9-4fef-9e8a-d495953e95a5
+    Textures/black_shoe_-_segmented_tripo_part_22_normal: !<reference> b4a9c8cc-7391-436e-b3e5-a1d38b824e6b
+    Textures/black_shoe_-_segmented_tripo_part_22_rm: !<reference> 002698c8-b763-428f-bb89-3990fbcee513
+    Textures/black_shoe_-_segmented_tripo_part_23_basecolor: !<reference> 6c9479ba-85d6-498b-bb6d-8ad0be6b53d5
+    Textures/black_shoe_-_segmented_tripo_part_23_normal: !<reference> dc2ca583-f6db-498c-874a-6599e57c7c64
+    Textures/black_shoe_-_segmented_tripo_part_23_rm: !<reference> f8ea97aa-1593-4418-b9ee-14ca246dfccd
+    Textures/black_shoe_-_segmented_tripo_part_24_basecolor: !<reference> e8e5d33b-c76e-4c6c-87ce-3ed943a9d00d
+    Textures/black_shoe_-_segmented_tripo_part_24_normal: !<reference> 2ec545b6-c1a6-4657-9d2b-a19e10784806
+    Textures/black_shoe_-_segmented_tripo_part_24_rm: !<reference> 60b01ccd-f8df-40c5-a8cc-9898ab78680b
+    Textures/black_shoe_-_segmented_tripo_part_25_basecolor: !<reference> daeda965-fa87-4940-8f35-349ca55c24d0
+    Textures/black_shoe_-_segmented_tripo_part_25_normal: !<reference> 49ae088c-bb04-498d-a4b6-2cbd2232bec3
+    Textures/black_shoe_-_segmented_tripo_part_25_rm: !<reference> 58e9158c-7034-48ec-9f7b-270b812a6139
+    Textures/black_shoe_-_segmented_tripo_part_26_basecolor: !<reference> 7996c6b8-ba60-4c71-a295-07a6f00e92ae
+    Textures/black_shoe_-_segmented_tripo_part_26_normal: !<reference> 91127553-6e55-4bc6-b63a-acf6c215f0e8
+    Textures/black_shoe_-_segmented_tripo_part_26_rm: !<reference> 66a27fcf-04bc-43bb-b394-8a4038e45bfd
+    Textures/black_shoe_-_segmented_tripo_part_27_basecolor: !<reference> 84cec2d8-cc32-4336-b1a3-e94b86b39fb6
+    Textures/black_shoe_-_segmented_tripo_part_27_normal: !<reference> 1f255a81-8411-460f-b056-7b0a9abfd668
+    Textures/black_shoe_-_segmented_tripo_part_27_rm: !<reference> 1e9bfee1-14a1-42de-938b-7aeb1db2131b
+    Textures/black_shoe_-_segmented_tripo_part_28_basecolor: !<reference> 057be49d-d299-4050-9e86-83850866bebf
+    Textures/black_shoe_-_segmented_tripo_part_28_normal: !<reference> 1ddb06ad-a744-4999-a3b4-0830c2188773
+    Textures/black_shoe_-_segmented_tripo_part_28_rm: !<reference> 35bb70d5-3c65-431e-abe4-b873dd9092aa
+    Textures/black_shoe_-_segmented_tripo_part_29_basecolor: !<reference> 4e40166b-2211-453a-8cec-733cb17c4544
+    Textures/black_shoe_-_segmented_tripo_part_29_normal: !<reference> b7392ae8-9357-44a6-872f-fe13d7c72262
+    Textures/black_shoe_-_segmented_tripo_part_29_rm: !<reference> bfd6f3cc-f798-488b-b2b3-f5907d0c6165
+    Textures/black_shoe_-_segmented_tripo_part_2_basecolor: !<reference> 7c97d996-de64-4dd4-b007-645d7930e851
+    Textures/black_shoe_-_segmented_tripo_part_2_normal: !<reference> bef27049-4810-4d00-baa0-f2dda311ed87
+    Textures/black_shoe_-_segmented_tripo_part_2_rm: !<reference> 39a6cfe0-314e-4cb2-824d-d606ebc37ee4
+    Textures/black_shoe_-_segmented_tripo_part_30_basecolor: !<reference> 9c241460-1f9e-46fd-ab28-391d53b5d2bc
+    Textures/black_shoe_-_segmented_tripo_part_30_normal: !<reference> 037cf4c6-23ed-47af-837f-04d6a866af4a
+    Textures/black_shoe_-_segmented_tripo_part_30_rm: !<reference> 1af6645c-d3ce-4345-891c-fba8ae5ee184
+    Textures/black_shoe_-_segmented_tripo_part_31_basecolor: !<reference> 34717c42-2035-42d0-a641-916d86adfb8c
+    Textures/black_shoe_-_segmented_tripo_part_31_normal: !<reference> 1e6ee85c-9ab0-4ea6-b74b-518cfb3d0324
+    Textures/black_shoe_-_segmented_tripo_part_31_rm: !<reference> 134da587-4879-4160-add0-5b1b457f6f0e
+    Textures/black_shoe_-_segmented_tripo_part_32_basecolor: !<reference> 24a1c647-3037-4c39-b6c9-f44e71360863
+    Textures/black_shoe_-_segmented_tripo_part_32_normal: !<reference> 34731597-75b3-40ee-b8bb-0da9a9d63e25
+    Textures/black_shoe_-_segmented_tripo_part_32_rm: !<reference> 744a6343-bb6d-48b7-b782-854861b4e27e
+    Textures/black_shoe_-_segmented_tripo_part_33_basecolor: !<reference> 99d79fea-fc44-40bf-861b-0700037dadc0
+    Textures/black_shoe_-_segmented_tripo_part_33_normal: !<reference> 6fa927fa-7a2f-4d4c-ae6e-34c585b1cc13
+    Textures/black_shoe_-_segmented_tripo_part_33_rm: !<reference> 0b7d3dd7-521f-4634-ac81-627f92821f55
+    Textures/black_shoe_-_segmented_tripo_part_34_basecolor: !<reference> 7683cfcb-f35f-49fe-884a-229b774fa9be
+    Textures/black_shoe_-_segmented_tripo_part_34_normal: !<reference> 70cdeab6-3ad0-4165-9c73-90169c7e2d2e
+    Textures/black_shoe_-_segmented_tripo_part_34_rm: !<reference> 692f5841-ab28-49ff-8d1a-d8370c46d4e1
+    Textures/black_shoe_-_segmented_tripo_part_35_basecolor: !<reference> 61229196-3005-4b14-bc3d-12cc8c0c012e
+    Textures/black_shoe_-_segmented_tripo_part_35_normal: !<reference> 440ac2c0-a9ac-406a-8dd0-fb87efae1300
+    Textures/black_shoe_-_segmented_tripo_part_35_rm: !<reference> f507b5f7-3b15-4d08-911b-e6e6c23ba294
+    Textures/black_shoe_-_segmented_tripo_part_3_basecolor: !<reference> 036cf35f-928d-4d81-b314-7fa0e3a399c0
+    Textures/black_shoe_-_segmented_tripo_part_3_normal: !<reference> 2a570e7d-6360-4c28-86a6-623a94c41f32
+    Textures/black_shoe_-_segmented_tripo_part_3_rm: !<reference> 2e7a30a8-9aed-480a-a26f-8430af5f7128
+    Textures/black_shoe_-_segmented_tripo_part_4_basecolor: !<reference> fe722846-6f71-40fa-8507-ffc574e0e5fa
+    Textures/black_shoe_-_segmented_tripo_part_4_normal: !<reference> 114f76d1-7313-4c28-bf78-9851210f05f1
+    Textures/black_shoe_-_segmented_tripo_part_4_rm: !<reference> 483e68be-4140-4d1f-92af-f74ccdb801c5
+    Textures/black_shoe_-_segmented_tripo_part_5_basecolor: !<reference> 82d0e035-08cf-48f6-9d58-241ee0771caf
+    Textures/black_shoe_-_segmented_tripo_part_5_normal: !<reference> 3272a202-bd51-426b-ae48-a2853371e194
+    Textures/black_shoe_-_segmented_tripo_part_5_rm: !<reference> dca6f7a8-5ef4-49a5-a1d4-818bb29d4313
+    Textures/black_shoe_-_segmented_tripo_part_6_basecolor: !<reference> 1cf5e645-dd40-4498-8e83-575ad96a3640
+    Textures/black_shoe_-_segmented_tripo_part_6_normal: !<reference> 996149b5-d9a8-445d-ae08-b3fbbc4b81a3
+    Textures/black_shoe_-_segmented_tripo_part_6_rm: !<reference> 53f32a80-fead-4ed7-a91d-e555c2a257ec
+    Textures/black_shoe_-_segmented_tripo_part_7_basecolor: !<reference> 4ff0a820-55c6-4602-881e-c9ffcbe0e8bf
+    Textures/black_shoe_-_segmented_tripo_part_7_normal: !<reference> 420dc19c-b9a5-4734-82fc-521ed165a743
+    Textures/black_shoe_-_segmented_tripo_part_7_rm: !<reference> 6965aa9e-ba15-4b13-b8b1-523f93a1c180
+    Textures/black_shoe_-_segmented_tripo_part_8_basecolor: !<reference> 525eef6f-acae-413a-93ba-94de2eb6a1cd
+    Textures/black_shoe_-_segmented_tripo_part_8_normal: !<reference> 17ada7c7-00a6-4019-aa96-e0a890fbb48e
+    Textures/black_shoe_-_segmented_tripo_part_8_rm: !<reference> ae18ee36-139d-41e4-a8c1-a4aeb937f016
+    Textures/black_shoe_-_segmented_tripo_part_9_basecolor: !<reference> 9d2276b9-1008-450c-813a-c351bcf793c8
+    Textures/black_shoe_-_segmented_tripo_part_9_normal: !<reference> a02d6389-186b-4321-b14b-4901bf79aa2d
+    Textures/black_shoe_-_segmented_tripo_part_9_rm: !<reference> e5a937ac-130c-4c0c-a46a-ca4c877d4a91
+    a1876fafc37c6fab: !<reference> 03e4646c-d0a1-4adb-ac43-29ae0285a34f
+    a90b8de6fc9108c3: !<reference> 2cd0a2ef-1efc-4e7b-8a87-69fe066c9156
+    ad87e9721d6ada01: !<reference> 0dece10d-ad66-447b-84c2-4f75e315a32f
+    b823ebf6fe0fcea2: !<reference> e0bcf8c4-b549-4baf-b267-4f25eb5994fc
+    c043b6539adf9948: !<reference> b6fa70af-fce9-4732-8615-db1772b5d58e
+    c4dd509fe8887339: !<reference> b800455d-6f54-441c-8991-aa7a9c688657
+    c9699f84dadd2a14: !<reference> 6034afe5-bf03-4449-a21f-f396fcaf806a
+    ca2303a68c99e508: !<reference> b7f454b4-afe2-4fe0-abec-baa6f54636b2
+    cb902a72b0e12994: !<reference> 1b831bcb-c156-4e69-821f-a15221b71ed8
+    d2f44b484ed75b50: !<reference> 3f12a843-27d8-43a8-b510-c8bab08cd0cc
+    d477caa6e0d6bfa2: !<reference> 8fc1a0e6-a692-4889-bf9d-7dbee7ac4a29
+    d4accc2c66d89696: !<reference> a68dfb64-5e5e-4b13-b124-1531cff580e4
+    d7c7d4842127c009: !<reference> 4f82a47b-bc01-4b96-9f7c-58e91b830419
+    dcd65ba7b5bb2bc5: !<reference> cb31e052-23a8-4b07-afad-01f85bd3ad23
+    e3ba2cc415a17a40: !<reference> b6e8f881-898e-41c3-92f0-8c4a673e761d
+    e8725c71fad6726a: !<reference> 160a3671-8dcf-4b85-8feb-6fe156150d9d
+    eaeee5472ac2f513: !<reference> 16076598-4df6-4e9e-9d78-f5fdc76b0240
+    eb37dd7c8dd44963: !<reference> 66da3f51-b806-4201-8681-e420eeb3264a
+    ecc39a1b93e4b05b: !<reference> 4bc410d7-2b9c-4062-afd2-8891875a8b10
+    efbf9c4cb581e8d8: !<reference> 5c2e315a-d40e-417d-ac13-e8162e939d4e
+    fa9616e63fa98272: !<reference> be2afafe-ff81-404d-b905-2568078286f5
+    fe6cdea468a2d25c: !<reference> a33ca111-3b80-4c65-9ad2-f0523ed31171
+  ImporterName: GltfImporter
+  PrimaryAsset: !<reference> 72c8411f-31c9-4316-a033-7f767aac453a
+  PackageType: LegacyPackage
+  LegacyPackagePolicy: CanBeUnpackedTransparent
+  ExtraData:
+    {}
+  AssetDataMap:
+    Scene: !<own> dc9306b8-1cc8-415e-b74b-9adf21ddfc3f
+  DependentFiles:
+    []
+  ImporterSettings: !<GltfImporterSettings>
+    UseLegacyImporter: false
+    WithMaterials: true
+    NamingConvention: ByCategorySanitizeV2
+    PersistentIdGenerationAlgorithm: DescriptorBasedV2
+    AnimationCurveOptimization: true
+    CustomAnimationSamplingRate: 30.000000
+    ImportVertexColor: true
+    ImportTangents: true
+    ImportMorphTargetAnimation: true
+    ConvertMetersToCentimeters: true
+    RegenerateTangents: false
+    OptimizeMesh: true
+  CompressionSettings: !<ComplexCompressionSettings>
+    Presets:
+      None Compression: !<FileCompressionSettings>
+        {}
+      Performance Compression: !<PerformanceCompressionSettings>
+        Level: Medium
+        Mipmap: false
+    ExtensionMappings:
+      mesh: None Compression
+      jpg: Performance Compression
+      png: Performance Compression
+    Overrides:
+      {}
+- !<SceneObject/01893884-2d88-4e20-489f-6c4276fece64>
+  PrefabRemaps:
+    []
+  Name: tripo_part_15
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> 33d91267-b9e4-4eba-508a-7bbce96ef122
+- !<SceneObject/03e4646c-d0a1-4adb-53bc-d651fd7a5cb0>
+  PrefabRemaps:
+    []
+  Name: tripo_part_11
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> 1edb376a-0d97-43a3-5d17-79f76a548b2a
+- !<RenderMeshVisual/0ac93021-ad50-4a10-7242-7b2670934ebb>
+  PrefabRemaps:
+    []
+  Name: "meshes[13]"
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Stretch
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> 17ffce17-4283-495b-a0e5-28408de17b1b
+  Mesh: !<reference> 0f0b7f3b-aeac-4a85-ae14-1914b4dd802c
+  Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  BlendShapesEnabled: true
+  BlendNormals: false
+  BlendShapes:
+    {}
+- !<SceneObject/0cff4b69-27fb-49fb-7d1c-a54f729989ce>
+  PrefabRemaps:
+    []
+  Name: tripo_part_26
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> 160a3671-8dcf-4b85-7014-901ea9eaf262
+- !<SceneObject/0dece10d-ad66-447b-7b3d-b08a1cea5cd0>
+  PrefabRemaps:
+    []
+  Name: tripo_part_0
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> 4bc410d7-2b9c-4062-502d-776e78a574ef
+- !<SceneObject/16076598-4df6-4e9e-6287-0a023894fdbf>
+  PrefabRemaps:
+    []
+  Name: tripo_part_18
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> e7ef7969-edb7-4e69-793a-f5399d2b3e8d
+- !<RenderMeshVisual/160a3671-8dcf-4b85-7014-901ea9eaf262>
+  PrefabRemaps:
+    []
+  Name: "meshes[26]"
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Stretch
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> e125311a-6a88-4a27-92cc-1dd40b57c8b4
+  Mesh: !<reference> c393fbb5-57bc-432b-85bd-972297d56e9a
+  Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  BlendShapesEnabled: true
+  BlendNormals: false
+  BlendShapes:
+    {}
+- !<RenderMeshVisual/188b9a26-d823-45da-4322-765e86b0e103>
+  PrefabRemaps:
+    []
+  Name: "meshes[5]"
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Stretch
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> c7a3eb45-31a0-495d-8e5f-58ceab405e91
+  Mesh: !<reference> e4ece5ed-2377-42fb-8d2e-9adf97a9d382
+  Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  BlendShapesEnabled: true
+  BlendNormals: false
+  BlendShapes:
+    {}
+- !<SceneObject/1b831bcb-c156-4e69-7de0-5eadde48e127>
+  PrefabRemaps:
+    []
+  Name: tripo_part_35
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> ac478a40-14eb-4db8-7a77-7bf6e8ccfd39
+- !<RenderMeshVisual/1edb376a-0d97-43a3-5d17-79f76a548b2a>
+  PrefabRemaps:
+    []
+  Name: "meshes[11]"
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Stretch
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> a7e1f0b4-1381-4de7-8acc-3a9c7232d577
+  Mesh: !<reference> 14937bc6-6780-47d5-a6e9-756e4fbe26b3
+  Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  BlendShapesEnabled: true
+  BlendNormals: false
+  BlendShapes:
+    {}
+- !<SceneObject/2065e353-99c5-4bde-491d-17eb31e25f7c>
+  PrefabRemaps:
+    []
+  Name: tripo_part_4
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> cb31e052-23a8-4b07-5052-fe07a42c52dc
+- !<RenderMeshVisual/20f531c0-a924-4c87-4824-f6802b6f5346>
+  PrefabRemaps:
+    []
+  Name: "meshes[31]"
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Stretch
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> 8c039b07-67ad-467e-b6b9-1faf57ae0abc
+  Mesh: !<reference> 16904d11-d18f-4738-a6a7-cbc873481120
+  Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  BlendShapesEnabled: true
+  BlendNormals: false
+  BlendShapes:
+    {}
+- !<SceneObject/25510bf5-39af-4e58-6400-1f515ba079dc>
+  PrefabRemaps:
+    []
+  Name: Scenes
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    - !<own> 945e5794-6a1c-4808-7508-58fc23319e8a
+  Components:
+    []
+- !<SceneObject/27d9d12f-c10d-498f-5894-636704e7d42d>
+  PrefabRemaps:
+    []
+  Name: tripo_part_27
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> becfb473-a7fc-48c0-703a-d92cba8eb92d
+- !<SceneObject/2cd0a2ef-1efc-4e7b-7578-9601f9936ea9>
+  PrefabRemaps:
+    []
+  Name: tripo_part_33
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> 991fe077-cce5-46d3-76d4-f20f786ff7c7
+- !<SceneObject/3070c698-0f0c-4365-73d2-dd79f3839440>
+  PrefabRemaps:
+    []
+  Name: tripo_part_1
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> de591cc1-ce0a-409d-7946-1ee6602ad481
+- !<RenderMeshVisual/33d91267-b9e4-4eba-508a-7bbce96ef122>
+  PrefabRemaps:
+    []
+  Name: "meshes[15]"
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Stretch
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> a67e9692-18dc-405f-83e0-40f31fce772d
+  Mesh: !<reference> 85924116-b704-48ac-bd83-9c2fee2f8d26
+  Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  BlendShapesEnabled: true
+  BlendNormals: false
+  BlendShapes:
+    {}
+- !<RenderMeshVisual/3e47ae0b-d7a4-469a-7947-2391e010c6fd>
+  PrefabRemaps:
+    []
+  Name: "meshes[22]"
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Stretch
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> 294ad089-cdc0-4cd7-8a11-e7a33aa7ec99
+  Mesh: !<reference> 62b7b047-5032-4f85-9ab2-6db5a23657f9
+  Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  BlendShapesEnabled: true
+  BlendNormals: false
+  BlendShapes:
+    {}
+- !<RenderMeshVisual/3f12a843-27d8-43a8-4aef-37454f732f33>
+  PrefabRemaps:
+    []
+  Name: "meshes[17]"
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Stretch
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> 97dfbea5-efac-420f-be05-aa0434ea3f58
+  Mesh: !<reference> d5ba49c3-3187-4927-af05-2a25ea68d48a
+  Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  BlendShapesEnabled: true
+  BlendNormals: false
+  BlendShapes:
+    {}
+- !<RenderMeshVisual/4bc410d7-2b9c-4062-502d-776e78a574ef>
+  PrefabRemaps:
+    []
+  Name: "meshes[0]"
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Stretch
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> d92ffba2-d6a6-440b-9ad7-29711c3f68d9
+  Mesh: !<reference> 87d1eb03-4824-4eab-b3f3-313c55e71e9e
+  Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  BlendShapesEnabled: true
+  BlendNormals: false
+  BlendShapes:
+    {}
+- !<RenderMeshVisual/4be87f47-62e7-425d-578c-45c179aadd6f>
+  PrefabRemaps:
+    []
+  Name: "meshes[16]"
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Stretch
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> 16ff589e-52ae-42b2-965b-37815d6cc74b
+  Mesh: !<reference> 2f575458-e5d6-47a7-89eb-aaa2df4fd526
+  Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  BlendShapesEnabled: true
+  BlendNormals: false
+  BlendShapes:
+    {}
+- !<SceneObject/4f82a47b-bc01-4b96-6083-a716e47cfbe6>
+  PrefabRemaps:
+    []
+  Name: tripo_part_25
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> bb448f43-87bc-4e0d-6a00-8ef9b7405050
+- !<SceneObject/5066b9bf-a3e2-4b59-64fe-6a58346f967f>
+  PrefabRemaps:
+    []
+  Name: occluder_left
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 6.236547, y: -3.486526, z: 0.952710}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> 66da3f51-b806-4201-797e-1bdf114cd9b5
+- !<SceneObject/5c2e315a-d40e-417d-53ec-17e9d16c62b1>
+  PrefabRemaps:
+    []
+  Name: tripo_part_34
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> 9ac63033-9b7d-4445-77d3-54f9cffc0055
+- !<SceneObject/6034afe5-bf03-4449-5de0-0c6903507f95>
+  PrefabRemaps:
+    []
+  Name: tripo_part_32
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> d0b2a6b6-5900-41f6-5fb1-aebdd3ccfcc0
+- !<SceneObject/615819c5-93fd-4081-53f1-3a705ae4fa42>
+  PrefabRemaps:
+    []
+  Name: black-shoe-L-segmented-lite
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 100.000000, y: 100.000000, z: 100.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    - !<own> 25510bf5-39af-4e58-6400-1f515ba079dc
+  Components:
+    []
+- !<RenderMeshVisual/66313eec-a81c-4631-70a5-aaa8be7c7003>
+  PrefabRemaps:
+    []
+  Name: "meshes[6]"
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Stretch
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> 10ea8e9d-6c3f-430f-bb9d-49d892c10c93
+  Mesh: !<reference> dd6d44a3-5e56-4284-9ef6-f4de3b624be3
+  Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  BlendShapesEnabled: true
+  BlendNormals: false
+  BlendShapes:
+    {}
+- !<RenderMeshVisual/66da3f51-b806-4201-797e-1bdf114cd9b5>
+  PrefabRemaps:
+    []
+  Name: occluder_left
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Stretch
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    []
+  Mesh: !<reference> 4d3c97db-19da-4a81-a5aa-de6b1e90c82f
+  Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  BlendShapesEnabled: true
+  BlendNormals: false
+  BlendShapes:
+    {}
+- !<RenderMeshVisual/6e7d26a5-325c-4a8f-5dad-ab00b1221586>
+  PrefabRemaps:
+    []
+  Name: "meshes[3]"
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Stretch
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> b091b7df-5453-401f-80c3-97349fbbf5f5
+  Mesh: !<reference> f25b346b-603c-4704-af2c-ea5c9537105b
+  Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  BlendShapesEnabled: true
+  BlendNormals: false
+  BlendShapes:
+    {}
+- !<RenderMeshVisual/7bbb0fa2-888b-42ea-57ca-040d9eccda71>
+  PrefabRemaps:
+    []
+  Name: "meshes[19]"
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Stretch
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> 57975276-5789-40c7-b58f-1ee0269fe477
+  Mesh: !<reference> c7674318-ebd5-44e8-80fe-f46294a066fa
+  Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  BlendShapesEnabled: true
+  BlendNormals: false
+  BlendShapes:
+    {}
+- !<RenderMeshVisual/8291eada-2261-4e13-4d85-4f9b53cf0cb9>
+  PrefabRemaps:
+    []
+  Name: "meshes[20]"
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Stretch
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> 25db740b-f956-4e91-a940-2871a621b9aa
+  Mesh: !<reference> b82e9337-26ea-49b3-b5ea-6eadd3e53eec
+  Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  BlendShapesEnabled: true
+  BlendNormals: false
+  BlendShapes:
+    {}
+- !<RenderMeshVisual/8fc1a0e6-a692-4889-4062-82411853b5d6>
+  PrefabRemaps:
+    []
+  Name: "meshes[23]"
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Stretch
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> 016d485c-ebdc-4e79-ba59-1a97e1f211ae
+  Mesh: !<reference> 045f2169-5ceb-4635-89f5-b982eccead6f
+  Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  BlendShapesEnabled: true
+  BlendNormals: false
+  BlendShapes:
+    {}
+- !<SceneObject/914cab83-a99e-44f1-78de-fc79a52e62f2>
+  PrefabRemaps:
+    []
+  Name: tripo_part_16
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> 4be87f47-62e7-425d-578c-45c179aadd6f
+- !<SceneObject/93777498-b23f-4669-4149-90c484f03556>
+  PrefabRemaps:
+    []
+  Name: tripo_part_23
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> 8fc1a0e6-a692-4889-4062-82411853b5d6
+- !<SceneObject/945e5794-6a1c-4808-7508-58fc23319e8a>
+  PrefabRemaps:
+    []
+  Name: Scene
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    - !<own> 5066b9bf-a3e2-4b59-64fe-6a58346f967f
+    - !<own> b7f454b4-afe2-4fe0-5413-45590ab9c94d
+  Components:
+    []
+- !<RenderMeshVisual/991fe077-cce5-46d3-76d4-f20f786ff7c7>
+  PrefabRemaps:
+    []
+  Name: "meshes[33]"
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Stretch
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> b734b94f-7f82-47c8-8016-bf0107e026bd
+  Mesh: !<reference> ef53b789-c09b-4d8e-8376-75a212be84de
+  Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  BlendShapesEnabled: true
+  BlendNormals: false
+  BlendShapes:
+    {}
+- !<RenderMeshVisual/9ac63033-9b7d-4445-77d3-54f9cffc0055>
+  PrefabRemaps:
+    []
+  Name: "meshes[34]"
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Stretch
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> 2944d5ef-0107-4776-be1e-04464f51d8ae
+  Mesh: !<reference> 9e70a565-47b3-43aa-adc2-2cafb2cf6724
+  Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  BlendShapesEnabled: true
+  BlendNormals: false
+  BlendShapes:
+    {}
+- !<SceneObject/a0d85a5e-0270-4b03-6ba0-9d0ea044b2a5>
+  PrefabRemaps:
+    []
+  Name: tripo_part_31
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> 20f531c0-a924-4c87-4824-f6802b6f5346
+- !<RenderMeshVisual/a33ca111-3b80-4c65-652d-0fadc12cee8e>
+  PrefabRemaps:
+    []
+  Name: "meshes[7]"
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Stretch
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> 19b26b10-562f-496a-80ba-da6e70a28c11
+  Mesh: !<reference> f97fcb7d-e4af-4f19-8639-c9a6f0bb75e0
+  Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  BlendShapesEnabled: true
+  BlendNormals: false
+  BlendShapes:
+    {}
+- !<SceneObject/a4f0d491-6814-4fb9-72e2-a86d7ee0092b>
+  PrefabRemaps:
+    []
+  Name: tripo_part_28
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> c9c1c2aa-8462-4569-62b9-8cc825b13c44
+- !<SceneObject/a5c39c6a-b92a-4040-4617-0d9dc11d4787>
+  PrefabRemaps:
+    []
+  Name: tripo_part_21
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> bd9f5dd6-44d8-487a-5b8b-285af1619807
+- !<SceneObject/a68dfb64-5e5e-4b13-4edb-eace300a7f1b>
+  PrefabRemaps:
+    []
+  Name: tripo_part_6
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> 66313eec-a81c-4631-70a5-aaa8be7c7003
+- !<SceneObject/a6dfb08a-d78e-421f-553d-2de8dd9fa07f>
+  PrefabRemaps:
+    []
+  Name: tripo_part_5
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> 188b9a26-d823-45da-4322-765e86b0e103
+- !<SceneObject/a7656ece-5600-4e59-4df8-0e767412efb3>
+  PrefabRemaps:
+    []
+  Name: tripo_part_24
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> b6e8f881-898e-41c3-6d0f-73b598c189e2
+- !<RenderMeshVisual/ac478a40-14eb-4db8-7a77-7bf6e8ccfd39>
+  PrefabRemaps:
+    []
+  Name: "meshes[35]"
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Stretch
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> 4ac008d8-04bd-42e0-aa77-b4724f097c68
+  Mesh: !<reference> f8686249-fdb1-4927-80a4-9e3c03ccf4ea
+  Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  BlendShapesEnabled: true
+  BlendNormals: false
+  BlendShapes:
+    {}
+- !<SceneObject/b54aa308-02f8-49fb-78ae-cbcf02e79041>
+  PrefabRemaps:
+    []
+  Name: tripo_part_19
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> 7bbb0fa2-888b-42ea-57ca-040d9eccda71
+- !<SceneObject/b6da8884-2c6e-41ae-5ca9-95cebfb26380>
+  PrefabRemaps:
+    []
+  Name: tripo_part_20
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> 8291eada-2261-4e13-4d85-4f9b53cf0cb9
+- !<RenderMeshVisual/b6e8f881-898e-41c3-6d0f-73b598c189e2>
+  PrefabRemaps:
+    []
+  Name: "meshes[24]"
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Stretch
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> 17bce0ef-ddc0-4cee-bb85-f38cb694f934
+  Mesh: !<reference> 7a65dc6f-9c53-4f74-84b9-960c7878ab7c
+  Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  BlendShapesEnabled: true
+  BlendNormals: false
+  BlendShapes:
+    {}
+- !<SceneObject/b6fa70af-fce9-4732-79ea-24e88d4a2a71>
+  PrefabRemaps:
+    []
+  Name: tripo_part_8
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> e0bcf8c4-b549-4baf-4d98-b0da14a66b03
+- !<SceneObject/b7f454b4-afe2-4fe0-5413-45590ab9c94d>
+  PrefabRemaps:
+    []
+  Name: ROOT
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: -0.375579, y: -7.950430, z: 0.000000}
+    Rotation: {x: 180.000000, y: 89.980217, z: 180.000000}
+    Scale: {x: 104.801468, y: 104.801430, z: 104.801468}
+    HasSegmentScaleCompensation: false
+  Children:
+    - !<own> 0dece10d-ad66-447b-7b3d-b08a1cea5cd0
+    - !<own> 3070c698-0f0c-4365-73d2-dd79f3839440
+    - !<own> cb8290ab-1155-4c1f-7880-edc1ab726652
+    - !<own> da3c41c5-0db8-4984-7f2c-e7b5c030ff38
+    - !<own> 2065e353-99c5-4bde-491d-17eb31e25f7c
+    - !<own> a6dfb08a-d78e-421f-553d-2de8dd9fa07f
+    - !<own> a68dfb64-5e5e-4b13-4edb-eace300a7f1b
+    - !<own> b800455d-6f54-441c-766e-5585639779a8
+    - !<own> b6fa70af-fce9-4732-79ea-24e88d4a2a71
+    - !<own> fdeb46c9-e182-497a-7d09-f42ecece60aa
+    - !<own> e692e88e-fd2d-46ed-6ad9-1b88223cc600
+    - !<own> 03e4646c-d0a1-4adb-53bc-d651fd7a5cb0
+    - !<own> be2afafe-ff81-404d-46fa-da97f87d790a
+    - !<own> d305f0f1-64ea-465a-49d6-44314e664825
+    - !<own> c030211b-3865-40b1-69b8-879d527751bd
+    - !<own> 01893884-2d88-4e20-489f-6c4276fece64
+    - !<own> 914cab83-a99e-44f1-78de-fc79a52e62f2
+    - !<own> b9254eed-9c99-4f99-7f8f-64aa42f54a1b
+    - !<own> 16076598-4df6-4e9e-6287-0a023894fdbf
+    - !<own> b54aa308-02f8-49fb-78ae-cbcf02e79041
+    - !<own> b6da8884-2c6e-41ae-5ca9-95cebfb26380
+    - !<own> a5c39c6a-b92a-4040-4617-0d9dc11d4787
+    - !<own> c852d7dc-0e31-476a-7741-9e8f1ff5d6bc
+    - !<own> 93777498-b23f-4669-4149-90c484f03556
+    - !<own> a7656ece-5600-4e59-4df8-0e767412efb3
+    - !<own> 4f82a47b-bc01-4b96-6083-a716e47cfbe6
+    - !<own> 0cff4b69-27fb-49fb-7d1c-a54f729989ce
+    - !<own> 27d9d12f-c10d-498f-5894-636704e7d42d
+    - !<own> a4f0d491-6814-4fb9-72e2-a86d7ee0092b
+    - !<own> d2b6c1cf-aa3b-4076-6687-0501c01c178a
+    - !<own> df0b4f99-6ed3-4571-586f-e013de6285d0
+    - !<own> a0d85a5e-0270-4b03-6ba0-9d0ea044b2a5
+    - !<own> 6034afe5-bf03-4449-5de0-0c6903507f95
+    - !<own> 2cd0a2ef-1efc-4e7b-7578-9601f9936ea9
+    - !<own> 5c2e315a-d40e-417d-53ec-17e9d16c62b1
+    - !<own> 1b831bcb-c156-4e69-7de0-5eadde48e127
+  Components:
+    []
+- !<SceneObject/b800455d-6f54-441c-766e-5585639779a8>
+  PrefabRemaps:
+    []
+  Name: tripo_part_7
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> a33ca111-3b80-4c65-652d-0fadc12cee8e
+- !<SceneObject/b9254eed-9c99-4f99-7f8f-64aa42f54a1b>
+  PrefabRemaps:
+    []
+  Name: tripo_part_17
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> 3f12a843-27d8-43a8-4aef-37454f732f33
+- !<RenderMeshVisual/bb448f43-87bc-4e0d-6a00-8ef9b7405050>
+  PrefabRemaps:
+    []
+  Name: "meshes[25]"
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Stretch
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> d6fda868-4e2e-44ed-8e4e-dac10d84d1f1
+  Mesh: !<reference> 7332047e-4e05-4eaf-9eaa-d31e30d52bb3
+  Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  BlendShapesEnabled: true
+  BlendNormals: false
+  BlendShapes:
+    {}
+- !<RenderMeshVisual/bb67b386-fcf1-4d96-6fe5-089b916ddb31>
+  PrefabRemaps:
+    []
+  Name: "meshes[29]"
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Stretch
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> fd25547f-4f93-4c7d-9998-131356dbf356
+  Mesh: !<reference> b74eea86-256c-4f63-b654-26f2fec4f664
+  Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  BlendShapesEnabled: true
+  BlendNormals: false
+  BlendShapes:
+    {}
+- !<RenderMeshVisual/bd9f5dd6-44d8-487a-5b8b-285af1619807>
+  PrefabRemaps:
+    []
+  Name: "meshes[21]"
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Stretch
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> fee5fc43-7389-4cc9-ab16-6c698c4ef467
+  Mesh: !<reference> 561da0e5-aeb9-47f9-b83b-52d77ff2bef9
+  Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  BlendShapesEnabled: true
+  BlendNormals: false
+  BlendShapes:
+    {}
+- !<SceneObject/be2afafe-ff81-404d-46fa-da97f87d790a>
+  PrefabRemaps:
+    []
+  Name: tripo_part_12
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> eebbe7aa-7034-46ab-570c-8f9b0e393ccf
+- !<RenderMeshVisual/becfb473-a7fc-48c0-703a-d92cba8eb92d>
+  PrefabRemaps:
+    []
+  Name: "meshes[27]"
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Stretch
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> 9ec7e388-2fdf-4514-8b20-9ab20b1bce9d
+  Mesh: !<reference> 60ddfad5-9a46-45fc-82ef-c8af19854224
+  Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  BlendShapesEnabled: true
+  BlendNormals: false
+  BlendShapes:
+    {}
+- !<SceneObject/c030211b-3865-40b1-69b8-879d527751bd>
+  PrefabRemaps:
+    []
+  Name: tripo_part_14
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> fc4f6b14-f904-4c8b-6c29-f407415d5fef
+- !<SceneObject/c852d7dc-0e31-476a-7741-9e8f1ff5d6bc>
+  PrefabRemaps:
+    []
+  Name: tripo_part_22
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> 3e47ae0b-d7a4-469a-7947-2391e010c6fd
+- !<RenderMeshVisual/c9c1c2aa-8462-4569-62b9-8cc825b13c44>
+  PrefabRemaps:
+    []
+  Name: "meshes[28]"
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Stretch
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> cd315ccc-d23c-41b4-bd64-69f1539ebd54
+  Mesh: !<reference> f70c499e-3bf2-4ada-929f-d15fe57353a7
+  Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  BlendShapesEnabled: true
+  BlendNormals: false
+  BlendShapes:
+    {}
+- !<RenderMeshVisual/cb31e052-23a8-4b07-5052-fe07a42c52dc>
+  PrefabRemaps:
+    []
+  Name: "meshes[4]"
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Stretch
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> e71b1350-204a-49ae-9340-879c42241e8e
+  Mesh: !<reference> e4ef88c3-4d1a-4ef9-be5d-31a069f254e6
+  Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  BlendShapesEnabled: true
+  BlendNormals: false
+  BlendShapes:
+    {}
+- !<SceneObject/cb8290ab-1155-4c1f-7880-edc1ab726652>
+  PrefabRemaps:
+    []
+  Name: tripo_part_2
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> f099c922-5d25-47d8-421c-118fbb3a1627
+- !<RenderMeshVisual/d0b2a6b6-5900-41f6-5fb1-aebdd3ccfcc0>
+  PrefabRemaps:
+    []
+  Name: "meshes[32]"
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Stretch
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> 4fb076ea-a2cb-4b0c-a689-90617a58ff73
+  Mesh: !<reference> 5070f076-d7e1-413d-a8c3-328a8b803f59
+  Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  BlendShapesEnabled: true
+  BlendNormals: false
+  BlendShapes:
+    {}
+- !<SceneObject/d2b6c1cf-aa3b-4076-6687-0501c01c178a>
+  PrefabRemaps:
+    []
+  Name: tripo_part_29
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> bb67b386-fcf1-4d96-6fe5-089b916ddb31
+- !<SceneObject/d305f0f1-64ea-465a-49d6-44314e664825>
+  PrefabRemaps:
+    []
+  Name: tripo_part_13
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> 0ac93021-ad50-4a10-7242-7b2670934ebb
+- !<SceneObject/da3c41c5-0db8-4984-7f2c-e7b5c030ff38>
+  PrefabRemaps:
+    []
+  Name: tripo_part_3
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> 6e7d26a5-325c-4a8f-5dad-ab00b1221586
+- !<RenderMeshVisual/da7f35d9-27b4-4eb2-4b31-680bd6bf90c4>
+  PrefabRemaps:
+    []
+  Name: "meshes[10]"
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Stretch
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> d2ec9c60-7fe2-4cb2-8104-05f6b18c2721
+  Mesh: !<reference> c3255254-2112-4105-95f5-250644cbc77a
+  Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  BlendShapesEnabled: true
+  BlendNormals: false
+  BlendShapes:
+    {}
+- !<ObjectPrefabAssetData/dc9306b8-1cc8-415e-b74b-9adf21ddfc3f>
+  Prototype: !<ObjectOwner/ebe49180-b415-4996-87fb-47dd219d1463>
+    PackagePath: ""
+    objects:
+      - !<own> 615819c5-93fd-4081-53f1-3a705ae4fa42
+- !<RenderMeshVisual/de591cc1-ce0a-409d-7946-1ee6602ad481>
+  PrefabRemaps:
+    []
+  Name: "meshes[1]"
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Stretch
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> 7bf56802-c3d7-48e3-badb-ecab46d67fa8
+  Mesh: !<reference> d181f783-b977-4a79-9084-4d45be6b4fc5
+  Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  BlendShapesEnabled: true
+  BlendNormals: false
+  BlendShapes:
+    {}
+- !<SceneObject/df0b4f99-6ed3-4571-586f-e013de6285d0>
+  PrefabRemaps:
+    []
+  Name: tripo_part_30
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> e4297b94-7a07-4e58-5bcb-41892ff33c28
+- !<RenderMeshVisual/e0bcf8c4-b549-4baf-4d98-b0da14a66b03>
+  PrefabRemaps:
+    []
+  Name: "meshes[8]"
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Stretch
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> f4d88332-1280-418f-8179-a9bc359ebfde
+  Mesh: !<reference> af61a0ba-28d8-4fa6-b7f2-f3f732a8a630
+  Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  BlendShapesEnabled: true
+  BlendNormals: false
+  BlendShapes:
+    {}
+- !<RenderMeshVisual/e4297b94-7a07-4e58-5bcb-41892ff33c28>
+  PrefabRemaps:
+    []
+  Name: "meshes[30]"
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Stretch
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> c68c8734-1708-4d36-ae1f-19b4da397450
+  Mesh: !<reference> db8a1e43-b86c-40fe-81bf-e2eee1f068e7
+  Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  BlendShapesEnabled: true
+  BlendNormals: false
+  BlendShapes:
+    {}
+- !<SceneObject/e692e88e-fd2d-46ed-6ad9-1b88223cc600>
+  PrefabRemaps:
+    []
+  Name: tripo_part_10
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> da7f35d9-27b4-4eb2-4b31-680bd6bf90c4
+- !<RenderMeshVisual/e7ef7969-edb7-4e69-793a-f5399d2b3e8d>
+  PrefabRemaps:
+    []
+  Name: "meshes[18]"
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Stretch
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> 9946acc3-447e-4053-954f-9de52cd1cfe7
+  Mesh: !<reference> 9bfb6583-2e33-48fc-a9af-c12f0b099fd0
+  Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  BlendShapesEnabled: true
+  BlendNormals: false
+  BlendShapes:
+    {}
+- !<RenderMeshVisual/eeae4f15-9d40-4709-62aa-0c21ea6b4251>
+  PrefabRemaps:
+    []
+  Name: "meshes[9]"
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Stretch
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> a3633a3a-8201-4bc5-b08e-8b4ada9c547d
+  Mesh: !<reference> de70d8ff-80ad-4757-8d0d-746992da2d4f
+  Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  BlendShapesEnabled: true
+  BlendNormals: false
+  BlendShapes:
+    {}
+- !<RenderMeshVisual/eebbe7aa-7034-46ab-570c-8f9b0e393ccf>
+  PrefabRemaps:
+    []
+  Name: "meshes[12]"
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Stretch
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> 0c5a803d-b7a9-4815-a362-c4f92353b59a
+  Mesh: !<reference> 4e418bbc-f7da-4744-962b-9e8ec6a0ed44
+  Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  BlendShapesEnabled: true
+  BlendNormals: false
+  BlendShapes:
+    {}
+- !<RenderMeshVisual/f099c922-5d25-47d8-421c-118fbb3a1627>
+  PrefabRemaps:
+    []
+  Name: "meshes[2]"
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Stretch
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> 918e624d-fbfc-4ebb-b737-b4cc6964eb9e
+  Mesh: !<reference> 22c3b462-166e-4191-ab83-f3e62b98a2eb
+  Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  BlendShapesEnabled: true
+  BlendNormals: false
+  BlendShapes:
+    {}
+- !<RenderMeshVisual/fc4f6b14-f904-4c8b-6c29-f407415d5fef>
+  PrefabRemaps:
+    []
+  Name: "meshes[14]"
+  Enabled: true
+  RenderOrder: 0
+  StretchMode: Stretch
+  VerticalAlignment: Center
+  HorizontalAlignment: Center
+  MeshShadowMode: None
+  ShadowColor: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  ShadowDensity: 1.000000
+  Materials:
+    - !<reference> c5cfa4da-6545-4718-8ece-e2fdff03b6ff
+  Mesh: !<reference> 2b534c8e-e694-49aa-89d6-f36589a33f3f
+  Skin: !<reference> 00000000-0000-0000-0000-000000000000
+  BlendShapesEnabled: true
+  BlendNormals: false
+  BlendShapes:
+    {}
+- !<SceneObject/fdeb46c9-e182-497a-7d09-f42ecece60aa>
+  PrefabRemaps:
+    []
+  Name: tripo_part_9
+  Enabled: true
+  Layers: 1
+  LocalTransform: !<TransformEntity>
+    Position: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Rotation: {x: 0.000000, y: 0.000000, z: 0.000000}
+    Scale: {x: 1.000000, y: 1.000000, z: 1.000000}
+    HasSegmentScaleCompensation: false
+  Children:
+    []
+  Components:
+    - !<own> eeae4f15-9d40-4709-62aa-0c21ea6b4251

@@ -139,22 +139,36 @@ List<Offset> extractFootOutlineFromMask({
   return out;
 }
 
+/// First-use model download can stall on a slow link; a hung segment must
+/// re-coach, never freeze the capture screen on "Measuring your foot…".
+const Duration kStillSegmentTimeout = Duration(seconds: 25);
+
 /// Segments the foot in the still at [imagePath], in full-image pixels.
 ///
 /// Runs the same selfie-segmentation model the live loop uses, over the
 /// decoded file rather than an NV21 preview frame. Never throws — any
-/// failure (missing file, no mask, unusable blob) is an empty outline, and
-/// the caller re-coaches.
-Future<List<Offset>> segmentFootOutlineInStill(String imagePath) async {
+/// failure (missing file, no mask, unusable blob, segment timeout) is an
+/// empty outline, and the caller re-coaches.
+///
+/// [imageW]/[imageH] are the still's own pixel dims (the burst loop already
+/// decoded them for reference detection). The raw-size mask already spans
+/// the full still, so known dims skip a second multi-megapixel JPEG decode
+/// per still; the decode survives only as a fallback when the caller has
+/// no dims or the mask outgrows them.
+Future<List<Offset>> segmentFootOutlineInStill(
+  String imagePath, {
+  int? imageW,
+  int? imageH,
+}) async {
   try {
     final segmenter = SelfieSegmenter(
       mode: SegmenterMode.single,
       enableRawSizeMask: true,
     );
     try {
-      final mask = await segmenter.processImage(
-        InputImage.fromFilePath(imagePath),
-      );
+      final mask = await segmenter
+          .processImage(InputImage.fromFilePath(imagePath))
+          .timeout(kStillSegmentTimeout);
       if (mask == null || mask.confidences.isEmpty) return const [];
       final outline = extractFootOutlineFromMask(
         confidences: mask.confidences,
@@ -162,12 +176,21 @@ Future<List<Offset>> segmentFootOutlineInStill(String imagePath) async {
         maskH: mask.height,
       );
       if (outline.isEmpty) return const [];
-      final bytes = await compute(_readStillBytes, imagePath);
-      if (bytes == null) return const [];
-      final decoded = img.decodeJpg(bytes) ?? img.decodePng(bytes);
-      if (decoded == null) return const [];
-      final sx = decoded.width / mask.width;
-      final sy = decoded.height / mask.height;
+      var fullW = imageW;
+      var fullH = imageH;
+      if (fullW == null ||
+          fullH == null ||
+          fullW < mask.width ||
+          fullH < mask.height) {
+        final bytes = await compute(_readStillBytes, imagePath);
+        if (bytes == null) return const [];
+        final decoded = img.decodeJpg(bytes) ?? img.decodePng(bytes);
+        if (decoded == null) return const [];
+        fullW = decoded.width;
+        fullH = decoded.height;
+      }
+      final sx = fullW / mask.width;
+      final sy = fullH / mask.height;
       if (!sx.isFinite || !sy.isFinite || sx <= 0 || sy <= 0) {
         return const [];
       }

@@ -1,0 +1,96 @@
+- !<Material/8d08a90c-5715-4a87-b943-9929aa5dbac9>
+  PackagePath: ""
+  PassesInfo:
+    - !<own> e0e74fb1-e7a2-4dd3-a8bd-6b7bc9ac18ec
+- !<PassInfo/e0e74fb1-e7a2-4dd3-a8bd-6b7bc9ac18ec>
+  CachedProperties:
+    - overrideTimeDelta:
+        typeIdx: 1
+        value: 0.000000
+    - overrideTimeElapsed:
+        typeIdx: 1
+        value: 0.000000
+    - overrideTimeEnabled:
+        typeIdx: 0
+        value: 0
+    - screenTextureBorderColor:
+        typeIdx: 5
+        value: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+    - screenTextureDims:
+        typeIdx: 5
+        value: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+    - screenTextureUvMinMax:
+        typeIdx: 5
+        value: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+  DepthWrite: false
+  DepthTest: false
+  DepthFunction: LessEqual
+  TwoSided: false
+  ColorMask: {x: true, y: true, z: true, w: true}
+  CullMode: Back
+  PolygonOffset: {x: 0.000000, y: 0.000000}
+  FrustumCulling: Auto
+  FrustumCullPad: 0.000000
+  InstanceCount: 1
+  Defines:
+    []
+  BlendMode: Disabled
+  Properties:
+    Port_Input1_N045:
+      typeIdx: 1
+      value: 0.700000
+    Port_Input2_N105:
+      typeIdx: 1
+      value: 0.840000
+    Port_Item0_N084:
+      typeIdx: 3
+      value: {x: 1.016200, y: 0.420900}
+    Port_Item1_N084:
+      typeIdx: 3
+      value: {x: 0.420900, y: 1.016200}
+    Port_Item2_N084:
+      typeIdx: 3
+      value: {x: -0.420900, y: 1.016200}
+    Port_Item3_N084:
+      typeIdx: 3
+      value: {x: -1.016200, y: 0.420900}
+    Port_Item4_N084:
+      typeIdx: 3
+      value: {x: -1.016200, y: -0.420900}
+    Port_Item5_N084:
+      typeIdx: 3
+      value: {x: -0.420900, y: -1.016200}
+    Port_Item6_N084:
+      typeIdx: 3
+      value: {x: 0.420900, y: -1.016200}
+    Port_Item7_N084:
+      typeIdx: 3
+      value: {x: 1.016200, y: -0.420900}
+    PreviewEnabled:
+      typeIdx: 0
+      value: 0
+    blurFactor:
+      typeIdx: 1
+      value: 4.000000
+    screenTexture:
+      typeIdx: 9
+      value:
+        id: b1fb5c5b-84fb-4c73-9870-240f93124198
+        sampler:
+          filteringMode: Trilinear
+          wrapModeU: ClampToEdge
+          wrapModeV: ClampToEdge
+          wrapModeW: ClampToEdge
+          borderColor: {x: 0.000000, y: 0.000000, z: 0.000000, w: 0.000000}
+          mipmaps: true
+        type: Texture2D
+    screenTextureSize:
+      typeIdx: 5
+      value: {x: 1.000000, y: 1.000000, z: 1.000000, w: 1.000000}
+    screenTextureTransform:
+      typeIdx: 7
+      value:
+        0: {x: 1.000000, y: 0.000000, z: 0.000000}
+        1: {x: 0.000000, y: 1.000000, z: 0.000000}
+        2: {x: 0.000000, y: 0.000000, z: 1.000000}
+  Pass: !<reference> a517d095-ece1-48a5-a161-13fb29b4d321

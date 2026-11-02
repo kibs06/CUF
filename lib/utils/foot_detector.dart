@@ -244,6 +244,19 @@ class FootDetectionResult {
   /// metric is computed in the pipeline yet (see kQualityWeightSharpness).
   final double sharpnessScore;
 
+  /// Axis-aligned bounding box of the detected foot in normalized upright
+  /// image coordinates (0.0–1.0), for the on-device test overlay.
+  ///
+  /// ONNX fills this from the model's box head; the segmentation detector
+  /// fills it from the largest foreground component's extents. Null means
+  /// the backend produced points but no box (pose landmarks).
+  final Rect? boundingBox;
+
+  /// Which inference backend produced this result (`onnx`, `mlkit-seg`,
+  /// `mlkit-pose`), for the on-device test overlay. Null when unknown
+  /// (legacy fakes in tests).
+  final String? detectorBackend;
+
   const FootDetectionResult({
     required this.footDetected,
     required this.confidence,
@@ -258,7 +271,47 @@ class FootDetectionResult {
     this.shapeScore = 0.0,
     this.containmentScore = 0.0,
     this.sharpnessScore = 1.0,
+    this.boundingBox,
+    this.detectorBackend,
   });
+
+  /// Copy with overridden fields (used by the ONNX-first wrapper to stamp
+  /// the fallback backend on results that predate the field).
+  FootDetectionResult copyWith({
+    bool? footDetected,
+    double? confidence,
+    String? footSide,
+    String? rejectedFootSide,
+    FootPoint? heelPoint,
+    FootPoint? toePoint,
+    List<FootPoint>? widthPoints,
+    Uint8List? mask,
+    double? qualityScore,
+    double? segmentationScore,
+    double? shapeScore,
+    double? containmentScore,
+    double? sharpnessScore,
+    Rect? boundingBox,
+    String? detectorBackend,
+  }) {
+    return FootDetectionResult(
+      footDetected: footDetected ?? this.footDetected,
+      confidence: confidence ?? this.confidence,
+      footSide: footSide ?? this.footSide,
+      rejectedFootSide: rejectedFootSide ?? this.rejectedFootSide,
+      heelPoint: heelPoint ?? this.heelPoint,
+      toePoint: toePoint ?? this.toePoint,
+      widthPoints: widthPoints ?? this.widthPoints,
+      mask: mask ?? this.mask,
+      qualityScore: qualityScore ?? this.qualityScore,
+      segmentationScore: segmentationScore ?? this.segmentationScore,
+      shapeScore: shapeScore ?? this.shapeScore,
+      containmentScore: containmentScore ?? this.containmentScore,
+      sharpnessScore: sharpnessScore ?? this.sharpnessScore,
+      boundingBox: boundingBox ?? this.boundingBox,
+      detectorBackend: detectorBackend ?? this.detectorBackend,
+    );
+  }
 
   /// A "no foot detected" result for this frame.
   ///
@@ -267,6 +320,7 @@ class FootDetectionResult {
   const FootDetectionResult.negative({
     double confidence = 0.0,
     String? rejectedFootSide,
+    String? detectorBackend,
   })  : this(
           footDetected: false,
           confidence: confidence,
@@ -275,6 +329,7 @@ class FootDetectionResult {
           heelPoint: null,
           toePoint: null,
           widthPoints: null,
+          detectorBackend: detectorBackend,
         );
 }
 
@@ -485,6 +540,7 @@ FootDetectionResult evaluateFootLandmarks({
       // segmentation score and the combined quality score.
       qualityScore: conf,
       segmentationScore: conf,
+      detectorBackend: 'mlkit-pose',
       footSide: 'left',
       heelPoint: FootPoint(
         x: leftHeel.x,
@@ -512,6 +568,7 @@ FootDetectionResult evaluateFootLandmarks({
       confidence: conf,
       qualityScore: conf,
       segmentationScore: conf,
+      detectorBackend: 'mlkit-pose',
       footSide: 'right',
       heelPoint: FootPoint(
         x: rightHeel.x,
@@ -971,6 +1028,22 @@ FootDetectionResult evaluateFootMask({
       'cont=${containmentScore.toStringAsFixed(2)})');
   emit();
 
+  // Axis-aligned box of the (possibly guide-clipped) foreground blob, for
+  // the on-device test overlay. Normalized upright space, like the points.
+  var minX = double.infinity;
+  var minY = double.infinity;
+  var maxX = double.negativeInfinity;
+  var maxY = double.negativeInfinity;
+  for (final p in foreground) {
+    if (p.nx < minX) minX = p.nx;
+    if (p.ny < minY) minY = p.ny;
+    if (p.nx > maxX) maxX = p.nx;
+    if (p.ny > maxY) maxY = p.ny;
+  }
+  final Rect? maskBox = (minX <= maxX && minY <= maxY)
+      ? Rect.fromLTRB(minX, minY, maxX, maxY)
+      : null;
+
   return FootDetectionResult(
     // §1.4: `footDetected` now means the combined score cleared the
     // threshold. Points are still returned for below-threshold frames so the
@@ -981,6 +1054,8 @@ FootDetectionResult evaluateFootMask({
     heelPoint: heelPoint,
     toePoint: toePoint,
     widthPoints: widthPoints,
+    boundingBox: maskBox,
+    detectorBackend: 'mlkit-seg',
     // V4.4: the same confidences the geometry was extracted from, at the wire
     // size — computed here because this is the one place that still holds both
     // the mask array and its dimensions once the result exists.

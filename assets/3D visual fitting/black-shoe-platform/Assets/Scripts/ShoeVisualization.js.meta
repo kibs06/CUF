@@ -1,0 +1,56 @@
+- !<AssetImportMetadata/be8de0b2-2fe9-4798-b98f-81ff791addc0>
+  ImportedAssetIds:
+    JavaScriptAsset: !<reference> 6b8af0bc-464b-4dc1-ad85-b5956375ecc1
+  ImporterName: JavaScriptAssetImporter
+  PrimaryAsset: !<reference> 6b8af0bc-464b-4dc1-ad85-b5956375ecc1
+  PackageType: NotAPackage
+  LegacyPackagePolicy: ~
+  ExtraData:
+    {}
+  AssetDataMap:
+    JavaScriptAsset: !<own> 585c7308-5c6b-48b6-a2a3-5ff23e5c5109
+  DependentFiles:
+    []
+  ImporterSettings: !<AssetImporterSettings>
+    {}
+  CompressionSettings: !<own> 00000000-0000-0000-0000-000000000000
+- !<ScriptAssetData/585c7308-5c6b-48b6-a2a3-5ff23e5c5109>
+  SvgIcon: ""
+  SetupScript:
+    code: ""
+  Description: ""
+  VersionMajor: 1
+  VersionMinor: 0
+  VersionPatch: 0
+  VersionPrerelease: ""
+  UpdateOrder: 0
+  ComponentUid: 69c1e913-ef25-4f61-a89d-bb115b11ac8c
+  ExportUid: 00000000-0000-0000-0000-000000000000
+  PackagePolicy: CanBeUnpacked
+  ScriptInputsHidden:
+    advanced: false
+    interactionComponent: false
+    parent: false
+    renderOrder: false
+    rotationOffset: false
+    scaleProxy: false
+    verticalRotation: false
+  ScriptTypesHidden:
+    {}
+  ReadMe: !<reference> 00000000-0000-0000-0000-000000000000
+  DeclarationFile: !<reference> 00000000-0000-0000-0000-000000000000
+  Tags:
+    []
+  Attachments:
+    []
+  DefaultScriptInputs:
+    - advanced: false
+      verticalRotation: false
+      parent: !<reference.SceneObject> 00000000-0000-0000-0000-000000000000
+      scaleProxy: !<reference.SceneObject> 00000000-0000-0000-0000-000000000000
+      rotationOffset: !<Vec3> {x: 0.000000, y: 0.000000, z: 0.000000}
+      renderOrder: 0
+      interactionComponent: !<reference.InteractionComponent> 00000000-0000-0000-0000-000000000000
+  ScriptTypes:
+    -
+      {}

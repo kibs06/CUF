@@ -410,19 +410,31 @@ void main() {
       expect(provider.productsInSize(42).map((p) => p['id']).toList(), ['fit']);
     });
 
-    test(
-      'a sold-out size is not suggested, and neither is the next size down',
-      () {
-        final provider = providerWith([
-          product(id: 'sold-out', stock: [('EU 42', 0)]),
-          // Close, but not the customer's size: a suggestion rail offers
-          // what they actually wear, not what fits "roughly".
-          product(id: 'near', stock: [('EU 41.5', 4)]),
-        ], {});
+    test('a sold-out size is not suggested', () {
+      final provider = providerWith([
+        product(id: 'sold-out', stock: [('EU 42', 0)]),
+      ], {});
 
-        expect(provider.productsInSize(42), isEmpty);
-      },
-    );
+      expect(provider.productsInSize(42), isEmpty);
+    });
+
+    test('a half size away is suggested when it is in stock', () {
+      // Half-size allowance: 36.5 still sees EU 37, 40 still sees EU 40.5.
+      final provider = providerWith([
+        product(id: 'half-up', stock: [('EU 37', 2)]),
+        product(id: 'half-down', stock: [('EU 41.5', 2)]),
+        product(id: 'too-far', stock: [('EU 41', 2)]),
+      ], {});
+
+      expect(
+        provider.productsInSize(36.5).map((p) => p['id']).toList(),
+        ['half-up'],
+      );
+      expect(
+        provider.productsInSize(42).map((p) => p['id']).toList(),
+        ['half-down'],
+      );
+    });
 
     test('no size on file yields no rail — never a fallback size', () {
       final provider = providerWith([

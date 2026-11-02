@@ -64,6 +64,12 @@ class AppConstants {
   static String snapLensUrl(String productId) =>
       '$customerPortalUrl/try-lens?product=$productId';
 
+  /// DeepAR Web shoe try-on URL for a product (opened in the phone browser).
+  /// Web 5.6.3 is the last line with foot tracking — native SDKs dropped
+  /// feet, so the app never embeds this in a WebView, it redirects here.
+  static String deepArShoeUrl(String productId) =>
+      '$customerPortalUrl/deepar-shoe?product=$productId';
+
   // --- PRODUCT SHARING (rich link previews) ---
   // Server-rendered Open Graph endpoint (Supabase Edge Function
   // `product-preview`, see supabase/functions/product-preview/index.ts).

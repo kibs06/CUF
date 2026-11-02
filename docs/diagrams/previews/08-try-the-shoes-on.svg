@@ -1,28 +1,39 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="1126" viewBox="0 0 1100 1126">
+<svg xmlns="http://www.w3.org/2000/svg" width="827" height="1169" viewBox="0 0 827 1169"><g transform="translate(40,40) scale(0.736) translate(-50.0,-42.0)">
 <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L8,3 L0,6 z" fill="#000000"/></marker></defs>
-<rect x="4" y="4" width="1092" height="1118" fill="none" stroke="#000000" stroke-width="1"/>
+<rect x="4" y="4" width="819" height="1161" fill="none" stroke="#000000" stroke-width="1"/>
 <text font-family="Helvetica, Arial, sans-serif" font-size="22" font-weight="bold" fill="#000000" text-anchor="start"><tspan x="60" y="57.0">8 · Try the shoes on</tspan></text>
-<text font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#000000" text-anchor="start"><tspan x="60" y="88.0">SoleVision — what the customer does · page 8 of 14</tspan></text>
+<text font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#000000" text-anchor="start"><tspan x="60" y="88.0">SoleVision — what the customer does · page 8 of 13</tspan></text>
 <polyline points="565.0,222.0 565.0,264.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
 <polyline points="565.0,329.0 565.0,371.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
 <polyline points="565.0,455.0 565.0,497.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
-<polyline points="565.0,581.0 565.0,623.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
-<polyline points="720.0,698.0 825.0,698.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
-<polyline points="945.0,730.5 945.0,772.5" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
-<polyline points="565.0,773.0 565.0,815.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
-<polyline points="565.0,880.0 565.0,922.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
-<polyline points="825.0,539.0 710.0,539.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
-<text font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000" text-anchor="middle"><tspan x="565" y="606.0">Yes</tspan></text>
-<text font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000" text-anchor="middle"><tspan x="772.5" y="702.0">No</tspan></text>
+<polyline points="565.0,600.0 565.0,612.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,660.0 565.0,702.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="720.0,777.0 825.0,777.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="945.0,809.5 945.0,851.5" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,852.0 565.0,894.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,978.0 565.0,990.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,1038.0 565.0,1080.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="170.0,1292.0 190.0,1292.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="390.0,1292.0 410.0,1292.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="458.0,1292.0 480.0,1292.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="825.0,548.5 710.0,548.5" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000" text-anchor="middle"><tspan x="565" y="685.0">Yes</tspan></text>
+<text font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#000000" text-anchor="middle"><tspan x="772.5" y="781.0">No</tspan></text>
 <polygon points="420,130 710,130 710,198.07999999999998 565,222 420,198.07999999999998" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="12" font-weight="bold" fill="#000000" text-anchor="middle"><tspan x="565" y="159.5">From page 7</tspan><tspan x="565" y="176.5">they tapped Try on</tspan></text>
 <rect x="420" y="264" width="290" height="65" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="296.5">Point the camera at their feet.</tspan></text>
 <rect x="420" y="371" width="290" height="84" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="404.0">The shoe appears on their feet and</tspan><tspan x="565" y="422.0">moves with them.</tspan></text>
-<rect x="420" y="497" width="290" height="84" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="530.0">They can swap shoes while the camera</tspan><tspan x="565" y="548.0">is on. The app shows the size that fits.</tspan></text>
-<polygon points="565,623 720,698 565,773 410,698" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="698.0">Does it look right?</tspan></text>
-<rect x="825" y="665.5" width="240" height="65" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="945" y="698.0">Try another shoe or size.</tspan></text>
-<circle cx="945" cy="796.5" r="24" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="945" y="796.5">A</tspan></text>
-<rect x="420" y="815" width="290" height="65" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="847.5">Add it to the cart.</tspan></text>
-<polygon points="420,922 710,922 710,990.08 565,1014 420,990.08" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="12" font-weight="bold" fill="#000000" text-anchor="middle"><tspan x="565" y="951.5">Continue on page 10</tspan><tspan x="565" y="968.5">Cart and payment</tspan></text>
-<rect x="825" y="942" width="240" height="72" rx="0" fill="none" stroke="#000000" stroke-width="1.5" stroke-dasharray="5 5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="945" y="969.0">The fitting is a guide — the size</tspan><tspan x="945" y="987.0">shown is what the app suggests.</tspan></text>
-<circle cx="849" cy="539" r="24" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="849" y="539.0">A</tspan></text>
-</svg>
+<rect x="420" y="497" width="290" height="103" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="530.5">They can swap shoes while the camera</tspan><tspan x="565" y="548.5">is on. The app shows the size that fits.</tspan><tspan x="565" y="566.5">Sizes come from the Database.</tspan></text>
+<circle cx="565" cy="636" r="24" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="636.0">DB1</tspan></text>
+<polygon points="565,702 720,777 565,852 410,777" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="777.0">Does it look right?</tspan></text>
+<rect x="825" y="744.5" width="240" height="65" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="945" y="777.0">Try another shoe or size.</tspan></text>
+<circle cx="945" cy="875.5" r="24" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="945" y="875.5">A</tspan></text>
+<rect x="420" y="894" width="290" height="84" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="927.0">Add it to the cart.</tspan><tspan x="565" y="945.0">Saved to the Database.</tspan></text>
+<circle cx="565" cy="1014" r="24" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="1014.0">DB1</tspan></text>
+<polygon points="420,1080 710,1080 710,1148.08 565,1172 420,1148.08" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="12" font-weight="bold" fill="#000000" text-anchor="middle"><tspan x="565" y="1109.5">Continue on page 9</tspan><tspan x="565" y="1126.5">Cart and payment</tspan></text>
+<rect x="825" y="1100" width="240" height="72" rx="0" fill="none" stroke="#000000" stroke-width="1.5" stroke-dasharray="5 5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="945" y="1127.0">The fitting is a guide — the size</tspan><tspan x="945" y="1145.0">shown is what the app suggests.</tspan></text>
+<polygon points="50,1256 170,1256 170,1309.28 110,1328 50,1309.28" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="12" font-weight="bold" fill="#000000" text-anchor="middle"><tspan x="110" y="1286.6">DB</tspan></text>
+<path d="M190,1270 L190,1314 A100,14 0 0,0 390,1314 L390,1270 A100,14 0 0,0 190,1270 Z" fill="none" stroke="#000000" stroke-width="1.5"/><ellipse cx="290" cy="1270" rx="100" ry="14" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="290" y="1292.0">Database</tspan></text>
+<circle cx="434" cy="1292" r="24" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="434" y="1292.0">DB1</tspan></text>
+<rect x="480" y="1256" width="330" height="72" rx="0" fill="none" stroke="#000000" stroke-width="1.5" stroke-dasharray="5 5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="645" y="1283.0">DB steps touch the Database;</tspan><tspan x="645" y="1301.0">DB1 marks where in the flow.</tspan></text>
+<circle cx="849" cy="548.5" r="24" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="849" y="548.5">A</tspan></text>
+</g></svg>

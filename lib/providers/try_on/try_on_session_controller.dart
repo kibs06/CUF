@@ -54,7 +54,7 @@ import '../../utils/foot_detector.dart';
 import '../../utils/foot_detection_rate_limiter.dart';
 import '../../utils/foot_mask.dart';
 import '../../utils/foot_pose.dart';
-import '../../utils/mlkit_segmentation_foot_detector.dart';
+import '../../utils/onnx_foot_detector.dart';
 import '../../utils/shoe_model_resolver.dart';
 import '../../utils/size_key.dart';
 import '../../utils/try_on_coach.dart';
@@ -85,6 +85,24 @@ const int kPresenceRefreshTicks = 10;
 /// loop from being the noisiest thing on the screen. V4.2 removes the failure
 /// mode, not the guard.
 const int kFootTrackFailureLimit = 5;
+
+/// One detection tick's test-visible output: the result plus the sensor frame
+/// geometry it was measured in. The screen maps the normalized points through
+/// the same center-crop transform as the scan overlay, so the box sits on the
+/// real foot pixels.
+class TryOnDetectionFrame {
+  final FootDetectionResult result;
+  final int frameWidth;
+  final int frameHeight;
+  final int rotationDegrees;
+
+  const TryOnDetectionFrame({
+    required this.result,
+    required this.frameWidth,
+    required this.frameHeight,
+    required this.rotationDegrees,
+  });
+}
 
 class TryOnSessionController extends ChangeNotifier {
   TryOnSessionController({
@@ -196,6 +214,13 @@ class TryOnSessionController extends ChangeNotifier {
   bool _footLocked = false;
   double _footQuality = 0;
   String? _footSide;
+
+  /// Latest detection tick for the on-device test box. A [ValueNotifier] —
+  /// not `notifyListeners` — so the overlay repaints at tick rate without
+  /// rebuilding the whole screen ten times a second. Null until the first
+  /// tick answers.
+  final ValueNotifier<TryOnDetectionFrame?> lastDetection =
+      ValueNotifier<TryOnDetectionFrame?>(null);
 
   /// **V4.5's coaching inputs**, captured on the same tick that published the
   /// pose: whether a foot was seen at all, and how it sits in the frame.
@@ -719,7 +744,7 @@ class TryOnSessionController extends ChangeNotifier {
       if (frame == null || frame.nv21Bytes.isEmpty) return;
 
       final detector =
-          _detector ??= _injectedDetector ?? MlKitSegmentationFootDetector();
+          _detector ??= _injectedDetector ?? OnnxFirstFootDetector();
       final detection = await detector.detect(
         nv21Bytes: frame.nv21Bytes,
         width: frame.width,
@@ -727,6 +752,14 @@ class TryOnSessionController extends ChangeNotifier {
         rotationDegrees: frame.rotationDegrees,
       );
       if (_disposed) return;
+      // Test box feed: every answered tick publishes, foot or not, so the
+      // overlay's "searching" line proves the loop runs.
+      lastDetection.value = TryOnDetectionFrame(
+        result: detection,
+        frameWidth: frame.width,
+        frameHeight: frame.height,
+        rotationDegrees: frame.rotationDegrees,
+      );
 
       // The same consecutive-positive rule the scan applies before recording a
       // sample: one lucky frame is not a foot.
@@ -1130,6 +1163,7 @@ class TryOnSessionController extends ChangeNotifier {
     liveFoot.dispose();
     footSnapshot.dispose();
     nativeStatusLine.dispose();
+    lastDetection.dispose();
     _eventSubscription?.cancel();
     // D1: no Dart-initiated stopSession — the platform view owns native teardown.
     _channel.detach().ignore();

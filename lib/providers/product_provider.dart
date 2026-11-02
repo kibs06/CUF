@@ -300,10 +300,10 @@ class ProductProvider extends ChangeNotifier {
   /// hands back — not the inclusion rules.
   ///
   /// The inclusion rule it delegates to is built from `size_match.dart`
-  /// ([stocksMySize]), so this shelf and any later size surface (chip, badge,
-  /// product-page pre-select) can never disagree about whether a product has the
-  /// customer's size. It reuses the `inventory` data the catalog already fetched
-  /// — no second query, no schema change.
+  /// ([matchStockedSize]): an exact size in stock, or a stocked size within
+  /// half a size of it (36.5 still sees EU 37, 40 still sees EU 40.5). It
+  /// reuses the `inventory` data the catalog already fetched — no second
+  /// query, no schema change.
   ///
   /// [euSize] null (signed out, or a customer who never gave a size) returns
   /// EMPTY, never a guess or a fallback size: every size surface is

@@ -5,6 +5,7 @@ import 'package:app/screens/shared/shoe_preview_screen.dart';
 import 'package:app/services/ar_try_on_channel.dart';
 import 'package:app/services/shoe_model_service.dart';
 import 'package:app/services/shoe_preview_channel.dart';
+import 'package:app/services/snap_try_on_channel.dart';
 import 'package:app/services/try_on_prefetch.dart';
 import 'package:app/utils/shoe_model_resolver.dart';
 import 'package:app/widgets/shoe_preview_3d.dart';
@@ -28,6 +29,24 @@ import 'package:mocktail/mocktail.dart';
 /// The **seller door** gets its own group: it is the one that resolves a model
 /// it was not handed, and it is the only place the honest "there is nothing to
 /// draw" sentence is reachable from a seller's tap.
+/// Stands in for the native Camera Kit camera, which cannot answer under
+/// `flutter test` (`MissingPluginException` on the real channel).
+class _FakeSnapTryOn extends SnapTryOnChannel {
+  _FakeSnapTryOn({required this.opened});
+  final bool opened;
+  int calls = 0;
+  @override
+  Future<bool> launchSnapTryOn({
+    required String apiToken,
+    required String lensGroupId,
+    required String lensId,
+  }) async {
+    calls++;
+    if (opened) return true;
+    throw const SnapTryOnUnavailable('test-refused');
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -408,7 +427,7 @@ void main() {
 
     testWidgets('shows Try on Snap only for a product with a lens',
         (tester) async {
-      // Luna Loafers has the only published lens: all three pills.
+      // Luna Loafers has the only published lens: Snap + AR pills.
       final luna = <String, dynamic>{
         'id': AppConstants.snapLensProductIds.single,
         'name': 'Luna Loafers',
@@ -421,14 +440,14 @@ void main() {
               const SizedBox(key: Key('fake-3d'), height: 240),
         ),
       ));
-      expect(find.text('Capture to fit'), findsOneWidget);
+      expect(find.text('Capture to fit'), findsNothing);
       expect(find.text('Try on Snap'), findsOneWidget);
       expect(find.text('Try On in AR'), findsOneWidget);
 
-      // Any other product keeps capture + AR, no Snap entry.
+      // Any other product keeps AR only: no Snap, no Capture entry.
       await tester.pumpWidget(harness());
       await tester.pumpAndSettle();
-      expect(find.text('Capture to fit'), findsOneWidget);
+      expect(find.text('Capture to fit'), findsNothing);
       expect(find.text('Try on Snap'), findsNothing);
       expect(find.text('Try On in AR'), findsOneWidget);
     });
@@ -491,6 +510,66 @@ void main() {
         find.text('Could not open the Snap try-on just now.'),
         findsOneWidget,
       );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('an answering native camera skips the web lens entirely',
+        (tester) async {
+      // Phase 1's preferred path: the plugin opened its camera, so the
+      // browser must never be touched — no launch, no sentence.
+      final lunaId = AppConstants.snapLensProductIds.single;
+      final launched = <Uri>[];
+      final snap = _FakeSnapTryOn(opened: true);
+      await tester.pumpWidget(MaterialApp(
+        home: ShoePreviewScreen(
+          model: model,
+          product: <String, dynamic>{'id': lunaId, 'name': 'Luna Loafers'},
+          viewBuilder: () =>
+              const SizedBox(key: Key('fake-3d'), height: 240),
+          launchExternal: (uri) async {
+            launched.add(uri);
+            return true;
+          },
+          snapTryOn: snap,
+        ),
+      ));
+
+      await tester.tap(find.text('Try on Snap'));
+      await tester.pump();
+
+      expect(snap.calls, 1);
+      expect(launched, isEmpty);
+      expect(
+        find.text('Could not open the Snap try-on just now.'),
+        findsNothing,
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a refusing native camera still falls back to the web lens',
+        (tester) async {
+      // The seam's other half: a refusing plugin is the same as no plugin —
+      // the pill degrades to the exact web launch the older test pins.
+      final lunaId = AppConstants.snapLensProductIds.single;
+      final launched = <Uri>[];
+      await tester.pumpWidget(MaterialApp(
+        home: ShoePreviewScreen(
+          model: model,
+          product: <String, dynamic>{'id': lunaId, 'name': 'Luna Loafers'},
+          viewBuilder: () =>
+              const SizedBox(key: Key('fake-3d'), height: 240),
+          launchExternal: (uri) async {
+            launched.add(uri);
+            return true;
+          },
+          snapTryOn: _FakeSnapTryOn(opened: false),
+        ),
+      ));
+
+      await tester.tap(find.text('Try on Snap'));
+      await tester.pump();
+
+      expect(launched, [Uri.parse(AppConstants.snapLensUrl(lunaId))]);
       expect(tester.takeException(), isNull);
     });
   });

@@ -482,6 +482,28 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
       _guidanceStatus = 'measuring';
       _guidanceText = 'Measuring your foot…';
     });
+    try {
+      await _measureInstantBurst(summary);
+    } catch (_) {
+      // Never strand the user on a spinner: any unexpected throw becomes
+      // a visible coaching line and detection restarts.
+      if (!mounted || _instantDone) return;
+      setState(() {
+        _isCapturing = false;
+        _holdTicks = 0;
+        _guidanceStatus = 'searching';
+        _guidanceText =
+            'Measuring was interrupted — hold still and we\'ll retry your $_footLabel foot';
+      });
+      await _startFrameStream();
+      _startPaperDetection();
+    }
+  }
+
+  /// The measuring half of [_finishInstantFit], split out so an unexpected
+  /// throw anywhere in segment/measure becomes a coaching line, never a
+  /// frozen screen.
+  Future<void> _measureInstantBurst(BurstScaleSummary summary) async {
     final confidence = burstConfidenceLevel(
       scaleMedian: summary.medianScale,
       scaleIqr: summary.iqrScale,
@@ -496,7 +518,18 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
         continue;
       }
       tried++;
-      final outline = await segmentFootOutlineInStill(_burstPaths[i]);
+      if (mounted && !_instantDone) {
+        setState(() {
+          _guidanceText = 'Measuring your foot… (still $tried of 3)';
+        });
+      }
+      // Still dims are this same file's decoded size (burst loop), so the
+      // raw-size mask maps with no second JPEG decode per still.
+      final outline = await segmentFootOutlineInStill(
+        _burstPaths[i],
+        imageW: still.frameW,
+        imageH: still.frameH,
+      );
       if (!mounted || _instantDone) return;
       final outcome = measureCardCapture(
         refCorners: still.corners,
@@ -626,7 +659,9 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
           Text(
             'Initializing camera...',
             style: AppConstants.bodyStyle(
-              color: AppConstants.surfaceLight.withValues(alpha: 0.7),
+              // Pinned light: this text sits on the black camera
+              // background, where surfaceLight resolves dark and vanishes.
+              color: AppConstants.inkInverse.withValues(alpha: 0.7),
             ),
           ),
         ],
@@ -651,7 +686,9 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
               _guidanceText,
               textAlign: TextAlign.center,
               style: AppConstants.bodyStyle(
-                color: AppConstants.surfaceLight.withValues(alpha: 0.7),
+                // Pinned light: this text sits on the black camera
+                // background, where surfaceLight resolves dark and vanishes.
+                color: AppConstants.inkInverse.withValues(alpha: 0.7),
               ),
             ),
             const SizedBox(height: 24),
@@ -845,7 +882,7 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
                                     _guidanceStatus == 'tooSmall' ||
                                     _guidanceStatus == 'wrongObject'
                                 ? AppConstants.error
-                                : AppConstants.surfaceLight
+                                : AppConstants.inkInverse
                                     .withValues(alpha: 0.5),
                     shape: BoxShape.circle,
                   ),
@@ -856,9 +893,14 @@ class _FootCaptureScreenState extends State<FootCaptureScreen>
                     _guidanceText,
                     style: AppConstants.bodyStyle(
                       fontSize: 13,
-                      color: AppConstants.surfaceLight.withValues(alpha: 0.9),
+                      // Pinned light: this text sits on a black scrim,
+                      // where surfaceLight resolves dark and vanishes.
+                      color: AppConstants.inkInverse.withValues(alpha: 0.9),
                     ),
                     textAlign: TextAlign.center,
+                    // Coaching and refusal lines run long; a single
+                    // ellipsized line hides the fix the user needs.
+                    maxLines: 3,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),

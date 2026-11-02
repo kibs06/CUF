@@ -1,0 +1,29 @@
+- !<AssetImportMetadata/614b3218-7173-43c0-859d-c37a40eb15da>
+  ImportedAssetIds:
+    AnimatedTexture: !<reference> 6246b7fb-6f8c-4ee2-8853-c20f7ecfd646
+    LPD_341_try_on_your_feet_v01.png: !<reference> bc6f80a0-8cec-4f81-97c7-fbd9da63c661
+  ImporterName: LensAnimationImporter
+  PrimaryAsset: !<reference> 6246b7fb-6f8c-4ee2-8853-c20f7ecfd646
+  PackageType: LegacyPackage
+  ExtraData:
+    {}
+  AssetDataMap:
+    AnimatedTexture: !<own> e290cac3-36ce-4409-b6ac-3376d028a3a4
+  DependentFiles:
+    - LPD_341_try_on_your_feet_v01.png
+  ImporterSettings: !<AssetImporterSettings>
+    {}
+  CompressionSettings: !<FileCompressionSettings>
+    {}
+  LegacyPackagePolicy: CannotBeUnpackedTransparent
+- !<AnimatedTextureData/e290cac3-36ce-4409-b6ac-3376d028a3a4>
+  AutoPlay: true
+  Reversed: false
+  PingPong: false
+  CurrentSequence: default
+  KeyFramesData:
+    default:
+      - time: 0.000000
+        value: 0
+      - time: 2.800000
+        value: 42

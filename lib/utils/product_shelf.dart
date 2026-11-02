@@ -28,9 +28,10 @@ import 'size_match.dart';
 /// The products that stock [euSize] right now, narrowed by [category].
 ///
 /// The exclusion rules come from the existing helpers and are not re-decided
-/// here: [stocksMySize] requires an **available, exact** size match (a sold-out
-/// size is not a suggestion, and neither is the next size down), and the stated
-/// audience narrows the shelf only when the customer has stated a scale.
+/// here: [matchStockedSize] requires an **available exact-or-near** size match
+/// (a sold-out size is not a suggestion, and anything beyond half a size away
+/// is a different fit), and the stated audience narrows the shelf only when
+/// the customer has stated a scale.
 ///
 /// **`unisex` counts, and a missing audience does not.** A unisex product in the
 /// customer's size genuinely IS in their size — this is a personal shelf, not a
@@ -40,6 +41,12 @@ import 'size_match.dart';
 /// rails already use: an unstated audience is never inferred from the size band
 /// (EU is unisex, so the band cannot tell Men's from Women's, and the kids' band
 /// overlaps the adult one at the top).
+///
+/// **Half-size allowance.** A product within half a size ([kNearSizeToleranceEu])
+/// of the customer's size still counts — e.g. a 36.5 foot sees a product that
+/// only stocks EU 37, and a size-40 foot sees EU 40.5 — as long as that nearby
+/// size is in stock. Anything further away is a different fit, and a sold-out
+/// nearby size is not a suggestion.
 ///
 /// **With no stated scale the shelf stays size-only** rather than guessing one,
 /// which is what stops an empty result for a customer who simply never picked a
@@ -63,7 +70,8 @@ List<Map<String, dynamic>> productsInMySize(
 
   final wanted = productAudienceFrom(category);
   final matches = products.where((p) {
-    if (!stocksMySize(p, euSize)) return false;
+    final match = matchStockedSize(p, euSize);
+    if (match == null || !match.isAvailable) return false;
     if (wanted == null || wanted == kUnisexAudience) return true;
     final audience = productAudienceFrom(p['audience']?.toString());
     return audience == wanted || audience == kUnisexAudience;

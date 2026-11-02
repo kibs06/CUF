@@ -1,0 +1,1504 @@
+SchemaVersion: 1
+Nodes:
+  ChildNodes:
+    Node0:
+      CommentSizeX: 0
+      CommentSizeY: 0
+      DependencyIndex: 0
+      LevelID: 15
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Index:
+          Variable: 1
+        UVCoord:
+          IOType: 1
+          Variable: [0.0, 0.0]
+      PositionX: -2039
+      PositionY: 302
+      TemplateID: node_effect_global_surface_uvcoord0
+      Title1: Surface UV Coord
+    Node1:
+      CommentSizeX: 0
+      CommentSizeY: 0
+      DependencyIndex: 1
+      LevelID: 17
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Channels:
+          ItemIndex: 5
+          ItemList: "xyzw : rgba : xyz : rgb : xy : x"
+        Default:
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        EnableMax:
+          Variable: true
+        EnableMin:
+          Variable: true
+        Group:
+          String: ""
+        Max:
+          Variable: 100.0
+        Min:
+          Variable: 1.0
+        Output:
+          IOType: 1
+          Variable: [0.0, 0.0, 0.0, 0.0]
+        ScriptName:
+          String: Tweak_N17
+        SortIndex:
+          Variable: 0
+        Step:
+          Variable: 0.1
+        Title:
+          String: UV 2 Scale
+        Tooltip:
+          String: ""
+      PositionX: -2025
+      PositionY: 405
+      TemplateID: nodes_inputs_parameters_float
+      Title1: Float Parameter
+      Title2: UV 2 Scale
+    Node10:
+      DependencyIndex: 10
+      LevelID: 29
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Coords:
+          ItemIndex: 2
+          ItemList: "UV Coord 0 : UV Coord 1 : Custom"
+        Depth:
+          IOType: 1
+          Variable: 0.0
+        ExtraOutputs:
+          Variable: false
+        Group:
+          String: ""
+        LODMode:
+          ItemIndex: 0
+          ItemList: "Auto : Custom"
+        LODValue:
+          Variable: 0.0
+        Output:
+          ClassType1: COLOR
+          IOType: 1
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        PixelSize:
+          IOType: 1
+          Variable: [0.0, 0.0]
+        ScriptName:
+          String: Tweak_N29
+        SortIndex:
+          Variable: 0
+        TextureSize:
+          IOType: 1
+          Variable: [0.0, 0.0]
+        Title:
+          String: Fabric 02 Shadow
+        Tooltip:
+          String: ""
+        Type:
+          ItemIndex: 0
+          ItemList: "2D Map : Normal Map : View Space Depth Map"
+        UVCoord:
+          Connection0:
+            NodeLevelID: 34
+            PortID: CoordsOut
+          Variable: [0.0, 0.0]
+      PositionX: -756
+      PositionY: -718
+      TemplateID: nodes_inputs_parameters_image
+      Title1: Texture 2D Parameter
+      Title2: Fabric 02 Shadow
+    Node11:
+      DependencyIndex: 11
+      LevelID: 36
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Channels:
+          ItemIndex: 0
+          ItemList: "rgba : rgb"
+        Default:
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        Group:
+          String: ""
+        Output:
+          IOType: 1
+          Variable: [0.0, 0.0, 0.0, 0.0]
+        ScriptName:
+          String: Tweak_N36
+        SortIndex:
+          Variable: 0
+        Tooltip:
+          String: ""
+        UniqueID:
+          String: Fabric 02 Color
+      PositionX: -724
+      PositionY: -860
+      TemplateID: nodes_inputs_parameters_color
+      Title1: Color Parameter
+      Title2: Fabric 02 Color
+    Node12:
+      DependencyIndex: 12
+      LevelID: 37
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Input0:
+          Connection0:
+            NodeLevelID: 29
+            PortID: Output
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        Input1:
+          Connection0:
+            NodeLevelID: 36
+            PortID: Output
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        Inputs:
+          ItemIndex: 0
+          ItemList: "2 : 3 : 4 : 5 : 6"
+        Output:
+          IOType: 1
+          Variable: [0.0, 0.0, 0.0, 0.0]
+        Type0:
+          ItemIndex: 0
+          ItemList: "auto : xyzw : rgba : xyz : rgb : xy : x"
+        Type1:
+          ItemIndex: 0
+          ItemList: "auto : xyzw : rgba : xyz : rgb : xy : x"
+      PositionX: -429
+      PositionY: -778
+      TemplateID: nodes_math_multiply
+      Title1: Multiply
+    Node13:
+      DependencyIndex: 13
+      LevelID: 23
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Coords:
+          ItemIndex: 0
+          ItemList: "UV Coord 0 : UV Coord 1 : Custom"
+        Depth:
+          IOType: 1
+          Variable: 0.0
+        ExtraOutputs:
+          Variable: false
+        Group:
+          String: ""
+        LODMode:
+          ItemIndex: 0
+          ItemList: "Auto : Custom"
+        LODValue:
+          Variable: 0.0
+        Output:
+          ClassType1: COLOR
+          IOType: 1
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        PixelSize:
+          IOType: 1
+          Variable: [0.0, 0.0]
+        ScriptName:
+          String: Tweak_N23
+        SortIndex:
+          Variable: 0
+        TextureSize:
+          IOType: 1
+          Variable: [0.0, 0.0]
+        Title:
+          String: Mask fabric 1
+        Tooltip:
+          String: ""
+        Type:
+          ItemIndex: 0
+          ItemList: "2D Map : Normal Map : View Space Depth Map"
+        UVCoord:
+          Variable: [0.0, 0.0]
+      PositionX: -1212
+      PositionY: 338
+      TemplateID: nodes_inputs_parameters_image
+      Title1: Texture 2D Parameter
+      Title2: Mask fabric 1
+    Node14:
+      DependencyIndex: 14
+      LevelID: 39
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Base:
+          ClassType1: COLOR
+          Connection0:
+            NodeLevelID: 37
+            PortID: Output
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        Blend:
+          ItemIndex: 11
+          ItemList: |2-
+            			Normal :			Lighten :			Darken :			Multiply :			Divide :			Average :			Add :			Subtract :			Difference :			Negation :			Exclusion :			Screen :			Overlay :			SoftLight :			HardLight :			ColorDodge :			ColorBurn :			LinearLight :			VividLight :			PinLight :			HardMix :			Reflect :			Glow :			Phoenix :			Hue :			Saturation :			Color :			Luminosity		
+        Color:
+          ClassType1: COLOR
+          Connection0:
+            NodeLevelID: 23
+            PortID: Output
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        Output:
+          ClassType1: COLOR
+          IOType: 1
+          Variable: [1.0, 1.0, 1.0, 1.0]
+      PositionX: -238
+      PositionY: -732
+      TemplateID: node_math_blend
+      Title1: Blend
+      Title2: "Type: Screen"
+    Node15:
+      DependencyIndex: 15
+      LevelID: 3
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Channels:
+          ItemIndex: 0
+          ItemList: "rgba : rgb"
+        Default:
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        Group:
+          String: ""
+        Output:
+          IOType: 1
+          Variable: [0.0, 0.0, 0.0, 0.0]
+        ScriptName:
+          String: Tweak_N3
+        SortIndex:
+          Variable: 0
+        Tooltip:
+          String: ""
+        UniqueID:
+          String: Fabric 01 Color
+      PositionX: -786
+      PositionY: -571
+      TemplateID: nodes_inputs_parameters_color
+      Title1: Color Parameter
+      Title2: Fabric 01 Color
+    Node16:
+      CommentSizeX: 0
+      CommentSizeY: 0
+      DependencyIndex: 16
+      LevelID: 11
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Index:
+          Variable: 0
+        UVCoord:
+          IOType: 1
+          Variable: [0.0, 0.0]
+      PositionX: -2075
+      PositionY: -46
+      TemplateID: node_effect_global_surface_uvcoord0
+      Title1: Surface UV Coord
+    Node17:
+      CommentSizeX: 0
+      CommentSizeY: 0
+      DependencyIndex: 17
+      LevelID: 8
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Channels:
+          ItemIndex: 5
+          ItemList: "xyzw : rgba : xyz : rgb : xy : x"
+        Default:
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        EnableMax:
+          Variable: true
+        EnableMin:
+          Variable: true
+        Group:
+          String: ""
+        Max:
+          Variable: 20.0
+        Min:
+          Variable: 1.0
+        Output:
+          IOType: 1
+          Variable: [0.0, 0.0, 0.0, 0.0]
+        ScriptName:
+          String: uvScale
+        SortIndex:
+          Variable: 0
+        Step:
+          Variable: 0.1
+        Title:
+          String: UV 1 Scale
+        Tooltip:
+          String: ""
+      PositionX: -2061
+      PositionY: 57
+      TemplateID: nodes_inputs_parameters_float
+      Title1: Float Parameter
+      Title2: UV 1 Scale
+    Node18:
+      CommentSizeX: 0
+      CommentSizeY: 0
+      DependencyIndex: 18
+      LevelID: 16
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Center:
+          Variable: [0.0, 0.0]
+        CoordsIn:
+          Connection0:
+            NodeLevelID: 11
+            PortID: UVCoord
+          Variable: [0.0, 0.0]
+        CoordsOut:
+          IOType: 1
+          Variable: [0.0, 0.0]
+        Scale:
+          Connection0:
+            NodeLevelID: 8
+            PortID: Output
+          Variable: [2.0, 2.0]
+      PositionX: -1818
+      PositionY: -22
+      TemplateID: nodes_functions_coords_scale
+      Title1: Scale Coords
+    Node19:
+      CommentSizeX: 0
+      CommentSizeY: 0
+      DependencyIndex: 19
+      LevelID: 10
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Channels:
+          ItemIndex: 5
+          ItemList: "xyzw : rgba : xyz : rgb : xy : x"
+        Default:
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        EnableMax:
+          Variable: true
+        EnableMin:
+          Variable: true
+        Group:
+          String: ""
+        Max:
+          Variable: 360.0
+        Min:
+          Variable: 0.0
+        Output:
+          IOType: 1
+          Variable: [0.0, 0.0, 0.0, 0.0]
+        ScriptName:
+          String: uvAngle
+        SortIndex:
+          Variable: 0
+        Step:
+          Variable: 1.0
+        Title:
+          String: UV 1 Angle
+        Tooltip:
+          String: ""
+      PositionX: -1891
+      PositionY: 166
+      TemplateID: nodes_inputs_parameters_float
+      Title1: Float Parameter
+      Title2: UV 1 Angle
+    Node2:
+      CommentSizeX: 0
+      CommentSizeY: 0
+      DependencyIndex: 2
+      LevelID: 18
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Center:
+          Variable: [0.0, 0.0]
+        CoordsIn:
+          Connection0:
+            NodeLevelID: 15
+            PortID: UVCoord
+          Variable: [0.0, 0.0]
+        CoordsOut:
+          IOType: 1
+          Variable: [0.0, 0.0]
+        Scale:
+          Connection0:
+            NodeLevelID: 17
+            PortID: Output
+          Variable: [2.0, 2.0]
+      PositionX: -1784
+      PositionY: 326
+      TemplateID: nodes_functions_coords_scale
+      Title1: Scale Coords
+    Node20:
+      DependencyIndex: 20
+      LevelID: 12
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Center:
+          Variable: [0.5, 0.5]
+        CoordsIn:
+          Connection0:
+            NodeLevelID: 16
+            PortID: CoordsOut
+          Variable: [0.0, 0.0]
+        CoordsOut:
+          IOType: 1
+          Variable: [0.0, 0.0]
+        Dimension:
+          Variable: [1.0, 1.0]
+        MaintainAspect:
+          Variable: false
+        Rotation:
+          Connection0:
+            NodeLevelID: 10
+            PortID: Output
+          Variable: 0.0
+      PositionX: -1653
+      PositionY: -20
+      TemplateID: nodes_functions_coords_rotate
+      Title1: Rotate Coords
+    Node21:
+      DependencyIndex: 21
+      LevelID: 1
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Coords:
+          ItemIndex: 2
+          ItemList: "UV Coord 0 : UV Coord 1 : Custom"
+        Depth:
+          IOType: 1
+          Variable: 0.0
+        ExtraOutputs:
+          Variable: false
+        Group:
+          String: ""
+        LODMode:
+          ItemIndex: 0
+          ItemList: "Auto : Custom"
+        LODValue:
+          Variable: 0.0
+        Output:
+          ClassType1: COLOR
+          IOType: 1
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        PixelSize:
+          IOType: 1
+          Variable: [0.0, 0.0]
+        ScriptName:
+          String: Tweak_N1
+        SortIndex:
+          Variable: 0
+        TextureSize:
+          IOType: 1
+          Variable: [0.0, 0.0]
+        Title:
+          String: Fabric 01 Color
+        Tooltip:
+          String: ""
+        Type:
+          ItemIndex: 0
+          ItemList: "2D Map : Normal Map : View Space Depth Map"
+        UVCoord:
+          Connection0:
+            NodeLevelID: 12
+            PortID: CoordsOut
+          Variable: [0.0, 0.0]
+      PositionX: -801
+      PositionY: -478
+      TemplateID: nodes_inputs_parameters_image
+      Title1: Texture 2D Parameter
+      Title2: Fabric 01 Color
+    Node22:
+      DependencyIndex: 22
+      LevelID: 5
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Base:
+          ClassType1: COLOR
+          Connection0:
+            NodeLevelID: 3
+            PortID: Output
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        Blend:
+          ItemIndex: 2
+          ItemList: |2-
+            			Normal :			Lighten :			Darken :			Multiply :			Divide :			Average :			Add :			Subtract :			Difference :			Negation :			Exclusion :			Screen :			Overlay :			SoftLight :			HardLight :			ColorDodge :			ColorBurn :			LinearLight :			VividLight :			PinLight :			HardMix :			Reflect :			Glow :			Phoenix :			Hue :			Saturation :			Color :			Luminosity		
+        Color:
+          ClassType1: COLOR
+          Connection0:
+            NodeLevelID: 1
+            PortID: Output
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        Output:
+          ClassType1: COLOR
+          IOType: 1
+          Variable: [1.0, 1.0, 1.0, 1.0]
+      PositionX: -518
+      PositionY: -543
+      TemplateID: node_math_blend
+      Title1: Blend
+      Title2: "Type: Darken"
+    Node23:
+      DependencyIndex: 23
+      LevelID: 22
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Coords:
+          ItemIndex: 0
+          ItemList: "UV Coord 0 : UV Coord 1 : Custom"
+        Depth:
+          IOType: 1
+          Variable: 0.0
+        ExtraOutputs:
+          Variable: false
+        Group:
+          String: ""
+        LODMode:
+          ItemIndex: 0
+          ItemList: "Auto : Custom"
+        LODValue:
+          Variable: 0.0
+        Output:
+          ClassType1: COLOR
+          IOType: 1
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        PixelSize:
+          IOType: 1
+          Variable: [0.0, 0.0]
+        ScriptName:
+          String: Tweak_N22
+        SortIndex:
+          Variable: 0
+        TextureSize:
+          IOType: 1
+          Variable: [0.0, 0.0]
+        Title:
+          String: Mask Fabric 02
+        Tooltip:
+          String: ""
+        Type:
+          ItemIndex: 0
+          ItemList: "2D Map : Normal Map : View Space Depth Map"
+        UVCoord:
+          Variable: [0.0, 0.0]
+      PositionX: -1210
+      PositionY: 15
+      TemplateID: nodes_inputs_parameters_image
+      Title1: Texture 2D Parameter
+      Title2: Mask Fabric 02
+    Node24:
+      DependencyIndex: 24
+      LevelID: 40
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Base:
+          ClassType1: COLOR
+          Connection0:
+            NodeLevelID: 5
+            PortID: Output
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        Blend:
+          ItemIndex: 11
+          ItemList: |2-
+            			Normal :			Lighten :			Darken :			Multiply :			Divide :			Average :			Add :			Subtract :			Difference :			Negation :			Exclusion :			Screen :			Overlay :			SoftLight :			HardLight :			ColorDodge :			ColorBurn :			LinearLight :			VividLight :			PinLight :			HardMix :			Reflect :			Glow :			Phoenix :			Hue :			Saturation :			Color :			Luminosity		
+        Color:
+          ClassType1: COLOR
+          Connection0:
+            NodeLevelID: 22
+            PortID: Output
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        Output:
+          ClassType1: COLOR
+          IOType: 1
+          Variable: [1.0, 1.0, 1.0, 1.0]
+      PositionX: -223
+      PositionY: -484
+      TemplateID: node_math_blend
+      Title1: Blend
+      Title2: "Type: Screen"
+    Node25:
+      DependencyIndex: 25
+      LevelID: 38
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Input0:
+          Connection0:
+            NodeLevelID: 39
+            PortID: Output
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        Input1:
+          Connection0:
+            NodeLevelID: 40
+            PortID: Output
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        Inputs:
+          ItemIndex: 0
+          ItemList: "2 : 3 : 4 : 5 : 6"
+        Output:
+          IOType: 1
+          Variable: [0.0, 0.0, 0.0, 0.0]
+        Type0:
+          ItemIndex: 0
+          ItemList: "auto : xyzw : rgba : xyz : rgb : xy : x"
+        Type1:
+          ItemIndex: 0
+          ItemList: "auto : xyzw : rgba : xyz : rgb : xy : x"
+      PositionX: 74
+      PositionY: -683
+      TemplateID: nodes_math_multiply
+      Title1: Multiply
+    Node26:
+      DependencyIndex: 26
+      LevelID: 13
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Coords:
+          ItemIndex: 0
+          ItemList: "UV Coord 0 : UV Coord 1 : Custom"
+        Depth:
+          IOType: 1
+          Variable: 0.0
+        ExtraOutputs:
+          Variable: false
+        Group:
+          String: ""
+        LODMode:
+          ItemIndex: 0
+          ItemList: "Auto : Custom"
+        LODValue:
+          Variable: 0.0
+        Output:
+          ClassType1: COLOR
+          IOType: 1
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        PixelSize:
+          IOType: 1
+          Variable: [0.0, 0.0]
+        ScriptName:
+          String: Tweak_N13
+        SortIndex:
+          Variable: 0
+        TextureSize:
+          IOType: 1
+          Variable: [0.0, 0.0]
+        Title:
+          String: Main Normal
+        Tooltip:
+          String: ""
+        Type:
+          ItemIndex: 1
+          ItemList: "2D Map : Normal Map : View Space Depth Map"
+        UVCoord:
+          Variable: [0.0, 0.0]
+      PositionX: -1188
+      PositionY: -238
+      TemplateID: nodes_inputs_parameters_image
+      Title1: Texture 2D Parameter
+      Title2: Main Normal
+    Node27:
+      CommentSizeX: 0
+      CommentSizeY: 0
+      DependencyIndex: 27
+      LevelID: 24
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Index:
+          Variable: 0
+        UVCoord:
+          IOType: 1
+          Variable: [0.0, 0.0]
+      PositionX: -2036
+      PositionY: -384
+      TemplateID: node_effect_global_surface_uvcoord0
+      Title1: Surface UV Coord
+    Node28:
+      CommentSizeX: 0
+      CommentSizeY: 0
+      DependencyIndex: 28
+      LevelID: 25
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Channels:
+          ItemIndex: 5
+          ItemList: "xyzw : rgba : xyz : rgb : xy : x"
+        Default:
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        EnableMax:
+          Variable: true
+        EnableMin:
+          Variable: true
+        Group:
+          String: ""
+        Max:
+          Variable: 300.0
+        Min:
+          Variable: 1.0
+        Output:
+          IOType: 1
+          Variable: [0.0, 0.0, 0.0, 0.0]
+        ScriptName:
+          String: Tweak_N25
+        SortIndex:
+          Variable: 0
+        Step:
+          Variable: 0.1
+        Title:
+          String: UV 1 Scale
+        Tooltip:
+          String: ""
+      PositionX: -2022
+      PositionY: -281
+      TemplateID: nodes_inputs_parameters_float
+      Title1: Float Parameter
+      Title2: UV 1 Scale
+    Node29:
+      CommentSizeX: 0
+      CommentSizeY: 0
+      DependencyIndex: 29
+      LevelID: 26
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Center:
+          Variable: [0.0, 0.0]
+        CoordsIn:
+          Connection0:
+            NodeLevelID: 24
+            PortID: UVCoord
+          Variable: [0.0, 0.0]
+        CoordsOut:
+          IOType: 1
+          Variable: [0.0, 0.0]
+        Scale:
+          Connection0:
+            NodeLevelID: 25
+            PortID: Output
+          Variable: [2.0, 2.0]
+      PositionX: -1779
+      PositionY: -360
+      TemplateID: nodes_functions_coords_scale
+      Title1: Scale Coords
+    Node3:
+      CommentSizeX: 0
+      CommentSizeY: 0
+      DependencyIndex: 3
+      LevelID: 19
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Channels:
+          ItemIndex: 5
+          ItemList: "xyzw : rgba : xyz : rgb : xy : x"
+        Default:
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        EnableMax:
+          Variable: true
+        EnableMin:
+          Variable: true
+        Group:
+          String: ""
+        Max:
+          Variable: 360.0
+        Min:
+          Variable: 0.0
+        Output:
+          IOType: 1
+          Variable: [0.0, 0.0, 0.0, 0.0]
+        ScriptName:
+          String: Tweak_N19
+        SortIndex:
+          Variable: 0
+        Step:
+          Variable: 1.0
+        Title:
+          String: UV 2 Angle
+        Tooltip:
+          String: ""
+      PositionX: -1855
+      PositionY: 514
+      TemplateID: nodes_inputs_parameters_float
+      Title1: Float Parameter
+      Title2: UV 2 Angle
+    Node30:
+      CommentSizeX: 0
+      CommentSizeY: 0
+      DependencyIndex: 30
+      LevelID: 27
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Channels:
+          ItemIndex: 5
+          ItemList: "xyzw : rgba : xyz : rgb : xy : x"
+        Default:
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        EnableMax:
+          Variable: true
+        EnableMin:
+          Variable: true
+        Group:
+          String: ""
+        Max:
+          Variable: 360.0
+        Min:
+          Variable: 0.0
+        Output:
+          IOType: 1
+          Variable: [0.0, 0.0, 0.0, 0.0]
+        ScriptName:
+          String: Tweak_N27
+        SortIndex:
+          Variable: 0
+        Step:
+          Variable: 1.0
+        Title:
+          String: UV 1 Angle
+        Tooltip:
+          String: ""
+      PositionX: -1852
+      PositionY: -172
+      TemplateID: nodes_inputs_parameters_float
+      Title1: Float Parameter
+      Title2: UV 1 Angle
+    Node31:
+      DependencyIndex: 31
+      LevelID: 28
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Center:
+          Variable: [0.5, 0.5]
+        CoordsIn:
+          Connection0:
+            NodeLevelID: 26
+            PortID: CoordsOut
+          Variable: [0.0, 0.0]
+        CoordsOut:
+          IOType: 1
+          Variable: [0.0, 0.0]
+        Dimension:
+          Variable: [1.0, 1.0]
+        MaintainAspect:
+          Variable: false
+        Rotation:
+          Connection0:
+            NodeLevelID: 27
+            PortID: Output
+          Variable: 0.0
+      PositionX: -1614
+      PositionY: -358
+      TemplateID: nodes_functions_coords_rotate
+      Title1: Rotate Coords
+    Node32:
+      DependencyIndex: 32
+      LevelID: 21
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Coords:
+          ItemIndex: 2
+          ItemList: "UV Coord 0 : UV Coord 1 : Custom"
+        Depth:
+          IOType: 1
+          Variable: 0.0
+        ExtraOutputs:
+          Variable: false
+        Group:
+          String: ""
+        LODMode:
+          ItemIndex: 0
+          ItemList: "Auto : Custom"
+        LODValue:
+          Variable: 0.0
+        Output:
+          ClassType1: COLOR
+          IOType: 1
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        PixelSize:
+          IOType: 1
+          Variable: [0.0, 0.0]
+        ScriptName:
+          String: Tweak_N21
+        SortIndex:
+          Variable: 0
+        TextureSize:
+          IOType: 1
+          Variable: [0.0, 0.0]
+        Title:
+          String: Normal Fabric 02
+        Tooltip:
+          String: ""
+        Type:
+          ItemIndex: 1
+          ItemList: "2D Map : Normal Map : View Space Depth Map"
+        UVCoord:
+          Connection0:
+            NodeLevelID: 28
+            PortID: CoordsOut
+          Variable: [0.0, 0.0]
+      PositionX: -1219
+      PositionY: -98
+      TemplateID: nodes_inputs_parameters_image
+      Title1: Texture 2D Parameter
+      Title2: Normal Fabric 02
+    Node33:
+      DependencyIndex: 33
+      LevelID: 9
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Coords:
+          ItemIndex: 2
+          ItemList: "UV Coord 0 : UV Coord 1 : Custom"
+        Depth:
+          IOType: 1
+          Variable: 0.0
+        ExtraOutputs:
+          Variable: false
+        Group:
+          String: ""
+        LODMode:
+          ItemIndex: 0
+          ItemList: "Auto : Custom"
+        LODValue:
+          Variable: 0.0
+        Output:
+          ClassType1: COLOR
+          IOType: 1
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        PixelSize:
+          IOType: 1
+          Variable: [0.0, 0.0]
+        ScriptName:
+          String: Tweak_N9
+        SortIndex:
+          Variable: 0
+        TextureSize:
+          IOType: 1
+          Variable: [0.0, 0.0]
+        Title:
+          String: Fabric 01 Normal
+        Tooltip:
+          String: ""
+        Type:
+          ItemIndex: 1
+          ItemList: "2D Map : Normal Map : View Space Depth Map"
+        UVCoord:
+          Connection0:
+            NodeLevelID: 12
+            PortID: CoordsOut
+          Variable: [0.0, 0.0]
+      PositionX: -1210
+      PositionY: 198
+      TemplateID: nodes_inputs_parameters_image
+      Title1: Texture 2D Parameter
+      Title2: Fabric 01 Normal
+    Node34:
+      DependencyIndex: 34
+      LevelID: 14
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Count:
+          Variable: 3
+        Normal:
+          IOType: 1
+          Variable: [0.0, 0.0, 0.0]
+        Normal1:
+          Connection0:
+            NodeLevelID: 13
+            PortID: Output
+          Variable: [0.0, 0.0, 1.0]
+        Normal2:
+          Connection0:
+            NodeLevelID: 21
+            PortID: Output
+          Variable: [0.0, 0.0, 1.0]
+        Normal3:
+          Connection0:
+            NodeLevelID: 9
+            PortID: Output
+          Variable: [0.0, 0.0, 1.0]
+        Strength1:
+          Variable: 1.0
+        Strength2:
+          Connection0:
+            NodeLevelID: 22
+            PortID: Output
+          Variable: 1.0
+        Strength3:
+          Connection0:
+            NodeLevelID: 23
+            PortID: Output
+          Variable: 0.7
+      PositionX: -717
+      PositionY: 2
+      TemplateID: node_math_combinenormals
+      Title1: Combine Normals
+    Node35:
+      DependencyIndex: 35
+      LevelID: 2
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Channels:
+          ItemIndex: 5
+          ItemList: "xyzw : rgba : xyz : rgb : xy : x"
+        Default:
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        EnableMax:
+          Variable: true
+        EnableMin:
+          Variable: true
+        Group:
+          String: ""
+        Max:
+          Variable: 1.0
+        Min:
+          Variable: 0.0
+        Output:
+          IOType: 1
+          Variable: [0.0, 0.0, 0.0, 0.0]
+        ScriptName:
+          String: metallic
+        SortIndex:
+          Variable: 0
+        Step:
+          Variable: 0.009999999776482582
+        Title:
+          String: Metallic
+        Tooltip:
+          String: ""
+      PositionX: -611
+      PositionY: 265
+      TemplateID: nodes_inputs_parameters_float
+      Title1: Float Parameter
+      Title2: Metallic
+    Node36:
+      DependencyIndex: 36
+      LevelID: 7
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Input0:
+          Connection0:
+            NodeLevelID: 2
+            PortID: Output
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        Input1:
+          Connection0:
+            NodeLevelID: 22
+            PortID: Output
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        Inputs:
+          ItemIndex: 0
+          ItemList: "2 : 3 : 4 : 5 : 6"
+        Output:
+          IOType: 1
+          Variable: [0.0, 0.0, 0.0, 0.0]
+        Type0:
+          ItemIndex: 0
+          ItemList: "auto : xyzw : rgba : xyz : rgb : xy : x"
+        Type1:
+          ItemIndex: 0
+          ItemList: "auto : xyzw : rgba : xyz : rgb : xy : x"
+      PositionX: -270
+      PositionY: 86
+      TemplateID: nodes_math_multiply
+      Title1: Multiply
+    Node37:
+      DependencyIndex: 37
+      LevelID: 0
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Channels:
+          ItemIndex: 5
+          ItemList: "xyzw : rgba : xyz : rgb : xy : x"
+        Default:
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        EnableMax:
+          Variable: true
+        EnableMin:
+          Variable: true
+        Group:
+          String: ""
+        Max:
+          Variable: 1.0
+        Min:
+          Variable: 0.0
+        Output:
+          IOType: 1
+          Variable: [0.0, 0.0, 0.0, 0.0]
+        ScriptName:
+          String: roughness
+        SortIndex:
+          Variable: 0
+        Step:
+          Variable: 0.009999999776482582
+        Title:
+          String: Roughness
+        Tooltip:
+          String: ""
+      PositionX: -336
+      PositionY: 487
+      TemplateID: nodes_inputs_parameters_float
+      Title1: Float Parameter
+      Title2: Roughness
+    Node38:
+      CommentSizeX: 0
+      CommentSizeY: 0
+      DependencyIndex: 38
+      LevelID: 6
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        AO:
+          ClassType1: COLOR
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        Albedo:
+          ClassType1: COLOR
+          Connection0:
+            NodeLevelID: 38
+            PortID: Output
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        Emissive:
+          ClassType1: COLOR
+          Variable: [0.0, 0.0, 0.0, 1.0]
+        Metallic:
+          Connection0:
+            NodeLevelID: 7
+            PortID: Output
+          Variable: 0.0
+        Mode:
+          ItemIndex: 0
+          ItemList: "Diffuse and Specular : Diffuse Only : Specular Only"
+        Normal:
+          ClassType1: COLOR
+          Connection0:
+            NodeLevelID: 14
+            PortID: Normal
+          Variable: [0.0, 1.0, 0.0, 1.0]
+        NormalSpace:
+          ItemIndex: 0
+          ItemList: "Tangent : World"
+        Opacity:
+          Variable: 1.0
+        Output:
+          ClassType1: COLOR
+          IOType: 1
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        Roughness:
+          Connection0:
+            NodeLevelID: 0
+            PortID: Output
+          Variable: 0.0
+        SpecularAO:
+          ClassType1: COLOR
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        ToneMapping:
+          Variable: true
+      PositionX: 151
+      PositionY: -341
+      TemplateID: nodes_main_material_brdf
+      Title1: PBR ( Lighting )
+      Title2: Diffuse and Specular
+    Node39:
+      DependencyIndex: 39
+      LevelID: 35
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Input0:
+          Connection0:
+            NodeLevelID: 6
+            PortID: Output
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        Input1:
+          Connection0:
+            NodeLevelID: 39
+            PortID: Output
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        Inputs:
+          ItemIndex: 0
+          ItemList: "2 : 3 : 4 : 5 : 6"
+        Output:
+          IOType: 1
+          Variable: [0.0, 0.0, 0.0, 0.0]
+        Type0:
+          ItemIndex: 0
+          ItemList: "auto : xyzw : rgba : xyz : rgb : xy : x"
+        Type1:
+          ItemIndex: 0
+          ItemList: "auto : xyzw : rgba : xyz : rgb : xy : x"
+      PositionX: 461
+      PositionY: -535
+      TemplateID: nodes_math_multiply
+      Title1: Multiply
+    Node4:
+      DependencyIndex: 4
+      LevelID: 20
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Center:
+          Variable: [0.5, 0.5]
+        CoordsIn:
+          Connection0:
+            NodeLevelID: 18
+            PortID: CoordsOut
+          Variable: [0.0, 0.0]
+        CoordsOut:
+          IOType: 1
+          Variable: [0.0, 0.0]
+        Dimension:
+          Variable: [1.0, 1.0]
+        MaintainAspect:
+          Variable: false
+        Rotation:
+          Connection0:
+            NodeLevelID: 19
+            PortID: Output
+          Variable: 0.0
+      PositionX: -1617
+      PositionY: 328
+      TemplateID: nodes_functions_coords_rotate
+      Title1: Rotate Coords
+    Node40:
+      CommentSizeX: 0
+      CommentSizeY: 0
+      DependencyIndex: 40
+      LevelID: 4
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Depth:
+          Variable: 1.0
+        DepthMode:
+          ItemIndex: 0
+          ItemList: |2-
+            		Non-Linear - Normalized [0 to 1] ) :		Linear - Normalized [-1 to 1] :		View Space - Non-Normalized [-near to -far]	
+        DontFreezeSpec:
+          Variable: false
+        FinalColor:
+          ClassType1: COLOR
+          Connection0:
+            NodeLevelID: 35
+            PortID: Output
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        FinalColor1:
+          ClassType1: COLOR
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        FinalColor2:
+          ClassType1: COLOR
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        FinalColor3:
+          ClassType1: COLOR
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        GSplatPointSize:
+          Variable: 0.0
+        Negative:
+          Variable: false
+        RayDirection:
+          Variable: [0.0, 1.0, 0.0]
+        RayOrigin:
+          Variable: [0.0, 0.0, 0.0]
+        Targets:
+          ItemIndex: 0
+          ItemList: "1 : 2 : 3 : 4"
+        Type:
+          ItemIndex: 0
+          ItemList: "3D : Post Effect : Hair : Gaussian Splatting"
+        WorldNormal:
+          Variable: [0.0, 1.0, 0.0]
+        WorldPosition:
+          Variable: [0.0, 0.0, 0.0]
+        WorldTangent:
+          Variable: [0.0, 0.0, 1.0]
+        WriteDepth:
+          Variable: false
+      PositionX: 670
+      PositionY: -315
+      TemplateID: nodes_main_graph
+      Title1: Shader
+      Title2: 3D
+    Node5:
+      CommentSizeX: 0
+      CommentSizeY: 0
+      DependencyIndex: 5
+      LevelID: 30
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Index:
+          Variable: 0
+        UVCoord:
+          IOType: 1
+          Variable: [0.0, 0.0]
+      PositionX: -1364
+      PositionY: -743
+      TemplateID: node_effect_global_surface_uvcoord0
+      Title1: Surface UV Coord
+    Node6:
+      CommentSizeX: 0
+      CommentSizeY: 0
+      DependencyIndex: 6
+      LevelID: 31
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Channels:
+          ItemIndex: 5
+          ItemList: "xyzw : rgba : xyz : rgb : xy : x"
+        Default:
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        EnableMax:
+          Variable: true
+        EnableMin:
+          Variable: true
+        Group:
+          String: ""
+        Max:
+          Variable: 300.0
+        Min:
+          Variable: 1.0
+        Output:
+          IOType: 1
+          Variable: [0.0, 0.0, 0.0, 0.0]
+        ScriptName:
+          String: Tweak_N31
+        SortIndex:
+          Variable: 0
+        Step:
+          Variable: 0.1
+        Title:
+          String: UV 1 Scale
+        Tooltip:
+          String: ""
+      PositionX: -1350
+      PositionY: -640
+      TemplateID: nodes_inputs_parameters_float
+      Title1: Float Parameter
+      Title2: UV 1 Scale
+    Node7:
+      CommentSizeX: 0
+      CommentSizeY: 0
+      DependencyIndex: 7
+      LevelID: 32
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Center:
+          Variable: [0.0, 0.0]
+        CoordsIn:
+          Connection0:
+            NodeLevelID: 30
+            PortID: UVCoord
+          Variable: [0.0, 0.0]
+        CoordsOut:
+          IOType: 1
+          Variable: [0.0, 0.0]
+        Scale:
+          Connection0:
+            NodeLevelID: 31
+            PortID: Output
+          Variable: [2.0, 2.0]
+      PositionX: -1107
+      PositionY: -719
+      TemplateID: nodes_functions_coords_scale
+      Title1: Scale Coords
+    Node8:
+      CommentSizeX: 0
+      CommentSizeY: 0
+      DependencyIndex: 8
+      LevelID: 33
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Channels:
+          ItemIndex: 5
+          ItemList: "xyzw : rgba : xyz : rgb : xy : x"
+        Default:
+          Variable: [1.0, 1.0, 1.0, 1.0]
+        EnableMax:
+          Variable: true
+        EnableMin:
+          Variable: true
+        Group:
+          String: ""
+        Max:
+          Variable: 360.0
+        Min:
+          Variable: 0.0
+        Output:
+          IOType: 1
+          Variable: [0.0, 0.0, 0.0, 0.0]
+        ScriptName:
+          String: Tweak_N33
+        SortIndex:
+          Variable: 0
+        Step:
+          Variable: 1.0
+        Title:
+          String: UV 1 Angle
+        Tooltip:
+          String: ""
+      PositionX: -1157
+      PositionY: -531
+      TemplateID: nodes_inputs_parameters_float
+      Title1: Float Parameter
+      Title2: UV 1 Angle
+    Node9:
+      DependencyIndex: 9
+      LevelID: 34
+      NodeCount: 0
+      NodeType: 1
+      Ports:
+        Center:
+          Variable: [0.5, 0.5]
+        CoordsIn:
+          Connection0:
+            NodeLevelID: 32
+            PortID: CoordsOut
+          Variable: [0.0, 0.0]
+        CoordsOut:
+          IOType: 1
+          Variable: [0.0, 0.0]
+        Dimension:
+          Variable: [1.0, 1.0]
+        MaintainAspect:
+          Variable: false
+        Rotation:
+          Connection0:
+            NodeLevelID: 33
+            PortID: Output
+          Variable: 0.0
+      PositionX: -942
+      PositionY: -717
+      TemplateID: nodes_functions_coords_rotate
+      Title1: Rotate Coords
+  IsSubGraph0: true
+  IsSubGraph1: true
+  IsSubGraph2: true
+  IsSubGraph3: true
+  LevelID: 0
+  NodeType: 3
+  PositionX: 0
+  PositionY: 0
+  TemplateID: nodes_main_subgraph
+  Title1: ""
+SystemID: dev.snap.shaders
