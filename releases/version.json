@@ -1,10 +1,10 @@
 {
-  "latest_version": "1.0.65",
-  "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.65/app-release-1.0.65.apk",
+  "latest_version": "1.0.66",
+  "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.66/app-release-1.0.66.apk",
   "released_at": "2026-11-02",
   "notes": [
-    "DeepAR Try-On button now appears automatically for new shoes",
-    "JBC Crown Leather Sandals effect hardcoded like Luna and Luxe",
-    "Web probes /effects/<snake>.deepar on deploy, app checks bundled manifest"
+    "Seller GCash queue: instant seller push on proof, decision history, legacy gating",
+    "JBC Crown Leather Sandals DeepAR effect updated (latest Studio export)",
+    "DeepAR auto-appear: new shoes go live with just the .deepar file + deploy"
   ]
 }
