@@ -83,6 +83,13 @@ export default function DeepArShoe() {
   const canvasRef = useRef(null)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
+  // What the loader is waiting on right now, so a slow start names its
+  // stage instead of one flat line. `showSlowHint` flips after 30 s of
+  // still loading — a phone on a slow connection (or with the camera
+  // permission prompt unanswered) otherwise sits on the same sentence
+  // with no way to tell waiting from stuck.
+  const [loadStage, setLoadStage] = useState('Starting camera…')
+  const [showSlowHint, setShowSlowHint] = useState(false)
   // Which effect URL the live DeepAR instance was started for. The effect
   // often resolves *after* first paint (uploaded-row read, then the
   // product-name fallback for a bare uuid like Luxe) — without this the
@@ -100,13 +107,22 @@ export default function DeepArShoe() {
     startedForRef.current = status.effect
     setError(null)
     setLoading(true)
+    setShowSlowHint(false)
+    setLoadStage('Downloading camera engine…')
     let cancelled = false
     let deepAR = null
+    // Name the wait instead of timing out: the SDK + WASM + effect can
+    // take a minute on a slow connection, and the camera-permission
+    // prompt can sit unanswered — both look like a freeze on one line.
+    const slowTimer = setTimeout(() => {
+      if (!cancelled) setShowSlowHint(true)
+    }, 30000)
 
     async function start() {
       try {
         const deepar = await import('deepar')
         if (cancelled) return
+        setLoadStage('Loading shoe…')
         // 5.3.0 API: initialize wants a real <canvas>, not a div.
         // Size it to the screen (×dpr) so a tall phone doesn't stretch
         // the feed — DeepAR fits the camera into these pixels.
@@ -124,6 +140,9 @@ export default function DeepArShoe() {
         }
         fitCanvas()
         window.addEventListener('resize', fitCanvas)
+        // The camera-permission prompt appears during initialize on most
+        // phones — the stage line tells the customer to look for it.
+        setLoadStage('Opening camera — allow access when asked…')
         try {
           deepAR = await deepar.initialize({
             licenseKey: env.webKey,
@@ -138,9 +157,11 @@ export default function DeepArShoe() {
           window.removeEventListener('resize', fitCanvas)
         }
         if (cancelled) return
+        clearTimeout(slowTimer)
         setLoading(false)
       } catch (e) {
         if (!cancelled) {
+          clearTimeout(slowTimer)
           setError(String(e?.message ?? e))
           setLoading(false)
         }
@@ -150,6 +171,7 @@ export default function DeepArShoe() {
     start()
     return () => {
       cancelled = true
+      clearTimeout(slowTimer)
       // Only tear down the instance this run created: the ready→not-ready
       // flip unmounts the canvas anyway, and clearing the ref lets a later
       // effect URL start fresh.
@@ -190,8 +212,16 @@ export default function DeepArShoe() {
     <div data-testid="deepar-shoe-mount" className="fixed inset-0 h-dvh w-full overflow-hidden bg-black">
       <canvas ref={canvasRef} className="h-full w-full object-cover" style={{ objectFit: 'cover' }} />
       {loading && (
-        <div className="absolute inset-0 flex items-center justify-center text-center text-sm text-stone-300">
-          Loading the shoe… point rear camera at feet.
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-8 text-center text-sm text-stone-300">
+          <p>{loadStage}</p>
+          <p className="text-xs text-stone-500">Point rear camera at feet.</p>
+          {showSlowHint && (
+            <p className="mt-2 max-w-xs text-xs leading-relaxed text-stone-400">
+              Still loading — usually a slow connection or the camera permission
+              waiting for an answer. Check the permission prompt, move to faster
+              Wi-Fi, and close background tabs, then reopen this page.
+            </p>
+          )}
         </div>
       )}
       <Link

@@ -21,6 +21,15 @@ test('Luxe resolves by row id and slug, any row id by name', () => {
   assert.equal(deepArSlugForName('Luxe Cross-Strap Sandals'), 'luxe-cross-strap-sandals')
 })
 
+test('JBC resolves by slug, any row id by name', () => {
+  assert.equal(deepArEffectForProduct('jbc-crown-leather-sandals'), '/effects/jbc_crown_leather_sandals.deepar')
+  assert.equal(
+    deepArEffectForProductName('JBC Crown Leather Sandals'),
+    '/effects/jbc_crown_leather_sandals.deepar',
+  )
+  assert.equal(deepArSlugForName('JBC Crown Leather Sandals'), 'jbc-crown-leather-sandals')
+})
+
 test('Luna mapping is unchanged', () => {
   assert.equal(
     deepArEffectForProduct('0aebaa64-4d9e-44f8-8876-6b3ee9855fae'),

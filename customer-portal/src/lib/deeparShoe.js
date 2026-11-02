@@ -37,6 +37,11 @@ export function deepArEffectForProduct(productId) {
   ) {
     return '/effects/luxe_cross_strap_sandals.deepar'
   }
+  // JBC Crown Leather Sandals, same as Luxe: slug for shared links. Row ids
+  // resolve through the product-name fallback below.
+  if (id === 'jbc-crown-leather-sandals') {
+    return '/effects/jbc_crown_leather_sandals.deepar'
+  }
   return null
 }
 
@@ -47,6 +52,9 @@ export function deepArEffectForProductName(name) {
   if (!slug) return null
   if (slug.includes('luxe') && slug.includes('cross') && slug.includes('strap')) {
     return '/effects/luxe_cross_strap_sandals.deepar'
+  }
+  if (slug.includes('jbc') && slug.includes('crown') && slug.includes('leather')) {
+    return '/effects/jbc_crown_leather_sandals.deepar'
   }
   return deepArEffectForProduct(slug)
 }

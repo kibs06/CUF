@@ -38,6 +38,20 @@ void main() {
       );
     });
 
+    test('JBC resolves by slug and product name', () {
+      expect(
+        deepArEffectForProduct('jbc-crown-leather-sandals'),
+        'assets/effects/jbc_crown_leather_sandals.deepar',
+      );
+      expect(
+        deepArEffectForProduct(
+          'some-uuid-nobody-recorded',
+          productName: 'JBC Crown Leather Sandals',
+        ),
+        'assets/effects/jbc_crown_leather_sandals.deepar',
+      );
+    });
+
     test('unknown product has no effect yet', () {
       expect(deepArEffectForProduct('abc123'), isNull);
     });
