@@ -60,10 +60,18 @@ export function useCompressModel() {
    * Resolves with the same shape the modal renders:
    * `{ ok, plan, result }` or `{ ok: false, message }`.
    */
-  const compress = useCallback(async ({ bytes, declaredLengthMm, authoredSizeEu = null }) => {
-    setError(null)
+  const compress = useCallback(
+    async ({ bytes, declaredLengthMm, authoredSizeEu = null, targetTriangles }) => {
+      setError(null)
 
-    const planned = planCompression({ bytes, declaredLengthMm, authoredSizeEu })
+      const planned = planCompression({
+        bytes,
+        declaredLengthMm,
+        authoredSizeEu,
+        // `undefined` keeps the default aim; a follow-up pass halves it so the
+        // loop converges instead of returning the same too-big file.
+        ...(targetTriangles === undefined ? {} : { targetTriangles }),
+      })
     setPlan(planned.ok ? planned.plan : null)
 
     if (!planned.ok) {

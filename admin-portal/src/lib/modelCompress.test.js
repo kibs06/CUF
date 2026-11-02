@@ -174,6 +174,17 @@ test('the ratio is clamped, so a huge mesh cannot ask for a zero-triangle one', 
   assert.equal(decimationRatio({ triangleCount: 1e12 }), 0.01)
 })
 
+test('a smaller target yields a smaller ratio for the same mesh', () => {
+  // Follow-up passes halve the target (20k, 10k, 5k) so the loop converges
+  // instead of returning the same too-big file.
+  assert.equal(decimationRatio({ triangleCount: 1500000, targetTriangles: 20000 }), 20000 / 1500000)
+  // Garbage keeps the default aim rather than a nonsense ratio.
+  assert.equal(
+    decimationRatio({ triangleCount: 1500000, targetTriangles: null }),
+    TARGET_TRIANGLES / 1500000,
+  )
+})
+
 // ─── The plan, end to end ──────────────────────────────────────────
 
 test('a repairable file produces options the normalizer accepts', () => {
@@ -195,6 +206,19 @@ test('a repairable file produces options the normalizer accepts', () => {
     materialRenames: {},
     soleBandMm: 12,
   })
+})
+
+test('a follow-up pass plans against the smaller target', () => {
+  const result = planCompression({
+    bytes: buildGlb(shoeJson({ triangles: 1500000, materials: [{ name: 'Material.001' }] })),
+    declaredLengthMm: 270,
+    authoredSizeEu: 42,
+    targetTriangles: 20000,
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.plan.ratio, 20000 / 1500000)
+  assert.equal(result.plan.targetTriangles, 20000)
 })
 
 test('the refusal names the parts and the way out', () => {

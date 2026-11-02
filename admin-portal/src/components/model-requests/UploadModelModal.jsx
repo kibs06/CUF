@@ -15,6 +15,8 @@ import {
 } from '../../lib/modelPublish.js'
 import {
   FILE_SIZE_BUDGET_BYTES,
+  MIN_TARGET_TRIANGLES,
+  TARGET_TRIANGLES,
   compressFailureMessage,
   compressionSummary,
   formatBytes,
@@ -56,6 +58,11 @@ import {
 // client-side run is a courtesy that saves a round trip, not a gate. So a
 // refusal here costs one upload, arrives with the failing rows named, and leaves
 // the row hidden and the ask open.
+
+// Follow-up passes beyond the first: 20k, 10k, 5k triangle targets. Past the
+// last one the mesh would lose its silhouette, so the loop stops and says the
+// weight is in the textures.
+const MAX_EXTRA_PASSES = 3
 
 const fieldClass =
   'w-full rounded-xl border bg-[#F5F0EB] px-3 py-2 text-sm text-[#3B2314] outline-none transition-colors focus:ring-2 disabled:opacity-60'
@@ -109,6 +116,10 @@ export default function UploadModelModal({ request, onClose, onDone }) {
   const [sizeEu, setSizeEu] = useState(prefill.authoredSizeEu)
   const [note, setNote] = useState('')
   const [error, setError] = useState(null)
+  // Follow-up passes beyond the first: each one halves the triangle target,
+  // so the loop converges on the budget instead of returning the same
+  // too-big file. Reset whenever the picked file changes.
+  const [passes, setPasses] = useState(0)
   // What the compress step produced, and the sentence it ended with — kept
   // beside `file` because both are "the source", and the admin needs to see
   // which one is in hand before pressing Publish.
@@ -124,8 +135,19 @@ export default function UploadModelModal({ request, onClose, onDone }) {
   const hasSource = Boolean(file) || link.trim() !== ''
   // The length is required: the server's scale check cannot run without it, so a
   // publish without one would be a round trip to a refusal.
-  const ready =
-    hasSource && !declaration.error && declaration.externalLengthMm !== null && !publish.isPending
+  const baseReady =
+    hasSource &&
+    !declaration.error &&
+    declaration.externalLengthMm !== null &&
+    !publish.isPending
+  // Compressing needs a file and a length, but never a publishable size —
+  // shrinking an over-cap file is the whole point of the button.
+
+  const compressReady =
+    Boolean(file) &&
+    !declaration.error &&
+    declaration.externalLengthMm !== null &&
+    !publish.isPending
 
   // ⚠️ The file that was compressed, tracked by identity rather than by name:
   // a second file with the same name from another folder is a different file,
@@ -138,12 +160,30 @@ export default function UploadModelModal({ request, onClose, onDone }) {
   const overBudget = Boolean(file) && file.size > FILE_SIZE_BUDGET_BYTES
   const showCompress = Boolean(file) && (overBudget || compressedMatchesFile)
 
+  // The bytes Publish would upload, whatever the source: the compressed
+  // result when it is about the picked file, else the picked file itself. A
+  // link's size is unknown until it downloads, so it is never pre-judged.
+  const outgoingBytes = compressedMatchesFile
+    ? compressed.bytes.length
+    : file
+      ? file.size
+      : null
+  // The bucket's hard cap, not the authoring budget: a publish over this is
+  // refused before the validator ever sees it, so the button stays off and
+  // says why instead of spending the upload.
+  const overCap = outgoingBytes !== null && outgoingBytes > BUCKET_CAP_BYTES
+  // Publish needs everything above, plus bytes the bucket will take. A link's
+  // size is unknown, so a link-only publish stays enabled and the server
+  // judges it.
+  const ready = baseReady && !overCap
+
   const reset = () => {
     setLink('')
     setFile(null)
     setNote('')
     setError(null)
     setCompressed(null)
+    setPasses(0)
     compress.clear()
   }
 
@@ -163,16 +203,33 @@ export default function UploadModelModal({ request, onClose, onDone }) {
     // compression that never reached the server. The hook keeps its own.
     compress.clear()
 
+    // Follow-up passes feed the previous pass's bytes back in with half the
+    // triangle target (20k, 10k, 5k), so a 58 MB export converges instead of
+    // returning the same 10 MB file. The picked file itself is never touched:
+    // pass 0 reads it, later passes read the previous result. `.slice()` is a
+    // copy because the hook transfers the buffer to the worker, detaching it.
+    const targetTriangles =
+      passes === 0
+        ? undefined
+        : Math.max(Math.round(TARGET_TRIANGLES / 2 ** passes), MIN_TARGET_TRIANGLES)
     // A copy this component owns, because the hook transfers the buffer to the
     // worker rather than cloning 90 MB of it. `arrayBuffer()` already returns a
     // fresh buffer per call, so this is a view onto a copy, not the file itself.
+    const sourceBytes =
+      passes === 0 || !compressedMatchesFile
+        ? new Uint8Array(await file.arrayBuffer())
+        : compressed.bytes.slice()
     const outcome = await compress.compress({
-      bytes: new Uint8Array(await file.arrayBuffer()),
+      bytes: sourceBytes,
       declaredLengthMm: declaration.externalLengthMm,
       authoredSizeEu: declaration.authoredSizeEu,
+      ...(targetTriangles === undefined ? {} : { targetTriangles }),
     })
 
     if (!outcome.ok) return
+
+    const stillOver = outcome.result.bytes.length > FILE_SIZE_BUDGET_BYTES
+    if (stillOver && passes < MAX_EXTRA_PASSES) setPasses(passes + 1)
 
     setCompressed({
       forFile: file,
@@ -181,10 +238,22 @@ export default function UploadModelModal({ request, onClose, onDone }) {
       changes: outcome.result.changes,
       before: outcome.result.before,
       after: outcome.result.after,
+      // The story is always original → latest, whatever the pass: the triangle
+      // count the first pass started from, and the count the latest produced.
+      // The fallback cannot normally happen (a pass count without a previous
+      // result), but a missing count must never crash the summary.
+      trianglesBefore:
+        passes === 0
+          ? outcome.plan.triangleCount
+          : (compressed?.trianglesBefore ?? outcome.plan.triangleCount),
+      overBudgetAfter: stillOver,
       summary: compressionSummary({
         beforeBytes: file.size,
         afterBytes: outcome.result.bytes.length,
-        triangleCount: outcome.plan.triangleCount,
+        triangleCount:
+          passes === 0
+            ? outcome.plan.triangleCount
+            : (compressed?.trianglesBefore ?? outcome.plan.triangleCount),
         triangleCountAfter: outcome.result.after?.triangles ?? null,
       }),
     })
@@ -353,6 +422,7 @@ export default function UploadModelModal({ request, onClose, onDone }) {
               // A different file is a different problem: the previous run's
               // bytes and change log are no longer about what is in hand.
               setCompressed(null)
+              setPasses(0)
               compress.clear()
             }}
             className="w-full rounded-xl border border-[#D9D0C7] bg-white px-3 py-2 text-sm text-[#3B2314] file:mr-3 file:rounded-lg file:border-0 file:bg-[#8B5A2B] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
@@ -381,9 +451,11 @@ export default function UploadModelModal({ request, onClose, onDone }) {
             <div className="min-w-0">
               <p className="flex items-center gap-2 text-sm font-semibold text-[#3B2314]">
                 <Sparkles size={14} className="text-[#8B5A2B]" />
-                {compressedMatchesFile
-                  ? 'Compressed and ready to upload'
-                  : 'This file is over the authoring budget'}
+                {!compressedMatchesFile
+                  ? 'This file is over the authoring budget'
+                  : compressed.overBudgetAfter
+                    ? 'Compressed, but still over the budget'
+                    : 'Compressed and ready to upload'}
               </p>
               <p className="mt-1 text-xs leading-relaxed text-[#6B5C4E]">
                 {compressedMatchesFile
@@ -397,31 +469,47 @@ export default function UploadModelModal({ request, onClose, onDone }) {
                     'file this size, and the tab stays usable while it does.'}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={handleCompress}
-              disabled={compress.isRunning || !ready}
+            {/* The loop ends after the smallest target: past 5,000 triangles
+                the shoe keeps its footprint but loses its silhouette, so more
+                passes would trade the fitting for bytes. The weight then is in
+                the textures, which need a human and the guide, not a button. */}
+            {(compressedMatchesFile &&
+              compressed.overBudgetAfter &&
+              passes >= MAX_EXTRA_PASSES) ||
+            compress.isRunning ? null : (
+              <button
+                type="button"
+                onClick={handleCompress}
+                disabled={!compressReady}
               className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-[#8B5A2B] px-4 py-2 text-sm font-semibold text-[#8B5A2B] transition-colors hover:bg-[#8B5A2B] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {compress.isRunning ? (
-                <>
-                  <Loader2 size={14} className="animate-spin" />
-                  Compressing…
-                </>
-              ) : (
-                <>
-                  <Sparkles size={14} />
-                  {compressedMatchesFile ? 'Compress again' : 'Compress it'}
-                </>
-              )}
+              <>
+                <Sparkles size={14} />
+                {!compressedMatchesFile
+                  ? 'Compress it'
+                  : compressed.overBudgetAfter && passes < MAX_EXTRA_PASSES
+                    ? `Compress again (pass ${passes + 1} of ${MAX_EXTRA_PASSES + 1})`
+                    : 'Compress again'}
+              </>
             </button>
+            )}
+            {compress.isRunning && (
+              <button
+                type="button"
+                disabled
+                className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-[#8B5A2B] px-4 py-2 text-sm font-semibold text-[#8B5A2B] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Loader2 size={14} className="animate-spin" />
+                Compressing…
+              </button>
+            )}
           </div>
 
           {compress.isRunning && compress.stageSentence && (
             <p className="mt-2 text-xs text-[#8B5A2B]">{compress.stageSentence}</p>
           )}
 
-          {!ready && !compress.isRunning && (
+          {!compressReady && !compress.isRunning && (
             <p className="mt-2 text-xs text-[#6B5C4E]">
               Fill in the declared length first — the mesh is scaled to it, so compressing
               without one would leave the scale wrong.
@@ -438,6 +526,22 @@ export default function UploadModelModal({ request, onClose, onDone }) {
             <div className="mt-2">
               <p className="text-xs font-semibold text-[#3B2314]">
                 {compressed.summary}
+                {compressed.overBudgetAfter && passes < MAX_EXTRA_PASSES && (
+                  <>
+                    {' '}Still over the {formatBytes(FILE_SIZE_BUDGET_BYTES)} budget the server
+                    enforces — the next pass halves the triangle target to{' '}
+                    {Math.max(
+                      Math.round(TARGET_TRIANGLES / 2 ** passes),
+                      MIN_TARGET_TRIANGLES,
+                    ).toLocaleString('en-US')}.
+                  </>
+                )}
+                {compressed.overBudgetAfter && passes >= MAX_EXTRA_PASSES && (
+                  <>
+                    {' '}Four passes and still over: the weight is in the textures, not the mesh.
+                    Re-bake them and re-export (guide §C5/C7), or run the CLI.
+                  </>
+                )}
               </p>
               {/* ⚠️ The assumptions, shown rather than applied quietly. The toe
                   end and the sole cut line are decisions the file cannot make
@@ -490,6 +594,16 @@ export default function UploadModelModal({ request, onClose, onDone }) {
         />
         <p className="mt-1 text-xs text-[#6B5C4E]">{noteReachesSeller()}</p>
       </div>
+
+      {overCap && file && !compress.isRunning && (
+        <div className="mt-3">
+          <Notice tone="warn" title="Still too big to publish">
+            {formatBytes(outgoingBytes)} against the {formatBytes(BUCKET_CAP_BYTES)} the model
+            bucket accepts — Publish stays off until the bytes in hand fit. Run another compress
+            pass above, or pick a smaller export.
+          </Notice>
+        </div>
+      )}
 
       {error && (
         <div className="mt-3">

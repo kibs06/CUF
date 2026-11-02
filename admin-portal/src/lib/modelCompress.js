@@ -51,6 +51,10 @@ export const MAX_TRIANGLES = 60000
  *  so a file lands inside it whether the simplifier overshoots or undershoots. */
 export const TARGET_TRIANGLES = 40000
 
+/** The smallest target a follow-up pass will aim at: below this a shoe keeps
+ *  its footprint but loses the silhouette the fitting is judged on. */
+export const MIN_TARGET_TRIANGLES = 5000
+
 /** The sole cut line used when a single-material mesh is split (the CLI's
  *  `--sole-band-mm 12`). A starting point, not a measurement: the change log
  *  calls the cut an approximation and the reviewer confirms it (§6). */
@@ -248,13 +252,17 @@ export function planMaterials({ materialNames: names }) {
  * re-bakes on its own. Decimating a mesh that is already inside the budget
  * would throw away detail for nothing.
  */
-export function decimationRatio({ triangleCount }) {
+export function decimationRatio({ triangleCount, targetTriangles = TARGET_TRIANGLES }) {
   const count = Number(triangleCount)
   if (!Number.isFinite(count) || count <= MAX_TRIANGLES) return null
+  const target =
+    Number.isFinite(Number(targetTriangles)) && Number(targetTriangles) > 0
+      ? Number(targetTriangles)
+      : TARGET_TRIANGLES
   // Clamped at the bottom: meshoptimizer's ratio is a fraction of the *input*,
   // and a ratio small enough to be a rounding error produces a mesh with no
   // silhouette left rather than a smaller shoe.
-  return Math.max(0.01, Math.min(1, TARGET_TRIANGLES / count))
+  return Math.max(0.01, Math.min(1, target / count))
 }
 
 /**
@@ -265,10 +273,15 @@ export function decimationRatio({ triangleCount }) {
  * it the normalizer re-axes and re-grounds but leaves the scale alone, and the
  * model is refused for a reason the admin could have fixed here.
  */
-export function planCompression({ bytes, declaredLengthMm, authoredSizeEu = null }) {
+export function planCompression({
+  bytes,
+  declaredLengthMm,
+  authoredSizeEu = null,
+  targetTriangles = TARGET_TRIANGLES,
+}) {
   const plan = readGlbPlan(bytes)
   const materials = planMaterials({ materialNames: plan.materialNames })
-  const ratio = decimationRatio({ triangleCount: plan.triangleCount })
+  const ratio = decimationRatio({ triangleCount: plan.triangleCount, targetTriangles })
 
   if (materials.kind === MATERIAL_PLAN.UNKNOWN) {
     return {
@@ -291,6 +304,7 @@ export function planCompression({ bytes, declaredLengthMm, authoredSizeEu = null
       materialNames: plan.materialNames,
       materials,
       ratio,
+      targetTriangles,
       options: {
         externalLengthMm: declaredLengthMm,
         authoredSizeEu,
