@@ -171,7 +171,7 @@ class OnnxFirstFootDetector implements FootDetector {
       // native code — fall through to ML Kit there, but keep a genuine
       // Android negative as the answer.
       if (!Platform.isAndroid) {
-        return _fallback(nv21Bytes, width, height, rotationDegrees,
+        return await _fallback(nv21Bytes, width, height, rotationDegrees,
             preferSide, guideRect);
       }
       return r;

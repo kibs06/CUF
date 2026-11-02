@@ -337,14 +337,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.7.14"
-  deepar_flutter_plus:
-    dependency: "direct main"
-    description:
-      name: deepar_flutter_plus
-      sha256: "7038a67ba8feae9e75164eed1f34795e78818b49c9042c89e61f67b3f19eac76"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.2.1"
   device_info_plus:
     dependency: "direct main"
     description:

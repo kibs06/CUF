@@ -105,7 +105,6 @@ dependencies:
   workmanager: ^0.10.10
   # Manual foot-size wizard: horizontal wheel for the EU half-size list.
   wheel_picker: ^0.4.0
-  deepar_flutter_plus: ^0.2.1
   webview_flutter: ^4.10.0
 dev_dependencies:
   flutter_test:
