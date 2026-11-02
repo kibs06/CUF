@@ -150,6 +150,14 @@ class _GcashPayScreenState extends State<GcashPayScreen> {
         referenceNumber: _refController.text.trim(),
         screenshotPath: uploadedPath,
       );
+      // 3. Ping the seller's device now — the in-app row is already
+      // written by the RPC (realtime bell covers the open app); this
+      // covers the closed app. Fire-and-forget, never blocks this screen.
+      unawaited(_service.notifySellerOfProof(
+        orderId: widget.orderId,
+        storeId: widget.storeId,
+        totalAmount: widget.totalAmount,
+      ));
       if (!mounted) return;
       setState(() {
         _submitting = false;

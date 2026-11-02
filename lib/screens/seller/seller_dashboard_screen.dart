@@ -1515,6 +1515,8 @@ class _PaymentsToConfirmCardState extends State<_PaymentsToConfirmCard> {
   int? _count;
   bool _loading = true;
   Timer? _timer;
+  SellerNotificationProvider? _notifProvider;
+  int _lastSeenNotifCount = 0;
 
   /// Last tab index this card saw on screen (see [ActiveTab]).
   int? _lastActiveTab;
@@ -1530,6 +1532,22 @@ class _PaymentsToConfirmCardState extends State<_PaymentsToConfirmCard> {
     super.initState();
     _refresh();
     _startPoll();
+    // Instant path: the submit RPC already writes a seller_notifications
+    // row, and the provider streams it live — a new notification means
+    // "recount now" instead of waiting for the next 30-second tick.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _notifProvider = context.read<SellerNotificationProvider>();
+      _lastSeenNotifCount = _notifProvider!.notifications.length;
+      _notifProvider!.addListener(_onNotificationsChanged);
+    });
+  }
+
+  void _onNotificationsChanged() {
+    final n = _notifProvider?.notifications.length ?? 0;
+    if (n == _lastSeenNotifCount) return;
+    _lastSeenNotifCount = n;
+    _refresh();
   }
 
   /// Start (or resume) the 30-second poll.
@@ -1578,6 +1596,7 @@ class _PaymentsToConfirmCardState extends State<_PaymentsToConfirmCard> {
 
   @override
   void dispose() {
+    _notifProvider?.removeListener(_onNotificationsChanged);
     _timer?.cancel();
     super.dispose();
   }
@@ -1605,6 +1624,11 @@ class _PaymentsToConfirmCardState extends State<_PaymentsToConfirmCard> {
   Widget build(BuildContext context) {
     final count = _count ?? 0;
     final has = count > 0;
+    // Legacy gate: PayMongo auto-confirms the live path, so this manual
+    // queue only surfaces while leftover `awaiting_payment_confirmation`
+    // rows exist. Hidden at zero keeps a dormant flow off the dashboard;
+    // the queue stays reachable via the notification bell / push tap.
+    if (!_loading && !has) return const SizedBox.shrink();
     return Material(
       color: SellerTheme.card,
       borderRadius: BorderRadius.circular(20),

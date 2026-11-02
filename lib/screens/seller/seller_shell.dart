@@ -21,6 +21,7 @@ import 'seller_dashboard_screen.dart';
 import 'pos_screen.dart';
 import 'manage_products_screen.dart';
 import 'manage_orders_screen.dart';
+import 'gcash_payment_queue_screen.dart';
 import 'order_detail_screen.dart';
 import 'custom_orders_screen.dart';
 import 'reservation_requests_screen.dart';
@@ -116,6 +117,15 @@ class _SellerShellState extends State<SellerShell> {
           Navigator.of(
             context,
           ).push(MaterialPageRoute(builder: (_) => const CustomOrdersScreen()));
+          break;
+        case 'seller_gcash_queue':
+          // Manual-GCash proof push (sent by the customer's app right
+          // after submitProof) lands on the confirm/reject queue.
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const GcashPaymentQueueScreen(),
+            ),
+          );
           break;
         case 'seller_reservations':
           // Bulk reservation request / deposit-verification pushes land

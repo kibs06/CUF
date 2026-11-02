@@ -10,6 +10,7 @@ import '../../providers/seller_notification_provider.dart';
 import '../../services/seller_notification_service.dart';
 import '../../utils/model_notice.dart';
 import 'manage_orders_screen.dart';
+import 'gcash_payment_queue_screen.dart';
 import 'custom_orders_screen.dart';
 import 'manage_products_screen.dart';
 import 'order_detail_screen.dart';
@@ -278,7 +279,17 @@ class _SellerNotificationCenterScreenState
     switch (notif.type) {
       case 'new_order':
       case 'stale_order':
-        if (notif.referenceId != null) {
+        // Manual-GCash proofs arrive as `new_order` rows titled
+        // "Payment awaiting confirmation" (written by submit_gcash_proof).
+        // They belong to the confirm/reject queue, not the order detail —
+        // the detail screen has no confirm action for that status.
+        if (notif.title.startsWith('Payment awaiting confirmation')) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const GcashPaymentQueueScreen(),
+            ),
+          );
+        } else if (notif.referenceId != null) {
           _navigateToOrderDetail(notif.referenceId!);
         }
         break;

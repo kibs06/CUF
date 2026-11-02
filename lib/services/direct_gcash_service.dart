@@ -260,6 +260,43 @@ class DirectGcashService {
     }
   }
 
+  /// Fire-and-forget FCM push to the store owner right after a proof lands.
+  ///
+  /// The in-app row is written server-side by the submit RPC (the seller's
+  /// realtime bell covers the open app); this covers the closed/background
+  /// app. The customer can read `stores.owner_id` (public store rows), so
+  /// no new RPC or migration is needed. Never throws — a push failure must
+  /// not fail a proof that already succeeded.
+  Future<void> notifySellerOfProof({
+    required String orderId,
+    required String storeId,
+    required double totalAmount,
+  }) async {
+    try {
+      final store = await _client
+          .from('stores')
+          .select('owner_id')
+          .eq('id', storeId)
+          .maybeSingle();
+      final ownerId = store?['owner_id']?.toString();
+      if (ownerId == null || ownerId.isEmpty) return;
+      final shortId = orderId.length >= 8
+          ? orderId.substring(orderId.length - 8)
+          : orderId;
+      await _client.functions.invoke('send-notification-push', body: {
+        'recipientUserId': ownerId,
+        'title': 'Payment awaiting confirmation',
+        'body': 'Order #$shortId — ₱${totalAmount.toStringAsFixed(0)} '
+            'proof submitted. Tap to review.',
+        'type': 'new_order',
+        'referenceId': orderId,
+        'screen': 'seller_gcash_queue',
+      });
+    } catch (e) {
+      debugPrint('[GCASH] seller proof push failed (non-fatal): $e');
+    }
+  }
+
   /// Customer cancels their OWN pending GCash checkout (allowed only while
   /// no proof has been submitted — server-enforced). Releases the reserved
   /// stock and frees the one-open-order cap so they can check out again.

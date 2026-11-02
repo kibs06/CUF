@@ -32,6 +32,13 @@ class _GcashPaymentQueueScreenState extends State<GcashPaymentQueueScreen> {
   List<Map<String, dynamic>> _orders = [];
   final Map<String, String?> _signedUrls = {};
 
+  /// Recently decided manual-GCash orders (confirmed + rejected), newest
+  /// first. Read from `order_payment_events` — seller-readable, unlike the
+  /// admin-only `gcash_payment_decision_audit` — so any failure hides this
+  /// section instead of breaking the queue.
+  List<Map<String, dynamic>> _history = [];
+  String? _storeId;
+
   // 1-second tick so deadline countdowns stay live.
   Timer? _tick;
   DateTime _now = DateTime.now();
@@ -73,6 +80,8 @@ class _GcashPaymentQueueScreenState extends State<GcashPaymentQueueScreen> {
         return;
       }
       final storeId = (storeRows as List).first['id'].toString();
+      _storeId = storeId;
+      unawaited(_loadHistory(client, storeId));
 
       final orders = await client
           .from('orders')
@@ -117,6 +126,32 @@ class _GcashPaymentQueueScreenState extends State<GcashPaymentQueueScreen> {
     }
   }
 
+  /// Last 10 confirm/reject decisions for this store's manual-GCash orders.
+  /// Fire-and-forget from [_load]: a failure leaves [_history] empty and
+  /// the section stays hidden — the queue above is unaffected.
+  Future<void> _loadHistory(SupabaseClient client, String storeId) async {
+    try {
+      final rows = await client
+          .from('order_payment_events')
+          .select(
+            'event_type, notes, created_at, order_id, '
+            'orders!inner(store_id, total_amount)',
+          )
+          .inFilter('event_type', const ['confirmed', 'rejected'])
+          .eq('orders.store_id', storeId)
+          .order('created_at', ascending: false)
+          .limit(10);
+      if (!mounted) return;
+      setState(() {
+        _history = (rows as List)
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
+      });
+    } catch (e) {
+      debugPrint('[GCASH-QUEUE] history load failed (non-fatal): $e');
+    }
+  }
+
   Future<void> _confirmOrder(Map<String, dynamic> order) async {
     final orderId = order['id'].toString();
     final shortId = orderId.length >= 8
@@ -149,6 +184,9 @@ class _GcashPaymentQueueScreenState extends State<GcashPaymentQueueScreen> {
       await _service.confirmPayment(orderId);
       if (!mounted) return;
       setState(() => _orders.removeWhere((o) => o['id'].toString() == orderId));
+      if (_storeId != null) {
+        unawaited(_loadHistory(Supabase.instance.client, _storeId!));
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Payment confirmed — order is now in your queue.'),
@@ -221,6 +259,9 @@ class _GcashPaymentQueueScreenState extends State<GcashPaymentQueueScreen> {
       await _service.rejectPayment(orderId, reasonController.text.trim());
       if (!mounted) return;
       setState(() => _orders.removeWhere((o) => o['id'].toString() == orderId));
+      if (_storeId != null) {
+        unawaited(_loadHistory(Supabase.instance.client, _storeId!));
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Payment rejected — order cancelled, stock released.'),
@@ -313,6 +354,7 @@ class _GcashPaymentQueueScreenState extends State<GcashPaymentQueueScreen> {
         onRefresh: _load,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.only(bottom: 24),
           children: [
             const SizedBox(height: 120),
             const Icon(
@@ -341,6 +383,10 @@ class _GcashPaymentQueueScreenState extends State<GcashPaymentQueueScreen> {
                 ),
               ),
             ),
+            if (_history.isNotEmpty) ...[
+              const SizedBox(height: 28),
+              _DecisionHistory(history: _history),
+            ],
           ],
         ),
       );
@@ -352,16 +398,137 @@ class _GcashPaymentQueueScreenState extends State<GcashPaymentQueueScreen> {
       child: ListView.builder(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
-        itemCount: _orders.length,
-        itemBuilder: (context, index) => _OrderCard(
-          order: _orders[index],
-          screenshotUrl: _signedUrls[_orders[index]['id'].toString()],
-          now: _now,
-          onConfirm: () => _confirmOrder(_orders[index]),
-          onReject: () => _rejectOrder(_orders[index]),
-        ),
+        itemCount: _orders.length + (_history.isNotEmpty ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (index >= _orders.length) {
+            return Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: _DecisionHistory(history: _history),
+            );
+          }
+          return _OrderCard(
+            order: _orders[index],
+            screenshotUrl: _signedUrls[_orders[index]['id'].toString()],
+            now: _now,
+            onConfirm: () => _confirmOrder(_orders[index]),
+            onReject: () => _rejectOrder(_orders[index]),
+          );
+        },
       ),
     );
+  }
+}
+
+/// Recently decided manual-GCash orders (confirmed + rejected), newest
+/// first. Seller-readable via `order_payment_events` — the admin-only
+/// decision audit stays retrospective-only, this is the seller's own
+/// "what did I just do" list.
+class _DecisionHistory extends StatelessWidget {
+  final List<Map<String, dynamic>> history;
+
+  const _DecisionHistory({required this.history});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Text(
+            'Recently decided',
+            style: AppConstants.bodyStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: AppConstants.secondary,
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        ...history.map((e) {
+          final orderId = e['order_id']?.toString() ?? '';
+          final shortId = orderId.length >= 8
+              ? orderId.substring(orderId.length - 8)
+              : orderId;
+          final confirmed = e['event_type']?.toString() == 'confirmed';
+          final order = e['orders'] is Map
+              ? Map<String, dynamic>.from(e['orders'] as Map)
+              : <String, dynamic>{};
+          final total =
+              (order['total_amount'] as num?)?.toDouble() ?? 0;
+          final when = _formatWhen(e['created_at']?.toString() ?? '');
+          final reason = e['notes']?.toString().trim() ?? '';
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: SoleCard(
+              color: AppConstants.surfaceLight,
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: (confirmed
+                              ? AppConstants.success
+                              : AppConstants.error)
+                          .withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      confirmed ? 'Confirmed' : 'Rejected',
+                      style: AppConstants.bodyStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: confirmed
+                            ? AppConstants.success
+                            : AppConstants.error,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Order #$shortId · ₱${total.toStringAsFixed(2)}',
+                          style: AppConstants.bodyStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          confirmed
+                              ? when
+                              : (reason.isNotEmpty ? '$when · $reason' : when),
+                          style: AppConstants.bodyStyle(
+                            fontSize: 11,
+                            color: AppConstants.secondary
+                                .withValues(alpha: 0.6),
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  static String _formatWhen(String iso) {
+    final dt = DateTime.tryParse(iso);
+    if (dt == null) return '';
+    final local = dt.toLocal();
+    final h =
+        local.hour > 12 ? local.hour - 12 : (local.hour == 0 ? 12 : local.hour);
+    final ampm = local.hour >= 12 ? 'PM' : 'AM';
+    return '${local.month}/${local.day} $h:${local.minute.toString().padLeft(2, '0')} $ampm';
   }
 }
 
