@@ -172,10 +172,17 @@ export default function UploadModelModal({ request, onClose, onDone }) {
   // refused before the validator ever sees it, so the button stays off and
   // says why instead of spending the upload.
   const overCap = outgoingBytes !== null && outgoingBytes > BUCKET_CAP_BYTES
-  // Publish needs everything above, plus bytes the bucket will take. A link's
-  // size is unknown, so a link-only publish stays enabled and the server
-  // judges it.
-  const ready = baseReady && !overCap
+  // The server's number, not the bucket's: anything over the authoring budget
+  // uploads and is then refused on `file size`, so Publish stays off here too.
+  // The screenshot this was written against is the proof — 6.9 MB sailed past
+  // the button and came back refused. The way through is another pass, which
+  // is why the notice below points at the button above instead.
+  const outgoingOverBudget =
+    outgoingBytes !== null && outgoingBytes > FILE_SIZE_BUDGET_BYTES
+  // Publish needs everything above, plus bytes the bucket will take and the
+  // server will pass. A link's size is unknown, so a link-only publish stays
+  // enabled and the server judges it.
+  const ready = baseReady && !overCap && !outgoingOverBudget
 
   const reset = () => {
     setLink('')
@@ -601,6 +608,21 @@ export default function UploadModelModal({ request, onClose, onDone }) {
             {formatBytes(outgoingBytes)} against the {formatBytes(BUCKET_CAP_BYTES)} the model
             bucket accepts — Publish stays off until the bytes in hand fit. Run another compress
             pass above, or pick a smaller export.
+          </Notice>
+        </div>
+      )}
+
+      {!overCap && outgoingOverBudget && file && !compress.isRunning && (
+        <div className="mt-3">
+          <Notice
+            tone="warn"
+            title={`Over the ${formatBytes(FILE_SIZE_BUDGET_BYTES)} the server enforces`}
+          >
+            {formatBytes(outgoingBytes)} uploads, then the server refuses it on file size — so
+            Publish stays off until the bytes fit. Run the next compress pass above (each one
+            halves the triangle target){!compressedMatchesFile || passes < MAX_EXTRA_PASSES
+              ? '. The picked file itself is left alone.'
+              : ', or re-bake the textures and re-export (guide §C5/C7): four passes is the floor.'}
           </Notice>
         </div>
       )}
