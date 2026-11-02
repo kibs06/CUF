@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { AlertTriangle, Check, Cuboid, Loader2, Ruler, Sparkles, Upload } from 'lucide-react'
 import Modal from '../ui/Modal.jsx'
 import { usePublishModelRequest } from '../../hooks/usePublishModel.js'
@@ -116,10 +116,14 @@ export default function UploadModelModal({ request, onClose, onDone }) {
   const [sizeEu, setSizeEu] = useState(prefill.authoredSizeEu)
   const [note, setNote] = useState('')
   const [error, setError] = useState(null)
-  // Follow-up passes beyond the first: each one halves the triangle target,
-  // so the loop converges on the budget instead of returning the same
-  // too-big file. Reset whenever the picked file changes.
+  // Which rung of the ladder the auto-loop is on (0 = the full-target first
+  // pass). Reset whenever the picked file changes.
   const [passes, setPasses] = useState(0)
+  // One click runs the whole ladder without stopping, so closing the modal or
+  // picking another file mid-run must retire the loop, not leave it feeding
+  // workers into a closed dialog. The hook's own run guard only covers one
+  // pass; this one covers the chain.
+  const loopRef = useRef(0)
   // What the compress step produced, and the sentence it ended with — kept
   // beside `file` because both are "the source", and the admin needs to see
   // which one is in hand before pressing Publish.
@@ -139,7 +143,10 @@ export default function UploadModelModal({ request, onClose, onDone }) {
     hasSource &&
     !declaration.error &&
     declaration.externalLengthMm !== null &&
-    !publish.isPending
+    !publish.isPending &&
+    // Publishing mid-loop would upload an intermediate pass's bytes — a file
+    // already known to be over budget — instead of the loop's answer.
+    !compress.isRunning
   // Compressing needs a file and a length, but never a publishable size —
   // shrinking an over-cap file is the whole point of the button.
 
@@ -197,73 +204,81 @@ export default function UploadModelModal({ request, onClose, onDone }) {
   const close = () => {
     if (publish.isPending) return
     // A run in flight is stopped rather than left to finish into a closed
-    // modal: it holds a few hundred megabytes until it does.
+    // modal: it holds a few hundred megabytes until it does. Retiring the
+    // loop as well, so a pass finishing after this cannot start another.
+    loopRef.current += 1
     compress.stop()
     reset()
     onClose()
   }
 
   const handleCompress = async () => {
-    if (!file) return
+    if (!file || compress.isRunning) return
     // ⚠️ Deliberately not `setError`: that one is the *publish* error and is
     // rendered under "That did not publish", which would be a lie about a
     // compression that never reached the server. The hook keeps its own.
+    //
+    // One click runs the whole ladder without stopping: each over-budget
+    // result feeds the next pass with half the triangle target (20k, 10k, 5k),
+    // so the first press already lands under the budget whenever the file can
+    // get there at all. The picked file itself is never touched: pass 1 reads
+    // it, later passes read the previous pass's bytes.
+    const myLoop = ++loopRef.current
     compress.clear()
 
-    // Follow-up passes feed the previous pass's bytes back in with half the
-    // triangle target (20k, 10k, 5k), so a 58 MB export converges instead of
-    // returning the same 10 MB file. The picked file itself is never touched:
-    // pass 0 reads it, later passes read the previous result. `.slice()` is a
-    // copy because the hook transfers the buffer to the worker, detaching it.
-    const targetTriangles =
-      passes === 0
-        ? undefined
-        : Math.max(Math.round(TARGET_TRIANGLES / 2 ** passes), MIN_TARGET_TRIANGLES)
     // A copy this component owns, because the hook transfers the buffer to the
     // worker rather than cloning 90 MB of it. `arrayBuffer()` already returns a
     // fresh buffer per call, so this is a view onto a copy, not the file itself.
-    const sourceBytes =
-      passes === 0 || !compressedMatchesFile
-        ? new Uint8Array(await file.arrayBuffer())
-        : compressed.bytes.slice()
-    const outcome = await compress.compress({
-      bytes: sourceBytes,
-      declaredLengthMm: declaration.externalLengthMm,
-      authoredSizeEu: declaration.authoredSizeEu,
-      ...(targetTriangles === undefined ? {} : { targetTriangles }),
-    })
+    let sourceBytes = new Uint8Array(await file.arrayBuffer())
+    let extras = 0
+    let baseTriangles = null
 
-    if (!outcome.ok) return
+    while (loopRef.current === myLoop) {
+      setPasses(extras)
+      const targetTriangles =
+        extras === 0
+          ? undefined
+          : Math.max(Math.round(TARGET_TRIANGLES / 2 ** extras), MIN_TARGET_TRIANGLES)
+      const outcome = await compress.compress({
+        bytes: sourceBytes,
+        declaredLengthMm: declaration.externalLengthMm,
+        authoredSizeEu: declaration.authoredSizeEu,
+        ...(targetTriangles === undefined ? {} : { targetTriangles }),
+      })
 
-    const stillOver = outcome.result.bytes.length > FILE_SIZE_BUDGET_BYTES
-    if (stillOver && passes < MAX_EXTRA_PASSES) setPasses(passes + 1)
+      // Retired mid-pass (modal closed, file re-picked): leave nothing behind.
+      if (loopRef.current !== myLoop) return
+      if (!outcome.ok) return
 
-    setCompressed({
-      forFile: file,
-      blob: new Blob([outcome.result.bytes], { type: 'model/gltf-binary' }),
-      bytes: outcome.result.bytes,
-      changes: outcome.result.changes,
-      before: outcome.result.before,
-      after: outcome.result.after,
-      // The story is always original → latest, whatever the pass: the triangle
-      // count the first pass started from, and the count the latest produced.
-      // The fallback cannot normally happen (a pass count without a previous
-      // result), but a missing count must never crash the summary.
-      trianglesBefore:
-        passes === 0
-          ? outcome.plan.triangleCount
-          : (compressed?.trianglesBefore ?? outcome.plan.triangleCount),
-      overBudgetAfter: stillOver,
-      summary: compressionSummary({
-        beforeBytes: file.size,
-        afterBytes: outcome.result.bytes.length,
-        triangleCount:
-          passes === 0
-            ? outcome.plan.triangleCount
-            : (compressed?.trianglesBefore ?? outcome.plan.triangleCount),
-        triangleCountAfter: outcome.result.after?.triangles ?? null,
-      }),
-    })
+      if (baseTriangles === null) baseTriangles = outcome.plan.triangleCount
+      const stillOver = outcome.result.bytes.length > FILE_SIZE_BUDGET_BYTES
+
+      setCompressed({
+        forFile: file,
+        blob: new Blob([outcome.result.bytes], { type: 'model/gltf-binary' }),
+        bytes: outcome.result.bytes,
+        changes: outcome.result.changes,
+        before: outcome.result.before,
+        after: outcome.result.after,
+        // The story is always original → latest, whatever the pass: the triangle
+        // count the first pass started from, and the count the latest produced.
+        trianglesBefore: baseTriangles,
+        overBudgetAfter: stillOver,
+        summary: compressionSummary({
+          beforeBytes: file.size,
+          afterBytes: outcome.result.bytes.length,
+          triangleCount: baseTriangles,
+          triangleCountAfter: outcome.result.after?.triangles ?? null,
+        }),
+      })
+
+      if (!stillOver || extras >= MAX_EXTRA_PASSES) return
+
+      // Next pass reads this pass's bytes. `.slice()` copies because the hook
+      // transfers (detaches) the buffer to the worker.
+      extras += 1
+      sourceBytes = outcome.result.bytes.slice()
+    }
   }
 
   const handlePublish = async () => {
@@ -424,6 +439,9 @@ export default function UploadModelModal({ request, onClose, onDone }) {
             type="file"
             accept=".glb,model/gltf-binary"
             onChange={(e) => {
+              // A different file retires a running loop the same way closing
+              // does: its passes are about bytes no longer in hand.
+              loopRef.current += 1
               setFile(e.target.files?.[0] ?? null)
               setError(null)
               // A different file is a different problem: the previous run's
@@ -472,33 +490,26 @@ export default function UploadModelModal({ request, onClose, onDone }) {
                     'budget — the bucket takes it, but the server will refuse it. Compressing ' +
                     'decimates the mesh and re-bakes the textures to 1024², then runs the same ' +
                     'normalizer the CLI runs: re-aimed axes, grounded, scaled to the declared ' +
-                    'length, parts renamed. It runs in the background — a minute or so for a ' +
-                    'file this size, and the tab stays usable while it does.'}
+                    'length, parts renamed. One press runs up to four passes on its own — each ' +
+                    'over-budget result halves the triangle target for the next — a minute or so ' +
+                    'per pass for a file this size, and the tab stays usable while it does.'}
               </p>
             </div>
-            {/* The loop ends after the smallest target: past 5,000 triangles
-                the shoe keeps its footprint but loses its silhouette, so more
-                passes would trade the fitting for bytes. The weight then is in
-                the textures, which need a human and the guide, not a button. */}
-            {(compressedMatchesFile &&
-              compressed.overBudgetAfter &&
-              passes >= MAX_EXTRA_PASSES) ||
-            compress.isRunning ? null : (
+            {/* The loop runs itself to the budget or the floor — there is no
+                manual "again" left to press. Past 5,000 triangles the shoe keeps
+                its footprint but loses its silhouette, so more passes would trade
+                the fitting for bytes. The weight then is in the textures, which
+                need a human and the guide, not a button. */}
+            {!compressedMatchesFile && !compress.isRunning && (
               <button
                 type="button"
                 onClick={handleCompress}
                 disabled={!compressReady}
               className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-[#8B5A2B] px-4 py-2 text-sm font-semibold text-[#8B5A2B] transition-colors hover:bg-[#8B5A2B] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <>
                 <Sparkles size={14} />
-                {!compressedMatchesFile
-                  ? 'Compress it'
-                  : compressed.overBudgetAfter && passes < MAX_EXTRA_PASSES
-                    ? `Compress again (pass ${passes + 1} of ${MAX_EXTRA_PASSES + 1})`
-                    : 'Compress again'}
-              </>
-            </button>
+                Compress it
+              </button>
             )}
             {compress.isRunning && (
               <button
@@ -507,7 +518,7 @@ export default function UploadModelModal({ request, onClose, onDone }) {
                 className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-[#8B5A2B] px-4 py-2 text-sm font-semibold text-[#8B5A2B] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Loader2 size={14} className="animate-spin" />
-                Compressing…
+                Compressing… (pass {passes + 1} of {MAX_EXTRA_PASSES + 1})
               </button>
             )}
           </div>
@@ -533,17 +544,9 @@ export default function UploadModelModal({ request, onClose, onDone }) {
             <div className="mt-2">
               <p className="text-xs font-semibold text-[#3B2314]">
                 {compressed.summary}
-                {compressed.overBudgetAfter && passes < MAX_EXTRA_PASSES && (
-                  <>
-                    {' '}Still over the {formatBytes(FILE_SIZE_BUDGET_BYTES)} budget the server
-                    enforces — the next pass halves the triangle target to{' '}
-                    {Math.max(
-                      Math.round(TARGET_TRIANGLES / 2 ** passes),
-                      MIN_TARGET_TRIANGLES,
-                    ).toLocaleString('en-US')}.
-                  </>
-                )}
-                {compressed.overBudgetAfter && passes >= MAX_EXTRA_PASSES && (
+                {/* Reachable only when the loop ran all four passes: anything
+                    else fits the budget and lands on Publish instead. */}
+                {compressed.overBudgetAfter && (
                   <>
                     {' '}Four passes and still over: the weight is in the textures, not the mesh.
                     Re-bake them and re-export (guide §C5/C7), or run the CLI.
