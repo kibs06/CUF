@@ -59,6 +59,10 @@ const Map<String, String> kDeepArBundledEffects = {
   // product-name fallback below for rows whose ids were never recorded.
   'jbc-crown-leather-sandals':
       'assets/effects/jbc_crown_leather_sandals.deepar',
+  // Espadrille Slip-On Shoes, same shape: slug for shared links plus the
+  // product-name fallback below for rows whose ids were never recorded.
+  'espadrille-slip-on-shoes':
+      'assets/effects/espadrille_slip_on_shoes.deepar',
 };
 
 /// Normalizes a product name to its effect slug: lowercase, non-alphanumerics
@@ -99,6 +103,13 @@ bool _isJbcName(String name) {
       slug.contains('leather');
 }
 
+/// Whether a product name is the Espadrille Slip-On Shoes pair. Same reason
+/// as Luxe/JBC: the effect was handed over as a file for a named product.
+bool _isEspadrilleName(String name) {
+  final slug = deepArSlugForName(name);
+  return slug.contains('espadrille') && slug.contains('slip');
+}
+
 /// Resolves the `.deepar` effect path for a product.
 ///
 /// `productName` is the escape hatch for effects filed by product name rather
@@ -123,6 +134,9 @@ String? deepArEffectForProduct(
   }
   if (_isJbcName(name)) {
     return kDeepArBundledEffects['jbc-crown-leather-sandals'];
+  }
+  if (_isEspadrilleName(name)) {
+    return kDeepArBundledEffects['espadrille-slip-on-shoes'];
   }
   final slugHit = kDeepArBundledEffects[deepArSlugForName(name)];
   return slugHit;

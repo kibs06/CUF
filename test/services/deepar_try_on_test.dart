@@ -60,6 +60,20 @@ void main() {
       expect(deepArConventionAssetForName('  '), isNull);
     });
 
+    test('Espadrille resolves by slug and product name', () {
+      expect(
+        deepArEffectForProduct('espadrille-slip-on-shoes'),
+        'assets/effects/espadrille_slip_on_shoes.deepar',
+      );
+      expect(
+        deepArEffectForProduct(
+          'some-uuid-nobody-recorded',
+          productName: 'Espadrille Slip-On Shoes',
+        ),
+        'assets/effects/espadrille_slip_on_shoes.deepar',
+      );
+    });
+
     test('unknown product has no effect yet', () {
       expect(deepArEffectForProduct('abc123'), isNull);
     });

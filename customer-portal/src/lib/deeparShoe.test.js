@@ -41,6 +41,15 @@ test('convention URL needs no map edit', async () => {
   assert.equal(await checkDeepArConventionExists('http://127.0.0.1:1/nope.deepar'), false)
 })
 
+test('Espadrille resolves by slug, any row id by name', () => {
+  assert.equal(deepArEffectForProduct('espadrille-slip-on-shoes'), '/effects/espadrille_slip_on_shoes.deepar')
+  assert.equal(
+    deepArEffectForProductName('Espadrille Slip-On Shoes'),
+    '/effects/espadrille_slip_on_shoes.deepar',
+  )
+  assert.equal(deepArSlugForName('Espadrille Slip-On Shoes'), 'espadrille-slip-on-shoes')
+})
+
 test('Luna mapping is unchanged', () => {
   assert.equal(
     deepArEffectForProduct('0aebaa64-4d9e-44f8-8876-6b3ee9855fae'),

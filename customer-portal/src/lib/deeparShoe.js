@@ -42,6 +42,11 @@ export function deepArEffectForProduct(productId) {
   if (id === 'jbc-crown-leather-sandals') {
     return '/effects/jbc_crown_leather_sandals.deepar'
   }
+  // Espadrille Slip-On Shoes, same shape: slug for shared links, row ids
+  // through the product-name fallback below.
+  if (id === 'espadrille-slip-on-shoes') {
+    return '/effects/espadrille_slip_on_shoes.deepar'
+  }
   return null
 }
 
@@ -55,6 +60,9 @@ export function deepArEffectForProductName(name) {
   }
   if (slug.includes('jbc') && slug.includes('crown') && slug.includes('leather')) {
     return '/effects/jbc_crown_leather_sandals.deepar'
+  }
+  if (slug.includes('espadrille') && slug.includes('slip')) {
+    return '/effects/espadrille_slip_on_shoes.deepar'
   }
   return deepArEffectForProduct(slug)
 }
