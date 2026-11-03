@@ -63,6 +63,14 @@ const Map<String, String> kDeepArBundledEffects = {
   // product-name fallback below for rows whose ids were never recorded.
   'espadrille-slip-on-shoes':
       'assets/effects/espadrille_slip_on_shoes.deepar',
+  // PrimeStep Trail Stitch Sandals, same shape: slug for shared links plus
+  // the product-name fallback below for rows whose ids were never recorded.
+  'primestep-trail-stitch-sandals':
+      'assets/effects/primestep_trail_stitch_sandals.deepar',
+  // Velux Classic Leather Sandals, same shape: slug for shared links plus
+  // the product-name fallback below for rows whose ids were never recorded.
+  'velux-classic-leather-sandals':
+      'assets/effects/velux_classic_leather_sandals.deepar',
 };
 
 /// Normalizes a product name to its effect slug: lowercase, non-alphanumerics
@@ -110,6 +118,22 @@ bool _isEspadrilleName(String name) {
   return slug.contains('espadrille') && slug.contains('slip');
 }
 
+/// Whether a product name is the PrimeStep Trail Stitch Sandals pair. Same
+/// reason as Luxe/JBC/Espadrille: the effect was handed over as a file for
+/// a named product, so the name is the stable key until a row id is recorded.
+bool _isPrimeStepName(String name) {
+  final slug = deepArSlugForName(name);
+  return slug.contains('primestep') && slug.contains('trail');
+}
+
+/// Whether a product name is the Velux Classic Leather Sandals pair. Same
+/// reason as PrimeStep: the effect was handed over as a file for a named
+/// product, so the name is the stable key until a row id is recorded.
+bool _isVeluxName(String name) {
+  final slug = deepArSlugForName(name);
+  return slug.contains('velux') && slug.contains('classic');
+}
+
 /// Resolves the `.deepar` effect path for a product.
 ///
 /// `productName` is the escape hatch for effects filed by product name rather
@@ -137,6 +161,12 @@ String? deepArEffectForProduct(
   }
   if (_isEspadrilleName(name)) {
     return kDeepArBundledEffects['espadrille-slip-on-shoes'];
+  }
+  if (_isPrimeStepName(name)) {
+    return kDeepArBundledEffects['primestep-trail-stitch-sandals'];
+  }
+  if (_isVeluxName(name)) {
+    return kDeepArBundledEffects['velux-classic-leather-sandals'];
   }
   final slugHit = kDeepArBundledEffects[deepArSlugForName(name)];
   return slugHit;

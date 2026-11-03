@@ -47,6 +47,16 @@ export function deepArEffectForProduct(productId) {
   if (id === 'espadrille-slip-on-shoes') {
     return '/effects/espadrille_slip_on_shoes.deepar'
   }
+  // PrimeStep Trail Stitch Sandals, same shape: slug for shared links, row
+  // ids through the product-name fallback below.
+  if (id === 'primestep-trail-stitch-sandals') {
+    return '/effects/primestep_trail_stitch_sandals.deepar'
+  }
+  // Velux Classic Leather Sandals, same shape: slug for shared links, row
+  // ids through the product-name fallback below.
+  if (id === 'velux-classic-leather-sandals') {
+    return '/effects/velux_classic_leather_sandals.deepar'
+  }
   return null
 }
 
@@ -63,6 +73,12 @@ export function deepArEffectForProductName(name) {
   }
   if (slug.includes('espadrille') && slug.includes('slip')) {
     return '/effects/espadrille_slip_on_shoes.deepar'
+  }
+  if (slug.includes('primestep') && slug.includes('trail')) {
+    return '/effects/primestep_trail_stitch_sandals.deepar'
+  }
+  if (slug.includes('velux') && slug.includes('classic')) {
+    return '/effects/velux_classic_leather_sandals.deepar'
   }
   return deepArEffectForProduct(slug)
 }

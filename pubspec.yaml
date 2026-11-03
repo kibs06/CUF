@@ -174,6 +174,10 @@ flutter:
     - assets/effects/jbc_crown_leather_sandals.deepar
     # Espadrille Slip-On Shoes (Studio export, filed by product name).
     - assets/effects/espadrille_slip_on_shoes.deepar
+    # PrimeStep Trail Stitch Sandals (Studio export, filed by product name).
+    - assets/effects/primestep_trail_stitch_sandals.deepar
+    # Velux Classic Leather Sandals (Studio export, filed by product name).
+    - assets/effects/velux_classic_leather_sandals.deepar
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
