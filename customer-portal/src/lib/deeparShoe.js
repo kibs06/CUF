@@ -57,6 +57,11 @@ export function deepArEffectForProduct(productId) {
   if (id === 'velux-classic-leather-sandals') {
     return '/effects/velux_classic_leather_sandals.deepar'
   }
+  // Elara, same shape: slug for shared links, row ids through the
+  // product-name fallback below.
+  if (id === 'elara') {
+    return '/effects/elara.deepar'
+  }
   return null
 }
 
@@ -79,6 +84,9 @@ export function deepArEffectForProductName(name) {
   }
   if (slug.includes('velux') && slug.includes('classic')) {
     return '/effects/velux_classic_leather_sandals.deepar'
+  }
+  if (slug.includes('elara')) {
+    return '/effects/elara.deepar'
   }
   return deepArEffectForProduct(slug)
 }

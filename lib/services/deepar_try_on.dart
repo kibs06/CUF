@@ -71,6 +71,9 @@ const Map<String, String> kDeepArBundledEffects = {
   // the product-name fallback below for rows whose ids were never recorded.
   'velux-classic-leather-sandals':
       'assets/effects/velux_classic_leather_sandals.deepar',
+  // Elara, same shape: slug for shared links plus the product-name
+  // fallback below for rows whose ids were never recorded.
+  'elara': 'assets/effects/elara.deepar',
 };
 
 /// Normalizes a product name to its effect slug: lowercase, non-alphanumerics
@@ -134,6 +137,14 @@ bool _isVeluxName(String name) {
   return slug.contains('velux') && slug.contains('classic');
 }
 
+/// Whether a product name is the Elara pair. Same reason as Velux: the
+/// effect was handed over as a file for a named product, so the name is
+/// the stable key until a row id is recorded.
+bool _isElaraName(String name) {
+  final slug = deepArSlugForName(name);
+  return slug.contains('elara');
+}
+
 /// Resolves the `.deepar` effect path for a product.
 ///
 /// `productName` is the escape hatch for effects filed by product name rather
@@ -167,6 +178,9 @@ String? deepArEffectForProduct(
   }
   if (_isVeluxName(name)) {
     return kDeepArBundledEffects['velux-classic-leather-sandals'];
+  }
+  if (_isElaraName(name)) {
+    return kDeepArBundledEffects['elara'];
   }
   final slugHit = kDeepArBundledEffects[deepArSlugForName(name)];
   return slugHit;
