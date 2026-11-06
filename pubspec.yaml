@@ -182,6 +182,11 @@ flutter:
     - assets/effects/elara.deepar
     # Tassel Loafer (Studio export, filed by product name).
     - assets/effects/tassel_loafer.deepar
+    # Lavender Luxe Double-Strap Sandals (Studio export `lavander.deepar`,
+    # filed by product name; matches Lavender/Lavander spellings).
+    - assets/effects/lavander.deepar
+    # CARCARO Leather Slides (Studio export, filed by product name).
+    - assets/effects/carcaro_leather_slides.deepar
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

@@ -67,6 +67,17 @@ export function deepArEffectForProduct(productId) {
   if (id === 'tassel-loafer') {
     return '/effects/tassel_loafer.deepar'
   }
+  // Lavender Luxe Double-Strap Sandals, same shape: slug for shared links,
+  // row ids through the product-name fallback below. Effect file keeps its
+  // Studio export name (`lavander.deepar`); both spellings resolve to it.
+  if (id === 'lavender-luxe-double-strap-sandals' || id === 'lavander') {
+    return '/effects/lavander.deepar'
+  }
+  // CARCARO Leather Slides, same shape: slug for shared links, row ids
+  // through the product-name fallback below.
+  if (id === 'carcaro-leather-slides') {
+    return '/effects/carcaro_leather_slides.deepar'
+  }
   return null
 }
 
@@ -95,6 +106,15 @@ export function deepArEffectForProductName(name) {
   }
   if (slug.includes('tassel') && slug.includes('loafer')) {
     return '/effects/tassel_loafer.deepar'
+  }
+  if (
+    slug.includes('lavander') ||
+    (slug.includes('lavender') && slug.includes('luxe'))
+  ) {
+    return '/effects/lavander.deepar'
+  }
+  if (slug.includes('carcaro')) {
+    return '/effects/carcaro_leather_slides.deepar'
   }
   return deepArEffectForProduct(slug)
 }

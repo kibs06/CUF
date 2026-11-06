@@ -77,6 +77,15 @@ const Map<String, String> kDeepArBundledEffects = {
   // Tassel Loafer, same shape: slug for shared links plus the
   // product-name fallback below for rows whose ids were never recorded.
   'tassel-loafer': 'assets/effects/tassel_loafer.deepar',
+  // Lavender Luxe Double-Strap Sandals, same shape: slug for shared links
+  // plus the product-name fallback below for rows whose ids were never
+  // recorded. Effect file keeps its Studio export name (`lavander.deepar`);
+  // both Lavender/Lavander spellings resolve to it.
+  'lavender-luxe-double-strap-sandals': 'assets/effects/lavander.deepar',
+  'lavander': 'assets/effects/lavander.deepar',
+  // CARCARO Leather Slides, same shape: slug for shared links plus the
+  // product-name fallback below for rows whose ids were never recorded.
+  'carcaro-leather-slides': 'assets/effects/carcaro_leather_slides.deepar',
 };
 
 /// Normalizes a product name to its effect slug: lowercase, non-alphanumerics
@@ -156,6 +165,24 @@ bool _isTasselLoaferName(String name) {
   return slug.contains('tassel') && slug.contains('loafer');
 }
 
+/// Whether a product name is the Lavender Luxe Double-Strap Sandals pair.
+/// Same reason as Tassel Loafer: the effect was handed over as a file for
+/// a named product. Matches both `lavender` (product name) and `lavander`
+/// (Studio export filename) spellings.
+bool _isLavenderLuxeName(String name) {
+  final slug = deepArSlugForName(name);
+  return slug.contains('lavander') ||
+      (slug.contains('lavender') && slug.contains('luxe'));
+}
+
+/// Whether a product name is the CARCARO Leather Slides pair. Same reason
+/// as Lavender Luxe: the effect was handed over as a file for a named
+/// product, so the name is the stable key until a row id is recorded.
+bool _isCarcaroName(String name) {
+  final slug = deepArSlugForName(name);
+  return slug.contains('carcaro');
+}
+
 /// Resolves the `.deepar` effect path for a product.
 ///
 /// `productName` is the escape hatch for effects filed by product name rather
@@ -195,6 +222,12 @@ String? deepArEffectForProduct(
   }
   if (_isTasselLoaferName(name)) {
     return kDeepArBundledEffects['tassel-loafer'];
+  }
+  if (_isLavenderLuxeName(name)) {
+    return kDeepArBundledEffects['lavender-luxe-double-strap-sandals'];
+  }
+  if (_isCarcaroName(name)) {
+    return kDeepArBundledEffects['carcaro-leather-slides'];
   }
   final slugHit = kDeepArBundledEffects[deepArSlugForName(name)];
   return slugHit;
