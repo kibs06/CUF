@@ -1,10 +1,11 @@
 {
-  "latest_version": "1.0.67",
-  "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.67/app-release-1.0.67.apk",
-  "released_at": "2026-11-03",
+  "latest_version": "1.0.68",
+  "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.68/app-release-1.0.68.apk",
+  "released_at": "2026-11-06",
   "notes": [
-    "Espadrille Slip-On Shoes DeepAR effect hardcoded like Luna and Luxe",
-    "PrimeStep Trail Stitch Sandals DeepAR effect hardcoded like Luna and Luxe",
-    "Velux Classic Leather Sandals DeepAR effect hardcoded like Luna and Luxe"
+    "CARCARO Leather Slides effect updated to new export",
+    "Crocotex Men's Comfort Slides DeepAR effect hardcoded like Luna and Luxe",
+    "EcoStride Double Strap Sandals DeepAR effect hardcoded like Luna and Luxe",
+    "Classic Red Double-Buckle Comfort Sandals DeepAR effect hardcoded like Luna and Luxe"
   ]
 }
