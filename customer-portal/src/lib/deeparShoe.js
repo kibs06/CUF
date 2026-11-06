@@ -62,6 +62,11 @@ export function deepArEffectForProduct(productId) {
   if (id === 'elara') {
     return '/effects/elara.deepar'
   }
+  // Tassel Loafer, same shape: slug for shared links, row ids through
+  // the product-name fallback below.
+  if (id === 'tassel-loafer') {
+    return '/effects/tassel_loafer.deepar'
+  }
   return null
 }
 
@@ -87,6 +92,9 @@ export function deepArEffectForProductName(name) {
   }
   if (slug.includes('elara')) {
     return '/effects/elara.deepar'
+  }
+  if (slug.includes('tassel') && slug.includes('loafer')) {
+    return '/effects/tassel_loafer.deepar'
   }
   return deepArEffectForProduct(slug)
 }
