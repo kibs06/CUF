@@ -187,6 +187,13 @@ flutter:
     - assets/effects/lavander.deepar
     # CARCARO Leather Slides (Studio export, filed by product name).
     - assets/effects/carcaro_leather_slides.deepar
+    # Crocotex Men's Comfort Slides (Studio export, filed by product name).
+    - assets/effects/crocotex_men_s_comfort_slides.deepar
+    # EcoStride Double Strap Sandals (Studio export, filed by product name).
+    - assets/effects/ecostride_double_strap_sandals.deepar
+    # Classic Red Double-Buckle Comfort Sandals (Studio export, filed by
+    # product name).
+    - assets/effects/classic_red_double_buckle_comfort_sandals.deepar
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

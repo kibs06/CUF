@@ -78,6 +78,21 @@ export function deepArEffectForProduct(productId) {
   if (id === 'carcaro-leather-slides') {
     return '/effects/carcaro_leather_slides.deepar'
   }
+  // Crocotex Men's Comfort Slides, same shape: slug for shared links,
+  // row ids through the product-name fallback below.
+  if (id === 'crocotex-men-s-comfort-slides') {
+    return '/effects/crocotex_men_s_comfort_slides.deepar'
+  }
+  // EcoStride Double Strap Sandals, same shape: slug for shared links,
+  // row ids through the product-name fallback below.
+  if (id === 'ecostride-double-strap-sandals') {
+    return '/effects/ecostride_double_strap_sandals.deepar'
+  }
+  // Classic Red Double-Buckle Comfort Sandals, same shape: slug for
+  // shared links, row ids through the product-name fallback below.
+  if (id === 'classic-red-double-buckle-comfort-sandals') {
+    return '/effects/classic_red_double_buckle_comfort_sandals.deepar'
+  }
   return null
 }
 
@@ -115,6 +130,19 @@ export function deepArEffectForProductName(name) {
   }
   if (slug.includes('carcaro')) {
     return '/effects/carcaro_leather_slides.deepar'
+  }
+  if (slug.includes('crocotex') && slug.includes('comfort')) {
+    return '/effects/crocotex_men_s_comfort_slides.deepar'
+  }
+  if (slug.includes('ecostride') && slug.includes('strap')) {
+    return '/effects/ecostride_double_strap_sandals.deepar'
+  }
+  if (
+    slug.includes('classic') &&
+    slug.includes('red') &&
+    slug.includes('buckle')
+  ) {
+    return '/effects/classic_red_double_buckle_comfort_sandals.deepar'
   }
   return deepArEffectForProduct(slug)
 }

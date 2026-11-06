@@ -86,6 +86,21 @@ const Map<String, String> kDeepArBundledEffects = {
   // CARCARO Leather Slides, same shape: slug for shared links plus the
   // product-name fallback below for rows whose ids were never recorded.
   'carcaro-leather-slides': 'assets/effects/carcaro_leather_slides.deepar',
+  // Crocotex Men's Comfort Slides, same shape: slug for shared links
+  // plus the product-name fallback below for rows whose ids were never
+  // recorded.
+  'crocotex-men-s-comfort-slides':
+      'assets/effects/crocotex_men_s_comfort_slides.deepar',
+  // EcoStride Double Strap Sandals, same shape: slug for shared links
+  // plus the product-name fallback below for rows whose ids were never
+  // recorded.
+  'ecostride-double-strap-sandals':
+      'assets/effects/ecostride_double_strap_sandals.deepar',
+  // Classic Red Double-Buckle Comfort Sandals, same shape: slug for
+  // shared links plus the product-name fallback below for rows whose
+  // ids were never recorded.
+  'classic-red-double-buckle-comfort-sandals':
+      'assets/effects/classic_red_double_buckle_comfort_sandals.deepar',
 };
 
 /// Normalizes a product name to its effect slug: lowercase, non-alphanumerics
@@ -183,6 +198,33 @@ bool _isCarcaroName(String name) {
   return slug.contains('carcaro');
 }
 
+/// Whether a product name is the Crocotex Men's Comfort Slides pair. Same
+/// reason as CARCARO: the effect was handed over as a file for a named
+/// product, so the name is the stable key until a row id is recorded.
+bool _isCrocotexName(String name) {
+  final slug = deepArSlugForName(name);
+  return slug.contains('crocotex') && slug.contains('comfort');
+}
+
+/// Whether a product name is the EcoStride Double Strap Sandals pair. Same
+/// reason as Crocotex: the effect was handed over as a file for a named
+/// product, so the name is the stable key until a row id is recorded.
+bool _isEcoStrideName(String name) {
+  final slug = deepArSlugForName(name);
+  return slug.contains('ecostride') && slug.contains('strap');
+}
+
+/// Whether a product name is the Classic Red Double-Buckle Comfort Sandals
+/// pair. Same reason as EcoStride: the effect was handed over as a file
+/// for a named product, so the name is the stable key until a row id is
+/// recorded.
+bool _isClassicRedName(String name) {
+  final slug = deepArSlugForName(name);
+  return slug.contains('classic') &&
+      slug.contains('red') &&
+      slug.contains('buckle');
+}
+
 /// Resolves the `.deepar` effect path for a product.
 ///
 /// `productName` is the escape hatch for effects filed by product name rather
@@ -228,6 +270,15 @@ String? deepArEffectForProduct(
   }
   if (_isCarcaroName(name)) {
     return kDeepArBundledEffects['carcaro-leather-slides'];
+  }
+  if (_isCrocotexName(name)) {
+    return kDeepArBundledEffects['crocotex-men-s-comfort-slides'];
+  }
+  if (_isEcoStrideName(name)) {
+    return kDeepArBundledEffects['ecostride-double-strap-sandals'];
+  }
+  if (_isClassicRedName(name)) {
+    return kDeepArBundledEffects['classic-red-double-buckle-comfort-sandals'];
   }
   final slugHit = kDeepArBundledEffects[deepArSlugForName(name)];
   return slugHit;
