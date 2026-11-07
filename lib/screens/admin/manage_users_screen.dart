@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../constants/app_constants.dart';
 import '../../providers/order_provider.dart';
+import '../../widgets/custom_popup_menu.dart';
 import '../../widgets/sole_card.dart';
 import 'admin_account_security_screen.dart';
 import 'admin_user_documents_screen.dart';
@@ -384,50 +385,43 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                                           ),
                                         ),
                                       ),
-                                      // Context actions
-                                      PopupMenuButton<String>(
-                                        icon: const Icon(Icons.more_vert, size: 18, color: AppConstants.primary),
-                                        onSelected: (val) {
-                                          if (val == 'role') {
-                                            _changeRole(userId, role);
-                                          } else if (val == 'reset') {
-                                            _deactivateUser(userId, name);
-                                          } else if (val == 'view_docs') {
-                                            _viewDocuments(userId, name);
-                                          } else if (val == 'security') {
-                                            _viewAccountSecurity(userId, name);
-                                          }
-                                        },
-                                        itemBuilder: (context) => [
-                                          PopupMenuItem(
-                                            value: 'view_docs',
-                                            child: Row(
-                                              children: [
-                                                const Icon(Icons.description_outlined, size: 16, color: AppConstants.primary),
-                                                const SizedBox(width: 8),
-                                                Text('View Documents', style: AppConstants.bodyStyle(fontSize: 13)),
+                                      // Context actions (same animated menu as the chat header).
+                                      Builder(
+                                        builder: (context) => IconButton(
+                                          icon: const Icon(Icons.more_vert, size: 18, color: AppConstants.primary),
+                                          onPressed: () {
+                                            showCustomPopupMenu(
+                                              context: context,
+                                              items: [
+                                                CustomPopupMenuItem(
+                                                  label: 'View Documents',
+                                                  icon: Icons.description_outlined,
+                                                  iconColor: AppConstants.primary,
+                                                  onTap: () => _viewDocuments(userId, name),
+                                                ),
+                                                CustomPopupMenuItem(
+                                                  label: 'Account Security',
+                                                  icon: Icons.shield_outlined,
+                                                  iconColor: AppConstants.primary,
+                                                  onTap: () => _viewAccountSecurity(userId, name),
+                                                ),
+                                                CustomPopupMenuItem(
+                                                  label: 'Edit Role',
+                                                  icon: Icons.edit_outlined,
+                                                  onTap: () => _changeRole(userId, role),
+                                                ),
+                                                CustomPopupMenuItem(
+                                                  label: 'Reset to Customer',
+                                                  icon: Icons.restart_alt_outlined,
+                                                  iconColor: AppConstants.error,
+                                                  textColor: AppConstants.error,
+                                                  onTap: () => _deactivateUser(userId, name),
+                                                  showDividerBefore: true,
+                                                ),
                                               ],
-                                            ),
-                                          ),
-                                          PopupMenuItem(
-                                            value: 'security',
-                                            child: Row(
-                                              children: [
-                                                const Icon(Icons.shield_outlined, size: 16, color: AppConstants.primary),
-                                                const SizedBox(width: 8),
-                                                Text('Account Security', style: AppConstants.bodyStyle(fontSize: 13)),
-                                              ],
-                                            ),
-                                          ),
-                                          PopupMenuItem(
-                                            value: 'role',
-                                            child: Text('Edit Role', style: AppConstants.bodyStyle(fontSize: 13)),
-                                          ),
-                                          PopupMenuItem(
-                                            value: 'reset',
-                                            child: Text('Reset to Customer', style: AppConstants.bodyStyle(fontSize: 13, color: AppConstants.error)),
-                                          ),
-                                        ],
+                                            );
+                                          },
+                                        ),
                                       ),
                                       // Permanent delete — a dedicated button
                                       // at the far right, isolated from the

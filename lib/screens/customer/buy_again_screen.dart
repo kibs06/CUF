@@ -40,6 +40,9 @@ class _BuyAgainScreenState extends State<BuyAgainScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final Map<dynamic, Timer> _pendingDeletes = {};
+  final TextEditingController _searchController = TextEditingController();
+  bool _isSearching = false;
+  String _searchQuery = '';
 
   static const _tabs = <_OrderTab>[
     _OrderTab('To Ship', 'to_ship'),
@@ -62,30 +65,50 @@ class _BuyAgainScreenState extends State<BuyAgainScreen>
     }
     _pendingDeletes.clear();
     _tabController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
-  /// Filter orders for a given tab.
+  /// Filter orders for a given tab, additionally narrowed by the search query.
   List<Map<String, dynamic>> _filterOrders(String filter) {
     return widget.orders.where((order) {
       final status = (order['status'] ?? '').toString().toLowerCase();
-      switch (filter) {
-        case 'to_ship':
-          return status == 'pending' ||
-              status == 'placed' ||
-              status == 'preparing';
-        case 'to_receive':
-          return status == 'ready';
-        case 'completed':
-          return status == 'delivered' || status == 'received';
-        case 'return_refund':
-          return status == 'cancellation_requested';
-        case 'cancelled':
-          return status == 'cancelled';
-        default:
-          return true;
-      }
+      final matchesTab = switch (filter) {
+        'to_ship' =>
+          status == 'pending' || status == 'placed' || status == 'preparing',
+        'to_receive' => status == 'ready',
+        'completed' => status == 'delivered' || status == 'received',
+        'return_refund' => status == 'cancellation_requested',
+        'cancelled' => status == 'cancelled',
+        _ => true,
+      };
+      return matchesTab && _matchesSearch(order);
     }).toList();
+  }
+
+  /// True when the order matches the current search query.
+  /// Matches against order ID, store name, and product names.
+  bool _matchesSearch(Map<String, dynamic> order) {
+    final query = _searchQuery.trim().toLowerCase();
+    if (query.isEmpty) return true;
+
+    if ((order['id']?.toString() ?? '').toLowerCase().contains(query)) {
+      return true;
+    }
+    if (_extractStoreName(order).toLowerCase().contains(query)) return true;
+
+    final items = order['order_items'] is List
+        ? order['order_items'] as List
+        : const <dynamic>[];
+    for (final item in items) {
+      final map = item as Map;
+      final product = map['products'];
+      final name = product is Map
+          ? (product['name']?.toString() ?? '')
+          : '';
+      if (name.toLowerCase().contains(query)) return true;
+    }
+    return false;
   }
 
   @override
@@ -93,23 +116,62 @@ class _BuyAgainScreenState extends State<BuyAgainScreen>
     return Scaffold(
       backgroundColor: AppConstants.surfaceLight,
       appBar: AppBar(
-        title: Text(
-          'My Purchases',
-          style: AppConstants.headlineStyle(fontSize: 20),
-        ),
+        title: _isSearching
+            ? TextField(
+                controller: _searchController,
+                autofocus: true,
+                decoration: InputDecoration(
+                  hintText: 'Search orders, products, stores',
+                  hintStyle: AppConstants.bodyStyle(
+                    fontSize: 14,
+                    color: AppConstants.secondary.withValues(alpha: 0.45),
+                  ),
+                  border: InputBorder.none,
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: Icon(
+                            Icons.clear,
+                            size: 20,
+                            color: AppConstants.secondary
+                                .withValues(alpha: 0.5),
+                          ),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _searchQuery = '');
+                          },
+                        )
+                      : null,
+                ),
+                style: AppConstants.bodyStyle(fontSize: 15),
+                onChanged: (value) =>
+                    setState(() => _searchQuery = value),
+              )
+            : Text(
+                'My Purchases',
+                style: AppConstants.headlineStyle(fontSize: 20),
+              ),
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
           icon: Icon(Icons.arrow_back, color: AppConstants.secondary),
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () {
+            if (_isSearching) {
+              _searchController.clear();
+              setState(() {
+                _isSearching = false;
+                _searchQuery = '';
+              });
+            } else {
+              Navigator.of(context).pop();
+            }
+          },
         ),
         actions: [
-          IconButton(
-            icon: Icon(Icons.search, color: AppConstants.secondary),
-            onPressed: () {
-              // TODO: Add search within orders
-            },
-          ),
+          if (!_isSearching)
+            IconButton(
+              icon: Icon(Icons.search, color: AppConstants.secondary),
+              onPressed: () => setState(() => _isSearching = true),
+            ),
         ],
       ),
       body: Column(
@@ -413,13 +475,18 @@ class _BuyAgainScreenState extends State<BuyAgainScreen>
   }
 
   Widget _buildEmptyState(String tabName) {
+    final searching = _searchQuery.trim().isNotEmpty;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
         child: EmptyStateWidget(
-          icon: Icons.shopping_bag_outlined,
-          title: 'No orders here yet',
-          subtitle: 'Your $tabName orders will appear here.',
+          icon: searching
+              ? Icons.search_off_outlined
+              : Icons.shopping_bag_outlined,
+          title: searching ? 'No matching orders' : 'No orders here yet',
+          subtitle: searching
+              ? 'No $tabName orders match "${_searchQuery.trim()}".'
+              : 'Your $tabName orders will appear here.',
         ),
       ),
     );

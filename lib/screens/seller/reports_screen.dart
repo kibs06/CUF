@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../constants/app_constants.dart';
 import '../../constants/seller_theme_constants.dart';
 import '../../models/seller_report_data.dart';
@@ -19,6 +22,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
   late Future<SellerReportData> _reportFuture;
   String? _storeId;
   bool _isMonthly = false;
+  bool _isExporting = false;
+  SellerReportData? _latestData;
 
   @override
   void initState() {
@@ -91,14 +96,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.download_outlined, color: Colors.white),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('CSV export coming soon!'),
-                  backgroundColor: AppConstants.primary,
-                ),
-              );
-            },
+            onPressed: () => _exportCsv(_latestData),
           ),
         ],
       ),
@@ -129,6 +127,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   );
                 }
                 final data = snapshot.data!;
+                _latestData = data;
                 return _buildReportBody(data);
               },
             ),
@@ -182,7 +181,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             // Section 3: Export
             _buildSectionLabel('EXPORT'),
             const SizedBox(height: 12),
-            _buildExportButton(),
+            _buildExportButton(data),
             const SizedBox(height: 40),
           ],
         ),
@@ -441,22 +440,115 @@ class _ReportsScreenState extends State<ReportsScreen> {
     );
   }
 
-  Widget _buildExportButton() {
+  String _escCsv(Object? value) {
+    final s = value?.toString() ?? '';
+    if (s.contains(',') || s.contains('"') || s.contains('\n')) {
+      return '"${s.replaceAll('"', '""')}"';
+    }
+    return s;
+  }
+
+  String _csvDate(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  /// Build a CSV of the loaded report (summary + daily revenue + top
+  /// products) and open the platform share sheet so the seller can save or
+  /// send the file. Same BOM/escaping/temp-file pattern as the admin
+  /// transactions export.
+  Future<void> _exportCsv(SellerReportData? data) async {
+    if (data == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Report is still loading — try again in a moment.'),
+          backgroundColor: AppConstants.primary,
+        ),
+      );
+      return;
+    }
+    if (_isExporting) return;
+    setState(() => _isExporting = true);
+    try {
+      final periodLabel = _weekLabel(data.weekStart, data.weekEnd);
+      final rows = <List<Object?>>[
+        ['Seller Sales Report'],
+        ['Period', periodLabel],
+        ['Generated', _csvDate(DateTime.now())],
+        [],
+        ['Summary'],
+        ['Total Revenue (PHP)', data.weeklyTotal.toStringAsFixed(2)],
+        [
+          'Previous Period (PHP)',
+          data.previousPeriodTotal.toStringAsFixed(2)
+        ],
+        [
+          'Change (%)',
+          data.percentChange == null
+              ? 'n/a'
+              : data.percentChange!.toStringAsFixed(1),
+        ],
+        [],
+        ['Daily Revenue'],
+        ['Date', 'Revenue (PHP)'],
+        for (int i = 0; i < data.dailyRevenue.length; i++)
+          [
+            _csvDate(data.weekStart.add(Duration(days: i))),
+            data.dailyRevenue[i].toStringAsFixed(2),
+          ],
+        [],
+        ['Top Products'],
+        ['Rank', 'Product', 'Units Sold', 'Revenue (PHP)'],
+        for (int i = 0; i < data.topProducts.length; i++)
+          [
+            i + 1,
+            data.topProducts[i]['name'] ?? 'Unknown',
+            data.topProducts[i]['units'] ?? 0,
+            ((data.topProducts[i]['revenue'] as num?)?.toDouble() ?? 0)
+                .toStringAsFixed(2),
+          ],
+      ];
+      final csv =
+          '\uFEFF${rows.map((r) => r.map(_escCsv).join(',')).join('\n')}';
+
+      final dir = await Directory.systemTemp.createTemp('sales-report');
+      final file =
+          File('${dir.path}/sales-report-${_csvDate(DateTime.now())}.csv');
+      await file.writeAsString(csv);
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path, mimeType: 'text/csv')],
+          subject: 'Sales report $periodLabel',
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Export failed: $e'),
+          backgroundColor: AppConstants.error,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isExporting = false);
+    }
+  }
+
+  Widget _buildExportButton(SellerReportData data) {
     return SizedBox(
       width: double.infinity,
       height: 48,
       child: OutlinedButton.icon(
-        onPressed: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('CSV export coming soon!'),
-              backgroundColor: AppConstants.primary,
-            ),
-          );
-        },
-        icon: const Icon(Icons.download, color: AppConstants.primary),
+        onPressed: _isExporting ? null : () => _exportCsv(data),
+        icon: _isExporting
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.download, color: AppConstants.primary),
         label: Text(
-          'Download Sales Report (CSV)',
+          _isExporting
+              ? 'Preparing CSV…'
+              : 'Download Sales Report (CSV)',
           style: AppConstants.bodyStyle(
             fontWeight: FontWeight.w500,
             color: AppConstants.primary,

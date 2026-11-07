@@ -5,6 +5,7 @@ import '../../constants/app_constants.dart';
 import '../../models/address_model.dart';
 import '../../providers/address_provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../widgets/custom_popup_menu.dart';
 import '../../widgets/empty_state_widget.dart';
 import '../../widgets/shimmer_box.dart';
 import '../../widgets/sole_card.dart';
@@ -342,60 +343,40 @@ class _AddressCard extends StatelessWidget {
                           : AppConstants.secondary.withValues(alpha: 0.3),
                     ),
                   if (!isSelection)
-                    PopupMenuButton<String>(
-                      icon: Icon(
-                        Icons.more_vert,
-                        size: 20,
-                        color: AppConstants.secondary.withValues(alpha: 0.4),
+                    Builder(
+                      builder: (context) => IconButton(
+                        icon: Icon(
+                          Icons.more_vert,
+                          size: 20,
+                          color: AppConstants.secondary.withValues(alpha: 0.4),
+                        ),
+                        onPressed: () {
+                          showCustomPopupMenu(
+                            context: context,
+                            items: [
+                              CustomPopupMenuItem(
+                                label: 'Edit',
+                                icon: Icons.edit_outlined,
+                                onTap: () => onEdit?.call(),
+                              ),
+                              if (!address.isDefault)
+                                CustomPopupMenuItem(
+                                  label: 'Set as Default',
+                                  icon: Icons.star_outline,
+                                  onTap: () => onSetDefault?.call(),
+                                ),
+                              CustomPopupMenuItem(
+                                label: 'Delete',
+                                icon: Icons.delete_outline,
+                                iconColor: AppConstants.error,
+                                textColor: AppConstants.error,
+                                onTap: () => onDelete?.call(),
+                                showDividerBefore: true,
+                              ),
+                            ],
+                          );
+                        },
                       ),
-                      onSelected: (value) {
-                        switch (value) {
-                          case 'edit':
-                            onEdit?.call();
-                            break;
-                          case 'default':
-                            onSetDefault?.call();
-                            break;
-                          case 'delete':
-                            onDelete?.call();
-                            break;
-                        }
-                      },
-                      itemBuilder: (context) => [
-                        const PopupMenuItem(
-                          value: 'edit',
-                          child: Row(
-                            children: [
-                              Icon(Icons.edit_outlined, size: 18),
-                              SizedBox(width: 8),
-                              Text('Edit'),
-                            ],
-                          ),
-                        ),
-                        if (!address.isDefault)
-                          const PopupMenuItem(
-                            value: 'default',
-                            child: Row(
-                              children: [
-                                Icon(Icons.star_outline, size: 18),
-                                SizedBox(width: 8),
-                                Text('Set as Default'),
-                              ],
-                            ),
-                          ),
-                        const PopupMenuItem(
-                          value: 'delete',
-                          child: Row(
-                            children: [
-                              Icon(Icons.delete_outline,
-                                  size: 18, color: AppConstants.error),
-                              SizedBox(width: 8),
-                              Text('Delete',
-                                  style: TextStyle(color: AppConstants.error)),
-                            ],
-                          ),
-                        ),
-                      ],
                     ),
                 ],
               ),

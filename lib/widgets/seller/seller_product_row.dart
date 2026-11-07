@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../constants/app_constants.dart';
+import '../custom_popup_menu.dart';
 import '../../constants/seller_theme_constants.dart';
 import '../../utils/sale_price.dart';
 
@@ -228,40 +229,45 @@ class SellerProductRow extends StatelessWidget {
               ],
             ),
           ),
-          PopupMenuButton<String>(
-            icon: Icon(Icons.more_horiz, color: AppConstants.secondary),
-            onSelected: (value) {
-              switch (value) {
-                case 'edit':
-                  onEdit?.call();
-                  break;
-                case 'feature':
-                  onToggleFeatured?.call();
-                  break;
-                case 'publish':
-                  onTogglePublished?.call();
-                  break;
-                case 'duplicate':
-                  onDuplicate?.call();
-                  break;
-                case 'archive':
-                  onArchive?.call();
-                  break;
-              }
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(value: 'edit', child: Text('Edit')),
-              PopupMenuItem(
-                value: 'feature',
-                child: Text(isFeatured ? 'Remove Featured' : 'Mark Featured'),
-              ),
-              PopupMenuItem(
-                value: 'publish',
-                child: Text(isPublished ? 'Set as Draft' : 'Publish'),
-              ),
-              const PopupMenuItem(value: 'duplicate', child: Text('Duplicate')),
-              const PopupMenuItem(value: 'archive', child: Text('Archive')),
-            ],
+          Builder(
+            builder: (context) => IconButton(
+              icon: Icon(Icons.more_horiz, color: AppConstants.secondary),
+              onPressed: () {
+                showCustomPopupMenu(
+                  context: context,
+                  items: [
+                    CustomPopupMenuItem(
+                      label: 'Edit',
+                      icon: Icons.edit_outlined,
+                      onTap: () => onEdit?.call(),
+                    ),
+                    CustomPopupMenuItem(
+                      label: isFeatured ? 'Remove Featured' : 'Mark Featured',
+                      icon: isFeatured ? Icons.star : Icons.star_outline,
+                      onTap: () => onToggleFeatured?.call(),
+                    ),
+                    CustomPopupMenuItem(
+                      label: isPublished ? 'Set as Draft' : 'Publish',
+                      icon: isPublished
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined,
+                      onTap: () => onTogglePublished?.call(),
+                    ),
+                    CustomPopupMenuItem(
+                      label: 'Duplicate',
+                      icon: Icons.content_copy_outlined,
+                      onTap: () => onDuplicate?.call(),
+                    ),
+                    CustomPopupMenuItem(
+                      label: 'Archive',
+                      icon: Icons.archive_outlined,
+                      onTap: () => onArchive?.call(),
+                      showDividerBefore: true,
+                    ),
+                  ],
+                );
+              },
+            ),
           ),
         ],
       ),

@@ -459,6 +459,49 @@ class SupabaseService {
     return data == null ? null : Map<String, dynamic>.from(data);
   }
 
+  /// Fetch a full order with its items for the order detail screens.
+  /// Same shape as the notifications-screen deep link:
+  /// `*, order_items(*, products(name, product_images(image_url, display_order)))`.
+  /// Returns null when the order doesn't exist (or RLS hides it).
+  Future<Map<String, dynamic>?> fetchOrderWithItems(dynamic orderId) async {
+    final key = orderId is int
+        ? orderId
+        : int.tryParse(orderId.toString()) ?? orderId.toString();
+    final data = await _client
+        .from('orders')
+        .select(
+          '*, order_items(*, products(name, product_images(image_url, display_order)))',
+        )
+        .eq('id', key)
+        .maybeSingle()
+        .timeout(_defaultTimeout);
+    return data == null ? null : Map<String, dynamic>.from(data);
+  }
+
+  /// Fetch a single order in the seller-facing shape (same select + mapping
+  /// as [fetchOrders], plus `customer_name`) for OrderDetailScreen.
+  /// Returns null when the order doesn't exist (or RLS hides it).
+  Future<Map<String, dynamic>?> fetchSellerOrderById(dynamic orderId) async {
+    final key = orderId is int
+        ? orderId
+        : int.tryParse(orderId.toString()) ?? orderId.toString();
+    final data = await _client
+        .from('orders')
+        .select(
+          '*, profiles!orders_customer_id_fkey(full_name, email), order_items(*, products(name))',
+        )
+        .eq('id', key)
+        .maybeSingle()
+        .timeout(_defaultTimeout);
+    if (data == null) return null;
+    final mapped = _mapOrder(Map<String, dynamic>.from(data));
+    final profile = mapped['profiles'];
+    mapped['customer_name'] = profile is Map
+        ? (profile['full_name'] ?? profile['email'] ?? 'Customer')
+        : 'Customer';
+    return mapped;
+  }
+
   Future<List<Map<String, dynamic>>> fetchOrders() async {
     final data = await _client
         .from('orders')

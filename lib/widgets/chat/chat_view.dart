@@ -21,6 +21,8 @@ import '../../services/supabase_service.dart';
 import '../order_change_request_sheet.dart';
 import '../custom_popup_menu.dart';
 import '../report_modal.dart';
+import '../../screens/customer/tracking_screen.dart';
+import '../../screens/seller/order_detail_screen.dart';
 
 /// Shared chat screen used by both Customer and Seller sides.
 ///
@@ -1568,7 +1570,11 @@ class _ChatViewState extends State<ChatView> with SingleTickerProviderStateMixin
   }
 
   void _showChangeRequest() async {
-    final result = await showChangeRequestSheet(context);
+    final result = await showChangeRequestSheet(
+      context,
+      orderId: widget.orderReferenceId,
+      viewerRole: widget.viewerRole,
+    );
     if (result == null || _currentUserId == null) return;
 
     // Format the change request as a structured message
@@ -2243,13 +2249,39 @@ class _ChatViewState extends State<ChatView> with SingleTickerProviderStateMixin
     );
   }
 
-  void _navigateToOrder(String orderId) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Order #$orderId'),
-        duration: const Duration(seconds: 1),
+  void _navigateToOrder(String orderId) async {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('Loading order…'),
+        duration: Duration(seconds: 1),
       ),
     );
+    try {
+      final Map<String, dynamic>? order = widget.viewerRole == 'seller'
+          ? await SupabaseService.instance.fetchSellerOrderById(orderId)
+          : await SupabaseService.instance.fetchOrderWithItems(orderId);
+      if (!mounted) return;
+      if (order == null) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Order is no longer available')),
+        );
+        return;
+      }
+      messenger.hideCurrentSnackBar();
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => widget.viewerRole == 'seller'
+              ? OrderDetailScreen(order: order)
+              : OrderTrackingScreen(order: order),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not load order: $e')),
+      );
+    }
   }
 
   void _retryAttachment(Message failedMessage) {

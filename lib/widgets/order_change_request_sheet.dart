@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 import '../constants/app_constants.dart';
+import '../screens/customer/tracking_screen.dart';
+import '../screens/seller/order_detail_screen.dart';
+import '../screens/shared/support_chat_screen.dart';
+import '../services/supabase_service.dart';
+import 'custom_popup_menu.dart';
 import 'sole_primary_button.dart';
 
 /// Result data returned from the change request flow.
@@ -64,17 +69,37 @@ const changeRequestTypes = [
 ];
 
 /// Bottom sheet for selecting a change request type and entering details.
-Future<ChangeRequestResult?> showChangeRequestSheet(BuildContext context) {
+///
+/// [orderId] links the overflow menu's "View Order Details" to the real
+/// order screen. [parentContext] is the context that opened the sheet and
+/// stays mounted after the sheet pops, so pushed routes land correctly.
+Future<ChangeRequestResult?> showChangeRequestSheet(
+  BuildContext context, {
+  String? orderId,
+  String viewerRole = 'customer',
+}) {
   return showModalBottomSheet<ChangeRequestResult>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (_) => const _ChangeRequestSheet(),
+    builder: (_) => _ChangeRequestSheet(
+      orderId: orderId,
+      viewerRole: viewerRole,
+      parentContext: context,
+    ),
   );
 }
 
 class _ChangeRequestSheet extends StatefulWidget {
-  const _ChangeRequestSheet();
+  final String? orderId;
+  final String viewerRole;
+  final BuildContext parentContext;
+
+  const _ChangeRequestSheet({
+    this.orderId,
+    this.viewerRole = 'customer',
+    required this.parentContext,
+  });
 
   @override
   State<_ChangeRequestSheet> createState() => _ChangeRequestSheetState();
@@ -83,6 +108,62 @@ class _ChangeRequestSheet extends StatefulWidget {
 class _ChangeRequestSheetState extends State<_ChangeRequestSheet> {
   ChangeRequestType? _selectedType;
   final _detailsController = TextEditingController();
+  bool _isNavigating = false;
+
+  bool get _isSeller => widget.viewerRole == 'seller';
+
+  /// Open the linked order in the role-appropriate detail screen.
+  Future<void> _openOrderDetails() async {
+    if (_isNavigating) return;
+    final orderId = widget.orderId;
+    if (orderId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No order is linked to this conversation'),
+        ),
+      );
+      return;
+    }
+    setState(() => _isNavigating = true);
+    try {
+      final Map<String, dynamic>? order = _isSeller
+          ? await SupabaseService.instance.fetchSellerOrderById(orderId)
+          : await SupabaseService.instance.fetchOrderWithItems(orderId);
+      if (!mounted || !widget.parentContext.mounted) return;
+      if (order == null) {
+        setState(() => _isNavigating = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Order is no longer available'),
+          ),
+        );
+        return;
+      }
+      Navigator.of(context).pop();
+      Navigator.of(widget.parentContext).push(
+        MaterialPageRoute(
+          builder: (_) => _isSeller
+              ? OrderDetailScreen(order: order)
+              : OrderTrackingScreen(order: order),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isNavigating = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not load order details: $e')),
+      );
+    }
+  }
+
+  /// Open the support screen (same destination as Profile → Help → Support).
+  void _openSupport() {
+    if (_isNavigating) return;
+    Navigator.of(context).pop();
+    Navigator.of(widget.parentContext).push(
+      MaterialPageRoute(builder: (_) => const SupportChatScreen()),
+    );
+  }
 
   @override
   void dispose() {
@@ -155,86 +236,45 @@ class _ChangeRequestSheetState extends State<_ChangeRequestSheet> {
                     style: AppConstants.headlineStyle(fontSize: 18),
                   ),
                 ),
-                // Overflow menu
-                PopupMenuButton<String>(
-                  icon: Icon(
-                    Icons.more_vert,
-                    size: 22,
-                    color: AppConstants.secondary,
+                // Overflow menu (same animated menu as the chat header).
+                Builder(
+                  builder: (context) => IconButton(
+                    icon: Icon(
+                      Icons.more_vert,
+                      size: 22,
+                      color: AppConstants.secondary,
+                    ),
+                    onPressed: _isNavigating
+                        ? null
+                        : () {
+                            showCustomPopupMenu(
+                              context: context,
+                              items: [
+                                CustomPopupMenuItem(
+                                  label: 'Reset Form',
+                                  icon: Icons.refresh,
+                                  onTap: _resetForm,
+                                ),
+                                CustomPopupMenuItem(
+                                  label: 'Clear Draft',
+                                  icon: Icons.backspace_outlined,
+                                  onTap: _clearDraft,
+                                ),
+                                CustomPopupMenuItem(
+                                  label: 'View Order Details',
+                                  icon: Icons.receipt_long,
+                                  onTap: _openOrderDetails,
+                                  showDividerBefore: true,
+                                ),
+                                CustomPopupMenuItem(
+                                  label: 'Contact Support',
+                                  icon: Icons.help_outline,
+                                  onTap: _openSupport,
+                                ),
+                              ],
+                            );
+                          },
                   ),
-                  onSelected: (value) {
-                    switch (value) {
-                      case 'cancel':
-                        _resetForm();
-                        break;
-                      case 'clear':
-                        _clearDraft();
-                        break;
-                      case 'view_order':
-                        Navigator.of(context).pop();
-                        // TODO: Navigate to order details screen
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Order details coming soon'),
-                            duration: Duration(seconds: 1),
-                          ),
-                        );
-                        break;
-                      case 'support':
-                        Navigator.of(context).pop();
-                        // TODO: Open support chat
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Support chat coming soon'),
-                            duration: Duration(seconds: 1),
-                          ),
-                        );
-                        break;
-                    }
-                  },
-                  itemBuilder: (context) => [
-                    PopupMenuItem(
-                      value: 'cancel',
-                      child: Row(
-                        children: [
-                          Icon(Icons.refresh, size: 18, color: AppConstants.secondary),
-                          SizedBox(width: 12),
-                          Text('Reset Form'),
-                        ],
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'clear',
-                      child: Row(
-                        children: [
-                          Icon(Icons.backspace_outlined, size: 18, color: AppConstants.secondary),
-                          SizedBox(width: 12),
-                          Text('Clear Draft'),
-                        ],
-                      ),
-                    ),
-                    const PopupMenuDivider(),
-                    PopupMenuItem(
-                      value: 'view_order',
-                      child: Row(
-                        children: [
-                          Icon(Icons.receipt_long, size: 18, color: AppConstants.secondary),
-                          SizedBox(width: 12),
-                          Text('View Order Details'),
-                        ],
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'support',
-                      child: Row(
-                        children: [
-                          Icon(Icons.help_outline, size: 18, color: AppConstants.secondary),
-                          SizedBox(width: 12),
-                          Text('Contact Support'),
-                        ],
-                      ),
-                    ),
-                  ],
                 ),
               ],
             ),
@@ -253,6 +293,16 @@ class _ChangeRequestSheetState extends State<_ChangeRequestSheet> {
           ),
 
           const SizedBox(height: 12),
+
+          // Loading bar while the linked order is being fetched.
+          if (_isNavigating)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20),
+              child: LinearProgressIndicator(
+                color: AppConstants.primary,
+                backgroundColor: Colors.transparent,
+              ),
+            ),
 
           // ─── SCROLLABLE BODY ──────────────────────────────
           Expanded(
@@ -341,8 +391,8 @@ class _ChangeRequestSheetState extends State<_ChangeRequestSheet> {
               ],
             ),
             child: SolePrimaryButton(
-              label: 'Send Request',
-              onPressed: _canSubmit ? _submit : null,
+              label: _isNavigating ? 'Loading Order…' : 'Send Request',
+              onPressed: (_canSubmit && !_isNavigating) ? _submit : null,
             ),
           ),
         ],
