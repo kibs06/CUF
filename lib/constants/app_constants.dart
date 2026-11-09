@@ -571,6 +571,24 @@ class AppConstants {
   static const String statusReady = 'ready';
   static const String statusReceived = 'received';
   static const String statusCancellationRequested = 'cancellation_requested';
+  static const String statusReturnRequested = 'return_requested';
+  static const String statusRefunded = 'refunded';
+
+  // --- ORDER RETURN CONFIG (matches Customer Terms & Privacy) ---
+  /// Return window in days from delivery.
+  static const int returnWindowDays = 7;
+
+  /// Guidance window for defective/incorrect items (contact within 48h).
+  static const int defectiveReportWindowHours = 48;
+
+  // --- ORDER RETURN REASONS ---
+  static const List<String> returnReasons = [
+    'Wrong size or fit',
+    'Defective or damaged',
+    'Wrong item delivered',
+    'Changed my mind (unworn, with tags)',
+    'Other',
+  ];
 
   static const String statusPending = 'pending';
   static const String statusApproved = 'approved';
