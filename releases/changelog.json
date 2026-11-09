@@ -1,5 +1,20 @@
 [
   {
+    "latest_version": "1.0.72",
+    "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.72/app-release-1.0.72.apk",
+    "released_at": "2026-11-09",
+    "notes": [
+      "Rebuild of v1.0.71 with the missing return constants committed (fixes release compile) and the AR-effects device-gate exemption",
+      "Declining a return needs a reason, sent to the customer by chat and push",
+      "Return photo proof is mandatory (1-4 photos)",
+      "Push alerts for return requested, approved, and declined",
+      "Delivered orders show under Review to confirm, rate, or return",
+      "Seller order lists sort newest first",
+      "Product gallery store badge opens the selling store",
+      "Seller reviews screen linked from dashboard rating and profile"
+    ]
+  },
+  {
     "latest_version": "1.0.70",
     "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.70/app-release-1.0.70.apk",
     "released_at": "2026-11-07",
