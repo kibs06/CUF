@@ -455,6 +455,33 @@ class SellerNotificationService {
     );
   }
 
+  /// Push to the store owner that a customer requested a return.
+  ///
+  /// The in-app row is written server-side by the request_my_return RPC
+  /// (the seller's realtime bell covers the open app); this covers the
+  /// closed/background app. Fire-and-forget — never throws.
+  Future<void> notifyReturnRequested({
+    required String storeId,
+    required String orderId,
+    required String reason,
+  }) async {
+    final shortId = orderId.length >= 8 ? orderId.substring(0, 8) : orderId;
+    final title = 'Return requested';
+    final body = 'Order #$shortId — $reason. Tap to review.';
+    try {
+      _triggerPush(
+        storeId: storeId,
+        type: 'return_request',
+        title: title,
+        body: body,
+        referenceId: orderId,
+        screen: 'seller_order_detail',
+      );
+    } catch (e) {
+      debugPrint('[SellerNotification] Return request push failed (non-fatal): $e');
+    }
+  }
+
   // ─── PUSH NOTIFICATION HELPERS ────────────────────────────────
 
   /// Look up the store owner's user ID and send a push notification.

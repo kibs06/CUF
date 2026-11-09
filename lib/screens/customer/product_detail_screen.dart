@@ -31,6 +31,7 @@ import 'checkout_screen.dart';
 import '../shared/shoe_preview_screen.dart';
 import 'tag_products_screen.dart';
 import 'write_review_screen.dart';
+import '../store/store_profile_screen.dart';
 import '../../widgets/cart_icon_button.dart';
 import '../../widgets/fit_verdict_card.dart';
 import '../../widgets/seller/fly_to_order_animation.dart';
@@ -1512,6 +1513,19 @@ class _ProductDetailViewState extends State<_ProductDetailView>
   /// is [_selectedColourOrNull] — the *evidence of a tap* — never
   /// [_effectiveColor], which falls back to the first colour name and is what
   /// made the page open on a colour it had chosen for itself.
+  /// Store badge on the gallery: the store selling this product.
+  String get _storeIdForBadge =>
+      widget.product['store_id']?.toString() ?? '';
+
+  String get _storeNameForBadge {
+    final direct = widget.product['store_name']?.toString().trim() ?? '';
+    if (direct.isNotEmpty) return direct;
+    final nested = widget.product['stores'] is Map
+        ? (widget.product['stores']['name']?.toString().trim() ?? '')
+        : '';
+    return nested.isNotEmpty ? nested : 'Visit Store';
+  }
+
   List<String> get _sortedImageUrls {
     // A colour the shopper actually tapped, and only that, swaps the gallery.
     final color = _selectedColourOrNull;
@@ -1719,6 +1733,70 @@ class _ProductDetailViewState extends State<_ProductDetailView>
             bottom: 50,
             child: Sole3DIconButton(onPressed: _openShoePreview),
           ),
+
+        // Store button — bottom-left of the gallery, styled exactly like
+        // the 3D-view button on the right (dark rounded square, white
+        // glyph). Tapping it takes the customer to the store selling this
+        // product. Always shown so the entry to the store is never
+        // missing; without a store_id the tap explains rather than
+        // navigating.
+        Positioned(
+          left: 12,
+          bottom: 50,
+          child: Tooltip(
+            message: _storeNameForBadge,
+            excludeFromSemantics: true,
+            child: Semantics(
+              button: true,
+              label: 'Visit $_storeNameForBadge',
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  key: const Key('product-store-badge'),
+                  onTap: () {
+                    final storeId = _storeIdForBadge;
+                    if (storeId.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content:
+                              Text('Store not available for this product'),
+                        ),
+                      );
+                      return;
+                    }
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => StoreProfileScreen(storeId: storeId),
+                      ),
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(14),
+                  child: Ink(
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.45),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.35),
+                        width: 1,
+                      ),
+                    ),
+                    child: const SizedBox(
+                      width: 44,
+                      height: 44,
+                      child: Center(
+                        child: Icon(
+                          Icons.storefront_outlined,
+                          color: Colors.white,
+                          size: 22,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
       ],
       ),
     );

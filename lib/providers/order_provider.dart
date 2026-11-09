@@ -104,8 +104,22 @@ class OrderProvider extends ChangeNotifier {
 
     try {
       _orders = await PerfTrace.span('orders:fetch', () => _db.fetchOrders());
-      // Sort: newest first
-      _orders.sort((a, b) => b['id'].compareTo(a['id']));
+      // Sort: newest first by creation time. IDs are random UUIDs, so
+      // sorting by id scrambles the list (Pending tab showed 30m, 8d,
+      // Just-now out of order). Null timestamps sink to the bottom.
+      _orders.sort((a, b) {
+        final aT = DateTime.tryParse(a['created_at']?.toString() ?? '');
+        final bT = DateTime.tryParse(b['created_at']?.toString() ?? '');
+        if (aT != null && bT != null) {
+          final byTime = bT.compareTo(aT);
+          if (byTime != 0) return byTime;
+        } else if (aT != null) {
+          return -1;
+        } else if (bT != null) {
+          return 1;
+        }
+        return b['id'].toString().compareTo(a['id'].toString());
+      });
       _ordersLoadedAt = DateTime.now();
     } catch (_) {
       // Keep whatever we already had: a failed refresh must not blank a list
@@ -179,6 +193,85 @@ class OrderProvider extends ChangeNotifier {
       await loadOrders();
       return true;
     } catch (_) {
+      return false;
+    }
+  }
+
+  // ── Order Return / Refund (matches Customer Terms & Privacy) ─────
+
+  /// Request a return for a delivered/received order.
+  ///
+  /// Goes through `request_my_return` (SECURITY DEFINER RPC) because
+  /// customers have no UPDATE policy on orders. On success updates the
+  /// local caches so the Returns tab + tracking screen reflect it.
+  Future<bool> requestReturn({
+    required dynamic orderId,
+    required String reason,
+    String? details,
+    List<String>? proofPaths,
+  }) async {
+    try {
+      final newStatus = await _orderService.requestReturn(
+        orderId: orderId.toString(),
+        reason: reason,
+        details: details,
+        proofPaths: proofPaths,
+      );
+      for (final list in [_orders, _myOrders, _filteredMyOrders]) {
+        final i = list.indexWhere((o) => o['id'] == orderId);
+        if (i != -1) {
+          list[i] = Map<String, dynamic>.from(list[i])
+            ..['status'] = newStatus
+            ..['return_reason'] = reason
+            ..['return_details'] = details
+            // A fresh request clears any previous decline verdict.
+            ..['return_decline_reason'] = null
+            ..['return_proof_paths'] = proofPaths
+            ..['return_proof_path'] =
+                (proofPaths != null && proofPaths.isNotEmpty)
+                    ? proofPaths.first
+                    : null;
+        }
+      }
+      notifyListeners();
+      await loadMyOrders();
+      return true;
+    } catch (e) {
+      debugPrint('OrderProvider.requestReturn error: $e');
+      rethrow;
+    }
+  }
+
+  /// Seller decision on a `return_requested` order.
+  ///
+  /// approve=true → `refunded` (inspected + refund issued to original
+  /// payment method); approve=false → back to `received` (return declined,
+  /// [declineReason] mandatory — stored for the customer to see).
+  /// Sellers have a store-scoped UPDATE policy so this is a direct update,
+  /// mirroring cancel approval.
+  Future<bool> resolveReturn({
+    required dynamic orderId,
+    required bool approve,
+    String? declineReason,
+  }) async {
+    try {
+      final newStatus = approve ? 'refunded' : 'received';
+      final patch = <String, dynamic>{'status': newStatus};
+      if (approve) {
+        patch['refunded_at'] = DateTime.now().toIso8601String();
+        patch['return_decline_reason'] = null;
+      } else {
+        patch['return_decline_reason'] = declineReason?.trim();
+      }
+      await Supabase.instance.client
+          .from('orders')
+          .update(patch)
+          .eq('id', orderId);
+      await loadOrders();
+      await loadMyOrders();
+      return true;
+    } catch (e) {
+      debugPrint('OrderProvider.resolveReturn error: $e');
       return false;
     }
   }
@@ -499,9 +592,14 @@ bool matchesMyOrdersFilter(Map<String, dynamic> order, String filter) {
     case 'shipped':
       return status == 'ready';
     case 'review':
-      return status == 'received';
+      // Delivered orders live here: confirm receipt, then rate & review
+      // — or file a return. (Matches the purchase-history 'completed'
+      // tab, which has always grouped delivered + received.)
+      return status == 'delivered' || status == 'received';
     case 'returns':
-      return status == 'cancelled';
+      return status == 'cancelled' ||
+          status == 'return_requested' ||
+          status == 'refunded';
     default:
       // 'all' (and any unknown key) matches every order.
       return true;
@@ -510,8 +608,9 @@ bool matchesMyOrdersFilter(Map<String, dynamic> order, String filter) {
 
 /// Per-tab counts for a raw customer order list, keyed by [myOrdersFilterKeys].
 ///
-/// Note that statuses with no tab home (`delivered`, `cancellation_requested`)
-/// are only counted under `all`.
+/// Note that `cancellation_requested` has no tab home and is only counted
+/// under `all`. Returns (`return_requested`, `refunded`) live under
+/// `returns` alongside `cancelled`.
 Map<String, int> computeMyOrdersCounts(List<Map<String, dynamic>> orders) {
   final counts = <String, int>{
     for (final key in myOrdersFilterKeys) key: 0,

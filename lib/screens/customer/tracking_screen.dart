@@ -8,12 +8,16 @@ import '../../constants/app_constants.dart';
 import '../../providers/cart_provider.dart';
 import '../../providers/order_provider.dart';
 import '../../widgets/order_cancellation_sheet.dart';
+import '../../widgets/order_return_sheet.dart';
+import '../../widgets/return_proof_image.dart';
 import '../../widgets/sole_card.dart';
 import '../../widgets/sole_primary_button.dart';
 import '../../widgets/sole_status_chip.dart';
 import '../../widgets/sole_timeline.dart';
 import '../../services/direct_gcash_service.dart';
 import '../../services/gcash_payment_service.dart';
+import '../../services/order_service.dart';
+import '../../services/seller_notification_service.dart';
 import 'gcash_pay_screen.dart';
 import 'gcash_payment_screen.dart';
 import 'order_review_screen.dart';
@@ -56,6 +60,8 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     'delivered': 3,
     'received': 4,
     'cancelled': -1, // special: show cancelled banner
+    'return_requested': 4,
+    'refunded': 4,
     'awaiting_payment': 0, // PayMongo GCash: not yet paid
     'payment_conflict': -1, // money captured but needs review
     'awaiting_payment_confirmation': 0, // dormant direct flow
@@ -143,6 +149,43 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   bool get _hasCancellationRequested =>
       _currentStatus == AppConstants.statusCancellationRequested ||
       (_order['cancellation_reason']?.toString().isNotEmpty ?? false);
+
+  // ─── Return Eligibility (Terms: 7 days from delivery) ──────────
+
+  /// Delivery moment for the return window: prefers the real
+  /// delivered/received history row, falls back to created_at.
+  DateTime? get _deliveredAt {
+    final ts = _statusTimestamps['received'] ?? _statusTimestamps['delivered'];
+    if (ts != null) return ts;
+    return DateTime.tryParse(_order['created_at']?.toString() ?? '');
+  }
+
+  /// Whether the order's payment state allows a return (mirrors the
+  /// request_my_return gate: paid, or cash + unpaid which means paid
+  /// offline at handover). Anything else (pending/failed GCash, …) has no
+  /// money to refund, so the button stays hidden instead of the server
+  /// rejecting the tap with a red banner.
+  bool get _isReturnPayable {
+    final payment = (_order['payment_status'] ?? '').toString().toLowerCase();
+    if (payment == 'paid') return true;
+    final method = (_order['payment_method'] ?? '').toString().toLowerCase();
+    return method == 'cash' && payment == 'unpaid';
+  }
+
+  /// Whether the customer can currently request a return.
+  bool get _canReturn {
+    final status = _currentStatus;
+    if (status != 'delivered' && status != 'received') return false;
+    if (status == AppConstants.statusReturnRequested ||
+        status == AppConstants.statusRefunded) return false;
+    if ((_order['return_reason']?.toString().isNotEmpty ?? false)) return false;
+    if (!_isReturnPayable) return false;
+    final at = _deliveredAt;
+    if (at == null) {
+      return true;
+    }
+    return DateTime.now().difference(at).inDays < AppConstants.returnWindowDays;
+  }
 
   /// Start countdown timer if order is in 'preparing' status.
   void _startCountdownIfNeeded() {
@@ -659,6 +702,104 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     }
   }
 
+  // ─── Request Return ────────────────────────────────────────────
+
+  Future<void> _requestReturn() async {
+    final result = await showReturnRequestSheet(context);
+    if (result == null || !mounted) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Confirm Return Request'),
+        content: const Text(
+          'The maker will review your request. Refunds are issued to your original payment method within 5–7 business days after inspection.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep Order'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Request Return'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isUpdating = true);
+    List<String> uploadedProofPaths = [];
+    try {
+      // 1. Upload the photo proofs first (private bucket → storage paths).
+      if (result.proofFilePaths.isNotEmpty) {
+        uploadedProofPaths = await OrderService().uploadReturnProofs(
+              orderId: _order['id'].toString(),
+              filePaths: result.proofFilePaths,
+            );
+      }
+      // 2. File the return (RPC stores the proof paths for the seller).
+      if (!mounted) return;
+      await context.read<OrderProvider>().requestReturn(
+            orderId: _order['id'],
+            reason: result.reason,
+            details: result.details,
+            proofPaths: uploadedProofPaths,
+          );
+      if (mounted) {
+        setState(() {
+          _isUpdating = false;
+          _order['status'] = AppConstants.statusReturnRequested;
+          _order['return_reason'] = result.reason;
+          _order['return_details'] = result.details;
+          _order['return_proof_paths'] = uploadedProofPaths;
+          _order['return_proof_path'] = uploadedProofPaths.isNotEmpty
+              ? uploadedProofPaths.first
+              : null;
+        });
+        // Push the request to the seller's device (closed-app cover; the
+        // open app sees it via the realtime bell + Returns tab).
+        final storeId = _order['store_id']?.toString() ?? '';
+        if (storeId.isNotEmpty) {
+          unawaited(
+            SellerNotificationService.instance.notifyReturnRequested(
+              storeId: storeId,
+              orderId: _order['id'].toString(),
+              reason: result.reason,
+            ),
+          );
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Return request submitted. Waiting for seller approval.'),
+            backgroundColor: AppConstants.success,
+          ),
+        );
+      }
+    } catch (e) {
+      // The request failed after photos were uploaded — remove the now-
+      // orphaned files (best-effort, mirrors the GCash proof flow).
+      for (final path in uploadedProofPaths) {
+        unawaited(OrderService().deleteReturnProof(path));
+      }
+      if (mounted) {
+        setState(() => _isUpdating = false);
+        final msg = e.toString().replaceFirst('Exception: ', '');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(msg.contains('7-day') || msg.contains('Only delivered')
+                ? msg
+                : 'Failed to request return: $msg'),
+            backgroundColor: AppConstants.error,
+          ),
+        );
+      }
+    }
+  }
+
   String get _currentStatus =>
       (_order['status'] ?? 'pending').toString().toLowerCase();
 
@@ -799,6 +940,28 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                     color: AppConstants.statusPendingColor,
                     message: 'Cancellation request pending seller approval.',
                     details: _order['cancellation_reason']?.toString(),
+                  ),
+                  const SizedBox(height: 20),
+                ],
+
+                // ── Return Requested banner ──────────────────────
+                if (status == AppConstants.statusReturnRequested) ...[
+                  _buildCancellationBanner(
+                    icon: Icons.assignment_return_outlined,
+                    color: AppConstants.statusPendingColor,
+                    message: 'Return request pending seller approval.',
+                    details: _order['return_reason']?.toString(),
+                  ),
+                  const SizedBox(height: 20),
+                ],
+
+                // ── Refunded banner ───────────────────────────────
+                if (status == AppConstants.statusRefunded) ...[
+                  _buildCancellationBanner(
+                    icon: Icons.price_check_outlined,
+                    color: AppConstants.success,
+                    message: 'This order was refunded.',
+                    details: 'Refund issued to your original payment method within 5–7 business days.',
                   ),
                   const SizedBox(height: 20),
                 ],
@@ -1254,18 +1417,56 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
           subtitle: 'Please confirm that you received it.',
           child: Padding(
             padding: const EdgeInsets.only(top: 16),
-            child: SizedBox(
-              width: double.infinity,
-              child: SolePrimaryButton(
-                label: _isUpdating ? 'Confirming...' : 'Confirm Receipt',
-                onPressed: _isUpdating ? null : _confirmReceipt,
-                icon: const Icon(Icons.check_circle_outline, size: 20, color: Colors.white),
-              ),
+            child: Column(
+              children: [
+                SizedBox(
+                  width: double.infinity,
+                  child: SolePrimaryButton(
+                    label: _isUpdating ? 'Confirming...' : 'Confirm Receipt',
+                    onPressed: _isUpdating ? null : _confirmReceipt,
+                    icon: const Icon(Icons.check_circle_outline, size: 20, color: Colors.white),
+                  ),
+                ),
+                if (_canReturn) ...[
+                  const SizedBox(height: 12),
+                  _buildReturnButton(),
+                ],
+              ],
+            ),
+          ),
+        );
+
+      case 'return_requested':
+        return _buildInfoCard(
+          icon: Icons.assignment_return_outlined,
+          color: AppConstants.statusPendingColor,
+          title: 'Return requested',
+          subtitle: 'Waiting for the maker to confirm your return.',
+          child: Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: ReturnProofImage(
+              storagePaths: returnProofPathsOf(_order),
+            ),
+          ),
+        );
+
+      case 'refunded':
+        return _buildInfoCard(
+          icon: Icons.price_check_outlined,
+          color: AppConstants.success,
+          title: 'Refunded',
+          subtitle: 'Refund issued to your original payment method within 5–7 business days.',
+          child: Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: ReturnProofImage(
+              storagePaths: returnProofPathsOf(_order),
             ),
           ),
         );
 
       case 'received':
+        final declineReason =
+            _order['return_decline_reason']?.toString().trim() ?? '';
         return _buildInfoCard(
           icon: Icons.check_circle,
           color: AppConstants.success,
@@ -1273,35 +1474,50 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
           subtitle: 'Order confirmed. Enjoy your new shoes!',
           child: Padding(
             padding: const EdgeInsets.only(top: 16),
-            child: SizedBox(
-              width: double.infinity,
-              child:               OutlinedButton.icon(
-                onPressed: () {
-                  // Navigate to order review screen which properly handles
-                  // per-order-item reviews with all required IDs.
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => OrderReviewScreen(order: _order),
+            child: Column(
+              children: [
+                if (declineReason.isNotEmpty) ...[
+                  _buildCancellationBanner(
+                    icon: Icons.cancel_outlined,
+                    color: AppConstants.error,
+                    message: 'Return declined by the maker.',
+                    details: declineReason,
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => OrderReviewScreen(order: _order),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.star_outline, size: 18),
+                    label: Text(
+                      'Rate & Review',
+                      style: AppConstants.bodyStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  );
-                },
-                icon: const Icon(Icons.star_outline, size: 18),
-                label: Text(
-                  'Rate & Review',
-                  style: AppConstants.bodyStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppConstants.primary,
+                      side: const BorderSide(color: AppConstants.primary),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
                   ),
                 ),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppConstants.primary,
-                  side: const BorderSide(color: AppConstants.primary),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-              ),
+                if (_canReturn) ...[
+                  const SizedBox(height: 12),
+                  _buildReturnButton(),
+                ],
+              ],
             ),
           ),
         );
@@ -1309,6 +1525,27 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
       default:
         return const SizedBox.shrink();
     }
+  }
+
+  Widget _buildReturnButton() {
+    if (!_canReturn || _isUpdating) return const SizedBox.shrink();
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: _requestReturn,
+        icon: const Icon(Icons.assignment_return_outlined, size: 18),
+        label: Text(
+          'Request Return',
+          style: AppConstants.bodyStyle(fontSize: 14, fontWeight: FontWeight.w600),
+        ),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppConstants.secondary,
+          side: BorderSide(color: AppConstants.borderGray),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+        ),
+      ),
+    );
   }
 
   Widget _buildInfoCard({

@@ -26,6 +26,7 @@ import '../../widgets/seller/seller_metric_card.dart';
 import '../../widgets/seller/seller_alert_chip.dart';
 import '../../widgets/seller/seller_order_card.dart';
 import 'reservation_requests_screen.dart';
+import 'store_reviews_screen.dart';
 import '../../models/sales_trend_data.dart';
 import '../../widgets/seller/seller_revenue_columns_chart.dart';
 import '../../widgets/seller/seller_revenue_doughnut.dart';
@@ -844,11 +845,41 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                 ),
                 if (ratingStr != null) ...[
                   const SizedBox(height: 4),
-                  Text(
-                    ratingStr,
-                    style: AppConstants.bodyStyle(
-                      fontSize: 11,
-                      color: SellerTheme.amber,
+                  GestureDetector(
+                    onTap: _storeId == null
+                        ? null
+                        : () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => SellerReviewsScreen(
+                                  storeId: _storeId!,
+                                ),
+                              ),
+                            ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          ratingStr,
+                          style: AppConstants.bodyStyle(
+                            fontSize: 11,
+                            color: SellerTheme.amber,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'View reviews',
+                          style: AppConstants.bodyStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: SellerTheme.amber,
+                          ),
+                        ),
+                        const Icon(
+                          Icons.chevron_right,
+                          size: 14,
+                          color: SellerTheme.amber,
+                        ),
+                      ],
                     ),
                   ),
                 ],

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -5,6 +7,8 @@ import '../../constants/app_constants.dart';
 import '../../constants/seller_theme_constants.dart';
 import '../../providers/order_provider.dart';
 import '../../services/message_service.dart';
+import '../../services/order_service.dart';
+import '../../widgets/return_proof_image.dart';
 import '../../widgets/seller/seller_status_chip.dart';
 import '../../widgets/chat/chat_view.dart';
 
@@ -72,6 +76,197 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   bool get _canReject => _currentStatus.toLowerCase() == 'pending';
+
+  bool get _isReturnRequested =>
+      _currentStatus.toLowerCase() == 'return_requested';
+
+  /// Seller decision on a return request: approve issues the refund
+  /// (status → refunded), decline sends the order back to received with a
+  /// mandatory reason plus an instant chat message to the customer.
+  Future<void> _performReturnDecision(bool approve) async {
+    final orderId = order['id'];
+    if (orderId == null || _isUpdating) return;
+
+    String declineReason = '';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          backgroundColor: AppConstants.sellerCardBg,
+          title: Text(approve ? 'Approve Refund?' : 'Decline Return?'),
+          content: approve
+              ? const Text(
+                  'Inspect the returned item first. Approving marks the order refunded — refund the customer via their original payment method.',
+                )
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'The order goes back to received. Tell the customer why — they will see this reason, get a push, and get a chat message.',
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      autofocus: true,
+                      maxLines: 3,
+                      minLines: 2,
+                      onChanged: (v) =>
+                          setDialogState(() => declineReason = v.trim()),
+                      decoration: InputDecoration(
+                        hintText: 'Reason for declining (required)',
+                        hintStyle: AppConstants.bodyStyle(
+                          fontSize: 13,
+                          color: Colors.grey.shade400,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
+                      ),
+                    ),
+                  ],
+                ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(
+                'Back',
+                style: AppConstants.bodyStyle(color: AppConstants.secondary),
+              ),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor:
+                    approve ? AppConstants.success : AppConstants.error,
+              ),
+              onPressed: (approve || declineReason.isNotEmpty)
+                  ? () => Navigator.of(context).pop(true)
+                  : null,
+              child: Text(approve ? 'Approve refund' : 'Decline'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isUpdating = true);
+    try {
+      final success = await Provider.of<OrderProvider>(
+        context,
+        listen: false,
+      ).resolveReturn(
+        orderId: orderId,
+        approve: approve,
+        declineReason: approve ? null : declineReason,
+      );
+      if (mounted) {
+        setState(() => _isUpdating = false);
+        if (success) {
+          final customerId = order['customer_id']?.toString() ?? '';
+          if (approve) {
+            // Push the approval to the customer's device (closed-app
+            // cover; the open app sees it via the Returns tab / tracking).
+            if (customerId.isNotEmpty) {
+              unawaited(OrderService().notifyCustomerOfReturnDecision(
+                customerId: customerId,
+                orderId: orderId.toString(),
+                approved: true,
+              ));
+            }
+          } else {
+            // Decline: instant chat message first (it carries its own
+            // notification + push). Fall back to the decision push when
+            // there is no conversation to write into.
+            final chatSent = await _sendDeclineChatMessage(
+              customerId: customerId,
+              reason: declineReason,
+            );
+            if (!chatSent && customerId.isNotEmpty && mounted) {
+              unawaited(OrderService().notifyCustomerOfReturnDecision(
+                customerId: customerId,
+                orderId: orderId.toString(),
+                approved: false,
+                declineReason: declineReason,
+              ));
+            }
+          }
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(approve
+                  ? 'Order marked refunded. Please refund via original payment method.'
+                  : 'Return declined. Order back to received.'),
+              backgroundColor: AppConstants.success,
+            ),
+          );
+          Navigator.of(context).pop(true);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Failed to update return. Please try again.'),
+              backgroundColor: AppConstants.error,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isUpdating = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error updating return: $e'),
+            backgroundColor: AppConstants.error,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Instant chat message carrying the decline reason to the customer.
+  ///
+  /// Returns true when the message landed. Sellers cannot create
+  /// conversations (RLS lets only customers insert), so when no
+  /// store–customer thread exists yet this returns false and the caller
+  /// falls back to the decision push. Never throws — chat must not fail
+  /// a decline that already succeeded.
+  Future<bool> _sendDeclineChatMessage({
+    required String customerId,
+    required String reason,
+  }) async {
+    try {
+      final storeId = order['store_id']?.toString() ?? '';
+      final orderId = order['id']?.toString() ?? '';
+      final sellerId = Supabase.instance.client.auth.currentUser?.id;
+      if (storeId.isEmpty || customerId.isEmpty || sellerId == null) {
+        return false;
+      }
+      final conversations =
+          await MessageService.instance.getConversationsForStore(storeId);
+      Conversation? thread;
+      for (final c in conversations) {
+        if (c.customerId == customerId) {
+          thread = c;
+          break;
+        }
+      }
+      if (thread == null) return false;
+      final shortId = orderId.length >= 8 ? orderId.substring(0, 8) : orderId;
+      await MessageService.instance.sendMessage(
+        conversationId: thread.id,
+        senderId: sellerId,
+        senderType: 'seller',
+        body: 'Update on your return request for order #$shortId: '
+            'we had to decline it. Reason: $reason. '
+            'Reply here if you have questions.',
+        orderReferenceId: orderId,
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 
   Future<void> _performReject() async {
     final orderId = order['id'];
@@ -618,6 +813,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     Divider(height: 16, color: AppConstants.borderGray),
                     _buildCancellationReason(),
                   ],
+                  if (status == 'return_requested') ...[
+                    Divider(height: 16, color: AppConstants.borderGray),
+                    _buildReturnReason(),
+                  ],
+                  if (status == 'refunded') ...[
+                    Divider(height: 16, color: AppConstants.borderGray),
+                    _buildReturnReason(isRefunded: true),
+                  ],
                 ],
               ),
             ),
@@ -625,7 +828,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         ),
       ),
       // Action buttons at bottom
-      bottomNavigationBar: (_actionLabel.isNotEmpty || _canReject)
+      bottomNavigationBar: (_actionLabel.isNotEmpty || _canReject || _isReturnRequested)
           ? Container(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
               decoration: BoxDecoration(
@@ -639,7 +842,36 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 ],
               ),
               child: SafeArea(
-                child: _canReject
+                child: _isReturnRequested
+                    ? Row(
+                        children: [
+                          Expanded(
+                            child: SizedBox(
+                              height: 48,
+                              child: OutlinedButton(
+                                onPressed: _isUpdating ? null : () => _performReturnDecision(false),
+                                style: OutlinedButton.styleFrom(
+                                  side: const BorderSide(color: AppConstants.error),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
+                                child: Text('Decline', style: AppConstants.bodyStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppConstants.error)),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: SizedBox(
+                              height: 48,
+                              child: FilledButton(
+                                onPressed: _isUpdating ? null : () => _performReturnDecision(true),
+                                style: FilledButton.styleFrom(backgroundColor: AppConstants.success, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                                child: Text('Approve refund', style: AppConstants.bodyStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white)),
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    : _canReject
                     ? Row(
                         children: [
                           Expanded(
@@ -761,6 +993,66 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             child: Text(
               value,
               style: AppConstants.bodyStyle(fontSize: 13, fontWeight: FontWeight.w500),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReturnReason({bool isRefunded = false}) {
+    final reason = order['return_reason']?.toString();
+    final details = order['return_details']?.toString();
+    final at = order['return_requested_at']?.toString();
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 24,
+            height: 24,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: (isRefunded ? AppConstants.success : AppConstants.statusPendingColor).withValues(alpha: 0.15),
+            ),
+            child: Icon(
+              isRefunded ? Icons.price_check_outlined : Icons.assignment_return_outlined,
+              size: 14,
+              color: isRefunded ? AppConstants.success : AppConstants.statusPendingColor,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isRefunded ? 'Refunded' : 'Return requested',
+                  style: AppConstants.bodyStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppConstants.secondary),
+                ),
+                if (reason != null && reason.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(reason, style: AppConstants.bodyStyle(fontSize: 12, color: AppConstants.secondary)),
+                ],
+                if (details != null && details.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(details, style: AppConstants.bodyStyle(fontSize: 12, color: Colors.grey.shade600)),
+                ],
+                if (at != null) ...[
+                  const SizedBox(height: 4),
+                  Text('Requested ${_formatTimestamp(at)}', style: AppConstants.bodyStyle(fontSize: 11, color: Colors.grey.shade500)),
+                ],
+                // Photo proofs the customer attached (1-4, mandatory) — the
+                // seller judges the request from these before approving or
+                // declining.
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: ReturnProofImage(
+                    storagePaths: returnProofPathsOf(order),
+                  ),
+                ),
+              ],
             ),
           ),
         ],

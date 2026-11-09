@@ -25,6 +25,7 @@ import '../customer/my_reservations_screen.dart';
 import '../seller/create_store_screen.dart';
 import '../seller/store_profile_screen.dart';
 import '../seller/gcash_payment_settings_screen.dart';
+import '../seller/store_reviews_screen.dart';
 import '../seller/vouchers_screen.dart';
 import 'help_menu_screen.dart';
 import 'whats_new_screen.dart';
@@ -1232,6 +1233,63 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                   ),
+                  if (store != null) ...[
+                    const Divider(height: 1, color: Color(0xFFE5E7EB)),
+                    Material(
+                      color: Colors.transparent,
+                      child: ListTile(
+                        dense: true,
+                        title: Text(
+                          'Customer Reviews',
+                          style: AppConstants.bodyStyle(fontSize: 14),
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Builder(
+                              builder: (context) {
+                                final rating =
+                                    (store['rating'] as num?)?.toDouble();
+                                final count =
+                                    (store['review_count'] as num?)?.toInt() ?? 0;
+                                final label = rating != null && count > 0
+                                    ? '${rating.toStringAsFixed(1)} ★ ($count)'
+                                    : count > 0
+                                        ? '($count)'
+                                        : 'View';
+                                return Text(
+                                  label,
+                                  style: AppConstants.bodyStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppConstants.primary,
+                                  ),
+                                );
+                              },
+                            ),
+                            const SizedBox(width: 2),
+                            Icon(
+                              Icons.chevron_right,
+                              size: 18,
+                              color:
+                                  AppConstants.secondary.withValues(alpha: 0.4),
+                            ),
+                          ],
+                        ),
+                        onTap: () {
+                          final storeId = store['id']?.toString();
+                          if (storeId == null || storeId.isEmpty) return;
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => SellerReviewsScreen(
+                                storeId: storeId,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                 ],
               );
             },

@@ -75,30 +75,38 @@ void main() {
       );
     });
 
-    test('review: received only', () {
+    test('review: delivered or received (confirm, rate, or return)', () {
       expect(
         matchesMyOrdersFilter(order(status: 'received'), 'review'),
         isTrue,
       );
-      // delivered requires the customer to confirm receipt first
+      // delivered lives here too: confirm receipt, then rate & review —
+      // or file a return
       expect(
         matchesMyOrdersFilter(order(status: 'delivered'), 'review'),
+        isTrue,
+      );
+      expect(
+        matchesMyOrdersFilter(order(status: 'ready'), 'review'),
         isFalse,
       );
     });
 
-    test('returns: cancelled only', () {
-      expect(
-        matchesMyOrdersFilter(order(status: 'cancelled'), 'returns'),
-        isTrue,
-      );
+    test('returns: cancelled, return_requested, refunded', () {
+      for (final status in ['cancelled', 'return_requested', 'refunded']) {
+        expect(
+          matchesMyOrdersFilter(order(status: status), 'returns'),
+          isTrue,
+          reason: '$status should be in Returns',
+        );
+      }
       expect(
         matchesMyOrdersFilter(order(status: 'received'), 'returns'),
         isFalse,
       );
     });
 
-    test('all matches every order (even delivered/cancellation_requested)', () {
+    test('all matches every order (even delivered/cancellation_requested/returns)', () {
       for (final status in [
         'pending',
         'preparing',
@@ -107,6 +115,8 @@ void main() {
         'received',
         'cancelled',
         'cancellation_requested',
+        'return_requested',
+        'refunded',
         'unknown_status',
       ]) {
         expect(
@@ -153,32 +163,33 @@ void main() {
         order(status: 'ready', paymentStatus: 'paid'), // shipped
         order(status: 'received', paymentStatus: 'paid'), // review
         order(status: 'cancelled', paymentStatus: 'unpaid'), // returns (NOT unpaid)
-        order(status: 'delivered', paymentStatus: 'paid'), // all only
+        order(status: 'return_requested', paymentStatus: 'paid'), // returns
+        order(status: 'refunded', paymentStatus: 'paid'), // returns
+        order(status: 'delivered', paymentStatus: 'paid'), // review
         order(status: 'cancellation_requested', paymentStatus: 'paid'), // all only
       ];
 
       final counts = computeMyOrdersCounts(orders);
 
-      expect(counts['all'], 8);
+      expect(counts['all'], 10);
       expect(counts['unpaid'], 1);
       expect(counts['processing'], 3);
       expect(counts['shipped'], 1);
-      expect(counts['review'], 1);
-      expect(counts['returns'], 1);
+      expect(counts['review'], 2);
+      expect(counts['returns'], 3);
     });
 
-    test('paid delivered orders do not inflate any named tab', () {
+    test('paid delivered orders land in Review (confirm, rate, or return)', () {
       final counts = computeMyOrdersCounts([
         order(status: 'delivered', paymentStatus: 'paid'),
         order(status: 'delivered', paymentStatus: 'paid'),
       ]);
 
-      // delivered has no home tab of its own (customer must confirm receipt)
       expect(counts['all'], 2);
       expect(counts['unpaid'], 0);
       expect(counts['processing'], 0);
       expect(counts['shipped'], 0);
-      expect(counts['review'], 0);
+      expect(counts['review'], 2);
       expect(counts['returns'], 0);
     });
 
@@ -192,7 +203,7 @@ void main() {
       expect(counts['unpaid'], 1);
       expect(counts['processing'], 0);
       expect(counts['shipped'], 0);
-      expect(counts['review'], 0);
+      expect(counts['review'], 1);
       expect(counts['returns'], 0);
     });
 
