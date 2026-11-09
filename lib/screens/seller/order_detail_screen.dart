@@ -184,6 +184,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               customerId: customerId,
               reason: declineReason,
             );
+            if (!mounted) return;
             if (!chatSent && customerId.isNotEmpty && mounted) {
               unawaited(OrderService().notifyCustomerOfReturnDecision(
                 customerId: customerId,

@@ -134,12 +134,11 @@ class OrderService {
       data = await _storeOrderRows(orderIds, _storeOrderColumnsLegacy);
     }
 
-    final orders = (data as List)
-        .map((row) => Map<String, dynamic>.from(row))
-        .toList();
+    final orders =
+        data.map((row) => Map<String, dynamic>.from(row)).toList();
 
     final customerIds = orders
-        .map((o) => o['customer_id'] as dynamic)
+        .map((o) => o['customer_id'])
         .where((id) => id != null)
         .toSet()
         .toList();
@@ -230,12 +229,11 @@ class OrderService {
         .inFilter('id', orderIds)
         .order('created_at', ascending: false);
 
-    final orders = (data as List)
-        .map((row) => Map<String, dynamic>.from(row))
-        .toList();
+    final orders =
+        data.map((row) => Map<String, dynamic>.from(row)).toList();
 
     final customerIds = orders
-        .map((o) => o['customer_id'] as dynamic)
+        .map((o) => o['customer_id'])
         .where((id) => id != null)
         .toSet()
         .toList();
@@ -343,9 +341,8 @@ class OrderService {
         .eq('source', 'pos')
         .order('created_at', ascending: false);
 
-    final orders = (data as List)
-        .map((row) => Map<String, dynamic>.from(row))
-        .toList();
+    final orders =
+        data.map((row) => Map<String, dynamic>.from(row)).toList();
 
     if (orders.isEmpty) return [];
 

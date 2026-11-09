@@ -343,7 +343,6 @@ class _ReturnRequestSheetState extends State<_ReturnRequestSheet> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
                 child: SoleCard(
-                  color: Colors.white,
                   padding: const EdgeInsets.symmetric(
                       horizontal: 14, vertical: 10),
                   margin: EdgeInsets.zero,

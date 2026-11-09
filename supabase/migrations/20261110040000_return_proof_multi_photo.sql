@@ -38,6 +38,7 @@ SET search_path = public
 AS $$
 DECLARE
   v_order public.orders%ROWTYPE;
+  v_store_id uuid;
   v_since timestamptz;
   v_proofs TEXT[] := '{}';
 BEGIN
@@ -147,10 +148,13 @@ BEGIN
   END IF;
 
   -- Seller bell (store-scoped; the channel the seller app reads).
-  IF v_order.store_id IS NOT NULL THEN
+  -- NULL store_id (custom/legacy orders) would 23502-abort the whole
+  -- request, so read it into a guarded variable first (repo recipient rule).
+  v_store_id := v_order.store_id;
+  IF v_store_id IS NOT NULL THEN
     INSERT INTO public.seller_notifications (store_id, type, title, body, reference_id)
     VALUES (
-      v_order.store_id,
+      v_store_id,
       'return_request',
       'Return requested',
       'Order #' || left(p_order_id::text, 8) || ' — ' || p_reason,

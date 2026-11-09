@@ -177,8 +177,12 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     final status = _currentStatus;
     if (status != 'delivered' && status != 'received') return false;
     if (status == AppConstants.statusReturnRequested ||
-        status == AppConstants.statusRefunded) return false;
-    if ((_order['return_reason']?.toString().isNotEmpty ?? false)) return false;
+        status == AppConstants.statusRefunded) {
+      return false;
+    }
+    if ((_order['return_reason']?.toString().isNotEmpty ?? false)) {
+      return false;
+    }
     if (!_isReturnPayable) return false;
     final at = _deliveredAt;
     if (at == null) {
