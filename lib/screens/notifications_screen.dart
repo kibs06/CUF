@@ -8,11 +8,13 @@ import '../constants/app_constants.dart';
 import '../models/app_notification.dart';
 import '../models/notification_category.dart';
 import '../providers/notification_provider.dart';
+import '../services/supabase_service.dart';
 import '../utils/model_notice.dart';
 import '../widgets/sole_card.dart';
 import '../widgets/chat/chat_view.dart';
 import 'customer/tracking_screen.dart';
 import 'customer/my_reports_screen.dart';
+import 'customer/product_detail_screen.dart';
 import 'seller/manage_products_screen.dart';
 
 /// Notifications feed screen — the primary entry point via the bottom nav
@@ -261,6 +263,27 @@ class _NotificationsScreenState extends State<NotificationsScreen>
             builder: (_) => const MyReportsScreen(),
           ),
         );
+      }
+      return;
+    }
+
+    // ── Review notification (reply / helpful vote): open the product ─
+    final reviewProductId = notif.metadata?['product_id']?.toString();
+    if (notif.category == NotificationCategory.review &&
+        reviewProductId != null &&
+        reviewProductId.isNotEmpty) {
+      try {
+        final product =
+            await SupabaseService.instance.fetchProductById(reviewProductId);
+        if (product != null && mounted) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => ProductDetailScreen(product: product),
+            ),
+          );
+        }
+      } catch (e) {
+        debugPrint('[Notifications] Failed to fetch product for review tap: $e');
       }
       return;
     }

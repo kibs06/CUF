@@ -27,6 +27,7 @@ import 'custom_orders_screen.dart';
 import 'reservation_requests_screen.dart';
 import 'seller_inbox_screen.dart';
 import 'seller_notification_center_screen.dart';
+import 'store_reviews_screen.dart';
 import 'pos_history_screen.dart';
 import '../shared/profile_screen.dart';
 import '../shared/settings_screen.dart';
@@ -117,6 +118,17 @@ class _SellerShellState extends State<SellerShell> {
           Navigator.of(
             context,
           ).push(MaterialPageRoute(builder: (_) => const CustomOrdersScreen()));
+          break;
+        case 'seller_reviews':
+          // A new review on one of the store's products lands on the
+          // reviews grid (referenceId is the store id).
+          if (referenceId != null) {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => SellerReviewsScreen(storeId: referenceId),
+              ),
+            );
+          }
           break;
         case 'seller_gcash_queue':
           // Manual-GCash proof push (sent by the customer's app right

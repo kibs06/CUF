@@ -15,6 +15,7 @@ import 'custom_orders_screen.dart';
 import 'manage_products_screen.dart';
 import 'order_detail_screen.dart';
 import 'seller_inbox_screen.dart';
+import 'store_reviews_screen.dart';
 
 /// Seller Notification Center — pushed from the Dashboard bell icon.
 ///
@@ -337,6 +338,15 @@ class _SellerNotificationCenterScreenState
       case 'new_message':
         Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => const SellerInboxScreen()),
+        );
+        break;
+      case 'new_review':
+        // A review on one of this store's products lands on the reviews
+        // grid, which is scoped by the row's own store id.
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => SellerReviewsScreen(storeId: notif.storeId),
+          ),
         );
         break;
     }

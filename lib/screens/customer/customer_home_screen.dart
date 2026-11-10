@@ -13,6 +13,7 @@ import '../../providers/message_provider.dart';
 import '../../providers/product_provider.dart';
 import '../../services/connectivity_service.dart';
 import '../../services/push_notification_service.dart';
+import '../../services/supabase_service.dart';
 import '../../widgets/floating_message_button.dart';
 import '../../widgets/no_internet_view.dart';
 import '../../widgets/on_sale_card.dart';
@@ -236,6 +237,24 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => const MyReservationsScreen()),
           );
+          break;
+        case 'product_detail':
+          // Review events (seller reply, helpful vote) land on the product
+          // the review is about.
+          if (referenceId == null) return;
+          SupabaseService.instance
+              .fetchProductById(referenceId)
+              .then((product) {
+            if (product != null && mounted) {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => ProductDetailScreen(product: product),
+                ),
+              );
+            }
+          }).catchError((e) {
+            debugPrint('[Push] Failed to fetch product for deep-link: $e');
+          });
           break;
       }
     };

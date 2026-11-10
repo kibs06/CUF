@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -329,6 +331,18 @@ class ReviewService {
     if (images != null && images.isNotEmpty) {
       await _uploadReviewImagesNew(reviewId: reviewId, images: images);
     }
+
+    // Tell the seller (bell row + push, fire-and-forget — never fail the
+    // submit for a notification that did not land).
+    unawaited(
+      _notifySellerNewReview(
+        storeId: storeId,
+        productId: productId,
+        rating: rating,
+        comment: comment,
+        reviewId: reviewId,
+      ),
+    );
   }
 
   /// Update an existing per-order-item review.
@@ -386,6 +400,9 @@ class ReviewService {
       'seller_reply': reply.trim(),
       'seller_reply_at': DateTime.now().toIso8601String(),
     }).eq('id', reviewId);
+
+    // Tell the customer (bell row + push, fire-and-forget).
+    unawaited(_notifyCustomerReply(reviewId: reviewId, reply: reply.trim()));
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -439,6 +456,15 @@ class ReviewService {
       },
       onConflict: 'review_id,user_id',
     );
+
+    // A helpful vote tells the author someone valued their words (bell row
+    // + push, fire-and-forget). "Not helpful" stays silent, and voting on
+    // your own review never notifies.
+    if (isHelpful) {
+      unawaited(
+        _notifyAuthorHelpful(reviewId: reviewId, voterId: userId),
+      );
+    }
   }
 
   /// Pin (or unpin) a review as the product's spotlight. Pinning one review
@@ -472,6 +498,175 @@ class ReviewService {
         .delete()
         .eq('review_id', reviewId)
         .eq('user_id', userId);
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  //  REVIEW EVENT NOTIFICATIONS (bell row + push, fire-and-forget)
+  //
+  //  The row is the fact (lands on the bell the recipient actually
+  //  reads: seller_notifications for sellers, notifications for
+  //  customers); the push is the wake-up for a backgrounded app.
+  //  None of these may ever throw — a notification must not fail the
+  //  review, reply, or vote that already succeeded.
+  // ═══════════════════════════════════════════════════════════════
+
+  Future<String> _reviewProductName(String productId) async {
+    try {
+      final row = await _client
+          .from('products')
+          .select('name')
+          .eq('id', productId)
+          .maybeSingle();
+      final name = row?['name']?.toString().trim() ?? '';
+      return name.isEmpty ? 'your product' : name;
+    } catch (_) {
+      return 'your product';
+    }
+  }
+
+  /// Seller bell + push when one of their products gets reviewed.
+  Future<void> _notifySellerNewReview({
+    required String storeId,
+    required String productId,
+    required int rating,
+    String? comment,
+    required String reviewId,
+  }) async {
+    try {
+      final productName = await _reviewProductName(productId);
+      final snippet = (comment ?? '').trim();
+      final short = snippet.length > 90
+          ? '${snippet.substring(0, 90)}…'
+          : snippet;
+      final title = 'New $rating★ review — $productName';
+      final body = short.isEmpty
+          ? 'A customer rated $productName $rating out of 5. Tap to read.'
+          : '$rating★: "$short"';
+
+      await _client.from('seller_notifications').insert({
+        'store_id': storeId,
+        'type': 'new_review',
+        'title': title,
+        'body': body,
+        'reference_id': reviewId,
+        'metadata': {'product_id': productId},
+      });
+
+      final store = await _client
+          .from('stores')
+          .select('owner_id')
+          .eq('id', storeId)
+          .maybeSingle();
+      final ownerId = store?['owner_id']?.toString();
+      if (ownerId == null || ownerId.isEmpty) return;
+
+      await _client.functions.invoke('send-notification-push', body: {
+        'recipientUserId': ownerId,
+        'title': title,
+        'body': '$body Tap to view.',
+        'type': 'new_review',
+        'referenceId': storeId,
+        'screen': 'seller_reviews',
+      });
+    } catch (e) {
+      debugPrint('[ReviewService] New-review notify failed (non-fatal): $e');
+    }
+  }
+
+  /// Customer bell + push when the seller replies to their review.
+  Future<void> _notifyCustomerReply({
+    required String reviewId,
+    required String reply,
+  }) async {
+    try {
+      final row = await _client
+          .from('reviews')
+          .select('customer_id, product_id, products(name)')
+          .eq('id', reviewId)
+          .maybeSingle();
+      if (row == null) return;
+      final customerId = row['customer_id']?.toString() ?? '';
+      final productId = row['product_id']?.toString() ?? '';
+      if (customerId.isEmpty || productId.isEmpty) return;
+      final product = row['products'];
+      final productName = product is Map
+          ? (product['name']?.toString() ?? 'your item')
+          : 'your item';
+
+      final short =
+          reply.length > 90 ? '${reply.substring(0, 90)}…' : reply;
+      final title = 'The seller replied to your review';
+      final body = '"$short" — on $productName. Tap to view.';
+
+      await _client.from('notifications').insert({
+        'user_id': customerId,
+        'category': 'review',
+        'title': title,
+        'message': body,
+        'is_read': false,
+        'is_deleted': false,
+        'metadata': {'product_id': productId, 'review_id': reviewId},
+      });
+
+      await _client.functions.invoke('send-notification-push', body: {
+        'recipientUserId': customerId,
+        'title': title,
+        'body': body,
+        'type': 'review_reply',
+        'referenceId': productId,
+        'screen': 'product_detail',
+      });
+    } catch (e) {
+      debugPrint('[ReviewService] Reply notify failed (non-fatal): $e');
+    }
+  }
+
+  /// Author bell + push when someone marks their review helpful.
+  Future<void> _notifyAuthorHelpful({
+    required String reviewId,
+    required String voterId,
+  }) async {
+    try {
+      final row = await _client
+          .from('reviews')
+          .select('customer_id, product_id, products(name)')
+          .eq('id', reviewId)
+          .maybeSingle();
+      if (row == null) return;
+      final authorId = row['customer_id']?.toString() ?? '';
+      final productId = row['product_id']?.toString() ?? '';
+      if (authorId.isEmpty || authorId == voterId || productId.isEmpty) {
+        return;
+      }
+      final product = row['products'];
+      final productName = product is Map
+          ? (product['name']?.toString() ?? 'your review')
+          : 'your review';
+
+      final title = 'Someone found your review helpful';
+      final body = 'Your review on $productName got a thumbs up. Tap to view.';
+
+      await _client.from('notifications').insert({
+        'user_id': authorId,
+        'category': 'review',
+        'title': title,
+        'message': body,
+        'is_read': false,
+        'is_deleted': false,
+        'metadata': {'product_id': productId, 'review_id': reviewId},
+      });
+
+      await _client.functions.invoke('send-notification-push', body: {
+        'recipientUserId': authorId,
+        'title': title,
+        'body': body,
+        'type': 'review_helpful',
+        'referenceId': productId,
+        'screen': 'product_detail',
+      });
+    } catch (e) {
+      debugPrint('[ReviewService] Helpful-vote notify failed (non-fatal): $e');
+    }
   }
 
   /// Delete a per-order-item review.
@@ -764,6 +959,16 @@ class ReviewService {
     if (images != null && images.isNotEmpty) {
       await _uploadReviewImagesNew(reviewId: reviewId, images: images);
     }
+
+    unawaited(
+      _notifySellerNewReview(
+        storeId: storeId,
+        productId: trimmedProductId,
+        rating: rating,
+        comment: body,
+        reviewId: reviewId,
+      ),
+    );
   }
 
   Future<void> updateReview({

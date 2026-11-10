@@ -12,7 +12,8 @@ class SellerNotification {
   /// One of the values `seller_notifications_type_check` admits (see
   /// `20260928140000_add_shoe_model_requests.sql`, which widened it to add
   /// 'model_request'): 'new_order' | 'stale_order' | 'low_stock' |
-  /// 'custom_order_request' | 'new_message' | 'model_request'.
+  /// 'custom_order_request' | 'new_message' | 'model_request' |
+  /// 'return_request' | 'new_review'.
   final String type;
   final String title;
   final String body;
