@@ -10,6 +10,7 @@ import '../../providers/update_provider.dart';
 import '../../services/apk_installer_service.dart';
 import '../../services/update_checker.dart';
 import '../../utils/in_app_update_eligibility.dart';
+import '../../widgets/update_restart_prompt.dart';
 import '../../widgets/empty_state_widget.dart';
 import '../../widgets/error_retry_widget.dart';
 import '../../widgets/release_note_card.dart';
@@ -91,6 +92,10 @@ class _WhatsNewScreenState extends State<WhatsNewScreen> {
     try {
       // Download is skipped by the service when this version's APK exists.
       await _installer.downloadAndInstall(update.apkUrl, update.version);
+      if (!mounted) return;
+      // The system installer is now in front: offer the restart choice
+      // for when the user comes back.
+      await showUpdateRestartPrompt(context, version: update.version);
     } on DownloadIncompleteException catch (e) {
       // The .part file is still on disk, so tapping Download again resumes it.
       // That beats the browser fallback, which would restart the whole ~220 MB.

@@ -1544,6 +1544,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.6.0"
+  restart_app:
+    dependency: "direct main"
+    description:
+      name: restart_app
+      sha256: "398550c5c0438b15c6062c7cb7e5c234498584aa9ba1b28910e77d4ff43bfef6"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.10.2"
   retry:
     dependency: transitive
     description:

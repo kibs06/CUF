@@ -1,11 +1,12 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../constants/app_constants.dart';
 import '../models/update_info.dart';
+import '../services/apk_installer_service.dart';
 import '../utils/in_app_update_eligibility.dart';
+import 'update_restart_prompt.dart';
 
 /// A full-screen overlay that appears when a newer app version is available.
 ///
@@ -14,8 +15,9 @@ import '../utils/in_app_update_eligibility.dart';
 /// not a nag screen.
 ///
 /// Usage: call [UpdateOverlay.show] from any context that has access to
-/// the root [NavigatorState]. The overlay dismisses itself on download
-/// or "Maybe Later".
+/// the root [NavigatorState]. The overlay dismisses itself on "Maybe
+/// Later" — an in-flight download keeps running in the background (see
+/// [ApkInstallerService]) and is announced from the notification shade.
 class UpdateOverlay {
   UpdateOverlay._();
 
@@ -315,6 +317,66 @@ class _UpdateOverlayDialogState extends State<_UpdateOverlayDialog>
     );
   }
 
+  /// Starts the in-app download outside the build pass: the service is a
+  /// singleton, so the download survives this dialog being dismissed.
+  /// Failures surface as the service's error state (with a Retry button),
+  /// never as a browser handoff.
+  Future<void> _startInAppDownload(UpdateInfo update) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      // Skipped by the service when this version's APK already sits on
+      // disk — the second call short-circuits to the Install tap.
+      final existing = await _existingCompletedApk(update.version);
+      if (existing == null) {
+        await ApkInstallerService.instance.downloadApk(
+          update.apkUrl,
+          update.version,
+        );
+      }
+      if (!mounted) return;
+      final path = ApkInstallerService.instance.state?.filePath ?? existing;
+      if (path == null) return;
+      final message = await ApkInstallerService.instance.installApk(path);
+      if (!mounted) return;
+      if (message.isEmpty) {
+        // The system installer is now in front: offer the restart choice
+        // for when the user comes back.
+        await showUpdateRestartPrompt(context, version: update.version);
+      } else {
+        messenger.showSnackBar(SnackBar(content: Text(message)));
+      }
+    } on DownloadIncompleteException catch (e) {
+      // The .part file is still on disk — tapping Update Now resumes it
+      // instead of restarting the whole ~220 MB.
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Download stopped early (${e.receivedBytes ~/ (1024 * 1024)} of '
+            '${e.expectedBytes ~/ (1024 * 1024)} MB) — tap Update Now to resume.',
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Download failed — check your connection and retry.'),
+        ),
+      );
+    }
+  }
+
+  /// Null unless this version's APK already finished downloading earlier
+  /// (this session or a previous one — the service checks the file on disk).
+  Future<String?> _existingCompletedApk(String version) {
+    final state = ApkInstallerService.instance.state;
+    if (state?.phase == ApkDownloadPhase.done && state?.filePath != null) {
+      return Future.value(state!.filePath);
+    }
+    return ApkInstallerService.instance.existingCompletedApk(version);
+  }
+
   Widget _buildActions(UpdateInfo update, bool isAndroid) {
     // The only reason that can apply here is a development build:
     // `UpdateProvider.shouldShowUpdateOverlay` already withholds this overlay
@@ -334,38 +396,83 @@ class _UpdateOverlayDialogState extends State<_UpdateOverlayDialog>
             // signed APK, and neither can be installed over this copy.
             _PassiveNote(inAppUpdateBlockerMessage(blocker))
           else
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: FilledButton(
-                onPressed: () => _downloadApk(update.apkUrl),
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppConstants.accent,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: AppConstants.buttonRadius,
-                  ),
-                  elevation: 0,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+            AnimatedBuilder(
+              animation: ApkInstallerService.instance,
+              builder: (context, _) {
+                final state = ApkInstallerService.instance.state;
+                final downloading =
+                    state?.phase == ApkDownloadPhase.downloading;
+                final done = state?.phase == ApkDownloadPhase.done;
+                final failed = state?.phase == ApkDownloadPhase.error;
+
+                if (downloading && state != null) {
+                  return _DownloadProgressSection(
+                    state: state,
+                    onCancel: () => ApkInstallerService.instance
+                        .cancelDownload(),
+                  );
+                }
+                return Column(
                   children: [
-                    Icon(
-                      Icons.download_rounded,
-                      size: 20,
-                      color: AppConstants.secondary,
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: FilledButton(
+                        onPressed: () => _startInAppDownload(update),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppConstants.accent,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: AppConstants.buttonRadius,
+                          ),
+                          elevation: 0,
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              done
+                                  ? Icons.install_mobile_rounded
+                                  : Icons.download_rounded,
+                              size: 20,
+                              color: AppConstants.secondary,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              done ? 'Install Update' : 'Update Now',
+                              style: AppConstants.headlineStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: AppConstants.secondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                    const SizedBox(width: 8),
+                    if (failed && state?.message != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        state!.message!,
+                        textAlign: TextAlign.center,
+                        style: AppConstants.bodyStyle(
+                          fontSize: 12,
+                          color: AppConstants.error,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 4),
                     Text(
-                      'Update Now',
-                      style: AppConstants.headlineStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: AppConstants.secondary,
+                      'Downloads inside the app — you can leave this screen, '
+                      'it continues in the background.',
+                      textAlign: TextAlign.center,
+                      style: AppConstants.bodyStyle(
+                        fontSize: 11,
+                        color: AppConstants.secondary.withValues(alpha: 0.5),
                       ),
                     ),
                   ],
-                ),
-              ),
+                );
+              },
             ),
           const SizedBox(height: 10),
           // Maybe Later button
@@ -388,21 +495,68 @@ class _UpdateOverlayDialogState extends State<_UpdateOverlayDialog>
     );
   }
 
-  Future<void> _downloadApk(String url) async {
-    final uri = Uri.parse(url);
-    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    if (!mounted) return;
-    if (launched) {
-      Navigator.of(context).pop();
-    }
-  }
-
   static String _formatDate(DateTime date) {
     const months = [
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
     ];
     return '${months[date.month - 1]} ${date.day}, ${date.year}';
+  }
+}
+
+/// Live progress (percent + MB) with a Cancel action while the APK streams.
+/// Dismissing the dialog does not stop the download — the shade
+/// notification keeps reporting it.
+class _DownloadProgressSection extends StatelessWidget {
+  const _DownloadProgressSection({required this.state, required this.onCancel});
+
+  final ApkDownloadState state;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final pct = (state.progress * 100).round();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: LinearProgressIndicator(
+            value: state.progress,
+            minHeight: 10,
+            backgroundColor: AppConstants.secondary.withValues(alpha: 0.12),
+            valueColor:
+                const AlwaysStoppedAnimation<Color>(AppConstants.accent),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                state.totalMb > 0
+                    ? 'Downloading — $pct% (${state.receivedMb}/${state.totalMb} MB)'
+                    : 'Downloading…',
+                style: AppConstants.bodyStyle(
+                  fontSize: 12,
+                  color: AppConstants.secondary.withValues(alpha: 0.7),
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: onCancel,
+              child: Text(
+                'Cancel',
+                style: AppConstants.bodyStyle(
+                  fontSize: 12,
+                  color: AppConstants.secondary.withValues(alpha: 0.6),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
   }
 }
 

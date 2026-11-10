@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
+
+import 'push_notification_service.dart';
 
 /// In-app APK self-updater: streams the new APK to app storage with live
 /// progress + resume support, then hands the finished file to Android's
@@ -50,6 +53,12 @@ class ApkInstallerService extends ChangeNotifier {
   /// the file would be reused by every later Install tap.
   static const int minPlausibleApkBytes = 5 * 1024 * 1024;
 
+  /// Path of the APK previously downloaded for [version], or null —
+  /// including a file finished in an earlier app session. Lets callers skip
+  /// straight to the Install tap without re-downloading.
+  Future<String?> existingCompletedApk(String version) =>
+      _existingApkPath(version);
+
   /// Path of the APK previously downloaded for [version], or null.
   /// Used to resume/tap-Install without re-downloading. A file too small to be
   /// a real APK is deleted, so the download starts over instead of being
@@ -88,6 +97,25 @@ class ApkInstallerService extends ChangeNotifier {
     _busy = true;
     _cancelToken = CancelToken();
 
+    // Ongoing shade notification: the download keeps running when the
+    // user leaves the update screen or backgrounds the app. Best
+    // effort — never fails the download itself.
+    var lastNotifiedPct = -1;
+    void notifyProgress(int received, int total) {
+      if (total <= 0) return;
+      final pct = ((received / total) * 100).floor();
+      if (pct == lastNotifiedPct) return;
+      lastNotifiedPct = pct;
+      unawaited(
+        PushNotificationService.instance.showDownloadProgress(
+          version: version,
+          percent: pct,
+          statusLine:
+              '${received ~/ (1024 * 1024)}/${total ~/ (1024 * 1024)} MB — continues in background',
+        ),
+      );
+    }
+
     void report(int received, int total) {
       if (total <= 0) return;
       onProgress?.call(
@@ -95,6 +123,7 @@ class ApkInstallerService extends ChangeNotifier {
         received ~/ (1024 * 1024),
         total ~/ (1024 * 1024),
       );
+      notifyProgress(received, total);
     }
 
     try {
@@ -104,6 +133,7 @@ class ApkInstallerService extends ChangeNotifier {
       var existing = partial.existsSync() ? partial.lengthSync() : 0;
 
       _emit(ApkDownloadState.downloading(0, message: 'Starting…'));
+      notifyProgress(0, 1);
 
       // Resume support: ask the server for the remaining bytes.
       final headers = <String, dynamic>{};
@@ -182,12 +212,17 @@ class ApkInstallerService extends ChangeNotifier {
       partial.renameSync(savePath);
 
       _emit(ApkDownloadState.done(savePath));
+      unawaited(
+        PushNotificationService.instance.showDownloadComplete(version),
+      );
       return savePath;
     } on DownloadIncompleteException {
       // State was already emitted with the byte counts; the .part file stays
-      // on disk for the resume.
+      // on disk for the resume. Drop the shade row so it can't freeze mid-%.
+      unawaited(PushNotificationService.instance.hideDownloadNotification());
       rethrow;
     } on DioException catch (e) {
+      unawaited(PushNotificationService.instance.hideDownloadNotification());
       if (e.type == DioExceptionType.cancel) {
         _emit(ApkDownloadState.idle(message: 'Download cancelled'));
         throw Exception('DOWNLOAD_CANCELLED');
@@ -195,6 +230,7 @@ class ApkInstallerService extends ChangeNotifier {
       _emit(ApkDownloadState.error('Download failed — check your connection.'));
       rethrow;
     } catch (e) {
+      unawaited(PushNotificationService.instance.hideDownloadNotification());
       _emit(ApkDownloadState.error('Download failed — check your connection.'));
       rethrow;
     } finally {

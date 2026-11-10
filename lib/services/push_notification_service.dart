@@ -283,6 +283,97 @@ class PushNotificationService {
     }
   }
 
+  // ── App-update download progress ────────────────────────────────
+  //
+  // The in-app updater (ApkInstallerService) streams the new APK while the
+  // user may leave the update screen — or the app. This ongoing
+  // notification keeps the download visible in the shade and updates in
+  // place (one id), so backgrounding never looks like a stall. Tapping it
+  // just reopens the app, where the update screen offers the Install tap.
+
+  static const int _downloadNotificationId = 2001;
+  static const String _downloadChannelId = 'cufmai_updates';
+
+  Future<void> _ensureDownloadChannel() async {
+    try {
+      final androidPlugin =
+          _localNotifications.resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>();
+      await androidPlugin?.createNotificationChannel(
+        const AndroidNotificationChannel(
+          _downloadChannelId,
+          'App updates',
+          description: 'Download progress for app updates',
+          importance: Importance.low,
+        ),
+      );
+    } catch (_) {}
+  }
+
+  /// Ongoing progress row, updated in place by [percent] (0–100).
+  Future<void> showDownloadProgress({
+    required String version,
+    required int percent,
+    required String statusLine,
+  }) async {
+    try {
+      await _ensureDownloadChannel();
+      await _localNotifications.show(
+        id: _downloadNotificationId,
+        title: 'Downloading update v$version — $percent%',
+        body: statusLine,
+        notificationDetails: NotificationDetails(
+          android: AndroidNotificationDetails(
+            _downloadChannelId,
+            'App updates',
+            channelDescription: 'Download progress for app updates',
+            importance: Importance.low,
+            priority: Priority.low,
+            ongoing: true,
+            autoCancel: false,
+            onlyAlertOnce: true,
+            showProgress: true,
+            maxProgress: 100,
+            progress: percent.clamp(0, 100),
+            icon: '@mipmap/ic_launcher',
+          ),
+        ),
+      );
+    } catch (_) {}
+  }
+
+  /// The APK is complete — the tap target is the app itself, whose update
+  /// screen now offers Install.
+  Future<void> showDownloadComplete(String version) async {
+    try {
+      await _ensureDownloadChannel();
+      await _localNotifications.show(
+        id: _downloadNotificationId,
+        title: 'Update v$version downloaded',
+        body: 'Reopen CUFMAI to install it.',
+        notificationDetails: const NotificationDetails(
+          android: AndroidNotificationDetails(
+            _downloadChannelId,
+            'App updates',
+            channelDescription: 'Download progress for app updates',
+            importance: Importance.high,
+            priority: Priority.high,
+            ongoing: false,
+            autoCancel: true,
+            onlyAlertOnce: true,
+            icon: '@mipmap/ic_launcher',
+          ),
+        ),
+      );
+    } catch (_) {}
+  }
+
+  Future<void> hideDownloadNotification() async {
+    try {
+      await _localNotifications.cancel(id: _downloadNotificationId);
+    } catch (_) {}
+  }
+
   // ── Notification Channels ───────────────────────────────────────
 
   /// Ensure the notification channels exist (Android 8+). Idempotent —
