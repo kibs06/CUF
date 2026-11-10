@@ -41,6 +41,19 @@ class ReviewService {
     return 0;
   }
 
+  /// Pinned reviews first, then newest. Sorted client-side (not via
+  /// `.order('is_pinned')`) so the list keeps working against a database
+  /// that has not applied the pin migration yet — a server-side order on
+  /// a missing column fails the whole query and would hide every review.
+  static int _pinnedFirst(Map<String, dynamic> a, Map<String, dynamic> b) {
+    final ap = a['is_pinned'] == true ? 0 : 1;
+    final bp = b['is_pinned'] == true ? 0 : 1;
+    if (ap != bp) return ap.compareTo(bp);
+    final ac = a['created_at']?.toString() ?? '';
+    final bc = b['created_at']?.toString() ?? '';
+    return bc.compareTo(ac);
+  }
+
   /// Fetch all reviews for a product, joined with reviewer profile + images.
   Future<List<Map<String, dynamic>>> getReviews(String productId) async {
     try {
@@ -52,13 +65,14 @@ class ReviewService {
             review_images(id, image_url, display_order)
           ''')
           .eq('product_id', productId.trim())
-          .order('is_pinned', ascending: false)
           .order('created_at', ascending: false);
 
-      return (data as List).map((row) {
+      final list = (data as List).map((row) {
         final map = _normalizeOrderItemReview(row);
         return map;
       }).toList();
+      list.sort(_pinnedFirst);
+      return list;
     } catch (e) {
       return [];
     }
@@ -219,10 +233,12 @@ class ReviewService {
             order_items!inner(product_id, size, quantity, products(name))
           ''')
           .eq('store_id', storeId)
-          .order('is_pinned', ascending: false)
           .order('created_at', ascending: false);
 
-      return (data as List).map((row) => _normalizeOrderItemReview(row)).toList();
+      final list =
+          (data as List).map((row) => _normalizeOrderItemReview(row)).toList();
+      list.sort(_pinnedFirst);
+      return list;
     } catch (e) {
       return [];
     }
