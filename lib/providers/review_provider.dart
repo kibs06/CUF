@@ -350,6 +350,35 @@ class ReviewProvider extends ChangeNotifier {
     }
   }
 
+  /// Pin or unpin a review as the product's spotlight.
+  Future<bool> togglePin({
+    required String reviewId,
+    required String productId,
+    required bool pinned,
+    String? storeId,
+  }) async {
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      await _reviewService.setReviewPinned(
+        reviewId: reviewId,
+        productId: productId,
+        pinned: pinned,
+      );
+
+      if (storeId != null) {
+        await loadStoreReviews(storeId);
+      }
+      return true;
+    } catch (e) {
+      _errorMessage = 'Failed to ${pinned ? 'pin' : 'unpin'} review: $e';
+      _isLoadingStoreReviews = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
   // ═══════════════════════════════════════════════════════════════
   //  STORE-LEVEL REVIEWS (direct "Rate this store")
   // ═══════════════════════════════════════════════════════════════

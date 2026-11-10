@@ -42,6 +42,7 @@ class SoleReviewCard extends StatelessWidget {
     final images = review['review_images'] as List<dynamic>? ?? [];
     final sellerReply = review['seller_reply']?.toString();
     final sellerReplyAt = review['seller_reply_at']?.toString();
+    final isPinned = review['is_pinned'] == true;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -98,6 +99,35 @@ class SoleReviewCard extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
+                        if (isPinned) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppConstants.primary.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.push_pin,
+                                  size: 9,
+                                  color: AppConstants.primary,
+                                ),
+                                const SizedBox(width: 2),
+                                Text(
+                                  'Pinned',
+                                  style: AppConstants.bodyStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppConstants.primary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                         if (isVerified && showVerifiedBadge) ...[
                           const SizedBox(width: 6),
                           Container(

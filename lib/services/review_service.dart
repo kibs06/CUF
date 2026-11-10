@@ -52,6 +52,7 @@ class ReviewService {
             review_images(id, image_url, display_order)
           ''')
           .eq('product_id', productId.trim())
+          .order('is_pinned', ascending: false)
           .order('created_at', ascending: false);
 
       return (data as List).map((row) {
@@ -218,6 +219,7 @@ class ReviewService {
             order_items!inner(product_id, size, quantity, products(name))
           ''')
           .eq('store_id', storeId)
+          .order('is_pinned', ascending: false)
           .order('created_at', ascending: false);
 
       return (data as List).map((row) => _normalizeOrderItemReview(row)).toList();
@@ -421,6 +423,29 @@ class ReviewService {
       },
       onConflict: 'review_id,user_id',
     );
+  }
+
+  /// Pin (or unpin) a review as the product's spotlight. Pinning one review
+  /// unpins the product's previous pin first — the partial unique index
+  /// `uq_reviews_pinned_per_product` makes a double-pin impossible even
+  /// under a race. The DB trigger `guard_review_pin` refuses non-sellers.
+  Future<void> setReviewPinned({
+    required String reviewId,
+    required String productId,
+    required bool pinned,
+  }) async {
+    if (pinned) {
+      await _client
+          .from('reviews')
+          .update({'is_pinned': false})
+          .eq('product_id', productId)
+          .eq('is_pinned', true)
+          .neq('id', reviewId);
+    }
+    await _client
+        .from('reviews')
+        .update({'is_pinned': pinned})
+        .eq('id', reviewId);
   }
 
   /// Remove the current user's vote on a review (tapping the active vote).
