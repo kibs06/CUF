@@ -10,6 +10,7 @@ import '../models/notification_category.dart';
 import '../providers/notification_provider.dart';
 import '../services/supabase_service.dart';
 import '../utils/model_notice.dart';
+import '../widgets/review_notice_block.dart';
 import '../widgets/sole_card.dart';
 import '../widgets/chat/chat_view.dart';
 import 'customer/tracking_screen.dart';
@@ -710,7 +711,7 @@ class _NotificationCardContent extends StatelessWidget {
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
-                    _categoryIcon(notification.category),
+                    _categoryIcon(notification),
                     size: 20,
                     color: _categoryColor(notification.category),
                   ),
@@ -749,8 +750,18 @@ class _NotificationCardContent extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    // ── Batched message previews or single message ──
-                    if (notification.isBatched && notification.previews.isNotEmpty)
+                    // ── Review notice (stars + quoted snippet), batched
+                    // message previews, or the single message ──
+                    if (notification.isReviewNotice)
+                      ReviewNoticeBlock(
+                        rating: notification.reviewRating ?? 0,
+                        snippet: notification.reviewSnippet ?? '',
+                        label: notification.reviewKind == 'reply'
+                            ? 'Seller reply'
+                            : 'Your review',
+                      )
+                    else if (notification.isBatched &&
+                        notification.previews.isNotEmpty)
                       _buildBatchedPreviews()
                     else
                       Text(
@@ -780,8 +791,11 @@ class _NotificationCardContent extends StatelessWidget {
     );
   }
 
-  IconData _categoryIcon(NotificationCategory cat) {
-    switch (cat) {
+  IconData _categoryIcon(AppNotification notification) {
+    // A review notice is about stars, not chat — the star icon says so
+    // before a word is read.
+    if (notification.isReviewNotice) return Icons.star_outline;
+    switch (notification.category) {
       case NotificationCategory.unpaid:
         return Icons.credit_card_outlined;
       case NotificationCategory.processing:

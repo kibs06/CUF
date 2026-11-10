@@ -9,6 +9,7 @@ import '../../constants/seller_theme_constants.dart';
 import '../../providers/seller_notification_provider.dart';
 import '../../services/seller_notification_service.dart';
 import '../../utils/model_notice.dart';
+import '../../widgets/review_notice_block.dart';
 import 'manage_orders_screen.dart';
 import 'gcash_payment_queue_screen.dart';
 import 'custom_orders_screen.dart';
@@ -649,8 +650,15 @@ class _NotificationRowContent extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    // ── Batched message previews or single body ──
-                    if (notification.isBatched &&
+                    // ── Review notice (stars + quoted snippet), batched
+                    // message previews, or the single body ──
+                    if (notification.isReviewNotice)
+                      ReviewNoticeBlock(
+                        rating: notification.reviewRating ?? 0,
+                        snippet: notification.reviewSnippet ?? '',
+                        label: 'New review',
+                      )
+                    else if (notification.isBatched &&
                         notification.previews.isNotEmpty)
                       _buildBatchedPreviews()
                     else
@@ -729,6 +737,8 @@ class _NotificationRowContent extends StatelessWidget {
         return Icons.design_services_outlined;
       case 'new_message':
         return Icons.chat_bubble_outline;
+      case 'new_review':
+        return Icons.star_outline;
       case kModelRequestSellerType:
         // The same icon the product action sheet's request row uses, so the
         // notice and the row it points at read as one thing.
@@ -750,6 +760,10 @@ class _NotificationRowContent extends StatelessWidget {
         return AppConstants.statusReadyColor;
       case 'new_message':
         return AppConstants.statusConfirmedColor;
+      case 'new_review':
+        // Same green as the customer feed's review colour, so review news
+        // reads the same on either side.
+        return const Color(0xFF6B8F47);
       case kModelRequestSellerType:
         // Deep purple — "3D modelling news", the same reading as the customer
         // feed's `models` colour, so an ending looks the same on either side.

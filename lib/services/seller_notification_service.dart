@@ -59,6 +59,18 @@ class SellerNotification {
     );
   }
 
+  /// Review-notice helpers — present when metadata carries kind/rating
+  /// (written by ReviewService for new-review notices).
+  String? get reviewKind => metadata?['kind']?.toString();
+  int? get reviewRating => (metadata?['rating'] as num?)?.toInt();
+  String? get reviewSnippet => metadata?['snippet']?.toString();
+  String? get reviewProductName => metadata?['product_name']?.toString();
+
+  /// Whether this card should render the rich review block (stars +
+  /// snippet) instead of the plain one-line body.
+  bool get isReviewNotice =>
+      type == 'new_review' && reviewKind == 'new_review' && reviewRating != null;
+
   /// Relative time string like "5 min ago", "3d ago".
   String get relativeTime {
     final diff = DateTime.now().difference(createdAt);

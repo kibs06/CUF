@@ -549,7 +549,13 @@ class ReviewService {
         'title': title,
         'body': body,
         'reference_id': reviewId,
-        'metadata': {'product_id': productId},
+        'metadata': {
+          'product_id': productId,
+          'kind': 'new_review',
+          'rating': rating,
+          'snippet': short,
+          'product_name': productName,
+        },
       });
 
       final store = await _client
@@ -581,7 +587,7 @@ class ReviewService {
     try {
       final row = await _client
           .from('reviews')
-          .select('customer_id, product_id, products(name)')
+          .select('customer_id, product_id, rating, comment, products(name)')
           .eq('id', reviewId)
           .maybeSingle();
       if (row == null) return;
@@ -592,6 +598,7 @@ class ReviewService {
       final productName = product is Map
           ? (product['name']?.toString() ?? 'your item')
           : 'your item';
+      final rating = (row['rating'] as num?)?.toInt() ?? 0;
 
       final short =
           reply.length > 90 ? '${reply.substring(0, 90)}…' : reply;
@@ -605,7 +612,14 @@ class ReviewService {
         'message': body,
         'is_read': false,
         'is_deleted': false,
-        'metadata': {'product_id': productId, 'review_id': reviewId},
+        'metadata': {
+          'product_id': productId,
+          'review_id': reviewId,
+          'kind': 'reply',
+          'rating': rating,
+          'snippet': short,
+          'product_name': productName,
+        },
       });
 
       await _client.functions.invoke('send-notification-push', body: {
@@ -629,7 +643,7 @@ class ReviewService {
     try {
       final row = await _client
           .from('reviews')
-          .select('customer_id, product_id, products(name)')
+          .select('customer_id, product_id, rating, comment, products(name)')
           .eq('id', reviewId)
           .maybeSingle();
       if (row == null) return;
@@ -642,6 +656,11 @@ class ReviewService {
       final productName = product is Map
           ? (product['name']?.toString() ?? 'your review')
           : 'your review';
+      final rating = (row['rating'] as num?)?.toInt() ?? 0;
+      final comment = (row['comment']?.toString() ?? '').trim();
+      final snippet = comment.length > 90
+          ? '${comment.substring(0, 90)}…'
+          : comment;
 
       final title = 'Someone found your review helpful';
       final body = 'Your review on $productName got a thumbs up. Tap to view.';
@@ -653,7 +672,14 @@ class ReviewService {
         'message': body,
         'is_read': false,
         'is_deleted': false,
-        'metadata': {'product_id': productId, 'review_id': reviewId},
+        'metadata': {
+          'product_id': productId,
+          'review_id': reviewId,
+          'kind': 'helpful',
+          'rating': rating,
+          'snippet': snippet,
+          'product_name': productName,
+        },
       });
 
       await _client.functions.invoke('send-notification-push', body: {

@@ -66,6 +66,20 @@ class AppNotification {
   /// Whether this is a support/report notification.
   bool get isSupportNotification => category == NotificationCategory.support;
 
+  /// Review-notice helpers — present when metadata carries kind/rating
+  /// (written by ReviewService for reply / helpful-vote notices).
+  String? get reviewKind => metadata?['kind']?.toString();
+  int? get reviewRating => (metadata?['rating'] as num?)?.toInt();
+  String? get reviewSnippet => metadata?['snippet']?.toString();
+  String? get reviewProductName => metadata?['product_name']?.toString();
+
+  /// Whether this card should render the rich review block (stars +
+  /// snippet) instead of the plain one-line message.
+  bool get isReviewNotice =>
+      category == NotificationCategory.review &&
+      (reviewKind == 'reply' || reviewKind == 'helpful') &&
+      reviewRating != null;
+
   /// The order type ('catalog', 'custom', or null).
   String? get orderType => metadata?['order_type']?.toString();
 
