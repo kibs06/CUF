@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../constants/app_constants.dart';
@@ -6,9 +7,12 @@ import '../services/review_service.dart';
 
 /// Thumbs up / thumbs down on a review — "was this helpful?".
 ///
-/// Self-sufficient: loads its own totals + the viewer's vote, handles
-/// voting with an optimistic update, and rolls back on failure. Used by
-/// [SoleReviewCard], so it shows on customer and seller surfaces alike.
+/// Right-aligned, borderless, with a like-button micro-interaction: the
+/// icon presses in under the finger, then pops with a spring overshoot as
+/// it fills, the count ticks over, and a light haptic confirms the vote.
+/// Self-sufficient: loads its own totals + the viewer's vote, votes with
+/// an optimistic update, rolls back on failure. Used by [SoleReviewCard],
+/// so it shows on customer and seller surfaces alike.
 class ReviewVoteButtons extends StatefulWidget {
   final String reviewId;
 
@@ -50,6 +54,8 @@ class _ReviewVoteButtonsState extends State<ReviewVoteButtons> {
       );
       return;
     }
+
+    HapticFeedback.lightImpact();
 
     // Optimistic update; the service call either confirms or rolls back.
     final previous = _myVote;
@@ -102,6 +108,7 @@ class _ReviewVoteButtonsState extends State<ReviewVoteButtons> {
   @override
   Widget build(BuildContext context) {
     return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
       children: [
         Text(
           'Was this helpful?',
@@ -110,20 +117,21 @@ class _ReviewVoteButtonsState extends State<ReviewVoteButtons> {
             color: AppConstants.secondary.withValues(alpha: 0.5),
           ),
         ),
-        const SizedBox(width: 8),
-        _VotePill(
-          icon: Icons.thumb_up_outlined,
-          activeIcon: Icons.thumb_up,
+        const SizedBox(width: 2),
+        _SpringVoteButton(
+          selected: _myVote == true,
           count: _helpful,
-          active: _myVote == true,
+          outlineIcon: Icons.thumb_up_outlined,
+          filledIcon: Icons.thumb_up,
+          semanticLabel: 'Mark review helpful',
           onTap: () => _tap(true),
         ),
-        const SizedBox(width: 8),
-        _VotePill(
-          icon: Icons.thumb_down_outlined,
-          activeIcon: Icons.thumb_down,
+        _SpringVoteButton(
+          selected: _myVote == false,
           count: _notHelpful,
-          active: _myVote == false,
+          outlineIcon: Icons.thumb_down_outlined,
+          filledIcon: Icons.thumb_down,
+          semanticLabel: 'Mark review not helpful',
           onTap: () => _tap(false),
         ),
       ],
@@ -131,63 +139,152 @@ class _ReviewVoteButtonsState extends State<ReviewVoteButtons> {
   }
 }
 
-class _VotePill extends StatelessWidget {
-  final IconData icon;
-  final IconData activeIcon;
+/// One borderless vote button with a spring-pop micro-interaction.
+///
+/// The press sinks the icon to 0.92 while the finger is down; on selection
+/// it springs to ~1.3 with an overshoot curve and settles back, while the
+/// icon cross-fades from outline to filled. The count ticks with a small
+/// vertical slide. Only transform + opacity animate, so it stays jank-free.
+class _SpringVoteButton extends StatefulWidget {
+  final bool selected;
   final int count;
-  final bool active;
+  final IconData outlineIcon;
+  final IconData filledIcon;
+  final String semanticLabel;
   final VoidCallback onTap;
 
-  const _VotePill({
-    required this.icon,
-    required this.activeIcon,
+  const _SpringVoteButton({
+    required this.selected,
     required this.count,
-    required this.active,
+    required this.outlineIcon,
+    required this.filledIcon,
+    required this.semanticLabel,
     required this.onTap,
   });
 
   @override
+  State<_SpringVoteButton> createState() => _SpringVoteButtonState();
+}
+
+class _SpringVoteButtonState extends State<_SpringVoteButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pop;
+  late final Animation<double> _scale;
+  bool _pressed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _pop = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 320),
+    );
+    // Overshoot past the target and back — the spring that makes the tap
+    // feel physical rather than flat.
+    _scale = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween(begin: 1.0, end: 1.32)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 38,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 1.32, end: 1.0)
+            .chain(CurveTween(curve: Curves.elasticOut)),
+        weight: 62,
+      ),
+    ]).animate(_pop);
+  }
+
+  @override
+  void didUpdateWidget(covariant _SpringVoteButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Pop only when the button BECOMES selected (the vote landing), not
+    // when it clears — removal stays quiet.
+    if (!oldWidget.selected && widget.selected) {
+      _pop.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _pop.dispose();
+    super.dispose();
+  }
+
+  Color _iconColor(BuildContext context) => widget.selected
+      ? AppConstants.primary
+      : AppConstants.secondary.withValues(alpha: 0.42);
+
+  @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: active
-              ? AppConstants.primary.withValues(alpha: 0.12)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: active
-                ? AppConstants.primary
-                : AppConstants.secondary.withValues(alpha: 0.2),
-            width: 1,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              active ? activeIcon : icon,
-              size: 14,
-              color: active
-                  ? AppConstants.primary
-                  : AppConstants.secondary.withValues(alpha: 0.5),
-            ),
-            if (count > 0) ...[
-              const SizedBox(width: 4),
-              Text(
-                count.toString(),
-                style: AppConstants.bodyStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  color: active
-                      ? AppConstants.primary
-                      : AppConstants.secondary.withValues(alpha: 0.5),
-                ),
+    return Semantics(
+      button: true,
+      label: widget.semanticLabel,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapUp: (_) => setState(() => _pressed = false),
+        onTapCancel: () => setState(() => _pressed = false),
+        onTap: widget.onTap,
+        child: Padding(
+          // Generous touch target with no visible chrome.
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+          child: AnimatedScale(
+            scale: _pressed ? 0.9 : 1.0,
+            duration: const Duration(milliseconds: 110),
+            curve: Curves.easeOut,
+            child: ScaleTransition(
+              scale: _scale,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 160),
+                    transitionBuilder: (child, animation) =>
+                        FadeTransition(opacity: animation, child: child),
+                    child: Icon(
+                      widget.selected
+                          ? widget.filledIcon
+                          : widget.outlineIcon,
+                      key: ValueKey(widget.selected),
+                      size: 19,
+                      color: _iconColor(context),
+                    ),
+                  ),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 180),
+                    transitionBuilder: (child, animation) =>
+                        SlideTransition(
+                          position: Tween<Offset>(
+                            begin: const Offset(0, 0.45),
+                            end: Offset.zero,
+                          ).animate(animation),
+                          child: FadeTransition(
+                            opacity: animation,
+                            child: child,
+                          ),
+                        ),
+                    child: widget.count > 0
+                        ? Padding(
+                            key: ValueKey(widget.count),
+                            padding: const EdgeInsets.only(left: 4),
+                            child: Text(
+                              widget.count > 999
+                                  ? '${(widget.count / 1000).toStringAsFixed(1)}k'
+                                  : widget.count.toString(),
+                              style: AppConstants.bodyStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: _iconColor(context),
+                              ),
+                            ),
+                          )
+                        : const SizedBox(key: ValueKey('empty'), width: 0),
+                  ),
+                ],
               ),
-            ],
-          ],
+            ),
+          ),
         ),
       ),
     );
