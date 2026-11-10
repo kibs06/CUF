@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../constants/app_constants.dart';
+import 'review_vote_buttons.dart';
 import 'sole_star_rating.dart';
 
 /// Renders a single review: stars, comment, photos, reviewer name,
@@ -18,11 +19,15 @@ class SoleReviewCard extends StatelessWidget {
   /// Show the "Verified Purchase" badge.
   final bool showVerifiedBadge;
 
+  /// Show the helpful / not-helpful vote row.
+  final bool showVotes;
+
   const SoleReviewCard({
     super.key,
     required this.review,
     this.showSellerReply = true,
     this.showVerifiedBadge = true,
+    this.showVotes = true,
   });
 
   @override
@@ -195,6 +200,12 @@ class SoleReviewCard extends StatelessWidget {
                 },
               ),
             ),
+          ],
+
+          // ── Helpfulness votes ──────────────────────────────
+          if (showVotes && (review['id']?.toString() ?? '').isNotEmpty) ...[
+            const SizedBox(height: 10),
+            ReviewVoteButtons(reviewId: review['id'].toString()),
           ],
 
           // ── Seller reply ───────────────────────────────────

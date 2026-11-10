@@ -2,6 +2,25 @@ import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// Totals + the viewer's own vote for one review's helpfulness buttons.
+class ReviewVoteSummary {
+  final int helpful;
+  final int notHelpful;
+
+  /// The current user's vote: true = helpful, false = not helpful,
+  /// null = no vote (or signed out).
+  final bool? myVote;
+
+  const ReviewVoteSummary({
+    required this.helpful,
+    required this.notHelpful,
+    required this.myVote,
+  });
+
+  factory ReviewVoteSummary.empty() =>
+      const ReviewVoteSummary(helpful: 0, notHelpful: 0, myVote: null);
+}
+
 /// Service handling all review Supabase operations.
 ///
 /// Uses the `reviews` table (Shopee/Lazada-style per-order-item reviews)
@@ -349,6 +368,69 @@ class ReviewService {
       'seller_reply': reply.trim(),
       'seller_reply_at': DateTime.now().toIso8601String(),
     }).eq('id', reviewId);
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  //  HELPFULNESS VOTES (review_votes table — thumbs up / down)
+  // ═══════════════════════════════════════════════════════════════
+
+  /// Totals + the current user's vote for one review.
+  Future<ReviewVoteSummary> getReviewVote(String reviewId) async {
+    if (reviewId.isEmpty) return ReviewVoteSummary.empty();
+    try {
+      final rows = await _client
+          .from('review_votes')
+          .select('user_id,is_helpful')
+          .eq('review_id', reviewId);
+      final uid = _client.auth.currentUser?.id;
+      var helpful = 0;
+      var notHelpful = 0;
+      bool? mine;
+      for (final row in (rows as List)) {
+        final map = Map<String, dynamic>.from(row as Map);
+        if (map['is_helpful'] == true) {
+          helpful++;
+        } else {
+          notHelpful++;
+        }
+        if (uid != null && map['user_id']?.toString() == uid) {
+          mine = map['is_helpful'] == true;
+        }
+      }
+      return ReviewVoteSummary(
+        helpful: helpful,
+        notHelpful: notHelpful,
+        myVote: mine,
+      );
+    } catch (_) {
+      return ReviewVoteSummary.empty();
+    }
+  }
+
+  /// Cast or change the current user's vote on a review.
+  Future<void> voteReview({
+    required String reviewId,
+    required bool isHelpful,
+  }) async {
+    final userId = _client.auth.currentUser!.id;
+    await _client.from('review_votes').upsert(
+      {
+        'review_id': reviewId,
+        'user_id': userId,
+        'is_helpful': isHelpful,
+      },
+      onConflict: 'review_id,user_id',
+    );
+  }
+
+  /// Remove the current user's vote on a review (tapping the active vote).
+  Future<void> removeVote(String reviewId) async {
+    final userId = _client.auth.currentUser!.id;
+    await _client
+        .from('review_votes')
+        .delete()
+        .eq('review_id', reviewId)
+        .eq('user_id', userId);
   }
 
   /// Delete a per-order-item review.
