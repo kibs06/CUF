@@ -1,5 +1,17 @@
 [
   {
+    "latest_version": "1.0.73",
+    "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.73/app-release-1.0.73.apk",
+    "released_at": "2026-11-10",
+    "notes": [
+      "Seller reviews grid with pinning and one-reply-per-customer discussion threads",
+      "Helpful / not-helpful votes on reviews with a spring-pop micro-interaction",
+      "Bell + push notifications for new reviews, seller replies, and helpful votes",
+      "Rich review cards (stars + quoted snippet) in customer and seller bells",
+      "Demo reviews and ratings for products without real reviews (marked DEMO, removable)"
+    ]
+  },
+  {
     "latest_version": "1.0.72",
     "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.72/app-release-1.0.72.apk",
     "released_at": "2026-11-09",
