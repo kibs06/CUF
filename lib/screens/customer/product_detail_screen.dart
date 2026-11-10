@@ -2152,7 +2152,22 @@ class _ProductDetailViewState extends State<_ProductDetailView>
                           );
                         },
                         builder: (context, data, _) {
-                          final (sold, avgRating, reviewCount) = data;
+                          var (sold, avgRating, reviewCount) = data;
+                          // ── DEMO ONLY ───────────────────────────────
+                          // Fall back to the (possibly mocked) review summary
+                          // so demo products show their mock stars + count
+                          // here too. In production the two sources agree,
+                          // so this only fires when the product row lags the
+                          // review trigger. Remove with
+                          // lib/data/demo_reviews.dart before real deployment.
+                          if (reviewCount <= 0) {
+                            final demoSummary =
+                                context.watch<ReviewProvider>();
+                            if (demoSummary.reviewCount > 0) {
+                              avgRating = demoSummary.avgRating;
+                              reviewCount = demoSummary.reviewCount;
+                            }
+                          }
                           if (sold <= 0 && reviewCount <= 0) return const SizedBox.shrink();
                           return Padding(
                             padding: const EdgeInsets.only(top: 6),

@@ -32,6 +32,7 @@ class SoleReviewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDemo = review['is_demo'] == true;
     final reviewerName = review['reviewer_name']?.toString() ?? 'Customer';
     final reviewerAvatar = review['reviewer_avatar']?.toString();
     final rating = (review['rating'] as num?)?.toInt() ?? 0;
@@ -43,6 +44,10 @@ class SoleReviewCard extends StatelessWidget {
     final sellerReply = review['seller_reply']?.toString();
     final sellerReplyAt = review['seller_reply_at']?.toString();
     final isPinned = review['is_pinned'] == true;
+    // DEMO ONLY: mock reviews carry `is_demo: true` (see
+    // lib/data/demo_reviews.dart). They get a visible Demo pill and their
+    // vote row is suppressed — fake ids exist only on-device, never in
+    // the DB, so voting on them must stay impossible.
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -125,6 +130,29 @@ class SoleReviewCard extends StatelessWidget {
                                   ),
                                 ),
                               ],
+                            ),
+                          ),
+                        ],
+                        // DEMO ONLY pill — marks mock reviews so they are
+                        // never mistaken for real feedback. Remove with
+                        // lib/data/demo_reviews.dart before real deployment.
+                        if (isDemo) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF7E57C2)
+                                  .withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              'Demo',
+                              style: AppConstants.bodyStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                color: const Color(0xFF7E57C2),
+                              ),
                             ),
                           ),
                         ],
@@ -233,7 +261,11 @@ class SoleReviewCard extends StatelessWidget {
           ],
 
           // ── Helpfulness votes ──────────────────────────────
-          if (showVotes && (review['id']?.toString() ?? '').isNotEmpty) ...[
+          // Demo reviews never reach the DB, so their vote row stays
+          // hidden (a vote insert would violate the review_votes FK).
+          if (showVotes &&
+              !isDemo &&
+              (review['id']?.toString() ?? '').isNotEmpty) ...[
             const SizedBox(height: 10),
             ReviewVoteButtons(reviewId: review['id'].toString()),
           ],
