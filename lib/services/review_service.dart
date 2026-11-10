@@ -695,6 +695,186 @@ class ReviewService {
     }
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  //  REVIEW DISCUSSION THREAD (review_comments — flat, newest last)
+  //
+  //  The review author can reply under the seller's reply, and any
+  //  other signed-in customer can comment on the thread too. Demo
+  //  reviews (is_demo, on-device only) never reach here — the thread
+  //  widget stays hidden for them.
+  // ═══════════════════════════════════════════════════════════════
+
+  /// All comments on a review, oldest first, with author names.
+  Future<List<Map<String, dynamic>>> getReviewComments(String reviewId) async {
+    try {
+      final data = await _client
+          .from('review_comments')
+          .select('*, profiles!user_id(full_name, avatar_url)')
+          .eq('review_id', reviewId)
+          .order('created_at', ascending: true);
+      return (data as List).map((row) {
+        final map = Map<String, dynamic>.from(row as Map);
+        final profile = map['profiles'];
+        map['author_name'] = profile is Map
+            ? (profile['full_name'] ?? 'Customer')
+            : 'Customer';
+        map['author_avatar'] =
+            profile is Map ? profile['avatar_url'] : null;
+        return map;
+      }).toList();
+    } catch (e) {
+      debugPrint('[ReviewService] getReviewComments failed: $e');
+      return [];
+    }
+  }
+
+  /// Post a comment on a review as the current user. Notifies the review
+  /// author (unless it's their own comment) and the seller — both
+  /// fire-and-forget, never throwing.
+  Future<bool> addReviewComment({
+    required String reviewId,
+    required String text,
+  }) async {
+    final userId = _client.auth.currentUser?.id;
+    final trimmed = text.trim();
+    if (userId == null || trimmed.isEmpty) return false;
+    try {
+      await _client.from('review_comments').insert({
+        'review_id': reviewId,
+        'user_id': userId,
+        'comment': trimmed.length > 500
+            ? trimmed.substring(0, 500)
+            : trimmed,
+      });
+      unawaited(_notifyAuthorComment(reviewId: reviewId, commenterId: userId));
+      unawaited(_notifySellerComment(reviewId: reviewId, commenterId: userId));
+      return true;
+    } catch (e) {
+      debugPrint('[ReviewService] addReviewComment failed: $e');
+      return false;
+    }
+  }
+
+  /// Author bell + push when someone comments on their review thread.
+  Future<void> _notifyAuthorComment({
+    required String reviewId,
+    required String commenterId,
+  }) async {
+    try {
+      final row = await _client
+          .from('reviews')
+          .select('customer_id, product_id, rating, comment, products(name)')
+          .eq('id', reviewId)
+          .maybeSingle();
+      if (row == null) return;
+      final authorId = row['customer_id']?.toString() ?? '';
+      final productId = row['product_id']?.toString() ?? '';
+      if (authorId.isEmpty || authorId == commenterId || productId.isEmpty) {
+        return;
+      }
+      final product = row['products'];
+      final productName = product is Map
+          ? (product['name']?.toString() ?? 'your review')
+          : 'your review';
+      final rating = (row['rating'] as num?)?.toInt() ?? 0;
+
+      final title = 'New reply on your review';
+      final body = 'Someone commented on your review of $productName. Tap to join.';
+
+      await _client.from('notifications').insert({
+        'user_id': authorId,
+        'category': 'review',
+        'title': title,
+        'message': body,
+        'is_read': false,
+        'is_deleted': false,
+        'metadata': {
+          'product_id': productId,
+          'review_id': reviewId,
+          'kind': 'comment',
+          'rating': rating,
+          'snippet': body,
+          'product_name': productName,
+        },
+      });
+
+      await _client.functions.invoke('send-notification-push', body: {
+        'recipientUserId': authorId,
+        'title': title,
+        'body': body,
+        'type': 'review_comment',
+        'referenceId': productId,
+        'screen': 'product_detail',
+      });
+    } catch (e) {
+      debugPrint('[ReviewService] Comment notify failed (non-fatal): $e');
+    }
+  }
+
+  /// Seller bell + push when a review thread on their store gets a comment.
+  Future<void> _notifySellerComment({
+    required String reviewId,
+    required String commenterId,
+  }) async {
+    try {
+      final row = await _client
+          .from('reviews')
+          .select('store_id, product_id, rating, comment')
+          .eq('id', reviewId)
+          .maybeSingle();
+      if (row == null) return;
+      final storeId = row['store_id']?.toString() ?? '';
+      final productId = row['product_id']?.toString() ?? '';
+      if (storeId.isEmpty || productId.isEmpty) return;
+      final productName = await _reviewProductName(productId);
+      final rating = (row['rating'] as num?)?.toInt() ?? 0;
+      final snippet = (row['comment']?.toString() ?? '').trim();
+      final short = snippet.length > 90
+          ? '${snippet.substring(0, 90)}…'
+          : snippet;
+
+      final title = 'New reply on a review — $productName';
+      final body = short.isEmpty
+          ? 'A customer joined the discussion. Tap to read.'
+          : 'Discussion on "$short"';
+
+      await _client.from('seller_notifications').insert({
+        'store_id': storeId,
+        'type': 'review_comment',
+        'title': title,
+        'body': body,
+        'reference_id': reviewId,
+        'metadata': {
+          'product_id': productId,
+          'kind': 'review_comment',
+          'rating': rating,
+          'snippet': short,
+          'product_name': productName,
+        },
+      });
+
+      final store = await _client
+          .from('stores')
+          .select('owner_id')
+          .eq('id', storeId)
+          .maybeSingle();
+      final ownerId = store?['owner_id']?.toString();
+      if (ownerId == null || ownerId.isEmpty || ownerId == commenterId) return;
+
+      await _client.functions.invoke('send-notification-push', body: {
+        'recipientUserId': ownerId,
+        'title': title,
+        'body': '$body Tap to view.',
+        'type': 'review_comment',
+        'referenceId': storeId,
+        'screen': 'seller_reviews',
+      });
+    } catch (e) {
+      debugPrint(
+          '[ReviewService] Seller-comment notify failed (non-fatal): $e');
+    }
+  }
+
   /// Delete a per-order-item review.
   Future<void> deleteOrderItemReview(String reviewId) async {
     final userId = _client.auth.currentUser!.id;

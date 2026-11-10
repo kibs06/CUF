@@ -69,7 +69,11 @@ class SellerNotification {
   /// Whether this card should render the rich review block (stars +
   /// snippet) instead of the plain one-line body.
   bool get isReviewNotice =>
-      type == 'new_review' && reviewKind == 'new_review' && reviewRating != null;
+      (type == 'new_review' && reviewKind == 'new_review' &&
+              reviewRating != null) ||
+          (type == 'review_comment' &&
+              reviewKind == 'review_comment' &&
+              reviewRating != null);
 
   /// Relative time string like "5 min ago", "3d ago".
   String get relativeTime {

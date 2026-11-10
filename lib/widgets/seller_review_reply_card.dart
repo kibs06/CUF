@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../constants/app_constants.dart';
 import '../constants/seller_theme_constants.dart';
 import '../providers/review_provider.dart';
+import 'review_thread_section.dart';
 import 'sole_review_card.dart';
 
 /// One customer review with the seller's reply block and reply composer.
@@ -139,7 +140,22 @@ class _SellerReviewReplyCardState extends State<SellerReviewReplyCard> {
             review: widget.review,
             showSellerReply: true,
             showVerifiedBadge: true,
+            // The card's own thread sits under the reply block; the
+            // seller joins the same discussion, so no second section.
+            showDiscussion: false,
           ),
+
+          // Discussion thread — the seller reads and joins the same
+          // thread the customers see. Real reviews only (demo ids exist
+          // only on-device).
+          if ((widget.review['is_demo'] != true) &&
+              (widget.review['id']?.toString() ?? '').isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: ReviewThreadSection(
+                reviewId: widget.review['id'].toString(),
+              ),
+            ),
 
           // Reply + pin actions
           if (!_isReplying)

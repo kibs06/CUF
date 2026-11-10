@@ -77,7 +77,9 @@ class AppNotification {
   /// snippet) instead of the plain one-line message.
   bool get isReviewNotice =>
       category == NotificationCategory.review &&
-      (reviewKind == 'reply' || reviewKind == 'helpful') &&
+      (reviewKind == 'reply' ||
+          reviewKind == 'helpful' ||
+          reviewKind == 'comment') &&
       reviewRating != null;
 
   /// The order type ('catalog', 'custom', or null).

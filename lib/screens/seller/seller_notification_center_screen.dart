@@ -342,8 +342,10 @@ class _SellerNotificationCenterScreenState
         );
         break;
       case 'new_review':
-        // A review on one of this store's products lands on the reviews
-        // grid, which is scoped by the row's own store id.
+      case 'review_comment':
+        // A review (or a reply in its discussion thread) on one of this
+        // store's products lands on the reviews grid, scoped by the row's
+        // own store id.
         Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => SellerReviewsScreen(storeId: notif.storeId),
@@ -656,7 +658,9 @@ class _NotificationRowContent extends StatelessWidget {
                       ReviewNoticeBlock(
                         rating: notification.reviewRating ?? 0,
                         snippet: notification.reviewSnippet ?? '',
-                        label: 'New review',
+                        label: notification.reviewKind == 'review_comment'
+                            ? 'Discussion'
+                            : 'New review',
                       )
                     else if (notification.isBatched &&
                         notification.previews.isNotEmpty)
@@ -739,6 +743,8 @@ class _NotificationRowContent extends StatelessWidget {
         return Icons.chat_bubble_outline;
       case 'new_review':
         return Icons.star_outline;
+      case 'review_comment':
+        return Icons.forum_outlined;
       case kModelRequestSellerType:
         // The same icon the product action sheet's request row uses, so the
         // notice and the row it points at read as one thing.
@@ -763,6 +769,8 @@ class _NotificationRowContent extends StatelessWidget {
       case 'new_review':
         // Same green as the customer feed's review colour, so review news
         // reads the same on either side.
+        return const Color(0xFF6B8F47);
+      case 'review_comment':
         return const Color(0xFF6B8F47);
       case kModelRequestSellerType:
         // Deep purple — "3D modelling news", the same reading as the customer

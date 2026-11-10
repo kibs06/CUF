@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../constants/app_constants.dart';
+import 'review_thread_section.dart';
 import 'review_vote_buttons.dart';
 import 'sole_star_rating.dart';
 
@@ -22,12 +23,20 @@ class SoleReviewCard extends StatelessWidget {
   /// Show the helpful / not-helpful vote row.
   final bool showVotes;
 
+  /// Show the discussion thread (author + customer replies). Hidden for
+  /// demo reviews, whose ids exist only on-device.
+
+  /// Show the discussion thread (author + customer replies). Hidden for
+  /// demo reviews, whose ids exist only on-device.
+  final bool showDiscussion;
+
   const SoleReviewCard({
     super.key,
     required this.review,
     this.showSellerReply = true,
     this.showVerifiedBadge = true,
     this.showVotes = true,
+    this.showDiscussion = true,
   });
 
   @override
@@ -328,6 +337,14 @@ class SoleReviewCard extends StatelessWidget {
               ),
             ),
           ],
+
+          // ── Discussion thread (under the seller reply) ─────
+          // Real reviews only: demo ids never reach the DB, so there is
+          // no thread to load and no row a comment could reference.
+          if (showDiscussion &&
+              !isDemo &&
+              (review['id']?.toString() ?? '').isNotEmpty)
+            ReviewThreadSection(reviewId: review['id'].toString()),
         ],
       ),
     );

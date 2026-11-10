@@ -758,7 +758,9 @@ class _NotificationCardContent extends StatelessWidget {
                         snippet: notification.reviewSnippet ?? '',
                         label: notification.reviewKind == 'reply'
                             ? 'Seller reply'
-                            : 'Your review',
+                            : notification.reviewKind == 'comment'
+                                ? 'Discussion'
+                                : 'Your review',
                       )
                     else if (notification.isBatched &&
                         notification.previews.isNotEmpty)
