@@ -109,8 +109,14 @@ class SoleProductCard extends StatelessWidget {
             (summary['avg_rating'] as num?)?.toDouble() ?? 0.0;
       }
     }
-    if (unitsSold <= 0 && kDemoReviewsEnabled && pid.isNotEmpty) {
-      unitsSold = buildDemoSoldCount(pid);
+    // Demo sold can never undercut the (possibly demo) reviews: a real
+    // `units_sold` of 1 next to 20 reviews is impossible (every reviewer
+    // bought), so the demo count — always above the review count — wins
+    // whenever the real number is lower. Real history above the demo
+    // number still wins untouched.
+    if (kDemoReviewsEnabled && pid.isNotEmpty) {
+      final demoSold = buildDemoSoldCount(pid, reviewCount: reviewCount);
+      if (unitsSold < demoSold) unitsSold = demoSold;
     }
     final DateTime? saleEnd = DateTime.tryParse(
       product['sale_ends_at']?.toString() ?? '',

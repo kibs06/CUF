@@ -189,47 +189,33 @@ List<Map<String, dynamic>> buildDemoReviewsForProduct(String productId) {
   final now = DateTime.now();
   final reviews = <Map<String, dynamic>>[];
 
-  // Per star-band cursors so good/neutral/bad picks all rotate with seed.
-  var goodCursor = seed;
-  var midCursor = seed ~/ 3;
-  var badCursor = seed ~/ 7;
-  MapEntry<int, int>? nextOf(int band) {
-    // band: 0 = good (4–5★), 1 = neutral (3★), 2 = bad (1–2★)
+  // Per-rating cursors so each star value rotates through its own pool
+  // entries with the seed. Exact-match only: the card at position [i]
+  // always carries shape[i] as its rating, so the breakdown bars and the
+  // average are identical on every product (14×5★, 3×4★, 1×3★, 1×2★,
+  // 1×1★ → 4.40 avg) and only the comments/names rotate.
+  final cursors = <int, int>{
+    5: seed,
+    4: seed ~/ 2,
+    3: seed ~/ 3,
+    2: seed ~/ 7,
+    1: seed ~/ 11,
+  };
+  int nextOf(int target) {
+    final stride = target == 5 ? 1 : (target == 4 ? 3 : 7);
     for (var step = 0; step < pool.length; step++) {
-      final idx = switch (band) {
-        0 => (goodCursor + step) % pool.length,
-        1 => (midCursor + step * 5) % pool.length,
-        _ => (badCursor + step * 7) % pool.length,
-      };
-      final rating = pool[idx].$1;
-      final ok = switch (band) {
-        0 => rating >= 4,
-        1 => rating == 3,
-        _ => rating <= 2,
-      };
-      if (ok) {
-        switch (band) {
-          case 0:
-            goodCursor = idx + 1;
-            break;
-          case 1:
-            midCursor = idx + 1;
-            break;
-          default:
-            badCursor = idx + 1;
-        }
-        return MapEntry(idx, rating);
+      final idx = (cursors[target]! + step * stride) % pool.length;
+      if (pool[idx].$1 == target) {
+        cursors[target] = idx + 1;
+        return idx;
       }
     }
-    return null; // unreachable: every band has entries in the pool
+    return (seed + target) % pool.length; // unreachable: every value exists
   }
 
   for (var i = 0; i < count; i++) {
     final target = shape[i];
-    final band = target >= 4 ? 0 : (target == 3 ? 1 : 2);
-    var pick = nextOf(band);
-    pick ??= MapEntry((seed + i) % pool.length, target);
-    final entry = pool[pick.key];
+    final entry = pool[nextOf(target)];
     final created = now.subtract(Duration(days: (seed % 20) + i * 4 + 1));
     reviews.add({
       // Stable fake id (never in the DB) + explicit demo flag.
@@ -256,14 +242,15 @@ List<Map<String, dynamic>> buildDemoReviewsForProduct(String productId) {
   return reviews;
 }
 
-/// Deterministic demo sold count for a product with no real sales yet.
-/// Seeded by [productId] so sibling cards show different-but-stable
-/// counts (30…900); higher-rated products skew higher, like a real shop.
-int buildDemoSoldCount(String productId) {
+/// Deterministic demo sold count, derived from the demo review count so
+/// the two can never contradict each other (sold is always comfortably
+/// above reviews — not everyone leaves a review — and the SAME function
+/// feeds the home card and the detail page, so both surfaces agree).
+/// Seeded by [productId] for stable per-product variety (≈4–8× reviews).
+int buildDemoSoldCount(String productId, {int reviewCount = 20}) {
   final seed = productId.hashCode.abs();
-  final base = 30 + (seed % 600);
-  final bump = (seed % 5 == 0) ? 300 : 0;
-  return base + bump;
+  final mult = 4 + (seed % 5); // 4…8
+  return reviewCount * mult + (seed % 37); // 20 reviews → ~80…197
 }
 
 /// Synthesizes the rating-summary shape `ReviewProvider` expects

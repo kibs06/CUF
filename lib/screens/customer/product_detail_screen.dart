@@ -27,6 +27,8 @@ import '../../utils/variant_swatch_color.dart';
 import '../../widgets/sole_badge.dart';
 import '../../widgets/sole_review_card.dart';
 import '../../widgets/sole_star_rating.dart';
+import '../../data/demo_reviews.dart';
+import '../../utils/compact_number.dart';
 import 'checkout_screen.dart';
 import '../shared/shoe_preview_screen.dart';
 import 'tag_products_screen.dart';
@@ -2315,6 +2317,22 @@ class _ProductDetailViewState extends State<_ProductDetailView>
                               reviewCount = demoSummary.reviewCount;
                             }
                           }
+                          // ── DEMO ONLY ───────────────────────────────
+                          // Same rule as the home card: demo sold always
+                          // clears the (possibly demo) review count, so a
+                          // real `units_sold` of 1 can never sit next to 20
+                          // reviews. Remove with demo_reviews.dart.
+                          if (kDemoReviewsEnabled) {
+                            final pid =
+                                widget.product['id']?.toString() ?? '';
+                            if (pid.isNotEmpty && reviewCount > 0) {
+                              final demoSold = buildDemoSoldCount(
+                                pid,
+                                reviewCount: reviewCount,
+                              );
+                              if (sold < demoSold) sold = demoSold;
+                            }
+                          }
                           if (sold <= 0 && reviewCount <= 0) return const SizedBox.shrink();
                           return Padding(
                             padding: const EdgeInsets.only(top: 6),
@@ -2322,7 +2340,7 @@ class _ProductDetailViewState extends State<_ProductDetailView>
                               children: [
                                 if (sold > 0) ...[
                                   Text(
-                                    '$sold sold',
+                                    '${compactNumber(sold)} sold',
                                     style: AppConstants.bodyStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.bold,
