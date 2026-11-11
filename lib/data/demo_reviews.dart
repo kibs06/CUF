@@ -256,6 +256,16 @@ List<Map<String, dynamic>> buildDemoReviewsForProduct(String productId) {
   return reviews;
 }
 
+/// Deterministic demo sold count for a product with no real sales yet.
+/// Seeded by [productId] so sibling cards show different-but-stable
+/// counts (30…900); higher-rated products skew higher, like a real shop.
+int buildDemoSoldCount(String productId) {
+  final seed = productId.hashCode.abs();
+  final base = 30 + (seed % 600);
+  final bump = (seed % 5 == 0) ? 300 : 0;
+  return base + bump;
+}
+
 /// Synthesizes the rating-summary shape `ReviewProvider` expects
 /// (`avg_rating`, `review_count`, `breakdown`) from demo reviews so the
 /// summary bar, breakdown bars, and price-row stars match the mock list.

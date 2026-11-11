@@ -93,8 +93,13 @@ class SoleProductCard extends StatelessWidget {
     int reviewCount = (product['review_count'] as num?)?.toInt() ?? 0;
     double avgRating =
         (product['avg_rating'] as num?)?.toDouble() ?? 0.0;
+    // Demo sold count: real `units_sold` wins when > 0, otherwise borrow a
+    // deterministic per-product number so the row still draws social proof
+    // (Shopee/Lazada style: stars left, "N sold" right). Kill switch is
+    // the same `kDemoReviewsEnabled` flag as the demo reviews.
+    int unitsSold = (product['units_sold'] as num?)?.toInt() ?? 0;
+    final String pid = product['id']?.toString() ?? '';
     if (reviewCount <= 0 && kDemoReviewsEnabled) {
-      final pid = product['id']?.toString() ?? '';
       if (pid.isNotEmpty) {
         final summary = buildDemoRatingSummary(
           buildDemoReviewsForProduct(pid),
@@ -103,6 +108,9 @@ class SoleProductCard extends StatelessWidget {
         avgRating =
             (summary['avg_rating'] as num?)?.toDouble() ?? 0.0;
       }
+    }
+    if (unitsSold <= 0 && kDemoReviewsEnabled && pid.isNotEmpty) {
+      unitsSold = buildDemoSoldCount(pid);
     }
     final DateTime? saleEnd = DateTime.tryParse(
       product['sale_ends_at']?.toString() ?? '',
@@ -205,8 +213,7 @@ class SoleProductCard extends StatelessWidget {
                       // average (e.g. 4.5) so customers see the precise
                       // score; the compact sold count (1k, 2.5m) sits on
                       // the right. Either can appear alone.
-                      if (reviewCount > 0 ||
-                          (product['units_sold'] as int? ?? 0) > 0) ...[
+                      if (reviewCount > 0 || unitsSold > 0) ...[
                         const SizedBox(height: 2),
                         // Also a Wrap (see the price row below for the full
                         // reasoning): the stars and the score are one unit that
@@ -235,7 +242,7 @@ class SoleProductCard extends StatelessWidget {
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     SoleStarRating(
-                                      rating: avgRating.round(),
+                                      rating: avgRating,
                                       size: 13,
                                     ),
                                     const SizedBox(width: 4),
@@ -250,9 +257,9 @@ class SoleProductCard extends StatelessWidget {
                                   ],
                                 ),
                               ),
-                            if ((product['units_sold'] as int? ?? 0) > 0)
+                            if (unitsSold > 0)
                               Text(
-                                '${compactNumber(product['units_sold'] as int)} sold',
+                                '${compactNumber(unitsSold)} sold',
                                 style: AppConstants.bodyStyle(
                                   fontSize: 10,
                                   color: AppConstants.secondary.withValues(
