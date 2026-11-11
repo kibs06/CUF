@@ -5,8 +5,12 @@ import 'package:flutter/material.dart';
 /// Supports both read-only display ([interactive] = false) and
 /// tap-to-rate mode ([interactive] = true).
 class SoleStarRating extends StatelessWidget {
-  /// Current rating (1–5). In interactive mode, this is the selected value.
-  final int rating;
+  /// Current rating (0–5, fractional allowed, e.g. 4.3). Read-only mode
+  /// clips the active color to the exact fraction, so halves and
+  /// three-quarters render as partially filled stars. In interactive mode
+  /// this is the selected whole-star value and taps still snap to ints.
+  /// `num` so existing `int` call sites keep compiling.
+  final num rating;
 
   /// Size of each star icon.
   final double size;
@@ -39,21 +43,51 @@ class SoleStarRating extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Interactive mode snaps to whole stars; display mode keeps fractions.
+    final displayRating =
+        interactive ? rating.round().toDouble() : rating.toDouble();
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: List.generate(5, (index) {
         final starNumber = index + 1;
-        final isFilled = starNumber <= rating;
+        // 0..1 of this star that should glow (supports halves, 3/4, …).
+        final fill = (displayRating - index).clamp(0.0, 1.0);
+        final isFilled = fill >= 1.0;
 
-        Widget star = Icon(
-          isFilled ? Icons.star_rounded : Icons.star_outline_rounded,
-          size: size,
-          color: isFilled ? activeColor : inactiveColor,
-        );
+        Widget star = fill <= 0.0 || isFilled
+            ? Icon(
+                isFilled ? Icons.star_rounded : Icons.star_outline_rounded,
+                size: size,
+                color: isFilled ? activeColor : inactiveColor,
+              )
+            : SizedBox(
+                width: size,
+                height: size,
+                child: Stack(
+                  children: [
+                    Icon(
+                      Icons.star_outline_rounded,
+                      size: size,
+                      color: inactiveColor,
+                    ),
+                    ClipRect(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        widthFactor: fill,
+                        child: Icon(
+                          Icons.star_rounded,
+                          size: size,
+                          color: activeColor,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
 
         if (interactive) {
           star = GestureDetector(
-            onTap: () => onRatingChanged?.call(starNumber),
+            onTap: () => onRatingChanged?.call(starNumber.toInt()),
             child: Padding(
               padding: EdgeInsets.symmetric(horizontal: spacing / 2),
               child: AnimatedScale(

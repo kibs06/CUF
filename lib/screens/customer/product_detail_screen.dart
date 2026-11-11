@@ -182,10 +182,23 @@ class _ReviewsSection extends StatefulWidget {
 }
 
 class _ReviewsSectionState extends State<_ReviewsSection> {
+  /// Null = all stars; otherwise only that star band is listed.
+  /// Resets when a different product's reviews load.
+  int? _starFilter;
+
+  /// Collapsed list shows the first [_previewCount] reviews (or all of the
+  /// filtered set when a filter leaves fewer); "More reviews" expands.
+  bool _expanded = false;
+  static const int _previewCount = 3;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      setState(() {
+        _starFilter = null;
+        _expanded = false;
+      });
       context.read<ReviewProvider>().loadReviews(widget.productId);
     });
   }
@@ -257,34 +270,168 @@ class _ReviewsSectionState extends State<_ReviewsSection> {
               ),
             ),
           )
-        else if (provider.reviews.isEmpty)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 24),
-            decoration: BoxDecoration(
-              color: AppConstants.borderGray.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
+        else ...[
+          _buildFilterChips(provider),
+          const SizedBox(height: 12),
+          if (_filteredReviews(provider).isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              decoration: BoxDecoration(
+                color: AppConstants.borderGray.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.rate_review_outlined,
+                    size: 36,
+                    color: AppConstants.borderGray,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _starFilter == null
+                        ? 'No reviews yet — be the first!'
+                        : 'No $_starFilter-star reviews yet.',
+                    style: AppConstants.bodyStyle(
+                      fontSize: 13,
+                      color: AppConstants.secondary.withValues(alpha: 0.5),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else ...[
+            ..._visibleReviews(provider).map(
+              (review) => SoleReviewCard(
+                // Key by review id so each card keeps its own demo vote state
+                // when the list expands, collapses, or re-filters.
+                key: ValueKey(review['id']?.toString() ?? review.hashCode),
+                review: review,
+              ),
             ),
-            child: Column(
-              children: [
-                Icon(
-                  Icons.rate_review_outlined,
-                  size: 36,
-                  color: AppConstants.borderGray,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'No reviews yet — be the first!',
-                  style: AppConstants.bodyStyle(
-                    fontSize: 13,
-                    color: AppConstants.secondary.withValues(alpha: 0.5),
+            if (_hiddenCount(provider) > 0) ...[
+              const SizedBox(height: 4),
+              Center(
+                child: TextButton.icon(
+                  onPressed: () => setState(() => _expanded = true),
+                  icon: const Icon(Icons.expand_more_rounded, size: 18),
+                  label: Text(
+                    'More reviews (${_hiddenCount(provider)} more)',
+                    style: AppConstants.bodyStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: AppConstants.primary,
+                    ),
                   ),
                 ),
-              ],
+              ),
+            ],
+            if (_expanded &&
+                _starFilter == null &&
+                _hiddenCount(provider) == 0)
+              Center(
+                child: TextButton.icon(
+                  onPressed: () => setState(() => _expanded = false),
+                  icon: const Icon(Icons.expand_less_rounded, size: 18),
+                  label: Text(
+                    'Show less',
+                    style: AppConstants.bodyStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: AppConstants.primary,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ],
+      ],
+    );
+  }
+
+  /// Reviews after the star filter (null = all), newest handled by the
+  /// provider's own ordering.
+  List<Map<String, dynamic>> _filteredReviews(ReviewProvider provider) {
+    if (_starFilter == null) return provider.reviews;
+    return provider.reviews
+        .where((r) => ((r['rating'] as num?)?.toInt() ?? 0) == _starFilter)
+        .toList();
+  }
+
+  /// What the list actually renders: the first [_previewCount] unless
+  /// expanded or the filtered set is that short already.
+  List<Map<String, dynamic>> _visibleReviews(ReviewProvider provider) {
+    final filtered = _filteredReviews(provider);
+    if (_expanded || filtered.length <= _previewCount) return filtered;
+    return filtered.sublist(0, _previewCount);
+  }
+
+  int _hiddenCount(ReviewProvider provider) {
+    if (_expanded) return 0;
+    return _filteredReviews(provider).length - _visibleReviews(provider).length;
+  }
+
+  /// Shopee/Lazada-style rating filter: All + 5★…1★ chips with per-band
+  /// counts drawn from the provider breakdown. Tapping the active chip
+  /// clears the filter. When the pool has no real reviews the breakdown
+  /// still covers demo reviews, so the counts stay truthful.
+  Widget _buildFilterChips(ReviewProvider provider) {
+    final breakdown = provider.breakdown;
+    final total = provider.reviewCount;
+
+    Widget chip({required String label, required bool selected, required VoidCallback onTap}) {
+      return GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          decoration: BoxDecoration(
+            color: selected
+                ? AppConstants.primary
+                : AppConstants.surfaceLight,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: selected
+                  ? AppConstants.primary
+                  : AppConstants.borderGray.withValues(alpha: 0.5),
+              width: 1,
             ),
-          )
-        else
-          ...provider.reviews.map((review) => SoleReviewCard(review: review)),
+          ),
+          child: Text(
+            label,
+            style: AppConstants.bodyStyle(
+              fontSize: 12,
+              fontWeight: selected ? FontWeight.bold : FontWeight.w500,
+              color: selected
+                  ? Colors.white
+                  : AppConstants.secondary.withValues(alpha: 0.7),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        chip(
+          label: 'All ($total)',
+          selected: _starFilter == null,
+          onTap: () => setState(() {
+            _starFilter = null;
+            _expanded = false;
+          }),
+        ),
+        for (var star = 5; star >= 1; star--)
+          chip(
+            label: '$star ★ (${breakdown[star] ?? 0})',
+            selected: _starFilter == star,
+            onTap: () => setState(() {
+              _starFilter = _starFilter == star ? null : star;
+              _expanded = false;
+            }),
+          ),
       ],
     );
   }
@@ -321,7 +468,7 @@ class _ReviewsSectionState extends State<_ReviewsSection> {
               ),
               const SizedBox(height: 2),
               SoleStarRating(
-                rating: provider.avgRating.round(),
+                rating: provider.avgRating,
                 size: 16,
               ),
               const SizedBox(height: 2),
