@@ -23,11 +23,7 @@ class SoleReviewCard extends StatelessWidget {
   /// Show the helpful / not-helpful vote row.
   final bool showVotes;
 
-  /// Show the discussion thread (author + customer replies). Hidden for
-  /// demo reviews, whose ids exist only on-device.
-
-  /// Show the discussion thread (author + customer replies). Hidden for
-  /// demo reviews, whose ids exist only on-device.
+  /// Show the discussion thread (author + customer replies).
   final bool showDiscussion;
 
   const SoleReviewCard({
@@ -41,7 +37,6 @@ class SoleReviewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDemo = review['is_demo'] == true;
     final reviewerName = review['reviewer_name']?.toString() ?? 'Customer';
     final reviewerAvatar = review['reviewer_avatar']?.toString();
     final rating = (review['rating'] as num?)?.toInt() ?? 0;
@@ -53,10 +48,6 @@ class SoleReviewCard extends StatelessWidget {
     final sellerReply = review['seller_reply']?.toString();
     final sellerReplyAt = review['seller_reply_at']?.toString();
     final isPinned = review['is_pinned'] == true;
-    // DEMO ONLY: mock reviews carry `is_demo: true` (see
-    // lib/data/demo_reviews.dart). They get a visible Demo pill and their
-    // vote row is suppressed — fake ids exist only on-device, never in
-    // the DB, so voting on them must stay impossible.
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -139,29 +130,6 @@ class SoleReviewCard extends StatelessWidget {
                                   ),
                                 ),
                               ],
-                            ),
-                          ),
-                        ],
-                        // DEMO ONLY pill — marks mock reviews so they are
-                        // never mistaken for real feedback. Remove with
-                        // lib/data/demo_reviews.dart before real deployment.
-                        if (isDemo) ...[
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF7E57C2)
-                                  .withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              'Demo',
-                              style: AppConstants.bodyStyle(
-                                fontSize: 9,
-                                fontWeight: FontWeight.bold,
-                                color: const Color(0xFF7E57C2),
-                              ),
                             ),
                           ),
                         ],
@@ -270,17 +238,10 @@ class SoleReviewCard extends StatelessWidget {
           ],
 
           // ── Helpfulness votes ──────────────────────────────
-          // Demo reviews never reach the DB (a vote insert would violate
-          // the review_votes FK), so instead of the DB-backed buttons
-          // they get a local-only row: deterministic seeded counts, taps
-          // flip the vote in-memory and never leave the device.
           if (showVotes &&
               (review['id']?.toString() ?? '').isNotEmpty) ...[
             const SizedBox(height: 10),
-            if (isDemo)
-              _DemoVoteRow(reviewId: review['id'].toString())
-            else
-              ReviewVoteButtons(reviewId: review['id'].toString()),
+            ReviewVoteButtons(reviewId: review['id'].toString()),
           ],
 
           // ── Seller reply ───────────────────────────────────
@@ -343,10 +304,7 @@ class SoleReviewCard extends StatelessWidget {
           ],
 
           // ── Discussion thread (under the seller reply) ─────
-          // Real reviews only: demo ids never reach the DB, so there is
-          // no thread to load and no row a comment could reference.
           if (showDiscussion &&
-              !isDemo &&
               (review['id']?.toString() ?? '').isNotEmpty)
             ReviewThreadSection(reviewId: review['id'].toString()),
         ],
@@ -389,147 +347,5 @@ class SoleReviewCard extends StatelessWidget {
     } catch (_) {
       return '';
     }
-  }
-}
-
-/// Local-only thumbs up/down for demo reviews: seeded counts derived from
-/// the review id (stable across rebuilds), one active vote at a time,
-/// fully in-memory — nothing touches the database.
-class _DemoVoteRow extends StatefulWidget {
-  const _DemoVoteRow({required this.reviewId});
-
-  final String reviewId;
-
-  @override
-  State<_DemoVoteRow> createState() => _DemoVoteRowState();
-}
-
-class _DemoVoteRowState extends State<_DemoVoteRow> {
-  late int _helpful;
-  late int _notHelpful;
-  bool? _myVote;
-
-  @override
-  void initState() {
-    super.initState();
-    final seed = widget.reviewId.hashCode.abs();
-    // Busier-looking reviews read as more "real" than flat zeros;
-    // good reviews skew positive, bad ones skew negative.
-    _helpful = 3 + (seed % 17);
-    _notHelpful = seed % 4;
-  }
-
-  void _tap(bool value) {
-    setState(() {
-      if (_myVote == value) {
-        // Tapping the active vote removes it.
-        _myVote = null;
-        if (value) {
-          _helpful--;
-        } else {
-          _notHelpful--;
-        }
-      } else {
-        if (_myVote == true) _helpful--;
-        if (_myVote == false) _notHelpful--;
-        _myVote = value;
-        if (value) {
-          _helpful++;
-        } else {
-          _notHelpful++;
-        }
-      }
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.end,
-      children: [
-        Text(
-          'Was this helpful?',
-          style: AppConstants.bodyStyle(
-            fontSize: 11,
-            color: AppConstants.secondary.withValues(alpha: 0.5),
-          ),
-        ),
-        const SizedBox(width: 2),
-        _DemoVoteButton(
-          selected: _myVote == true,
-          count: _helpful,
-          outlineIcon: Icons.thumb_up_outlined,
-          filledIcon: Icons.thumb_up,
-          semanticLabel: 'Mark review helpful',
-          onTap: () => _tap(true),
-        ),
-        _DemoVoteButton(
-          selected: _myVote == false,
-          count: _notHelpful,
-          outlineIcon: Icons.thumb_down_outlined,
-          filledIcon: Icons.thumb_down,
-          semanticLabel: 'Mark review not helpful',
-          onTap: () => _tap(false),
-        ),
-      ],
-    );
-  }
-}
-
-/// Borderless vote button matching [ReviewVoteButtons] styling, minus the
-/// spring animation and DB round-trip (demo-only, local state).
-class _DemoVoteButton extends StatelessWidget {
-  const _DemoVoteButton({
-    required this.selected,
-    required this.count,
-    required this.outlineIcon,
-    required this.filledIcon,
-    required this.semanticLabel,
-    required this.onTap,
-  });
-
-  final bool selected;
-  final int count;
-  final IconData outlineIcon;
-  final IconData filledIcon;
-  final String semanticLabel;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: semanticLabel,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                selected ? filledIcon : outlineIcon,
-                size: 16,
-                color: selected
-                    ? AppConstants.primary
-                    : AppConstants.secondary.withValues(alpha: 0.45),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                '$count',
-                style: AppConstants.bodyStyle(
-                  fontSize: 11,
-                  fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-                  color: selected
-                      ? AppConstants.primary
-                      : AppConstants.secondary.withValues(alpha: 0.5),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 }

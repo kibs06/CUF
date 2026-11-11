@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import '../data/demo_reviews.dart';
 import '../services/review_service.dart';
 
 /// Provider for product reviews state.
@@ -130,16 +129,6 @@ class ReviewProvider extends ChangeNotifier {
       _canReview = results[2] as bool;
       _ratingSummary = results[3] as Map<String, dynamic>;
 
-      // ── DEMO ONLY ───────────────────────────────────────────
-      // Demo fallback: products with no real reviews show flagged mock
-      // reviews + a matching mock summary so the demo has ratings to
-      // look at. Kill-switch is `kDemoReviewsEnabled` in
-      // lib/data/demo_reviews.dart — set false / delete before the real
-      // deployment. Never fires when real reviews exist.
-      if (kDemoReviewsEnabled && _reviews.isEmpty) {
-        _reviews = buildDemoReviewsForProduct(productId);
-        _ratingSummary = buildDemoRatingSummary(_reviews);
-      }
     } catch (e) {
       _errorMessage = 'Failed to load reviews: $e';
     }

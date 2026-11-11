@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../constants/app_constants.dart';
-import '../data/demo_reviews.dart';
 import '../utils/sale_price.dart';
 import '../utils/compact_number.dart';
 import '../utils/product_images.dart';
@@ -84,40 +83,13 @@ class SoleProductCard extends StatelessWidget {
     final bool onSale = isOnSale(product, now: now);
     final double displayPrice = effectivePrice(product, now: now);
     final int? salePct = salePercent(product, now: now);
-    // Star-row inputs. Products with no real reviews yet borrow the same
-    // deterministic demo summary the review sheet shows (see
-    // `ReviewProvider`'s demo fallback), so a demo card draws its stars
-    // exactly like a reviewed one (e.g. Luna Loafers) instead of hiding
-    // the row. Real aggregates always win when present; the kill switch
-    // in `demo_reviews.dart` restores the old hide-when-empty behaviour.
-    int reviewCount = (product['review_count'] as num?)?.toInt() ?? 0;
-    double avgRating =
+    // Star-row inputs: live aggregates only. Products with no reviews and
+    // no sales hide the row entirely (see below) instead of borrowing
+    // mock numbers.
+    final int reviewCount = (product['review_count'] as num?)?.toInt() ?? 0;
+    final double avgRating =
         (product['avg_rating'] as num?)?.toDouble() ?? 0.0;
-    // Demo sold count: real `units_sold` wins when > 0, otherwise borrow a
-    // deterministic per-product number so the row still draws social proof
-    // (Shopee/Lazada style: stars left, "N sold" right). Kill switch is
-    // the same `kDemoReviewsEnabled` flag as the demo reviews.
-    int unitsSold = (product['units_sold'] as num?)?.toInt() ?? 0;
-    final String pid = product['id']?.toString() ?? '';
-    if (reviewCount <= 0 && kDemoReviewsEnabled) {
-      if (pid.isNotEmpty) {
-        final summary = buildDemoRatingSummary(
-          buildDemoReviewsForProduct(pid),
-        );
-        reviewCount = summary['review_count'] as int? ?? 0;
-        avgRating =
-            (summary['avg_rating'] as num?)?.toDouble() ?? 0.0;
-      }
-    }
-    // Demo sold can never undercut the (possibly demo) reviews: a real
-    // `units_sold` of 1 next to 20 reviews is impossible (every reviewer
-    // bought), so the demo count — always above the review count — wins
-    // whenever the real number is lower. Real history above the demo
-    // number still wins untouched.
-    if (kDemoReviewsEnabled && pid.isNotEmpty) {
-      final demoSold = buildDemoSoldCount(pid, reviewCount: reviewCount);
-      if (unitsSold < demoSold) unitsSold = demoSold;
-    }
+    final int unitsSold = (product['units_sold'] as num?)?.toInt() ?? 0;
     final DateTime? saleEnd = DateTime.tryParse(
       product['sale_ends_at']?.toString() ?? '',
     );
