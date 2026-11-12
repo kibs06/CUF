@@ -32,7 +32,6 @@ import '../../widgets/seller/seller_revenue_columns_chart.dart';
 import '../../widgets/seller/seller_revenue_doughnut.dart';
 import 'manage_orders_screen.dart';
 import 'manage_products_screen.dart';
-import 'custom_orders_screen.dart';
 import 'order_detail_screen.dart';
 import 'seller_notification_center_screen.dart';
 import 'seller_inbox_screen.dart';
@@ -59,7 +58,6 @@ class _DashboardData {
   final Map<String, int> ordersByStatus;
   final Map<String, dynamic>? store;
   final int lowStockCount;
-  final int pendingCustoms;
   final int pendingReservations;
   /// Live FREE pickup holds (ANQUI item 14) — stock already off the shelf,
   /// waiting for the customer to walk in. A different queue from the
@@ -87,7 +85,6 @@ class _DashboardData {
     required this.ordersByStatus,
     this.store,
     required this.lowStockCount,
-    required this.pendingCustoms,
     required this.pendingReservations,
     required this.activePickups,
     this.pickupLapsing = 0,
@@ -299,12 +296,6 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     final lowStockItems = _getLowStockItems(products);
     final lowStockCount = lowStockItems.length;
 
-    final pendingCustoms = context
-        .read<OrderProvider>()
-        .customizations
-        .where((c) => c['status'] == 'pending')
-        .length;
-
     // Ensure lowStockItems and staleOrders are computed after products/orders are loaded
 
     final staleOrders = orders
@@ -373,7 +364,6 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
       weeklyTrend: results[8] as SalesTrendResult?,
       monthlyTrend: results[9] as SalesTrendResult?,
       lowStockCount: lowStockCount,
-      pendingCustoms: pendingCustoms,
       pendingReservations: pendingReservations,
       activePickups: activePickups,
       pickupLapsing: pickupLapsing,
@@ -396,7 +386,6 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     recentOrders: [],
     ordersByStatus: {},
     lowStockCount: 0,
-    pendingCustoms: 0,
     pendingReservations: 0,
     activePickups: 0,
     lowStockItems: [],
@@ -632,7 +621,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
           // Today's Sales hero card placeholder (full width, taller)
           ShimmerBox(width: double.infinity, height: 160, borderRadius: 20),
           const SizedBox(height: 12),
-          // Low Stock & Custom Orders — small boxes below
+          // Low Stock & Bulk Reservations — small boxes below
           Row(
             children: [
               Expanded(child: ShimmerBox(width: double.infinity, height: 112, borderRadius: 20)),
@@ -685,9 +674,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
             const SizedBox(height: 16),
 
             // Block 2 — Needs Attention Alert Strip
-            if (data.lowStockItems.isNotEmpty ||
-                data.staleOrders.isNotEmpty ||
-                data.pendingCustoms > 0)
+            if (data.lowStockItems.isNotEmpty || data.staleOrders.isNotEmpty)
               _buildAlertStrip(data),
 
             // Block 3 — Order Status Summary
@@ -909,7 +896,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        // Low Stock / Custom Orders / Bulk Reservations — three equal cards
+        // Low Stock / Bulk Reservations — two equal cards
         // across. IntrinsicHeight + stretch keeps all three the same height
         // even when a label wraps to two lines at this width.
         IntrinsicHeight(
@@ -929,21 +916,6 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                       MaterialPageRoute(
                         builder: (_) => const ManageProductsScreen(
                             initialFilter: 'Low Stock'),
-                      ),
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(width: 10),
-              // Custom Orders
-              Expanded(
-                child: SellerMetricCard(
-                  label: 'CUSTOM ORDERS',
-                  value: '${data.pendingCustoms}',
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const CustomOrdersScreen(),
                       ),
                     );
                   },
@@ -1015,18 +987,6 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                     );
                   },
                 ),
-              ),
-            if (data.pendingCustoms > 0)
-              SellerAlertChip(
-                icon: Icons.design_services,
-                text: '${data.pendingCustoms} custom requests',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const CustomOrdersScreen(),
-                    ),
-                  );
-                },
               ),
             // FREE pickup holds (ANQUI item 14). Their stock is already off
             // the shelf, so they are a queue of their own rather than part of

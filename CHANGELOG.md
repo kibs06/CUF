@@ -1,5 +1,10 @@
 # SoleVision — Changelog
 
+## Unreleased — custom orders leave the seller dashboard
+
+- **The dashboard's snapshot row gave CUSTOM ORDERS equal billing with LOW STOCK and BULK RESERVATIONS, and the alert strip echoed it with a "custom requests" chip.** The dashboard no longer tracks that queue: the card, the chip and the `pendingCustoms` the briefing carried for them are gone, leaving LOW STOCK and BULK RESERVATIONS. Sellers still reach their custom-order requests from the notification center and the `seller_custom_order` deep link — `CustomOrdersScreen` itself is untouched.
+- Tests: `flutter analyze` clean on the dashboard file; the contract test and the metric-card suite green (16).
+
 ## Unreleased — the 3D-model request stops asking the seller to measure the pair
 
 - **The request form asked the seller to measure the pair with a ruler — four boxes in millimetres or centimetres, a measuring guide, two size pickers — and sellers do not know those numbers.** Worse, the fitting never needed them: it sizes the model to each customer's foot on its own. The ask is now bare — an optional note, a Send button, and the wait said up front: **around 7 business days or more for the 3D model, around 9 business days for the 3D fitting to go live** (`kShoeModelRequestTimelineMessage`, one const read by both the form and the progress sheet so the wait cannot disagree with itself).
