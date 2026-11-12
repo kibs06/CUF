@@ -22,6 +22,32 @@ body {
   border-radius: 6px;
 }
 
+/* 3D shelf card entrance: a short rise-and-settle, staggered per card via
+   inline animation-delay. Purely decorative — reduced-motion gets the final
+   state with no movement. */
+@keyframes shelf-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.shelf-card {
+  opacity: 0;
+  animation: shelf-rise 0.5s cubic-bezier(0.22, 0.9, 0.3, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shelf-card {
+    animation: none;
+    opacity: 1;
+  }
+}
+
 /* Slim sidebar scroll */
 .sole-scroll::-webkit-scrollbar {
   width: 8px;

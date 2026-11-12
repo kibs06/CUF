@@ -9,6 +9,7 @@ import {
   DECLARATION_FIELD,
   declarationMessageFor,
   declaredLengthAgreement,
+  formatSizeNumber,
   modellingPrefill,
   readDeclaration,
   MODELLING_ENDING,
@@ -100,17 +101,30 @@ function Notice({ tone = 'error', title, children }) {
   )
 }
 
-export default function UploadModelModal({ request, onClose, onDone }) {
+// `request` is the queue flow (publish + close the ask). `replaceTarget` is
+// the shelf flow (publish a new live version, no ask involved) — one of the
+// two is always present:
+// `{ productId, storeId, name, version, authoredLengthMm, authoredSizeEu }`.
+export default function UploadModelModal({ request, replaceTarget, onClose, onDone }) {
   const publish = usePublishModelRequest()
+  const isReplace = Boolean(replaceTarget)
+  const productName =
+    replaceTarget?.name ?? request?.products?.name ?? 'this product'
 
   // The seller's own measurement, so it is the right starting point here — the
   // prefill has a different rule on the seller's side, and the reason is spelled
   // out in `modellingPrefill` (this one IS the external figure the mesh scales
-  // to; the seller's form had only the internal last).
-  const prefill = modellingPrefill({
-    externalLengthMm: request?.external_length_mm,
-    measuredSizeEu: request?.measured_size_eu,
-  })
+  // to; the seller's form had only the internal last). The replace flow has no
+  // ask, so it starts from the live model's own declaration instead.
+  const prefill = isReplace
+    ? {
+        externalLengthMm: formatSizeNumber(replaceTarget.authoredLengthMm),
+        authoredSizeEu: formatSizeNumber(replaceTarget.authoredSizeEu),
+      }
+    : modellingPrefill({
+        externalLengthMm: request?.external_length_mm,
+        measuredSizeEu: request?.measured_size_eu,
+      })
 
   const [link, setLink] = useState('')
   const [file, setFile] = useState(null)
@@ -321,12 +335,42 @@ export default function UploadModelModal({ request, onClose, onDone }) {
         : file
 
       const result = await publish.mutateAsync({
-        request,
+        // The replace flow carries no queue row: a minimal carrier with the
+        // two ids the pipeline needs, and no close afterwards.
+        request: request ?? {
+          id: null,
+          product_id: replaceTarget.productId,
+          store_id: replaceTarget.storeId,
+        },
         link,
         file: source,
         declaration,
         note: note.trim() === '' ? null : note.trim(),
+        closeRequest: !isReplace,
       })
+
+      // The replace flow writes its own sentences: there is no ask, so the
+      // request-shaped endings would lie about one. Live (or the same bytes
+      // already live) closes the modal; anything else stays open on the
+      // server's refusal, the link and fields still in front of the admin.
+      if (isReplace) {
+        if (!result.live) {
+          const detail =
+            result.refusal === null || String(result.refusal).trim() === ''
+              ? 'The server did not accept the file, so it stays hidden.'
+              : String(result.refusal).trim()
+          setError(`The model did not go live, so the shelf is unchanged. ${detail}`)
+          return
+        }
+        const doneVersion =
+          result.version ?? (replaceTarget.version ?? 0) + 1
+        reset()
+        onDone({
+          version: doneVersion,
+          reused: result.reused === true,
+        })
+        return
+      }
 
       // Nothing went live: stay open, because the link and the fields are still
       // in front of the admin and the fix is usually one of the two — the app's
@@ -345,9 +389,9 @@ export default function UploadModelModal({ request, onClose, onDone }) {
 
   return (
     <Modal
-      open={Boolean(request)}
+      open={Boolean(request || replaceTarget)}
       onClose={close}
-      title="Upload the model"
+      title={isReplace ? 'Replace the live model' : 'Upload the model'}
       size="xl"
       footer={
         <>
@@ -373,7 +417,7 @@ export default function UploadModelModal({ request, onClose, onDone }) {
             ) : (
               <>
                 <Check size={14} />
-                Publish and close the request
+                {isReplace ? 'Publish new version' : 'Publish and close the request'}
               </>
             )}
           </button>
@@ -382,28 +426,53 @@ export default function UploadModelModal({ request, onClose, onDone }) {
     >
       <p className="mb-4 text-sm text-[#6B5C4E]">
         Publish the finished <span className="font-semibold text-[#3B2314]">.glb</span> for{' '}
-        <strong className="text-[#3B2314]">{request?.products?.name ?? 'this product'}</strong> and
-        close the seller&apos;s request in the same step. The server checks the stored bytes before
-        the model goes live, so a refusal leaves it hidden and the request open.
+        <strong className="text-[#3B2314]">{productName}</strong>
+        {isReplace ? (
+          <>
+            {' '}as a new live version. The server checks the stored bytes before the model goes
+            live, so a refusal leaves the shelf exactly as it is.
+          </>
+        ) : (
+          <>
+            {' '}and close the seller&apos;s request in the same step. The server checks the stored
+            bytes before the model goes live, so a refusal leaves it hidden and the request open.
+          </>
+        )}
       </p>
 
-      {/* The ask, so the admin can see what was measured before answering it. */}
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <span className="inline-flex items-center gap-2 rounded-xl border border-[#F5F0EB] bg-[#FBF8F5] px-3 py-2">
-          <Ruler size={13} className="text-[#8B5A2B]" />
-          <span className="text-[11px] uppercase tracking-wider text-[#6B5C4E]">Seller measured</span>
-          <span className="text-sm font-semibold text-[#3B2314]">
-            {request?.external_length_mm == null
-              ? '—'
-              : `${Number(request.external_length_mm).toFixed(1)} mm outside`}
+      {isReplace ? (
+        /* The version this replaces, so the admin can see what the shelf holds before answering it. */
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center gap-2 rounded-xl border border-[#F5F0EB] bg-[#FBF8F5] px-3 py-2">
+            <Cuboid size={13} className="text-[#8B5A2B]" />
+            <span className="text-[11px] uppercase tracking-wider text-[#6B5C4E]">Currently live</span>
+            <span className="text-sm font-semibold text-[#3B2314]">
+              Version {replaceTarget.version ?? '—'}
+              {replaceTarget.authoredLengthMm != null
+                ? ` · ${Number(replaceTarget.authoredLengthMm).toFixed(1)} mm`
+                : ''}
+            </span>
           </span>
-        </span>
-        {request?.note && (
-          <span className="rounded-xl bg-[#F5F0EB] px-3 py-2 text-xs text-[#6B5C4E]">
-            <strong className="text-[#3B2314]">Their note:</strong> {request.note}
+        </div>
+      ) : (
+        /* The ask, so the admin can see what was measured before answering it. */
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center gap-2 rounded-xl border border-[#F5F0EB] bg-[#FBF8F5] px-3 py-2">
+            <Ruler size={13} className="text-[#8B5A2B]" />
+            <span className="text-[11px] uppercase tracking-wider text-[#6B5C4E]">Seller measured</span>
+            <span className="text-sm font-semibold text-[#3B2314]">
+              {request?.external_length_mm == null
+                ? '—'
+                : `${Number(request.external_length_mm).toFixed(1)} mm outside`}
+            </span>
           </span>
-        )}
-      </div>
+          {request?.note && (
+            <span className="rounded-xl bg-[#F5F0EB] px-3 py-2 text-xs text-[#6B5C4E]">
+              <strong className="text-[#3B2314]">Their note:</strong> {request.note}
+            </span>
+          )}
+        </div>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
@@ -638,6 +707,10 @@ export default function UploadModelModal({ request, onClose, onDone }) {
         </p>
       </div>
 
+      {/* The note rides the fulfil notice to the seller's bell — with no ask
+          there is nobody to tell, so the replace flow omits it rather than
+          silently dropping it. */}
+      {!isReplace && (
       <div className="mt-3">
         <label className={labelClass} htmlFor="model-note">
           Note for the seller (optional)
@@ -652,6 +725,7 @@ export default function UploadModelModal({ request, onClose, onDone }) {
         />
         <p className="mt-1 text-xs text-[#6B5C4E]">{noteReachesSeller()}</p>
       </div>
+      )}
 
       {!overCap && !outgoingOverBudget && overTris && file && !compress.isRunning && (
         <div className="mt-3">
@@ -697,8 +771,9 @@ export default function UploadModelModal({ request, onClose, onDone }) {
 
       {/* ⚠️ The ending this dialog stays open for is the one where an admin is
           most likely to assume the seller was told *something* — a refusal
-          notice, a "try again". Nothing was written, and that is the news. */}
-      {error && (
+          notice, a "try again". Nothing was written, and that is the news.
+          Request-scoped, so the replace flow omits it. */}
+      {error && !isReplace && (
         <div className="mt-2 rounded-xl border border-[#F5F0EB] bg-[#FBF8F5] px-3 py-2 text-[11px] leading-relaxed text-[#6B5C4E]">
           {deliverySentence(MODELLING_ENDING.NOT_LIVE)}
         </div>
@@ -707,8 +782,10 @@ export default function UploadModelModal({ request, onClose, onDone }) {
       <p className="mt-4 flex items-start gap-2 text-[11px] leading-relaxed text-[#6B5C4E]">
         <Cuboid size={13} className="mt-0.5 shrink-0 text-[#8B5A2B]" />
         A green run means the file is buildable, not that it looks right: the toe direction, the
-        de-lit colour and the likeness still need a human eye (guide §5.2). Publishing also tells
-        the seller, in the same transaction. {NOTICE_NOT_READABLE_SENTENCE}
+        de-lit colour and the likeness still need a human eye (guide §5.2).{' '}
+        {isReplace
+          ? 'Publishing swaps the live version the moment the server accepts it.'
+          : <>Publishing also tells the seller, in the same transaction. {NOTICE_NOT_READABLE_SENTENCE}</>}
       </p>
     </Modal>
   )

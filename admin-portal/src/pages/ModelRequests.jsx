@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { AlertTriangle, Check, Cuboid, Hand, Loader2, MoreVertical, Package, Ruler, Upload } from 'lucide-react'
+import { AlertTriangle, Check, Cuboid, Hand, Loader2, MoreVertical, Package, Ruler, Sparkles, Upload } from 'lucide-react'
 import Badge from '../components/ui/Badge.jsx'
 import EmptyState from '../components/ui/EmptyState.jsx'
 import Modal from '../components/ui/Modal.jsx'
@@ -77,6 +77,49 @@ const statusLabel = (status) =>
 const statusVariant = (status) =>
   status === REQUEST_STATUS.CANCELLED ? 'dismissed' : status
 
+// ─── The shelf's own header ────────────────────────────────────────
+//
+// The two numbers this tab exists to answer: how many products customers can
+// spin and fit right now, and how many of them also fit in AR. The helper line
+// keeps the two viewers straight (photo grid vs the model itself), because a
+// new admin otherwise opens the wrong one first.
+function ShelfSummary({ modelled, arCount }) {
+  const total = modelled.length
+  const withAr = Math.min(arCount, total)
+  return (
+    <div className="relative mb-4 overflow-hidden rounded-3xl bg-[#3B2314] px-6 py-5 text-white shadow-[0_18px_40px_-24px_rgba(59,35,20,0.6)]">
+      {/* Warm light leaks — depth without leaving the palette. */}
+      <div aria-hidden="true" className="pointer-events-none absolute -right-16 -top-24 h-56 w-56 rounded-full bg-[#8B5A2B]/40 blur-3xl" />
+      <div aria-hidden="true" className="pointer-events-none absolute -bottom-28 left-1/3 h-48 w-48 rounded-full bg-[#E8A020]/20 blur-3xl" />
+      <div className="relative flex flex-wrap items-center justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#E8CFA8]">
+            Live shelf
+          </p>
+          <p className="mt-1 font-display text-xl font-bold leading-snug">
+            {total} {total === 1 ? 'product' : 'products'} customers can spin and fit
+          </p>
+          <p className="mt-1 max-w-xl text-xs leading-relaxed text-white/70">
+            The same live file the app renders. The photo opens all of the
+            product&apos;s pictures; <strong className="text-white">View 3D</strong> opens
+            the model itself.
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-2xl bg-white/10 px-3.5 py-2 text-xs font-semibold ring-1 ring-white/15 backdrop-blur">
+            <Cuboid size={13} className="text-[#E8CFA8]" />
+            <span className="tabular-nums">{total} live</span>
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-2xl bg-[#4ECDC4]/15 px-3.5 py-2 text-xs font-semibold ring-1 ring-[#4ECDC4]/30 backdrop-blur">
+            <Sparkles size={13} className="text-[#4ECDC4]" />
+            <span className="tabular-nums">{withAr} AR fit</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // A seller measures the OUTSIDE of the pair (the number the renderer scales to),
 // which is why these are labelled "external" here and never called a last length:
 // `products.last_length_mm` is the INTERNAL last the fit verdict compares, and
@@ -115,6 +158,10 @@ export default function ModelRequests() {
   // plus the entry under the cursor.
   const [menu, setMenu] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
+  // Shelf replace without a queue row: `{ entry, storeId }`. The pipeline
+  // needs the store for the object path and the entry only carries the
+  // product, so the store is read once when the menu item is picked.
+  const [replaceTarget, setReplaceTarget] = useState(null)
   const [arTarget, setArTarget] = useState(null)
   const del = useDeleteProductModel()
   // One read for the whole shelf: which products carry a live uploaded
@@ -190,7 +237,7 @@ export default function ModelRequests() {
       a.remove()
       URL.revokeObjectURL(url)
       showToast(
-        'Downloaded — edit it in Blender, then re-upload the fixed file from a request’s “Upload a model”.',
+        'Downloaded — edit it in Blender, then re-upload the fixed file with “Replace live model…” from this card’s menu.',
       )
     } catch (e) {
       showToast(describeError(e, 'That file could not be downloaded.').message, 'error')
@@ -215,6 +262,28 @@ export default function ModelRequests() {
     showToast('Public link copied — it downloads the exact file customers get.')
   }
 
+  // Shelf replace without a queue row: the pipeline needs the store for the
+  // object path and the entry only carries the product — one read fills it,
+  // and a failure is a toast rather than a modal that cannot publish.
+  const startReplace = async (entry) => {
+    if (!MODEL_UPLOAD_ENABLED) {
+      showToast('Model uploads are disabled in this build.', 'error')
+      return
+    }
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('store_id')
+        .eq('id', entry.productId)
+        .single()
+      if (error) throw error
+      if (!data?.store_id) throw new Error('That product has no store to publish under.')
+      setReplaceTarget({ entry, storeId: data.store_id })
+    } catch (e) {
+      showToast(describeError(e, 'Could not open the replacement upload.').message, 'error')
+    }
+  }
+
   const handleMenuPick = (action, entry) => {
     const ar = menu?.ar ?? null
     setMenu(null)
@@ -224,6 +293,7 @@ export default function ModelRequests() {
     else if (action === 'download') void downloadForEdit(entry)
     else if (action === 'copy') void copyPublicLink(entry)
     else if (action === 'upload-ar') setArTarget({ entry, current: ar })
+    else if (action === 'replace') void startReplace(entry)
     else if (action === 'delete') setDeleteTarget(entry)
   }
 
@@ -552,12 +622,18 @@ export default function ModelRequests() {
           and this is the same live file the app's preview renders — drag to
           turn, scroll to zoom, exactly what a customer gets. */}
       {isModelsTab && modelledQuery.isLoading && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="space-y-3 rounded-2xl border border-[#D9D0C7] bg-white p-5">
-              <div className="h-14 w-14 animate-pulse rounded-xl bg-[#E8DDD5]" />
-              <div className="h-4 w-40 animate-pulse rounded bg-[#E8DDD5]" />
-              <div className="h-3 w-56 animate-pulse rounded bg-[#E8DDD5]" />
+            <div key={i} className="rounded-3xl border border-[#E5DACA] bg-white p-5">
+              <div className="flex items-start gap-4">
+                <div className="h-20 w-20 animate-pulse rounded-2xl bg-[#EFE3D3]" />
+                <div className="flex-1 space-y-2 pt-1">
+                  <div className="h-4 w-24 animate-pulse rounded-full bg-[#EFE3D3]" />
+                  <div className="h-4 w-40 animate-pulse rounded bg-[#EFE3D3]" />
+                  <div className="h-3 w-32 animate-pulse rounded bg-[#F5F0EB]" />
+                </div>
+              </div>
+              <div className="mt-4 h-9 animate-pulse rounded-xl bg-[#F5F0EB]" />
             </div>
           ))}
         </div>
@@ -582,15 +658,14 @@ export default function ModelRequests() {
 
       {isModelsTab && !modelledQuery.isLoading && !modelledQuery.isError && modelled.length > 0 && (
         <div>
-          <p className="mb-3 text-sm text-[#6B5C4E]">
-            Every product customers can spin and fit right now — the same live file the app
-            renders. The photo opens all of the product&apos;s pictures;{' '}
-            <strong className="text-[#3B2314]">View 3D</strong> opens the model itself.
-          </p>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {modelled.map((entry) => {
+          {/* The shelf's own header: what is live, and how much of it fits —
+              the two numbers this tab exists to answer. */}
+          <ShelfSummary modelled={modelled} arCount={arByProduct.size} />
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {modelled.map((entry, index) => {
               const image =
                 orderedPhotos(entry.images).find((p) => p?.image_url)?.image_url ?? null
+              const hasAr = arByProduct.has(entry.productId)
               return (
                 <div
                   key={entry.productId}
@@ -598,9 +673,15 @@ export default function ModelRequests() {
                     e.preventDefault()
                     setMenu({ entry, x: e.clientX, y: e.clientY, ar: arByProduct.get(entry.productId) ?? null })
                   }}
-                  className="rounded-2xl border border-[#D9D0C7] bg-white p-5 transition-shadow hover:shadow-md"
+                  style={{ animationDelay: `${Math.min(index * 70, 420)}ms` }}
+                  className="shelf-card group relative overflow-hidden rounded-3xl border border-[#E5DACA] bg-white p-5 transition-all duration-200 hover:-translate-y-1 hover:border-[#8B5A2B]/50 hover:shadow-[0_18px_40px_-18px_rgba(59,35,20,0.35)] focus-within:border-[#8B5A2B]/50"
                 >
-                  <div className="flex min-w-0 items-start gap-3">
+                  {/* Warm top glow on hover — depth without leaving the palette. */}
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-[#F5E9D6]/0 via-[#F5E9D6]/0 to-transparent opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+                  />
+                  <div className="relative flex min-w-0 items-start gap-4">
                     {image ? (
                       <button
                         type="button"
@@ -612,48 +693,57 @@ export default function ModelRequests() {
                         }
                         title="View all product photos"
                         aria-label={`View photos of ${entry.name}`}
-                        className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl bg-[#E8DDD5] transition-shadow hover:shadow-md hover:ring-2 hover:ring-[#8B5A2B]/40"
+                        className="h-20 w-20 flex-shrink-0 overflow-hidden rounded-2xl bg-gradient-to-br from-[#EFE3D3] to-[#E2D2BD] ring-1 ring-[#E5DACA] transition-all hover:shadow-lg hover:ring-2 hover:ring-[#8B5A2B]/50"
                       >
                         <img
                           src={image}
-                          className="h-full w-full object-cover"
+                          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.06]"
                           alt={entry.name}
+                          loading="lazy"
                         />
                       </button>
                     ) : (
-                      <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl bg-[#E8DDD5]">
-                        <div className="flex h-full w-full items-center justify-center">
-                          <Package size={20} className="text-[#8B5A2B]/30" />
-                        </div>
+                      <div className="flex h-20 w-20 flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-[#EFE3D3] to-[#E2D2BD] ring-1 ring-[#E5DACA]">
+                        <Package size={24} className="text-[#8B5A2B]/30" />
                       </div>
                     )}
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="text-sm font-semibold text-[#3B2314]">{entry.name}</h3>
-                        <Badge label={entry.model.status} variant={entry.model.status} />
-                        {arByProduct.has(entry.productId) && (
-                          <span className="inline-flex items-center rounded-full bg-[#4ECDC4]/15 px-2 py-0.5 text-[10px] font-semibold text-teal-700">
-                            AR live
+                    <div className="min-w-0 flex-1 pt-0.5">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700 ring-1 ring-emerald-600/20">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                          Live
+                        </span>
+                        {hasAr && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-[#4ECDC4]/15 px-2 py-0.5 text-[10px] font-semibold text-teal-700 ring-1 ring-teal-600/20">
+                            <Sparkles size={10} />
+                            AR fit
                           </span>
                         )}
                       </div>
-                      <p className="mt-1 text-xs text-[#6B5C4E]">
-                        Version {entry.model.version}
-                        {entry.model.authored_length_mm
-                          ? ` · ${Number(entry.model.authored_length_mm).toFixed(1)} mm`
-                          : ''}
-                        {entry.model.authored_size_eu
-                          ? ` · EU ${Number(entry.model.authored_size_eu)}`
-                          : ''}
+                      <h3 className="mt-1.5 font-display text-[15px] font-bold leading-snug text-[#3B2314]">{entry.name}</h3>
+                      <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs tabular-nums text-[#6B5C4E]">
+                        <span className="inline-flex items-center rounded-md bg-[#F5F0EB] px-1.5 py-0.5 font-semibold text-[#8B5A2B]">
+                          v{entry.model.version}
+                        </span>
+                        {entry.model.authored_length_mm != null && (
+                          <span className="inline-flex items-center gap-1">
+                            <Ruler size={11} className="text-[#8B5A2B]/60" />
+                            {Number(entry.model.authored_length_mm).toFixed(1)} mm
+                          </span>
+                        )}
+                        {entry.model.authored_size_eu != null && (
+                          <span>EU {Number(entry.model.authored_size_eu)}</span>
+                        )}
                       </p>
                     </div>
                   </div>
-                  <div className="mt-4 flex gap-2">
+                  <div className="relative mt-4 flex gap-2">
                     <button
                       type="button"
                       onClick={() => openViewerFor(entry)}
-                      className="flex-1 rounded-lg border border-[#8B5A2B] px-3 py-1.5 text-xs font-semibold text-[#8B5A2B] transition-colors hover:bg-[#8B5A2B]/10"
+                      className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-[#8B5A2B] px-3 py-2 text-xs font-bold text-white shadow-sm transition-all hover:bg-[#6B4423] hover:shadow-md active:scale-[0.99]"
                     >
+                      <Cuboid size={14} />
                       View 3D
                     </button>
                     {/* The same menu as right-click, for trackpads and touch:
@@ -663,7 +753,7 @@ export default function ModelRequests() {
                       aria-label={`More actions for ${entry.name}`}
                       title="More actions"
                       onClick={(e) => setMenu({ entry, x: e.clientX, y: e.clientY, ar: arByProduct.get(entry.productId) ?? null })}
-                      className="shrink-0 rounded-lg border border-[#D9D0C7] px-2.5 py-1.5 text-[#6B5C4E] transition-colors hover:bg-[#F5F0EB] hover:text-[#3B2314]"
+                      className="shrink-0 rounded-xl border border-[#E5DACA] bg-[#FBF8F5] px-3 py-2 text-[#6B5C4E] transition-colors hover:border-[#8B5A2B]/50 hover:bg-[#F5F0EB] hover:text-[#3B2314]"
                     >
                       <MoreVertical size={15} />
                     </button>
@@ -765,6 +855,37 @@ export default function ModelRequests() {
           showToast(
             `${result.message} ${deliveryHeadline(result.ending)}`,
             result.ending === MODELLING_ENDING.CLOSED ? 'success' : 'error',
+          )
+        }}
+      />
+
+      {/* ─── Replace the live version, with no ask ───────────────
+          The wrong-file way out: publishes the fixed file as the next live
+          version of the same product. History keeps pointing at the old
+          version, which is why the delete stays blocked — and why it no
+          longer matters, since customers only ever see the newest live one. */}
+      <UploadModelModal
+        key={replaceTarget ? `replace-${replaceTarget.entry.productId}` : 'replace-closed'}
+        replaceTarget=
+          {replaceTarget
+            ? {
+                productId: replaceTarget.entry.productId,
+                storeId: replaceTarget.storeId,
+                name: replaceTarget.entry.name,
+                version: replaceTarget.entry.model.version,
+                authoredLengthMm: replaceTarget.entry.model.authored_length_mm,
+                authoredSizeEu: replaceTarget.entry.model.authored_size_eu,
+              }
+            : null}
+        onClose={() => setReplaceTarget(null)}
+        onDone={({ version, reused }) => {
+          const name = replaceTarget?.entry?.name ?? 'this product'
+          setReplaceTarget(null)
+          showToast(
+            reused
+              ? `That exact file is already live as version ${version} — nothing changed.`
+              : `Version ${version} of ${name} is live — customers see it now. The old version stays in history.`,
+            'success',
           )
         }}
       />

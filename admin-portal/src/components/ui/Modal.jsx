@@ -5,7 +5,7 @@ const SIZES = {
   xl: 'max-w-2xl',
 }
 
-export default function Modal({ open, onClose, title, children, footer, size = 'md' }) {
+export default function Modal({ open, onClose, title, children, footer, size = 'md', scrim = 'bg-secondary/40' }) {
   const reduce = useReducedMotion()
 
   return (
@@ -13,7 +13,7 @@ export default function Modal({ open, onClose, title, children, footer, size = '
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <motion.div
-            className="absolute inset-0 bg-secondary/40"
+            className={`absolute inset-0 ${scrim}`}
             initial={reduce ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={reduce ? undefined : { opacity: 0 }}

@@ -170,6 +170,7 @@ async function publishAndClose({ request, link, file, declaration, note }) {
 
   let modelId = null
   let alreadyLive = false
+  let version = null
 
   if (reusable) {
     // These exact bytes are already this product's: the digest IS the filename,
@@ -179,6 +180,7 @@ async function publishAndClose({ request, link, file, declaration, note }) {
     // and asking again would spend a download to be told what the row says.
     modelId = rowId(reusable.id)
     alreadyLive = String(reusable.status) === 'active'
+    version = Number(reusable.version) || null
     if (modelId === null) {
       throw new Error(
         'The stored model record is missing its id, so it cannot be published. Upload the model ' +
@@ -186,7 +188,7 @@ async function publishAndClose({ request, link, file, declaration, note }) {
       )
     }
   } else {
-    const version = nextVersion(existing)
+    version = nextVersion(existing)
     const path = storagePath({
       storeId: request.store_id,
       productId: request.product_id,
@@ -242,6 +244,11 @@ async function publishAndClose({ request, link, file, declaration, note }) {
     // `notLive` ending reads it, because "refused (materials, scale)" is
     // actionable and "it did not work" is not.
     refusal: verdictMessage(verdict),
+    // Which authoring revision this publish produced (or re-found): the shelf's
+    // replace flow names it in its own success sentence.
+    version,
+    // The same bytes were already this product's: no new row, no new version.
+    reused: alreadyLive,
   }
 }
 
@@ -250,7 +257,7 @@ export function usePublishModelRequest() {
   const fulfil = useFulfilModelRequest()
 
   const mutation = useMutation({
-    mutationFn: async ({ request, link, file, declaration, note }) => {
+    mutationFn: async ({ request, link, file, declaration, note, closeRequest = true }) => {
       const published = await publishAndClose({ request, link, file, declaration, note })
 
       // Only a live model can close an ask — the RPC requires an `active` model
@@ -258,8 +265,13 @@ export function usePublishModelRequest() {
       // something to point at, and its failure is a reported ending rather than
       // a thrown error. That is the `liveButOpen` state: the one outcome this
       // feature must not quietly produce.
+      //
+      // The shelf's replace flow sets `closeRequest: false`: there is no ask,
+      // so there is nothing to fulfil — the version going live IS the outcome.
+      // (`request` is then a minimal `{ id: null, product_id, store_id }`
+      // carrier for the pipeline, never a queue row.)
       let fulfilled = false
-      if (published.live && published.modelId !== null) {
+      if (closeRequest && published.live && published.modelId !== null) {
         try {
           await fulfil.mutateAsync({
             requestId: request.id,
@@ -272,19 +284,29 @@ export function usePublishModelRequest() {
         }
       }
 
-      return modellingResult({
-        modelIsLive: published.live,
-        fulfilled,
-        modelId: published.modelId,
+      return {
+        ...modellingResult({
+          modelIsLive: published.live,
+          fulfilled,
+          modelId: published.modelId,
+          refusal: published.refusal,
+        }),
+        // Raw facts beside the ask-shaped ending, for callers with no ask:
+        // the replace modal writes its own sentences from these.
+        live: published.live,
         refusal: published.refusal,
-      })
+        version: published.version,
+        reused: published.reused,
+      }
     },
     onSettled: (_result, _error, variables) => {
       // Read the queue again rather than assume it changed: a `liveButOpen`
       // ending leaves the ask exactly where it was, and the model picker now has
-      // one more row in it.
+      // one more row in it. The shelf reads `modelled-products`, so a replace
+      // refreshes the cards the same way.
       queryClient.invalidateQueries({ queryKey: ['model-requests'] })
       queryClient.invalidateQueries({ queryKey: ['product-models', variables?.request?.product_id] })
+      queryClient.invalidateQueries({ queryKey: ['modelled-products'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
     },
   })

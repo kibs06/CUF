@@ -49,8 +49,13 @@ export default function ModelViewerDialog({ target, onClose }) {
       onClose={onClose}
       title={shown ? `${shown.title} — 3D model` : '3D model'}
       size="xl"
+      scrim="bg-secondary/30"
     >
-      <div className="relative aspect-[4/3] w-full overflow-hidden rounded-xl bg-[#F5F5F5]">
+      {/* No stage box: the shoe floats on the card itself, so what the admin
+          sees is the file and nothing else. The viewer is transparent by
+          default — the grey backdrop it used to sit on is gone, and the
+          dialog is taller with a closer default orbit so the pair fills it. */}
+      <div className="relative h-[58vh] min-h-[420px] w-full overflow-hidden">
         {!url && (
           <div className="absolute inset-0 grid place-items-center p-6 text-center text-sm text-[#6B5C4E]">
             This model has no file on record, so there is nothing to draw.
@@ -73,10 +78,12 @@ export default function ModelViewerDialog({ target, onClose }) {
             camera-controls=""
             touch-action="none"
             interaction-prompt="none"
-            camera-orbit="-60deg 72deg 105%"
-            exposure="0.85"
-            shadow-intensity="0.45"
-            style={{ display: 'block', width: '100%', height: '100%' }}
+            camera-orbit="-60deg 72deg 88%"
+            min-camera-orbit="auto auto 55%"
+            max-camera-orbit="auto auto 160%"
+            exposure="0.9"
+            shadow-intensity="0.5"
+            style={{ display: 'block', width: '100%', height: '100%', backgroundColor: 'transparent' }}
           />
         )}
       </div>

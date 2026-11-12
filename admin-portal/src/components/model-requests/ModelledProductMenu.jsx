@@ -1,17 +1,18 @@
 import { useEffect } from 'react'
-import { Eye, Image, Link2, Download, Sparkles, Trash2 } from 'lucide-react'
+import { Eye, Image, Link2, Download, FileUp, Sparkles, Trash2 } from 'lucide-react'
 
 // ─── The 3D shelf's right-click menu ───────────────────────────────
 //
 // A card's buttons cover the one thing an admin does daily (look at the
-// model). Everything else lives here: photos, the file itself, its link, and
-// — at the bottom, behind its own confirm — the delete. The menu is
-// positioned at the cursor and clamped into the viewport, so a card at the
-// page's edge still opens a fully visible menu.
+// model). Everything else lives here: photos, the file itself, its link, a
+// replacement upload for a wrong live file — and at the bottom, behind its
+// own confirm, the delete. The menu is positioned at the cursor and clamped
+// into the viewport, so a card at the page's edge still opens a fully
+// visible menu.
 //
 // `menu` is `{ entry, x, y } | null`. Every choice reports back through
 // `onPick(action, entry)` and the page owns what happens next — the menu
-// never downloads, copies, or deletes anything itself.
+// never downloads, copies, uploads, or deletes anything itself.
 
 const MENU_WIDTH = 232
 
@@ -31,6 +32,12 @@ const items = [
     Icon: Sparkles,
     // Filled in per product below: live version when there is one.
     hint: 'The Studio file customers fit in',
+  },
+  {
+    action: 'replace',
+    label: 'Replace live model…',
+    Icon: FileUp,
+    hint: 'Publish the fixed file as a new version',
   },
 ]
 
