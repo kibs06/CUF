@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="2135" viewBox="0 0 1100 2135">
+<rect x="0" y="0" width="1100" height="2135" fill="#FFFFFF"/>
+<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L8,3 L0,6 z" fill="#000000"/></marker></defs>
+<rect x="4" y="4" width="1092" height="2127" fill="none" stroke="#000000" stroke-width="1"/>
+<text font-family="Helvetica, Arial, sans-serif" font-size="22" font-weight="bold" fill="#000000" text-anchor="start"><tspan x="60" y="57.0">3 · Sellers and users</tspan></text>
+<text font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#000000" text-anchor="start"><tspan x="60" y="88.0">SoleVision — what the admin does · page 3 of 7</tspan></text>
+<polyline points="565.0,193.0 565.0,261.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,364.0 565.0,432.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,516.0 565.0,584.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="720.0,659.0 825.0,659.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="945.0,701.0 945.0,769.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,734.0 565.0,802.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,905.0 565.0,973.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,1057.0 565.0,1125.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,1228.0 565.0,1252.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,1300.0 565.0,1356.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="720.0,1431.0 825.0,1431.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="945.0,1473.0 945.0,1541.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,1506.0 565.0,1574.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,1639.0 565.0,1707.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="130.0,1961.0 150.0,1961.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="350.0,1961.0 370.0,1961.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="418.0,1961.0 440.0,1961.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="825.0,312.5 710.0,312.5" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#000000" text-anchor="middle"><tspan x="772.5" y="663.0">No</tspan></text>
+<text font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#000000" text-anchor="middle"><tspan x="565" y="772.0">Yes</tspan></text>
+<text font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#000000" text-anchor="middle"><tspan x="772.5" y="1435.0">Yes</tspan></text>
+<text font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#000000" text-anchor="middle"><tspan x="565" y="1544.0">No</tspan></text>
+<polygon points="525,130 605,130 605,176.62 565,193 525,176.62" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="12" font-weight="bold" fill="#000000" text-anchor="middle"><tspan x="565" y="157.3">SU</tspan></text>
+<rect x="420" y="261" width="290" height="103" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="294.5">Asks wait newest first —</tspan><tspan x="565" y="312.5">tabs for pending, approved,</tspan><tspan x="565" y="330.5">rejected or all.</tspan></text>
+<polygon points="438,432 710,432 692,516 420,516" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="465.0">They open an ask to see the shop,</tspan><tspan x="565" y="483.0">its papers, photos and owner.</tspan></text>
+<polygon points="565,584 720,659 565,734 410,659" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="659.0">Take the shop on?</tspan></text>
+<polygon points="843,617 1065,617 1047,701 825,701" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="945" y="650.0">They turn it down with</tspan><tspan x="945" y="668.0">a short reason the owner sees.</tspan></text>
+<circle cx="945" cy="793" r="24" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="945" y="793.0">A</tspan></text>
+<polygon points="438,802 710,802 692,905 420,905" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="835.5">On Users they find people</tspan><tspan x="565" y="853.5">by name or email — shoppers,</tspan><tspan x="565" y="871.5">shop owners, fellow admins.</tspan></text>
+<polygon points="438,973 710,973 692,1057 420,1057" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="1006.0">Tabs and filters split shoppers,</tspan><tspan x="565" y="1024.0">sellers, admins — active or paused.</tspan></text>
+<rect x="420" y="1125" width="290" height="103" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="1158.5">They open a person to see orders,</tspan><tspan x="565" y="1176.5">shops, past trouble —</tspan><tspan x="565" y="1194.5">failed sign-ins show too.</tspan></text>
+<circle cx="565" cy="1276" r="24" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="1276.0">DB1</tspan></text>
+<polygon points="565,1356 720,1431 565,1506 410,1431" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="1431.0">Causing trouble?</tspan></text>
+<polygon points="843,1389 1065,1389 1047,1473 825,1473" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="945" y="1422.0">They pause it with a reason</tspan><tspan x="945" y="1440.0">on record — no more sign-ins.</tspan></text>
+<polygon points="843,1541 1065,1541 1047,1625 825,1625" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="945" y="1574.0">Quiet again — they lift</tspan><tspan x="945" y="1592.0">the pause.</tspan></text>
+<rect x="420" y="1574" width="290" height="65" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="1606.5">Queues clear — back to base.</tspan></text>
+<polygon points="484,1707 646,1707 646,1767.68 565,1789 484,1767.68" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="12" font-weight="bold" fill="#000000" text-anchor="middle"><tspan x="565" y="1732.8">Dd</tspan><tspan x="565" y="1749.8">back to the Dashboard</tspan></text>
+<rect x="30" y="1717" width="250" height="72" rx="0" fill="none" stroke="#000000" stroke-width="1.5" stroke-dasharray="5 5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="155" y="1744.0">Shops stay shut till approved —</tspan><tspan x="155" y="1762.0">owners can fix and ask again.</tspan></text>
+<polygon points="50,1925 130,1925 130,1978.28 90,1997 50,1978.28" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="12" font-weight="bold" fill="#000000" text-anchor="middle"><tspan x="90" y="1955.6">DB</tspan></text>
+<path d="M150,1939 L150,1983 A100,14 0 0,0 350,1983 L350,1939 A100,14 0 0,0 150,1939 Z" fill="none" stroke="#000000" stroke-width="1.5"/><ellipse cx="250" cy="1939" rx="100" ry="14" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="250" y="1961.0">Database</tspan></text>
+<circle cx="394" cy="1961" r="24" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="394" y="1961.0">DB1</tspan></text>
+<rect x="440" y="1925" width="330" height="72" rx="0" fill="none" stroke="#000000" stroke-width="1.5" stroke-dasharray="5 5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="605" y="1952.0">DB steps touch the Database;</tspan><tspan x="605" y="1970.0">DB1 marks where in the flow.</tspan></text>
+<circle cx="849" cy="312.5" r="24" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="849" y="312.5">A</tspan></text>
+</svg>

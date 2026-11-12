@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="2996" viewBox="0 0 1100 2996">
+<rect x="0" y="0" width="1100" height="2996" fill="#FFFFFF"/>
+<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L8,3 L0,6 z" fill="#000000"/></marker></defs>
+<rect x="4" y="4" width="1092" height="2988" fill="none" stroke="#000000" stroke-width="1"/>
+<text font-family="Helvetica, Arial, sans-serif" font-size="22" font-weight="bold" fill="#000000" text-anchor="start"><tspan x="60" y="57.0">2 · Dashboard</tspan></text>
+<text font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#000000" text-anchor="start"><tspan x="60" y="88.0">SoleVision — what the admin does · page 2 of 7</tspan></text>
+<polyline points="250.0,193.0 250.0,261.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="370.0,193.0 370.0,261.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="490.0,193.0 490.0,261.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="610.0,193.0 610.0,261.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="730.0,193.0 730.0,261.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="850.0,193.0 850.0,261.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="550.0,345.0 550.0,413.0 565.0,413.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,497.0 565.0,565.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,668.0 565.0,692.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,740.0 565.0,796.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,880.0 565.0,948.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="720.0,1023.0 905.0,1023.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,1098.0 565.0,1166.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="720.0,1241.0 905.0,1241.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,1316.0 565.0,1384.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="720.0,1459.0 905.0,1459.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,1534.0 565.0,1602.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="720.0,1677.0 905.0,1677.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,1752.0 565.0,1820.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="720.0,1895.0 905.0,1895.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,1970.0 565.0,2038.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,2122.0 565.0,2190.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="720.0,2265.0 825.0,2265.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="945.0,2307.0 945.0,2375.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,2340.0 565.0,2408.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="565.0,2492.0 565.0,2560.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="130.0,2822.0 150.0,2822.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="350.0,2822.0 370.0,2822.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="418.0,2822.0 440.0,2822.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<polyline points="825.0,2080.0 710.0,2080.0" fill="none" stroke="#000000" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#000000" text-anchor="middle"><tspan x="812.5" y="1027.0">Yes</tspan></text>
+<text font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#000000" text-anchor="middle"><tspan x="565" y="1136.0">No</tspan></text>
+<text font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#000000" text-anchor="middle"><tspan x="812.5" y="1245.0">Yes</tspan></text>
+<text font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#000000" text-anchor="middle"><tspan x="565" y="1354.0">No</tspan></text>
+<text font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#000000" text-anchor="middle"><tspan x="812.5" y="1463.0">Yes</tspan></text>
+<text font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#000000" text-anchor="middle"><tspan x="565" y="1572.0">No</tspan></text>
+<text font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#000000" text-anchor="middle"><tspan x="812.5" y="1681.0">Yes</tspan></text>
+<text font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#000000" text-anchor="middle"><tspan x="565" y="1790.0">No</tspan></text>
+<text font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#000000" text-anchor="middle"><tspan x="812.5" y="1899.0">Yes</tspan></text>
+<text font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#000000" text-anchor="middle"><tspan x="565" y="2008.0">No</tspan></text>
+<text font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#000000" text-anchor="middle"><tspan x="772.5" y="2269.0">No</tspan></text>
+<text font-family="Helvetica, Arial, sans-serif" font-size="9" fill="#000000" text-anchor="middle"><tspan x="565" y="2378.0">Yes</tspan></text>
+<polygon points="210,130 290,130 290,176.62 250,193 210,176.62" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="12" font-weight="bold" fill="#000000" text-anchor="middle"><tspan x="250" y="157.3">SI</tspan></text>
+<polygon points="330,130 410,130 410,176.62 370,193 330,176.62" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="12" font-weight="bold" fill="#000000" text-anchor="middle"><tspan x="370" y="157.3">SU</tspan></text>
+<polygon points="450,130 530,130 530,176.62 490,193 450,176.62" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="12" font-weight="bold" fill="#000000" text-anchor="middle"><tspan x="490" y="157.3">P3M</tspan></text>
+<polygon points="570,130 650,130 650,176.62 610,193 570,176.62" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="12" font-weight="bold" fill="#000000" text-anchor="middle"><tspan x="610" y="157.3">OM</tspan></text>
+<polygon points="690,130 770,130 770,176.62 730,193 690,176.62" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="12" font-weight="bold" fill="#000000" text-anchor="middle"><tspan x="730" y="157.3">CB</tspan></text>
+<polygon points="810,130 890,130 890,176.62 850,193 810,176.62" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="12" font-weight="bold" fill="#000000" text-anchor="middle"><tspan x="850" y="157.3">NAS</tspan></text>
+<rect x="50" y="261" width="1000" height="84" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="550" y="294.0">The Dashboard shows sales, sellers waiting,</tspan><tspan x="550" y="312.0">orders needing work and recent sign-ins.</tspan></text>
+<rect x="420" y="413" width="290" height="84" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="446.0">They scan what needs</tspan><tspan x="565" y="464.0">work first.</tspan></text>
+<rect x="420" y="565" width="290" height="103" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="598.5">The pipeline counts action needed,</tspan><tspan x="565" y="616.5">in prep, shipped and delivered —</tspan><tspan x="565" y="634.5">each opens its order list.</tspan></text>
+<circle cx="565" cy="716" r="24" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="716.0">DB1</tspan></text>
+<rect x="420" y="796" width="290" height="84" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="829.0">Clear seller asks can be</tspan><tspan x="565" y="847.0">taken right from the Dashboard.</tspan></text>
+<polygon points="565,948 720,1023 565,1098 410,1023" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="1014.0">Sellers waiting</tspan><tspan x="565" y="1032.0">for review?</tspan></text>
+<polygon points="905,991.5 985,991.5 985,1038.12 945,1054.5 905,1038.12" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="12" font-weight="bold" fill="#000000" text-anchor="middle"><tspan x="945" y="1018.8">SU</tspan></text>
+<polygon points="565,1166 720,1241 565,1316 410,1241" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="1232.0">Products or 3D asks</tspan><tspan x="565" y="1250.0">need work?</tspan></text>
+<polygon points="905,1209.5 985,1209.5 985,1256.12 945,1272.5 905,1256.12" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="12" font-weight="bold" fill="#000000" text-anchor="middle"><tspan x="945" y="1236.8">P3M</tspan></text>
+<polygon points="565,1384 720,1459 565,1534 410,1459" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="1450.0">Orders or money</tspan><tspan x="565" y="1468.0">need work?</tspan></text>
+<polygon points="905,1427.5 985,1427.5 985,1474.12 945,1490.5 905,1474.12" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="12" font-weight="bold" fill="#000000" text-anchor="middle"><tspan x="945" y="1454.8">OM</tspan></text>
+<polygon points="565,1602 720,1677 565,1752 410,1677" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="1668.0">Banners or complaints</tspan><tspan x="565" y="1686.0">need work?</tspan></text>
+<polygon points="905,1645.5 985,1645.5 985,1692.12 945,1708.5 905,1692.12" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="12" font-weight="bold" fill="#000000" text-anchor="middle"><tspan x="945" y="1672.8">CB</tspan></text>
+<polygon points="565,1820 720,1895 565,1970 410,1895" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="1886.0">Numbers, audit</tspan><tspan x="565" y="1904.0">or settings?</tspan></text>
+<polygon points="905,1863.5 985,1863.5 985,1910.12 945,1926.5 905,1910.12" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="12" font-weight="bold" fill="#000000" text-anchor="middle"><tspan x="945" y="1890.8">NAS</tspan></text>
+<rect x="420" y="2038" width="290" height="84" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="2071.0">They keep an eye on the numbers</tspan><tspan x="565" y="2089.0">and hop between screens.</tspan></text>
+<polygon points="565,2190 720,2265 565,2340 410,2265" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="2256.0">Done for</tspan><tspan x="565" y="2274.0">the day?</tspan></text>
+<polygon points="843,2223 1065,2223 1047,2307 825,2307" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="945" y="2256.0">They stay — the numbers</tspan><tspan x="945" y="2274.0">keep updating.</tspan></text>
+<circle cx="945" cy="2399" r="24" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="945" y="2399.0">A</tspan></text>
+<rect x="420" y="2408" width="290" height="84" rx="0" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="565" y="2441.0">They sign out — see you</tspan><tspan x="565" y="2459.0">at the next shift.</tspan></text>
+<ellipse cx="565" cy="2605" rx="125" ry="45" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="bold" fill="#000000" text-anchor="middle"><tspan x="565" y="2605.0">END</tspan></text>
+<rect x="30" y="2578" width="250" height="72" rx="0" fill="none" stroke="#000000" stroke-width="1.5" stroke-dasharray="5 5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="155" y="2605.0">Quick approve sits on the</tspan><tspan x="155" y="2623.0">Dashboard for clear cases.</tspan></text>
+<rect x="825" y="2578" width="240" height="72" rx="0" fill="none" stroke="#000000" stroke-width="1.5" stroke-dasharray="5 5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="945" y="2605.0">Tapping a pipeline number</tspan><tspan x="945" y="2623.0">opens Orders pre-filtered.</tspan></text>
+<polygon points="50,2786 130,2786 130,2839.28 90,2858 50,2839.28" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="12" font-weight="bold" fill="#000000" text-anchor="middle"><tspan x="90" y="2816.6">DB</tspan></text>
+<path d="M150,2800 L150,2844 A100,14 0 0,0 350,2844 L350,2800 A100,14 0 0,0 150,2800 Z" fill="none" stroke="#000000" stroke-width="1.5"/><ellipse cx="250" cy="2800" rx="100" ry="14" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="250" y="2822.0">Database</tspan></text>
+<circle cx="394" cy="2822" r="24" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="394" y="2822.0">DB1</tspan></text>
+<rect x="440" y="2786" width="330" height="72" rx="0" fill="none" stroke="#000000" stroke-width="1.5" stroke-dasharray="5 5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="605" y="2813.0">DB steps touch the Database;</tspan><tspan x="605" y="2831.0">DB1 marks where in the flow.</tspan></text>
+<circle cx="849" cy="2080" r="24" fill="none" stroke="#000000" stroke-width="1.5"/><text font-family="Helvetica, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="middle"><tspan x="849" y="2080.0">A</tspan></text>
+</svg>

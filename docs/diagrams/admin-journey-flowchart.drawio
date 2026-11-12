@@ -1,0 +1,1144 @@
+<mxfile host="Electron" agent="SoleVision journey generator" pages="7">
+  <diagram id="page-1" name="1 Sign in">
+    <mxGraphModel dx="698" dy="716" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="2141" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="p1-start" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=14;fontStyle=1;" value="START" vertex="1">
+          <mxGeometry height="88" width="230" x="450" y="130" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-open" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;" value="The admin opens the portal&lt;br&gt;sign-in screen." vertex="1">
+          <mxGeometry height="84" width="290" x="420" y="286" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-pick" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=parallelogramPerimeter;" value="Pick email sign-in, or Continue&lt;br&gt;with Google or Facebook." vertex="1">
+          <mxGeometry height="84" width="290" x="420" y="438" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-creds" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=parallelogramPerimeter;" value="They type their email&lt;br&gt;and their password." vertex="1">
+          <mxGeometry height="84" width="290" x="420" y="590" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-valid" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=rhombusPerimeter;" value="Do the details&lt;br&gt;check out in the Database?" vertex="1">
+          <mxGeometry height="150" width="310" x="410" y="742" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-db1-valid" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=15;fontStyle=1;aspect=fixed;perimeter=ellipsePerimeter;" value="DB1" vertex="1">
+          <mxGeometry height="48" width="48" x="541" y="935" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-fixbox" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=parallelogramPerimeter;" value="See the error on&lt;br&gt;the box and fix it." vertex="1">
+          <mxGeometry height="84" width="240" x="825" y="775" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-c-A-out" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=15;fontStyle=1;aspect=fixed;perimeter=ellipsePerimeter;" value="A" vertex="1">
+          <mxGeometry height="48" width="48" x="921" y="927" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-allowed" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=rhombusPerimeter;" value="An admin account&lt;br&gt;in good standing&lt;br&gt;in the Database?" vertex="1">
+          <mxGeometry height="150" width="310" x="410" y="1020" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-db1-allowed" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=15;fontStyle=1;aspect=fixed;perimeter=ellipsePerimeter;" value="DB1" vertex="1">
+          <mxGeometry height="48" width="48" x="541" y="1218" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-denied" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=parallelogramPerimeter;" value="They see Access denied —&lt;br&gt;this portal is for admins only." vertex="1">
+          <mxGeometry height="84" width="240" x="825" y="1053" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-paused" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=parallelogramPerimeter;" value="A paused admin sees why,&lt;br&gt;then signs out." vertex="1">
+          <mxGeometry height="84" width="250" x="30" y="1053" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-mfa" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=rhombusPerimeter;" value="A second step&lt;br&gt;code needed?" vertex="1">
+          <mxGeometry height="150" width="310" x="410" y="1298" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-code" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=parallelogramPerimeter;" value="They type the 6-digit code&lt;br&gt;from the authenticator app —&lt;br&gt;a wrong one shows a hint." vertex="1">
+          <mxGeometry height="103" width="240" x="825" y="1322" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-retry" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=parallelogramPerimeter;" value="Expired code — wait for&lt;br&gt;the next one and try again." vertex="1">
+          <mxGeometry height="84" width="240" x="825" y="1493" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-dash" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;" value="They land on the Dashboard." vertex="1">
+          <mxGeometry height="65" width="290" x="420" y="1516" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-exit-2" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=12;fontStyle=1;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" value="Dd" vertex="1">
+          <mxGeometry height="63" width="80" x="525" y="1649" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-db" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=12;fontStyle=1;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" value="DB" vertex="1">
+          <mxGeometry height="72" width="80" x="50" y="1848" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-database" parent="1" style="shape=cylinder;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;fontStyle=1;" value="Database" vertex="1">
+          <mxGeometry height="72" width="200" x="150" y="1848" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-db1-legend" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=15;fontStyle=1;aspect=fixed;perimeter=ellipsePerimeter;" value="DB1" vertex="1">
+          <mxGeometry height="48" width="48" x="370" y="1860" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-c-A-in" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=15;fontStyle=1;aspect=fixed;perimeter=ellipsePerimeter;" value="A" vertex="1">
+          <mxGeometry height="48" width="48" x="825" y="608" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-title" parent="1" style="text;html=1;fontSize=22;fontStyle=1;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" value="1 · Sign in" vertex="1">
+          <mxGeometry height="30" width="700" x="60" y="42" as="geometry" />
+        </mxCell>
+        <mxCell id="p1-subtitle" parent="1" style="text;html=1;fontSize=12;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" value="SoleVision — what the admin does · page 1 of 7" vertex="1">
+          <mxGeometry height="24" width="700" x="60" y="76" as="geometry" />
+        </mxCell>
+        <mxCell id="e1-1" edge="1" parent="1" source="p1-start" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p1-open" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e1-2" edge="1" parent="1" source="p1-open" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p1-pick" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e1-3" edge="1" parent="1" source="p1-pick" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p1-creds" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e1-4" edge="1" parent="1" source="p1-creds" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p1-valid" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e1-5" edge="1" parent="1" source="p1-valid" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;" target="p1-db1-valid" value="Yes">
+          <mxGeometry relative="1" x="-0.2307" y="11" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e1-6" edge="1" parent="1" source="p1-valid" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;" target="p1-fixbox" value="No">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e1-7" edge="1" parent="1" source="p1-fixbox" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p1-c-A-out" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e1-8" edge="1" parent="1" source="p1-db1-valid" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;" target="p1-allowed" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e1-9" edge="1" parent="1" source="p1-allowed" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;" target="p1-db1-allowed" value="Yes">
+          <mxGeometry relative="1" x="-0.0138" y="12" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e1-10" edge="1" parent="1" source="p1-allowed" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;" target="p1-denied" value="No">
+          <mxGeometry relative="1" x="-0.1894" y="11" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e1-11" edge="1" parent="1" source="p1-allowed" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;" target="p1-paused" value="No">
+          <mxGeometry relative="1" x="-0.1815" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e1-12" edge="1" parent="1" source="p1-db1-allowed" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p1-mfa" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e1-13" edge="1" parent="1" source="p1-mfa" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;" target="p1-code" value="Yes">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e1-15" edge="1" parent="1" source="p1-mfa" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p1-dash" value="No">
+          <mxGeometry relative="1" x="-0.1529" y="10" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e1-16" edge="1" parent="1" source="p1-retry" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0;exitY=0.5;exitPerimeter=0;" target="p1-dash" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+            <Array as="points">
+              <mxPoint x="945" y="1549" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e1-17" edge="1" parent="1" source="p1-dash" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p1-exit-2" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e1-18" edge="1" parent="1" source="p1-db" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;startArrow=classic;startFill=1;" target="p1-database" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e1-19" edge="1" parent="1" source="p1-database" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;startArrow=classic;startFill=1;" target="p1-db1-legend" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e1-21" edge="1" parent="1" source="p1-c-A-in" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0;exitY=0.5;exitPerimeter=0;" target="p1-creds" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="page-2" name="2 Dashboard">
+    <mxGraphModel dx="2790" dy="2863" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="2996" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="p2-entry-4" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=12;fontStyle=1;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" value="Dd" vertex="1">
+          <mxGeometry height="63" width="80" x="510" y="130" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-home" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;" value="The Dashboard shows sales, sellers waiting,&lt;br&gt;orders needing work and recent sign-ins." vertex="1">
+          <mxGeometry height="84" width="331" x="384.5" y="257" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-triage" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;" value="They scan what needs&lt;br&gt;work first." vertex="1">
+          <mxGeometry height="84" width="290" x="405" y="421" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-pipes" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;" value="The pipeline counts action needed,&lt;br&gt;in prep, shipped and delivered —&lt;br&gt;each opens its order list." vertex="1">
+          <mxGeometry height="103" width="290" x="405" y="565" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-db1-pipes" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=15;fontStyle=1;aspect=fixed;perimeter=ellipsePerimeter;" value="DB1" vertex="1">
+          <mxGeometry height="48" width="48" x="541" y="692" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-quick" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;" value="Clear seller asks can be&lt;br&gt;taken right from the Dashboard." vertex="1">
+          <mxGeometry height="84" width="290" x="420" y="796" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-sellers" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=rhombusPerimeter;" value="Sellers waiting&lt;br&gt;for review?" vertex="1">
+          <mxGeometry height="150" width="310" x="410" y="948" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-exit-3-right" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=12;fontStyle=1;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" value="SU" vertex="1">
+          <mxGeometry height="63" width="80" x="905" y="992" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-goods" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=rhombusPerimeter;" value="Products or 3D asks&lt;br&gt;need work?" vertex="1">
+          <mxGeometry height="150" width="310" x="410" y="1166" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-exit-4-right" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=12;fontStyle=1;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" value="P3M" vertex="1">
+          <mxGeometry height="63" width="80" x="905" y="1210" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-orders" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=rhombusPerimeter;" value="Orders or money&lt;br&gt;need work?" vertex="1">
+          <mxGeometry height="150" width="310" x="410" y="1384" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-exit-5-right" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=12;fontStyle=1;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" value="OM" vertex="1">
+          <mxGeometry height="63" width="80" x="905" y="1428" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-care" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=rhombusPerimeter;" value="Banners or complaints&lt;br&gt;need work?" vertex="1">
+          <mxGeometry height="150" width="310" x="410" y="1602" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-exit-6-right" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=12;fontStyle=1;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" value="CB" vertex="1">
+          <mxGeometry height="63" width="80" x="905" y="1646" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-books" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=rhombusPerimeter;" value="Numbers, audit&lt;br&gt;or settings?" vertex="1">
+          <mxGeometry height="150" width="310" x="410" y="1820" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-exit-7-right" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=12;fontStyle=1;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;size=0.34126984126983767;" value="NAS" vertex="1">
+          <mxGeometry height="63" width="80" x="905" y="1864" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-monitor" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;" value="They keep an eye on the numbers&lt;br&gt;and hop between screens." vertex="1">
+          <mxGeometry height="84" width="290" x="420" y="2038" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-done" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=rhombusPerimeter;" value="Done for&lt;br&gt;the day?" vertex="1">
+          <mxGeometry height="150" width="310" x="410" y="2190" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-stay" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=parallelogramPerimeter;" value="They stay — the numbers&lt;br&gt;keep updating." vertex="1">
+          <mxGeometry height="84" width="240" x="825" y="2223" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-c-A-out" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=15;fontStyle=1;aspect=fixed;perimeter=ellipsePerimeter;" value="A" vertex="1">
+          <mxGeometry height="48" width="48" x="921" y="2375" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-bye" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;" value="They sign out — see you&lt;br&gt;at the next shift." vertex="1">
+          <mxGeometry height="84" width="290" x="420" y="2408" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-end" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=14;fontStyle=1;" value="END" vertex="1">
+          <mxGeometry height="90" width="250" x="440" y="2560" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-db" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=12;fontStyle=1;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" value="DB" vertex="1">
+          <mxGeometry height="72" width="80" x="50" y="2786" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-database" parent="1" style="shape=cylinder;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;fontStyle=1;" value="Database" vertex="1">
+          <mxGeometry height="72" width="200" x="150" y="2786" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-db1-legend" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=15;fontStyle=1;aspect=fixed;perimeter=ellipsePerimeter;" value="DB1" vertex="1">
+          <mxGeometry height="48" width="48" x="370" y="2798" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-c-A-in" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=15;fontStyle=1;aspect=fixed;perimeter=ellipsePerimeter;" value="A" vertex="1">
+          <mxGeometry height="48" width="48" x="825" y="2056" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-title" parent="1" style="text;html=1;fontSize=22;fontStyle=1;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" value="2 · Dashboard" vertex="1">
+          <mxGeometry height="30" width="700" x="60" y="42" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-subtitle" parent="1" style="text;html=1;fontSize=12;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" value="SoleVision — what the admin does · page 2 of 7" vertex="1">
+          <mxGeometry height="24" width="700" x="60" y="76" as="geometry" />
+        </mxCell>
+        <mxCell id="e2-3" edge="1" parent="1" source="p2-entry-4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;" target="p2-home" value="">
+          <mxGeometry relative="1" x="-0.4688" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2-7" edge="1" parent="1" source="p2-home" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p2-triage" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+            <Array as="points">
+              <mxPoint x="550" y="413" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2-8" edge="1" parent="1" source="p2-triage" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p2-pipes" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2-9" edge="1" parent="1" source="p2-pipes" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p2-db1-pipes" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2-10" edge="1" parent="1" source="p2-db1-pipes" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p2-quick" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2-11" edge="1" parent="1" source="p2-quick" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p2-sellers" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2-12" edge="1" parent="1" source="p2-sellers" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;" target="p2-exit-3-right" value="Yes">
+          <mxGeometry relative="1" x="-0.0809" y="14" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2-13" edge="1" parent="1" source="p2-sellers" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p2-goods" value="No">
+          <mxGeometry relative="1" x="-0.1176" y="10" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2-14" edge="1" parent="1" source="p2-goods" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;" target="p2-exit-4-right" value="Yes">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2-15" edge="1" parent="1" source="p2-goods" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p2-orders" value="No">
+          <mxGeometry relative="1" x="-0.0844" y="10" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2-16" edge="1" parent="1" source="p2-orders" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;" target="p2-exit-5-right" value="Yes">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2-17" edge="1" parent="1" source="p2-orders" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p2-care" value="No">
+          <mxGeometry relative="1" x="-0.0809" y="12" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2-18" edge="1" parent="1" source="p2-care" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;" target="p2-exit-6-right" value="Yes">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2-19" edge="1" parent="1" source="p2-care" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p2-books" value="No">
+          <mxGeometry relative="1" x="-0.0671" y="8" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2-20" edge="1" parent="1" source="p2-books" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;" target="p2-exit-7-right" value="Yes">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2-21" edge="1" parent="1" source="p2-books" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p2-monitor" value="No">
+          <mxGeometry relative="1" x="-0.1274" y="13" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2-22" edge="1" parent="1" source="p2-monitor" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;" target="p2-done" value="">
+          <mxGeometry relative="1" x="-0.1586" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2-23" edge="1" parent="1" source="p2-done" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;" target="p2-stay" value="No">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2-24" edge="1" parent="1" source="p2-stay" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p2-c-A-out" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2-25" edge="1" parent="1" source="p2-done" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p2-bye" value="Yes">
+          <mxGeometry relative="1" x="-0.0941" y="14" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2-26" edge="1" parent="1" source="p2-bye" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p2-end" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2-27" edge="1" parent="1" source="p2-db" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;startArrow=classic;startFill=1;" target="p2-database" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2-28" edge="1" parent="1" source="p2-database" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;startArrow=classic;startFill=1;" target="p2-db1-legend" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2-29" edge="1" parent="1" source="p2-db1-legend" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+            <mxPoint x="440" y="2822" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2-30" edge="1" parent="1" source="p2-c-A-in" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0;exitY=0.5;exitPerimeter=0;entryX=1;entryY=0.5;entryPerimeter=0;" target="p2-monitor" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="page-3" name="3 Sellers and users">
+    <mxGraphModel dx="1744" dy="1790" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="2135" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="p3-entry-2" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=12;fontStyle=1;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" value="SU" vertex="1">
+          <mxGeometry height="63" width="80" x="525" y="130" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-queue" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;" value="Asks wait newest first —&lt;br&gt;tabs for pending, approved,&lt;br&gt;rejected or all." vertex="1">
+          <mxGeometry height="103" width="290" x="420" y="261" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-review" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=parallelogramPerimeter;" value="They open an ask to see the shop,&lt;br&gt;its papers, photos and owner." vertex="1">
+          <mxGeometry height="84" width="290" x="420" y="432" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-approve" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=rhombusPerimeter;" value="Take the shop on?" vertex="1">
+          <mxGeometry height="150" width="310" x="410" y="584" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-reject" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=parallelogramPerimeter;" value="They turn it down with&lt;br&gt;a short reason the owner sees." vertex="1">
+          <mxGeometry height="84" width="240" x="825" y="617" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-c-A-out" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=15;fontStyle=1;aspect=fixed;perimeter=ellipsePerimeter;" value="A" vertex="1">
+          <mxGeometry height="48" width="48" x="921" y="769" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-users" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=parallelogramPerimeter;" value="On Users they find people&lt;br&gt;by name or email — shoppers,&lt;br&gt;shop owners, fellow admins." vertex="1">
+          <mxGeometry height="103" width="290" x="420" y="802" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-flags" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=parallelogramPerimeter;" value="Tabs and filters split shoppers,&lt;br&gt;sellers, admins — active or paused." vertex="1">
+          <mxGeometry height="84" width="290" x="420" y="973" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-detail" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;" value="They open a person to see orders,&lt;br&gt;shops, past trouble —&lt;br&gt;failed sign-ins show too." vertex="1">
+          <mxGeometry height="103" width="290" x="420" y="1125" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-db1-detail" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=15;fontStyle=1;aspect=fixed;perimeter=ellipsePerimeter;" value="DB1" vertex="1">
+          <mxGeometry height="48" width="48" x="541" y="1252" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-trouble" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=rhombusPerimeter;" value="Causing trouble?" vertex="1">
+          <mxGeometry height="150" width="310" x="410" y="1356" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-suspend" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=parallelogramPerimeter;" value="They pause it with a reason&lt;br&gt;on record — no more sign-ins." vertex="1">
+          <mxGeometry height="84" width="240" x="825" y="1389" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-restore" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=parallelogramPerimeter;" value="Quiet again — they lift&lt;br&gt;the pause." vertex="1">
+          <mxGeometry height="84" width="240" x="825" y="1541" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-back" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;" value="Queues clear — back to base." vertex="1">
+          <mxGeometry height="65" width="290" x="420" y="1574" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-exit-2" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=12;fontStyle=1;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;size=0.4895833333333286;" value="Dd&lt;div&gt;&lt;br/&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="48" width="71" x="529.5" y="1686" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-db" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=12;fontStyle=1;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" value="DB" vertex="1">
+          <mxGeometry height="72" width="80" x="50" y="1925" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-database" parent="1" style="shape=cylinder;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;fontStyle=1;" value="Database" vertex="1">
+          <mxGeometry height="72" width="200" x="150" y="1925" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-db1-legend" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=15;fontStyle=1;aspect=fixed;perimeter=ellipsePerimeter;" value="DB1" vertex="1">
+          <mxGeometry height="48" width="48" x="370" y="1937" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-db-note" parent="1" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;dashPattern=4 4;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=12;align=left;verticalAlign=middle;spacingLeft=10;spacingRight=10;" value="DB steps touch the Database;&lt;br&gt;DB1 marks where in the flow." vertex="1">
+          <mxGeometry height="72" width="330" x="440" y="1925" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-c-A-in" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=15;fontStyle=1;aspect=fixed;perimeter=ellipsePerimeter;" value="A" vertex="1">
+          <mxGeometry height="48" width="48" x="825" y="289" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-title" parent="1" style="text;html=1;fontSize=22;fontStyle=1;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" value="3 · Sellers and users" vertex="1">
+          <mxGeometry height="30" width="700" x="60" y="42" as="geometry" />
+        </mxCell>
+        <mxCell id="p3-subtitle" parent="1" style="text;html=1;fontSize=12;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" value="SoleVision — what the admin does · page 3 of 7" vertex="1">
+          <mxGeometry height="24" width="700" x="60" y="76" as="geometry" />
+        </mxCell>
+        <mxCell id="e3-1" edge="1" parent="1" source="p3-entry-2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p3-queue" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e3-2" edge="1" parent="1" source="p3-queue" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p3-review" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e3-3" edge="1" parent="1" source="p3-review" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p3-approve" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e3-4" edge="1" parent="1" source="p3-approve" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;" target="p3-reject" value="No">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e3-5" edge="1" parent="1" source="p3-reject" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p3-c-A-out" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e3-6" edge="1" parent="1" source="p3-approve" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p3-users" value="Yes">
+          <mxGeometry relative="1" x="-0.2353" y="15" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e3-7" edge="1" parent="1" source="p3-users" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p3-flags" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e3-8" edge="1" parent="1" source="p3-flags" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p3-detail" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e3-9" edge="1" parent="1" source="p3-detail" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p3-db1-detail" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e3-10" edge="1" parent="1" source="p3-db1-detail" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;" target="p3-trouble" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e3-11" edge="1" parent="1" source="p3-trouble" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;" target="p3-suspend" value="Yes">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e3-12" edge="1" parent="1" source="p3-suspend" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p3-restore" value="">
+          <mxGeometry relative="1" x="-0.1059" y="11" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e3-13" edge="1" parent="1" source="p3-trouble" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p3-back" value="No">
+          <mxGeometry relative="1" x="-0.0882" y="8" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e3-14" edge="1" parent="1" source="p3-back" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p3-exit-2" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e3-15" edge="1" parent="1" source="p3-db" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;startArrow=classic;startFill=1;" target="p3-database" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e3-16" edge="1" parent="1" source="p3-database" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;startArrow=classic;startFill=1;" target="p3-db1-legend" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e3-17" edge="1" parent="1" source="p3-db1-legend" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;" target="p3-db-note" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e3-18" edge="1" parent="1" source="p3-c-A-in" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0;exitY=0.5;exitPerimeter=0;entryX=1;entryY=0.5;entryPerimeter=0;" target="p3-queue" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="page-4" name="4 Products and 3D models">
+    <mxGraphModel dx="1213" dy="1245" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="2154" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="p4-entry-2" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=12;fontStyle=1;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" value="P3M" vertex="1">
+          <mxGeometry height="63" width="80" x="525" y="130" as="geometry" />
+        </mxCell>
+        <mxCell id="p4-catalogue" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;" value="Products sit grouped by shop —&lt;br&gt;grid or list, search, filter&lt;br&gt;by kind or shelf state." vertex="1">
+          <mxGeometry height="103" width="290" x="420" y="261" as="geometry" />
+        </mxCell>
+        <mxCell id="p4-detail" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;" value="They open a product for photos,&lt;br&gt;price, sizes and reviews." vertex="1">
+          <mxGeometry height="84" width="290" x="420" y="432" as="geometry" />
+        </mxCell>
+        <mxCell id="p4-live" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=rhombusPerimeter;" value="Still fit for&lt;br&gt;the shelf?" vertex="1">
+          <mxGeometry height="150" width="310" x="410" y="584" as="geometry" />
+        </mxCell>
+        <mxCell id="p4-hide" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=parallelogramPerimeter;" value="They take it down — confirm,&lt;br&gt;hidden from shoppers,&lt;br&gt;but kept on record." vertex="1">
+          <mxGeometry height="103" width="240" x="825" y="608" as="geometry" />
+        </mxCell>
+        <mxCell id="p4-c-B-out" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=15;fontStyle=1;aspect=fixed;perimeter=ellipsePerimeter;" value="B" vertex="1">
+          <mxGeometry height="48" width="48" x="921" y="779" as="geometry" />
+        </mxCell>
+        <mxCell id="p4-asks" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;" value="Model asks wait in their own list —&lt;br&gt;waiting, done and closed." vertex="1">
+          <mxGeometry height="84" width="290" x="420" y="802" as="geometry" />
+        </mxCell>
+        <mxCell id="p4-claim" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;" value="They take an ask and shape&lt;br&gt;the 3D pair from shop photos." vertex="1">
+          <mxGeometry height="84" width="290" x="420" y="954" as="geometry" />
+        </mxCell>
+        <mxCell id="p4-ready" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=rhombusPerimeter;" value="Model good to go?" vertex="1">
+          <mxGeometry height="150" width="310" x="410" y="1106" as="geometry" />
+        </mxCell>
+        <mxCell id="p4-decline" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=parallelogramPerimeter;" value="They turn it down with&lt;br&gt;a note the shop gets told." vertex="1">
+          <mxGeometry height="84" width="240" x="825" y="1139" as="geometry" />
+        </mxCell>
+        <mxCell id="p4-c-A-out" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=15;fontStyle=1;aspect=fixed;perimeter=ellipsePerimeter;" value="A" vertex="1">
+          <mxGeometry height="48" width="48" x="921" y="1291" as="geometry" />
+        </mxCell>
+        <mxCell id="p4-fulfil" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;" value="They load the model with its&lt;br&gt;AR try-on — shoppers can&lt;br&gt;spin it now.&lt;br&gt;Saved to the Database." vertex="1">
+          <mxGeometry height="122" width="290" x="420" y="1324" as="geometry" />
+        </mxCell>
+        <mxCell id="p4-db1-fulfil" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=15;fontStyle=1;aspect=fixed;perimeter=ellipsePerimeter;" value="DB1" vertex="1">
+          <mxGeometry height="48" width="48" x="541" y="1486" as="geometry" />
+        </mxCell>
+        <mxCell id="p4-tidy" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=parallelogramPerimeter;" value="Worn models go by right-click —&lt;br&gt;confirm, then file and row go." vertex="1">
+          <mxGeometry height="84" width="290" x="420" y="1574" as="geometry" />
+        </mxCell>
+        <mxCell id="p4-exit-2" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=12;fontStyle=1;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" value="Dd&lt;div&gt;&lt;br/&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="48" width="61" x="534.5" y="1731" as="geometry" />
+        </mxCell>
+        <mxCell id="p4-db" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=12;fontStyle=1;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" value="DB" vertex="1">
+          <mxGeometry height="72" width="80" x="28" y="1944" as="geometry" />
+        </mxCell>
+        <mxCell id="p4-database" parent="1" style="shape=cylinder;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;fontStyle=1;" value="Database" vertex="1">
+          <mxGeometry height="72" width="200" x="150" y="1944" as="geometry" />
+        </mxCell>
+        <mxCell id="p4-db1-legend" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=15;fontStyle=1;aspect=fixed;perimeter=ellipsePerimeter;" value="DB1" vertex="1">
+          <mxGeometry height="48" width="48" x="392" y="1956" as="geometry" />
+        </mxCell>
+        <mxCell id="p4-c-B-in" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=15;fontStyle=1;aspect=fixed;perimeter=ellipsePerimeter;" value="B" vertex="1">
+          <mxGeometry height="48" width="48" x="825" y="289" as="geometry" />
+        </mxCell>
+        <mxCell id="p4-c-A-in" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=15;fontStyle=1;aspect=fixed;perimeter=ellipsePerimeter;" value="A" vertex="1">
+          <mxGeometry height="48" width="48" x="825" y="972" as="geometry" />
+        </mxCell>
+        <mxCell id="p4-title" parent="1" style="text;html=1;fontSize=22;fontStyle=1;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" value="4 · Products and 3D models" vertex="1">
+          <mxGeometry height="30" width="700" x="60" y="42" as="geometry" />
+        </mxCell>
+        <mxCell id="p4-subtitle" parent="1" style="text;html=1;fontSize=12;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" value="SoleVision — what the admin does · page 4 of 7" vertex="1">
+          <mxGeometry height="24" width="700" x="60" y="76" as="geometry" />
+        </mxCell>
+        <mxCell id="e4-1" edge="1" parent="1" source="p4-entry-2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p4-catalogue" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e4-2" edge="1" parent="1" source="p4-catalogue" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p4-detail" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e4-3" edge="1" parent="1" source="p4-detail" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p4-live" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e4-4" edge="1" parent="1" source="p4-live" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;" target="p4-hide" value="No">
+          <mxGeometry relative="1" x="-0.1815" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e4-5" edge="1" parent="1" source="p4-hide" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p4-c-B-out" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e4-6" edge="1" parent="1" source="p4-live" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p4-asks" value="Yes">
+          <mxGeometry relative="1" x="-0.115" y="10" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e4-7" edge="1" parent="1" source="p4-asks" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p4-claim" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e4-8" edge="1" parent="1" source="p4-claim" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p4-ready" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e4-9" edge="1" parent="1" source="p4-ready" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;" target="p4-decline" value="No">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e4-10" edge="1" parent="1" source="p4-decline" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p4-c-A-out" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e4-11" edge="1" parent="1" source="p4-ready" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p4-fulfil" value="Yes">
+          <mxGeometry relative="1" x="-0.1324" y="10" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e4-12" edge="1" parent="1" source="p4-fulfil" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p4-db1-fulfil" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e4-13" edge="1" parent="1" source="p4-db1-fulfil" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p4-tidy" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e4-14" edge="1" parent="1" source="p4-tidy" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p4-exit-2" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e4-15" edge="1" parent="1" source="p4-db" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;startArrow=classic;startFill=1;" target="p4-database" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e4-16" edge="1" parent="1" source="p4-database" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;startArrow=classic;startFill=1;" target="p4-db1-legend" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e4-18" edge="1" parent="1" source="p4-c-B-in" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0;exitY=0.5;exitPerimeter=0;entryX=1;entryY=0.5;entryPerimeter=0;" target="p4-catalogue" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e4-19" edge="1" parent="1" source="p4-c-A-in" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0;exitY=0.5;exitPerimeter=0;entryX=1;entryY=0.5;entryPerimeter=0;" target="p4-claim" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="page-5" name="5 Orders and money">
+    <mxGraphModel dx="1213" dy="1245" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="2226" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="p5-entry-2" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=12;fontStyle=1;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" value="OM" vertex="1">
+          <mxGeometry height="63" width="80" x="525" y="130" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-orders" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;" value="Orders line up newest first —&lt;br&gt;search, dates and stage filters&lt;br&gt;find the stuck ones." vertex="1">
+          <mxGeometry height="103" width="290" x="420" y="261" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-detail" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;" value="They open an order to see items,&lt;br&gt;payment, address and stage." vertex="1">
+          <mxGeometry height="84" width="290" x="420" y="432" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-move" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=rhombusPerimeter;" value="Move it a stage on?" vertex="1">
+          <mxGeometry height="150" width="310" x="410" y="584" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-hold" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=parallelogramPerimeter;" value="Not yet — they leave it&lt;br&gt;and check back later." vertex="1">
+          <mxGeometry height="84" width="240" x="825" y="617" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-c-A-out" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=15;fontStyle=1;aspect=fixed;perimeter=ellipsePerimeter;" value="A" vertex="1">
+          <mxGeometry height="48" width="48" x="921" y="769" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-pack" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;" value="They shift the stage as the shop&lt;br&gt;packs, ships and hands over." vertex="1">
+          <mxGeometry height="84" width="290" x="420" y="802" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-money" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;" value="On Money they scan the piles —&lt;br&gt;paid, waiting, failed,&lt;br&gt;out of date and called off." vertex="1">
+          <mxGeometry height="103" width="290" x="420" y="954" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-cards" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;" value="Top cards sum paid takings,&lt;br&gt;fees and the failed pile,&lt;br&gt;with a daily chart." vertex="1">
+          <mxGeometry height="103" width="290" x="420" y="1125" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-moneyok" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=rhombusPerimeter;" value="Does the money&lt;br&gt;add up in the Database?" vertex="1">
+          <mxGeometry height="150" width="310" x="410" y="1296" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-db1-moneyok" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=15;fontStyle=1;aspect=fixed;perimeter=ellipsePerimeter;" value="DB1" vertex="1">
+          <mxGeometry height="48" width="48" x="541" y="1486" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-chase" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=parallelogramPerimeter;" value="Failed or odd ones get&lt;br&gt;a closer look with the order&lt;br&gt;open beside them." vertex="1">
+          <mxGeometry height="103" width="240" x="825" y="1320" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-sheet" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=parallelogramPerimeter;" value="The list can leave as a sheet&lt;br&gt;for the books." vertex="1">
+          <mxGeometry height="84" width="290" x="420" y="1574" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-exit-2" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=12;fontStyle=1;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" value="Dd&lt;div&gt;&lt;br/&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="63" width="66" x="532" y="1740.5" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-db" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=12;fontStyle=1;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" value="DB" vertex="1">
+          <mxGeometry height="72" width="80" x="24" y="2016" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-database" parent="1" style="shape=cylinder;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;fontStyle=1;" value="Database" vertex="1">
+          <mxGeometry height="72" width="200" x="150" y="2016" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-db1-legend" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=15;fontStyle=1;aspect=fixed;perimeter=ellipsePerimeter;" value="DB1" vertex="1">
+          <mxGeometry height="48" width="48" x="400" y="2028" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-c-A-in" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=15;fontStyle=1;aspect=fixed;perimeter=ellipsePerimeter;" value="A" vertex="1">
+          <mxGeometry height="48" width="48" x="825" y="450" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-title" parent="1" style="text;html=1;fontSize=22;fontStyle=1;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" value="5 · Orders and money" vertex="1">
+          <mxGeometry height="30" width="700" x="60" y="42" as="geometry" />
+        </mxCell>
+        <mxCell id="p5-subtitle" parent="1" style="text;html=1;fontSize=12;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" value="SoleVision — what the admin does · page 5 of 7" vertex="1">
+          <mxGeometry height="24" width="700" x="60" y="76" as="geometry" />
+        </mxCell>
+        <mxCell id="e5-1" edge="1" parent="1" source="p5-entry-2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p5-orders" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5-2" edge="1" parent="1" source="p5-orders" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p5-detail" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5-3" edge="1" parent="1" source="p5-detail" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p5-move" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5-4" edge="1" parent="1" source="p5-move" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;" target="p5-hold" value="No">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5-5" edge="1" parent="1" source="p5-hold" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p5-c-A-out" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5-6" edge="1" parent="1" source="p5-move" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p5-pack" value="Yes">
+          <mxGeometry relative="1" x="-0.1412" y="10" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5-7" edge="1" parent="1" source="p5-pack" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p5-money" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5-8" edge="1" parent="1" source="p5-money" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p5-cards" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5-9" edge="1" parent="1" source="p5-cards" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p5-moneyok" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5-10" edge="1" parent="1" source="p5-moneyok" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;" target="p5-db1-moneyok" value="Yes">
+          <mxGeometry relative="1" x="-0.1355" y="10" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5-11" edge="1" parent="1" source="p5-moneyok" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;" target="p5-chase" value="No">
+          <mxGeometry relative="1" x="-0.1691" y="17" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5-12" edge="1" parent="1" source="p5-db1-moneyok" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p5-sheet" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5-13" edge="1" parent="1" source="p5-sheet" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p5-exit-2" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5-14" edge="1" parent="1" source="p5-db" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;startArrow=classic;startFill=1;" target="p5-database" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5-15" edge="1" parent="1" source="p5-database" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;startArrow=classic;startFill=1;" target="p5-db1-legend" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5-17" edge="1" parent="1" source="p5-c-A-in" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0;exitY=0.5;exitPerimeter=0;entryX=1;entryY=0.5;entryPerimeter=0;" target="p5-detail" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="page-6" name="6 Complaints and banners">
+    <mxGraphModel dx="837" dy="859" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="2458" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="p6-entry-2" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=12;fontStyle=1;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" value="CB" vertex="1">
+          <mxGeometry height="63" width="80" x="525" y="130" as="geometry" />
+        </mxCell>
+        <mxCell id="p6-inbox" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;" value="Flags land newest first —&lt;br&gt;rude words, spam and scams,&lt;br&gt;fake items and knock-offs." vertex="1">
+          <mxGeometry height="103" width="290" x="420" y="261" as="geometry" />
+        </mxCell>
+        <mxCell id="p6-urgent" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;" value="Red flags and counters point&lt;br&gt;at the urgent ones." vertex="1">
+          <mxGeometry height="84" width="290" x="420" y="432" as="geometry" />
+        </mxCell>
+        <mxCell id="p6-read" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=parallelogramPerimeter;" value="They open one to see who told,&lt;br&gt;who it is about and the proof." vertex="1">
+          <mxGeometry height="84" width="290" x="420" y="584" as="geometry" />
+        </mxCell>
+        <mxCell id="p6-fair" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=rhombusPerimeter;" value="Did someone break&lt;br&gt;the house rules?" vertex="1">
+          <mxGeometry height="150" width="310" x="410" y="736" as="geometry" />
+        </mxCell>
+        <mxCell id="p6-act" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=parallelogramPerimeter;" value="They warn, hide the item,&lt;br&gt;pause the seller or refund,&lt;br&gt;then thank the one who told." vertex="1">
+          <mxGeometry height="103" width="240" x="825" y="760" as="geometry" />
+        </mxCell>
+        <mxCell id="p6-refund" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=parallelogramPerimeter;" value="Refund issued — the money&lt;br&gt;moves back to the buyer." vertex="1">
+          <mxGeometry height="84" width="240" x="825" y="931" as="geometry" />
+        </mxCell>
+        <mxCell id="p6-close" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=parallelogramPerimeter;" value="They mark it fixed — saying&lt;br&gt;what was done — or let it go,&lt;br&gt;reason on record." vertex="1">
+          <mxGeometry height="103" width="290" x="420" y="954" as="geometry" />
+        </mxCell>
+        <mxCell id="p6-tell" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=parallelogramPerimeter;" value="Word goes back to the one&lt;br&gt;who told — ready words&lt;br&gt;or the office’s own." vertex="1">
+          <mxGeometry height="103" width="290" x="420" y="1125" as="geometry" />
+        </mxCell>
+        <mxCell id="p6-flags" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=parallelogramPerimeter;" value="On Banners they shape the home&lt;br&gt;strip — photo, words, link, dates." vertex="1">
+          <mxGeometry height="84" width="290" x="420" y="1296" as="geometry" />
+        </mxCell>
+        <mxCell id="p6-order" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=parallelogramPerimeter;" value="They nudge the order, set dates&lt;br&gt;and flip each flag on or off." vertex="1">
+          <mxGeometry height="84" width="290" x="420" y="1448" as="geometry" />
+        </mxCell>
+        <mxCell id="p6-linkok" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=rhombusPerimeter;" value="Does every link&lt;br&gt;have its target&lt;br&gt;in the Database?" vertex="1">
+          <mxGeometry height="150" width="310" x="410" y="1600" as="geometry" />
+        </mxCell>
+        <mxCell id="p6-db1-linkok" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=15;fontStyle=1;aspect=fixed;perimeter=ellipsePerimeter;" value="DB1" vertex="1">
+          <mxGeometry height="48" width="48" x="541" y="1787" as="geometry" />
+        </mxCell>
+        <mxCell id="p6-fixlink" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=parallelogramPerimeter;" value="They fill the missing target&lt;br&gt;or drop the link." vertex="1">
+          <mxGeometry height="84" width="240" x="825" y="1633" as="geometry" />
+        </mxCell>
+        <mxCell id="p6-retire" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=parallelogramPerimeter;" value="Worn-out flags get erased&lt;br&gt;after a confirm." vertex="1">
+          <mxGeometry height="84" width="290" x="420" y="1878" as="geometry" />
+        </mxCell>
+        <mxCell id="p6-exit-2" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=12;fontStyle=1;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" value="Dd&lt;div&gt;&lt;br/&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="48" width="64" x="533" y="2030" as="geometry" />
+        </mxCell>
+        <mxCell id="p6-db" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=12;fontStyle=1;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" value="DB" vertex="1">
+          <mxGeometry height="72" width="80" x="33" y="2248" as="geometry" />
+        </mxCell>
+        <mxCell id="p6-database" parent="1" style="shape=cylinder;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;fontStyle=1;" value="Database" vertex="1">
+          <mxGeometry height="72" width="200" x="150" y="2248" as="geometry" />
+        </mxCell>
+        <mxCell id="p6-db1-legend" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=15;fontStyle=1;aspect=fixed;perimeter=ellipsePerimeter;" value="DB1" vertex="1">
+          <mxGeometry height="48" width="48" x="387" y="2260" as="geometry" />
+        </mxCell>
+        <mxCell id="p6-title" parent="1" style="text;html=1;fontSize=22;fontStyle=1;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" value="6 · Complaints and banners" vertex="1">
+          <mxGeometry height="30" width="700" x="60" y="42" as="geometry" />
+        </mxCell>
+        <mxCell id="p6-subtitle" parent="1" style="text;html=1;fontSize=12;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" value="SoleVision — what the admin does · page 6 of 7" vertex="1">
+          <mxGeometry height="24" width="700" x="60" y="76" as="geometry" />
+        </mxCell>
+        <mxCell id="e6-1" edge="1" parent="1" source="p6-entry-2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p6-inbox" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e6-2" edge="1" parent="1" source="p6-inbox" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p6-urgent" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e6-3" edge="1" parent="1" source="p6-urgent" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p6-read" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e6-4" edge="1" parent="1" source="p6-read" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p6-fair" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e6-5" edge="1" parent="1" source="p6-fair" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;" target="p6-act" value="Yes">
+          <mxGeometry relative="1" x="-0.1815" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e6-6" edge="1" parent="1" source="p6-act" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p6-refund" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e6-7" edge="1" parent="1" source="p6-fair" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p6-close" value="No">
+          <mxGeometry relative="1" x="-0.1079" y="11" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e6-8" edge="1" parent="1" source="p6-refund" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;" target="p6-close" value="">
+          <mxGeometry relative="1" x="-0.1421" as="geometry">
+            <mxPoint y="-12" as="offset" />
+            <Array as="points" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e6-9" edge="1" parent="1" source="p6-close" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p6-tell" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e6-10" edge="1" parent="1" source="p6-tell" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p6-flags" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e6-11" edge="1" parent="1" source="p6-flags" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p6-order" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e6-12" edge="1" parent="1" source="p6-order" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p6-linkok" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e6-13" edge="1" parent="1" source="p6-linkok" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;" target="p6-db1-linkok" value="Yes">
+          <mxGeometry relative="1" x="-0.1335" y="12" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e6-14" edge="1" parent="1" source="p6-linkok" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;" target="p6-fixlink" value="No">
+          <mxGeometry relative="1" x="-0.2248" y="11" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e6-15" edge="1" parent="1" source="p6-db1-linkok" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p6-retire" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e6-16" edge="1" parent="1" source="p6-retire" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p6-exit-2" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e6-17" edge="1" parent="1" source="p6-db" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;startArrow=classic;startFill=1;" target="p6-database" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e6-18" edge="1" parent="1" source="p6-database" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;startArrow=classic;startFill=1;" target="p6-db1-legend" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="page-7" name="7 Numbers, audit and settings">
+    <mxGraphModel dx="1008" dy="1035" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="1784" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="p7-entry-2" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=12;fontStyle=1;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" value="NAS" vertex="1">
+          <mxGeometry height="63" width="80" x="525" y="130" as="geometry" />
+        </mxCell>
+        <mxCell id="p7-numbers" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=parallelogramPerimeter;" value="On Numbers they pick 7, 30 or 90&lt;br&gt;days — takings, top pairs,&lt;br&gt;shares of order stages." vertex="1">
+          <mxGeometry height="103" width="290" x="420" y="261" as="geometry" />
+        </mxCell>
+        <mxCell id="p7-audit" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=parallelogramPerimeter;" value="On Audit they pick a trail — shops,&lt;br&gt;money, safety, sign-ins, doings —&lt;br&gt;each with its own filters." vertex="1">
+          <mxGeometry height="103" width="290" x="420" y="432" as="geometry" />
+        </mxCell>
+        <mxCell id="p7-sheet" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=parallelogramPerimeter;" value="Any trail can leave as a sheet&lt;br&gt;for the books." vertex="1">
+          <mxGeometry height="84" width="290" x="420" y="603" as="geometry" />
+        </mxCell>
+        <mxCell id="p7-profile" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=parallelogramPerimeter;" value="On Settings they save their name,&lt;br&gt;swap the password — six signs&lt;br&gt;or more, typed twice the same." vertex="1">
+          <mxGeometry height="103" width="290" x="420" y="755" as="geometry" />
+        </mxCell>
+        <mxCell id="p7-safe" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=rhombusPerimeter;" value="Is the second step&lt;br&gt;on for this account&lt;br&gt;in the Database?" vertex="1">
+          <mxGeometry height="150" width="310" x="410" y="926" as="geometry" />
+        </mxCell>
+        <mxCell id="p7-db1-safe" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=15;fontStyle=1;aspect=fixed;perimeter=ellipsePerimeter;" value="DB1" vertex="1">
+          <mxGeometry height="48" width="48" x="541" y="1116" as="geometry" />
+        </mxCell>
+        <mxCell id="p7-addmfa" parent="1" style="shape=parallelogram;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;perimeter=parallelogramPerimeter;" value="They link the authenticator&lt;br&gt;app for the extra code." vertex="1">
+          <mxGeometry height="84" width="240" x="768" y="959" as="geometry" />
+        </mxCell>
+        <mxCell id="p7-danger" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;" value="Lost phone — they sign out&lt;br&gt;on every device at once." vertex="1">
+          <mxGeometry height="84" width="290" x="420" y="1204" as="geometry" />
+        </mxCell>
+        <mxCell id="p7-exit-2" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=12;fontStyle=1;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" value="Dd&lt;div&gt;&lt;br/&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="55" width="76" x="527" y="1336" as="geometry" />
+        </mxCell>
+        <mxCell id="p7-db" parent="1" style="shape=offPageConnector;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=12;fontStyle=1;verticalAlign=top;spacingTop=10;perimeter=rectanglePerimeter;" value="DB" vertex="1">
+          <mxGeometry height="72" width="80" x="28" y="1574" as="geometry" />
+        </mxCell>
+        <mxCell id="p7-database" parent="1" style="shape=cylinder;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=13;fontStyle=1;" value="Database" vertex="1">
+          <mxGeometry height="72" width="200" x="150" y="1574" as="geometry" />
+        </mxCell>
+        <mxCell id="p7-db1-legend" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=none;strokeColor=light-dark(#000000,#FFFFFF);fontColor=light-dark(#000000,#FFFFFF);fontSize=15;fontStyle=1;aspect=fixed;perimeter=ellipsePerimeter;" value="DB1" vertex="1">
+          <mxGeometry height="48" width="48" x="392" y="1586" as="geometry" />
+        </mxCell>
+        <mxCell id="p7-title" parent="1" style="text;html=1;fontSize=22;fontStyle=1;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" value="7 · Numbers, audit and settings" vertex="1">
+          <mxGeometry height="30" width="700" x="60" y="42" as="geometry" />
+        </mxCell>
+        <mxCell id="p7-subtitle" parent="1" style="text;html=1;fontSize=12;align=left;verticalAlign=middle;fontColor=light-dark(#000000,#FFFFFF);" value="SoleVision — what the admin does · page 7 of 7" vertex="1">
+          <mxGeometry height="24" width="700" x="60" y="76" as="geometry" />
+        </mxCell>
+        <mxCell id="e7-1" edge="1" parent="1" source="p7-entry-2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p7-numbers" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e7-2" edge="1" parent="1" source="p7-numbers" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p7-audit" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e7-3" edge="1" parent="1" source="p7-audit" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p7-sheet" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e7-4" edge="1" parent="1" source="p7-sheet" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p7-profile" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e7-5" edge="1" parent="1" source="p7-profile" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p7-safe" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e7-6" edge="1" parent="1" source="p7-safe" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;" target="p7-db1-safe" value="Yes">
+          <mxGeometry relative="1" x="-0.282" y="10" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e7-7" edge="1" parent="1" source="p7-safe" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;" target="p7-addmfa" value="No">
+          <mxGeometry relative="1" x="-0.1126" y="11" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e7-8" edge="1" parent="1" source="p7-db1-safe" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p7-danger" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e7-9" edge="1" parent="1" source="p7-danger" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0;entryPerimeter=0;" target="p7-exit-2" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e7-10" edge="1" parent="1" source="p7-db" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;startArrow=classic;startFill=1;" target="p7-database" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e7-11" edge="1" parent="1" source="p7-database" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=0;html=1;endArrow=classic;endFill=1;strokeColor=light-dark(#000000,#FFFFFF);strokeWidth=1.5;fontSize=9;fontColor=light-dark(#000000,#FFFFFF);labelBackgroundColor=none;;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5;entryPerimeter=0;startArrow=classic;startFill=1;" target="p7-db1-legend" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
