@@ -59,10 +59,12 @@ class _DashboardData {
   final Map<String, dynamic>? store;
   final int lowStockCount;
   final int pendingReservations;
+
   /// Live FREE pickup holds (ANQUI item 14) — stock already off the shelf,
   /// waiting for the customer to walk in. A different queue from the
   /// deposit-gated `pendingReservations` above.
   final int activePickups;
+
   /// How many of [activePickups] hand their stock back within 2 hours (or
   /// already have, pending the sweep) and how many units that is — the part a
   /// store has to act on before the shelf refills itself.
@@ -138,7 +140,9 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
   void initState() {
     super.initState();
     _wasOffline = !ConnectivityService.instance.isOnline;
-    _connectivitySub = ConnectivityService.instance.isOnlineStream.listen((isOnline) {
+    _connectivitySub = ConnectivityService.instance.isOnlineStream.listen((
+      isOnline,
+    ) {
       if (isOnline && _wasOffline && mounted) {
         _loadDashboard();
       }
@@ -189,8 +193,10 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
         DateTime.now().difference(fetchedAt) < _staleAfter) {
       return;
     }
-    PerfTrace.mark('dashboard:stale re-entry refresh (age='
-        '${fetchedAt == null ? '?' : DateTime.now().difference(fetchedAt).inSeconds}s)');
+    PerfTrace.mark(
+      'dashboard:stale re-entry refresh (age='
+      '${fetchedAt == null ? '?' : DateTime.now().difference(fetchedAt).inSeconds}s)',
+    );
     _startDashboardLoad(context.read<AuthProvider>(), _storeId!);
   }
 
@@ -259,11 +265,10 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
   Future<_DashboardData> _fetchDashboardData(
     AuthProvider auth,
     String storeId,
-  ) =>
-      PerfTrace.span(
-        'dashboard:fetch',
-        () => _fetchDashboardDataInner(auth, storeId),
-      );
+  ) => PerfTrace.span(
+    'dashboard:fetch',
+    () => _fetchDashboardDataInner(auth, storeId),
+  );
 
   Future<_DashboardData> _fetchDashboardDataInner(
     AuthProvider auth,
@@ -281,8 +286,14 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
       salesService.getPosWeeklyRevenue(storeId),
       salesService.getOnlineMonthlyRevenueTrend(storeId),
       salesService.getPosMonthlyRevenueTrend(storeId),
-      salesService.getWeeklyTrend(storeId: storeId, channel: SalesChannelFilter.all),
-      salesService.getMonthlyTrend(storeId: storeId, channel: SalesChannelFilter.all),
+      salesService.getWeeklyTrend(
+        storeId: storeId,
+        channel: SalesChannelFilter.all,
+      ),
+      salesService.getMonthlyTrend(
+        storeId: storeId,
+        channel: SalesChannelFilter.all,
+      ),
       // Load products & orders for low stock / pending customs / alerts
       context.read<ProductProvider>().loadSellerProducts(),
       context.read<OrderProvider>().loadOrders(),
@@ -308,8 +319,9 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     // shows 0 when the query fails.
     var pendingReservations = 0;
     try {
-      pendingReservations =
-          await ReservationService.instance.fetchPendingCount(storeId);
+      pendingReservations = await ReservationService.instance.fetchPendingCount(
+        storeId,
+      );
     } catch (_) {}
 
     // Live pickup holds (free, no deposit, already holding stock). Also
@@ -318,7 +330,9 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     var pickupStats = const PickupStoreStats();
     try {
       await PickupReservationService.instance.expireStale();
-      pickupStats = await PickupReservationService.instance.fetchStoreStats(storeId);
+      pickupStats = await PickupReservationService.instance.fetchStoreStats(
+        storeId,
+      );
     } catch (_) {}
     final activePickups = pickupStats.active;
     final pickupLapsing = pickupStats.lapsing;
@@ -328,7 +342,9 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     // Fire-and-forget: notify seller about stale pending orders.
     for (final order in staleOrders) {
       final orderId = order['id']?.toString();
-      final createdAt = DateTime.tryParse(order['created_at']?.toString() ?? '');
+      final createdAt = DateTime.tryParse(
+        order['created_at']?.toString() ?? '',
+      );
       if (orderId != null && createdAt != null) {
         final hoursPending = DateTime.now().difference(createdAt).inHours;
         SellerNotificationService.instance.createStaleOrder(
@@ -345,10 +361,16 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     // 8=weeklyTrend, 9=monthlyTrend, 10=loadProducts, 11=loadOrders
     final onlineWeekly = results[4] as List<double>;
     final posWeekly = results[5] as List<double>;
-    final weeklySalesChart = List.generate(7, (i) => onlineWeekly[i] + posWeekly[i]);
+    final weeklySalesChart = List.generate(
+      7,
+      (i) => onlineWeekly[i] + posWeekly[i],
+    );
     final onlineMonthly = results[6] as List<double>;
     final posMonthly = results[7] as List<double>;
-    final monthlySalesChart = List.generate(6, (i) => onlineMonthly[i] + posMonthly[i]);
+    final monthlySalesChart = List.generate(
+      6,
+      (i) => onlineMonthly[i] + posMonthly[i],
+    );
 
     return _DashboardData(
       todayRevenue: results[0] as double,
@@ -419,8 +441,6 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     );
     return '₱$formatted';
   }
-
-
 
   String _timeAgo(String? isoString) {
     if (isoString == null) return '';
@@ -595,9 +615,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
               ),
               onPressed: () async {
                 await Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const CreateStoreScreen(),
-                  ),
+                  MaterialPageRoute(builder: (_) => const CreateStoreScreen()),
                 );
                 // Reload after setup so the dashboard picks up the store.
                 if (mounted) _loadDashboard();
@@ -624,9 +642,21 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
           // Low Stock & Bulk Reservations — small boxes below
           Row(
             children: [
-              Expanded(child: ShimmerBox(width: double.infinity, height: 112, borderRadius: 20)),
+              Expanded(
+                child: ShimmerBox(
+                  width: double.infinity,
+                  height: 112,
+                  borderRadius: 20,
+                ),
+              ),
               const SizedBox(width: 10),
-              Expanded(child: ShimmerBox(width: double.infinity, height: 112, borderRadius: 20)),
+              Expanded(
+                child: ShimmerBox(
+                  width: double.infinity,
+                  height: 112,
+                  borderRadius: 20,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 16),
@@ -662,10 +692,8 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // "Today's snapshot" eyebrow (mockup header)
-            _eyebrow("TODAY'S SNAPSHOT"),
-            const SizedBox(height: 12),
-            // Block 1 — Today's Snapshot (real data)
+            // Block 1 — Today's Snapshot (real data). The hero card leads;
+            // no eyebrow above it (one voice, not two).
             _buildMetricsGrid(data),
             const SizedBox(height: 16),
 
@@ -684,7 +712,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
             ],
 
             // Block 4 — Recent Orders (real data)
-            _buildSectionLabel('RECENT ORDERS'),
+            _buildOrdersHeader(),
             const SizedBox(height: 10),
             _buildRecentOrders(data),
             const SizedBox(height: 20),
@@ -705,9 +733,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                 points: data.weeklyTrend?.points ?? [],
                 trendResult: data.weeklyTrend,
                 isWeekly: true,
-                labels: const [
-                  'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun',
-                ],
+                labels: const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
               ),
             ),
             const SizedBox(height: 20),
@@ -778,47 +804,30 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
         // Today's Sales — full-width hero card with This Week embedded
         GestureDetector(
           onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const ReportsScreen()),
-            );
+            Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const ReportsScreen()));
           },
           child: Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [SellerTheme.card, SellerTheme.cardHeroEnd],
-              ),
+              // The ledger panel: flat espresso, cream ink. One confident
+              // brand surface instead of a barely-there gradient wash.
+              color: SellerTheme.espressoDark,
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: SellerTheme.cardBorder),
               boxShadow: SellerTheme.cardShadow,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Eyebrow label
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 5,
-                      height: 5,
-                      decoration: const BoxDecoration(
-                        color: SellerTheme.rust,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      "TODAY'S SALES",
-                      style: AppConstants.bodyStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: SellerTheme.textMuted,
-                      ).copyWith(letterSpacing: 1.2),
-                    ),
-                  ],
+                // Eyebrow label — cream on espresso, tracked, no dot.
+                Text(
+                  "TODAY'S SALES",
+                  style: AppConstants.bodyStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: SellerTheme.creamText.withValues(alpha: 0.7),
+                  ).copyWith(letterSpacing: 1.6),
                 ),
                 const SizedBox(height: 18),
                 // Today's value
@@ -827,7 +836,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                   style: AppConstants.monoStyle(
                     fontSize: 36,
                     fontWeight: FontWeight.bold,
-                    color: SellerTheme.rustDeep,
+                    color: SellerTheme.creamText,
                   ),
                 ),
                 if (ratingStr != null) ...[
@@ -836,60 +845,75 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                     onTap: _storeId == null
                         ? null
                         : () => Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => SellerReviewsScreen(
-                                  storeId: _storeId!,
-                                ),
-                              ),
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  SellerReviewsScreen(storeId: _storeId!),
                             ),
+                          ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          ratingStr,
-                          style: AppConstants.bodyStyle(
-                            fontSize: 11,
-                            color: SellerTheme.amber,
-                          ),
+                        const Icon(
+                          Icons.star_rounded,
+                          size: 13,
+                          color: SellerTheme.amber,
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          'View reviews',
+                          '$ratingStr · $reviewCount review${reviewCount == 1 ? '' : 's'}',
                           style: AppConstants.bodyStyle(
-                            fontSize: 11,
+                            fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            color: SellerTheme.amber,
+                            color: SellerTheme.creamText,
                           ),
                         ),
-                        const Icon(
+                        const SizedBox(width: 2),
+                        Icon(
                           Icons.chevron_right,
                           size: 14,
-                          color: SellerTheme.amber,
+                          color: SellerTheme.creamText.withValues(alpha: 0.6),
                         ),
                       ],
                     ),
                   ),
                 ],
                 const SizedBox(height: 16),
-                // This Week (left) + This Month (right), equal widths.
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildPeriodMiniCard(
-                        'THIS WEEK',
-                        weeklyTotal,
-                        _getWeekDateRange(),
+                Container(
+                  padding: const EdgeInsets.only(top: 14),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      top: BorderSide(
+                        color: SellerTheme.creamText.withValues(alpha: 0.14),
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _buildPeriodMiniCard(
-                        'THIS MONTH',
-                        monthlyTotal,
-                        _getMonthDateRange(),
+                  ),
+                  // Week + month as ledger entries, not cards-in-a-card.
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _buildLedgerStat(
+                          'THIS WEEK',
+                          weeklyTotal,
+                          _getWeekDateRange(),
+                        ),
                       ),
-                    ),
-                  ],
+                      Container(
+                        width: 1,
+                        height: 44,
+                        color: SellerTheme.creamText.withValues(alpha: 0.14),
+                      ),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 14),
+                          child: _buildLedgerStat(
+                            'THIS MONTH',
+                            monthlyTotal,
+                            _getMonthDateRange(),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -915,7 +939,8 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                     Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (_) => const ManageProductsScreen(
-                            initialFilter: 'Low Stock'),
+                          initialFilter: 'Low Stock',
+                        ),
                       ),
                     );
                   },
@@ -950,83 +975,93 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
   Widget _buildAlertStrip(_DashboardData data) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
-      child: SizedBox(
-        height: 36,
-        child: ListView(
-          scrollDirection: Axis.horizontal,
-          children: [
-            for (var item in data.lowStockItems.take(3))
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: SellerAlertChip(
-                  icon: Icons.warning_amber_rounded,
-                  text:
-                      '${item['name']} Size ${item['size']} — ${item['qty']} left',
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            const ManageProductsScreen(initialFilter: 'Low Stock'),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            for (var order in data.staleOrders)
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: SellerAlertChip(
-                  icon: Icons.schedule,
-                  text: 'Order #${order['id']} — pending',
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            const ManageOrdersScreen(initialFilter: 'pending'),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            // FREE pickup holds (ANQUI item 14). Their stock is already off
-            // the shelf, so they are a queue of their own rather than part of
-            // the bulk count below — and they never need a deposit decision.
-            if (data.activePickups > 0)
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: SellerAlertChip(
-                  icon: Icons.storefront_outlined,
-                  // The lapsing half matters more than the total: a hold that
-                  // just lapsed is stock that walks back on the shelf unnoticed.
-                  text: data.pickupLapsing > 0
-                      ? '${data.activePickups} pickup hold${data.activePickups > 1 ? 's' : ''} · '
-                          '${data.pickupReturningUnits} pair${data.pickupReturningUnits > 1 ? 's' : ''} back soon'
-                      : '${data.activePickups} pickup hold${data.activePickups > 1 ? 's' : ''} waiting',
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const PickupReservationsScreen(),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            if (data.pendingReservations > 0)
-              SellerAlertChip(
-                icon: Icons.inventory_2_outlined,
-                // Requests to decide + deposit proofs to verify (see
-                // fetchPendingCount — the deposit gate added the second kind).
-                text: '${data.pendingReservations} bulk reservation item${data.pendingReservations > 1 ? 's' : ''} to review',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const ReservationRequestsScreen(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildBlockTitle('Needs attention'),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 36,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                for (var item in data.lowStockItems.take(3))
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: SellerAlertChip(
+                      icon: Icons.warning_amber_rounded,
+                      text:
+                          '${item['name']} Size ${item['size']} — ${item['qty']} left',
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const ManageProductsScreen(
+                              initialFilter: 'Low Stock',
+                            ),
+                          ),
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
-          ],
-        ),
+                  ),
+                for (var order in data.staleOrders)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: SellerAlertChip(
+                      icon: Icons.schedule,
+                      text: 'Order #${order['id']} — pending',
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const ManageOrdersScreen(
+                              initialFilter: 'pending',
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                // FREE pickup holds (ANQUI item 14). Their stock is already off
+                // the shelf, so they are a queue of their own rather than part of
+                // the bulk count below — and they never need a deposit decision.
+                if (data.activePickups > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: SellerAlertChip(
+                      icon: Icons.storefront_outlined,
+                      // The lapsing half matters more than the total: a hold that
+                      // just lapsed is stock that walks back on the shelf unnoticed.
+                      text: data.pickupLapsing > 0
+                          ? '${data.activePickups} pickup hold${data.activePickups > 1 ? 's' : ''} · '
+                                '${data.pickupReturningUnits} pair${data.pickupReturningUnits > 1 ? 's' : ''} back soon'
+                          : '${data.activePickups} pickup hold${data.activePickups > 1 ? 's' : ''} waiting',
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const PickupReservationsScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                if (data.pendingReservations > 0)
+                  SellerAlertChip(
+                    icon: Icons.inventory_2_outlined,
+                    // Requests to decide + deposit proofs to verify (see
+                    // fetchPendingCount — the deposit gate added the second kind).
+                    text:
+                        '${data.pendingReservations} bulk reservation item${data.pendingReservations > 1 ? 's' : ''} to review',
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const ReservationRequestsScreen(),
+                        ),
+                      );
+                    },
+                  ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1049,12 +1084,13 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
         children: [
           Row(
             children: [
-              _eyebrow('ORDER STATUS'),
-              const SizedBox(width: 8),
+              _buildBlockTitle('Order status'),
+              const Spacer(),
               Text(
                 '$total total',
                 style: AppConstants.monoStyle(
-                  fontSize: 11,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
                   color: SellerTheme.textMuted,
                 ),
               ),
@@ -1088,10 +1124,11 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                     const SizedBox(height: 2),
                     Text(
                       status.toUpperCase(),
-                      style: AppConstants.monoStyle(
-                        fontSize: 9,
+                      style: AppConstants.bodyStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
                         color: SellerTheme.textMuted,
-                      ),
+                      ).copyWith(letterSpacing: 1.0),
                     ),
                   ],
                 ),
@@ -1169,24 +1206,6 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
             showPrimaryAction: false,
           );
         }),
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton(
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const ManageOrdersScreen()),
-              );
-            },
-            child: Text(
-              'View All Orders →',
-              style: AppConstants.bodyStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: SellerTheme.rust,
-              ),
-            ),
-          ),
-        ),
       ],
     );
   }
@@ -1199,9 +1218,9 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const ReportsScreen()),
-          );
+          Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const ReportsScreen()));
         },
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -1244,7 +1263,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                       'Daily revenue, top products & CSV export',
                       style: AppConstants.bodyStyle(
                         fontSize: 12,
-                        color: Colors.grey.shade500,
+                        color: SellerTheme.textMuted,
                       ),
                     ),
                   ],
@@ -1258,109 +1277,95 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     );
   }
 
-  // ─── Section Label ──────────────────────────────────────────────
-  Widget _buildSectionLabel(String label) {
+  // ─── Block titles ─────────────────────────────────────────────────
+  /// Section titles are set in the serif face with an inline action — one
+  /// voice for the whole page, instead of a dotted eyebrow over a
+  /// full-width rule on every block.
+  Widget _buildBlockTitle(String title) {
+    return Text(
+      title,
+      style: AppConstants.headlineStyle(
+        fontSize: 17,
+        color: AppConstants.secondary,
+      ),
+    );
+  }
+
+  /// Recent-orders header: serif title with the "view all" action inline,
+  /// so the list below needs no trailing link (and no arrow glyph).
+  Widget _buildOrdersHeader() {
     return Row(
       children: [
-        _eyebrow(label),
-        const SizedBox(width: 10),
-        Expanded(child: Divider(color: SellerTheme.cardBorder, height: 1)),
+        _buildBlockTitle('Recent orders'),
+        const Spacer(),
+        GestureDetector(
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const ManageOrdersScreen()),
+            );
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'View all',
+                  style: AppConstants.bodyStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: SellerTheme.rust,
+                  ),
+                ),
+                const SizedBox(width: 2),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  size: 17,
+                  color: SellerTheme.rust,
+                ),
+              ],
+            ),
+          ),
+        ),
       ],
     );
   }
 
-  /// Eyebrow caption: rust dot + uppercase, tracked-out muted text.
-  Widget _eyebrow(String text) {
-    return Row(
+  // ─── Ledger stat (week / month inside the hero panel) ────────────
+  /// A quiet text column on the espresso panel — the label, the Sora
+  /// figure, the date range — with no card chrome of its own.
+  Widget _buildLedgerStat(String label, double value, String range) {
+    final cream = SellerTheme.creamText;
+    return Column(
       mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          width: 5,
-          height: 5,
-          decoration: const BoxDecoration(
-            color: SellerTheme.rust,
-            shape: BoxShape.circle,
-          ),
-        ),
-        const SizedBox(width: 6),
         Text(
-          text,
+          label,
           style: AppConstants.bodyStyle(
-            fontSize: 11,
+            fontSize: 10,
             fontWeight: FontWeight.w700,
-            color: SellerTheme.textMuted,
+            color: cream.withValues(alpha: 0.6),
           ).copyWith(letterSpacing: 1.2),
         ),
+        const SizedBox(height: 6),
+        Text(
+          _formatCurrency(value),
+          style: AppConstants.monoStyle(
+            fontSize: 19,
+            fontWeight: FontWeight.bold,
+            color: cream,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          range,
+          style: AppConstants.bodyStyle(
+            fontSize: 10,
+            color: cream.withValues(alpha: 0.55),
+          ),
+        ),
       ],
-    );
-  }
-
-
-
-  // ─── Hero-card period mini card (This Week / This Month) ────────
-  Widget _buildPeriodMiniCard(String label, double value, String range) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 18,
-        vertical: 12,
-      ),
-      decoration: BoxDecoration(
-        color: SellerTheme.card,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: SellerTheme.cardBorder),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 4,
-                height: 4,
-                decoration: const BoxDecoration(
-                  color: SellerTheme.rust,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 5),
-              Text(
-                label,
-                style: AppConstants.bodyStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  color: SellerTheme.textMuted,
-                ).copyWith(letterSpacing: 1.0),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _formatCurrency(value),
-            style: AppConstants.monoStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: AppConstants.secondary,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            range,
-            style: AppConstants.bodyStyle(
-              fontSize: 9,
-              color: SellerTheme.textMuted,
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -1370,8 +1375,18 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
     final endOfWeek = startOfWeek.add(const Duration(days: 6));
     final months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${months[startOfWeek.month - 1]} ${startOfWeek.day}–${endOfWeek.day}';
   }
@@ -1380,14 +1395,22 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
   String _getMonthDateRange() {
     final now = DateTime.now();
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     final endOfMonth = DateTime(now.year, now.month + 1, 0);
     return '${months[now.month - 1]} 1–${endOfMonth.day}';
   }
-
-
 
   // ─── Message Icon with Badge ──────────────────────────────────
   Widget _buildMessageIcon() {
@@ -1404,9 +1427,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
             await msgProvider.refreshInbox();
             if (!mounted || !context.mounted) return;
             Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const SellerInboxScreen(),
-              ),
+              MaterialPageRoute(builder: (_) => const SellerInboxScreen()),
             );
           },
         ),
@@ -1420,10 +1441,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                 color: AppConstants.statusConfirmedColor,
                 shape: BoxShape.circle,
               ),
-              constraints: const BoxConstraints(
-                minWidth: 18,
-                minHeight: 18,
-              ),
+              constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
               child: Text(
                 badge,
                 style: const TextStyle(
@@ -1470,10 +1488,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                 color: AppConstants.statusConfirmedColor,
                 shape: BoxShape.circle,
               ),
-              constraints: const BoxConstraints(
-                minWidth: 18,
-                minHeight: 18,
-              ),
+              constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
               child: Text(
                 badge,
                 style: const TextStyle(
@@ -1627,9 +1642,7 @@ class _PaymentsToConfirmCardState extends State<_PaymentsToConfirmCard> {
         borderRadius: BorderRadius.circular(20),
         onTap: () {
           Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => const GcashPaymentQueueScreen(),
-            ),
+            MaterialPageRoute(builder: (_) => const GcashPaymentQueueScreen()),
           );
         },
         child: Container(
@@ -1677,8 +1690,8 @@ class _PaymentsToConfirmCardState extends State<_PaymentsToConfirmCard> {
                       _loading
                           ? 'Checking...'
                           : (has
-                              ? '$count order${count == 1 ? '' : 's'} awaiting your confirmation'
-                              : 'No payments waiting'),
+                                ? '$count order${count == 1 ? '' : 's'} awaiting your confirmation'
+                                : 'No payments waiting'),
                       style: AppConstants.bodyStyle(
                         fontSize: 12,
                         color: has
@@ -1692,7 +1705,9 @@ class _PaymentsToConfirmCardState extends State<_PaymentsToConfirmCard> {
               if (has)
                 Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 4),
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: AppConstants.error,
                     borderRadius: BorderRadius.circular(12),
@@ -1707,10 +1722,7 @@ class _PaymentsToConfirmCardState extends State<_PaymentsToConfirmCard> {
                   ),
                 ),
               const SizedBox(width: 6),
-              const Icon(
-                Icons.chevron_right,
-                color: SellerTheme.rust,
-              ),
+              const Icon(Icons.chevron_right, color: SellerTheme.rust),
             ],
           ),
         ),

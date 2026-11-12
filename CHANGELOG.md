@@ -1,5 +1,10 @@
 # SoleVision — Changelog
 
+## Unreleased — the seller dashboard stops looking generated
+
+- **Every block wore the same costume: a rust dot, tracked caps, a full-width rule — and the hero was a grey gradient box holding cards inside cards.** The hero is now one espresso ledger panel with cream ink (36pt Sora total, a real star icon with the review count, week/month as ledger entries split by a hairline instead of nested mini-cards). Section headers are serif titles with inline actions (`Recent orders` + `View all` up top, so the bottom `View All Orders →` link and its arrow glyph are gone), the status strip drops its 9px mono caps for tracked sans, the alert strip gets a proper `Needs attention` title, and the report CTA's hardcoded `grey.shade500` becomes the theme muted token. The `★` and `→` glyphs are real icons now; the two dead label helpers went with them.
+- Tests: `flutter analyze` clean; the contract, metric-card and seller-widget suites green (40).
+
 ## Unreleased — the onboarding illustrations grow up: a sandal, a boutique, a fitting
 
 - **The three glyphs were recognisable but generic — a sole, a box with a roof, a phone with a blob.** Each is now a composed scene in one shared kit (ground shadow, sparkle set, 3 / 2 / 1.25 stroke weights, clay washes): slide 1 is a side-profile leather sandal with welt stitching, straps, a buckle and a needle-and-thread arc; slide 2 is a boutique with a striped scalloped awning, hanging sign, shoes on stands in both windows and planters flanking the door; slide 3 is a phone framing a foot while a laced sneaker settles onto it under a scan beam, with focus corners and a fitted check badge. Rendered monochrome in `primaryInk` so the single tint keeps them legible on dark pages too — verified with on-device screenshots, not just widget tests.
