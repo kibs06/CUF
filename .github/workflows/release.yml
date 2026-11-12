@@ -70,6 +70,11 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          # Pinned to the SDK the project builds against. Floating on
+          # stable pulled a Flutter whose Gradle minimum (9.3.1) is newer
+          # than the wrapper here (8.14), so the release build died before
+          # compiling anything. Bump deliberately, with the wrapper.
+          flutter-version: '3.44.4'
 
       - name: Install dependencies
         run: flutter pub get
