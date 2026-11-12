@@ -8,6 +8,19 @@ class SalesService {
   SalesService({SupabaseClient? client})
     : _client = client ?? Supabase.instance.client;
 
+  /// The sale belongs to the handover, not the placement: every date
+  /// filter and every bucket below reads `delivered_at` (stamped when the
+  /// seller marks the order delivered — see stamp_delivered_at), falling
+  /// back to `created_at` only for rows that predate the stamp.
+  /// Rows with no handover yet (NULL `delivered_at`) have no sale date,
+  /// so the `delivered_at` range filters leave them out.
+  static DateTime _saleDate(dynamic row) {
+    final map = row as Map;
+    return DateTime.parse(
+      ((map['delivered_at'] ?? map['created_at']) as String),
+    );
+  }
+
   /// Helper: get order IDs for a store via products → order_items chain.
   Future<List<dynamic>> _getOrderIds(String storeId) async {
     final productRows = await _client
@@ -127,7 +140,7 @@ class SalesService {
         .select('total_amount')
         .inFilter('id', posOrderIds)
         .eq('payment_status', 'paid')
-        .gte('created_at', start);
+        .gte('delivered_at', start);
 
     return (data as List).fold<double>(
       0,
@@ -144,11 +157,11 @@ class SalesService {
 
     final data = await _client
         .from('orders')
-        .select('total_amount, created_at')
+        .select('total_amount, delivered_at, created_at')
         .inFilter('id', posOrderIds)
         .eq('payment_status', 'paid')
-        .gte('created_at', from)
-        .order('created_at');
+        .gte('delivered_at', from)
+        .order('delivered_at');
     return (data as List)
         .map((row) => Map<String, dynamic>.from(row as Map))
         .toList();
@@ -188,7 +201,7 @@ class SalesService {
         .inFilter('id', orderIds)
         .neq('status', 'cancelled')
         .eq('payment_status', 'paid')
-        .gte('created_at', startOfDay);
+        .gte('delivered_at', startOfDay);
 
     return (data as List).fold<double>(
       0,
@@ -214,12 +227,12 @@ class SalesService {
     // Filters before .order()
     final data = await _client
         .from('orders')
-        .select('total_amount, created_at')
+        .select('total_amount, delivered_at, created_at')
         .inFilter('id', orderIds)
         .neq('status', 'cancelled')
         .eq('payment_status', 'paid')
-        .gte('created_at', sevenDaysAgo.toIso8601String())
-        .order('created_at');
+        .gte('delivered_at', sevenDaysAgo.toIso8601String())
+        .order('delivered_at');
 
     return (data as List)
         .map((row) => Map<String, dynamic>.from(row as Map))
@@ -239,7 +252,7 @@ class SalesService {
     final rows = await getOnlineWeeklySales(storeId);
     final daily = List<double>.filled(7, 0);
     for (final row in rows) {
-      final createdAt = DateTime.parse(row['created_at'] as String);
+      final createdAt = _saleDate(row);
       daily[createdAt.weekday - 1] +=
           ((row['total_amount'] as num?)?.toDouble() ?? 0);
     }
@@ -251,7 +264,7 @@ class SalesService {
     final rows = await fetchWeeklySales(storeId);
     final daily = List<double>.filled(7, 0);
     for (final row in rows) {
-      final createdAt = DateTime.parse(row['created_at'] as String);
+      final createdAt = _saleDate(row);
       daily[createdAt.weekday - 1] +=
           ((row['total_amount'] as num?)?.toDouble() ?? 0);
     }
@@ -263,8 +276,9 @@ class SalesService {
     final startOfMonth = DateTime(now.year, now.month, 1).toIso8601String();
     final orderIds = await _getOrderIds(storeId);
 
-    // Revenue definition (consistent app-wide): exclude cancelled orders
-    // and require payment_status = 'paid' (money actually received).
+    // Revenue definition (consistent app-wide): exclude cancelled orders,
+    // require payment_status = 'paid' (money actually received), and count
+    // each sale on its handover date (`delivered_at`), not on placement.
     // POS now reads the LIVE orders.source='pos' path — the legacy
     // sales_transactions table is no longer written by the POS screen.
     final futures = <Future<List>>[
@@ -275,7 +289,7 @@ class SalesService {
           .eq('source', 'pos')
           .neq('status', 'cancelled')
           .eq('payment_status', 'paid')
-          .gte('created_at', startOfMonth)
+          .gte('delivered_at', startOfMonth)
           .then((d) => List.from(d as List)),
     ];
 
@@ -288,7 +302,7 @@ class SalesService {
             .inFilter('id', orderIds)
             .neq('status', 'cancelled')
             .eq('payment_status', 'paid')
-            .gte('created_at', startOfMonth)
+            .gte('delivered_at', startOfMonth)
             .then((d) => List.from(d as List)),
       );
     } else {
@@ -326,11 +340,11 @@ class SalesService {
 
     final rows = await _client
         .from('orders')
-        .select('total_amount, created_at')
+        .select('total_amount, delivered_at, created_at')
         .inFilter('id', orderIds)
         .neq('status', 'cancelled')
         .eq('payment_status', 'paid')
-        .gte('created_at', sixMonthsAgo.toIso8601String());
+        .gte('delivered_at', sixMonthsAgo.toIso8601String());
 
     return _aggregateMonthly(rows as List, now);
   }
@@ -344,10 +358,10 @@ class SalesService {
 
     final rows = await _client
         .from('orders')
-        .select('total_amount, created_at')
+        .select('total_amount, delivered_at, created_at')
         .inFilter('id', posOrderIds)
         .eq('payment_status', 'paid')
-        .gte('created_at', sixMonthsAgo.toIso8601String());
+        .gte('delivered_at', sixMonthsAgo.toIso8601String());
 
     return _aggregateMonthly(rows as List, now);
   }
@@ -356,7 +370,7 @@ class SalesService {
   List<double> _aggregateMonthly(List rows, DateTime now) {
     final monthly = List<double>.filled(6, 0);
     for (final row in rows) {
-      final createdAt = DateTime.parse(row['created_at'] as String);
+      final createdAt = _saleDate(row);
       final monthDiff =
           (now.year - createdAt.year) * 12 + (now.month - createdAt.month);
       final index = 5 - monthDiff;
@@ -427,12 +441,12 @@ class SalesService {
       orderIds.isNotEmpty
           ? _client
               .from('orders')
-              .select('id, total_amount, created_at')
+              .select('id, total_amount, delivered_at, created_at')
               .inFilter('id', orderIds)
               .neq('status', 'cancelled')
               .eq('payment_status', 'paid')
-              .gte('created_at', startStr)
-              .lt('created_at', endStr)
+              .gte('delivered_at', startStr)
+              .lt('delivered_at', endStr)
               .then((d) => List.from(d as List))
           : Future.value([]),
       // POS orders in range — LIVE path (orders WHERE source='pos').
@@ -440,13 +454,13 @@ class SalesService {
       // POS screen, so reading it here silently dropped all POS revenue.
       _client
           .from('orders')
-          .select('id, total_amount, created_at')
+          .select('id, total_amount, delivered_at, created_at')
           .eq('store_id', storeId)
           .eq('source', 'pos')
           .neq('status', 'cancelled')
           .eq('payment_status', 'paid')
-          .gte('created_at', startStr)
-          .lt('created_at', endStr)
+          .gte('delivered_at', startStr)
+          .lt('delivered_at', endStr)
           .then((d) => List.from(d as List)),
     ];
 
@@ -459,8 +473,8 @@ class SalesService {
               .inFilter('id', orderIds)
               .neq('status', 'cancelled')
               .eq('payment_status', 'paid')
-              .gte('created_at', prevStartStr)
-              .lt('created_at', prevEndStr)
+              .gte('delivered_at', prevStartStr)
+              .lt('delivered_at', prevEndStr)
               .then((d) => (d as List).fold<double>(0, (s, r) => s + ((r['total_amount'] as num?)?.toDouble() ?? 0)))
           : Future.value(0.0),
       _client
@@ -470,8 +484,8 @@ class SalesService {
           .eq('source', 'pos')
           .neq('status', 'cancelled')
           .eq('payment_status', 'paid')
-          .gte('created_at', prevStartStr)
-          .lt('created_at', prevEndStr)
+          .gte('delivered_at', prevStartStr)
+          .lt('delivered_at', prevEndStr)
           .then((d) => (d as List).fold<double>(0, (s, r) => s + ((r['total_amount'] as num?)?.toDouble() ?? 0))),
     ];
 
@@ -492,7 +506,7 @@ class SalesService {
     for (final row in onlineOrders) {
       final amount = (row['total_amount'] as num?)?.toDouble() ?? 0;
       weeklyTotal += amount;
-      final createdAt = DateTime.parse(row['created_at'] as String);
+      final createdAt = _saleDate(row);
       if (monthly) {
         dailyRevenue[createdAt.day - 1] += amount;
       } else {
@@ -502,7 +516,7 @@ class SalesService {
     for (final row in posTransactions) {
       final amount = (row['total_amount'] as num?)?.toDouble() ?? 0;
       weeklyTotal += amount;
-      final createdAt = DateTime.parse(row['created_at'] as String);
+      final createdAt = _saleDate(row);
       if (monthly) {
         dailyRevenue[createdAt.day - 1] += amount;
       } else {
@@ -727,12 +741,12 @@ class SalesService {
     if (channel != SalesChannelFilter.inStore && orderIds.isNotEmpty) {
       futures.add(_client
           .from('orders')
-          .select('total_amount, created_at')
+          .select('total_amount, delivered_at, created_at')
           .inFilter('id', orderIds)
           .neq('status', 'cancelled')
           .eq('payment_status', 'paid')
-          .gte('created_at', startStr)
-          .lt('created_at', endStr)
+          .gte('delivered_at', startStr)
+          .lt('delivered_at', endStr)
           .then((d) => List.from(d as List)));
     } else {
       futures.add(Future.value([]));
@@ -742,13 +756,13 @@ class SalesService {
     if (channel != SalesChannelFilter.online) {
       futures.add(_client
           .from('orders')
-          .select('total_amount, created_at')
+          .select('total_amount, delivered_at, created_at')
           .eq('store_id', storeId)
           .eq('source', 'pos')
           .neq('status', 'cancelled')
           .eq('payment_status', 'paid')
-          .gte('created_at', startStr)
-          .lt('created_at', endStr)
+          .gte('delivered_at', startStr)
+          .lt('delivered_at', endStr)
           .then((d) => List.from(d as List)));
     } else {
       futures.add(Future.value([]));
@@ -763,8 +777,8 @@ class SalesService {
           .inFilter('id', orderIds)
           .neq('status', 'cancelled')
           .eq('payment_status', 'paid')
-          .gte('created_at', prevStartStr)
-          .lt('created_at', prevEndStr)
+          .gte('delivered_at', prevStartStr)
+          .lt('delivered_at', prevEndStr)
           .then((d) => List.from(d as List)));
     } else {
       prevFutures.add(Future.value([]));
@@ -777,8 +791,8 @@ class SalesService {
           .eq('source', 'pos')
           .neq('status', 'cancelled')
           .eq('payment_status', 'paid')
-          .gte('created_at', prevStartStr)
-          .lt('created_at', prevEndStr)
+          .gte('delivered_at', prevStartStr)
+          .lt('delivered_at', prevEndStr)
           .then((d) => List.from(d as List)));
     } else {
       prevFutures.add(Future.value([]));
@@ -796,7 +810,7 @@ class SalesService {
     for (final row in results[0]) {
       final amount = (row['total_amount'] as num?)?.toDouble() ?? 0;
       totalRevenue += amount;
-      final createdAt = DateTime.parse(row['created_at'] as String);
+      final createdAt = _saleDate(row);
       final slot = slotByDate(createdAt);
       if (slot >= 0 && slot < slotCount) {
         onlineDaily[slot] += amount;
@@ -806,7 +820,7 @@ class SalesService {
     for (final row in results[1]) {
       final amount = (row['total_amount'] as num?)?.toDouble() ?? 0;
       totalRevenue += amount;
-      final createdAt = DateTime.parse(row['created_at'] as String);
+      final createdAt = _saleDate(row);
       final slot = slotByDate(createdAt);
       if (slot >= 0 && slot < slotCount) {
         inStoreDaily[slot] += amount;
