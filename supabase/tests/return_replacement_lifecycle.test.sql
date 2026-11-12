@@ -2,10 +2,10 @@
 -- Return → replacement lifecycle — pgTAP
 -- Run by CI via `supabase test db` (supabase-migrations.yml)
 --
--- Covers `20261112000000_return_replacement.sql`,
--- `20261112000100_return_replacement_inventory.sql`,
--- `20261112000200_return_replacement_method.sql` and
--- `20261112000300_replacement_received.sql` as ONE flow, because each
+-- Covers `20261113000100_return_replacement.sql`,
+-- `20261113000200_return_replacement_inventory.sql`,
+-- `20261113000300_return_replacement_method.sql` and
+-- `20261113000400_replacement_received.sql` as ONE flow, because each
 -- migration only owns a slice of it and the slices have to agree:
 --
 --   customer asks  →  delivered + paid, 1-4 photo proofs, inside 7 days

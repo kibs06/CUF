@@ -108,7 +108,7 @@ BEGIN
       USING ERRCODE = 'P0001';
   END IF;
 
-  -- `replacement_received` is added by 20261112000300; it is terminal
+  -- `replacement_received` is added by 20261113000400; it is terminal
   -- here too so a closed replacement cannot be returned again.
   IF v_order.status IN ('replaced', 'replacement_received', 'refunded') THEN
     RAISE EXCEPTION 'This order has already been replaced.'
