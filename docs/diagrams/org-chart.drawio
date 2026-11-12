@@ -1,0 +1,62 @@
+<mxfile host="Electron" agent="freebuff">
+  <diagram id="org-chart" name="Organizational chart">
+    <mxGraphModel dx="698" dy="716" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="leadership" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;fontStyle=1;fillColor=none;strokeColor=light-dark(#000000,#EDEDED);fontColor=light-dark(#000000,#EDEDED);" value="ASSOCIATION EXECUTIVE LEADERSHIP&lt;br&gt;&lt;font size=&quot;1&quot;>President / Founding Head: Mercedita Apura&lt;br&gt;Subsequent President / Owner (Jebiley): Algerico Gerry Sandoy&lt;br&gt;Vice Chairman: Samuel Lauron</font>" vertex="1">
+          <mxGeometry height="110" width="600" x="113" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="admin" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;fontStyle=1;fillColor=none;strokeColor=light-dark(#000000,#EDEDED);fontColor=light-dark(#000000,#EDEDED);" value="ASSOCIATION ADMINISTRATIVE STAFF&lt;br&gt;&lt;font size=&quot;1&quot;>Secretary: Jocelyn Yap&lt;br&gt;Treasurer: Timoteo Canape&lt;br&gt;Auditor: Ruth del Rosario</font>" vertex="1">
+          <mxGeometry height="100" width="600" x="113" y="170" as="geometry" />
+        </mxCell>
+        <mxCell id="detasie" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=10;fontStyle=1;fillColor=none;strokeColor=light-dark(#000000,#EDEDED);fontColor=light-dark(#000000,#EDEDED);" value="DETASIE SHOE FACTORY&lt;br&gt;&lt;font size=&quot;1&quot;>Owner: Mercedita Apura</font>" vertex="1">
+          <mxGeometry height="70" width="300" x="60" y="330" as="geometry" />
+        </mxCell>
+        <mxCell id="jebiley" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=10;fontStyle=1;fillColor=none;strokeColor=light-dark(#000000,#EDEDED);fontColor=light-dark(#000000,#EDEDED);" value="JEBILEY SHOES MANUFACTURER&lt;br&gt;&lt;font size=&quot;1&quot;>Owner: Gerry Sandoy</font>" vertex="1">
+          <mxGeometry height="70" width="300" x="466" y="330" as="geometry" />
+        </mxCell>
+        <mxCell id="sammy" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=10;fontStyle=1;fillColor=none;strokeColor=light-dark(#000000,#EDEDED);fontColor=light-dark(#000000,#EDEDED);" value="SAMMY SHOE&lt;br&gt;&lt;font size=&quot;1&quot;>Owner: Samuel Lauron</font>" vertex="1">
+          <mxGeometry height="70" width="300" x="60" y="450" as="geometry" />
+        </mxCell>
+        <mxCell id="khofeet" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=10;fontStyle=1;fillColor=none;strokeColor=light-dark(#000000,#EDEDED);fontColor=light-dark(#000000,#EDEDED);" value="KHOFEET COLLECTION&lt;br&gt;&lt;font size=&quot;1&quot;>Independent Management</font>" vertex="1">
+          <mxGeometry height="70" width="300" x="466" y="450" as="geometry" />
+        </mxCell>
+        <mxCell id="lirus" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=10;fontStyle=1;fillColor=none;strokeColor=light-dark(#000000,#EDEDED);fontColor=light-dark(#000000,#EDEDED);" value="LIRUS SHOE COMPANY" vertex="1">
+          <mxGeometry height="60" width="300" x="60" y="570" as="geometry" />
+        </mxCell>
+        <mxCell id="lidabeth" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=10;fontStyle=1;fillColor=none;strokeColor=light-dark(#000000,#EDEDED);fontColor=light-dark(#000000,#EDEDED);" value="LIDABETH SHOES" vertex="1">
+          <mxGeometry height="60" width="300" x="466" y="570" as="geometry" />
+        </mxCell>
+        <mxCell id="kevins" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=10;fontStyle=1;fillColor=none;strokeColor=light-dark(#000000,#EDEDED);fontColor=light-dark(#000000,#EDEDED);" value="KEVIN'S COLLECTION" vertex="1">
+          <mxGeometry height="60" width="300" x="60" y="680" as="geometry" />
+        </mxCell>
+        <mxCell id="jre" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=10;fontStyle=1;fillColor=none;strokeColor=light-dark(#000000,#EDEDED);fontColor=light-dark(#000000,#EDEDED);" value="JRE FOOTWEAR" vertex="1">
+          <mxGeometry height="60" width="300" x="466" y="680" as="geometry" />
+        </mxCell>
+        <mxCell id="footfit" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=10;fontStyle=1;fillColor=none;strokeColor=light-dark(#000000,#EDEDED);fontColor=light-dark(#000000,#EDEDED);" value="FOOT FIT" vertex="1">
+          <mxGeometry height="60" width="300" x="60" y="790" as="geometry" />
+        </mxCell>
+        <mxCell id="mildim" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=10;fontStyle=1;fillColor=none;strokeColor=light-dark(#000000,#EDEDED);fontColor=light-dark(#000000,#EDEDED);" value="MIL DIM CREATIONS" vertex="1">
+          <mxGeometry height="60" width="300" x="466" y="790" as="geometry" />
+        </mxCell>
+        <mxCell id="workshop" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontSize=11;fontStyle=1;fillColor=none;strokeColor=light-dark(#000000,#EDEDED);fontColor=light-dark(#000000,#EDEDED);" value="TRADITIONAL WORKSHOP TRADES &amp; ARTISANS&lt;br&gt;&lt;font size=&quot;1&quot;>(Standard Production Floor Layout Inside Each Factory)&lt;br&gt;Owner / Master Artisan (Pattern cutting, oversight)&lt;br&gt;Entradista (Pattern fitting, lasting, upper assembly)&lt;br&gt;Manglagdok (Sole stitching, welting, bonding)</font>" vertex="1">
+          <mxGeometry height="140" width="600" x="113" y="910" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" parent="1" style="endArrow=block;html=1;strokeColor=light-dark(#000000,#EDEDED);" edge="1" source="leadership" target="admin" />
+        <mxCell id="e2" parent="1" style="endArrow=block;html=1;strokeColor=light-dark(#000000,#EDEDED);" edge="1" source="admin" target="detasie" />
+        <mxCell id="e3" parent="1" style="endArrow=block;html=1;strokeColor=light-dark(#000000,#EDEDED);" edge="1" source="admin" target="jebiley" />
+        <mxCell id="e4" parent="1" style="endArrow=block;html=1;strokeColor=light-dark(#000000,#EDEDED);" edge="1" source="detasie" target="sammy" />
+        <mxCell id="e5" parent="1" style="endArrow=block;html=1;strokeColor=light-dark(#000000,#EDEDED);" edge="1" source="jebiley" target="khofeet" />
+        <mxCell id="e6" parent="1" style="endArrow=block;html=1;strokeColor=light-dark(#000000,#EDEDED);" edge="1" source="sammy" target="lirus" />
+        <mxCell id="e7" parent="1" style="endArrow=block;html=1;strokeColor=light-dark(#000000,#EDEDED);" edge="1" source="khofeet" target="lidabeth" />
+        <mxCell id="e8" parent="1" style="endArrow=block;html=1;strokeColor=light-dark(#000000,#EDEDED);" edge="1" source="lirus" target="kevins" />
+        <mxCell id="e9" parent="1" style="endArrow=block;html=1;strokeColor=light-dark(#000000,#EDEDED);" edge="1" source="lidabeth" target="jre" />
+        <mxCell id="e10" parent="1" style="endArrow=block;html=1;strokeColor=light-dark(#000000,#EDEDED);" edge="1" source="kevins" target="footfit" />
+        <mxCell id="e11" parent="1" style="endArrow=block;html=1;strokeColor=light-dark(#000000,#EDEDED);" edge="1" source="jre" target="mildim" />
+        <mxCell id="e12" parent="1" style="endArrow=block;html=1;strokeColor=light-dark(#000000,#EDEDED);" edge="1" source="footfit" target="workshop" />
+        <mxCell id="e13" parent="1" style="endArrow=block;html=1;strokeColor=light-dark(#000000,#EDEDED);" edge="1" source="mildim" target="workshop" />
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
