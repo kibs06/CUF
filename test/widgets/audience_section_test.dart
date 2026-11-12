@@ -123,6 +123,36 @@ List<Rect> tileRects(WidgetTester tester, String audience) {
   ];
 }
 
+/// The rectangle of every 2x2 cell in one section, in DOM order: the product
+/// tiles plus the blurred see-more door when the shelf holds more than three.
+List<Rect> cellRects(WidgetTester tester, String audience) {
+  final cards = tilesIn(audience);
+  final rects = <Rect>[
+    for (var i = 0; i < tester.widgetList<SoleProductCard>(cards).length; i++)
+      tester.getRect(cards.at(i)),
+  ];
+  final seeMore = find.descendant(
+    of: sectionOf(audience),
+    matching: find.byKey(kAudienceSeeMoreKey),
+  );
+  for (var i = 0; i < seeMore.evaluate().length; i++) {
+    rects.add(tester.getRect(seeMore.at(i)));
+  }
+  // DOM order is row-major; the door is always the last cell, so sorting by
+  // top then left restores reading order when it was appended last.
+  rects.sort((a, b) {
+    final row = (a.top - b.top).abs() > 1 ? a.top.compareTo(b.top) : 0;
+    if (row != 0) return row;
+    return a.left.compareTo(b.left);
+  });
+  return rects;
+}
+
+Finder seeMoreIn(String audience) => find.descendant(
+      of: sectionOf(audience),
+      matching: find.byKey(kAudienceSeeMoreKey),
+    );
+
 /// Product names carried by one section's tiles, in DOM order.
 ///
 /// Read off the CARD rather than off rendered text, because the tiles deliberately
@@ -369,19 +399,25 @@ void main() {
     await tester.pumpWidget(wrap(provider, audiences: const ['men']));
     await tester.pump(const Duration(milliseconds: 300));
 
-    // Six on the shelf, four doors to it — and every door is named. Four
-    // buttons under one identical label would be four buttons a screen reader
-    // cannot choose between, which is why the index is in the label.
-    for (final i in const [1, 2, 3, 4]) {
-      expect(find.bySemanticsLabel("See the Men's shelf, $i of 4"),
-          findsOneWidget,
-          reason: 'tile $i of 4 is unnamed');
-    }
-    expect(find.bySemanticsLabel("See the Men's shelf, 5 of 4"), findsNothing);
+    // The door sits in the second row, off the 800x600 surface until the
+    // feed scrolls — and an off-viewport tap misses while an offstage label
+    // is skipped — so bring it on screen before asserting either.
+    await tester.ensureVisible(seeMoreIn('men'));
+    await tester.pump(const Duration(milliseconds: 300));
 
-    // And nothing promises the product whose photo it is: the tile opens the
-    // shelf, so the name is not announced either.
-    expect(find.bySemanticsLabel('Derby 0'), findsNothing);
+    // Six on the shelf: three product doors named for their products, and
+    // the blurred fourth cell named for the shelf it opens. Four buttons
+    // under one identical label would be four buttons a screen reader
+    // cannot choose between — so the products say their names and the
+    // door says the shelf.
+    for (final i in const [0, 1, 2]) {
+      expect(find.bySemanticsLabel('Derby $i'), findsOneWidget,
+          reason: 'product tile $i is unnamed');
+    }
+    expect(find.bySemanticsLabel('Derby 3'), findsNothing,
+        reason: 'the fourth photo sits behind the blurred door, not its own tile');
+    expect(find.bySemanticsLabel("See all Men's products"), findsOneWidget,
+        reason: 'the blurred door must name the shelf it opens');
 
     // Disposed in the body rather than through addTearDown: the framework
     // asserts no handle is left open when the test ends, and that check runs
@@ -404,12 +440,19 @@ void main() {
     await tester.pumpWidget(wrap(provider, audiences: const ['men']));
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(namesInSection(tester, 'men').length, kAudiencePreviewCount,
-        reason: 'nine on the shelf, four in the preview');
+    expect(namesInSection(tester, 'men').length, kAudienceProductTileCount,
+        reason: 'nine on the shelf, three product tiles in the preview');
+    expect(kAudiencePreviewCount, 4);
+    expect(
+      tester.widgetList<SoleProductCard>(tilesIn('men')).length +
+          seeMoreIn('men').evaluate().length,
+      kAudiencePreviewCount,
+      reason: 'three products plus the blurred door fill the 2x2',
+    );
+    expect(seeMoreIn('men'), findsOneWidget);
   });
 
-  testWidgets('tapping a tile opens that audience shelf, not the product page',
-      (tester) async {
+  testWidgets('a product tile is wired to that product page', (tester) async {
     final provider = ProductProvider.seeded(
       products: [product(id: 'm', name: 'Derby', audience: 'men')],
       unitsSold: const {},
@@ -418,13 +461,46 @@ void main() {
     await tester.pumpWidget(wrap(provider, audiences: const ['men']));
     await tester.pump(const Duration(milliseconds: 300));
 
-    await tester.tap(tilesIn('men'));
+    // The tile carries the product's own card and announces its name — the
+    // shelf door beside it names the shelf instead (pinned above).
+    expect(tilesIn('men'), findsOneWidget);
+    expect(
+      tester.widget<SoleProductCard>(tilesIn('men')).product['id'],
+      'm',
+    );
 
-    // Pump rather than pumpAndSettle: a card's photo is a `CachedNetworkImage`
-    // whose placeholder is a `CircularProgressIndicator`, which animates for as
-    // long as the image is unresolved — and in a widget test it never resolves.
-    // Settling is therefore impossible anywhere a product card is on screen, so
-    // this file pumps the route transition by hand (as every test above does).
+    // Pumping ProductDetailScreen needs its auth/cart/review providers plus
+    // Supabase, which this harness deliberately does not stand up — so the
+    // destination is pinned at the source, the same move the feed-wiring
+    // test below makes for the row itself.
+    final source =
+        File('lib/widgets/audience_section.dart').readAsStringSync();
+    expect(source.contains('ProductDetailScreen('), isTrue,
+        reason: 'a product tile must open its product page');
+    expect(source.contains('browseList: shelf'), isTrue,
+        reason: 'swiping from it must walk the shelf behind the tap');
+  });
+
+  testWidgets('tapping the blurred tile opens that audience shelf',
+      (tester) async {
+    final provider = ProductProvider.seeded(
+      products: [
+        for (var i = 0; i < 5; i++)
+          product(id: 'm$i', name: 'Derby $i', audience: 'men'),
+      ],
+      unitsSold: const {},
+    );
+
+    await tester.pumpWidget(wrap(provider, audiences: const ['men']));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(seeMoreIn('men'), findsOneWidget);
+    // Off the default 800x600 surface until the feed scrolls — tapping an
+    // off-viewport widget misses, so scroll it on screen first.
+    await tester.ensureVisible(seeMoreIn('men'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(seeMoreIn('men'));
+
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pump();
@@ -434,6 +510,24 @@ void main() {
       tester.widget<AudienceListingScreen>(find.byType(AudienceListingScreen)).audience,
       'men',
     );
+  });
+
+  testWidgets('a short shelf has no blurred door — every tile is a product',
+      (tester) async {
+    final provider = ProductProvider.seeded(
+      products: [
+        for (var i = 0; i < 2; i++)
+          product(id: 'm$i', name: 'Derby $i', audience: 'men'),
+      ],
+      unitsSold: const {},
+    );
+
+    await tester.pumpWidget(wrap(provider, audiences: const ['men']));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(tester.widgetList<SoleProductCard>(tilesIn('men')).length, 2);
+    expect(seeMoreIn('men'), findsNothing,
+        reason: 'two shown of two — a door would promise nothing behind it');
   });
 
   // ── The shape of a section: a 2x2 grid ──
@@ -454,7 +548,7 @@ void main() {
       await tester.pumpWidget(wrapRow(provider));
       await tester.pump(const Duration(milliseconds: 300));
 
-      final rects = tileRects(tester, 'men');
+      final rects = cellRects(tester, 'men');
       expect(rects, hasLength(4), reason: 'at ${size.width}px wide');
 
       // Reading order: top-left, top-right, bottom-left, bottom-right.

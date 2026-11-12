@@ -61,7 +61,7 @@ A `CustomScrollView` with slivers, wrapped in `RefreshIndicator`. No AppBar — 
 2. **Sheet** — `SliverToBoxAdapter` with rounded top corners (`ClipRRect` `borderRadius: 22`), containing:
    - Foot profile banner (conditional — only for incomplete profiles)
    - Based on your size (conditional — see below — a `FitCard` size poster as the first cell of The Workshop Collection's 2-column masonry grid, not a rail)
-   - Men's / Women's / Kids' sections, side by side in one row — four image-only tiles each, every tile opening that audience's shelf (conditional — see below; gated by `AppConstants.productAudienceEnabled`, **now `true`**, and each hides itself when the catalog holds nothing for that audience — which is every audience today: P4 measured all 15 live products as unset, so the sections render nothing until a seller answers "Who is it for?" on a product)
+   - Men's / Women's / Kids' sections, side by side in one row — four cells each: three image-only product tiles opening those products, plus a blurred fourth opening that audience's shelf (conditional — see below; gated by `AppConstants.productAudienceEnabled`, **now `true`**, and each hides itself when the catalog holds nothing for that audience — which is every audience today: P4 measured all 15 live products as unset, so the sections render nothing until a seller answers "Who is it for?" on a product)
    - On Sale section (conditional — only when no search + no category filter + sale items exist)
    - Best Sellers rail (**currently gated off** by `kBestSellersRailEnabled = false` in `customer_home_screen.dart`; the widget and its data are kept, so re-enabling is a one-const flip. Also conditional — same gate as On Sale; hidden when nothing has sold). See `docs/AI/HOME_ON_SALE_ARCHITECTURE.md` §4.4
    - The Workshop Collection card (the heading; tapping it flips it over onto the sort list — it announces that in three ways: an idle beat that tips it a few degrees every ~4.5s, the product cards' lift under it, and a one-time `Tap to sort` hint; see `lib/widgets/workshop_collection_card.dart`)
@@ -262,20 +262,20 @@ two audiences and with three: no overflow in any of the 20 combinations. With tw
 audiences at 390px each photo comes out at 183px — the size of a catalog card,
 and the case the live catalog is actually in today (Men's and Women's only).
 
-**Every tile is a door to the same shelf.** A tap opens `AudienceListingScreen`
-for that audience — the page the Home hero's audience chip opens, and the same
-move `SeeMoreCard` makes for the size grid. It is deliberately *not* that
-product's detail page: the four tiles are one block, so the tap answers *"show me
-the Men's shelf"*, and opening one product out of a set the customer never chose
-between is the opposite of what the picture asked. Nothing on a tile is labelled
-with a name or a price, so nothing on it promises a product page.
+**Three tiles are products, the fourth is the shelf door.** Tapping one of the
+first three opens `ProductDetailScreen` for that product, with the audience's
+ranked shelf as its swipe list — so swiping walks the shelf the tap came from.
+The fourth cell is the next photo as the top of a small stacked deck, with a
+`+N more` count badge, opening `AudienceListingScreen` for that audience — the page the
+Home hero's audience chip opens (a short shelf of three or fewer has no door:
+the listing behind it would be the same products already on screen).
 
 **A tile that draws no words has to say what it is.** `imageOnly` leaves a screen
-reader nothing to collect, so each cell carries a spelled accessible name —
-`"See the Men's shelf, 2 of 4"` — for the same reason `SeeMoreCard` spells
-"See more products". The index is in the label because four buttons under one
-identical label are four buttons a screen reader cannot choose between. Both are
-pinned by `test/widgets/audience_section_test.dart`.
+reader nothing to collect, so the product tiles announce their product names
+while the stacked door announces `"See all Men's products"` (a single label
+in the `FitCard` shape — the stacked cards and the count badge say nothing on
+their own). Both are pinned by
+`test/widgets/audience_section_test.dart`.
 
 **The strip is no longer any audience surface's body.**
 `lib/widgets/product_rail_section.dart` (header row + `HorizontalProductCard`
@@ -466,7 +466,7 @@ All providers are app-root singletons, created in `main.dart` and consumed via `
 | `ProductSectionHeader` | `widgets/product_section_header.dart` | Home — the shared section header (title + muted meta) rails and grid both use |
 | `ProductRailSection` | `widgets/product_rail_section.dart` | Search — the shared rail body (header + 130×180 strip + trailing gap), now only "Popular right now": the audience sections left it for the 2-col grid |
 | `AudienceSections` | `widgets/audience_section.dart` | Home — the audience **row**: up to three equal columns side by side, one per audience that has products, owning the page margin and the gutters. Self-hiding, switch-gated |
-| `AudienceSection` | `widgets/audience_section.dart` | Home — **one column** of that row: a heading over four image-only tiles (`kAudiencePreviewCount`), each opening that audience's shelf, stacking or pairing its tiles by the width it is handed |
+| `AudienceSection` | `widgets/audience_section.dart` | Home — **one column** of that row: a heading over four cells (`kAudiencePreviewCount`) — three image-only product tiles (`kAudienceProductTileCount`) opening those products, plus a blurred see-more door to that audience's shelf — stacking or pairing its cells by the width it is handed |
 | `HomeCategoryRow` | `screens/customer/widgets/home_category_row.dart` | Home hero — category chips + the audience shelf chips |
 | `CatalogEndCap` | `widgets/catalog_end_cap.dart` | Home — the "that's the whole shelf" sign-off at the end of the catalog |
 
