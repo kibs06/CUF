@@ -1,5 +1,10 @@
 # SoleVision — Changelog
 
+## Unreleased — the onboarding heroes go full clipart (flat brand SVG, zero downloads)
+
+- **The heroes were monochrome line art — one clay tint, no fills.** All three are now full-color flat illustrations in the brand palette: a tan-and-clay sandal with a cream welt stitch and brass buckle, a cream boutique with a striped awning and clay shoes on stands, a phone with a clay sneaker landing on a foot under a rust scan beam. Each sits on an opaque sand sticker disc with a clay edge, so the art reads identically on light and dark pages with no runtime theming, no asset files and no licensing questions. The tint filter and the glow are gone with the monochrome era; layout, copy and the handoff contract are untouched.
+- Tests: `flutter analyze` clean; all 3 onboarding tests green (every slide renders in-test); the three SVG blocks validated as well-formed XML. On-device screenshot sign-off still pending (phone offline).
+
 ## Unreleased — the seller dashboard stops looking generated
 
 - **Every block wore the same costume: a rust dot, tracked caps, a full-width rule — and the hero was a grey gradient box holding cards inside cards.** The hero is now one espresso ledger panel with cream ink (36pt Sora total, a real star icon with the review count, week/month as ledger entries split by a hairline instead of nested mini-cards). Section headers are serif titles with inline actions (`Recent orders` + `View all` up top, so the bottom `View All Orders →` link and its arrow glyph are gone), the status strip drops its 9px mono caps for tracked sans, the alert strip gets a proper `Needs attention` title, and the report CTA's hardcoded `grey.shade500` becomes the theme muted token. The `★` and `→` glyphs are real icons now; the two dead label helpers went with them.

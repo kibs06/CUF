@@ -141,8 +141,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       // one labelled unit; the bars themselves are decorative.
                       Expanded(
                         child: Semantics(
-                          label:
-                              'Page ${_currentPage + 1} of $_totalPages',
+                          label: 'Page ${_currentPage + 1} of $_totalPages',
                           excludeSemantics: true,
                           child: Row(
                             children: [
@@ -151,8 +150,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                 style: AppConstants.monoStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
-                                  color: AppConstants.secondary
-                                      .withValues(alpha: 0.55),
+                                  color: AppConstants.secondary.withValues(
+                                    alpha: 0.55,
+                                  ),
                                 ),
                               ),
                               const SizedBox(width: 12),
@@ -160,8 +160,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                 _totalPages,
                                 (index) => Expanded(
                                   child: AnimatedContainer(
-                                    duration:
-                                        const Duration(milliseconds: 300),
+                                    duration: const Duration(milliseconds: 300),
                                     curve: Curves.easeOut,
                                     height: 4,
                                     margin: EdgeInsets.only(
@@ -171,8 +170,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                       borderRadius: BorderRadius.circular(2),
                                       color: index <= _currentPage
                                           ? AppConstants.primary
-                                          : AppConstants.secondary
-                                              .withValues(alpha: 0.15),
+                                          : AppConstants.secondary.withValues(
+                                              alpha: 0.15,
+                                            ),
                                     ),
                                   ),
                                 ),
@@ -352,45 +352,25 @@ class _SlideWidget extends StatelessWidget {
                       child: Stack(
                         alignment: Alignment.center,
                         children: [
-                          // Warm glow
-                          Container(
-                            width: 248,
-                            height: 248,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: RadialGradient(
-                                colors: [
-                                  AppConstants.primary
-                                      .withValues(alpha: 0.22),
-                                  AppConstants.primary
-                                      .withValues(alpha: 0.0),
-                                ],
-                                stops: const [0.0, 0.72],
-                              ),
-                            ),
-                          ),
+                          // The sticker disc lives inside the SVG (opaque sand,
+                          // flat craft colours); the stitched ring circles it
+                          // like a welt. No tint filter any more — the art
+                          // carries its own palette on both brightnesses.
                           // Stitched ring
                           Padding(
                             padding: const EdgeInsets.all(10),
                             child: CustomPaint(
                               size: const Size(228, 228),
                               painter: _StitchRingPainter(
-                                AppConstants.primary
-                                    .withValues(alpha: 0.45),
+                                AppConstants.primary.withValues(alpha: 0.45),
                               ),
                             ),
                           ),
                           // Line art
                           SizedBox(
-                            width: 178,
-                            height: 178,
-                            child: SvgPicture.string(
-                              data.svg,
-                              colorFilter: ColorFilter.mode(
-                                clayInk,
-                                BlendMode.srcIn,
-                              ),
-                            ),
+                            width: 198,
+                            height: 198,
+                            child: SvgPicture.string(data.svg),
                           ),
                           // Floating chips
                           Positioned(
@@ -438,8 +418,7 @@ class _SlideWidget extends StatelessWidget {
                     textAlign: TextAlign.center,
                     style: AppConstants.bodyStyle(
                       fontSize: 15,
-                      color:
-                          AppConstants.secondary.withValues(alpha: 0.65),
+                      color: AppConstants.secondary.withValues(alpha: 0.65),
                       height: 1.5,
                     ),
                   ),
@@ -452,7 +431,8 @@ class _SlideWidget extends StatelessWidget {
                       for (int i = 0; i < data.bullets.length; i++) ...[
                         if (i > 0) const SizedBox(height: 8),
                         _BulletRow(
-                          icon: _bulletIcons[data.bullets[i].icon] ??
+                          icon:
+                              _bulletIcons[data.bullets[i].icon] ??
                               Icons.check_circle_outline,
                           label: data.bullets[i].label,
                           clayInk: clayInk,
@@ -526,8 +506,7 @@ class _MedallionChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return ExcludeSemantics(
       child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
           color: AppConstants.surfaceRaised,
           borderRadius: BorderRadius.circular(999),
@@ -594,8 +573,7 @@ class _Parallax extends StatelessWidget {
         double offset = 0;
         if (pageController.hasClients &&
             pageController.position.hasContentDimensions) {
-          offset =
-              (pageController.page ?? currentPage.toDouble()) - index;
+          offset = (pageController.page ?? currentPage.toDouble()) - index;
         }
         final clamped = offset.clamp(-1.0, 1.0);
         return Opacity(
@@ -649,158 +627,156 @@ class _StitchRingPainter extends CustomPainter {
 
 // ─── SVG Illustrations ────────────────────────────────────────────
 
-/// Slide 1: hand-stitched leather sandal, side profile.
-///
-/// The footbed wash, welt stitching and needle-and-thread arc are the craft
-/// story; the shared kit (ground shadow, sparkles, 3 / 2 / 1.25 weights)
-/// keeps all three slides one visual family (Material: visual continuity).
+/// Slide 1: hand-stitched leather sandal, side profile — flat clipart:
+/// espresso sole, tan footbed, clay straps with cream stitching, brass
+/// buckle, needle-and-thread arc.
 const String _welcomeSvg = '''
 <svg viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="100" cy="100" r="78" fill="#F4E4C8"/>
+  <circle cx="100" cy="100" r="78" stroke="#8B5A2B" stroke-width="2.5" fill="none"/>
   <!-- Ground shadow -->
-  <ellipse cx="100" cy="172" rx="48" ry="6" fill="currentColor" opacity="0.12"/>
-  <!-- Footbed wash -->
-  <path d="M52,146 C66,152 134,152 152,142 L150,132 C130,140 70,140 54,134 Z"
-        fill="currentColor" opacity="0.10"/>
+  <ellipse cx="100" cy="158" rx="44" ry="6" fill="#3A2415" opacity="0.18"/>
   <!-- Outsole slab -->
-  <path d="M46,142 C62,152 138,152 156,140 L154,130 C138,140 64,140 48,132 Z"
-        stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-  <!-- Welt stitching along the sole -->
-  <path d="M54,137 C70,144 132,144 148,135"
-        stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-dasharray="4 3" opacity="0.6" fill="none"/>
-  <!-- Back strap -->
-  <path d="M76,136 C79,112 90,98 104,96"
-        stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none"/>
-  <path d="M82,132 C85,114 93,103 103,101"
-        stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-dasharray="3.5 3" opacity="0.55" fill="none"/>
+  <path d="M48,140 C64,150 136,150 154,138 L152,128 C136,138 66,138 50,130 Z"
+        fill="#3A2415"/>
+  <path d="M50,135 C66,143 134,143 152,133"
+        stroke="#FFF8EC" stroke-width="1.5" stroke-linecap="round" opacity="0.8" fill="none"/>
+  <!-- Footbed -->
+  <path d="M56,130 C70,136 130,136 146,128 L142,120 C126,126 74,126 60,122 Z"
+        fill="#D9A45B"/>
+  <!-- Back strap (clay band + cream stitch) -->
+  <path d="M78,128 C80,106 90,92 102,90"
+        stroke="#8B5A2B" stroke-width="11" stroke-linecap="round" fill="none"/>
+  <path d="M78,128 C80,106 90,92 102,90"
+        stroke="#FFF8EC" stroke-width="1.5" stroke-linecap="round" stroke-dasharray="3.5 3" fill="none"/>
   <!-- Front strap -->
-  <path d="M108,138 C112,116 124,104 140,104"
-        stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none"/>
-  <path d="M114,134 C118,118 127,109 139,109"
-        stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-dasharray="3.5 3" opacity="0.55" fill="none"/>
-  <!-- Buckle on the front strap -->
-  <rect x="122" y="112" width="12" height="10" rx="3"
-        stroke="currentColor" stroke-width="2" fill="none"/>
-  <circle cx="128" cy="117" r="1.6" fill="currentColor"/>
-  <!-- Heel pad -->
-  <ellipse cx="62" cy="136" rx="7" ry="4"
-        stroke="currentColor" stroke-width="1.5" opacity="0.6" fill="none"/>
-  <!-- Needle and thread arc — the making of the pair -->
-  <path d="M36,116 Q56,88 94,84"
-        stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-dasharray="5 4" opacity="0.7" fill="none"/>
-  <path d="M94,84 L106,76" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-  <circle cx="107" cy="75" r="1.8" fill="currentColor"/>
+  <path d="M110,128 C112,108 122,96 138,94"
+        stroke="#8B5A2B" stroke-width="11" stroke-linecap="round" fill="none"/>
+  <path d="M110,128 C112,108 122,96 138,94"
+        stroke="#FFF8EC" stroke-width="1.5" stroke-linecap="round" stroke-dasharray="3.5 3" fill="none"/>
+  <!-- Brass buckle -->
+  <rect x="120" y="98" width="15" height="12" rx="3.5"
+        fill="#B5622E" stroke="#3A2415" stroke-width="2"/>
+  <circle cx="127.5" cy="104" r="1.8" fill="#FFF8EC"/>
+  <!-- Needle and thread -->
+  <path d="M36,106 Q54,80 88,76"
+        stroke="#B5622E" stroke-width="2" stroke-linecap="round" fill="none"/>
+  <path d="M88,76 L100,68" stroke="#3A2415" stroke-width="2.5" stroke-linecap="round"/>
+  <circle cx="101" cy="67" r="1.8" fill="#3A2415"/>
   <!-- Sparkles -->
-  <path d="M158,52 v10 M153,57 h10" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
-  <circle cx="140" cy="44" r="1.8" fill="currentColor" opacity="0.7"/>
-  <circle cx="172" cy="70" r="1.5" fill="currentColor" opacity="0.5"/>
+  <path d="M152,44 v10 M147,49 h10" stroke="#8B5A2B" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="134" cy="38" r="2" fill="#8B5A2B"/>
+  <circle cx="164" cy="64" r="1.6" fill="#8B5A2B" opacity="0.6"/>
 </svg>
 ''';
 
-/// Slide 2: artisan boutique — striped awning, hanging sign, shoes on stands
-/// in both windows, planters flanking the door.
+/// Slide 2: artisan boutique, flat clipart — cream facade, clay/cream
+/// striped awning, espresso door, clay shoes on stands, sage planters.
 const String _storefrontSvg = '''
 <svg viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="100" cy="100" r="78" fill="#F4E4C8"/>
+  <circle cx="100" cy="100" r="78" stroke="#8B5A2B" stroke-width="2.5" fill="none"/>
   <!-- Ground shadow + line -->
-  <ellipse cx="100" cy="170" rx="62" ry="6" fill="currentColor" opacity="0.12"/>
-  <path d="M26,170 L174,170" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  <ellipse cx="100" cy="168" rx="58" ry="6" fill="#3A2415" opacity="0.18"/>
+  <path d="M30,168 L170,168" stroke="#3A2415" stroke-width="2.5" stroke-linecap="round"/>
   <!-- Facade -->
-  <rect x="46" y="62" width="108" height="108" rx="5"
-        stroke="currentColor" stroke-width="2.5" fill="none"/>
+  <rect x="48" y="60" width="104" height="108" rx="6"
+        fill="#FFF8EC" stroke="#3A2415" stroke-width="3"/>
   <!-- Cornice -->
-  <rect x="40" y="52" width="120" height="10" rx="3.5"
-        stroke="currentColor" stroke-width="2.5" fill="none"/>
+  <rect x="42" y="50" width="116" height="12" rx="4"
+        fill="#8B5A2B" stroke="#3A2415" stroke-width="2.5"/>
   <!-- Striped awning with scallops -->
-  <path d="M52,74 L148,74 L144,92 Q138,98 132,92 Q126,98 120,92 Q114,98 108,92 Q102,98 96,92 Q90,98 84,92 Q78,98 72,92 Q66,98 60,92 Q55,97 52,92 Z"
-        stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="currentColor" fill-opacity="0.10"/>
-  <path d="M76,74 L74,93 M100,74 L100,94 M124,74 L126,93"
-        stroke="currentColor" stroke-width="1.25" stroke-linecap="round" opacity="0.55"/>
-  <!-- Hanging sign with a mini sole -->
-  <path d="M92,74 v6 M108,74 v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-  <rect x="80" y="80" width="40" height="17" rx="8.5"
-        stroke="currentColor" stroke-width="1.75" fill="none"/>
-  <path d="M90,88.5 C93,86 97,86 99,88.5 M101,88.5 C103,86 107,86 110,88.5"
-        stroke="currentColor" stroke-width="1.25" stroke-linecap="round" fill="none"/>
+  <path d="M56,72 L144,72 L140,90 Q134,96 128,90 Q122,96 116,90 Q110,96 104,90 Q98,96 92,90 Q86,96 80,90 Q74,96 68,90 Q62,96 58,90 Z"
+        fill="#FFF8EC" stroke="#3A2415" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M76,72 L74,90 M96,72 L95,91 M104,72 L105,91 M124,72 L126,90"
+        stroke="#3A2415" stroke-width="1.5" stroke-linecap="round" opacity="0.45"/>
+  <path d="M84,72 L83,90.5 M116,72 L117,90.5"
+        stroke="#B5622E" stroke-width="7" opacity="0.75"/>
+  <!-- Hanging sign -->
+  <path d="M92,90 v6 M108,90 v6" stroke="#3A2415" stroke-width="2" stroke-linecap="round"/>
+  <rect x="79" y="96" width="42" height="18" rx="9"
+        fill="#8B5A2B" stroke="#3A2415" stroke-width="2"/>
+  <path d="M89,105 C92,102.5 96,102.5 98,105 M100,105 C102,102.5 106,102.5 109,105"
+        stroke="#FFF8EC" stroke-width="1.75" stroke-linecap="round" fill="none"/>
+  <circle cx="113" cy="105" r="1.6" fill="#FFF8EC"/>
   <!-- Door -->
-  <rect x="88" y="118" width="24" height="52" rx="2.5"
-        stroke="currentColor" stroke-width="2.25" fill="none"/>
-  <path d="M92,124 L92,164 M108,124 L108,164" stroke="currentColor" stroke-width="1.25" opacity="0.5"/>
-  <circle cx="106" cy="146" r="2" fill="currentColor"/>
-  <!-- Lantern dots flanking the sign -->
-  <circle cx="66" cy="88" r="2" fill="currentColor" opacity="0.7"/>
-  <circle cx="134" cy="88" r="2" fill="currentColor" opacity="0.7"/>
-  <!-- Left window + shoe on a stand -->
-  <rect x="54" y="118" width="26" height="32" rx="3"
-        stroke="currentColor" stroke-width="2" fill="none"/>
-  <path d="M58,142 C60,136 64,134 68,136 L73,140 L58,140 Z"
-        stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" fill="none"/>
-  <path d="M62,140 v4 M70,140 v4" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" opacity="0.6"/>
-  <!-- Right window + shoe on a stand -->
-  <rect x="120" y="118" width="26" height="32" rx="3"
-        stroke="currentColor" stroke-width="2" fill="none"/>
-  <path d="M124,142 C126,136 130,134 134,136 L139,140 L124,140 Z"
-        stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" fill="none"/>
-  <path d="M128,140 v4 M136,140 v4" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" opacity="0.6"/>
+  <rect x="89" y="120" width="22" height="48" rx="2.5"
+        fill="#3A2415"/>
+  <rect x="93" y="124" width="14" height="18" rx="1.5"
+        stroke="#FFF8EC" stroke-width="1.5" opacity="0.7" fill="none"/>
+  <rect x="93" y="145" width="14" height="18" rx="1.5"
+        stroke="#FFF8EC" stroke-width="1.5" opacity="0.7" fill="none"/>
+  <circle cx="105" cy="144" r="2" fill="#C98A2C"/>
+  <!-- Lanterns -->
+  <circle cx="66" cy="104" r="3" fill="#C98A2C" stroke="#3A2415" stroke-width="1.5"/>
+  <circle cx="134" cy="104" r="3" fill="#C98A2C" stroke="#3A2415" stroke-width="1.5"/>
+  <!-- Left window: clay shoe on a stand -->
+  <rect x="56" y="120" width="26" height="32" rx="3"
+        fill="#E9DCC3" stroke="#3A2415" stroke-width="2.5"/>
+  <path d="M60,142 C62,135 66,133 70,135 L75,139 L60,139 Z"
+        fill="#8B5A2B"/>
+  <path d="M64,139 v4 M71,139 v4" stroke="#3A2415" stroke-width="1.5" stroke-linecap="round"/>
+  <!-- Right window: clay shoe on a stand -->
+  <rect x="118" y="120" width="26" height="32" rx="3"
+        fill="#E9DCC3" stroke="#3A2415" stroke-width="2.5"/>
+  <path d="M122,142 C124,135 128,133 132,135 L137,139 L122,139 Z"
+        fill="#8B5A2B"/>
+  <path d="M126,139 v4 M133,139 v4" stroke="#3A2415" stroke-width="1.5" stroke-linecap="round"/>
   <!-- Planters -->
-  <path d="M34,158 L44,158 L42,170 L36,170 Z"
-        stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" fill="none"/>
-  <path d="M39,158 C37,150 33,147 29,146 M39,158 C39,150 41,145 45,143 M39,158 v-10"
-        stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/>
-  <path d="M156,158 L166,158 L164,170 L158,170 Z"
-        stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" fill="none"/>
-  <path d="M161,158 C159,150 155,147 151,146 M161,158 C161,150 163,145 167,143 M161,158 v-10"
-        stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/>
-  <!-- Sparkles -->
-  <path d="M164,30 v9 M159.5,34.5 h9" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
-  <circle cx="34" cy="38" r="1.8" fill="currentColor" opacity="0.7"/>
-  <circle cx="48" cy="28" r="1.4" fill="currentColor" opacity="0.5"/>
+  <path d="M36,156 L46,156 L44,168 L38,168 Z"
+        fill="#B5622E" stroke="#3A2415" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M41,156 C39,148 35,145 31,144 M41,156 C41,148 43,143 47,141 M41,156 v-10"
+        stroke="#5B7A52" stroke-width="2" stroke-linecap="round" fill="none"/>
+  <path d="M154,156 L164,156 L162,168 L160,168 Z"
+        fill="#B5622E" stroke="#3A2415" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M159,156 C157,148 153,145 149,144 M159,156 C159,148 161,143 165,141 M159,156 v-10"
+        stroke="#5B7A52" stroke-width="2" stroke-linecap="round" fill="none"/>
 </svg>
 ''';
 
-/// Slide 3: camera try-on — a phone framing a foot with a laced sneaker
-/// settling onto it, a scan beam, focus corners and a fitted check badge.
+/// Slide 3: camera try-on, flat clipart — espresso phone with a cream
+/// screen, tan foot, clay sneaker with cream sole and laces, rust scan
+/// beam, clay focus corners, sage fitted badge.
 const String _arSvg = '''
 <svg viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="100" cy="100" r="78" fill="#F4E4C8"/>
+  <circle cx="100" cy="100" r="78" stroke="#8B5A2B" stroke-width="2.5" fill="none"/>
   <!-- Ground shadow -->
-  <ellipse cx="100" cy="184" rx="42" ry="5" fill="currentColor" opacity="0.12"/>
-  <!-- Focus corners around the phone -->
-  <path d="M36,62 L36,46 L52,46" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
-  <path d="M164,62 L164,46 L148,46" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
-  <path d="M36,142 L36,158 L52,158" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
-  <path d="M164,142 L164,158 L148,158" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
-  <!-- Phone frame -->
-  <rect x="58" y="22" width="84" height="158" rx="16"
-        stroke="currentColor" stroke-width="3" fill="none"/>
-  <rect x="66" y="36" width="68" height="130" rx="6"
-        stroke="currentColor" stroke-width="1" opacity="0.5" fill="none"/>
-  <circle cx="100" cy="29" r="2" fill="currentColor"/>
-  <!-- Foot inside the screen -->
-  <path d="M88,148 C86,140 84,130 86,120 C87,112 87,104 91,99 C94,95 98,96 100,99 C102,96 106,95 108,97 C111,99 110,103 109,106 C111,112 113,122 112,134 C111,142 110,146 109,148"
-        stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
+  <ellipse cx="100" cy="180" rx="40" ry="5" fill="#3A2415" opacity="0.18"/>
+  <!-- Focus corners -->
+  <path d="M40,60 L40,46 L54,46" stroke="#8B5A2B" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  <path d="M160,60 L160,46 L146,46" stroke="#8B5A2B" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  <path d="M40,140 L40,154 L54,154" stroke="#8B5A2B" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  <path d="M160,140 L160,154 L146,154" stroke="#8B5A2B" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  <!-- Phone -->
+  <rect x="62" y="28" width="76" height="148" rx="15"
+        fill="#3A2415"/>
+  <rect x="69" y="41" width="62" height="122" rx="5"
+        fill="#FFF8EC"/>
+  <circle cx="100" cy="34.5" r="2" fill="#FFF8EC" opacity="0.85"/>
+  <!-- Foot -->
+  <path d="M90,144 C88,136 86,126 88,116 C89,108 89,102 93,97 C96,93 100,94 102,98 C104,94 108,93 110,95 C113,97 112,101 111,104 C113,110 115,120 114,132 C113,140 112,143 111,144 Z"
+        fill="#E8CF9F" stroke="#3A2415" stroke-width="2" stroke-linejoin="round"/>
   <!-- Scan beam -->
-  <rect x="72" y="112" width="56" height="14" rx="7"
-        fill="currentColor" opacity="0.08"/>
-  <path d="M72,119 L128,119" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-  <path d="M72,113 v-4 M128,113 v-4 M72,125 v-4 M128,125 v-4"
-        stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.7"/>
-  <!-- Sneaker settling onto the foot -->
-  <path d="M74,140 C88,146 116,146 130,139 L132,131 C118,137 88,137 76,131 Z"
-        stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-  <path d="M80,131 C82,120 90,113 101,111 L117,112 C124,113 128,119 129,127"
-        stroke="currentColor" stroke-width="2.25" stroke-linecap="round" fill="none"/>
-  <path d="M94,121 l7,-3 M92,127 l7,-3 M90,133 l7,-3"
-        stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-  <path d="M108,116 C114,118 118,122 119,128"
-        stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-dasharray="3 2.5" opacity="0.6" fill="none"/>
+  <rect x="74" y="110" width="52" height="14" rx="7"
+        fill="#B5622E" opacity="0.20"/>
+  <path d="M74,117 L126,117" stroke="#B5622E" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Sneaker upper -->
+  <path d="M78,132 C80,120 88,112 100,110 L118,111 C125,112 129,117 130,126 L131,132 Z"
+        fill="#8B5A2B" stroke="#3A2415" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M94,120 l8,-3 M92,126 l8,-3 M90,132 l8,-3"
+        stroke="#FFF8EC" stroke-width="2" stroke-linecap="round"/>
+  <!-- Sneaker sole -->
+  <path d="M76,132 C90,138 114,138 130,132 L128,140 C112,145 90,145 78,140 Z"
+        fill="#FFF8EC" stroke="#3A2415" stroke-width="2" stroke-linejoin="round"/>
   <!-- Placement motion arc -->
-  <path d="M136,108 C142,116 143,128 139,138"
-        stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-dasharray="4 3.5" opacity="0.55" fill="none"/>
+  <path d="M136,104 C142,112 143,124 139,134"
+        stroke="#8B5A2B" stroke-width="2" stroke-linecap="round" stroke-dasharray="4 3.5" fill="none"/>
   <!-- Fitted check badge -->
-  <circle cx="148" cy="150" r="13" fill="currentColor" opacity="0.12"/>
-  <circle cx="148" cy="150" r="13" stroke="currentColor" stroke-width="2" fill="none"/>
-  <path d="M142.5,150 l4,4 l7,-8" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <circle cx="144" cy="152" r="13" fill="#5B7A52" stroke="#3A2415" stroke-width="2"/>
+  <path d="M138.5,152 l4,4 l7,-8" stroke="#FFF8EC" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
   <!-- Sparkles -->
-  <path d="M44,96 v8 M40,100 h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-  <circle cx="158" cy="92" r="1.8" fill="currentColor" opacity="0.7"/>
-  <circle cx="46" cy="120" r="1.4" fill="currentColor" opacity="0.5"/>
+  <path d="M48,92 v8 M44,96 h8" stroke="#8B5A2B" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="154" cy="88" r="2" fill="#8B5A2B"/>
 </svg>
 ''';
