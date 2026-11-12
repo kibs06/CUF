@@ -162,11 +162,10 @@ void main() {
     testWidgets('unmounts the native view while it is paused, without moving',
         (tester) async {
       // ⚠️ The property that keeps two Filament engines from running at once.
-      // The viewer that mounts this section sets `paused` while the AR screen is
-      // on top (`ShoePreviewScreen._openArTryOn`) — a route check inside this
-      // widget would *not* have worked, because a push does not rebuild the route
-      // underneath it, and the product-page contract test pins that reasoning at
-      // the call site.
+      // The viewer that mounts this section sets `paused` while a pushed route
+      // covers it — a route check inside this widget would *not* have worked,
+      // because a push does not rebuild the route underneath it, and the
+      // product-page contract test pins that reasoning at the call site.
       var built = 0;
       Widget box({required bool paused}) => MaterialApp(
             home: Scaffold(
@@ -253,9 +252,9 @@ void main() {
       // here that can drop it. `shoe_preview_screen_test.dart` asserts it survives
       // the refusal from the page that draws it.
       expect(
-        find.text('Try On in AR'),
+        find.text('Try on DeepAR'),
         findsNothing,
-        reason: 'a second AR entry in the box is a second way into the same camera',
+        reason: 'a second try-on entry in the box is a second way into the same camera',
       );
     });
 
@@ -537,7 +536,7 @@ void main() {
       expect(find.byKey(const Key('fake-3d')), findsOneWidget);
       expect(find.text('View in 3D'), findsOneWidget);
       expect(
-        find.text('Try On in AR'),
+        find.text('Try on DeepAR'),
         findsNothing,
         reason: 'the escalation is the page\'s, at the foot of the page',
       );
@@ -555,9 +554,9 @@ void main() {
           findsOneWidget);
       expect(find.byType(ShoePreviewHint), findsOneWidget);
       expect(
-        find.text('Try On in AR'),
+        find.text('Try on DeepAR'),
         findsNothing,
-        reason: 'the branch that once kept the AR entry has none to keep now — '
+        reason: 'the branch that once kept the try-on entry has none to keep now — '
             'the viewer draws it, outside every branch in here',
       );
     });

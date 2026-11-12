@@ -185,10 +185,10 @@ void main() {
             'no gap where they would have been',
       );
       expect(
-        previewScreen,
-        contains('paused: _arTryOnOpen'),
-        reason: 'the box belongs to the viewer now, so the viewer is what stops '
-            'it while AR is on top',
+        codeOf(previewScreen),
+        isNot(contains('_arTryOnOpen')),
+        reason: 'no in-app AR screen is pushed any more — the try-ons open in '
+            'the phone browser, so there is no pause flag to own',
       );
       expect(
         helper,
@@ -344,24 +344,22 @@ void main() {
     });
   });
 
-  group('there are three entries on the page, all at the foot', () {
-    test('the viewer draws the DeepAR, AR and Snap pills, all at the foot', () {
+  group('there are two entries on the page, both at the foot', () {
+    test('the viewer draws the DeepAR and Snap pills, both at the foot', () {
       // ⚠️ The pill lived inside the section from 2026-10-01 to 2026-10-03, in
       // the flow directly under the box. The owner asked for it at the bottom of
       // the screen — with a box that fills most of the page, the button left a
       // dead half-page beneath it. What the move must not cost is the reason the
       // two used to be one widget (one entry, present exactly when the box is,
       // surviving a renderer that refuses), so each half of that is pinned here.
-      // Three entries: "Try on DeepAR" is the web DeepAR page, gated to
-      // products with a bundled effect so it can never show the wrong shoe;
-      // "Try On in AR" is the plain session, and "Try on Snap" is the web
-      // lens, gated to products with a published lens. ("Capture to fit"
-      // hidden for now, logic kept.)
+      // Two entries: "Try on DeepAR" is the web DeepAR page, gated to
+      // products with an effect so it can never show the wrong shoe, and
+      // "Try on Snap" is the web lens, gated to products with a published
+      // lens. The legacy simulated-AR pill is hidden: DeepAR is the feature.
       expect(
         'SoleARPill('.allMatches(previewScreen).length,
-        3,
-        reason: 'three entries: DeepAR and plain AR and Snap '
-            '(capture-to-fit hidden)',
+        2,
+        reason: 'two entries: DeepAR and Snap — the plain AR pill is gone',
       );
       expect(previewScreen, contains("label: 'Try on DeepAR'"));
       expect(
@@ -370,7 +368,12 @@ void main() {
         reason: 'DeepAR is the bundled-effect-products-only entry, never the '
             'seller\'s or an uneffected shoe\'s',
       );
-      expect(previewScreen, contains('SoleARPill(onPressed: _openArTryOn)'));
+      expect(
+        codeOf(previewScreen),
+        isNot(contains('_openArTryOn')),
+        reason: 'the legacy pill and its push are removed, not just unbuilt — '
+            'a simulated fitting flow must not be one revert away',
+      );
       expect(
         previewScreen,
         isNot(contains("label: 'Capture to fit'")),
@@ -448,25 +451,25 @@ void main() {
     });
   });
 
-  group('the box stops while the AR screen is on top', () {
-    test('the viewer pauses it around the push, not from inside the widget', () {
-      // The push moved from the page to the viewer with the button: the box is
-      // mounted by the pushed route now, so the route that owns both the box and
-      // the AR push is the viewer.
-      // Both entries go through `_openAr`, which holds the flag and the push.
-      final open = between(previewScreen, 'Future<TryOnFootSnapshotEvent?> _openAr(', '\n  }');
+  group('nothing is pushed on top of the box any more', () {
+    test('the legacy push and its pause flag are removed, not just unbuilt', () {
+      // The try-ons open in the phone browser now, so no pushed route can cover
+      // the box — and a hidden push would still be one revert from a simulated
+      // fitting flow reaching a customer.
+      expect(
+        codeOf(previewScreen),
+        isNot(contains('ARVirtualFitScreen(')),
+        reason: 'the viewer must not push the legacy fitting screen at all',
+      );
+      expect(
+        codeOf(previewScreen),
+        isNot(contains('_arTryOnOpen')),
+        reason: 'with no pushed route there is no pause flag to own',
+      );
 
-      final paused = open.indexOf('_arTryOnOpen = true');
-      final pushed = open.indexOf('Navigator.of(context).push');
-      final resumed = open.indexOf('_arTryOnOpen = false');
-
-      expect(paused, isNonNegative);
-      expect(pushed, greaterThan(paused), reason: 'the engine must be gone before AR starts');
-      expect(resumed, greaterThan(pushed), reason: 'and back when the screen pops');
-
-      // ⚠️ Why the flag exists rather than a route check: a push does not rebuild
-      // the route underneath it, so `ModalRoute.isCurrent` inside the widget would
-      // silently never fire and the box would render under the whole AR session.
+      // ⚠️ The section keeps its own guard: a push would not rebuild the route
+      // underneath it, so `ModalRoute.isCurrent` inside the widget would
+      // silently never fire.
       expect(
         codeOf(previewWidget),
         isNot(contains('ModalRoute.of(context)')),
@@ -651,8 +654,8 @@ void main() {
         'way in (V4.9)', () {
       // The device session's own finding: the try-on screen's QA seam made the
       // *session* reachable, but the page's gate still read `noModel` on every
-      // product while `product_models` holds 0 rows — and the "Try On in AR"
-      // button lives inside the viewer that gate hides. Pinned at the call
+      // product while `product_models` holds 0 rows — and the "Try on DeepAR"
+      // pill lives inside the viewer that gate hides. Pinned at the call
       // site, where the page builds its prefetch.
       final construction = between(
         productScreen,

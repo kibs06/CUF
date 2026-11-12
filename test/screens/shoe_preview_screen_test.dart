@@ -20,10 +20,10 @@ import 'package:mocktail/mocktail.dart';
 /// What is asserted here is the framing, not the renderer: that the box really
 /// does get the size of a screen rather than the 240 px frame the page used to
 /// give it (the reason this file exists at all), that the section's header comes
-/// with it, that the AR escalation is the page's own bottom action and survives a
-/// renderer that refuses, and that the model is handed over on the way in over the
-/// real channel. The renderer states — the refusal sentence, the QA readout, the
-/// pause during AR — belong to `ShoePreviewSection` and are pinned in
+/// with it, that the try-on escalation is the page's own bottom action and
+/// survives a renderer that refuses, and that the model is handed over on the
+/// way in over the real channel. The renderer states — the refusal sentence,
+/// the QA readout — belong to `ShoePreviewSection` and are pinned in
 /// `shoe_preview_3d_test.dart` and the product-page contract test.
 ///
 /// The **seller door** gets its own group: it is the one that resolves a model
@@ -192,7 +192,7 @@ void main() {
 
       final box = tester.getSize(find.byKey(const Key('fake-3d')));
       final boxBottom = tester.getBottomLeft(find.byKey(const Key('fake-3d')));
-      final pill = tester.getTopLeft(find.text('Try On in AR'));
+      final pill = tester.getTopLeft(find.text('Try on DeepAR'));
 
       expect(
         box.height,
@@ -222,7 +222,7 @@ void main() {
       );
     });
 
-    testWidgets('names the product and keeps the section, with its AR entry',
+    testWidgets('names the product and keeps the section, with its try-on entry',
         (tester) async {
       await tester.pumpWidget(harness());
 
@@ -231,12 +231,12 @@ void main() {
       // use it.
       expect(find.text('View in 3D'), findsOneWidget);
       expect(find.text('Drag to rotate'), findsOneWidget);
-      // And the camera stays one tap deeper — the escalation rather than a
+      // And the try-on stays one tap deeper — the escalation rather than a
       // second entry the customer had to choose between on the page.
-      expect(find.text('Try On in AR'), findsOneWidget);
+      expect(find.text('Try on DeepAR'), findsOneWidget);
     });
 
-    testWidgets('pins the AR escalation to the bottom edge of the page',
+    testWidgets('pins the try-on escalation to the bottom edge of the page',
         (tester) async {
       // The owner's request, 2026-10-03: directly under the box the pill left a
       // dead half-page beneath it. It is the page's bottom action now — the
@@ -246,7 +246,7 @@ void main() {
       await tester.pumpWidget(harness());
 
       final box = tester.getBottomLeft(find.byKey(const Key('fake-3d')));
-      final button = tester.getBottomLeft(find.text('Try On in AR'));
+      final button = tester.getBottomLeft(find.text('Try on DeepAR'));
       final page = tester.getSize(find.byType(Scaffold));
 
       // The customer still looks at the shoe first: the camera is the escalation.
@@ -287,10 +287,9 @@ void main() {
           findsOneWidget);
       expect(find.byKey(const Key('fake-3d')), findsNothing);
       expect(
-        find.text('Try On in AR'),
-        findsOneWidget,
-        reason: 'the AR screen degrades to its simulated mode on such a phone, so '
-            'the entry stays honestly usable',
+        find.text('Try on DeepAR'),
+        findsOneWidget,            reason: 'the DeepAR entry is a web page, so a renderer that cannot draw '
+            'changes nothing about it',
       );
     });
 
@@ -303,7 +302,7 @@ void main() {
       expect(args['modelId'], 7);
     });
 
-    testWidgets('leaves the AR entry out on the seller\'s door', (tester) async {
+    testWidgets('leaves the try-on entries out on the seller\'s door', (tester) async {
       // A seller cannot try the pair on — the customer can. The escalation is
       // the customer's, so the seller's viewer is the shoe and nothing else.
       await tester.pumpWidget(sellerHarness(
@@ -312,7 +311,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('fake-3d')), findsOneWidget);
-      expect(find.text('Try On in AR'), findsNothing);
+      expect(find.text('Try on DeepAR'), findsNothing);
       expect(find.text('Try on Snap'), findsNothing);
       expect(
         find.text('Change it any time from the product form.'),
@@ -340,7 +339,7 @@ void main() {
 
       expect(find.byKey(const Key('fake-3d')), findsOneWidget);
       expect(find.text('Try on Snap'), findsNothing);
-      expect(find.text('Try On in AR'), findsNothing);
+      expect(find.text('Try on DeepAR'), findsNothing);
     });
 
     testWidgets('and none appears when the renderer refuses either',
@@ -375,10 +374,9 @@ void main() {
           findsOneWidget);
       expect(find.byKey(const Key('fake-3d')), findsNothing);
       expect(
-        find.text('Try On in AR'),
-        findsNothing,
-        reason: 'a camera button on the seller\'s screen launches a fitting flow '
-            'on the wrong side of the shop',
+        find.text('Try on DeepAR'),
+        findsNothing,          reason: 'a try-on button on the seller\'s screen launches a fitting flow '
+          'on the wrong side of the shop',
       );
     });
 
@@ -427,7 +425,7 @@ void main() {
 
     testWidgets('shows Try on Snap only for a product with a lens',
         (tester) async {
-      // Luna Loafers has the only published lens: Snap + AR pills.
+      // Luna Loafers has the only published lens: Snap + DeepAR pills.
       final luna = <String, dynamic>{
         'id': AppConstants.snapLensProductIds.single,
         'name': 'Luna Loafers',
@@ -442,14 +440,14 @@ void main() {
       ));
       expect(find.text('Capture to fit'), findsNothing);
       expect(find.text('Try on Snap'), findsOneWidget);
-      expect(find.text('Try On in AR'), findsOneWidget);
+      expect(find.text('Try on DeepAR'), findsOneWidget);
 
-      // Any other product keeps AR only: no Snap, no Capture entry.
+      // Any other product keeps DeepAR only: no Snap, no Capture entry.
       await tester.pumpWidget(harness());
       await tester.pumpAndSettle();
       expect(find.text('Capture to fit'), findsNothing);
       expect(find.text('Try on Snap'), findsNothing);
-      expect(find.text('Try On in AR'), findsOneWidget);
+      expect(find.text('Try on DeepAR'), findsOneWidget);
     });
 
     testWidgets('tapping Try on Snap opens the try-lens page for the product',

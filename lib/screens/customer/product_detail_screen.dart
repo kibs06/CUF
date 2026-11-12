@@ -1184,7 +1184,7 @@ class _ProductDetailViewState extends State<_ProductDetailView>
           // asks *this* service whether the product has a model, so with the
           // QA switch on the production read service is pointed at the bundled
           // asset (the V3.5 boundary substitution the try-on screen already
-          // uses) — and the 3D viewer, plus the "Try On in AR" button inside
+          // uses) — and the 3D viewer, plus the "Try on DeepAR" pill inside
           // it, appears for the product under test. Only where the bytes come
           // from changes; resolution, digest verify, `.part` rename and the
           // cache budget all still run as production code.
@@ -1288,7 +1288,7 @@ class _ProductDetailViewState extends State<_ProductDetailView>
   Timer? _previewWaitTimer;
 
   /// **The inline 3D box's gate** — whether the product page shows the box, and
-  /// with it the "Try On in AR" button that lives inside its section.
+  /// with it the try-on pills that live inside the viewer it opens.
   ///
   /// ⚠️ The two facts come from different places on purpose, and the distinction
   /// is the one `TryOnPrefetchResult` already draws: `spec` is "this product has

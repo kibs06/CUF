@@ -10,10 +10,8 @@ import '../../services/deepar_try_on.dart';
 import '../../services/snap_try_on_channel.dart';
 import '../../services/space_view_service.dart';
 import '../../services/try_on_prefetch.dart';
-import '../../utils/shoe_fit_view.dart';
 import '../../widgets/shoe_preview_3d.dart';
 import '../../widgets/sole_ar_pill.dart';
-import '../customer/ar_fitting_screen.dart';
 
 /// **The full-screen 3D viewer** — the one surface that shows a product's model,
 /// whoever is looking at it.
@@ -48,12 +46,11 @@ import '../customer/ar_fitting_screen.dart';
 /// [kShoePreviewGutter], which exists so those numbers cannot drift apart.
 ///
 /// **What it does not change.** It is still `ShoePreview3D` in the same
-/// `Mode.PREVIEW`, drawing the same verified `.glb` through the same native
-/// renderer the AR session uses, mounted through `ShoePreviewSection` — the
-/// widget that knows what to draw when the renderer *refuses* (the refusal
-/// sentence, the QA banner, the measured facts). This screen is framing, a title,
-/// the optional resolve, the AR push — and, since 2026-10-03, the pill that makes
-/// that push.
+/// `Mode.PREVIEW`, drawing the same verified `.glb`, mounted through
+/// `ShoePreviewSection` — the widget that knows what to draw when the renderer
+/// *refuses* (the refusal sentence, the QA banner, the measured facts). This
+/// screen is framing, a title, the optional resolve, and the try-on pills at
+/// its foot — DeepAR first, Snap alongside.
 ///
 /// **The escalation is the page's, and it lives at the foot of the page.** The
 /// pill used to be `ShoePreviewSection`'s own last child, in the flow directly
@@ -64,22 +61,23 @@ import '../customer/ar_fitting_screen.dart';
 /// the viewer existed (a floating CTA above the buy bar). Two properties fall out
 /// of the move, and both are why it is safe:
 ///
-///   * **The box and the entry are still one decision.** This screen mounts the
-///     box *and* draws the pill, so a product that resolves no model gets
-///     neither, and there is exactly one way into AR.
+///   * **The box and the entries are still one decision.** This screen mounts
+///     the box *and* draws the pills: the box needs a verified model, each pill
+///     needs its own product (a bundled or uploaded effect, a published lens)
+///     — so a shoe offers only the try-ons that truly exist for it, and never
+///     a camera that cannot fit it.
 ///   * **A refusal cannot take the entry with it.** The renderer's refusal swaps
 ///     the box for its honest sentence *inside* the section; the pill is outside
 ///     it now, so the state that once had to remember to keep the button — the
 ///     owner's decision of 2026-09-30, after a real phone lost it mid-visit —
 ///     has no branch left that can drop it.
 ///
-/// **The AR push and the pause.** The box stops
-/// rendering while the AR screen is on top — a flag this screen owns rather than
-/// a `ModalRoute.isCurrent` check inside the widget, because a plain push does
-/// not rebuild the route underneath it and the check would silently never fire.
-/// `ShoePreviewSection.paused` carries it; the reasoning is written out on
-/// [ShoePreview3D.paused] and on [_openArTryOn]. It is **off** for the seller
-/// ([showTryOn]), who is looking at the pair rather than trying it on.
+/// **No in-app AR screen on top any more.** The legacy simulated-AR fitting
+/// flow (`ARVirtualFitScreen`, behind the old "Try On in AR" pill) is hidden:
+/// DeepAR is the try-on feature, and it opens in the phone browser rather than
+/// as a pushed route — so the box below keeps rendering and there is no pause
+/// flag to own. `ShoePreviewSection.paused` stays at its default. The seller
+/// door ([showTryOn] false) draws no pills at all.
 ///
 /// ⚠️ **It is a page, not a camera.** The AR screen is dark because it is a
 /// camera feed; this one follows the customer's brightness at every level.
@@ -138,21 +136,23 @@ class ShoePreviewScreen extends StatefulWidget {
   /// door, where the model is handed over.
   final String? productId;
 
-  /// The product the AR escalation hands to `ARVirtualFitScreen`. It is the
-  /// page's whole row rather than an id because the AR screen reads the product
-  /// (name, sizes, price) directly.
+  /// The product the try-on pills read. It is the page's whole row rather than
+  /// an id because the pills match on the product name (the effect lookup) and
+  /// open the portal URL with its id.
   final Map<String, dynamic> product;
 
-  /// Passed straight through to `ARVirtualFitScreen` (V3.9's availability half).
+  /// Kept for the product page's call site, which reports whether its prefetch
+  /// found a model. No pill reads it: each try-on is gated on its own product
+  /// (an effect, a lens), not on the 3D row.
   final bool modelAvailable;
 
-  /// Whether to offer the AR escalation at all.
+  /// Whether to offer the try-on escalation at all.
   ///
-  /// True for a customer: the camera is the step after a look. **False for the
+  /// True for a customer: the try-on is the step after a look. **False for the
   /// seller**, who cannot try the pair on — the person trying it on is the
-  /// customer, and an AR button here would launch a fitting flow on the wrong
-  /// side of the shop. Where it is true, the pill is drawn at the foot of the
-  /// page rather than under the box; see the class header.
+  /// customer, and a try-on button here would launch a fitting flow on the
+  /// wrong side of the shop. Where it is true, the pills are drawn at the foot
+  /// of the page rather than under the box; see the class header.
   final bool showTryOn;
 
   /// One line under the box, for the caller that has something to say about the
@@ -216,15 +216,6 @@ class _ShoePreviewScreenState extends State<ShoePreviewScreen> {
   /// or a desktop window offers the shoe a generous window rather than a
   /// thousand-pixel field with one shoe in the middle of it.
   static const double _stageCeiling = 900;
-
-  /// True while the AR screen is pushed on top of this one — see the class
-  /// header. The box stops rendering while it is, because the AR session needs
-  /// the GPU and two Filament engines for one customer is a frame-rate argument
-  /// nobody wins.
-  bool _arTryOnOpen = false;
-
-  /// The fit the customer captured in AR. Null until a capture, which leaves the default view.
-  ShoeFitView? _footFit;
 
   /// The model to draw: handed over on the customer door, resolved on the
   /// seller's.
@@ -346,10 +337,6 @@ class _ShoePreviewScreenState extends State<ShoePreviewScreen> {
     });
   }
 
-  Future<void> _openArTryOn() async {
-    await _openAr();
-  }
-
   /// The product this viewer is showing, either door: the customer door hands
   /// the row over, the seller door hands the id over.
   String? get _productId =>
@@ -464,42 +451,10 @@ class _ShoePreviewScreenState extends State<ShoePreviewScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text(
-          'Could not open the AR view on this phone. Try the Try On in AR fitting instead.',
+          'Could not open the space view on this phone just now.',
         ),
       ),
     );
-  }
-
-  /// **"Capture to fit": the AR screen, closed by the foot's first capture.** The pose it hands back
-  /// sets the viewer's orientation, top-down camera and size. A capture with no usable pose leaves
-  /// the viewer on its current fit.
-  // ignore: unused_element
-  Future<void> _captureFit() async {
-    final pose = await _openAr(captureFit: true);
-    if (!mounted || pose == null) return;
-    final fit = shoeFitViewFor(
-      yawDeg: pose.yawDeg,
-      lengthMm: pose.lengthMm,
-      authoredLengthMm: _model?.authoredLengthMm,
-    );
-    if (fit != null) setState(() => _footFit = fit);
-  }
-
-  Future<TryOnFootSnapshotEvent?> _openAr({bool captureFit = false}) async {
-    setState(() => _arTryOnOpen = true);
-    try {
-      return await Navigator.of(context).push<TryOnFootSnapshotEvent>(
-        MaterialPageRoute(
-          builder: (context) => ARVirtualFitScreen(
-            preselectedProduct: widget.product,
-            modelAvailable: widget.modelAvailable,
-            captureFit: captureFit,
-          ),
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => _arTryOnOpen = false);
-    }
   }
 
   /// The sentence for a resolve that produced nothing to draw, or null while one
@@ -570,7 +525,6 @@ class _ShoePreviewScreenState extends State<ShoePreviewScreen> {
                         if (model != null)
                           ShoePreviewSection(
                             model: model,
-                            paused: _arTryOnOpen,
                             height: boxHeight,
                             // The page's width, and only the box's: see
                             // [ShoePreview3D.bleed] for what that moves and what
@@ -579,7 +533,6 @@ class _ShoePreviewScreenState extends State<ShoePreviewScreen> {
                             channel: widget.channel,
                             viewBuilder: widget.viewBuilder,
                             events: widget.events,
-                            footFit: _footFit,
                           )
                         else if (_resolving)
                           _ResolvingBox(height: boxHeight)
@@ -686,37 +639,36 @@ class _ShoePreviewScreenState extends State<ShoePreviewScreen> {
                               ),
                             ),
                           ),
-                        // AR + Snap (lensed products only). Capture to fit is
-                        // hidden for now; _captureFit stays for re-enable.
-                        Row(
-                          children: [
-                            if (_showDeepAr) ...[
-                              Expanded(
-                                child: SoleARPill(
-                                  onPressed: _openDeepAr,
-                                  label: 'Try on DeepAR',
-                                  background: AppConstants.accent,
-                                  foreground: AppConstants.inkInverse,
+                        // DeepAR first, Snap alongside (lensed products only). The
+                        // legacy simulated-AR pill is hidden: DeepAR is the
+                        // try-on feature. A shoe with neither an effect nor a
+                        // lens gets no row at all — a camera that cannot fit it
+                        // would be worse than none.
+                        if (_showDeepAr || _showSnapLens)
+                          Row(
+                            children: [
+                              if (_showDeepAr)
+                                Expanded(
+                                  child: SoleARPill(
+                                    onPressed: _openDeepAr,
+                                    label: 'Try on DeepAR',
+                                    background: AppConstants.accent,
+                                    foreground: AppConstants.inkInverse,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(width: 8),
-                            ],
-                            if (_showSnapLens) ...[
-                              Expanded(
-                                child: SoleARPill(
-                                  onPressed: _openSnapLens,
-                                  label: 'Try on Snap',
-                                  background: AppConstants.primary,
-                                  foreground: AppConstants.inkInverse,
+                              if (_showDeepAr && _showSnapLens)
+                                const SizedBox(width: 8),
+                              if (_showSnapLens)
+                                Expanded(
+                                  child: SoleARPill(
+                                    onPressed: _openSnapLens,
+                                    label: 'Try on Snap',
+                                    background: AppConstants.primary,
+                                    foreground: AppConstants.inkInverse,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(width: 8),
                             ],
-                            Expanded(
-                              child: SoleARPill(onPressed: _openArTryOn),
-                            ),
-                          ],
-                        ),
+                          ),
                       ],
                     ),
                   ),

@@ -117,7 +117,7 @@ void main() {
 
     expect(find.byType(ShoePreviewScreen), findsOneWidget);
     // The seller's door, not the customer's: nobody here can try the pair on.
-    expect(find.text('Try On in AR'), findsNothing);
+    expect(find.text('Try on DeepAR'), findsNothing);
     // ⚠️ And the sheet that described the model is gone. It said the product
     // "has a model", which is the row's own claim said back to the seller — the
     // sentence that replaced it is the one about what is actually on screen.

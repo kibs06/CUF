@@ -1,5 +1,11 @@
 # SoleVision — Changelog
 
+## Unreleased — DeepAR is the try-on feature; the legacy simulated-AR pill is hidden
+
+- **The 3D viewer's bottom bar offered three try-ons, and one of them was a promise the app could not keep.** The legacy "Try On in AR" pill opened the simulated-AR fitting flow (`ARVirtualFitScreen`), which degrades to a simulated feed on any build without the `TRY_ON_V3` renderer path — a camera that performs fitting rather than doing it. DeepAR (the portal's foot-tracking page, opened in the phone browser) is the try-on that actually functions, so the viewer now offers only what exists for the shoe: **Try on DeepAR** where a bundled, uploaded or convention effect resolves, **Try on Snap** where a lens is published, and no row at all where neither does.
+- **The removal is a deletion, not a hiding.** The legacy pill, its `_openArTryOn`/`_openAr` push, the pause flag it owned and the capture-to-fit path are gone from `ShoePreviewScreen`; the contract test pins the absence (`isNot(contains('_openArTryOn'))`, two `SoleARPill`s, no `ARVirtualFitScreen` push) so the simulated flow cannot come back with a revert. `ARVirtualFitScreen` itself stays in the tree for its widget tests and a possible re-enable — nothing pushes it any more.
+- Tests: `flutter test` on the four affected files green (84 + 50 passing); `flutter analyze` on all six touched files clean.
+
 ## Unreleased — a development build stops offering an update it cannot install, and says why instead
 
 - **A `flutter run` build offered a ~220 MB download that Android was never going to install, and the refusal reached the user as one line with no reason on it.** Android will not replace an installed package whose signing certificate differs, and it tells the caller nothing: the installer answers **"App not installed."** and stops. A development build carries the machine-local debug keystore, so no published APK can be installed over it — and the app offered the download anyway, from the launch overlay's **Update Now** and the What's New banner's **Download vX.X.X** alike, with the browser fallback beside them fetching the same bytes to the same dead end. `docs/RELEASE_SIGNING.md` is the long version of the failure; this is the app refusing to walk into it.
