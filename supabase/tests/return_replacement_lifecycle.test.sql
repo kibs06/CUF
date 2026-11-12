@@ -309,6 +309,11 @@ begin
 end;
 $$;
 
+-- The caller here is the CUSTOMER (c1): claims still say s1 from the
+-- approval above, and under the store owner's identity this update
+-- succeeds — which is exactly the false negative CI caught.
+select set_config('request.jwt.claims',
+  public.tmp_rv_claims('e1000000-0000-0000-0000-000000000004'), true);
 set local role authenticated;
 select is(
   public.tmp_rv_try_status(
@@ -317,6 +322,9 @@ select is(
   '24: a customer cannot write `replacement_received` directly — the RPC is the only way in'
 );
 reset role;
+-- …and back to the store owner for the reconciliation below.
+select set_config('request.jwt.claims',
+  public.tmp_rv_claims('e1000000-0000-0000-0000-000000000001'), true);
 
 -- ══ 4. Stock reconciles, once ══════════════════════════════════════
 -- Pinned so the assertions do not depend on the sale trigger's arithmetic.
