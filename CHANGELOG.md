@@ -1,5 +1,10 @@
 # SoleVision — Changelog
 
+## Unreleased — the onboarding illustrations grow up: a sandal, a boutique, a fitting
+
+- **The three glyphs were recognisable but generic — a sole, a box with a roof, a phone with a blob.** Each is now a composed scene in one shared kit (ground shadow, sparkle set, 3 / 2 / 1.25 stroke weights, clay washes): slide 1 is a side-profile leather sandal with welt stitching, straps, a buckle and a needle-and-thread arc; slide 2 is a boutique with a striped scalloped awning, hanging sign, shoes on stands in both windows and planters flanking the door; slide 3 is a phone framing a foot while a laced sneaker settles onto it under a scan beam, with focus corners and a fitted check badge. Rendered monochrome in `primaryInk` so the single tint keeps them legible on dark pages too — verified with on-device screenshots, not just widget tests.
+- Tests: `flutter analyze` clean; the 3 onboarding tests still green (copy untouched).
+
 ## Unreleased — onboarding sells the story, not just the screens
 
 - **The three slides were the same flat formula: a line glyph, a headline, a sentence, dots.** Each slide now stages its illustration as a medallion — warm radial glow, a stitched clay ring (the welt motif) and two floating chips — with the art drifting against the swipe for depth (static under reduced motion). A small-caps clay eyebrow and three proof bullets per slide (`primaryInk`, so the clay stays legible on dark pages too) say what the old sentences never did: makers sell direct, orders track to the door, one foot scan sizes every product. Progress is a `1 / 3` Sora counter plus segmented bars announced as one unit, the CTA carries a forward arrow, and Skip keeps its 44px target.

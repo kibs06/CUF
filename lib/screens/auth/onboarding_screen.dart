@@ -382,8 +382,8 @@ class _SlideWidget extends StatelessWidget {
                           ),
                           // Line art
                           SizedBox(
-                            width: 168,
-                            height: 168,
+                            width: 178,
+                            height: 178,
                             child: SvgPicture.string(
                               data.svg,
                               colorFilter: ColorFilter.mode(
@@ -649,87 +649,158 @@ class _StitchRingPainter extends CustomPainter {
 
 // ─── SVG Illustrations ────────────────────────────────────────────
 
-/// Slide 1: Shoe sole — large, detailed, centered
+/// Slide 1: hand-stitched leather sandal, side profile.
+///
+/// The footbed wash, welt stitching and needle-and-thread arc are the craft
+/// story; the shared kit (ground shadow, sparkles, 3 / 2 / 1.25 weights)
+/// keeps all three slides one visual family (Material: visual continuity).
 const String _welcomeSvg = '''
 <svg viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- Outer sole shape -->
-  <path d="M100,20 C125,20 140,45 135,75 C130,105 138,145 130,170 C122,182 78,182 70,170 C62,145 70,105 65,75 C60,45 75,20 100,20 Z"
-        stroke="currentColor" stroke-width="3" stroke-linecap="round" fill="none"/>
-  <!-- Inner detail lines -->
-  <path d="M82,35 Q100,30 118,35" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none"/>
-  <path d="M78,50 Q100,44 122,50" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none"/>
-  <path d="M76,65 Q100,58 124,65" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none"/>
-  <path d="M75,80 Q100,73 125,80" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none"/>
-  <!-- Tread pattern -->
-  <path d="M78,100 L122,100" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="6 4"/>
-  <path d="M76,115 L124,115" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="6 4"/>
-  <path d="M78,130 L122,130" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="6 4"/>
-  <!-- Heel area -->
-  <ellipse cx="100" cy="155" rx="22" ry="12" stroke="currentColor" stroke-width="2" fill="none"/>
-  <path d="M88,155 L112,155" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-  <!-- Decorative stitching dots -->
-  <circle cx="100" cy="92" r="2" fill="currentColor"/>
-  <circle cx="90" cy="92" r="1.5" fill="currentColor"/>
-  <circle cx="110" cy="92" r="1.5" fill="currentColor"/>
+  <!-- Ground shadow -->
+  <ellipse cx="100" cy="172" rx="48" ry="6" fill="currentColor" opacity="0.12"/>
+  <!-- Footbed wash -->
+  <path d="M52,146 C66,152 134,152 152,142 L150,132 C130,140 70,140 54,134 Z"
+        fill="currentColor" opacity="0.10"/>
+  <!-- Outsole slab -->
+  <path d="M46,142 C62,152 138,152 156,140 L154,130 C138,140 64,140 48,132 Z"
+        stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- Welt stitching along the sole -->
+  <path d="M54,137 C70,144 132,144 148,135"
+        stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-dasharray="4 3" opacity="0.6" fill="none"/>
+  <!-- Back strap -->
+  <path d="M76,136 C79,112 90,98 104,96"
+        stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  <path d="M82,132 C85,114 93,103 103,101"
+        stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-dasharray="3.5 3" opacity="0.55" fill="none"/>
+  <!-- Front strap -->
+  <path d="M108,138 C112,116 124,104 140,104"
+        stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  <path d="M114,134 C118,118 127,109 139,109"
+        stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-dasharray="3.5 3" opacity="0.55" fill="none"/>
+  <!-- Buckle on the front strap -->
+  <rect x="122" y="112" width="12" height="10" rx="3"
+        stroke="currentColor" stroke-width="2" fill="none"/>
+  <circle cx="128" cy="117" r="1.6" fill="currentColor"/>
+  <!-- Heel pad -->
+  <ellipse cx="62" cy="136" rx="7" ry="4"
+        stroke="currentColor" stroke-width="1.5" opacity="0.6" fill="none"/>
+  <!-- Needle and thread arc — the making of the pair -->
+  <path d="M36,116 Q56,88 94,84"
+        stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-dasharray="5 4" opacity="0.7" fill="none"/>
+  <path d="M94,84 L106,76" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="107" cy="75" r="1.8" fill="currentColor"/>
+  <!-- Sparkles -->
+  <path d="M158,52 v10 M153,57 h10" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+  <circle cx="140" cy="44" r="1.8" fill="currentColor" opacity="0.7"/>
+  <circle cx="172" cy="70" r="1.5" fill="currentColor" opacity="0.5"/>
 </svg>
 ''';
 
-/// Slide 2: Storefront with shoes on display
+/// Slide 2: artisan boutique — striped awning, hanging sign, shoes on stands
+/// in both windows, planters flanking the door.
 const String _storefrontSvg = '''
 <svg viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- Storefront frame -->
-  <rect x="30" y="50" width="140" height="110" rx="6" stroke="currentColor" stroke-width="2.5" fill="none"/>
-  <!-- Roof / awning -->
-  <path d="M25,50 L100,25 L175,50" stroke="currentColor" stroke-width="3" stroke-linecap="round" fill="none"/>
-  <path d="M35,50 L100,30 L165,50" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-dasharray="4 3" fill="none"/>
+  <!-- Ground shadow + line -->
+  <ellipse cx="100" cy="170" rx="62" ry="6" fill="currentColor" opacity="0.12"/>
+  <path d="M26,170 L174,170" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  <!-- Facade -->
+  <rect x="46" y="62" width="108" height="108" rx="5"
+        stroke="currentColor" stroke-width="2.5" fill="none"/>
+  <!-- Cornice -->
+  <rect x="40" y="52" width="120" height="10" rx="3.5"
+        stroke="currentColor" stroke-width="2.5" fill="none"/>
+  <!-- Striped awning with scallops -->
+  <path d="M52,74 L148,74 L144,92 Q138,98 132,92 Q126,98 120,92 Q114,98 108,92 Q102,98 96,92 Q90,98 84,92 Q78,98 72,92 Q66,98 60,92 Q55,97 52,92 Z"
+        stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="currentColor" fill-opacity="0.10"/>
+  <path d="M76,74 L74,93 M100,74 L100,94 M124,74 L126,93"
+        stroke="currentColor" stroke-width="1.25" stroke-linecap="round" opacity="0.55"/>
+  <!-- Hanging sign with a mini sole -->
+  <path d="M92,74 v6 M108,74 v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+  <rect x="80" y="80" width="40" height="17" rx="8.5"
+        stroke="currentColor" stroke-width="1.75" fill="none"/>
+  <path d="M90,88.5 C93,86 97,86 99,88.5 M101,88.5 C103,86 107,86 110,88.5"
+        stroke="currentColor" stroke-width="1.25" stroke-linecap="round" fill="none"/>
   <!-- Door -->
-  <rect x="82" y="115" width="36" height="45" rx="3" stroke="currentColor" stroke-width="2" fill="none"/>
-  <circle cx="112" cy="140" r="2.5" fill="currentColor"/>
-  <!-- Window left -->
-  <rect x="40" y="62" width="35" height="40" rx="3" stroke="currentColor" stroke-width="2" fill="none"/>
-  <!-- Shoe in left window -->
-  <path d="M48,90 C52,82 58,80 65,84 L68,90 L48,90 Z" stroke="currentColor" stroke-width="1.5" fill="none"/>
-  <!-- Window right -->
-  <rect x="125" y="62" width="35" height="40" rx="3" stroke="currentColor" stroke-width="2" fill="none"/>
-  <!-- Shoe in right window -->
-  <path d="M133,90 C137,82 143,80 150,84 L153,90 L133,90 Z" stroke="currentColor" stroke-width="1.5" fill="none"/>
-  <!-- Sign -->
-  <rect x="75" y="58" width="50" height="18" rx="3" stroke="currentColor" stroke-width="1.5" fill="none"/>
-  <path d="M85,67 L115,67" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-  <!-- Stars/sparkles -->
-  <circle cx="45" cy="40" r="2" fill="currentColor"/>
-  <circle cx="155" cy="35" r="1.5" fill="currentColor"/>
-  <circle cx="170" cy="45" r="2" fill="currentColor"/>
-  <!-- Ground line -->
-  <path d="M20,160 L180,160" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  <rect x="88" y="118" width="24" height="52" rx="2.5"
+        stroke="currentColor" stroke-width="2.25" fill="none"/>
+  <path d="M92,124 L92,164 M108,124 L108,164" stroke="currentColor" stroke-width="1.25" opacity="0.5"/>
+  <circle cx="106" cy="146" r="2" fill="currentColor"/>
+  <!-- Lantern dots flanking the sign -->
+  <circle cx="66" cy="88" r="2" fill="currentColor" opacity="0.7"/>
+  <circle cx="134" cy="88" r="2" fill="currentColor" opacity="0.7"/>
+  <!-- Left window + shoe on a stand -->
+  <rect x="54" y="118" width="26" height="32" rx="3"
+        stroke="currentColor" stroke-width="2" fill="none"/>
+  <path d="M58,142 C60,136 64,134 68,136 L73,140 L58,140 Z"
+        stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" fill="none"/>
+  <path d="M62,140 v4 M70,140 v4" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" opacity="0.6"/>
+  <!-- Right window + shoe on a stand -->
+  <rect x="120" y="118" width="26" height="32" rx="3"
+        stroke="currentColor" stroke-width="2" fill="none"/>
+  <path d="M124,142 C126,136 130,134 134,136 L139,140 L124,140 Z"
+        stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" fill="none"/>
+  <path d="M128,140 v4 M136,140 v4" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" opacity="0.6"/>
+  <!-- Planters -->
+  <path d="M34,158 L44,158 L42,170 L36,170 Z"
+        stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" fill="none"/>
+  <path d="M39,158 C37,150 33,147 29,146 M39,158 C39,150 41,145 45,143 M39,158 v-10"
+        stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+  <path d="M156,158 L166,158 L164,170 L158,170 Z"
+        stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" fill="none"/>
+  <path d="M161,158 C159,150 155,147 151,146 M161,158 C161,150 163,145 167,143 M161,158 v-10"
+        stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+  <!-- Sparkles -->
+  <path d="M164,30 v9 M159.5,34.5 h9" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+  <circle cx="34" cy="38" r="1.8" fill="currentColor" opacity="0.7"/>
+  <circle cx="48" cy="28" r="1.4" fill="currentColor" opacity="0.5"/>
 </svg>
 ''';
 
-/// Slide 3: AR shoe fitting — abstract foot with shoe overlay
+/// Slide 3: camera try-on — a phone framing a foot with a laced sneaker
+/// settling onto it, a scan beam, focus corners and a fitted check badge.
 const String _arSvg = '''
 <svg viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Ground shadow -->
+  <ellipse cx="100" cy="184" rx="42" ry="5" fill="currentColor" opacity="0.12"/>
+  <!-- Focus corners around the phone -->
+  <path d="M36,62 L36,46 L52,46" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
+  <path d="M164,62 L164,46 L148,46" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
+  <path d="M36,142 L36,158 L52,158" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
+  <path d="M164,142 L164,158 L148,158" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
   <!-- Phone frame -->
-  <rect x="50" y="20" width="100" height="170" rx="14" stroke="currentColor" stroke-width="2.5" fill="none"/>
-  <rect x="58" y="32" width="84" height="140" rx="4" stroke="currentColor" stroke-width="1" fill="none"/>
-  <!-- Camera dot -->
-  <circle cx="100" cy="26" r="2" fill="currentColor"/>
-  <!-- Home button indicator -->
-  <path d="M90,178 L110,178" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-  <!-- Foot outline inside screen -->
-  <path d="M85,150 C82,142 80,130 82,118 C84,106 83,98 88,92 C93,86 97,88 100,92 C103,88 107,86 110,88 C113,90 112,95 110,98 C112,102 115,110 114,120 C113,135 110,145 108,150 Z"
+  <rect x="58" y="22" width="84" height="158" rx="16"
+        stroke="currentColor" stroke-width="3" fill="none"/>
+  <rect x="66" y="36" width="68" height="130" rx="6"
+        stroke="currentColor" stroke-width="1" opacity="0.5" fill="none"/>
+  <circle cx="100" cy="29" r="2" fill="currentColor"/>
+  <!-- Foot inside the screen -->
+  <path d="M88,148 C86,140 84,130 86,120 C87,112 87,104 91,99 C94,95 98,96 100,99 C102,96 106,95 108,97 C111,99 110,103 109,106 C111,112 113,122 112,134 C111,142 110,146 109,148"
         stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
-  <!-- Shoe overlay (AR projection) -->
-  <path d="M78,145 C80,132 84,125 92,122 C100,119 110,122 116,128 C120,132 122,140 120,148 L78,148 Z"
-        stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="5 3" fill="none"/>
-  <!-- AR scan lines -->
-  <path d="M62,55 L72,55 L72,45" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/>
-  <path d="M138,55 L128,55 L128,45" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/>
-  <path d="M62,155 L72,155 L72,165" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/>
-  <path d="M138,155 L128,155 L128,165" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/>
-  <!-- AR sparkle dots -->
-  <circle cx="75" cy="75" r="2" fill="currentColor" opacity="0.6"/>
-  <circle cx="125" cy="80" r="2" fill="currentColor" opacity="0.6"/>
-  <circle cx="90" cy="60" r="1.5" fill="currentColor" opacity="0.4"/>
-  <circle cx="115" cy="65" r="1.5" fill="currentColor" opacity="0.4"/>
+  <!-- Scan beam -->
+  <rect x="72" y="112" width="56" height="14" rx="7"
+        fill="currentColor" opacity="0.08"/>
+  <path d="M72,119 L128,119" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  <path d="M72,113 v-4 M128,113 v-4 M72,125 v-4 M128,125 v-4"
+        stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.7"/>
+  <!-- Sneaker settling onto the foot -->
+  <path d="M74,140 C88,146 116,146 130,139 L132,131 C118,137 88,137 76,131 Z"
+        stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <path d="M80,131 C82,120 90,113 101,111 L117,112 C124,113 128,119 129,127"
+        stroke="currentColor" stroke-width="2.25" stroke-linecap="round" fill="none"/>
+  <path d="M94,121 l7,-3 M92,127 l7,-3 M90,133 l7,-3"
+        stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M108,116 C114,118 118,122 119,128"
+        stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-dasharray="3 2.5" opacity="0.6" fill="none"/>
+  <!-- Placement motion arc -->
+  <path d="M136,108 C142,116 143,128 139,138"
+        stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-dasharray="4 3.5" opacity="0.55" fill="none"/>
+  <!-- Fitted check badge -->
+  <circle cx="148" cy="150" r="13" fill="currentColor" opacity="0.12"/>
+  <circle cx="148" cy="150" r="13" stroke="currentColor" stroke-width="2" fill="none"/>
+  <path d="M142.5,150 l4,4 l7,-8" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- Sparkles -->
+  <path d="M44,96 v8 M40,100 h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+  <circle cx="158" cy="92" r="1.8" fill="currentColor" opacity="0.7"/>
+  <circle cx="46" cy="120" r="1.4" fill="currentColor" opacity="0.5"/>
 </svg>
 ''';
