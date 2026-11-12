@@ -11,6 +11,29 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// failure reaches a seller as a sentence or as a crash.
 void main() {
   group('filing a request', () {
+    test('a bare ask is sent, not refused for having no length', () async {
+      // Since 2026-11-12 the seller's form sends no measurements at all —
+      // the normal case, not a missing field.
+      final data = _FakeData()
+        ..nextResult = {
+          'success': true,
+          'message': 'Request sent.',
+          'request_id': 'r-1',
+        };
+      final service = ShoeModelRequestService(data);
+
+      final outcome = await service.request(
+        productId: 'p1',
+        note: 'The pair in the photos is a size 42.',
+      );
+
+      expect(outcome.success, isTrue);
+      expect(data.calls, 1);
+      expect(data.lastProductId, 'p1');
+      expect(data.lastMeasurements, isNull);
+      expect(data.lastNote, 'The pair in the photos is a size 42.');
+    });
+
     test('an out-of-band length never reaches the network', () async {
       final data = _FakeData();
       final service = ShoeModelRequestService(data);
@@ -395,7 +418,7 @@ class _FakeData implements ShoeModelRequestDataSource {
   @override
   Future<Object?> request({
     required String productId,
-    required ShoeModelRequestMeasurements measurements,
+    ShoeModelRequestMeasurements? measurements,
     String? note,
   }) async {
     calls++;

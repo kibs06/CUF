@@ -72,13 +72,25 @@ class ShoeModelRequestRecord {
   /// Whether the ask is still occupying the product's single open slot.
   bool get isOpen => status?.isOpen ?? false;
 
+  /// Whether the ask carries anything a ruler could have produced. Asks filed
+  /// before 2026-11-12 do; newer ones are bare. The progress sheet shows
+  /// "what you sent" off this, and the wait instead when there is nothing
+  /// to show — a bare ask is not an empty one, so this is never an error.
+  bool get hasMeasurements =>
+      externalLengthMm != null ||
+      externalWidthMm != null ||
+      heelHeightMm != null ||
+      upperHeightMm != null ||
+      measuredSizeEu != null ||
+      sizesEu.isNotEmpty;
+
   /// The size run as a sentence — `40–44` — for the surfaces that show it. Built
   /// from the same rule the form and the sheets use, so the seller's "40–44" and
   /// the team's are the same string rather than two renderings that agree today.
   String get sizeRunSentence => ShoeModelRequestMeasurements(
-        externalLengthMm: 0,
-        sizesEu: sizesEu,
-      ).sizeRunSentence;
+    externalLengthMm: 0,
+    sizesEu: sizesEu,
+  ).sizeRunSentence;
 
   static ShoeModelRequestRecord fromRow(Map<String, dynamic> row) {
     final product = row['products'];
@@ -121,9 +133,7 @@ class ShoeModelRequestRecord {
   /// implementation rather than one per screen.
   static List<double> _doubleList(Object? value) {
     if (value is! List) return const [];
-    return normaliseSizeRun(
-      value.map(_double).whereType<double>(),
-    );
+    return normaliseSizeRun(value.map(_double).whereType<double>());
   }
 
   static DateTime? _date(Object? value) =>
@@ -163,7 +173,7 @@ abstract class ShoeModelRequestDataSource {
 
   Future<Object?> request({
     required String productId,
-    required ShoeModelRequestMeasurements measurements,
+    ShoeModelRequestMeasurements? measurements,
     String? note,
   });
 
@@ -271,19 +281,23 @@ class ShoeModelRequestService {
     }
   }
 
-  /// Files the ask. The bounds are checked here as well as in the form and the
-  /// CHECK, so a caller that skipped the form still cannot send a 40 mm shoe.
+  /// Files the ask. A provided length is band-checked here as well as by the
+  /// CHECK, so a hand-written call still cannot file a 40 mm shoe — but the
+  /// seller's form sends none at all (2026-11-12), and a bare ask is the
+  /// normal case rather than a missing field.
   Future<ShoeModelRequestOutcome> request({
     required String productId,
-    required ShoeModelRequestMeasurements measurements,
+    ShoeModelRequestMeasurements? measurements,
     String? note,
   }) async {
-    if (measurements.externalLengthMm < kPlausibleLengthMinMm ||
-        measurements.externalLengthMm > kPlausibleLengthMaxMm) {
+    final length = measurements?.externalLengthMm;
+    if (length != null &&
+        (length < kPlausibleLengthMinMm || length > kPlausibleLengthMaxMm)) {
       return const ShoeModelRequestOutcome(
         success: false,
-        message: 'That length does not look right — enter the outside of the '
-            'pair in millimetres, between 100 and 400.',
+        message:
+            'That length does not look right — an outside length should '
+            'be between 100 and 400 mm. Leave it out if you are not sure.',
       );
     }
 
@@ -306,21 +320,23 @@ class ShoeModelRequestService {
       // the two newest answers are the only arguments a server that predates
       // `20260929120000` cannot resolve, so when they were sent, clearing them
       // is a real fix the seller can carry out in two taps.
-      final sentTheNewOnes = measurements.upperHeightMm != null ||
-          measurements.sizesEu.isNotEmpty;
+      final sentTheNewOnes =
+          measurements?.upperHeightMm != null ||
+          (measurements?.sizesEu.isNotEmpty ?? false);
       return ShoeModelRequestOutcome(
         success: false,
         message: sentTheNewOnes
             ? 'The shoe height and the sizes you stock are not ready on the '
-                'team\'s side yet. Clear those two and send again — the '
-                'measurements that matter will go through.'
+                  'team\'s side yet. Clear those two and send again — the '
+                  'measurements that matter will go through.'
             : 'The team\'s end is not ready for this request yet. Please try '
-                'again later.',
+                  'again later.',
       );
     } catch (_) {
       return const ShoeModelRequestOutcome(
         success: false,
-        message: 'Could not send the request. Check your connection and try '
+        message:
+            'Could not send the request. Check your connection and try '
             'again.',
       );
     }
@@ -336,18 +352,14 @@ class ShoeModelRequestService {
     required String requestId,
     required int modelId,
     String? note,
-  }) =>
-      _outcome(() => _data.fulfil(
-            requestId: requestId,
-            modelId: modelId,
-            note: note,
-          ));
+  }) => _outcome(
+    () => _data.fulfil(requestId: requestId, modelId: modelId, note: note),
+  );
 
   Future<ShoeModelRequestOutcome> decline({
     required String requestId,
     String? reason,
-  }) =>
-      _outcome(() => _data.decline(requestId: requestId, reason: reason));
+  }) => _outcome(() => _data.decline(requestId: requestId, reason: reason));
 
   Future<ShoeModelRequestOutcome> _outcome(
     Future<Object?> Function() call,
@@ -357,7 +369,8 @@ class ShoeModelRequestService {
     } catch (_) {
       return const ShoeModelRequestOutcome(
         success: false,
-        message: 'That did not go through. Check your connection and try again.',
+        message:
+            'That did not go through. Check your connection and try again.',
       );
     }
   }
@@ -373,9 +386,9 @@ class ShoeModelRequestAvailability {
   /// The row to draw. Pure, so the four states are pinned by unit tests rather
   /// than by pumping a bottom sheet.
   ShoeModelRequestRow get row => shoeModelRequestRow(
-        status: request?.status,
-        productHasModel: hasLiveModel,
-      );
+    status: request?.status,
+    productHasModel: hasLiveModel,
+  );
 }
 
 /// Raised when the RPC refused on authorisation grounds (42501) — the caller
@@ -480,32 +493,41 @@ class SupabaseShoeModelRequestDataSource implements ShoeModelRequestDataSource {
   @override
   Future<Object?> request({
     required String productId,
-    required ShoeModelRequestMeasurements measurements,
+    ShoeModelRequestMeasurements? measurements,
     String? note,
   }) async {
     try {
-      final response = await _client.rpc('request_shoe_model', params: {
-        'p_product_id': productId,
-        'p_external_length_mm': measurements.externalLengthMm,
-        if (measurements.externalWidthMm != null)
-          'p_external_width_mm': measurements.externalWidthMm,
-        if (measurements.heelHeightMm != null)
-          'p_heel_height_mm': measurements.heelHeightMm,
-        if (measurements.measuredSizeEu != null)
-          'p_measured_size_eu': measurements.measuredSizeEu,
-        // ⚠️ The two newest arguments are sent ONLY when they carry something,
-        // and that is a deployment rule rather than tidiness: PostgREST resolves
-        // a function by its argument names, so naming an argument the live
-        // database does not have yet fails the whole call (PGRST202). Omitting an
-        // empty one means a plain request — the shape every seller sends until
-        // they touch the new boxes — keeps working against a server that has not
-        // had `20260929120000_add_request_size_run_and_upper_height.sql` applied,
-        // and the new fields start working the moment it is.
-        if (measurements.upperHeightMm != null)
-          'p_upper_height_mm': measurements.upperHeightMm,
-        if (measurements.sizesEu.isNotEmpty) 'p_sizes_eu': measurements.sizesEu,
-        if (note != null && note.trim().isNotEmpty) 'p_note': note.trim(),
-      });
+      // ⚠️ The length is sent EXPLICITLY, null when the ask carries none —
+      // and that is a compatibility rule rather than tidiness. A server that
+      // has not had `20261113000700` applied still *requires* the argument,
+      // so omitting it would fail resolution while a named null resolves and
+      // is answered by the RPC's own json refusal instead of a crash.
+      final response = await _client.rpc(
+        'request_shoe_model',
+        params: {
+          'p_product_id': productId,
+          'p_external_length_mm': measurements?.externalLengthMm,
+          if (measurements?.externalWidthMm != null)
+            'p_external_width_mm': measurements!.externalWidthMm,
+          if (measurements?.heelHeightMm != null)
+            'p_heel_height_mm': measurements!.heelHeightMm,
+          if (measurements?.measuredSizeEu != null)
+            'p_measured_size_eu': measurements!.measuredSizeEu,
+          // ⚠️ The two newest arguments are sent ONLY when they carry something,
+          // and that is a deployment rule rather than tidiness: PostgREST resolves
+          // a function by its argument names, so naming an argument the live
+          // database does not have yet fails the whole call (PGRST202). Omitting an
+          // empty one means a plain request — the shape every seller sends until
+          // they touch the new boxes — keeps working against a server that has not
+          // had `20260929120000_add_request_size_run_and_upper_height.sql` applied,
+          // and the new fields start working the moment it is.
+          if (measurements?.upperHeightMm != null)
+            'p_upper_height_mm': measurements!.upperHeightMm,
+          if (measurements?.sizesEu.isNotEmpty ?? false)
+            'p_sizes_eu': measurements!.sizesEu,
+          if (note != null && note.trim().isNotEmpty) 'p_note': note.trim(),
+        },
+      );
       return response;
     } on PostgrestException catch (e) {
       // 42501 is the ownership guard inside the RPC. It is not a sentence the
@@ -525,15 +547,19 @@ class SupabaseShoeModelRequestDataSource implements ShoeModelRequestDataSource {
 
   @override
   Future<Object?> cancel(String requestId) async {
-    final response = await _client.rpc('cancel_shoe_model_request',
-        params: {'p_request_id': requestId});
+    final response = await _client.rpc(
+      'cancel_shoe_model_request',
+      params: {'p_request_id': requestId},
+    );
     return response;
   }
 
   @override
   Future<Object?> claim(String requestId) async {
-    final response =
-        await _client.rpc('claim_shoe_model_request', params: {'p_request_id': requestId});
+    final response = await _client.rpc(
+      'claim_shoe_model_request',
+      params: {'p_request_id': requestId},
+    );
     return response;
   }
 
@@ -543,20 +569,27 @@ class SupabaseShoeModelRequestDataSource implements ShoeModelRequestDataSource {
     required int modelId,
     String? note,
   }) async {
-    final response = await _client.rpc('fulfil_shoe_model_request', params: {
-      'p_request_id': requestId,
-      'p_model_id': modelId,
-      if (note != null && note.trim().isNotEmpty) 'p_admin_note': note.trim(),
-    });
+    final response = await _client.rpc(
+      'fulfil_shoe_model_request',
+      params: {
+        'p_request_id': requestId,
+        'p_model_id': modelId,
+        if (note != null && note.trim().isNotEmpty) 'p_admin_note': note.trim(),
+      },
+    );
     return response;
   }
 
   @override
   Future<Object?> decline({required String requestId, String? reason}) async {
-    final response = await _client.rpc('decline_shoe_model_request', params: {
-      'p_request_id': requestId,
-      if (reason != null && reason.trim().isNotEmpty) 'p_reason': reason.trim(),
-    });
+    final response = await _client.rpc(
+      'decline_shoe_model_request',
+      params: {
+        'p_request_id': requestId,
+        if (reason != null && reason.trim().isNotEmpty)
+          'p_reason': reason.trim(),
+      },
+    );
     return response;
   }
 }

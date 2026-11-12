@@ -1,21 +1,17 @@
-import 'dart:io';
-
-import 'package:app/constants/app_constants.dart';
 import 'package:app/screens/shared/shoe_preview_screen.dart';
 import 'package:app/services/shoe_model_request_service.dart';
 import 'package:app/utils/shoe_model_request.dart';
 import 'package:app/widgets/shoe_model_request_tile.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// The seller's row in the product action sheet (roadmap V2.10).
 ///
 /// What is worth asserting here is the SENTENCE the seller reads, because the
 /// row is the whole interface: there is no screen behind it that says what a
-/// state means. The four labels are pinned, and so is the one thing that would
-/// be expensive to get wrong — that the form refuses a centimetre figure before
-/// anything is sent.
+/// state means. The four labels are pinned, and so is the shape of the ask —
+/// no measuring, nothing to mistype, the wait said up front — and what the
+/// progress sheet says when there is nothing to show.
 void main() {
   testWidgets('with the switch off the row is not there at all', (tester) async {
     await _pump(tester, enabled: false);
@@ -31,11 +27,17 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Ask for a 3D fitting'), findsOneWidget);
-    // The length is the required field, and the sheet says which measurement it
-    // wants twice: in the lead line, and again in the guide's own legend, which
-    // is where the sentence moved when the drawing arrived (2026-09-29).
-    expect(find.textContaining('Measure the pair'), findsOneWidget);
-    expect(find.textContaining('Outside length — heel to toe'), findsOneWidget);
+    // No boxes to measure into — the wait is the content, said up front, with
+    // the one box that remains: anything the team should know.
+    expect(
+      find.textContaining('so customers can try it on. No measuring needed.'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('9 business days for the 3D fitting'),
+      findsOneWidget,
+    );
+    expect(find.byType(TextField), findsOneWidget);
   });
 
   testWidgets('an open request says the team is on it, and shows what was sent',
@@ -88,7 +90,7 @@ void main() {
 
     expect(find.text('Ask for a 3D fitting'), findsOneWidget);
     // The previous answer is shown INSIDE the form, so the seller is not asked
-    // to remember it while retyping the numbers.
+    // to remember it while asking again.
     expect(
       find.textContaining('We could not get the pair to measure.'),
       findsOneWidget,
@@ -124,7 +126,21 @@ void main() {
     expect(find.textContaining('This product has a model'), findsNothing);
   });
 
-  testWidgets('the form refuses centimetres before it sends anything',
+  testWidgets('the form sends a bare ask — no measuring, nothing to mistype',
+      (tester) async {
+    final service = _FakeService();
+    await _pump(tester, service: service);
+
+    await tester.tap(find.text('Request a 3D fitting'));
+    await tester.pumpAndSettle();
+
+    await _tapSend(tester);
+
+    expect(service.requestCalls, 1);
+    expect(service.lastMeasurements, isNull);
+  });
+
+  testWidgets('a note rides along when the seller has something to say',
       (tester) async {
     final service = _FakeService();
     await _pump(tester, service: service);
@@ -134,143 +150,31 @@ void main() {
 
     await tester.enterText(
       find.byType(TextField).first,
-      '27', // centimetres, and the most likely way a seller gets this wrong
+      'The pair in the photos is a size 42.',
     );
-    await _tapSend(tester);
-
-    expect(find.textContaining('millimetres, not centimetres'), findsOneWidget);
-    expect(service.requestCalls, 0);
-  });
-
-  testWidgets('a complete form sends once, with the numbers that were typed',
-      (tester) async {
-    final service = _FakeService();
-    await _pump(tester, service: service, product: const {
-      'heel_height_mm': 25.0,
-      'fit_ref_size_eu': 42.0,
-    });
-
-    await tester.tap(find.text('Request a 3D fitting'));
-    await tester.pumpAndSettle();
-
-    await tester.enterText(find.byType(TextField).first, '272');
     await _tapSend(tester);
 
     expect(service.requestCalls, 1);
-    expect(service.lastMeasurements!.externalLengthMm, 272);
-    // The heel and the size came from the product's fit spec.
-    expect(service.lastMeasurements!.heelHeightMm, 25);
-    expect(service.lastMeasurements!.measuredSizeEu, 42);
+    expect(service.lastMeasurements, isNull);
+    expect(service.lastNote, 'The pair in the photos is a size 42.');
   });
 
-  testWidgets('the guide is drawn, and its legend names the arrows it draws',
+  testWidgets('a bare ask shows the wait instead of a row of dashes',
       (tester) async {
-    // ⚠️ The pairing is the test. The SVG carries no <text> — flutter_svg drops
-    // it, so a numeral written there would look correct in a browser and be
-    // missing on the device — which leaves colour as the only thing tying a
-    // legend line to an arrow. A legend pointing at the wrong arrow is worse
-    // than no legend, because it is confidently wrong.
-    final svg = File('assets/images/measure_shoe.svg').readAsStringSync();
-
-    for (final color in const [
-      kMeasureGuideLengthColor,
-      kMeasureGuideWidthColor,
-      kMeasureGuideHeelColor,
-      kMeasureGuideUpperColor,
-    ]) {
-      expect(
-        svg.toUpperCase(),
-        contains(_hex(color)),
-        reason: 'the SVG draws no arrow in ${_hex(color)}',
-      );
-    }
-
-    // Comments stripped first: this file's own header explains the no-<text>
-    // rule, and the literal string in that explanation would otherwise be the
-    // thing the assertion trips over.
-    final drawing = svg.replaceAll(
-      RegExp(r'<!--.*?-->', dotAll: true),
-      '',
-    );
-    expect(
-      drawing,
-      isNot(contains('<text')),
-      reason: 'flutter_svg drops <text>, so anything written there is invisible '
-          'on the device — the labels belong in the legend',
-    );
-
-    // And it is actually on screen, above the boxes it explains.
-    await _pump(tester);
-    await tester.tap(find.text('Request a 3D fitting'));
-    await tester.pumpAndSettle();
-    expect(find.byType(SvgPicture), findsOneWidget);
-    expect(find.textContaining('Outside length — heel to toe'), findsOneWidget);
-  });
-
-  testWidgets('a chosen chip is readable: white ink on the brand fill',
-      (tester) async {
-    // ⚠️ This is the regression that made the unit toggle look broken. Material
-    // 3 fills a selected chip from `colorScheme.secondaryContainer` and inks it
-    // `onSecondaryContainer`; the app's hand-built ColorScheme sets neither, so
-    // the fill and the label both came from Flutter's baseline while the sheet's
-    // own `labelStyle` pinned the ink dark — a black pill with black text, i.e.
-    // a seller who cannot see which unit they picked. Pin the pair that is
-    // legible so a future chip cannot quietly go back to the theme's defaults.
-    await _pump(tester);
-    await tester.tap(find.text('Request a 3D fitting'));
-    await tester.pumpAndSettle();
-
-    final mm = tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'mm'));
-    expect(mm.selected, isTrue);
-    expect(mm.selectedColor, AppConstants.primary);
-    expect(mm.labelStyle?.color, Colors.white);
-    // A checkmark next to a fill that already means "chosen" is width the chip
-    // does not have, and it was the unreadable half of the screenshot.
-    expect(mm.showCheckmark, isFalse);
-
-    final cm = tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'cm'));
-    expect(cm.selected, isFalse);
-    expect(cm.labelStyle?.color, isNot(Colors.white));
-
-    // The same widget draws the sizes, so the picker is the same bug's second
-    // home — opening it is what proves the fix reached both.
-    await tester.tap(find.text('Tap to choose').last);
-    await tester.pumpAndSettle();
-
-    final forty = tester.widget<ChoiceChip>(
-      find.widgetWithText(ChoiceChip, '40'),
-    );
-    expect(forty.selectedColor, AppConstants.primary);
-
-    await tester.tap(find.widgetWithText(ChoiceChip, '40'));
-    await tester.pumpAndSettle();
-    expect(
-      tester
-          .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, '40'))
-          .labelStyle
-          ?.color,
-      Colors.white,
-    );
+    // Asks filed since 2026-11-12 carry no numbers. The progress sheet shows
+    // "what you sent" — five dashes would read as a hole in the request,
+    // so it says the wait instead.
+    await _pump(tester, request: _record(status: 'requested'));
   });
 }
 
-/// Sends the form. The sheet is taller than the 800×600 test window since it
-/// gained the measuring guide, so the tap has to bring the button into view
-/// first — which is exactly what a thumb does on a real phone.
+/// Sends the form. The tap goes through `ensureVisible` first, which is what
+/// a thumb does on a real phone — the sheet scrolls, and the button with it.
 Future<void> _tapSend(WidgetTester tester) async {
   await tester.ensureVisible(find.text('Send the request'));
   await tester.pumpAndSettle();
   await tester.tap(find.text('Send the request'));
   await tester.pump();
-}
-
-/// `Color(0xFF8B5A2B)` → `#8B5A2B`, for comparing against the authored SVG.
-String _hex(Color color) {
-  int channel(double value) => (value * 255).round().clamp(0, 255);
-  final rgb = [color.r, color.g, color.b]
-      .map((v) => channel(v).toRadixString(16).padLeft(2, '0'))
-      .join();
-  return '#${rgb.toUpperCase()}';
 }
 
 Future<void> _pump(
@@ -281,12 +185,11 @@ Future<void> _pump(
   ShoeModelRequestService? service,
   Map<String, dynamic>? product,
 }) async {
-  // ⚠️ A surface tall enough for the whole sheet, and that is a loading
-  // condition rather than a preference: the form grew a measuring guide, a unit
-  // toggle, two pickers and a fifth box, so at the default 800×600 the Send
-  // button sits below the floor of the test surface and a tap on it lands
-  // nowhere. `ensureVisible` alone does not save it — a widget outside the
-  // *surface* cannot be hit even when its scrollable has scrolled.
+  // ⚠️ A surface taller than the default 800×600, and that is a loading
+  // condition rather than a preference: at the default size the Send button
+  // can sit below the floor of the test surface, and a tap on a widget
+  // outside the *surface* lands nowhere even when its scrollable has
+  // scrolled. `ensureVisible` still does the thumb's work first.
   tester.view.physicalSize = const Size(1000, 2400);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
@@ -342,6 +245,7 @@ class _FakeService extends ShoeModelRequestService {
   bool liveModel = false;
   int requestCalls = 0;
   ShoeModelRequestMeasurements? lastMeasurements;
+  String? lastNote;
 
   @override
   Future<ShoeModelRequestAvailability> availability(String productId) async =>
@@ -353,11 +257,12 @@ class _FakeService extends ShoeModelRequestService {
   @override
   Future<ShoeModelRequestOutcome> request({
     required String productId,
-    required ShoeModelRequestMeasurements measurements,
+    ShoeModelRequestMeasurements? measurements,
     String? note,
   }) async {
     requestCalls++;
     lastMeasurements = measurements;
+    lastNote = note;
     return const ShoeModelRequestOutcome(
       success: true,
       message: 'Request sent.',
@@ -385,7 +290,7 @@ class _FakeData implements ShoeModelRequestDataSource {
   @override
   Future<Object?> request({
     required String productId,
-    required ShoeModelRequestMeasurements measurements,
+    ShoeModelRequestMeasurements? measurements,
     String? note,
   }) async =>
       null;

@@ -313,7 +313,7 @@ class _FakeData implements ShoeModelRequestDataSource {
   @override
   Future<Object?> request({
     required String productId,
-    required ShoeModelRequestMeasurements measurements,
+    ShoeModelRequestMeasurements? measurements,
     String? note,
   }) async =>
       null;

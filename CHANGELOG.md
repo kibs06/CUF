@@ -1,5 +1,11 @@
 # SoleVision — Changelog
 
+## Unreleased — the 3D-model request stops asking the seller to measure the pair
+
+- **The request form asked the seller to measure the pair with a ruler — four boxes in millimetres or centimetres, a measuring guide, two size pickers — and sellers do not know those numbers.** Worse, the fitting never needed them: it sizes the model to each customer's foot on its own. The ask is now bare — an optional note, a Send button, and the wait said up front: **around 7 business days or more for the 3D model, around 9 business days for the 3D fitting to go live** (`kShoeModelRequestTimelineMessage`, one const read by both the form and the progress sheet so the wait cannot disagree with itself).
+- **The database agrees, in the migration folder.** `20261113000700_request_shoe_model_without_measurements.sql` makes `external_length_mm` nullable, admits NULL in its CHECK, and rebuilds `request_shoe_model` with the length defaulted — a provided 40 mm is still refused (pgTAP assertion 20), a missing one is now the normal case (new assertions 77–78, `plan(78)`). The app sends the length explicitly (null when absent) so a server without the migration answers with the RPC's own refusal instead of a resolution error. Old asks keep their numbers everywhere: the admin queue, the modelling prefill and the progress sheet's "what you sent" all still read them.
+- Tests: `flutter analyze` clean on the whole project; `flutter test` green on the request unit/service/widget suites (61) and the admin sheets (18). pgTAP not run locally (Docker Desktop is off) — CI's `Supabase Migrations` job runs it.
+
 ## Unreleased — DeepAR is the try-on feature; the legacy simulated-AR pill is hidden
 
 - **The 3D viewer's bottom bar offered three try-ons, and one of them was a promise the app could not keep.** The legacy "Try On in AR" pill opened the simulated-AR fitting flow (`ARVirtualFitScreen`), which degrades to a simulated feed on any build without the `TRY_ON_V3` renderer path — a camera that performs fitting rather than doing it. DeepAR (the portal's foot-tracking page, opened in the phone browser) is the try-on that actually functions, so the viewer now offers only what exists for the shoe: **Try on DeepAR** where a bundled, uploaded or convention effect resolves, **Try on Snap** where a lens is published, and no row at all where neither does.

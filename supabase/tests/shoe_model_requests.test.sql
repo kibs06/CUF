@@ -2,8 +2,9 @@
 -- 3D model requests (roadmap V2.10) — pgTAP
 -- Run by CI via `supabase test db` (supabase-migrations.yml)
 --
--- Covers `20260928140000_add_shoe_model_requests.sql` and
--- `20260929120000_add_request_size_run_and_upper_height.sql`. The assertions that
+-- Covers `20260928140000_add_shoe_model_requests.sql`,
+-- `20260929120000_add_request_size_run_and_upper_height.sql` and
+-- `20261113000700_request_shoe_model_without_measurements.sql`. The assertions that
 -- matter most are marked ⚠️ — each is a way the feature could look right
 -- and be wrong:
 --
@@ -72,7 +73,7 @@
 -- ══════════════════════════════════════════════════════════════════
 
 begin;
-select plan(76);
+select plan(78);
 
 -- ── helpers ────────────────────────────────────────────────────────
 create or replace function public.tmp_req_claims(p_user uuid)
@@ -797,6 +798,27 @@ select is(public.numeric_array_within_band(array[]::numeric[], 22, 48), false,
           '75: …answers false (never NULL) for an empty array');
 select is(public.numeric_array_within_band(array[null, 42.0]::numeric[], 22, 48), false,
           '76: …and for a run carrying a null element');
+
+-- ══ 11. The bare ask (2026-11-12): no measurements at all ═══════════
+-- The seller's form sends nothing but the product, so a missing length is the
+-- normal case now — refused only when a PROVIDED figure is out of band
+-- (assertion 20), accepted with NULLs otherwise.
+insert into tmp_req_results (k, v)
+select 'bare', public.request_shoe_model(
+  'f1000000-0000-0000-0000-000000000026'::uuid);
+select is((select tmp_req_ok(v) from tmp_req_results where k='bare'), true,
+          '77: an ask with no measurements is accepted');
+select ok(
+  (select external_length_mm is null
+     and external_width_mm is null
+     and heel_height_mm is null
+     and upper_height_mm is null
+     and measured_size_eu is null
+     and sizes_eu is null
+     from public.shoe_model_requests
+    where product_id = 'f1000000-0000-0000-0000-000000000026'),
+  '78: …and every measurement lands as NULL, not as a zero'
+);
 
 select * from finish();
 rollback;

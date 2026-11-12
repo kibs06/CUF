@@ -1,4 +1,4 @@
-/// The 3D model request: its states, its four measurements, and the sentence
+/// The 3D model request: its states, its measurements, and the sentence
 /// each state says to the seller.
 ///
 /// Pure Dart — no Flutter — so the rules are unit-testable (the
@@ -13,8 +13,14 @@
 /// can hand over a contract-compliant `.glb`. That is not this market —
 /// CUFMAI's sellers are local artisans, and V2.7's first real partner asset
 /// came from a marketplace and still needed a normaliser run before it passed.
-/// So there is a second door: the seller measures the pair with a ruler, the
-/// team does the modelling, and this file is the language both sides speak.
+/// So there is a second door: the seller asks, the team does the modelling,
+/// and this file is the language both sides speak.
+///
+/// Since 2026-11-12 the seller sends no measurements at all — the fitting
+/// sizes itself to each customer's foot, so there is nothing a ruler could add
+/// that the team cannot see on the product — and the ask is a bare request
+/// plus an optional note. The measurement fields stay on the row for the asks
+/// that already carry them, and the admin queue still shows those.
 ///
 /// ⚠️ THE ONE NUMBER THAT IS EASY TO GET WRONG, AND EXPENSIVE:
 ///
@@ -31,10 +37,9 @@
 /// writes `27`, not `270`. A centimetre figure is a *plausible* number to a
 /// parser and nonsense to a shoemaker, so it earns a message about units
 /// rather than "enter a number between 100 and 400" — the `fit_spec_form.dart`
-/// rule, and the reason [ShoeModelRequestFormResult.messageFor] exists.
+/// rule.
 library;
 
-import 'fit_engine.dart';
 import 'glb_validator.dart';
 import 'size_key.dart';
 
@@ -54,49 +59,20 @@ const double kRequestExternalWidthMaxMm = 200;
 const double kRequestUpperHeightMinMm = 10;
 const double kRequestUpperHeightMaxMm = 400;
 
-/// The EU sizes the form offers, and the band the column's CHECK enforces. The
-/// list is every whole and half size in the band, which is what a picker needs:
-/// a seller who cannot type `42.5` will still find it.
-const double kRequestEuSizeMin = 22;
-const double kRequestEuSizeMax = 48;
-
-/// Every EU size the picker offers, ascending.
-List<double> get kRequestEuSizes => [
-      for (var size = kRequestEuSizeMin; size <= kRequestEuSizeMax; size += 0.5)
-        size,
-    ];
-
-/// The sample shoe the sheet quotes under each box, so a wrong number looks
-/// wrong at a glance.
+/// What the seller is told about the wait, in one place — the ask form and
+/// the progress sheet say it in the same words, so the wait cannot be 7 days
+/// on one surface and 9 on another.
 ///
-/// These are not defaults and nothing prefills from them: they are a printed
-/// anchor, and the size is named beside them on purpose — "about 270 mm" is a
-/// statement about a size-42 leather sandal, not about shoes in general, and a
-/// size 38 is 27 mm shorter than that.
-const double kSampleShoeLengthMm = 270;
-const double kSampleShoeWidthMm = 105;
-const double kSampleShoeHeelMm = 25;
-const double kSampleShoeUpperMm = 40;
-const double kSampleShoeSizeEu = 42;
-
-/// Which unit the millimetre fields are being read in.
-///
-/// ⚠️ **Storage is millimetres either way.** The toggle changes what the seller
-/// types, never what the row holds — the columns are millimetres, the CHECK
-/// bands are millimetres, and the renderer scales a millimetre figure. A `27`
-/// typed in [cm] becomes 270 mm before it ever reaches the RPC, which is the
-/// same number the old advice line asked them to type by hand.
-enum ShoeModelRequestUnit {
-  mm('mm', 1),
-  cm('cm', 10);
-
-  const ShoeModelRequestUnit(this.label, this.millimetresPerUnit);
-
-  final String label;
-  final double millimetresPerUnit;
-
-  double toMm(double value) => value * millimetresPerUnit;
-}
+/// 7 business days or more for the model, 9 for the fitting to go live: the
+/// two numbers are the team's, and the sentence does not compress them into
+/// one because a seller waiting on day 8 should know which half they are
+/// waiting on.
+const String kShoeModelRequestTimelineMessage =
+    'No measuring needed — the CUFMAI team builds the 3D model from your '
+    'product, and the fitting sizes itself to each customer\'s foot '
+    'automatically. Please allow around 7 business days or more for the 3D '
+    'model, and around 9 business days for the 3D fitting to be ready after '
+    'you send this request.';
 
 /// Where a request is in its life.
 ///
@@ -139,47 +115,13 @@ enum ShoeModelRequestStatus {
   }
 }
 
-/// Which field an error belongs to, so the form can show it inline.
-enum ShoeModelRequestField {
-  externalLengthMm,
-  externalWidthMm,
-  heelHeightMm,
-  upperHeightMm,
-  measuredSizeEu,
-}
-
-/// The one-line anchor printed under a field's box.
-///
-/// Every hint is a sentence about **one named size**, because a range means
-/// nothing to somebody holding a ruler: "about 270 mm" is only true of the
-/// sample, and a size 38 is 27 mm shorter. The figure is deliberately on the
-/// generous side of the band's middle so that a centimetres mistake (27) sits
-/// visibly far from it.
-String shoeModelRequestSampleHint(ShoeModelRequestField field) => switch (field) {
-      ShoeModelRequestField.externalLengthMm =>
-        'A size ${formatSizeNumber(kSampleShoeSizeEu)} leather sandal measures '
-            'about ${formatSizeNumber(kSampleShoeLengthMm)} mm outside, heel to '
-            'toe.',
-      ShoeModelRequestField.externalWidthMm =>
-        'The same pair is about ${formatSizeNumber(kSampleShoeWidthMm)} mm '
-            'across the widest part.',
-      ShoeModelRequestField.heelHeightMm =>
-        'A flat sandal is about ${formatSizeNumber(kSampleShoeHeelMm)} mm at '
-            'the heel; a boot is more.',
-      ShoeModelRequestField.upperHeightMm =>
-        'Sole to the highest point: a sandal is about '
-            '${formatSizeNumber(kSampleShoeUpperMm)} mm, an ankle boot about '
-            '120 mm.',
-      ShoeModelRequestField.measuredSizeEu =>
-        'The size printed inside the pair you measured.',
-    };
-
-
-/// The numbers the team needs, in the seller's units, plus the size run.
+/// The numbers the team needs, plus the size run — every one of them now
+/// optional, because the seller sends none (2026-11-12).
 class ShoeModelRequestMeasurements {
-  /// Outside, heel to toe. **Required** — it is the figure the normaliser
-  /// scales the mesh to, so a request without it cannot become a model.
-  final double externalLengthMm;
+  /// Outside, heel to toe. The figure the normaliser scales the mesh to —
+  /// null since the seller stopped measuring, which is the normal case rather
+  /// than a gap: the team models from the product itself.
+  final double? externalLengthMm;
 
   /// Outside, across the widest part. Optional and never used to scale
   /// anything: it is a sanity check a modeller can see at a glance, not an
@@ -214,8 +156,19 @@ class ShoeModelRequestMeasurements {
   /// request is complete without it.
   final List<double> sizesEu;
 
+  /// Whether the ask carries anything a ruler could have produced — what
+  /// decides whether the progress sheet shows "what you sent" or the wait
+  /// instead. A bare ask is not an empty one, so this is never an error.
+  bool get hasMeasurements =>
+      externalLengthMm != null ||
+      externalWidthMm != null ||
+      heelHeightMm != null ||
+      upperHeightMm != null ||
+      measuredSizeEu != null ||
+      sizesEu.isNotEmpty;
+
   const ShoeModelRequestMeasurements({
-    required this.externalLengthMm,
+    this.externalLengthMm,
     this.externalWidthMm,
     this.heelHeightMm,
     this.upperHeightMm,
@@ -251,168 +204,9 @@ class ShoeModelRequestMeasurements {
       : '${formatSizeNumber(start)}–${formatSizeNumber(end)}';
 }
 
-/// The outcome of reading the request form's four text fields, in one of three
-/// states — the [FitSpecFormResult] shape, for the same reasons:
-///
-///  * [isEmpty] — every field blank, so there is nothing to send.
-///  * [isError] — the seller has something to fix; [errorField] says where to
-///    show the sentence, and [measurements] is null.
-///  * otherwise — a complete, plausible set to send.
-class ShoeModelRequestFormResult {
-  /// The parsed measurements, or null when the fields are blank or invalid.
-  final ShoeModelRequestMeasurements? measurements;
-
-  /// The sentence to show the seller, or null when there is nothing to fix.
-  final String? error;
-
-  /// The field [error] belongs to; null when there is no error.
-  final ShoeModelRequestField? errorField;
-
-  const ShoeModelRequestFormResult._({
-    this.measurements,
-    this.error,
-    this.errorField,
-  });
-
-  /// Every field blank.
-  const ShoeModelRequestFormResult.empty()
-      : measurements = null,
-        error = null,
-        errorField = null;
-
-  /// Reads the four raw field values.
-  factory ShoeModelRequestFormResult.fromFields({
-    required String externalLengthMm,
-    required String externalWidthMm,
-    required String heelHeightMm,
-    required String measuredSizeEu,
-    String upperHeightMm = '',
-    ShoeModelRequestUnit unit = ShoeModelRequestUnit.mm,
-    List<double> sizesEu = const [],
-  }) {
-    final lengthText = externalLengthMm.trim();
-    final widthText = externalWidthMm.trim();
-    final heelText = heelHeightMm.trim();
-    final upperText = upperHeightMm.trim();
-    final sizeText = measuredSizeEu.trim();
-    final run = normaliseSizeRun(sizesEu);
-
-    // A picked size run alone is not "nothing to send" — it is a request whose
-    // length is missing, which is the error below rather than silence.
-    if (lengthText.isEmpty &&
-        widthText.isEmpty &&
-        heelText.isEmpty &&
-        upperText.isEmpty &&
-        sizeText.isEmpty &&
-        run.isEmpty) {
-      return const ShoeModelRequestFormResult.empty();
-    }
-
-    // The length is required, and it is checked first so that a blank length
-    // beside a filled width is reported as "the length is missing" rather than
-    // as anything about the width.
-    if (lengthText.isEmpty) {
-      return const ShoeModelRequestFormResult._(
-        error: 'Measure the pair and enter the length — the modeller scales '
-            'everything from it, so a request without it cannot be started.',
-        errorField: ShoeModelRequestField.externalLengthMm,
-      );
-    }
-
-    final length = _parseMm(
-      lengthText,
-      what: 'the length',
-      min: kPlausibleLengthMinMm,
-      max: kPlausibleLengthMaxMm,
-      centimetresHint: true,
-      unit: unit,
-    );
-    if (length.error != null) {
-      return ShoeModelRequestFormResult._(
-        error: length.error,
-        errorField: ShoeModelRequestField.externalLengthMm,
-      );
-    }
-
-    final width = _parseMm(
-      widthText,
-      what: 'the width',
-      min: kRequestExternalWidthMinMm,
-      max: kRequestExternalWidthMaxMm,
-      centimetresHint: true,
-      unit: unit,
-    );
-    if (width.error != null) {
-      return ShoeModelRequestFormResult._(
-        error: width.error,
-        errorField: ShoeModelRequestField.externalWidthMm,
-      );
-    }
-
-    final heel = _parseMm(
-      heelText,
-      what: 'the heel height',
-      min: kPlausibleHeelHeightMm,
-      max: kPlausibleHeelHeightMaxMm,
-      centimetresHint: false,
-      unit: unit,
-    );
-    if (heel.error != null) {
-      return ShoeModelRequestFormResult._(
-        error: heel.error,
-        errorField: ShoeModelRequestField.heelHeightMm,
-      );
-    }
-
-    final upper = _parseMm(
-      upperText,
-      what: 'the height of the shoe',
-      min: kRequestUpperHeightMinMm,
-      max: kRequestUpperHeightMaxMm,
-      centimetresHint: false,
-      unit: unit,
-    );
-    if (upper.error != null) {
-      return ShoeModelRequestFormResult._(
-        error: upper.error,
-        errorField: ShoeModelRequestField.upperHeightMm,
-      );
-    }
-
-    final size = _parseSize(sizeText);
-    if (size.error != null) {
-      return ShoeModelRequestFormResult._(
-        error: size.error,
-        errorField: ShoeModelRequestField.measuredSizeEu,
-      );
-    }
-
-    return ShoeModelRequestFormResult._(
-      measurements: ShoeModelRequestMeasurements(
-        externalLengthMm: length.value!,
-        externalWidthMm: width.value,
-        heelHeightMm: heel.value,
-        upperHeightMm: upper.value,
-        measuredSizeEu: size.value,
-        sizesEu: run,
-      ),
-    );
-  }
-
-  /// Whether the fields are all blank — nothing to send, nothing to fix.
-  bool get isEmpty => measurements == null && error == null;
-
-  /// Whether the seller has something to fix.
-  bool get isError => error != null;
-
-  /// The sentence to show under [field], or null when that field is fine.
-  String? messageFor(ShoeModelRequestField field) =>
-      errorField == field ? error : null;
-}
-
 /// What the action sheet's row does when tapped.
 enum ShoeModelRequestAction {
-  /// Open the measurement form — the product has no request and no model.
+  /// Open the ask form — the product has no request and no model.
   ask,
 
   /// Open the progress detail — somebody is on it.
@@ -519,7 +313,8 @@ class ShoeModelRequestOutcome {
       final success = result['success'];
       return ShoeModelRequestOutcome(
         success: success == true,
-        message: result['message']?.toString() ??
+        message:
+            result['message']?.toString() ??
             (success == true
                 ? 'Done.'
                 : 'The request could not be sent. Please try again.'),
@@ -533,61 +328,29 @@ class ShoeModelRequestOutcome {
   }
 }
 
-/// What to prefill the form with from a product's existing fit spec.
-///
-/// ⚠️ **The length is deliberately NOT prefilled, and that is the whole design
-/// of this function.** `products.last_length_mm` is the INTERNAL last length —
-/// 8–15 mm shorter than the outside of the same shoe on leather
-/// (`SHOE_MODEL_AUTHORING_GUIDE.md` §5) — and the request needs the EXTERNAL
-/// one. Offering the internal figure in the external field would put a
-/// plausible wrong number in front of the seller, which is worse than an empty
-/// box: they would confirm it, and every mesh from then on would be scaled
-/// short by an amount nobody wrote down.
-///
-/// The heel height and the size ARE the same quantity measured the same way, so
-/// prefilling those saves real work and cannot mislead. The length is measured
-/// with a ruler and typed once, and the help text says where to put it.
-({String externalLengthMm, String heelHeightMm, String measuredSizeEu})
-    shoeModelRequestPrefill(Map<String, dynamic>? spec) {
-  final heel = _number(spec?['heel_height_mm']?.toString());
-  final size = _number(spec?['fit_ref_size_eu']?.toString());
-  return (
-    externalLengthMm: '',
-    heelHeightMm: heel == null ? '' : formatSizeNumber(heel),
-    measuredSizeEu: size == null ? '' : formatSizeNumber(size),
-  );
-}
-
 // ── The team's side: modelling a pair somebody asked for (P2) ──────────────
 
 /// What the admin's upload form starts with, taken from the seller's ask.
 ///
-/// ⚠️ **The length IS prefilled here — the exact opposite of
-/// [shoeModelRequestPrefill] — and the difference is the whole point.** There,
-/// the only length on hand was `products.last_length_mm`, the *internal* last,
-/// 8–15 mm shorter than the outside of the same shoe, so offering it would have
-/// put a plausible wrong figure in front of a seller who would then confirm it.
-/// Here the number on hand is the seller's own **external** measurement, taken
-/// with a ruler across the outside of the pair and sent for exactly this
-/// purpose: it is the figure the model is scaled to (§2.5.2), so it is the
-/// right starting point and retyping it would only add a way to mistype it.
-///
-/// The size is the same quantity on both sides too — the EU size of the pair
-/// that was measured — so it prefills as well. Nothing here invents a number:
-/// a request always carries a length (the column is `NOT NULL`), and blank is
-/// returned for the two optional figures when they were not sent.
+/// Asks filed before 2026-11-12 carry the seller's own **external** length,
+/// taken with a ruler across the outside of the pair: it is the figure the
+/// model is scaled to (§2.5.2), so it prefills here and retyping it would
+/// only add a way to mistype it. Newer asks carry no measurements at all —
+/// the team models from the product itself — and prefill with blanks, which
+/// is an empty starting point rather than a missing one. Nothing here invents
+/// a number either way.
 ({String externalLengthMm, String authoredSizeEu})
-    shoeModelRequestModellingPrefill({
+shoeModelRequestModellingPrefill({
   required double? externalLengthMm,
   required double? measuredSizeEu,
-}) =>
-        (
-          externalLengthMm: externalLengthMm == null
-              ? ''
-              : formatSizeNumber(externalLengthMm),
-          authoredSizeEu:
-              measuredSizeEu == null ? '' : formatSizeNumber(measuredSizeEu),
-        );
+}) => (
+  externalLengthMm: externalLengthMm == null
+      ? ''
+      : formatSizeNumber(externalLengthMm),
+  authoredSizeEu: measuredSizeEu == null
+      ? ''
+      : formatSizeNumber(measuredSizeEu),
+);
 
 /// Whether the length the admin declares on the model agrees with the length
 /// the seller measured — and the sentence to show when it does not.
@@ -620,7 +383,8 @@ class ShoeModelRequestOutcome {
   final direction = declaredMm > measuredMm ? 'longer' : 'shorter';
   return (
     disagrees: true,
-    message: 'The model is declared ${formatSizeNumber(declaredMm)} mm but the '
+    message:
+        'The model is declared ${formatSizeNumber(declaredMm)} mm but the '
         'seller measured ${formatSizeNumber(measuredMm)} mm outside — '
         '${formatSizeNumber(delta)} mm $direction. The renderer scales every '
         'size to the declared figure, so one of the two is wrong: re-measure '
@@ -702,7 +466,8 @@ ShoeModelRequestModellingResult shoeModelRequestModellingResult({
     return ShoeModelRequestModellingResult(
       ending: ShoeModelRequestModellingEnding.notLive,
       modelId: modelId,
-      message: 'The model did not go live, so the request is still waiting. '
+      message:
+          'The model did not go live, so the request is still waiting. '
           '$detail',
     );
   }
@@ -711,7 +476,8 @@ ShoeModelRequestModellingResult shoeModelRequestModellingResult({
     return ShoeModelRequestModellingResult(
       ending: ShoeModelRequestModellingEnding.liveButOpen,
       modelId: modelId,
-      message: 'The model is live on the product, but the request could not be '
+      message:
+          'The model is live on the product, but the request could not be '
           'closed — it still reads as waiting. Close it as done from the queue; '
           'the model is already there to pick.',
     );
@@ -726,74 +492,11 @@ ShoeModelRequestModellingResult shoeModelRequestModellingResult({
 
 // ── Internals ───────────────────────────────────────────────────────────────
 
-/// The units message, in one place — the most valuable sentence this file
-/// produces, and the one a seller is most likely to see.
-const String _centimetresError =
-    'Enter millimetres, not centimetres — write 270, not 27.';
-
-/// One millimetre field: a bare number, an optional `mm` suffix, and a refusal
-/// of centimetres whether or not the seller wrote the unit down.
-({double? value, String? error}) _parseMm(
-  String raw, {
-  required String what,
-  required double min,
-  required double max,
-  required bool centimetresHint,
-  ShoeModelRequestUnit unit = ShoeModelRequestUnit.mm,
-}) {
-  // Blank is "not measured", not a mistake — most of these fields are optional,
-  // and an empty optional field must never raise an error.
-  if (raw.isEmpty) return (value: null, error: null);
-
-  var text = raw.toLowerCase();
-
-  // ⚠️ An explicit suffix outranks the toggle, in both directions. The toggle is
-  // a convenience for what the seller is *about* to type, and a seller who types
-  // `27 cm` while the toggle says mm has told us the unit more recently than the
-  // toggle did — refusing that would be arguing with the person holding the tape
-  // measure. What the suffix can never do is reach storage unchanged: everything
-  // below is converted to millimetres before it is checked or returned.
-  var effective = unit;
-  if (text.endsWith('mm')) {
-    text = text.substring(0, text.length - 2).trim();
-    effective = ShoeModelRequestUnit.mm;
-  } else if (text.endsWith('cm')) {
-    text = text.substring(0, text.length - 2).trim();
-    effective = ShoeModelRequestUnit.cm;
-  }
-
-  final typed = _number(text);
-  if (typed == null) {
-    return (
-      value: null,
-      error: 'Enter $what as a number of ${effective.label}, like '
-          '${formatSizeNumber(kSampleShoeLengthMm / effective.millimetresPerUnit)}.',
-    );
-  }
-
-  final value = effective.toMm(typed);
-
-  // A figure that is right for centimetres and far too small for millimetres is
-  // a units mistake, and saying so is the whole point: a bare `27` would
-  // otherwise be told it is outside the band, which sends the seller hunting for
-  // a different number instead of a different unit. Only asked of a seller who
-  // chose mm — someone typing in cm has already answered this question.
-  if (centimetresHint && effective == ShoeModelRequestUnit.mm && value < min / 2) {
-    return (value: null, error: _centimetresError);
-  }
-
-  if (value < min || value > max) {
-    return (
-      value: null,
-      error: 'That does not look right — $what should be between '
-          '${formatSizeNumber(min / effective.millimetresPerUnit)} and '
-          '${formatSizeNumber(max / effective.millimetresPerUnit)} '
-          '${effective.label}.',
-    );
-  }
-
-  return (value: value, error: null);
-}
+/// The EU band the column's CHECK enforces, named here so the one guard that
+/// still reads the run does not carry a bare `22` and `48` no one can trace
+/// back to the schema.
+const double kRequestEuSizeMin = 22;
+const double kRequestEuSizeMax = 48;
 
 /// Cleans a picked size run: in band, no duplicates, ascending.
 ///
@@ -803,37 +506,13 @@ const String _centimetresError =
 /// somewhere. Silent by design: a size outside the shop's band is not an error
 /// the seller can act on from a chip row that never offered it.
 List<double> normaliseSizeRun(Iterable<double> sizes) {
-  final cleaned = sizes
-      .where((size) => size >= kRequestEuSizeMin && size <= kRequestEuSizeMax)
-      .toSet()
-      .toList()
-    ..sort();
+  final cleaned =
+      sizes
+          .where(
+            (size) => size >= kRequestEuSizeMin && size <= kRequestEuSizeMax,
+          )
+          .toSet()
+          .toList()
+        ..sort();
   return List<double>.unmodifiable(cleaned);
-}
-
-({double? value, String? error}) _parseSize(String raw) {
-  if (raw.isEmpty) return (value: null, error: null);
-
-  var text = raw.toUpperCase();
-  // Tolerate the ways a size gets written down: `EU 42`, `42`, `42.0`.
-  for (final prefix in const ['EU', 'EUR']) {
-    if (text.startsWith(prefix)) text = text.substring(prefix.length).trim();
-  }
-
-  final value = _number(text);
-  if (value == null) {
-    return (value: null, error: 'Enter the EU size as a number, like 42.');
-  }
-  if (value < 22 || value > 48) {
-    return (
-      value: null,
-      error: 'EU sizes in this shop run from 22 to 48.',
-    );
-  }
-  return (value: value, error: null);
-}
-
-double? _number(String? raw) {
-  if (raw == null) return null;
-  return double.tryParse(raw.trim());
 }
