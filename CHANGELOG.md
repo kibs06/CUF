@@ -1,5 +1,10 @@
 # SoleVision — Changelog
 
+## Unreleased — onboarding sells the story, not just the screens
+
+- **The three slides were the same flat formula: a line glyph, a headline, a sentence, dots.** Each slide now stages its illustration as a medallion — warm radial glow, a stitched clay ring (the welt motif) and two floating chips — with the art drifting against the swipe for depth (static under reduced motion). A small-caps clay eyebrow and three proof bullets per slide (`primaryInk`, so the clay stays legible on dark pages too) say what the old sentences never did: makers sell direct, orders track to the door, one foot scan sizes every product. Progress is a `1 / 3` Sora counter plus segmented bars announced as one unit, the CTA carries a forward arrow, and Skip keeps its 44px target.
+- Tests: `flutter analyze` clean; the handoff contract still green plus a new content test pinning each slide's eyebrow, headline, bullets and counter (3 tests).
+
 ## Unreleased — custom orders leave the seller dashboard
 
 - **The dashboard's snapshot row gave CUSTOM ORDERS equal billing with LOW STOCK and BULK RESERVATIONS, and the alert strip echoed it with a "custom requests" chip.** The dashboard no longer tracks that queue: the card, the chip and the `pendingCustoms` the briefing carried for them are gone, leaving LOW STOCK and BULK RESERVATIONS. Sellers still reach their custom-order requests from the notification center and the `seller_custom_order` deep link — `CustomOrdersScreen` itself is untouched.
