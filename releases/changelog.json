@@ -1,5 +1,17 @@
 [
   {
+    "latest_version": "1.0.76",
+    "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.76/app-release-1.0.76.apk",
+    "released_at": "2026-11-12",
+    "notes": [
+      "Returns are now replacement-only — swap in store, or ship it back for a replacement",
+      "Return requests need photo proof, and sellers can decline with a reason",
+      "Shipped replacements record the carrier and tracking, and close when marked received",
+      "Real ratings and reviews, with filter chips and sold counts on product cards",
+      "Cash on delivery now settles when the order is received"
+    ]
+  },
+  {
     "latest_version": "1.0.75",
     "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.75/app-release-1.0.75.apk",
     "released_at": "2026-11-10",
