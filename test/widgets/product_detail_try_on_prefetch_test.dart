@@ -268,6 +268,11 @@ Widget _wrapPage(Widget page) {
   when(() => reviews.reviews).thenReturn([]);
   when(() => reviews.isLoading).thenReturn(false);
   when(() => reviews.ratingSummary).thenReturn(null);
+  // Non-nullable since the reviews foundation: an unstubbed mocktail
+  // getter answers null, which dies at the typed boundary in
+  // _ReviewsSection._buildFilterChips and the summary header.
+  when(() => reviews.avgRating).thenReturn(0.0);
+  when(() => reviews.breakdown).thenReturn({1: 0, 2: 0, 3: 0, 4: 0, 5: 0});
   when(() => reviews.errorMessage).thenReturn(null);
   when(() => reviews.orderItems).thenReturn([]);
   when(() => reviews.loadReviews(any())).thenAnswer((_) async {});

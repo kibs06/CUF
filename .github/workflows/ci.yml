@@ -18,7 +18,12 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
+          # Pinned: a floating `stable` silently moved the runner past
+          # v3.47, whose SDK deprecates `package:flutter/material.dart`
+          # and fails `flutter analyze` on 384 info-level lints. This is
+          # the SDK the repo is developed and verified against.
           channel: 'stable'
+          flutter-version: '3.44.4'
 
       - name: Cache pub dependencies
         uses: actions/cache@v4

@@ -38,7 +38,14 @@ void main() {
     );
     expect(submitButton(tester).onPressed, isNull);
 
-    // Picking a reason still leaves submit disabled without a photo.
+    // Picking a reason still leaves submit disabled without a photo. The
+    // options live in a lazily-built ListView under the policy header, so
+    // scroll the option into view first — longer copy must not silently
+    // un-build it.
+    await tester.scrollUntilVisible(
+      find.text('Defective or damaged'),
+      200,
+    );
     await tester.tap(find.text('Defective or damaged'));
     await tester.pump();
     expect(submitButton(tester).onPressed, isNull);
