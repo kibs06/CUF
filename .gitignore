@@ -87,3 +87,23 @@ skills-lock.json
 # documentation for the project.
 freebuff-chat-*.md
 .vercel
+
+# draw.io autosave (cushion files update on every preview render)
+.$*
+
+# Partner 3D-model staging (source files, not build assets).
+# The app only bundles placeholder_shoe.glb + qa_partner_shoe_v1.glb (see
+# pubspec.yaml); canonical try-on effects live in assets/effects/.
+# Staging uploads stay on disk for the demo but out of git (some are 60 MB+).
+assets/models/deepar/
+assets/models/*.glb
+!assets/models/placeholder_shoe.glb
+!assets/models/qa_partner_shoe_v1.glb
+!assets/models/occluder_left.glb
+!assets/models/occluder_right.glb
+
+# draw.io editor lock/backup files — churn on every open, never source.
+*.bkp
+
+# Local diagram backup kept on disk only (rename before committing).
+docs/diagrams/back up because the AI is fucking stupid/

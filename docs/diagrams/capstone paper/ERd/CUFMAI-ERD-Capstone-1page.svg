@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="827" height="1169" viewBox="0 0 827 1169">
+<rect width="827" height="1169" fill="white"/>
+<text x="15" y="40" font-family="Arial" font-size="18" font-weight="bold" fill="#000">CUFMAI Database - ERD (Condensed for Paper, 1 page)</text>
+<text x="15" y="62" font-family="Arial" font-size="9" fill="#000">ERD legend: key icon = key column (red key = primary key [PK] bold, plain key = foreign key [FK&#8594;table]), line 1--crowfoot = one-to-many.</text>
+<defs><marker id="one" markerWidth="10" markerHeight="12" refX="9" refY="6" orient="auto"><path d="M1,1 L9,6 L1,11" fill="none" stroke="#000" stroke-width="1.4"/></marker><marker id="many" markerWidth="12" markerHeight="12" refX="1" refY="6" orient="auto"><path d="M11,1 L1,6 L11,11 M11,6 L1,6" fill="none" stroke="#000" stroke-width="1.4"/></marker></defs>
+<path d="M 265.0,185.0 L 285.0,185.0 L 285.0,185.0" fill="none" stroke="#000" stroke-width="1.2" marker-start="url(#many)" marker-end="url(#one)"/>
+<path d="M 680.0,110.0 L 680.0,110.0 L 680.0,90.0 L 140.0,90.0 L 140.0,90.0 L 140.0,90.0 L 140.0,110.0" fill="none" stroke="#000" stroke-width="1.2" marker-start="url(#many)" marker-end="url(#one)"/>
+<path d="M 592.5,110.0 L 592.0,110.0 L 592.0,90.0 L 497.0,90.0 L 497.0,90.0 L 497.5,90.0 L 497.5,110.0" fill="none" stroke="#000" stroke-width="1.2" marker-start="url(#many)" marker-end="url(#one)"/>
+<path d="M 680.0,380.0 L 680.0,380.0 L 680.0,260.0" fill="none" stroke="#000" stroke-width="1.2" marker-start="url(#many)" marker-end="url(#one)"/>
+<path d="M 140.0,380.0 L 140.0,380.0 L 140.0,320.0 L 335.0,320.0 L 335.0,320.0 L 335.0,320.0 L 335.0,260.0" fill="none" stroke="#000" stroke-width="1.2" marker-start="url(#many)" marker-end="url(#one)"/>
+<path d="M 265.0,413.0 L 275.0,413.0 L 275.0,413.0 L 275.0,413.0 L 275.0,90.0 L 680.0,90.0 L 680.0,90.0 L 680.0,90.0 L 680.0,110.0" fill="none" stroke="#000" stroke-width="1.2" marker-start="url(#many)" marker-end="url(#one)"/>
+<path d="M 410.0,650.0 L 410.0,650.0 L 410.0,530.0" fill="none" stroke="#000" stroke-width="1.2" marker-start="url(#many)" marker-end="url(#one)"/>
+<path d="M 410.0,380.0 L 410.0,380.0 L 410.0,260.0" fill="none" stroke="#000" stroke-width="1.2" marker-start="url(#many)" marker-end="url(#one)"/>
+<path d="M 285.0,455.0 L 275.0,455.0 L 275.0,455.0 L 275.0,455.0 L 275.0,320.0 L 140.0,320.0 L 140.0,320.0 L 140.0,320.0 L 140.0,260.0" fill="none" stroke="#000" stroke-width="1.2" marker-start="url(#many)" marker-end="url(#one)"/>
+<path d="M 535.0,702.0 L 545.0,702.0 L 545.0,702.0 L 545.0,702.0 L 545.0,192.0 L 555.0,192.0 L 555.0,192.5" fill="none" stroke="#000" stroke-width="1.2" marker-start="url(#many)" marker-end="url(#one)"/>
+<path d="M 555.0,715.0 L 545.0,715.0 L 545.0,715.0 L 545.0,715.0 L 545.0,455.0 L 535.0,455.0 L 535.0,455.0" fill="none" stroke="#000" stroke-width="1.2" marker-start="url(#many)" marker-end="url(#one)"/>
+<path d="M 15.0,705.0 L 8.0,705.0 L 8.0,705.0 L 8.0,705.0 L 8.0,90.0 L 385.0,90.0 L 385.0,90.0 L 385.0,90.0 L 385.0,110.0" fill="none" stroke="#000" stroke-width="1.2" marker-start="url(#many)" marker-end="url(#one)"/>
+<path d="M 805.0,985.0 L 810.0,985.0 L 810.0,985.0 L 810.0,985.0 L 810.0,185.0 L 805.0,185.0 L 805.0,185.0" fill="none" stroke="#000" stroke-width="1.2" marker-start="url(#many)" marker-end="url(#one)"/>
+<path d="M 555.0,972.0 L 545.0,972.0 L 545.0,972.0 L 545.0,972.0 L 545.0,590.0 L 510.0,590.0 L 510.0,590.0 L 510.0,590.0 L 510.0,530.0" fill="none" stroke="#000" stroke-width="1.2" marker-start="url(#many)" marker-end="url(#one)"/>
+<path d="M 265.0,953.0 L 275.0,953.0 L 275.0,953.0 L 275.0,953.0 L 275.0,340.0 L 65.0,340.0 L 65.0,340.0 L 65.0,340.0 L 65.0,260.0" fill="none" stroke="#000" stroke-width="1.2" marker-start="url(#many)" marker-end="url(#one)"/>
+<path d="M 15.0,975.0 L 5.0,975.0 L 5.0,975.0 L 5.0,975.0 L 5.0,90.0 L 335.0,90.0 L 335.0,90.0 L 335.0,90.0 L 335.0,110.0" fill="none" stroke="#000" stroke-width="1.2" marker-start="url(#many)" marker-end="url(#one)"/>
+<path d="M 285.0,975.0 L 265.0,975.0 L 265.0,975.0" fill="none" stroke="#000" stroke-width="1.2" marker-start="url(#many)" marker-end="url(#one)"/>
+<path d="M 535.0,975.0 L 545.0,975.0 L 545.0,975.0 L 545.0,975.0 L 545.0,90.0 L 447.0,90.0 L 447.0,90.0 L 447.5,90.0 L 447.5,110.0" fill="none" stroke="#000" stroke-width="1.2" marker-start="url(#many)" marker-end="url(#one)"/>
+<path d="M 680.0,920.0 L 680.0,920.0 L 680.0,860.0 L 820.0,860.0 L 820.0,860.0 L 820.0,860.0 L 820.0,90.0 L 510.0,90.0 L 510.0,90.0 L 510.0,90.0 L 510.0,110.0" fill="none" stroke="#000" stroke-width="1.2" marker-start="url(#many)" marker-end="url(#one)"/>
+<rect x="15" y="110" width="250" height="150" fill="none" stroke="#000" stroke-width="1.2"/>
+<line x1="15" y1="136" x2="265" y2="136" stroke="#000" stroke-width="1"/>
+<text x="140" y="128" font-family="Arial" font-size="12" font-weight="bold" text-anchor="middle" fill="#000">stores</text>
+<text x="21" y="154" font-family="Arial" font-size="10" font-weight="bold" fill="#000">⚿ id : UUID [PK]</text>
+<text x="21" y="174" font-family="Arial" font-size="10" fill="#000">🔑 owner_id : UUID [FK&#8594;profiles]</text>
+<text x="21" y="194" font-family="Arial" font-size="10" fill="#000">name : TEXT</text>
+<text x="21" y="214" font-family="Arial" font-size="10" fill="#000">location : TEXT</text>
+<text x="21" y="234" font-family="Arial" font-size="10" fill="#000">is_active : BOOL</text>
+<text x="21" y="254" font-family="Arial" font-size="10" fill="#000">created_at : TIMESTAMPTZ</text>
+<rect x="285" y="110" width="250" height="150" fill="none" stroke="#000" stroke-width="1.2"/>
+<line x1="285" y1="136" x2="535" y2="136" stroke="#000" stroke-width="1"/>
+<text x="410" y="128" font-family="Arial" font-size="12" font-weight="bold" text-anchor="middle" fill="#000">profiles</text>
+<text x="291" y="154" font-family="Arial" font-size="10" font-weight="bold" fill="#000">⚿ id : UUID [PK]</text>
+<text x="291" y="174" font-family="Arial" font-size="10" fill="#000">full_name : TEXT</text>
+<text x="291" y="194" font-family="Arial" font-size="10" fill="#000">email : TEXT [UQ]</text>
+<text x="291" y="214" font-family="Arial" font-size="10" fill="#000">role : ENUM</text>
+<text x="291" y="234" font-family="Arial" font-size="10" fill="#000">seller_status : ENUM</text>
+<text x="291" y="254" font-family="Arial" font-size="10" fill="#000">created_at : TIMESTAMPTZ</text>
+<rect x="555" y="110" width="250" height="150" fill="none" stroke="#000" stroke-width="1.2"/>
+<line x1="555" y1="136" x2="805" y2="136" stroke="#000" stroke-width="1"/>
+<text x="680" y="128" font-family="Arial" font-size="12" font-weight="bold" text-anchor="middle" fill="#000">products</text>
+<text x="561" y="154" font-family="Arial" font-size="10" font-weight="bold" fill="#000">⚿ id : UUID [PK]</text>
+<text x="561" y="174" font-family="Arial" font-size="10" fill="#000">🔑 store_id : UUID [FK&#8594;stores]</text>
+<text x="561" y="194" font-family="Arial" font-size="10" fill="#000">🔑 seller_id : UUID [FK&#8594;profiles]</text>
+<text x="561" y="214" font-family="Arial" font-size="10" fill="#000">name : TEXT</text>
+<text x="561" y="234" font-family="Arial" font-size="10" fill="#000">price : NUMERIC</text>
+<text x="561" y="254" font-family="Arial" font-size="10" fill="#000">is_active : BOOL</text>
+<rect x="15" y="380" width="250" height="110" fill="none" stroke="#000" stroke-width="1.2"/>
+<line x1="15" y1="406" x2="265" y2="406" stroke="#000" stroke-width="1"/>
+<text x="140" y="398" font-family="Arial" font-size="12" font-weight="bold" text-anchor="middle" fill="#000">cart_items</text>
+<text x="21" y="424" font-family="Arial" font-size="10" font-weight="bold" fill="#000">⚿ id : UUID [PK]</text>
+<text x="21" y="444" font-family="Arial" font-size="10" fill="#000">🔑 user_id : UUID [FK&#8594;profiles]</text>
+<text x="21" y="464" font-family="Arial" font-size="10" fill="#000">🔑 product_id : UUID [FK&#8594;products]</text>
+<text x="21" y="484" font-family="Arial" font-size="10" fill="#000">quantity : INT</text>
+<rect x="285" y="380" width="250" height="150" fill="none" stroke="#000" stroke-width="1.2"/>
+<line x1="285" y1="406" x2="535" y2="406" stroke="#000" stroke-width="1"/>
+<text x="410" y="398" font-family="Arial" font-size="12" font-weight="bold" text-anchor="middle" fill="#000">orders</text>
+<text x="291" y="424" font-family="Arial" font-size="10" font-weight="bold" fill="#000">⚿ id : UUID [PK]</text>
+<text x="291" y="444" font-family="Arial" font-size="10" fill="#000">🔑 customer_id : UUID [FK&#8594;profiles]</text>
+<text x="291" y="464" font-family="Arial" font-size="10" fill="#000">🔑 store_id : UUID [FK&#8594;stores]</text>
+<text x="291" y="484" font-family="Arial" font-size="10" fill="#000">status : ENUM</text>
+<text x="291" y="504" font-family="Arial" font-size="10" fill="#000">total_amount : NUMERIC</text>
+<text x="291" y="524" font-family="Arial" font-size="10" fill="#000">payment_status : ENUM</text>
+<rect x="555" y="380" width="250" height="130" fill="none" stroke="#000" stroke-width="1.2"/>
+<line x1="555" y1="406" x2="805" y2="406" stroke="#000" stroke-width="1"/>
+<text x="680" y="398" font-family="Arial" font-size="12" font-weight="bold" text-anchor="middle" fill="#000">product_variants</text>
+<text x="561" y="424" font-family="Arial" font-size="10" font-weight="bold" fill="#000">⚿ id : UUID [PK]</text>
+<text x="561" y="444" font-family="Arial" font-size="10" fill="#000">🔑 product_id : UUID [FK&#8594;products]</text>
+<text x="561" y="464" font-family="Arial" font-size="10" fill="#000">size : TEXT</text>
+<text x="561" y="484" font-family="Arial" font-size="10" fill="#000">color : TEXT</text>
+<text x="561" y="504" font-family="Arial" font-size="10" fill="#000">stock : INT</text>
+<rect x="15" y="650" width="250" height="110" fill="none" stroke="#000" stroke-width="1.2"/>
+<line x1="15" y1="676" x2="265" y2="676" stroke="#000" stroke-width="1"/>
+<text x="140" y="668" font-family="Arial" font-size="12" font-weight="bold" text-anchor="middle" fill="#000">vouchers</text>
+<text x="21" y="694" font-family="Arial" font-size="10" font-weight="bold" fill="#000">⚿ id : UUID [PK]</text>
+<text x="21" y="714" font-family="Arial" font-size="10" fill="#000">code : TEXT [UQ]</text>
+<text x="21" y="734" font-family="Arial" font-size="10" fill="#000">discount : NUMERIC</text>
+<text x="21" y="754" font-family="Arial" font-size="10" fill="#000">🔑 created_by : UUID [FK&#8594;profiles]</text>
+<rect x="285" y="650" width="250" height="130" fill="none" stroke="#000" stroke-width="1.2"/>
+<line x1="285" y1="676" x2="535" y2="676" stroke="#000" stroke-width="1"/>
+<text x="410" y="668" font-family="Arial" font-size="12" font-weight="bold" text-anchor="middle" fill="#000">order_items</text>
+<text x="291" y="694" font-family="Arial" font-size="10" font-weight="bold" fill="#000">⚿ id : UUID [PK]</text>
+<text x="291" y="714" font-family="Arial" font-size="10" fill="#000">🔑 order_id : UUID [FK&#8594;orders]</text>
+<text x="291" y="734" font-family="Arial" font-size="10" fill="#000">🔑 product_id : UUID [FK&#8594;products]</text>
+<text x="291" y="754" font-family="Arial" font-size="10" fill="#000">quantity : INT</text>
+<text x="291" y="774" font-family="Arial" font-size="10" fill="#000">unit_price : NUMERIC</text>
+<rect x="555" y="650" width="250" height="130" fill="none" stroke="#000" stroke-width="1.2"/>
+<line x1="555" y1="676" x2="805" y2="676" stroke="#000" stroke-width="1"/>
+<text x="680" y="668" font-family="Arial" font-size="12" font-weight="bold" text-anchor="middle" fill="#000">payment_intents</text>
+<text x="561" y="694" font-family="Arial" font-size="10" font-weight="bold" fill="#000">⚿ id : UUID [PK]</text>
+<text x="561" y="714" font-family="Arial" font-size="10" fill="#000">🔑 order_id : UUID [FK&#8594;orders]</text>
+<text x="561" y="734" font-family="Arial" font-size="10" fill="#000">amount : NUMERIC</text>
+<text x="561" y="754" font-family="Arial" font-size="10" fill="#000">status : TEXT</text>
+<text x="561" y="774" font-family="Arial" font-size="10" fill="#000">created_at : TIMESTAMPTZ</text>
+<rect x="15" y="920" width="250" height="110" fill="none" stroke="#000" stroke-width="1.2"/>
+<line x1="15" y1="946" x2="265" y2="946" stroke="#000" stroke-width="1"/>
+<text x="140" y="938" font-family="Arial" font-size="12" font-weight="bold" text-anchor="middle" fill="#000">conversations</text>
+<text x="21" y="964" font-family="Arial" font-size="10" font-weight="bold" fill="#000">⚿ id : UUID [PK]</text>
+<text x="21" y="984" font-family="Arial" font-size="10" fill="#000">🔑 store_id : UUID [FK&#8594;stores]</text>
+<text x="21" y="1004" font-family="Arial" font-size="10" fill="#000">🔑 customer_id : UUID [FK&#8594;profiles]</text>
+<text x="21" y="1024" font-family="Arial" font-size="10" fill="#000">last_message_at : TIMESTAMPTZ</text>
+<rect x="285" y="920" width="250" height="110" fill="none" stroke="#000" stroke-width="1.2"/>
+<line x1="285" y1="946" x2="535" y2="946" stroke="#000" stroke-width="1"/>
+<text x="410" y="938" font-family="Arial" font-size="12" font-weight="bold" text-anchor="middle" fill="#000">messages</text>
+<text x="291" y="964" font-family="Arial" font-size="10" font-weight="bold" fill="#000">⚿ id : UUID [PK]</text>
+<text x="291" y="984" font-family="Arial" font-size="10" fill="#000">🔑 conversation_id : UUID [FK&#8594;conversations]</text>
+<text x="291" y="1004" font-family="Arial" font-size="10" fill="#000">🔑 sender_id : UUID [FK&#8594;profiles]</text>
+<text x="291" y="1024" font-family="Arial" font-size="10" fill="#000">is_read : BOOL</text>
+<rect x="555" y="920" width="250" height="130" fill="none" stroke="#000" stroke-width="1.2"/>
+<line x1="555" y1="946" x2="805" y2="946" stroke="#000" stroke-width="1"/>
+<text x="680" y="938" font-family="Arial" font-size="12" font-weight="bold" text-anchor="middle" fill="#000">reviews</text>
+<text x="561" y="964" font-family="Arial" font-size="10" font-weight="bold" fill="#000">⚿ id : BIGINT [PK]</text>
+<text x="561" y="984" font-family="Arial" font-size="10" fill="#000">🔑 product_id : UUID [FK&#8594;products]</text>
+<text x="561" y="1004" font-family="Arial" font-size="10" fill="#000">🔑 customer_id : UUID [FK&#8594;profiles]</text>
+<text x="561" y="1024" font-family="Arial" font-size="10" fill="#000">🔑 order_id : UUID [FK&#8594;orders]</text>
+<text x="561" y="1044" font-family="Arial" font-size="10" fill="#000">rating : INT 1-5</text>
+</svg>
