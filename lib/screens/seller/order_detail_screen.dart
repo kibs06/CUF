@@ -559,7 +559,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 const SizedBox(width: 8),
                 Flexible(
                   child: Text(
-                    'Confirm Order #$shortId?',
+                    nextStatus == 'delivered'
+                        ? 'Mark Order #$shortId Delivered?'
+                        : 'Confirm Order #$shortId?',
                     style: AppConstants.bodyStyle(
                       fontSize: 17,
                       fontWeight: FontWeight.bold,
@@ -580,9 +582,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 12),
-            // Notification note
+            // Notification note — the delivered handover is the sale, so
+            // the Mark Delivered confirm states that it records the sale.
             Text(
-              'The customer will be notified.',
+              nextStatus == 'delivered'
+                  ? 'This records the ₱${totalAmount.toStringAsFixed(0)} sale in your sales figures. The customer will be notified to confirm receipt.'
+                  : 'The customer will be notified.',
               style: AppConstants.bodyStyle(
                 fontSize: 12,
                 color: Colors.grey.shade500,
@@ -633,7 +638,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         if (success) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Order #$orderId updated to $nextStatus'),
+              content: Text(
+                nextStatus == 'delivered'
+                    ? 'Order #$orderId marked delivered — ₱${totalAmount.toStringAsFixed(0)} recorded in your sales.'
+                    : 'Order #$orderId updated to $nextStatus',
+              ),
               backgroundColor: AppConstants.success,
             ),
           );
