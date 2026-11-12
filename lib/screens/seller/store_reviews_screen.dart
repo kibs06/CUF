@@ -236,7 +236,7 @@ class _SellerReviewsScreenState extends State<SellerReviewsScreen> {
                             ),
                           ),
                           SoleStarRating(
-                            rating: _overallAvg(groups).round(),
+                            rating: _overallAvg(groups),
                             size: 16,
                           ),
                           const SizedBox(height: 4),

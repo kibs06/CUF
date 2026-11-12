@@ -150,7 +150,7 @@ class _SellerProductReviewsScreenState
                   Row(
                     children: [
                       if (reviews.isNotEmpty) ...[
-                        SoleStarRating(rating: avg.round(), size: 14),
+                        SoleStarRating(rating: avg, size: 14),
                         const SizedBox(width: 6),
                         Text(
                           avg.toStringAsFixed(1),
