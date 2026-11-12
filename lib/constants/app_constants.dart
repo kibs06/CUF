@@ -573,6 +573,14 @@ class AppConstants {
   static const String statusCancellationRequested = 'cancellation_requested';
   static const String statusReturnRequested = 'return_requested';
   static const String statusRefunded = 'refunded';
+  // Replacement-only policy: approved returns get a product replacement
+  // (in-store on the spot, or shipped when remote). `refunded` is the
+  // legacy status value kept for old orders; new approvals use `replaced`.
+  static const String statusReplaced = 'replaced';
+  /// Customer confirmed the shipped replacement arrived (the shipped
+  /// path's "done"; an in-store swap finishes at the counter and stays
+  /// `replaced`).
+  static const String statusReplacementReceived = 'replacement_received';
 
   // --- ORDER RETURN CONFIG (matches Customer Terms & Privacy) ---
   /// Return window in days from delivery.

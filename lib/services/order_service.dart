@@ -74,7 +74,9 @@ class OrderService {
       'id, customer_id, status, total_amount, payment_method, '
       'created_at, source, return_reason, return_details, '
       'return_requested_at, refunded_at, return_proof_path, '
-      'return_proof_paths, return_decline_reason';
+      'return_proof_paths, return_decline_reason, '
+      'replacement_method, replacement_carrier, '
+      'replacement_tracking_number, replacement_shipped_at';
 
   static const _storeOrderColumnsLegacy =
       'id, customer_id, status, total_amount, payment_method, '
@@ -91,6 +93,7 @@ class OrderService {
       'return_requested',
       'return_decline',
       'refunded_at',
+      'replacement_',
     ];
     if (!names.any(message.contains)) return false;
     return e.code == 'PGRST204' ||
@@ -406,6 +409,8 @@ class OrderService {
       'payment_status, created_at, store_id, return_reason, '
       'return_details, return_requested_at, refunded_at, '
       'return_proof_path, return_proof_paths, return_decline_reason, '
+      'replacement_method, replacement_carrier, '
+      'replacement_tracking_number, replacement_shipped_at, '
       'stores(name), '
       'order_items(id, product_id, size, quantity, unit_price, '
       'products(name, category, product_images(image_url, display_order)))';
@@ -490,6 +495,45 @@ class OrderService {
     return 'return_requested';
   }
 
+  /// Customer confirms the shipped replacement arrived.
+  ///
+  /// RPC rather than an UPDATE: customers have no general UPDATE policy on
+  /// `orders`, and the function is what stamps `replacement_received_at`
+  /// and tells the store's seller bell. Returns the new status.
+  Future<String> confirmReplacementReceived({required String orderId}) async {
+    final data = await _client.rpc(
+      'confirm_replacement_received',
+      params: {'p_order_id': orderId},
+    );
+    if (data is Map && data['status'] != null) {
+      return data['status'].toString();
+    }
+    return 'replacement_received';
+  }
+
+  /// Reconcile stock for an approved replacement: the returned pair goes
+  /// back on the shelf and the replacement unit comes off it, per order
+  /// line (`apply_return_replacement_inventory`).
+  ///
+  /// Server-side and one-shot (the function stamps
+  /// `orders.replacement_inventory_at`), so a retried approval cannot move
+  /// stock twice. Never throws: the decision is already recorded and must
+  /// not be undone by an inventory hiccup.
+  Future<bool> applyReplacementInventory({required String orderId}) async {
+    try {
+      await _client.rpc(
+        'apply_return_replacement_inventory',
+        params: {'p_order_id': orderId},
+      );
+      return true;
+    } catch (e) {
+      debugPrint(
+        '[OrderService] Replacement inventory not reconciled (non-fatal): $e',
+      );
+      return false;
+    }
+  }
+
   /// Upload a return photo proof to the PRIVATE 'return-proofs' bucket
   /// under `{order_id}/{uuid}.jpg` and return the storage PATH (not a
   /// public URL — the bucket is not public).
@@ -551,7 +595,7 @@ class OrderService {
         'recipientUserId': customerId,
         'title': approved ? 'Return approved' : 'Return declined',
         'body': approved
-            ? 'Order #$shortId — refund is on the way to your original payment method. Tap to view.'
+            ? 'Order #$shortId — replacement approved. Bring the item to the physical store for an on-the-spot swap, or wait for the shipped replacement. Tap to view.'
             : reason.isNotEmpty
                 ? 'Order #$shortId — declined: $reason. Tap to view or message the store.'
                 : 'Order #$shortId — the maker declined the return. Tap to view or message the store.',

@@ -61,7 +61,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     'received': 4,
     'cancelled': -1, // special: show cancelled banner
     'return_requested': 4,
-    'refunded': 4,
+    'replaced': 4,
+    'replacement_received': 4, // shipped replacement delivered + confirmed
+    'refunded': 4, // legacy — same step as replaced
     'awaiting_payment': 0, // PayMongo GCash: not yet paid
     'payment_conflict': -1, // money captured but needs review
     'awaiting_payment_confirmation': 0, // dormant direct flow
@@ -163,8 +165,8 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   /// Whether the order's payment state allows a return (mirrors the
   /// request_my_return gate: paid, or cash + unpaid which means paid
   /// offline at handover). Anything else (pending/failed GCash, …) has no
-  /// money to refund, so the button stays hidden instead of the server
-  /// rejecting the tap with a red banner.
+  /// completed purchase to replace, so the button stays hidden instead of
+  /// the server rejecting the tap with a red banner.
   bool get _isReturnPayable {
     final payment = (_order['payment_status'] ?? '').toString().toLowerCase();
     if (payment == 'paid') return true;
@@ -177,6 +179,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     final status = _currentStatus;
     if (status != 'delivered' && status != 'received') return false;
     if (status == AppConstants.statusReturnRequested ||
+        status == AppConstants.statusReplaced ||
         status == AppConstants.statusRefunded) {
       return false;
     }
@@ -718,7 +721,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Confirm Return Request'),
         content: const Text(
-          'The maker will review your request. Refunds are issued to your original payment method within 5–7 business days after inspection.',
+          'The maker will review your request. Approved returns get a product replacement — bring the item to the physical store for an on-the-spot swap, or ship it back and wait for the replacement (remote takes longer).',
         ),
         actions: [
           TextButton(
@@ -873,6 +876,71 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     }
   }
 
+  /// Customer confirms the shipped replacement arrived — the shipped
+  /// path's "done" (in-store swaps finish at the counter and have no
+  /// button). Goes through the RPC: `orders` has no general customer
+  /// UPDATE policy, and the function stamps `replacement_received_at`
+  /// and rings the store's seller bell.
+  Future<void> _confirmReplacementReceived() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Confirm Replacement'),
+        content: const Text(
+          'I confirm that I have received the replacement for this order.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Confirm'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isUpdating = true);
+    final ok = await context
+        .read<OrderProvider>()
+        .confirmReplacementReceived(_order['id']);
+    if (!mounted) return;
+
+    setState(() {
+      _isUpdating = false;
+      if (ok) _order['status'] = AppConstants.statusReplacementReceived;
+    });
+    if (ok) {
+      // The RPC already wrote the store's bell row; this push covers the
+      // seller's closed/background app, the same split as the return
+      // request.
+      final storeId = _order['store_id']?.toString() ?? '';
+      if (storeId.isNotEmpty) {
+        unawaited(
+          SellerNotificationService.instance.notifyReplacementReceived(
+            storeId: storeId,
+            orderId: _order['id'].toString(),
+          ),
+        );
+      }
+      _loadStatusHistory();
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(ok
+            ? 'Replacement received. This return is closed.'
+            : 'Could not confirm the replacement. Please try again.'),
+        backgroundColor: ok ? AppConstants.success : AppConstants.error,
+      ),
+    );
+  }
+
   // ─── Build ─────────────────────────────────────────────────────
 
   @override
@@ -959,13 +1027,15 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                   const SizedBox(height: 20),
                 ],
 
-                // ── Refunded banner ───────────────────────────────
-                if (status == AppConstants.statusRefunded) ...[
+                // ── Replaced banner ───────────────────────────────
+                if (status == AppConstants.statusReplaced ||
+                    status == AppConstants.statusRefunded) ...[
                   _buildCancellationBanner(
                     icon: Icons.price_check_outlined,
                     color: AppConstants.success,
-                    message: 'This order was refunded.',
-                    details: 'Refund issued to your original payment method within 5–7 business days.',
+                    message: 'This order was replaced.',
+                    details:
+                        'Replacement approved. Bring the item to the physical store for an on-the-spot swap, or wait for the shipped replacement if you cannot visit (remote takes longer).',
                   ),
                   const SizedBox(height: 20),
                 ],
@@ -1454,18 +1524,95 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
           ),
         );
 
-      case 'refunded':
-        return _buildInfoCard(
-          icon: Icons.price_check_outlined,
-          color: AppConstants.success,
-          title: 'Refunded',
-          subtitle: 'Refund issued to your original payment method within 5–7 business days.',
-          child: Padding(
-            padding: const EdgeInsets.only(top: 12),
-            child: ReturnProofImage(
-              storagePaths: returnProofPathsOf(_order),
+      case 'replaced':
+      case 'refunded': // legacy — same card as replaced
+        {
+          // Which delivery path the seller recorded at approval. Empty on
+          // orders approved before the path was tracked.
+          final method =
+              _order['replacement_method']?.toString() ?? '';
+          final carrier =
+              _order['replacement_carrier']?.toString().trim() ?? '';
+          final tracking =
+              _order['replacement_tracking_number']?.toString().trim() ?? '';
+          final shippedAt =
+              DateTime.tryParse(_order['replacement_shipped_at']?.toString() ?? '');
+          final subtitle = method == 'in_store'
+              ? 'Approved. Bring the item to the physical store and they will hand over the replacement on the spot.'
+              : method == 'shipped'
+                  ? (shippedAt != null
+                      ? 'Your replacement is on its way — shipped ${_formatTimestamp(shippedAt)}.'
+                      : 'Approved. The store ships the replacement after inspecting your item, which takes longer than an in-store swap.')
+                  : 'Replacement approved. Bring the item to the physical store for an on-the-spot swap, or wait for the shipped replacement (remote takes longer).';
+          return _buildInfoCard(
+            icon: Icons.price_check_outlined,
+            color: AppConstants.success,
+            title: 'Replaced',
+            subtitle: subtitle,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (tracking.isNotEmpty) ...[
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.local_shipping_outlined,
+                          size: 16,
+                          color: AppConstants.secondary,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '${carrier.isEmpty ? 'Courier' : carrier} · $tracking',
+                            style: AppConstants.bodyStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                  ReturnProofImage(
+                    storagePaths: returnProofPathsOf(_order),
+                  ),
+                  // A shipped replacement is only done when the customer
+                  // says it arrived; an in-store swap already is.
+                  if (method != 'in_store') ...[
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      child: SolePrimaryButton(
+                        label: _isUpdating
+                            ? 'Confirming...'
+                            : 'Confirm Replacement Received',
+                        onPressed:
+                            _isUpdating ? null : _confirmReplacementReceived,
+                        icon: const Icon(
+                          Icons.check_circle_outline,
+                          size: 20,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
-          ),
+          );
+        }
+
+      case 'replacement_received':
+        return _buildInfoCard(
+          icon: Icons.verified_outlined,
+          color: AppConstants.success,
+          title: 'Replacement received',
+          subtitle:
+              'Confirmed — this return is closed. Enjoy the new pair!',
+          child: null,
         );
 
       case 'received':

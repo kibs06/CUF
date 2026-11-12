@@ -792,8 +792,9 @@ class SupabaseService {
 
   Future<Map<String, dynamic>> updateOrderStatus(
     dynamic orderId,
-    String newStatus,
-  ) async {
+    String newStatus, {
+    bool notifyCustomer = true,
+  }) async {
     final dbStatus = _mapUiStatusToDb(newStatus);
     final data = await _client
         .from('orders')
@@ -804,24 +805,18 @@ class SupabaseService {
         .timeout(_defaultTimeout);
     final mapped = _mapOrder(Map<String, dynamic>.from(data));
 
-    // ── Write order_status_history row ──────────────────────────
-    // order_status_history.order_id is BIGINT, so parse from string.
-    final orderIdInt = int.tryParse(orderId.toString());
-    if (orderIdInt != null) {
-      try {
-        await _client.from('order_status_history').insert({
-          'order_id': orderIdInt,
-          'status': dbStatus,
-          'changed_at': DateTime.now().toIso8601String(),
-        });
-      } catch (e) {
-        debugPrint('[ORDER-STATUS] Could not write status history: $e');
-      }
-    }
+    // ── order_status_history row ────────────────────────────────
+    // Written by the `trg_record_order_status_change` AFTER UPDATE
+    // trigger on `orders` (see migration 20260720140000). Inserting here
+    // as well would log every status change twice.
 
     // ── DB notification + push for customer ────────────────────
+    // `notifyCustomer: false` still moves the order (and the trigger still
+    // logs it) but skips the feed/push — used when the status returns to a
+    // previous state (e.g. a declined return going back to 'received') and
+    // the built-in copy for that status would be wrong.
     final customerId = data['customer_id']?.toString();
-    if (customerId != null) {
+    if (customerId != null && notifyCustomer) {
       final shortId = orderId.toString().length >= 8
           ? orderId.toString().substring(0, 8)
           : orderId.toString();
@@ -839,6 +834,18 @@ class SupabaseService {
           category: 'review',
           title: 'Order received',
           body: 'Order #$shortId was confirmed. Tap to rate your purchase.',
+          orderId: orderId.toString(),
+        );
+      } else if (dbStatus == 'replaced' || dbStatus == 'refunded') {
+        // `refunded` is the legacy terminal status for old orders — same
+        // customer-facing meaning as `replaced`.
+        _createCustomerNotification(
+          userId: customerId,
+          category: 'returns',
+          title: 'Replacement approved',
+          body: 'Order #$shortId — return approved. Bring the item to the '
+              'physical store for an on-the-spot swap, or wait for the '
+              'shipped replacement (remote takes longer).',
           orderId: orderId.toString(),
         );
       }
@@ -869,6 +876,18 @@ class SupabaseService {
             type: 'review',
             title: 'How was it?',
             body: 'Order #$shortId was delivered — leave a review',
+            referenceId: orderId.toString(),
+            screen: 'order_tracking',
+          );
+          break;
+        case 'replaced':
+        case 'refunded':
+          _triggerCustomerPush(
+            recipientUserId: customerId,
+            type: 'returns',
+            title: 'Replacement approved',
+            body: 'Order #$shortId — swap it in-store, or wait for the shipped '
+                'replacement. Tap to view.',
             referenceId: orderId.toString(),
             screen: 'order_tracking',
           );

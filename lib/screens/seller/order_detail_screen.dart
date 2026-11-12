@@ -80,25 +80,90 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   bool get _isReturnRequested =>
       _currentStatus.toLowerCase() == 'return_requested';
 
-  /// Seller decision on a return request: approve issues the refund
-  /// (status → refunded), decline sends the order back to received with a
+  /// Seller decision on a return request: approve issues a product
+  /// replacement (status → replaced; in-store on the spot, shipped when
+  /// remote), decline sends the order back to received with a
   /// mandatory reason plus an instant chat message to the customer.
   Future<void> _performReturnDecision(bool approve) async {
     final orderId = order['id'];
     if (orderId == null || _isUpdating) return;
 
     String declineReason = '';
+    // How the replacement reaches the customer. Recorded with the
+    // approval so the order no longer says "Replaced" for a shipped
+    // replacement that hasn't even left the store yet.
+    String replacementMethod = 'in_store';
+    String replacementCarrier = '';
+    String replacementTracking = '';
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           backgroundColor: AppConstants.sellerCardBg,
-          title: Text(approve ? 'Approve Refund?' : 'Decline Return?'),
+          title: Text(approve ? 'Approve Replacement?' : 'Decline Return?'),
           content: approve
-              ? const Text(
-                  'Inspect the returned item first. Approving marks the order refunded — refund the customer via their original payment method.',
-                )
+              ? SingleChildScrollView(
+                  child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Inspect the returned item first. Approving marks the order replaced — a product replacement, never a cash refund.',
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      'How is the replacement handed over?',
+                      style: AppConstants.bodyStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppConstants.secondary,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _methodChip(
+                          'In store now',
+                          'in_store',
+                          replacementMethod,
+                          (v) => setDialogState(() => replacementMethod = v),
+                        ),
+                        _methodChip(
+                          'Ship to customer',
+                          'shipped',
+                          replacementMethod,
+                          (v) => setDialogState(() => replacementMethod = v),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      replacementMethod == 'in_store'
+                          ? 'The customer is at the counter — hand the replacement over on the spot.'
+                          : 'They mailed the pair back, so it travels again. The customer sees it is still on the way.',
+                      style: AppConstants.bodyStyle(
+                        fontSize: 11,
+                        color: Colors.grey.shade500,
+                        height: 1.4,
+                      ),
+                    ),
+                    if (replacementMethod == 'shipped') ...[
+                      const SizedBox(height: 10),
+                      _dialogField(
+                        hint: 'Courier (optional)',
+                        onChanged: (v) => replacementCarrier = v,
+                      ),
+                      const SizedBox(height: 8),
+                      _dialogField(
+                        hint: 'Tracking number (optional — add it later if you do not have it yet)',
+                        onChanged: (v) => replacementTracking = v,
+                      ),
+                    ],
+                  ],
+                ))
               : Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -144,7 +209,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               onPressed: (approve || declineReason.isNotEmpty)
                   ? () => Navigator.of(context).pop(true)
                   : null,
-              child: Text(approve ? 'Approve refund' : 'Decline'),
+              child: Text(approve ? 'Approve replacement' : 'Decline'),
             ),
           ],
         ),
@@ -161,25 +226,21 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         orderId: orderId,
         approve: approve,
         declineReason: approve ? null : declineReason,
+        replacementMethod: replacementMethod,
+        replacementCarrier: replacementCarrier,
+        replacementTrackingNumber: replacementTracking,
       );
       if (mounted) {
         setState(() => _isUpdating = false);
         if (success) {
           final customerId = order['customer_id']?.toString() ?? '';
-          if (approve) {
-            // Push the approval to the customer's device (closed-app
-            // cover; the open app sees it via the Returns tab / tracking).
-            if (customerId.isNotEmpty) {
-              unawaited(OrderService().notifyCustomerOfReturnDecision(
-                customerId: customerId,
-                orderId: orderId.toString(),
-                approved: true,
-              ));
-            }
-          } else {
+          if (!approve) {
             // Decline: instant chat message first (it carries its own
             // notification + push). Fall back to the decision push when
             // there is no conversation to write into.
+            // (Approval needs nothing here — resolveReturn routes through
+            // updateOrderStatus, which writes the in-app notification and
+            // fires the replacement push.)
             final chatSent = await _sendDeclineChatMessage(
               customerId: customerId,
               reason: declineReason,
@@ -197,7 +258,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(approve
-                  ? 'Order marked refunded. Please refund via original payment method.'
+                  ? 'Order marked replaced. Please give a product replacement (on the spot in-store, or ship it for remote returns).'
                   : 'Return declined. Order back to received.'),
               backgroundColor: AppConstants.success,
             ),
@@ -818,9 +879,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     Divider(height: 16, color: AppConstants.borderGray),
                     _buildReturnReason(),
                   ],
-                  if (status == 'refunded') ...[
+                  if (status == 'replaced' ||
+                      status == 'refunded' ||
+                      status == 'replacement_received') ...[
                     Divider(height: 16, color: AppConstants.borderGray),
-                    _buildReturnReason(isRefunded: true),
+                    _buildReturnReason(isReplaced: true),
                   ],
                 ],
               ),
@@ -866,7 +929,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                               child: FilledButton(
                                 onPressed: _isUpdating ? null : () => _performReturnDecision(true),
                                 style: FilledButton.styleFrom(backgroundColor: AppConstants.success, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                                child: Text('Approve refund', style: AppConstants.bodyStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white)),
+                                child: Text('Approve replacement', style: AppConstants.bodyStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white)),
                               ),
                             ),
                           ),
@@ -977,6 +1040,127 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     );
   }
 
+  /// Selectable delivery path inside the approve dialog.
+  Widget _methodChip(
+    String label,
+    String value,
+    String current,
+    ValueChanged<String> onSelect,
+  ) {
+    final selected = value == current;
+    return ChoiceChip(
+      selected: selected,
+      onSelected: (_) => onSelect(value),
+      label: Text(
+        label,
+        style: AppConstants.bodyStyle(
+          fontSize: 12,
+          fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+          color: selected ? Colors.white : AppConstants.secondary,
+        ),
+      ),
+      backgroundColor: AppConstants.surfaceLight,
+      selectedColor: AppConstants.success,
+      side: BorderSide(
+        color: AppConstants.borderGray.withValues(alpha: 0.7),
+      ),
+    );
+  }
+
+  Widget _dialogField({
+    required String hint,
+    required ValueChanged<String> onChanged,
+  }) {
+    return TextField(
+      onChanged: (v) => onChanged(v.trim()),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: AppConstants.bodyStyle(fontSize: 12, color: Colors.grey.shade400),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        isDense: true,
+      ),
+    );
+  }
+
+  /// Attach the courier + tracking number to an approved shipped
+  /// replacement (approval happens before dispatch, so the number is
+  /// usually only known later).
+  Future<void> _addReplacementTracking() async {
+    final orderId = order['id'];
+    if (orderId == null || _isUpdating) return;
+
+    String carrier = order['replacement_carrier']?.toString() ?? '';
+    String tracking = '';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          backgroundColor: AppConstants.sellerCardBg,
+          title: const Text('Replacement tracking'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'The customer sees this on the order tracking screen. Save it once the courier has the parcel.',
+              ),
+              const SizedBox(height: 12),
+              _dialogField(
+                hint: 'Courier (e.g. J&T, LBC)',
+                onChanged: (v) => carrier = v,
+              ),
+              const SizedBox(height: 8),
+              _dialogField(
+                hint: 'Tracking number',
+                onChanged: (v) => setDialogState(() => tracking = v),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(
+                'Cancel',
+                style: AppConstants.bodyStyle(color: AppConstants.secondary),
+              ),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: AppConstants.success,
+              ),
+              onPressed: tracking.isEmpty
+                  ? null
+                  : () => Navigator.of(context).pop(true),
+              child: const Text('Save tracking'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isUpdating = true);
+    final ok = await Provider.of<OrderProvider>(context, listen: false)
+        .setReplacementTracking(
+      orderId: orderId,
+      carrier: carrier,
+      trackingNumber: tracking,
+    );
+    if (!mounted) return;
+    setState(() => _isUpdating = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(ok
+            ? 'Tracking saved. The customer can now follow the replacement.'
+            : 'Could not save the tracking number. Please try again.'),
+        backgroundColor: ok ? AppConstants.success : AppConstants.error,
+      ),
+    );
+    if (ok) Navigator.of(context).pop(true);
+  }
+
   Widget _infoRow(String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -1001,10 +1185,35 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     );
   }
 
-  Widget _buildReturnReason({bool isRefunded = false}) {
+  Widget _buildReturnReason({bool isReplaced = false}) {
     final reason = order['return_reason']?.toString();
     final details = order['return_details']?.toString();
     final at = order['return_requested_at']?.toString();
+    // Delivery path chosen at approval (empty on orders approved before
+    // the path was recorded).
+    final method = order['replacement_method']?.toString() ?? '';
+    final carrier = order['replacement_carrier']?.toString().trim() ?? '';
+    final tracking =
+        order['replacement_tracking_number']?.toString().trim() ?? '';
+    final shippedAt = order['replacement_shipped_at']?.toString();
+    final replacementDone =
+        (order['status']?.toString().toLowerCase() ?? '') ==
+            AppConstants.statusReplacementReceived;
+    final receivedAt = order['replacement_received_at']?.toString();
+    final pathLabel = replacementDone
+        ? 'Replacement received${receivedAt != null ? ' ${_formatTimestamp(receivedAt)}' : ''}'
+        : method == 'shipped'
+            ? (shippedAt != null
+                ? 'Shipped ${_formatTimestamp(shippedAt)}'
+                : 'Ship to customer — not dispatched yet')
+            : method == 'in_store'
+                ? 'Handed over in store — swap completed'
+                : 'Replacement approved';
+    final pathIcon = replacementDone
+        ? Icons.verified_outlined
+        : method == 'shipped'
+            ? Icons.local_shipping_outlined
+            : Icons.storefront_outlined;
     return Padding(
       padding: const EdgeInsets.only(top: 4),
       child: Row(
@@ -1015,12 +1224,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             height: 24,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: (isRefunded ? AppConstants.success : AppConstants.statusPendingColor).withValues(alpha: 0.15),
+              color: (isReplaced ? AppConstants.success : AppConstants.statusPendingColor).withValues(alpha: 0.15),
             ),
             child: Icon(
-              isRefunded ? Icons.price_check_outlined : Icons.assignment_return_outlined,
+              isReplaced ? Icons.price_check_outlined : Icons.assignment_return_outlined,
               size: 14,
-              color: isRefunded ? AppConstants.success : AppConstants.statusPendingColor,
+              color: isReplaced ? AppConstants.success : AppConstants.statusPendingColor,
             ),
           ),
           const SizedBox(width: 12),
@@ -1029,7 +1238,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  isRefunded ? 'Refunded' : 'Return requested',
+                  isReplaced ? 'Replaced' : 'Return requested',
                   style: AppConstants.bodyStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppConstants.secondary),
                 ),
                 if (reason != null && reason.isNotEmpty) ...[
@@ -1053,6 +1262,96 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     storagePaths: returnProofPathsOf(order),
                   ),
                 ),
+                // Where the replacement is, once it is approved. An
+                // in-store swap is finished; a shipped one is not, and
+                // says so until it is dispatched.
+                if (isReplaced) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(
+                        pathIcon,
+                        size: 14,
+                        color: Colors.grey.shade600,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          pathLabel,
+                          style: AppConstants.bodyStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppConstants.secondary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (method == 'shipped') ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      tracking.isEmpty
+                          ? 'No tracking number yet.'
+                          : '${carrier.isEmpty ? 'Courier' : carrier} · $tracking',
+                      style: AppConstants.bodyStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                    if (tracking.isEmpty && !replacementDone)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: TextButton.icon(
+                          onPressed:
+                              _isUpdating ? null : _addReplacementTracking,
+                          icon: const Icon(Icons.add_box_outlined, size: 16),
+                          label: const Text('Add tracking number'),
+                          style: TextButton.styleFrom(
+                            padding: EdgeInsets.zero,
+                            minimumSize: const Size(0, 32),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            foregroundColor: AppConstants.primary,
+                          ),
+                        ),
+                      ),
+                  ],
+                ],
+                // Short handling guide (pending requests only): in-store
+                // swaps happen on the spot, shipped ones wait for arrival.
+                if (!isReplaced) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppConstants.primary.withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: AppConstants.primary.withValues(alpha: 0.2),
+                      ),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(
+                          Icons.info_outline,
+                          size: 16,
+                          color: AppConstants.primary,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'In-store: inspect the item, then hand over the same product on the spot. Shipped: wait until the item arrives and passes inspection, then ship the replacement — tell the customer it takes longer.',
+                            style: AppConstants.bodyStyle(
+                              fontSize: 12,
+                              color: AppConstants.secondary,
+                              height: 1.4,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

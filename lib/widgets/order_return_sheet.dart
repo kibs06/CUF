@@ -193,8 +193,8 @@ class _ReturnRequestSheetState extends State<_ReturnRequestSheet> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Text(
-                  'Unworn items with tags can be returned within ${AppConstants.returnWindowDays} days of delivery. '
-                  'Refunds go to your original payment method within 5–7 business days after inspection. '
+                  'Unworn items with tags can be returned within ${AppConstants.returnWindowDays} days of delivery for a product replacement (no cash refunds). '
+                  'Bring the item to the physical store for an on-the-spot replacement after inspection, or ship it back — remote replacements take longer. '
                   'You cover return shipping unless the item arrived defective or incorrect — contact us within '
                   '${AppConstants.defectiveReportWindowHours}h for those.',
                   style: AppConstants.bodyStyle(

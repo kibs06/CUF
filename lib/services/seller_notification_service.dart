@@ -499,6 +499,31 @@ class SellerNotificationService {
     }
   }
 
+  /// Push to the store owner that the customer confirmed the shipped
+  /// replacement arrived (the in-app bell row is written by the
+  /// confirm_replacement_received RPC). Fire-and-forget — never throws.
+  Future<void> notifyReplacementReceived({
+    required String storeId,
+    required String orderId,
+  }) async {
+    final shortId = orderId.length >= 8 ? orderId.substring(0, 8) : orderId;
+    try {
+      _triggerPush(
+        storeId: storeId,
+        type: 'replacement_received',
+        title: 'Replacement received',
+        body: 'Order #$shortId — the customer confirmed they received the '
+            'replacement. This return is closed.',
+        referenceId: orderId,
+        screen: 'seller_order_detail',
+      );
+    } catch (e) {
+      debugPrint(
+        '[SellerNotification] Replacement receipt push failed (non-fatal): $e',
+      );
+    }
+  }
+
   // ─── PUSH NOTIFICATION HELPERS ────────────────────────────────
 
   /// Look up the store owner's user ID and send a push notification.

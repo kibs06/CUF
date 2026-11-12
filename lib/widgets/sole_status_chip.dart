@@ -19,6 +19,9 @@ class SoleStatusChip extends StatelessWidget {
       case 'received':
       case 'completed':
       case 'ready':
+      case 'replaced':
+      case 'replacement_received':
+      case 'refunded': // legacy status — displayed as replaced
       case 'fit looks good!':
         bg = AppConstants.success.withValues(alpha: 0.15);
         text = AppConstants.success;
@@ -26,6 +29,8 @@ class SoleStatusChip extends StatelessWidget {
       case 'pending':
       case 'placed':
       case 'preparing':
+      case 'return_requested':
+      case 'cancellation_requested':
       case 'being prepared':
       case 'in_progress':
       case 'tracking your feet...':

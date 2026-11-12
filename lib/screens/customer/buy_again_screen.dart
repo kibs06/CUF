@@ -21,7 +21,7 @@ import 'tracking_screen.dart';
 /// Buy Again strip.
 ///
 /// Receives the raw [orders] list (same as BuyAgainSection) and groups them
-/// by status into tabs: To Ship | To Receive | Completed | Return/Refund | Cancelled.
+/// by status into tabs: To Ship | To Receive | Completed | Return/Replacement | Cancelled.
 class BuyAgainScreen extends StatefulWidget {
   const BuyAgainScreen({
     super.key,
@@ -48,7 +48,7 @@ class _BuyAgainScreenState extends State<BuyAgainScreen>
     _OrderTab('To Ship', 'to_ship'),
     _OrderTab('To Receive', 'to_receive'),
     _OrderTab('Completed', 'completed'),
-    _OrderTab('Return/Refund', 'return_refund'),
+    _OrderTab('Return/Replacement', 'return_replacement'),
     _OrderTab('Cancelled', 'cancelled'),
   ];
 
@@ -78,7 +78,12 @@ class _BuyAgainScreenState extends State<BuyAgainScreen>
           status == 'pending' || status == 'placed' || status == 'preparing',
         'to_receive' => status == 'ready',
         'completed' => status == 'delivered' || status == 'received',
-        'return_refund' => status == 'cancellation_requested',
+        'return_replacement' =>
+          status == 'cancellation_requested' ||
+          status == 'return_requested' ||
+          status == 'replaced' ||
+          status == 'replacement_received' ||
+          status == 'refunded', // legacy — same tab as replaced
         'cancelled' => status == 'cancelled',
         _ => true,
       };
@@ -863,7 +868,14 @@ class _OrderStatusBadge extends StatelessWidget {
       case 'received':
         return ('Completed', AppConstants.statusDeliveredColor);
       case 'cancellation_requested':
-        return ('Return/Refund', Colors.orange);
+      case 'return_requested':
+        return ('Return/Replacement', Colors.orange);
+      case 'replaced':
+        return ('Replaced', AppConstants.success);
+      case 'replacement_received':
+        return ('Replacement received', AppConstants.success);
+      case 'refunded': // legacy — displayed as replaced
+        return ('Replaced', AppConstants.success);
       case 'cancelled':
         return ('Cancelled', AppConstants.error);
       default:

@@ -54,6 +54,7 @@ class _ManageOrdersScreenState extends State<ManageOrdersScreen>
     'Confirmed',
     'Ready',
     'Delivered',
+    'Returns',
     'Cancelled',
   ];
   StreamSubscription<bool>? _connectivitySub;
@@ -740,10 +741,22 @@ class _ManageOrdersScreenState extends State<ManageOrdersScreen>
         'delivered': 'delivered',
       };
       final statusFilter = _tabs[_tabIndex].toLowerCase();
-      final dbFilter = uiToDbFilter[statusFilter] ?? statusFilter;
-      filteredOrders = allOrders
-          .where((o) => (o['status'] ?? '').toLowerCase() == dbFilter)
-          .toList();
+      if (statusFilter == 'returns') {
+        filteredOrders = allOrders
+            .where((o) {
+              final s = (o['status'] ?? '').toString().toLowerCase();
+              return s == 'return_requested' ||
+                  s == 'replaced' ||
+                  s == 'replacement_received' ||
+                  s == 'refunded'; // legacy — same tab as replaced
+            })
+            .toList();
+      } else {
+        final dbFilter = uiToDbFilter[statusFilter] ?? statusFilter;
+        filteredOrders = allOrders
+            .where((o) => (o['status'] ?? '').toLowerCase() == dbFilter)
+            .toList();
+      }
     }
 
     return Scaffold(

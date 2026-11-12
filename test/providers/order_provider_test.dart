@@ -92,8 +92,17 @@ void main() {
       );
     });
 
-    test('returns: cancelled, return_requested, refunded', () {
-      for (final status in ['cancelled', 'return_requested', 'refunded']) {
+    test('returns: cancelled, return_requested, replaced, refunded', () {
+      // `replaced` is the approval, `replacement_received` is the shipped
+      // path's "done" — both are still returns the customer may want to
+      // reopen, and the in-store swap stays `replaced` forever.
+      for (final status in [
+        'cancelled',
+        'return_requested',
+        'replaced',
+        'replacement_received',
+        'refunded',
+      ]) {
         expect(
           matchesMyOrdersFilter(order(status: status), 'returns'),
           isTrue,
@@ -116,6 +125,8 @@ void main() {
         'cancelled',
         'cancellation_requested',
         'return_requested',
+        'replaced',
+        'replacement_received',
         'refunded',
         'unknown_status',
       ]) {
@@ -164,6 +175,8 @@ void main() {
         order(status: 'received', paymentStatus: 'paid'), // review
         order(status: 'cancelled', paymentStatus: 'unpaid'), // returns (NOT unpaid)
         order(status: 'return_requested', paymentStatus: 'paid'), // returns
+        order(status: 'replaced', paymentStatus: 'paid'), // returns
+        order(status: 'replacement_received', paymentStatus: 'paid'), // returns
         order(status: 'refunded', paymentStatus: 'paid'), // returns
         order(status: 'delivered', paymentStatus: 'paid'), // review
         order(status: 'cancellation_requested', paymentStatus: 'paid'), // all only
@@ -171,12 +184,12 @@ void main() {
 
       final counts = computeMyOrdersCounts(orders);
 
-      expect(counts['all'], 10);
+      expect(counts['all'], 12);
       expect(counts['unpaid'], 1);
       expect(counts['processing'], 3);
       expect(counts['shipped'], 1);
       expect(counts['review'], 2);
-      expect(counts['returns'], 3);
+      expect(counts['returns'], 5);
     });
 
     test('paid delivered orders land in Review (confirm, rate, or return)', () {

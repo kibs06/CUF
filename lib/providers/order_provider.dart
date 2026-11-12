@@ -197,7 +197,7 @@ class OrderProvider extends ChangeNotifier {
     }
   }
 
-  // ── Order Return / Refund (matches Customer Terms & Privacy) ─────
+  // ── Order Return / Replacement (matches Customer Terms & Privacy) ─────
 
   /// Request a return for a delivered/received order.
   ///
@@ -244,34 +244,151 @@ class OrderProvider extends ChangeNotifier {
 
   /// Seller decision on a `return_requested` order.
   ///
-  /// approve=true → `refunded` (inspected + refund issued to original
-  /// payment method); approve=false → back to `received` (return declined,
-  /// [declineReason] mandatory — stored for the customer to see).
-  /// Sellers have a store-scoped UPDATE policy so this is a direct update,
-  /// mirroring cancel approval.
+  /// approve=true → `replaced` (inspected + product replacement issued;
+  /// in-store on the spot, shipped when remote); approve=false → back to
+  /// `received` (return declined, [declineReason] mandatory — stored for
+  /// the customer to see). `refunded` is the legacy terminal status still
+  /// accepted by filters for old orders.
+  /// Sellers have a store-scoped UPDATE policy, so the extra return columns
+  /// are written directly (mirroring cancel approval), then the status change
+  /// goes through [SupabaseService.updateOrderStatus] like every other status
+  /// transition — that's what puts the decision in the customer's in-app
+  /// notification feed and fires the push. (The `order_status_history` row
+  /// comes from the `orders` trigger either way.)
   Future<bool> resolveReturn({
     required dynamic orderId,
     required bool approve,
     String? declineReason,
+    String replacementMethod = 'in_store',
+    String? replacementCarrier,
+    String? replacementTrackingNumber,
   }) async {
     try {
-      final newStatus = approve ? 'refunded' : 'received';
-      final patch = <String, dynamic>{'status': newStatus};
+      final newStatus = approve ? 'replaced' : 'received';
+      final patch = <String, dynamic>{};
       if (approve) {
+        final shipped = replacementMethod == 'shipped';
+        final tracking = replacementTrackingNumber?.trim() ?? '';
+        final carrier = replacementCarrier?.trim() ?? '';
         patch['refunded_at'] = DateTime.now().toIso8601String();
         patch['return_decline_reason'] = null;
+        patch['replacement_method'] = shipped ? 'shipped' : 'in_store';
+        // Tracking only ever belongs to the shipped path; an in-store
+        // swap has nothing to track.
+        patch['replacement_carrier'] = shipped && carrier.isNotEmpty ? carrier : null;
+        patch['replacement_tracking_number'] =
+            shipped && tracking.isNotEmpty ? tracking : null;
+        patch['replacement_shipped_at'] = shipped && tracking.isNotEmpty
+            ? DateTime.now().toIso8601String()
+            : null;
       } else {
         patch['return_decline_reason'] = declineReason?.trim();
       }
-      await Supabase.instance.client
-          .from('orders')
-          .update(patch)
-          .eq('id', orderId);
+      try {
+        await Supabase.instance.client
+            .from('orders')
+            .update(patch)
+            .eq('id', orderId);
+      } on PostgrestException catch (e) {
+        // Server predates the replacement-path migration: keep the return
+        // decision working and drop just those columns, the same way the
+        // order selects fall back to [_storeOrderColumnsLegacy].
+        final message = e.message.toLowerCase();
+        final pathKeys =
+            patch.keys.where((k) => k.startsWith('replacement_')).toList();
+        if (pathKeys.isEmpty ||
+            !(message.contains('replacement_') ||
+                message.contains('schema cache'))) {
+          rethrow;
+        }
+        debugPrint(
+          '[OrderProvider] Replacement path not on the server yet: $message',
+        );
+        for (final key in pathKeys) {
+          patch.remove(key);
+        }
+        await Supabase.instance.client
+            .from('orders')
+            .update(patch)
+            .eq('id', orderId);
+      }
+
+      // Decline notification stays with the seller's chat message (and its
+      // fallback push) — 'received' has its own unrelated copy.
+      await _db.updateOrderStatus(
+        orderId,
+        newStatus,
+        notifyCustomer: approve,
+      );
+
+      // Approval only: the returned pair goes back into stock and the
+      // replacement unit comes out of it. Best-effort — the decision is
+      // already recorded, so a stock failure must not undo it.
+      if (approve) {
+        await _orderService.applyReplacementInventory(
+          orderId: orderId.toString(),
+        );
+      }
+
       await loadOrders();
       await loadMyOrders();
       return true;
     } catch (e) {
       debugPrint('OrderProvider.resolveReturn error: $e');
+      return false;
+    }
+  }
+
+  /// Customer confirms the shipped replacement arrived (`replaced` →
+  /// `replacement_received`), which is the shipped path's "done".
+  Future<bool> confirmReplacementReceived(dynamic orderId) async {
+    try {
+      final newStatus = await _orderService.confirmReplacementReceived(
+        orderId: orderId.toString(),
+      );
+      for (final list in [_orders, _myOrders, _filteredMyOrders]) {
+        final i = list.indexWhere((o) => o['id'] == orderId);
+        if (i != -1) {
+          list[i] = Map<String, dynamic>.from(list[i])
+            ..['status'] = newStatus
+            ..['replacement_received_at'] =
+                DateTime.now().toIso8601String();
+        }
+      }
+      notifyListeners();
+      await loadMyOrders();
+      return true;
+    } catch (e) {
+      debugPrint('OrderProvider.confirmReplacementReceived error: $e');
+      return false;
+    }
+  }
+
+  /// Attach the courier + tracking number to an already-approved shipped
+  /// replacement, the moment the seller hands the parcel over.
+  ///
+  /// Approval happens after inspection, usually before the courier picks
+  /// the parcel up, so the number is often unknown at that point.
+  Future<bool> setReplacementTracking({
+    required dynamic orderId,
+    required String carrier,
+    required String trackingNumber,
+  }) async {
+    try {
+      final tracking = trackingNumber.trim();
+      if (tracking.isEmpty) return false;
+      final carrierText = carrier.trim();
+      await Supabase.instance.client.from('orders').update({
+        'replacement_carrier':
+            carrierText.isEmpty ? null : carrierText,
+        'replacement_tracking_number': tracking,
+        'replacement_shipped_at': DateTime.now().toIso8601String(),
+      }).eq('id', orderId);
+      await loadOrders();
+      await loadMyOrders();
+      return true;
+    } catch (e) {
+      debugPrint('OrderProvider.setReplacementTracking error: $e');
       return false;
     }
   }
@@ -599,7 +716,9 @@ bool matchesMyOrdersFilter(Map<String, dynamic> order, String filter) {
     case 'returns':
       return status == 'cancelled' ||
           status == 'return_requested' ||
-          status == 'refunded';
+          status == 'replaced' ||
+          status == 'replacement_received' ||
+          status == 'refunded'; // legacy
     default:
       // 'all' (and any unknown key) matches every order.
       return true;
@@ -609,8 +728,9 @@ bool matchesMyOrdersFilter(Map<String, dynamic> order, String filter) {
 /// Per-tab counts for a raw customer order list, keyed by [myOrdersFilterKeys].
 ///
 /// Note that `cancellation_requested` has no tab home and is only counted
-/// under `all`. Returns (`return_requested`, `refunded`) live under
-/// `returns` alongside `cancelled`.
+/// under `all`. Returns (`return_requested`, `replaced`,
+/// `replacement_received`, legacy `refunded`) live under `returns`
+/// alongside `cancelled`.
 Map<String, int> computeMyOrdersCounts(List<Map<String, dynamic>> orders) {
   final counts = <String, int>{
     for (final key in myOrdersFilterKeys) key: 0,

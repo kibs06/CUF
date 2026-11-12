@@ -341,6 +341,15 @@ class _SellerNotificationCenterScreenState
           MaterialPageRoute(builder: (_) => const SellerInboxScreen()),
         );
         break;
+      case 'return_request':
+      case 'replacement_received':
+        // Both ends of the return flow point at the same place: the order
+        // that carries the request (or the closed-out swap). The detail
+        // screen is where the approve/decline decision lives.
+        if (notif.referenceId != null) {
+          _navigateToOrderDetail(notif.referenceId!);
+        }
+        break;
       case 'new_review':
       case 'review_comment':
         // A review (or a reply in its discussion thread) on one of this
@@ -745,6 +754,10 @@ class _NotificationRowContent extends StatelessWidget {
         return Icons.star_outline;
       case 'review_comment':
         return Icons.forum_outlined;
+      case 'return_request':
+        return Icons.assignment_return_outlined;
+      case 'replacement_received':
+        return Icons.verified_outlined;
       case kModelRequestSellerType:
         // The same icon the product action sheet's request row uses, so the
         // notice and the row it points at read as one thing.
@@ -772,6 +785,12 @@ class _NotificationRowContent extends StatelessWidget {
         return const Color(0xFF6B8F47);
       case 'review_comment':
         return const Color(0xFF6B8F47);
+      case 'return_request':
+        // Same amber as the Returns tab's `return_requested` chip, so the
+        // notice and the row it points at read as one thing.
+        return SellerTheme.amberDark;
+      case 'replacement_received':
+        return AppConstants.success;
       case kModelRequestSellerType:
         // Deep purple — "3D modelling news", the same reading as the customer
         // feed's `models` colour, so an ending looks the same on either side.

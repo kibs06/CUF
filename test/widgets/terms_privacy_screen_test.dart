@@ -15,7 +15,7 @@ void main() {
     // Part I section titles (customer policy — the default document).
     expect(find.text('Your Account & Eligibility'), findsOneWidget);
     expect(find.text('Orders & Payment'), findsOneWidget);
-    expect(find.text('Returns & Refunds'), findsOneWidget);
+    expect(find.text('Returns & Replacements'), findsOneWidget);
     expect(find.text('Prohibited Conduct'), findsOneWidget);
     expect(find.text('Account Suspension & Termination'), findsOneWidget);
     expect(find.text('Disclaimer & Limitation of Liability'), findsOneWidget);

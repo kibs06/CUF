@@ -17,6 +17,12 @@ class SellerStatusChip extends StatelessWidget {
       'ready': 'Ready',
       'received': 'Delivered',
       'cancelled': 'Cancelled',
+      'return_requested': 'Return requested',
+      'replaced': 'Replaced',
+      'replacement_received': 'Replacement received',
+      'refunded': 'Replaced', // legacy status — replacement-only policy
+      'cancellation_requested': 'Cancel requested',
+      'delivered': 'Delivered',
     };
 
     // Espresso/cream palette pairs (see SellerTheme): pending = amber,
@@ -35,8 +41,17 @@ class SellerStatusChip extends StatelessWidget {
         break;
       case 'ready':
       case 'received':
+      case 'replaced':
+      case 'replacement_received':
+      case 'refunded': // legacy — same green treatment as replaced
+      case 'delivered':
         bg = SellerTheme.sageBg;
         text = SellerTheme.sageDark;
+        break;
+      case 'return_requested':
+      case 'cancellation_requested':
+        bg = SellerTheme.amberBg;
+        text = SellerTheme.amberDark;
         break;
       case 'cancelled':
         bg = AppConstants.statusCancelledColor.withValues(alpha: 0.12);

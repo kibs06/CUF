@@ -370,12 +370,18 @@ class _TermsPrivacyScreenState extends State<TermsPrivacyScreen> {
       const SizedBox(height: 16),
       _sectionCard(
         icon: Icons.assignment_return_outlined,
-        title: 'Returns & Refunds',
+        title: 'Returns & Replacements',
         items: const [
+          _PolicyItem(
+            'Replacement only — no cash refunds',
+            'Approved returns are replaced with the same product, not '
+                'refunded in cash. Please make sure of your size and fit '
+                'before ordering.',
+          ),
           _PolicyItem(
             'Return window',
             'You may return unworn, unused items within 7 days of delivery '
-                'for a full refund.',
+                'for a product replacement.',
           ),
           _PolicyItem(
             'Condition requirements',
@@ -384,10 +390,16 @@ class _TermsPrivacyScreenState extends State<TermsPrivacyScreen> {
                 'accepted.',
           ),
           _PolicyItem(
-            'Refund processing',
-            'Refunds are issued to your original payment method within 5–7 '
-                'business days after we receive and inspect the returned '
-                'item.',
+            'In-store replacement (fastest)',
+            'Bring the item to the physical store and get your replacement '
+                'on the spot after inspection — same product, subject to '
+                'availability.',
+          ),
+          _PolicyItem(
+            'Remote replacement (takes longer)',
+            'If you cannot visit the physical store, ship the item back and '
+                'we will send the replacement after we receive and inspect '
+                'it. Please allow extra days for shipping both ways.',
           ),
           _PolicyItem(
             'Return shipping',
