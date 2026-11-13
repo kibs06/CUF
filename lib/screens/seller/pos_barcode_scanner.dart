@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../../constants/app_constants.dart';
 
@@ -24,18 +25,31 @@ class _PosBarcodeScannerState extends State<PosBarcodeScanner> {
   void initState() {
     super.initState();
     _cameraController = MobileScannerController(
+      // Manual start below — the default autoStart plus an explicit
+      // start() double-starts the camera, throws, and drops the user on
+      // the permission-denied view even when permission was granted.
+      autoStart: false,
       detectionSpeed: DetectionSpeed.normal,
       facing: CameraFacing.back,
     );
     // Start after first frame to avoid dispose-during-init issues
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) return;
-      try {
-        await _cameraController?.start();
-      } catch (_) {
-        if (mounted) setState(() => _permissionDenied = true);
-      }
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _startCamera());
+  }
+
+  /// Single, guarded camera start: re-checks the OS grant (covers the
+  /// "revoked while the app was backgrounded" case), then starts once.
+  Future<void> _startCamera() async {
+    if (!mounted) return;
+    final status = await Permission.camera.status;
+    if (!status.isGranted) {
+      if (mounted) setState(() => _permissionDenied = true);
+      return;
+    }
+    try {
+      await _cameraController?.start();
+    } catch (_) {
+      if (mounted) setState(() => _permissionDenied = true);
+    }
   }
 
   @override
@@ -346,12 +360,34 @@ class _PosBarcodeScannerState extends State<PosBarcodeScanner> {
                     vertical: 12,
                   ),
                 ),
-                onPressed: () => Navigator.of(context).pop(),
+                onPressed: () async {
+                  // Re-asks the OS; if the grant is back, start the
+                  // camera in place instead of bouncing the seller out.
+                  final status = await Permission.camera.request();
+                  if (!mounted) return;
+                  if (status.isGranted) {
+                    setState(() => _permissionDenied = false);
+                    await _startCamera();
+                  } else if (status.isPermanentlyDenied) {
+                    await openAppSettings();
+                  }
+                },
                 child: Text(
-                  'Go Back',
+                  'Try Again',
                   style: AppConstants.bodyStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: openAppSettings,
+                child: Text(
+                  'Open Settings',
+                  style: AppConstants.bodyStyle(
+                    color: AppConstants.primary,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),

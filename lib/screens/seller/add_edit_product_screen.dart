@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:printing/printing.dart';
 import '../../constants/app_constants.dart';
 import '../../constants/seller_theme_constants.dart';
 import '../../exceptions/shoe_model_upload_exception.dart';
 import '../../models/product_models.dart';
 import '../../services/product_service.dart';
 import '../../services/shoe_model_upload_service.dart';
+import '../../utils/barcode_label_pdf.dart';
 import '../../utils/fit_spec_form.dart';
 import '../../utils/product_audience.dart';
 import '../../utils/shoe_model_upload.dart';
+import '../../widgets/seller/in_store_barcode_label.dart';
 import '../../widgets/shoe_model_report_card.dart';
 import '../../widgets/sole_card.dart';
 import '../../widgets/sole_text_field.dart';
@@ -61,7 +65,10 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
       widget.productService ?? ProductService.instance;
   final _imagePicker = ImagePicker();
 
-  final _barcodeController = TextEditingController();
+  /// The product's barcode, assigned by the system — never typed by the
+  /// seller. `null` on a new product (or a codeless one) means the service
+  /// picks a fresh in-store code at save time.
+  String? _existingBarcode;
   final _salePriceController = TextEditingController();
 
   // "3D & fit" — the four numbers a customer's fit verdict is computed from
@@ -185,7 +192,8 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
     _nameController.text = p['name'] ?? '';
     _priceController.text = (p['price'] ?? '').toString();
     _descController.text = p['description'] ?? '';
-    _barcodeController.text = p['barcode'] ?? '';
+    final storedBarcode = p['barcode']?.toString().trim() ?? '';
+    _existingBarcode = storedBarcode.isEmpty ? null : storedBarcode;
     _category = p['category'] ?? 'Casual';
     // Unrecognised or absent → null ("Not set"), never a guessed audience.
     _audience = productAudienceFrom(p['audience']?.toString());
@@ -289,7 +297,6 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
     _nameController.dispose();
     _priceController.dispose();
     _descController.dispose();
-    _barcodeController.dispose();
     _salePriceController.dispose();
     super.dispose();
   }
@@ -1532,7 +1539,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
           colors: _colors,
           isActive: _isActive,
           isFeatured: _isFeatured,
-          barcode: _barcodeController.text,
+          barcode: _existingBarcode,
           salePrice: salePrice,
           saleStartsAt: _saleStartsAt,
           saleEndsAt: _saleEndsAt,
@@ -1576,7 +1583,7 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
           colors: _colors,
           isActive: _isActive,
           isFeatured: _isFeatured,
-          barcode: _barcodeController.text,
+          barcode: _existingBarcode,
           salePrice: salePrice,
           saleStartsAt: _saleStartsAt,
           saleEndsAt: _saleEndsAt,
@@ -2288,30 +2295,80 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
 
   // ── Barcode ──
 
+  /// Sends the label PDF to the system print dialog (which also offers
+  /// save/share as PDF and a copies count for printing a sticker run).
+  Future<void> _printBarcodeLabel(String code) async {
+    try {
+      await Printing.layoutPdf(
+        onLayout: (_) => buildBarcodeLabelPdf(
+          productName: _nameController.text,
+          barcode: code,
+        ),
+        name: 'barcode-$code.pdf',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      final message = e.toString().replaceFirst('Exception: ', '');
+      _showSnackBar('Could not open print preview: $message', isError: true);
+    }
+  }
+
   Widget _buildBarcodeSection() {
+    final code = _existingBarcode;
     return _formCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SoleTextField(
-            labelText: 'Barcode (optional)',
-            hintText: 'e.g. EAN-13, UPC-A, or QR code value',
-            controller: _barcodeController,
-            validator: (val) {
-              if (val != null && val.length > 50) {
-                return 'Barcode must be under 50 characters';
-              }
-              return null;
-            },
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Barcode',
+                  style: AppConstants.bodyStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+              if (code != null && code.isNotEmpty) ...[
+                IconButton(
+                  tooltip: 'Copy barcode',
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: code));
+                    _showSnackBar('Barcode copied.');
+                  },
+                  icon: const Icon(Icons.copy, size: 20),
+                ),
+                IconButton(
+                  tooltip: 'Print label',
+                  onPressed: () => _printBarcodeLabel(code),
+                  icon: const Icon(Icons.print, size: 20),
+                ),
+              ],
+            ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            'Scanned at POS for quick product lookup.',
-            style: AppConstants.bodyStyle(
-              fontSize: 12,
-              color: AppConstants.secondary.withValues(alpha: 0.5),
+          const SizedBox(height: 6),
+          if (code != null && code.isNotEmpty) ...[
+            InStoreBarcodeLabel(code: code),
+            const SizedBox(height: 8),
+            Text(
+              'Assigned automatically by the system — scannable at POS. '
+              'In-store 200–299 range, not a registered retail code.',
+              style: AppConstants.bodyStyle(
+                fontSize: 12,
+                color: AppConstants.secondary.withValues(alpha: 0.5),
+              ),
             ),
-          ),
+          ] else ...[
+            Text(
+              'No barcode yet — the system assigns one automatically '
+              'when you save this product.',
+              style: AppConstants.bodyStyle(
+                fontSize: 12,
+                color: AppConstants.secondary.withValues(alpha: 0.6),
+              ),
+            ),
+          ],
         ],
       ),
     );

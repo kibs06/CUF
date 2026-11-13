@@ -139,6 +139,35 @@ void main() {
       );
     });
   });
+
+  group('the header carries the barcode label on the name row', () {
+    test('a barcode icon sits beside the name and opens the label dialog', () {
+      final source = sheet();
+      expect(
+        source,
+        contains('_showBarcodeLabel(ctx, product)'),
+        reason: 'the icon on the name row must open the scannable label '
+            'dialog (preview + print + copy)',
+      );
+    });
+
+    test('the icon only shows once the system has assigned a code', () {
+      final source = sheet();
+      final gate = source.indexOf("product['barcode']");
+      expect(
+        gate,
+        isNot(-1),
+        reason: 'the header must read the product barcode to decide whether '
+            'the icon shows — a codeless product has no label to open',
+      );
+      expect(
+        source.substring(gate),
+        contains('_showBarcodeLabel(ctx, product)'),
+        reason: 'the barcode read must guard the icon, so the dialog can '
+            'never open on an empty code',
+      );
+    });
+  });
 }
 
 /// The text from [start] up to [end] — used to assert *where* something is

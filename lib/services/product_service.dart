@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/product_models.dart';
 import '../utils/fit_engine.dart';
+import '../utils/in_store_barcode.dart';
 import '../utils/product_audience.dart';
 import 'seller_notification_service.dart';
 
@@ -43,6 +44,13 @@ class ProductService {
   }) async {
     final sellerId = _client.auth.currentUser!.id;
 
+    // Barcodes are system-picked: a missing value is auto-assigned here so
+    // every product leaves creation with a scannable code.
+    final resolvedBarcode = await _resolveBarcodeForSave(
+      barcode: barcode,
+      storeId: storeId,
+    );
+
     // 1. Insert product row
     final product = await _client
         .from('products')
@@ -56,7 +64,8 @@ class ProductService {
           'tags': tags,
           'is_active': isActive,
           'is_featured': isFeatured,
-          if (barcode != null && barcode.isNotEmpty) 'barcode': barcode.trim(),
+          if (resolvedBarcode != null && resolvedBarcode.isNotEmpty)
+            'barcode': resolvedBarcode,
           // Sale fields — `price` stays the ORIGINAL price; sale_price is
           // the discounted price (active-sale rules live in sale_price.dart).
           'sale_price': ?salePrice,
@@ -166,6 +175,17 @@ class ProductService {
   }) async {
     final sellerId = _client.auth.currentUser!.id;
 
+    // Barcodes are system-picked: a product saved without one is assigned a
+    // fresh code here, so re-saving a codeless product backfills it.
+    final storeId = await getSellerStoreId();
+    final resolvedBarcode = storeId == null
+        ? (barcode?.trim().isNotEmpty == true ? barcode!.trim() : null)
+        : await _resolveBarcodeForSave(
+            barcode: barcode,
+            storeId: storeId,
+            excludeProductId: productId,
+          );
+
     // 1. Update product row
     //    Sale fields are ALWAYS sent (null clears an existing sale) so the
     //    form can start/stop a sale by editing those fields. `audience`
@@ -182,7 +202,7 @@ class ProductService {
           'tags': tags,
           'is_active': isActive,
           'is_featured': isFeatured,
-          'barcode': (barcode != null && barcode.isNotEmpty) ? barcode.trim() : null,
+          'barcode': resolvedBarcode,
           'sale_price': salePrice,
           'sale_starts_at': saleStartsAt?.toIso8601String(),
           'sale_ends_at': saleEndsAt?.toIso8601String(),
@@ -378,6 +398,56 @@ class ProductService {
         .eq('store_id', storeId)
         .order('created_at', ascending: false);
     return List<Map<String, dynamic>>.from(data);
+  }
+
+  /// Generates a valid in-store EAN-13 barcode that no other product in this
+  /// seller's store is using (retries on the rare random collision).
+  ///
+  /// Pass the product being edited as [excludeProductId] so re-saving it does
+  /// not conflict with itself.
+  Future<String> generateUniqueInStoreBarcode({
+    String? excludeProductId,
+    String? storeId,
+    int maxAttempts = 25,
+  }) async {
+    final resolvedStoreId = storeId ?? await getSellerStoreId();
+    if (resolvedStoreId == null) {
+      throw Exception('No store is linked to this seller account.');
+    }
+    for (var attempt = 0; attempt < maxAttempts; attempt++) {
+      final candidate = generateInStoreBarcode(storeSeed: resolvedStoreId);
+      final query = _client
+          .from('products')
+          .select('id')
+          .eq('store_id', resolvedStoreId)
+          .eq('barcode', candidate);
+      if (excludeProductId != null && excludeProductId.isNotEmpty) {
+        query.neq('id', excludeProductId);
+      }
+      final conflict = await query.maybeSingle();
+      if (conflict == null) return candidate;
+    }
+    throw Exception(
+      'Could not generate a unique barcode — please try again.',
+    );
+  }
+
+  /// The barcode a product row should be saved with: the seller's value when
+  /// one was stated, otherwise a freshly generated system code.
+  ///
+  /// Barcode assignment is automatic — no caller is expected to invent codes.
+  /// `null`/empty in means a system-picked in-store EAN-13 out.
+  Future<String?> _resolveBarcodeForSave({
+    String? barcode,
+    required String storeId,
+    String? excludeProductId,
+  }) async {
+    final trimmed = barcode?.trim() ?? '';
+    if (trimmed.isNotEmpty) return trimmed;
+    return generateUniqueInStoreBarcode(
+      storeId: storeId,
+      excludeProductId: excludeProductId,
+    );
   }
 
   /// Get a single product with all its relations.

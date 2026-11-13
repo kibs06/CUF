@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -248,7 +249,34 @@ class _POSScreenState extends State<POSScreen>
     }
   }
 
+  /// Camera-permission gate shared by the search-bar scan button and the
+  /// order-panel scan button — the same request-first pattern the
+  /// foot-measure flow uses. The scanner screen is only pushed once the
+  /// OS has granted access, so it can never land on its dead-end
+  /// "permission denied" view on a first tap.
   void _openBarcodeScanner() async {
+    final status = await Permission.camera.request();
+    if (!mounted) return;
+    if (!status.isGranted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            'Camera access is needed to scan product barcodes.',
+          ),
+          backgroundColor: AppConstants.error,
+          duration: const Duration(seconds: 4),
+          action: status.isPermanentlyDenied
+              ? SnackBarAction(
+                  label: 'Settings',
+                  textColor: Colors.white,
+                  onPressed: openAppSettings,
+                )
+              : null,
+        ),
+      );
+      return;
+    }
+
     final barcode = await Navigator.of(context).push<String>(
       MaterialPageRoute(builder: (_) => const PosBarcodeScanner()),
     );
@@ -749,7 +777,7 @@ class _POSScreenState extends State<POSScreen>
                     backgroundColor: WidgetStateProperty.resolveWith(
                       (states) => states.contains(WidgetState.selected)
                           ? AppConstants.primary
-                          : Colors.white,
+                          : SellerTheme.card,
                     ),
                     foregroundColor: WidgetStateProperty.resolveWith(
                       (states) => states.contains(WidgetState.selected)
@@ -2101,7 +2129,7 @@ class _CheckoutSheetState extends State<_CheckoutSheet> {
                           backgroundColor: WidgetStateProperty.resolveWith(
                             (states) => states.contains(WidgetState.selected)
                                 ? AppConstants.primary
-                                : Colors.white,
+                                : SellerTheme.card,
                           ),
                           foregroundColor: WidgetStateProperty.resolveWith(
                             (states) {

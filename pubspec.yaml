@@ -107,6 +107,9 @@ dependencies:
   wheel_picker: ^0.4.0
   webview_flutter: ^4.10.0
   restart_app: ^1.10.2
+  file_saver: ^0.4.0
+  pdf: ^3.13.1
+  printing: ^5.15.1
 dev_dependencies:
   flutter_test:
     sdk: flutter
