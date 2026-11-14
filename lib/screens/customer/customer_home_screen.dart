@@ -363,6 +363,47 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         .toSet()
         .length;
 
+    // The On Sale grid only reads as a section on the whole catalog — under
+    // a category filter the feed is a slice of it, so a sale shelf above a
+    // narrowed grid would read as a second feed. Same gate as the curated
+    // sections around it.
+    final showOnSaleSection =
+        saleProducts.isNotEmpty && isBrowsingWholeCatalog;
+
+    // ── Lazily-built box sections, in feed order ──
+    //
+    // Factories, not widgets: the SliverList below only invokes the ones near
+    // the viewport (plus the 250px cache lead), so an offscreen section's
+    // subtree — and its image fetches — doesn't exist until the customer
+    // scrolls toward it. The browse gate lives here once instead of once per
+    // section: a personal or curated shelf above a category filter would be
+    // a second, unrelated feed.
+    //
+    // - InYourSize: the customer's saved size driving the catalog, in the
+    //   catalog's own 2-column grid. Renders itself away with no size on
+    //   file or nothing stocking it.
+    // - AudienceSections: Men's / Women's / Kids' side by side, one 2x2
+    //   image-only block each — doors to their shelves, not a second
+    //   catalog.
+    // - BestSellers: the live `units_sold` rail; hidden until the catalog
+    //   has real sales history (see `kBestSellersRailEnabled`).
+    final List<WidgetBuilder> lazyBoxSections = [
+      if (isBrowsingWholeCatalog) (_) => const InYourSizeSection(),
+      if (isBrowsingWholeCatalog) (_) => const AudienceSections(),
+      if (showBestSellers)
+        (context) => Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            BestSellersSection(
+              onSeeAll: () => context
+                  .read<ProductProvider>()
+                  .selectCategory(kBestSellersCategory),
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+    ];
+
     return Scaffold(
       backgroundColor: AppConstants.surfaceLight,
       // No AppBar — the HomeHero provides its own icon row that bleeds
@@ -395,6 +436,10 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 SliverToBoxAdapter(
                   child: HomeHero(
                     cartCount: cartCount,
+                    // Park the banner auto-advance once this scrolls out of
+                    // view — an offscreen full-bleed page animation every 4s
+                    // is pure raster work the customer never sees.
+                    autoScrollEnabled: _isHeroVisible,
                     onSearchTap: _openSearchScreen,
                     // The audience chips leave the feed for that shelf's own
                     // listing page, rather than narrowing this one — the same
@@ -416,7 +461,15 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                   ),
                 ),
 
-                // ── Sheet (overlaps hero bottom, rounded top corners) ──
+                // ── Sheet top (above the fold: rounded corners + reminder) ──
+                // The sheet used to be one giant Column holding the whole
+                // feed, so every card widget — and every image fetch — was
+                // created on the first frame. Each section below is now its
+                // own lazily-built sliver instead: a section's subtree (and
+                // its images) only exists once the customer scrolls toward
+                // it. Order, gaps and visuals are unchanged — the scaffold
+                // behind these slivers is the same `surfaceLight` the sheet
+                // used to paint, so the seam is invisible.
                 SliverToBoxAdapter(
                   child: ClipRRect(
                     borderRadius: const BorderRadius.vertical(
@@ -433,35 +486,19 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                             padding: EdgeInsets.fromLTRB(20, 4, 20, 8),
                             child: CustomerFootProfileBanner(),
                           ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
 
-                          // ── Based on your size (conditional, personal) ──
-                          // The customer's saved size, driving the catalog —
-                          // rendered in the catalog's own 2-column grid. It
-                          // renders itself away when there is no size on file
-                          // or nothing stocks it, so only the browse gate
-                          // below belongs here — same gate as On Sale / Best
-                          // Sellers, since a personal shelf above a category
-                          // filter would be a second, unrelated feed.
-                          if (productProvider.selectedCategory == null ||
-                              productProvider.selectedCategory == 'All')
-                            const InYourSizeSection(),
-
-                          // ── Men's / Women's / Kids' (conditional) ──
-                          // One row, side by side, in the fixed order
-                          // `productRailAudiences` fixes — the row, its order and
-                          // the `unisex` exclusion all belong to
-                          // `AudienceSections`, so this screen decides only
-                          // *whether* the section belongs on the feed. Each
-                          // audience gets a column of four image-only tiles, every
-                          // one of them opening that audience's whole shelf, and a
-                          // column appears only for an audience the catalog
-                          // actually holds something for — which is the normal
-                          // case for Kids' until the P4 backfill. Same browse gate
-                          // as the sections around it: a curated grid above a
-                          // category filter would read as a second feed.
-                          if (productProvider.selectedCategory == null ||
-                              productProvider.selectedCategory == 'All')
-                            const AudienceSections(),
+                // ── Curated box sections (lazy — see `lazyBoxSections`) ──
+                if (lazyBoxSections.isNotEmpty)
+                  SliverList.builder(
+                    itemCount: lazyBoxSections.length,
+                    itemBuilder: (context, index) =>
+                        lazyBoxSections[index](context),
+                  ),
 
                           // ── On Sale section ──
                           // The heading IS the section's grid now: the poster
@@ -472,14 +509,12 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                           // the section's name at poster scale, and the live
                           // figure it carries is the badge the row used to
                           // only decorate.
-                          if (saleProducts.isNotEmpty &&
-                              (productProvider.selectedCategory == null ||
-                                  productProvider.selectedCategory ==
-                                      'All')) ...[
-                            Padding(
+                          if (showOnSaleSection) ...[
+                            SliverPadding(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: AppConstants.feedMargin,
                               ),
+                              sliver: SliverGrid.builder(
                               // NOTE: deliberately a plain GridView, NOT masonry.
                               // This section's cards are uniform by design (no
                               // `imageAspectRatio`, the image fills the cell), which
@@ -492,9 +527,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                               // — "Based on your size" above is one, and
                               // `test/widgets/nested_masonry_scroll_test.dart` now
                               // pins that the feed still reaches its last card.)
-                              child: GridView.builder(
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
                                 gridDelegate:
                                     const SliverGridDelegateWithFixedCrossAxisCount(
                                       crossAxisCount: 2,
@@ -553,17 +585,9 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                                 },
                               ),
                             ),
-                            const SizedBox(height: 16),
-                          ],
-
-                          // ── Best Sellers rail ──
-                          if (showBestSellers) ...[
-                            BestSellersSection(
-                              onSeeAll: () => context
-                                  .read<ProductProvider>()
-                                  .selectCategory(kBestSellersCategory),
+                            const SliverToBoxAdapter(
+                              child: SizedBox(height: 16),
                             ),
-                            const SizedBox(height: 16),
                           ],
 
                           // The catalog's own lead. Every section above owns its
@@ -572,16 +596,19 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                           // than one of those sections — with nothing of its own
                           // in front, it opened a single trailing gap under the
                           // On Sale section and read as flush against it.
-                          const SizedBox(
-                            height: AppConstants.catalogLeadGap,
+                          const SliverToBoxAdapter(
+                            child: SizedBox(
+                              height: AppConstants.catalogLeadGap,
+                            ),
                           ),
 
                           // ── Sync status (quiet) ──
                           // A cached feed refreshing in the background — or
                           // serving cache offline — says so in one small row
                           // instead of flashing a shimmer over real products.
-                          // Renders nothing in the steady state.
-                          const _SyncStatusRow(),
+                          // Renders nothing in the steady state. Cheap (no
+                          // images), so it stays eager.
+                          const SliverToBoxAdapter(child: _SyncStatusRow()),
 
                           // ── The Workshop Collection ──
                           // The heading IS the collection's grid now: the poster
@@ -601,69 +628,87 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                           if (productProvider.isLoading ||
                               allProducts.isEmpty ||
                               filteredProducts.isEmpty) ...[
-                            _standalonePoster(productProvider),
-                            const SizedBox(
-                              height: AppConstants.productGridGutter,
+                            SliverToBoxAdapter(
+                              child: _standalonePoster(productProvider),
+                            ),
+                            const SliverToBoxAdapter(
+                              child: SizedBox(
+                                height: AppConstants.productGridGutter,
+                              ),
                             ),
                           ],
 
                           // ── Product grid ──
+                          // A real sliver now (not a shrink-wrapped box grid):
+                          // cells are built as the viewport approaches them, so
+                          // a 100-product catalog no longer builds 100 cards —
+                          // and fires 100 image fetches — on the first frame.
                           if (productProvider.isLoading)
-                            ConnectivityService.instance.isOnline
-                                ? const _CatalogSkeletonGrid()
-                                : NoInternetView(
-                                    onRetry: () => Provider.of<ProductProvider>(
-                                      context,
-                                      listen: false,
-                                    ).loadFirstPage(hideOutOfStock: true),
-                                  )
+                            SliverToBoxAdapter(
+                              child:
+                                  ConnectivityService.instance.isOnline
+                                      ? const _CatalogSkeletonGrid()
+                                      : NoInternetView(
+                                          onRetry: () =>
+                                              Provider.of<ProductProvider>(
+                                                context,
+                                                listen: false,
+                                              ).loadFirstPage(
+                                                hideOutOfStock: true,
+                                              ),
+                                        ),
+                            )
                           else if (allProducts.isEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 48),
-                              child: Column(
-                                children: [
-                                  Icon(
-                                    Icons.search_off,
-                                    size: 48,
-                                    color: AppConstants.primary.withValues(
-                                      alpha: 0.5,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  Text(
-                                    'No shoes match your criteria.',
-                                    style: AppConstants.bodyStyle(
-                                      color: AppConstants.secondary.withValues(
-                                        alpha: 0.6,
+                            SliverToBoxAdapter(
+                              child: Padding(
+                                padding: const EdgeInsets.only(top: 48),
+                                child: Column(
+                                  children: [
+                                    Icon(
+                                      Icons.search_off,
+                                      size: 48,
+                                      color: AppConstants.primary.withValues(
+                                        alpha: 0.5,
                                       ),
                                     ),
-                                  ),
-                                ],
+                                    const SizedBox(height: 12),
+                                    Text(
+                                      'No shoes match your criteria.',
+                                      style: AppConstants.bodyStyle(
+                                        color: AppConstants.secondary
+                                            .withValues(alpha: 0.6),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             )
                           else if (filteredProducts.isEmpty)
-                            _EmptyCategoryView(
-                              onBrowseAll: () => context
-                                  .read<ProductProvider>()
-                                  .selectCategory('All'),
+                            SliverToBoxAdapter(
+                              child: _EmptyCategoryView(
+                                onBrowseAll: () => context
+                                    .read<ProductProvider>()
+                                    .selectCategory('All'),
+                              ),
                             )
                           else
-                            MasonryGridView.count(
-                              key: _catalogKey,
-                              crossAxisCount: 2,
-                              crossAxisSpacing: AppConstants.productGridGutter,
-                              mainAxisSpacing: AppConstants.productGridGutter,
+                            SliverPadding(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: AppConstants.feedMargin,
                               ),
-                              physics: const NeverScrollableScrollPhysics(),
-                              shrinkWrap: true,
+                              sliver: SliverMasonryGrid.count(
+                                key: _catalogKey,
+                                crossAxisCount: 2,
+                                crossAxisSpacing:
+                                    AppConstants.productGridGutter,
+                                mainAxisSpacing:
+                                    AppConstants.productGridGutter,
                               // +1: the poster is the grid's first cell, so the
                               // collection opens on its own name with the first
                               // product beside it.
                               // +1: the poster is the grid's first cell; +1 more
                               // while the quiet append loader is showing.
-                              itemCount: filteredProducts.length + 1 + (showMoreLoader ? 1 : 0),
+                              childCount: filteredProducts.length + 1 + (showMoreLoader ? 1 : 0),
                               itemBuilder: (context, index) {
                                 if (index == 0) {
                                   return _workshopPoster(productProvider);
@@ -693,21 +738,21 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                                 );
                               },
                             ),
+                          ),
 
                           // ── Catalog end-cap — the feed's finish line ──
                           if (showCatalogEndCap)
-                            CatalogEndCap(
-                              productCount: allProducts.length,
-                              storeCount: workshopCount,
+                            SliverToBoxAdapter(
+                              child: CatalogEndCap(
+                                productCount: allProducts.length,
+                                storeCount: workshopCount,
+                              ),
                             ),
 
                           // Bottom spacing for nav bar
-                          const SizedBox(height: 100),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
+                          const SliverToBoxAdapter(
+                            child: SizedBox(height: 100),
+                          ),
               ],
             ),
           ),

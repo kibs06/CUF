@@ -22,6 +22,7 @@ class HomeHero extends StatefulWidget {
     this.cartCount = 0,
     this.onSearchTap,
     this.onAudienceTap,
+    this.autoScrollEnabled = true,
   });
 
   /// Called when the cart icon is tapped.
@@ -47,6 +48,16 @@ class HomeHero extends StatefulWidget {
   /// [onCartTap] and [onSearchTap] are: this widget renders the hero, the screen
   /// that hosts it owns where taps go.
   final ValueChanged<String>? onAudienceTap;
+
+  /// Whether the banner carousel advances on its own.
+  ///
+  /// The host screen drives this from scroll position: once the hero scrolls
+  /// out of view the 4s auto-advance timer is parked instead of animating an
+  /// offscreen full-bleed image (and re-running a 600ms page animation every
+  /// cycle while the customer is deep in the grid). Scrolling back up
+  /// resumes it. Defaults to true so the hero behaves as before wherever
+  /// the flag is not wired.
+  final bool autoScrollEnabled;
 
   @override
   State<HomeHero> createState() => _HomeHeroState();
@@ -81,6 +92,7 @@ class _HomeHeroState extends State<HomeHero> {
   Timer? _bannerTimer;
   int _bannerIndex = 0;
   bool _isUserDragging = false;
+  int _displayCount = 0;
 
   @override
   void initState() {
@@ -95,10 +107,37 @@ class _HomeHeroState extends State<HomeHero> {
     super.dispose();
   }
 
-  /// Start or restart the auto-scroll timer.
-  void _startAutoScroll(int bannerCount) {
+  @override
+  void didUpdateWidget(covariant HomeHero oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // The host parks the carousel once it scrolls out of view (and resumes
+    // it on the way back up) — see [HomeHero.autoScrollEnabled].
+    if (oldWidget.autoScrollEnabled != widget.autoScrollEnabled) {
+      if (widget.autoScrollEnabled) {
+        _ensureAutoScroll(_displayCount);
+      } else {
+        _bannerTimer?.cancel();
+        _bannerTimer = null;
+      }
+    }
+  }
+
+  /// Restart the auto-scroll timer (a page just changed, so the 4s window
+  /// starts over from this page).
+  void _restartAutoScroll(int bannerCount) {
     _bannerTimer?.cancel();
+    _bannerTimer = null;
+    _ensureAutoScroll(bannerCount);
+  }
+
+  /// Start the auto-scroll timer unless it is already running, unwanted, or
+  /// has nothing to advance. The build path uses this (not a restart) so an
+  /// unrelated rebuild — a banner refresh, a category tap — never resets the
+  /// 4s window or churns the timer.
+  void _ensureAutoScroll(int bannerCount) {
+    if (!widget.autoScrollEnabled) return;
     if (bannerCount <= 1) return;
+    if (_bannerTimer?.isActive ?? false) return;
     _bannerTimer = Timer.periodic(const Duration(seconds: 4), (_) {
       if (!_bannerController.hasClients || _isUserDragging) return;
       final next = (_bannerIndex + 1) % bannerCount;
@@ -188,11 +227,23 @@ class _HomeHeroState extends State<HomeHero> {
     final isDefault = bannerCount == 0 && !isLoading;
     final displayCount = activeBanners.length;
 
-    // Start auto-scroll when banners are available.
+    // Keep auto-scroll running while the hero is on screen (and parked once
+    // it scrolls out of view — see [HomeHero.autoScrollEnabled]). Ensures
+    // rather than restarts, so unrelated rebuilds never reset the 4s window.
+    _displayCount = displayCount;
     if (displayCount > 1) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _startAutoScroll(displayCount);
+        if (!mounted) return;
+        if (widget.autoScrollEnabled) {
+          _ensureAutoScroll(displayCount);
+        } else {
+          _bannerTimer?.cancel();
+          _bannerTimer = null;
+        }
       });
+    } else {
+      _bannerTimer?.cancel();
+      _bannerTimer = null;
     }
 
     // Clamp page index if banners changed.
@@ -331,7 +382,7 @@ class _HomeHeroState extends State<HomeHero> {
         itemCount: banners.length,
         onPageChanged: (index) {
           setState(() => _bannerIndex = index);
-          _startAutoScroll(banners.length);
+          _restartAutoScroll(banners.length);
         },
         itemBuilder: (context, index) {
           final banner = banners[index];
@@ -413,7 +464,7 @@ class _HomeHeroState extends State<HomeHero> {
     Future.delayed(const Duration(seconds: 4), () {
       if (mounted) {
         _isUserDragging = false;
-        _startAutoScroll(count);
+        _restartAutoScroll(count);
       }
     });
   }
