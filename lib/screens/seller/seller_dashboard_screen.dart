@@ -839,36 +839,35 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        // Low Stock / Bulk Reservations — two equal cards
+        // Pickup Reservations / Bulk Reservations — two equal cards
         // across. IntrinsicHeight + stretch keeps all three the same height
         // even when a label wraps to two lines at this width.
         IntrinsicHeight(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Low Stock — the dot and the words agree with the number:
-              // rust + "Needs restock" when something is low, sage +
-              // "All stocked up" when the shelf is healthy, so the state is
-              // never carried by colour alone.
+              // Pickup Reservations — the live FREE pickup holds (ANQUI
+              // item 14), already off the shelf and waiting at the counter.
+              // Same state-agreement as Bulk Reservations: amber +
+              // "Awaiting pickup" when holds need eyes, sage + "Nothing
+              // on hold" when the counter is clear.
               Expanded(
                 child: SellerMetricCard(
-                  label: 'LOW STOCK',
-                  value: '${data.lowStockCount}',
-                  subtitle: data.lowStockCount > 0
-                      ? 'Needs restock'
-                      : 'All stocked up',
-                  valueColor: data.lowStockCount > 0
-                      ? SellerTheme.rust
+                  label: 'PICKUP RESERVATIONS',
+                  value: '${data.activePickups}',
+                  subtitle: data.activePickups > 0
+                      ? 'Awaiting pickup'
+                      : 'Nothing on hold',
+                  valueColor: data.activePickups > 0
+                      ? SellerTheme.amberDark
                       : SellerTheme.sage,
-                  dotColor: data.lowStockCount > 0
-                      ? SellerTheme.rust
+                  dotColor: data.activePickups > 0
+                      ? SellerTheme.amberDark
                       : SellerTheme.sage,
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (_) => const ManageProductsScreen(
-                          initialFilter: 'Low Stock',
-                        ),
+                        builder: (_) => const PickupReservationsScreen(),
                       ),
                     );
                   },

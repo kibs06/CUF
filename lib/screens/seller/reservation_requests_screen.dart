@@ -18,22 +18,12 @@ class ReservationRequestsScreen extends StatefulWidget {
       _ReservationRequestsScreenState();
 }
 
-/// The queue's status groups, in the same order the Orders tab uses: the
-/// everything view first, then the group the seller has to act on, then the
-/// live holds, then the closed ones.
-const List<String> _tabs = ['All', 'Pending', 'Active', 'Resolved'];
-
-/// The filter keys behind [_tabs], index for index — a tab index *is* a filter,
-/// so the tab bar and the list can never disagree about what "Active" means.
-const List<String> _tabFilters = ['all', 'pending', 'active', 'resolved'];
-
 /// "Action needed" amber (amber-700) — the deposit gate's colour, on the status
 /// chip, the deposit line and the verify action alike, so one state keeps one
 /// colour wherever it appears on the card.
 const Color _depositAmber = Color(0xFFB45309);
 
-class _ReservationRequestsScreenState extends State<ReservationRequestsScreen>
-    with SingleTickerProviderStateMixin {
+class _ReservationRequestsScreenState extends State<ReservationRequestsScreen> {
   final _service = ReservationService.instance;
   final _storeService = StoreService.instance;
   List<BulkReservation>? _items;
@@ -41,26 +31,11 @@ class _ReservationRequestsScreenState extends State<ReservationRequestsScreen>
   String? _error;
   String _filter = 'all'; // all | pending | active (live holds) | resolved
   bool _busy = false;
-  late final TabController _tabController;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: _tabs.length, vsync: this);
-    // Same wiring as the Orders tab: the list follows the tab once the
-    // indicator has settled, so a mid-flight drag never re-filters the list.
-    _tabController.addListener(() {
-      if (!_tabController.indexIsChanging) {
-        setState(() => _filter = _tabFilters[_tabController.index]);
-      }
-    });
     _load();
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
   }
 
   Future<void> _load() async {
@@ -139,22 +114,6 @@ class _ReservationRequestsScreenState extends State<ReservationRequestsScreen>
       default:
         return 'When a reseller asks to hold stock in bulk, the request '
             'lands here for your approval.';
-    }
-  }
-
-  /// Badge colour per group, the way Orders colours its tab counts: the colour
-  /// names the state being counted (amber = the seller's move, sage = a live
-  /// hold) rather than decorating the number.
-  Color _tabCountColor(String filter) {
-    switch (filter) {
-      case 'pending':
-        return SellerTheme.amber;
-      case 'active':
-        return SellerTheme.sage;
-      case 'resolved':
-        return AppConstants.primary;
-      default:
-        return AppConstants.secondary;
     }
   }
 
@@ -407,154 +366,141 @@ class _ReservationRequestsScreenState extends State<ReservationRequestsScreen>
       backgroundColor: AppConstants.surfaceLight,
       appBar: AppBar(
         title: Text('Bulk Reservations',
-            style: AppConstants.headlineStyle(fontSize: 17)),
-        backgroundColor: AppConstants.surfaceLight,
-        surfaceTintColor: Colors.white,
+            style: AppConstants.headlineStyle(fontSize: 18)),
+        backgroundColor: Colors.transparent,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh, size: 20),
+            onPressed: _busy ? null : _load,
+            tooltip: 'Refresh',
+          ),
+        ],
       ),
-      body: Column(
+      body: Stack(
         children: [
-          // Status groups — the same scrollable tab bar, with the same count
-          // badges, as the seller's Orders tab, so the two queues read as one
-          // screen family.
-          Container(
-            color: AppConstants.surfaceLight,
-            child: TabBar(
-              controller: _tabController,
-              isScrollable: true,
-              // Four short labels fit most phones, and M3's scrollable default
-              // (TabAlignment.startOffset) parks them 52px from the left edge,
-              // which reads as a mis-aligned row. Centre them instead; when a
-              // device is too narrow the row still scrolls from the start.
-              tabAlignment: TabAlignment.center,
-              labelColor: AppConstants.secondary,
-              unselectedLabelColor: Colors.grey.shade500,
-              indicatorColor: AppConstants.accent,
-              indicatorSize: TabBarIndicatorSize.label,
-              labelStyle: AppConstants.bodyStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
+          AppConstants.noiseOverlay(opacity: 0.03),
+          _buildBody(filtered),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBody(List<BulkReservation> filtered) {
+    if (_error != null && _items == null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _error!,
+                textAlign: TextAlign.center,
+                style: AppConstants.bodyStyle(fontSize: 13),
               ),
-              unselectedLabelStyle: AppConstants.bodyStyle(fontSize: 12),
-              tabs: [
-                for (var i = 0; i < _tabs.length; i++)
-                  Tab(
-                    child: Row(
+              const SizedBox(height: 12),
+              TextButton(onPressed: _load, child: const Text('Retry')),
+            ],
+          ),
+        ),
+      );
+    }
+    if (_items == null) {
+      return const Center(
+        child: CircularProgressIndicator(color: AppConstants.primary),
+      );
+    }
+
+    return Column(
+      children: [
+        // Status groups — the same pill filters as the pickup queue, with the
+        // count in the label, so the two queues read as one screen family.
+        SizedBox(
+          height: 44,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            children: [
+              _filterChip('all', 'All (${_countFor('all')})'),
+              _filterChip('pending', 'Pending (${_countFor('pending')})'),
+              _filterChip('active', 'Active (${_countFor('active')})'),
+              _filterChip('resolved', 'Resolved (${_countFor('resolved')})'),
+            ],
+          ),
+        ),
+        Expanded(
+          child: filtered.isEmpty
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(28),
+                    child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(_tabs[i]),
-                        if (_countFor(_tabFilters[i]) > 0) ...[
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: _tabCountColor(_tabFilters[i])
-                                  .withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Text(
-                              '${_countFor(_tabFilters[i])}',
-                              style: AppConstants.monoStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: _tabCountColor(_tabFilters[i]),
-                              ),
-                            ),
-                          ),
-                        ],
+                        Text(
+                          _emptyTitle,
+                          textAlign: TextAlign.center,
+                          style: AppConstants.headlineStyle(fontSize: 15),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          _emptyHint,
+                          textAlign: TextAlign.center,
+                          style: AppConstants.bodyStyle(
+                              fontSize: 13,
+                              color: AppConstants.secondary),
+                        ),
                       ],
                     ),
                   ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: _items == null
-                ? Center(
-                    child: _error != null
-                        ? Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(_error!,
-                                  style:
-                                      AppConstants.bodyStyle(fontSize: 13)),
-                              const SizedBox(height: 12),
-                              TextButton(
-                                  onPressed: _load,
-                                  child: const Text('Retry')),
-                            ],
-                          )
-                        : const CircularProgressIndicator(
-                            color: AppConstants.primary,
-                          ),
-                  )
-                : RefreshIndicator(
-                    onRefresh: _load,
-                    child: filtered.isEmpty
-                        ? ListView(
-                            padding: const EdgeInsets.symmetric(horizontal: 32),
-                            children: [
-                              const SizedBox(height: 120),
-                              // Decorative beside the title below — hidden
-                              // from screen readers so the state is announced
-                              // once instead of twice.
-                              ExcludeSemantics(
-                                child: Icon(Icons.inventory_2_outlined,
-                                    size: 56,
-                                    color: AppConstants.secondary
-                                        .withValues(alpha: 0.3)),
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                _emptyTitle,
-                                textAlign: TextAlign.center,
-                                style: AppConstants.headlineStyle(fontSize: 15),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                _emptyHint,
-                                textAlign: TextAlign.center,
-                                style: AppConstants.bodyStyle(
-                                    fontSize: 13,
-                                    color: AppConstants.secondary),
-                              ),
-                              const SizedBox(height: 16),
-                              Center(
-                                child: TextButton.icon(
-                                  onPressed: _load,
-                                  icon: const Icon(Icons.refresh, size: 18),
-                                  label: const Text('Check again'),
-                                ),
-                              ),
-                            ],
-                          )
-                        : ListView.separated(
-                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                            itemCount: filtered.length,
-                            separatorBuilder: (_, _) =>
-                                const SizedBox(height: 12),
-                            itemBuilder: (context, i) => _SellerReservationTile(
-                              reservation: filtered[i],
-                              busy: _busy,
-                              onApprove: () =>
-                                  _decide(filtered[i], approve: true),
-                              onReject: () =>
-                                  _decide(filtered[i], approve: false),
-                              onFulfill: () => _fulfill(filtered[i]),
-                              onVerifyDeposit: () =>
-                                  DepositProofReviewSheet.show(
-                                context,
-                                reservation: filtered[i],
-                                onResolved: _load,
-                              ),
-                            ),
-                          ),
+                )
+              : RefreshIndicator(
+                  color: AppConstants.primary,
+                  onRefresh: _load,
+                  child: ListView.separated(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                    itemCount: filtered.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 12),
+                    itemBuilder: (context, i) => _SellerReservationTile(
+                      reservation: filtered[i],
+                      busy: _busy,
+                      onApprove: () => _decide(filtered[i], approve: true),
+                      onReject: () => _decide(filtered[i], approve: false),
+                      onFulfill: () => _fulfill(filtered[i]),
+                      onVerifyDeposit: () => DepositProofReviewSheet.show(
+                        context,
+                        reservation: filtered[i],
+                        onResolved: _load,
+                      ),
+                    ),
                   ),
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _filterChip(String value, String label) {
+    final selected = _filter == value;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: ChoiceChip(
+        selected: selected,
+        onSelected: (_) => setState(() => _filter = value),
+        label: Text(
+          label,
+          style: AppConstants.bodyStyle(
+            fontSize: 12,
+            fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+            color: selected ? AppConstants.surfaceLight : AppConstants.secondary,
           ),
-        ],
+        ),
+        backgroundColor: AppConstants.surfaceLight,
+        selectedColor: AppConstants.primary,
+        side: BorderSide(
+          color: AppConstants.borderGray.withValues(alpha: 0.7),
+        ),
       ),
     );
   }
