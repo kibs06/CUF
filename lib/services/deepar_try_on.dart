@@ -101,6 +101,11 @@ const Map<String, String> kDeepArBundledEffects = {
   // ids were never recorded.
   'classic-red-double-buckle-comfort-sandals':
       'assets/effects/classic_red_double_buckle_comfort_sandals.deepar',
+  // Classic Black Leather Lace-Up Dress Shoes, same shape: slug for
+  // shared links plus the product-name fallback below for rows whose
+  // ids were never recorded.
+  'classic-black-leather-lace-up-dress-shoes':
+      'assets/effects/classic_black_leather_lace_up_dress_shoes.deepar',
 };
 
 /// Normalizes a product name to its effect slug: lowercase, non-alphanumerics
@@ -225,6 +230,17 @@ bool _isClassicRedName(String name) {
       slug.contains('buckle');
 }
 
+/// Whether a product name is the Classic Black Leather Lace-Up Dress Shoes
+/// pair. Same reason as Classic Red: the effect was handed over as a file
+/// for a named product, so the name is the stable key until a row id is
+/// recorded.
+bool _isClassicBlackName(String name) {
+  final slug = deepArSlugForName(name);
+  return slug.contains('classic') &&
+      slug.contains('black') &&
+      slug.contains('lace');
+}
+
 /// Resolves the `.deepar` effect path for a product.
 ///
 /// `productName` is the escape hatch for effects filed by product name rather
@@ -279,6 +295,9 @@ String? deepArEffectForProduct(
   }
   if (_isClassicRedName(name)) {
     return kDeepArBundledEffects['classic-red-double-buckle-comfort-sandals'];
+  }
+  if (_isClassicBlackName(name)) {
+    return kDeepArBundledEffects['classic-black-leather-lace-up-dress-shoes'];
   }
   final slugHit = kDeepArBundledEffects[deepArSlugForName(name)];
   return slugHit;

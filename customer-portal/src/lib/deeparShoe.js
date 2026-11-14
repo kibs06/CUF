@@ -93,6 +93,11 @@ export function deepArEffectForProduct(productId) {
   if (id === 'classic-red-double-buckle-comfort-sandals') {
     return '/effects/classic_red_double_buckle_comfort_sandals.deepar'
   }
+  // Classic Black Leather Lace-Up Dress Shoes, same shape: slug for
+  // shared links, row ids through the product-name fallback below.
+  if (id === 'classic-black-leather-lace-up-dress-shoes') {
+    return '/effects/classic_black_leather_lace_up_dress_shoes.deepar'
+  }
   return null
 }
 
@@ -143,6 +148,13 @@ export function deepArEffectForProductName(name) {
     slug.includes('buckle')
   ) {
     return '/effects/classic_red_double_buckle_comfort_sandals.deepar'
+  }
+  if (
+    slug.includes('classic') &&
+    slug.includes('black') &&
+    slug.includes('lace')
+  ) {
+    return '/effects/classic_black_leather_lace_up_dress_shoes.deepar'
   }
   return deepArEffectForProduct(slug)
 }

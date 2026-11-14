@@ -198,6 +198,9 @@ flutter:
     # Classic Red Double-Buckle Comfort Sandals (Studio export, filed by
     # product name).
     - assets/effects/classic_red_double_buckle_comfort_sandals.deepar
+    # Classic Black Leather Lace-Up Dress Shoes (Studio export, filed by
+    # product name).
+    - assets/effects/classic_black_leather_lace_up_dress_shoes.deepar
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
