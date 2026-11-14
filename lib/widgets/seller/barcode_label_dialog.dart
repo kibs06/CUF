@@ -285,8 +285,8 @@ class _LegacyCodeCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        // Legacy barcode card matches the printed white label.
+        color: Colors.white, // legacy barcode card stays white to match printed label
         border: Border.all(
           color: AppConstants.borderGray.withValues(alpha: 0.5),
         ),

@@ -222,6 +222,11 @@ const Set<String> _allowedFills = {
   // Shimmer.fromColors uses the child purely as an alpha mask, so this colour
   // is never painted; the seller shimmer palette supplies the visible tone.
   'child: Container(color: Colors.white),',
+  // Printable barcode paper must stay pure white so the EAN symbol stays
+  // scannable in print/share, even on the cream theme.
+  'printable barcode paper stays white for scannability',
+  // Legacy code card matches the printed white label.
+  'legacy barcode card stays white to match printed label',
 };
 
 /// Walks backwards from [index] to the parenthesis that encloses it and

@@ -113,7 +113,8 @@ class InStoreBarcodeLabel extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
         decoration: BoxDecoration(
-          color: Colors.white,
+          // Printable barcode paper must stay pure white to stay scannable.
+          color: Colors.white, // printable barcode paper stays white for scannability
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: AppConstants.borderGray.withValues(alpha: 0.5),
