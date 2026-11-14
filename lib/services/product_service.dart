@@ -450,6 +450,22 @@ class ProductService {
     );
   }
 
+  /// Replaces a product's barcode with a freshly generated system code.
+  ///
+  /// Repair path for legacy seller-entered codes that are not valid EAN-13
+  /// (no scannable preview, nothing to print or share): the caller generates
+  /// via [generateUniqueInStoreBarcode] and writes it through here, so the
+  /// fix is one column, never a full product re-save.
+  Future<void> updateProductBarcode({
+    required String productId,
+    required String barcode,
+  }) async {
+    await _client
+        .from('products')
+        .update({'barcode': barcode.trim()})
+        .eq('id', productId);
+  }
+
   /// Get a single product with all its relations.
   Future<Map<String, dynamic>> getProduct(String productId) async {
     return await _client

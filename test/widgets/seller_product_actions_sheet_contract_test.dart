@@ -147,7 +147,7 @@ void main() {
         source,
         contains('_showBarcodeLabel(ctx, product)'),
         reason: 'the icon on the name row must open the scannable label '
-            'dialog (preview + print + copy)',
+            'dialog (preview + copy + share + print)',
       );
     });
 

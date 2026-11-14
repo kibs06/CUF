@@ -21,6 +21,83 @@ class SalesService {
     );
   }
 
+  // ─── QUERY SAFETY HELPERS ─────────────────────────────────────
+
+  /// PostgREST `in` lists ride in the request URL — an unbounded id list
+  /// risks HTTP 414s (or silent server-side truncation), which would drop
+  /// revenue without a trace. Every `inFilter` call below goes through
+  /// here so large stores stay correct.
+  static const int inFilterChunkSize = 200;
+
+  Future<List<dynamic>> _selectByIdChunks(
+    List<dynamic> ids,
+    Future<List<dynamic>> Function(List<dynamic> chunk) run,
+  ) async {
+    final rows = <dynamic>[];
+    for (var i = 0; i < ids.length; i += inFilterChunkSize) {
+      final end = (i + inFilterChunkSize).clamp(0, ids.length);
+      rows.addAll(await run(ids.sublist(i, end)));
+    }
+    return rows;
+  }
+
+  /// Sale-date range predicate: a row counts when its handover
+  /// (`delivered_at`) falls in [start, end); legacy rows with NULL
+  /// `delivered_at` count on `created_at` instead — mirroring [_saleDate].
+  /// A plain `.gte('delivered_at', …)` filter silently drops the legacy
+  /// rows, so every sale-date filter below goes through here.
+  static String saleRangeFilter(DateTime start, DateTime end) {
+    final s = start.toIso8601String();
+    final e = end.toIso8601String();
+    return 'and(delivered_at.gte.$s,delivered_at.lt.$e),'
+        'and(delivered_at.is.null,created_at.gte.$s,created_at.lt.$e)';
+  }
+
+  /// Open-ended variant of [saleRangeFilter] for "since" queries.
+  static String saleSinceFilter(DateTime start) {
+    final s = start.toIso8601String();
+    return 'delivered_at.gte.$s,and(delivered_at.is.null,created_at.gte.$s)';
+  }
+
+  /// Fold helper shared by the previous-period totals.
+  static double _sumAmounts(List rows) => rows.fold<double>(
+        0,
+        (s, r) => s + (((r as Map)['total_amount'] as num?)?.toDouble() ?? 0),
+      );
+
+  // ─── LIGHT CACHE ──────────────────────────────────────────────
+  // Short-TTL memo for the expensive report/trend queries: the dashboard
+  // and Reports screens each fan out to ~10 queries, and tab switches /
+  // pull-to-refresh would otherwise re-run all of them every time.
+  // Service instances are created per call (`SalesService()`), so the
+  // cache is static. The TTL is deliberately short — sales data must
+  // stay near-live.
+  static const Duration salesCacheTtl = Duration(minutes: 2);
+  static final Map<String, _SalesCacheEntry> _salesCache = {};
+
+  static String _cacheKey(String method, List<Object?> parts) =>
+      '$method:${parts.map((p) => p.toString()).join('|')}';
+
+  T? _readCache<T>(String key) {
+    final entry = _salesCache[key];
+    if (entry == null) return null;
+    if (DateTime.now().difference(entry.storedAt) > salesCacheTtl) {
+      _salesCache.remove(key);
+      return null;
+    }
+    return entry.value as T?;
+  }
+
+  void _writeCache(String key, Object value) {
+    _salesCache.removeWhere(
+      (k, e) => DateTime.now().difference(e.storedAt) > salesCacheTtl,
+    );
+    _salesCache[key] = _SalesCacheEntry(value, DateTime.now());
+  }
+
+  /// Test hook: drop all cached sales results.
+  static void clearSalesCache() => _salesCache.clear();
+
   /// Helper: get order IDs for a store via products → order_items chain.
   Future<List<dynamic>> _getOrderIds(String storeId) async {
     final productRows = await _client
@@ -126,43 +203,47 @@ class SalesService {
         .eq('store_id', storeId)
         .eq('source', 'pos')
         .neq('status', 'cancelled');
-    return (data as List).map((r) => (r as Map)['id']).toList();
+    return data.map((r) => (r as Map)['id']).toList();
   }
 
   Future<double> fetchTodaySales(String storeId) async {
     final now = DateTime.now();
-    final start = DateTime(now.year, now.month, now.day).toIso8601String();
+    final start = DateTime(now.year, now.month, now.day);
     final posOrderIds = await _getPosOrderIds(storeId);
     if (posOrderIds.isEmpty) return 0;
 
-    final data = await _client
-        .from('orders')
-        .select('total_amount')
-        .inFilter('id', posOrderIds)
-        .eq('payment_status', 'paid')
-        .gte('delivered_at', start);
+    final data = await _selectByIdChunks(posOrderIds, (chunk) async {
+      final rows = await _client
+          .from('orders')
+          .select('total_amount')
+          .inFilter('id', chunk)
+          .eq('payment_status', 'paid')
+          .or(saleSinceFilter(start));
+      return List<dynamic>.from(rows as List);
+    });
 
-    return (data as List).fold<double>(
+    return data.fold<double>(
       0,
       (sum, row) => sum + ((row['total_amount'] as num?)?.toDouble() ?? 0),
     );
   }
 
   Future<List<Map<String, dynamic>>> fetchWeeklySales(String storeId) async {
-    final from = DateTime.now()
-        .subtract(const Duration(days: 6))
-        .toIso8601String();
+    final from = DateTime.now().subtract(const Duration(days: 6));
     final posOrderIds = await _getPosOrderIds(storeId);
     if (posOrderIds.isEmpty) return [];
 
-    final data = await _client
-        .from('orders')
-        .select('total_amount, delivered_at, created_at')
-        .inFilter('id', posOrderIds)
-        .eq('payment_status', 'paid')
-        .gte('delivered_at', from)
-        .order('delivered_at');
-    return (data as List)
+    final data = await _selectByIdChunks(posOrderIds, (chunk) async {
+      final rows = await _client
+          .from('orders')
+          .select('total_amount, delivered_at, created_at')
+          .inFilter('id', chunk)
+          .eq('payment_status', 'paid')
+          .or(saleSinceFilter(from))
+          .order('delivered_at');
+      return List<dynamic>.from(rows as List);
+    });
+    return data
         .map((row) => Map<String, dynamic>.from(row as Map))
         .toList();
   }
@@ -180,7 +261,7 @@ class SalesService {
     if (to != null) query = query.lte('created_at', to.toIso8601String());
     // Filters before .order()
     final data = await query.order('created_at', ascending: false);
-    return (data as List)
+    return data
         .map((row) => Map<String, dynamic>.from(row as Map))
         .toList();
   }
@@ -189,21 +270,23 @@ class SalesService {
 
   Future<double> getOnlineTodayRevenue(String storeId) async {
     final now = DateTime.now();
-    final startOfDay = DateTime(now.year, now.month, now.day)
-        .toIso8601String();
+    final startOfDay = DateTime(now.year, now.month, now.day);
 
     final orderIds = await _getOrderIds(storeId);
     if (orderIds.isEmpty) return 0;
 
-    final data = await _client
-        .from('orders')
-        .select('total_amount')
-        .inFilter('id', orderIds)
-        .neq('status', 'cancelled')
-        .eq('payment_status', 'paid')
-        .gte('delivered_at', startOfDay);
+    final data = await _selectByIdChunks(orderIds, (chunk) async {
+      final rows = await _client
+          .from('orders')
+          .select('total_amount')
+          .inFilter('id', chunk)
+          .neq('status', 'cancelled')
+          .eq('payment_status', 'paid')
+          .or(saleSinceFilter(startOfDay));
+      return List<dynamic>.from(rows as List);
+    });
 
-    return (data as List).fold<double>(
+    return data.fold<double>(
       0,
       (sum, row) => sum + ((row['total_amount'] as num?)?.toDouble() ?? 0),
     );
@@ -225,16 +308,19 @@ class SalesService {
     if (orderIds.isEmpty) return [];
 
     // Filters before .order()
-    final data = await _client
-        .from('orders')
-        .select('total_amount, delivered_at, created_at')
-        .inFilter('id', orderIds)
-        .neq('status', 'cancelled')
-        .eq('payment_status', 'paid')
-        .gte('delivered_at', sevenDaysAgo.toIso8601String())
-        .order('delivered_at');
+    final data = await _selectByIdChunks(orderIds, (chunk) async {
+      final rows = await _client
+          .from('orders')
+          .select('total_amount, delivered_at, created_at')
+          .inFilter('id', chunk)
+          .neq('status', 'cancelled')
+          .eq('payment_status', 'paid')
+          .or(saleSinceFilter(sevenDaysAgo))
+          .order('delivered_at');
+      return List<dynamic>.from(rows as List);
+    });
 
-    return (data as List)
+    return data
         .map((row) => Map<String, dynamic>.from(row as Map))
         .toList();
   }
@@ -273,7 +359,7 @@ class SalesService {
 
   Future<double> getMonthlyRevenue(String storeId) async {
     final now = DateTime.now();
-    final startOfMonth = DateTime(now.year, now.month, 1).toIso8601String();
+    final startOfMonth = DateTime(now.year, now.month, 1);
     final orderIds = await _getOrderIds(storeId);
 
     // Revenue definition (consistent app-wide): exclude cancelled orders,
@@ -281,42 +367,36 @@ class SalesService {
     // each sale on its handover date (`delivered_at`), not on placement.
     // POS now reads the LIVE orders.source='pos' path — the legacy
     // sales_transactions table is no longer written by the POS screen.
-    final futures = <Future<List>>[
-      _client
-          .from('orders')
-          .select('total_amount')
-          .eq('store_id', storeId)
-          .eq('source', 'pos')
-          .neq('status', 'cancelled')
-          .eq('payment_status', 'paid')
-          .gte('delivered_at', startOfMonth)
-          .then((d) => List.from(d as List)),
-    ];
+    final onlineFuture = orderIds.isEmpty
+        ? Future.value(<dynamic>[])
+        : _selectByIdChunks(orderIds, (chunk) async {
+            final rows = await _client
+                .from('orders')
+                .select('total_amount')
+                .inFilter('id', chunk)
+                .neq('status', 'cancelled')
+                .eq('payment_status', 'paid')
+                .or(saleSinceFilter(startOfMonth));
+            return List<dynamic>.from(rows as List);
+          });
+    final posFuture = _client
+        .from('orders')
+        .select('total_amount')
+        .eq('store_id', storeId)
+        .eq('source', 'pos')
+        .neq('status', 'cancelled')
+        .eq('payment_status', 'paid')
+        .or(saleSinceFilter(startOfMonth))
+        .then((d) => List.from(d as List));
 
-    if (orderIds.isNotEmpty) {
-      futures.insert(
-        0,
-        _client
-            .from('orders')
-            .select('total_amount')
-            .inFilter('id', orderIds)
-            .neq('status', 'cancelled')
-            .eq('payment_status', 'paid')
-            .gte('delivered_at', startOfMonth)
-            .then((d) => List.from(d as List)),
-      );
-    } else {
-      futures.insert(0, Future.value([]));
-    }
-
-    final results = await Future.wait(futures);
+    final results = await Future.wait([onlineFuture, posFuture]);
 
     double total = 0;
     for (final row in results[0]) {
-      total += ((row['total_amount'] as num?)?.toDouble() ?? 0);
+      total += (((row as Map)['total_amount'] as num?)?.toDouble() ?? 0);
     }
     for (final row in results[1]) {
-      total += ((row['total_amount'] as num?)?.toDouble() ?? 0);
+      total += (((row as Map)['total_amount'] as num?)?.toDouble() ?? 0);
     }
     return total;
   }
@@ -338,15 +418,18 @@ class SalesService {
     final orderIds = await _getOrderIds(storeId);
     if (orderIds.isEmpty) return List<double>.filled(6, 0);
 
-    final rows = await _client
-        .from('orders')
-        .select('total_amount, delivered_at, created_at')
-        .inFilter('id', orderIds)
-        .neq('status', 'cancelled')
-        .eq('payment_status', 'paid')
-        .gte('delivered_at', sixMonthsAgo.toIso8601String());
+    final rows = await _selectByIdChunks(orderIds, (chunk) async {
+      final chunkRows = await _client
+          .from('orders')
+          .select('total_amount, delivered_at, created_at')
+          .inFilter('id', chunk)
+          .neq('status', 'cancelled')
+          .eq('payment_status', 'paid')
+          .or(saleSinceFilter(sixMonthsAgo));
+      return List<dynamic>.from(chunkRows as List);
+    });
 
-    return _aggregateMonthly(rows as List, now);
+    return _aggregateMonthly(rows, now);
   }
 
   /// POS-only monthly revenue trend (6 months).
@@ -356,14 +439,17 @@ class SalesService {
     final posOrderIds = await _getPosOrderIds(storeId);
     if (posOrderIds.isEmpty) return List<double>.filled(6, 0);
 
-    final rows = await _client
-        .from('orders')
-        .select('total_amount, delivered_at, created_at')
-        .inFilter('id', posOrderIds)
-        .eq('payment_status', 'paid')
-        .gte('delivered_at', sixMonthsAgo.toIso8601String());
+    final rows = await _selectByIdChunks(posOrderIds, (chunk) async {
+      final chunkRows = await _client
+          .from('orders')
+          .select('total_amount, delivered_at, created_at')
+          .inFilter('id', chunk)
+          .eq('payment_status', 'paid')
+          .or(saleSinceFilter(sixMonthsAgo));
+      return List<dynamic>.from(chunkRows as List);
+    });
 
-    return _aggregateMonthly(rows as List, now);
+    return _aggregateMonthly(rows, now);
   }
 
   /// Shared helper: aggregate rows into a 6-month revenue list.
@@ -425,75 +511,79 @@ class SalesService {
     final start = weekStart ??
         DateTime(now.year, now.month, now.day - (now.weekday - 1));
     final end = weekEnd ?? start.add(const Duration(days: 7));
-    final startStr = start.toIso8601String();
-    final endStr = end.toIso8601String();
 
     // Compute previous period range
     final duration = end.difference(start);
     final prevStart = start.subtract(duration);
     final prevEnd = start;
-    final prevStartStr = prevStart.toIso8601String();
-    final prevEndStr = prevEnd.toIso8601String();
+
+    final cacheKey = _cacheKey('weeklyReport', [
+      storeId,
+      start.toIso8601String(),
+      end.toIso8601String(),
+      monthly,
+    ]);
+    final cached = _readCache<SellerReportData>(cacheKey);
+    if (cached != null) return cached;
 
     // Fetch online orders in range (via products→order_items chain)
     final orderIds = await _getOrderIds(storeId);
-    final futures = <Future<List>>[
-      orderIds.isNotEmpty
-          ? _client
-              .from('orders')
-              .select('id, total_amount, delivered_at, created_at')
-              .inFilter('id', orderIds)
-              .neq('status', 'cancelled')
-              .eq('payment_status', 'paid')
-              .gte('delivered_at', startStr)
-              .lt('delivered_at', endStr)
-              .then((d) => List.from(d as List))
-          : Future.value([]),
-      // POS orders in range — LIVE path (orders WHERE source='pos').
-      // The legacy sales_transactions table is no longer written by the
-      // POS screen, so reading it here silently dropped all POS revenue.
-      _client
+    final rangeFilter = saleRangeFilter(start, end);
+    Future<List<dynamic>> fetchOnlineCurrent(List<dynamic> chunk) async {
+      final rows = await _client
           .from('orders')
           .select('id, total_amount, delivered_at, created_at')
-          .eq('store_id', storeId)
-          .eq('source', 'pos')
+          .inFilter('id', chunk)
           .neq('status', 'cancelled')
           .eq('payment_status', 'paid')
-          .gte('delivered_at', startStr)
-          .lt('delivered_at', endStr)
-          .then((d) => List.from(d as List)),
-    ];
+          .or(rangeFilter);
+      return List<dynamic>.from(rows as List);
+    }
 
-    // Fetch previous period totals (online + POS) in parallel
-    final prevFutures = <Future<double>>[
-      orderIds.isNotEmpty
-          ? _client
-              .from('orders')
-              .select('total_amount')
-              .inFilter('id', orderIds)
-              .neq('status', 'cancelled')
-              .eq('payment_status', 'paid')
-              .gte('delivered_at', prevStartStr)
-              .lt('delivered_at', prevEndStr)
-              .then((d) => (d as List).fold<double>(0, (s, r) => s + ((r['total_amount'] as num?)?.toDouble() ?? 0)))
-          : Future.value(0.0),
-      _client
-          .from('orders')
-          .select('total_amount')
-          .eq('store_id', storeId)
-          .eq('source', 'pos')
-          .neq('status', 'cancelled')
-          .eq('payment_status', 'paid')
-          .gte('delivered_at', prevStartStr)
-          .lt('delivered_at', prevEndStr)
-          .then((d) => (d as List).fold<double>(0, (s, r) => s + ((r['total_amount'] as num?)?.toDouble() ?? 0))),
-    ];
+    final onlineFuture = orderIds.isEmpty
+        ? Future.value(<dynamic>[])
+        : _selectByIdChunks(orderIds, fetchOnlineCurrent);
+    // POS orders in range — LIVE path (orders WHERE source='pos').
+    // The legacy sales_transactions table is no longer written by the
+    // POS screen, so reading it here silently dropped all POS revenue.
+    final posFuture = _client
+        .from('orders')
+        .select('id, total_amount, delivered_at, created_at')
+        .eq('store_id', storeId)
+        .eq('source', 'pos')
+        .neq('status', 'cancelled')
+        .eq('payment_status', 'paid')
+        .or(rangeFilter)
+        .then((d) => List.from(d as List));
 
-    final results = await Future.wait(futures);
-    final prevResults = await Future.wait(prevFutures);
+    final results = await Future.wait([onlineFuture, posFuture]);
     final onlineOrders = results[0];
     final posTransactions = results[1];
-    final previousPeriodTotal = prevResults[0] + prevResults[1];
+
+    // Fetch previous period totals (online + POS)
+    final prevRangeFilter = saleRangeFilter(prevStart, prevEnd);
+    final prevOnlineRows = orderIds.isEmpty
+        ? <dynamic>[]
+        : await _selectByIdChunks(orderIds, (chunk) async {
+            final rows = await _client
+                .from('orders')
+                .select('total_amount')
+                .inFilter('id', chunk)
+                .neq('status', 'cancelled')
+                .eq('payment_status', 'paid')
+                .or(prevRangeFilter);
+            return List<dynamic>.from(rows as List);
+          });
+    final prevPosRows = await _client
+        .from('orders')
+        .select('total_amount')
+        .eq('store_id', storeId)
+        .eq('source', 'pos')
+        .neq('status', 'cancelled')
+        .eq('payment_status', 'paid')
+        .or(prevRangeFilter);
+    final previousPeriodTotal =
+        _sumAmounts(prevOnlineRows) + _sumAmounts(prevPosRows as List);
 
     // Aggregate daily revenue
     // Weekly: 7 slots indexed by weekday (Mon=0 Sun=6)
@@ -539,13 +629,19 @@ class SalesService {
     // Fetch online order items
     if (onlineOrders.isNotEmpty) {
       final onlineOrderIds = onlineOrders
-          .map((o) => o['id'])
+          .map((o) => (o as Map)['id'])
           .toList();
-      final onlineItems = await _client
-          .from('order_items')
-          .select('product_id, quantity, unit_price')
-          .inFilter('order_id', onlineOrderIds);
-      for (final item in onlineItems as List) {
+      final onlineItems = await _selectByIdChunks(
+        onlineOrderIds,
+        (chunk) async {
+          final rows = await _client
+              .from('order_items')
+              .select('product_id, quantity, unit_price')
+              .inFilter('order_id', chunk);
+          return List<dynamic>.from(rows as List);
+        },
+      );
+      for (final item in onlineItems) {
         addItem(
           item['product_id'] as String,
           (item['quantity'] as num?)?.toInt() ?? 0,
@@ -558,13 +654,16 @@ class SalesService {
     // sales_transaction_items table is legacy and no longer written).
     if (posTransactions.isNotEmpty) {
       final posTxIds = posTransactions
-          .map((t) => t['id'])
+          .map((t) => (t as Map)['id'])
           .toList();
-      final posItems = await _client
-          .from('order_items')
-          .select('product_id, quantity, unit_price')
-          .inFilter('order_id', posTxIds);
-      for (final item in posItems as List) {
+      final posItems = await _selectByIdChunks(posTxIds, (chunk) async {
+        final rows = await _client
+            .from('order_items')
+            .select('product_id, quantity, unit_price')
+            .inFilter('order_id', chunk);
+        return List<dynamic>.from(rows as List);
+      });
+      for (final item in posItems) {
         addItem(
           item['product_id'] as String,
           (item['quantity'] as num?)?.toInt() ?? 0,
@@ -600,7 +699,7 @@ class SalesService {
           .toList();
     }
 
-    return SellerReportData(
+    final report = SellerReportData(
       weeklyTotal: weeklyTotal,
       previousPeriodTotal: previousPeriodTotal,
       dailyRevenue: dailyRevenue,
@@ -608,30 +707,38 @@ class SalesService {
       weekStart: start,
       weekEnd: end,
     );
+    _writeCache(cacheKey, report);
+    return report;
   }
 
   Future<int> getTotalOrderCount(String storeId) async {
     final orderIds = await _getOrderIds(storeId);
     if (orderIds.isEmpty) return 0;
 
-    final data = await _client
-        .from('orders')
-        .select('id')
-        .inFilter('id', orderIds)
-        .neq('status', 'cancelled');
-    return (data as List).length;
+    final data = await _selectByIdChunks(orderIds, (chunk) async {
+      final rows = await _client
+          .from('orders')
+          .select('id')
+          .inFilter('id', chunk)
+          .neq('status', 'cancelled');
+      return List<dynamic>.from(rows as List);
+    });
+    return data.length;
   }
 
   Future<int> getPendingOrderCount(String storeId) async {
     final orderIds = await _getOrderIds(storeId);
     if (orderIds.isEmpty) return 0;
 
-    final data = await _client
-        .from('orders')
-        .select('id')
-        .inFilter('id', orderIds)
-        .inFilter('status', ['placed', 'preparing']);
-    return (data as List).length;
+    final data = await _selectByIdChunks(orderIds, (chunk) async {
+      final rows = await _client
+          .from('orders')
+          .select('id')
+          .inFilter('id', chunk)
+          .inFilter('status', ['placed', 'preparing']);
+      return List<dynamic>.from(rows as List);
+    });
+    return data.length;
   }
 
   // ─── TREND DATA (for dashboard charts) ────────────────────────
@@ -651,7 +758,15 @@ class SalesService {
     final prevStart = start.subtract(const Duration(days: 7));
     final prevEnd = start;
 
-    return _fetchTrend(
+    final cacheKey = _cacheKey('weeklyTrend', [
+      storeId,
+      channel.name,
+      weekStart?.toIso8601String() ?? 'auto',
+    ]);
+    final cached = _readCache<SalesTrendResult>(cacheKey);
+    if (cached != null) return cached;
+
+    final result = await _fetchTrend(
       storeId: storeId,
       channel: channel,
       start: start,
@@ -663,6 +778,8 @@ class SalesService {
       labelBuilder: (i) => ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i],
       periodLabel: 'This Week',
     );
+    _writeCache(cacheKey, result);
+    return result;
   }
 
   /// Fetches monthly revenue for the last 6 months, combined online + POS.
@@ -679,7 +796,15 @@ class SalesService {
     final prevStart = DateTime(now.year, now.month - (monthsBack * 2 - 1), 1);
     final prevEnd = start;
 
-    return _fetchTrend(
+    final cacheKey = _cacheKey('monthlyTrend', [
+      storeId,
+      channel.name,
+      monthsBack,
+    ]);
+    final cached = _readCache<SalesTrendResult>(cacheKey);
+    if (cached != null) return cached;
+
+    final result = await _fetchTrend(
       storeId: storeId,
       channel: channel,
       start: start,
@@ -711,6 +836,8 @@ class SalesService {
       },
       periodLabel: 'Last $monthsBack Months',
     );
+    _writeCache(cacheKey, result);
+    return result;
   }
 
   /// Internal: fetch trend data for any period.
@@ -728,28 +855,36 @@ class SalesService {
     required String periodLabel,
     DateTime Function(int)? pointDateBuilder,
   }) async {
-    final startStr = start.toIso8601String();
-    final endStr = end.toIso8601String();
-    final prevStartStr = prevStart.toIso8601String();
-    final prevEndStr = prevEnd.toIso8601String();
+    final rangeFilter = saleRangeFilter(start, end);
+    final prevRangeFilter = saleRangeFilter(prevStart, prevEnd);
 
     // Fetch current period data
     final orderIds = await _getOrderIds(storeId);
-    final futures = <Future<List>>[];
+    Future<List<dynamic>> fetchTrendOnline(List<dynamic> chunk, String columns, String range) async {
+      final rows = await _client
+          .from('orders')
+          .select(columns)
+          .inFilter('id', chunk)
+          .neq('status', 'cancelled')
+          .eq('payment_status', 'paid')
+          .or(range);
+      return List<dynamic>.from(rows as List);
+    }
+
+    final futures = <Future<List<dynamic>>>[];
 
     // Online orders
     if (channel != SalesChannelFilter.inStore && orderIds.isNotEmpty) {
-      futures.add(_client
-          .from('orders')
-          .select('total_amount, delivered_at, created_at')
-          .inFilter('id', orderIds)
-          .neq('status', 'cancelled')
-          .eq('payment_status', 'paid')
-          .gte('delivered_at', startStr)
-          .lt('delivered_at', endStr)
-          .then((d) => List.from(d as List)));
+      futures.add(_selectByIdChunks(
+        orderIds,
+        (chunk) => fetchTrendOnline(
+          chunk,
+          'total_amount, delivered_at, created_at',
+          rangeFilter,
+        ),
+      ));
     } else {
-      futures.add(Future.value([]));
+      futures.add(Future.value(<dynamic>[]));
     }
 
     // POS orders
@@ -761,27 +896,21 @@ class SalesService {
           .eq('source', 'pos')
           .neq('status', 'cancelled')
           .eq('payment_status', 'paid')
-          .gte('delivered_at', startStr)
-          .lt('delivered_at', endStr)
+          .or(rangeFilter)
           .then((d) => List.from(d as List)));
     } else {
-      futures.add(Future.value([]));
+      futures.add(Future.value(<dynamic>[]));
     }
 
     // Previous period data
-    final prevFutures = <Future<List>>[];
+    final prevFutures = <Future<List<dynamic>>>[];
     if (channel != SalesChannelFilter.inStore && orderIds.isNotEmpty) {
-      prevFutures.add(_client
-          .from('orders')
-          .select('total_amount')
-          .inFilter('id', orderIds)
-          .neq('status', 'cancelled')
-          .eq('payment_status', 'paid')
-          .gte('delivered_at', prevStartStr)
-          .lt('delivered_at', prevEndStr)
-          .then((d) => List.from(d as List)));
+      prevFutures.add(_selectByIdChunks(
+        orderIds,
+        (chunk) => fetchTrendOnline(chunk, 'total_amount', prevRangeFilter),
+      ));
     } else {
-      prevFutures.add(Future.value([]));
+      prevFutures.add(Future.value(<dynamic>[]));
     }
     if (channel != SalesChannelFilter.online) {
       prevFutures.add(_client
@@ -791,11 +920,10 @@ class SalesService {
           .eq('source', 'pos')
           .neq('status', 'cancelled')
           .eq('payment_status', 'paid')
-          .gte('delivered_at', prevStartStr)
-          .lt('delivered_at', prevEndStr)
+          .or(prevRangeFilter)
           .then((d) => List.from(d as List)));
     } else {
-      prevFutures.add(Future.value([]));
+      prevFutures.add(Future.value(<dynamic>[]));
     }
 
     final results = await Future.wait(futures);
@@ -864,4 +992,11 @@ class SalesService {
       periodLabel: periodLabel,
     );
   }
+}
+
+/// One cached sales result with its write time (drives the TTL eviction).
+class _SalesCacheEntry {
+  final Object value;
+  final DateTime storedAt;
+  const _SalesCacheEntry(this.value, this.storedAt);
 }

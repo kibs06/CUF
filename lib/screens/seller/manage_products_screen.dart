@@ -1,10 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
-import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../constants/app_constants.dart';
@@ -12,14 +10,13 @@ import '../../providers/product_provider.dart';
 import '../../services/connectivity_service.dart';
 import '../../services/product_service.dart';
 import '../../services/store_service.dart';
-import '../../utils/barcode_label_pdf.dart';
 import '../../utils/sale_price.dart';
 import '../../utils/product_grid_ratio.dart';
 import '../../utils/product_audience.dart';
 import '../../utils/model_notice.dart';
 import '../../widgets/active_tab.dart';
 import '../../widgets/shoe_model_request_tile.dart';
-import '../../widgets/seller/in_store_barcode_label.dart';
+import '../../widgets/seller/barcode_label_dialog.dart';
 import '../../widgets/seller/seller_inventory_row.dart';
 import 'add_edit_product_screen.dart';
 import 'create_store_screen.dart';
@@ -697,66 +694,25 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
     });
   }
 
-  /// Scannable label dialog for the product's system barcode — preview plus
-  /// copy and print, opened from the barcode icon beside the product name.
+  /// Scannable label dialog for the product's system barcode — the branded
+  /// [BarcodeLabelDialog] (preview plus copy, share and print), opened from
+  /// the barcode icon beside the product name.
   void _showBarcodeLabel(BuildContext sheetContext, Map<String, dynamic> product) {
     final code = '${product['barcode'] ?? ''}'.trim();
     if (code.isEmpty) return;
     final name = '${product['name'] ?? 'Product'}';
     showDialog(
       context: sheetContext,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppConstants.surfaceLight,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: Text(
-          name,
-          style: AppConstants.bodyStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.bold,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        content: InStoreBarcodeLabel(code: code),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Clipboard.setData(ClipboardData(text: code));
-              Navigator.of(ctx).pop();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Barcode copied.')),
-              );
-            },
-            child: const Text('Copy'),
-          ),
-          FilledButton.icon(
-            onPressed: () async {
-              Navigator.of(ctx).pop();
-              try {
-                await Printing.layoutPdf(
-                  onLayout: (_) => buildBarcodeLabelPdf(
-                    productName: name,
-                    barcode: code,
-                  ),
-                  name: 'barcode-$code.pdf',
-                );
-              } catch (e) {
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'Could not open print preview: ${e.toString().replaceFirst('Exception: ', '')}',
-                    ),
-                  ),
-                );
-              }
-            },
-            icon: const Icon(Icons.print, size: 18),
-            label: const Text('Print'),
-          ),
-        ],
+      builder: (ctx) => BarcodeLabelDialog(
+        productName: name,
+        code: code,
+        productId: '${product['id'] ?? ''}',
+        onCodeAssigned: (fresh) {
+          // The sheet and the grid behind it read this same map, so one
+          // write updates both without a full reload.
+          product['barcode'] = fresh;
+          setState(() {});
+        },
       ),
     );
   }

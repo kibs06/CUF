@@ -5,8 +5,9 @@ import 'package:flutter_test/flutter_test.dart';
 
 /// The dashboard's "Today's snapshot" row — three equal cards across. This
 /// mirrors `_buildMetricsGrid`'s layout and copy at a given device width so
-/// the narrow-cell behaviour stays guarded. Each card is a label plus its
-/// number: the explanatory line that used to sit under the number is gone.
+/// the narrow-cell behaviour stays guarded. Each card is a label, its number
+/// and a one-line state subtitle ("Needs restock" / "All stocked up") — the
+/// words carry the state so it is never colour-only.
 ///
 /// NOTE: widget tests render with the fallback test font (Ahem), whose glyphs
 /// are a full em wide — far wider than DM Sans. That makes it ideal for
@@ -90,4 +91,87 @@ void main() {
           reason: 'the row must stretch all three cards to the same height');
     });
   }
+
+  group('state signalling', () {
+    // The old cards always showed a rust dot — even at zero, both cards
+    // cried wolf with the same red dot. The dot must agree with the number.
+    testWidgets('the status dot defaults to rust', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: SellerMetricCard(label: 'LOW STOCK', value: '0'),
+          ),
+        ),
+      );
+
+      final dot = tester.widget<Container>(
+        find.byWidgetPredicate(
+          (w) =>
+              w is Container &&
+              w.decoration is BoxDecoration &&
+              (w.decoration! as BoxDecoration).shape == BoxShape.circle,
+        ),
+      );
+      expect(
+        (dot.decoration! as BoxDecoration).color,
+        SellerTheme.rust,
+      );
+    });
+
+    testWidgets('a clear queue gets a sage dot', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: SellerMetricCard(
+              label: 'LOW STOCK',
+              value: '0',
+              subtitle: 'All stocked up',
+              dotColor: SellerTheme.sage,
+            ),
+          ),
+        ),
+      );
+
+      final dot = tester.widget<Container>(
+        find.byWidgetPredicate(
+          (w) =>
+              w is Container &&
+              w.decoration is BoxDecoration &&
+              (w.decoration! as BoxDecoration).shape == BoxShape.circle,
+        ),
+      );
+      expect(
+        (dot.decoration! as BoxDecoration).color,
+        SellerTheme.sage,
+      );
+      expect(find.text('All stocked up'), findsOneWidget);
+    });
+
+    // A bare GestureDetector exposes nothing to TalkBack/VoiceOver (the
+    // documented Bad example) — the card must announce label, number and
+    // state as one, and only claim to be a button when it goes somewhere.
+    testWidgets('a tappable card announces its full state', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SellerMetricCard(
+              label: 'BULK RESERVATIONS',
+              value: '2',
+              subtitle: 'Awaiting approval',
+              onTap: () {},
+            ),
+          ),
+        ),
+      );
+
+      final semantics = tester.getSemantics(
+        find.byType(SellerMetricCard),
+      );
+      expect(
+        semantics.label,
+        'BULK RESERVATIONS, 2, Awaiting approval',
+      );
+      expect(semantics.flagsCollection.isButton, isTrue);
+    });
+  });
 }

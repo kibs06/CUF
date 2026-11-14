@@ -12,6 +12,13 @@ class SellerMetricCard extends StatelessWidget {
   /// resolves to [AppConstants.secondary] (the page ink), because it is drawn
   /// on a card surface and must follow the theme.
   final Color? valueColor;
+  /// The eyebrow status dot. Defaults to rust (the pre-state-era look) so
+  /// existing callers keep their appearance; the dashboard passes a
+  /// state-driven colour (rust/amber when action is needed, sage when the
+  /// queue is clear) so the dot agrees with the number instead of always
+  /// crying wolf. State is never colour-only — the subtitle below says the
+  /// same thing in words.
+  final Color dotColor;
   final Widget? trailing;
   final VoidCallback? onTap;
 
@@ -23,15 +30,27 @@ class SellerMetricCard extends StatelessWidget {
     this.subtitleColor,
     this.isLarge = false,
     this.valueColor,
+    this.dotColor = SellerTheme.rust,
     this.trailing,
     this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
+    // Screen readers get the whole state as one announcement — label,
+    // number and subtitle — because a bare GestureDetector exposes nothing
+    // (the documented Bad example). Only advertised as a button when the
+    // card actually goes somewhere.
+    final semanticsLabel = subtitle == null
+        ? '$label, $value'
+        : '$label, $value, $subtitle';
+    return Semantics(
+      button: onTap != null,
+      label: semanticsLabel,
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
         constraints: BoxConstraints(minHeight: isLarge ? 138 : 112),
         decoration: BoxDecoration(
           // Hero card gets a subtle gradient (`.card.hero` in the mockup).
@@ -66,8 +85,8 @@ class SellerMetricCard extends StatelessWidget {
                   child: Container(
                     width: 5,
                     height: 5,
-                    decoration: const BoxDecoration(
-                      color: SellerTheme.rust,
+                    decoration: BoxDecoration(
+                      color: dotColor,
                       shape: BoxShape.circle,
                     ),
                   ),
@@ -109,6 +128,7 @@ class SellerMetricCard extends StatelessWidget {
             ],
             ?trailing,
           ],
+        ),
         ),
       ),
     );

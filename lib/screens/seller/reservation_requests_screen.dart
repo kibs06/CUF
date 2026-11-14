@@ -108,6 +108,40 @@ class _ReservationRequestsScreenState extends State<ReservationRequestsScreen>
   int _countFor(String filter) =>
       (_items ?? const []).where((r) => _matches(r, filter)).length;
 
+  /// Empty-state copy per group. A bare "Nothing here" leaves the seller
+  /// guessing what belongs in the tab; each group instead names itself and
+  /// says what lands there, plus a way to re-check — the empty-state rule
+  /// (helpful message + action, never a blank screen).
+  String get _emptyTitle {
+    switch (_filter) {
+      case 'pending':
+        return 'Nothing waiting on you';
+      case 'active':
+        return 'No live holds right now';
+      case 'resolved':
+        return 'Nothing closed yet';
+      default:
+        return 'No reservation requests yet';
+    }
+  }
+
+  String get _emptyHint {
+    switch (_filter) {
+      case 'pending':
+        return 'New reseller requests appear here. Approving one asks the '
+            'customer for a 20% GCash deposit within 24 hours.';
+      case 'active':
+        return 'Approved reservations stay here — unpaid deposit windows and '
+            'paid holds — until pickup or expiry.';
+      case 'resolved':
+        return 'Declined, fulfilled and expired requests end up here for '
+            'your records.';
+      default:
+        return 'When a reseller asks to hold stock in bulk, the request '
+            'lands here for your approval.';
+    }
+  }
+
   /// Badge colour per group, the way Orders colours its tab counts: the colour
   /// names the state being counted (amber = the seller's move, sage = a live
   /// hold) rather than decorating the number.
@@ -461,20 +495,38 @@ class _ReservationRequestsScreenState extends State<ReservationRequestsScreen>
                     onRefresh: _load,
                     child: filtered.isEmpty
                         ? ListView(
+                            padding: const EdgeInsets.symmetric(horizontal: 32),
                             children: [
                               const SizedBox(height: 120),
-                              Icon(Icons.inventory_2_outlined,
-                                  size: 56,
-                                  color: AppConstants.secondary
-                                      .withValues(alpha: 0.3)),
+                              // Decorative beside the title below — hidden
+                              // from screen readers so the state is announced
+                              // once instead of twice.
+                              ExcludeSemantics(
+                                child: Icon(Icons.inventory_2_outlined,
+                                    size: 56,
+                                    color: AppConstants.secondary
+                                        .withValues(alpha: 0.3)),
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                _emptyTitle,
+                                textAlign: TextAlign.center,
+                                style: AppConstants.headlineStyle(fontSize: 15),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                _emptyHint,
+                                textAlign: TextAlign.center,
+                                style: AppConstants.bodyStyle(
+                                    fontSize: 13,
+                                    color: AppConstants.secondary),
+                              ),
                               const SizedBox(height: 16),
                               Center(
-                                child: Text(
-                                  _filter == 'all'
-                                      ? 'No reservation requests yet'
-                                      : 'Nothing here',
-                                  style: AppConstants.headlineStyle(
-                                      fontSize: 15),
+                                child: TextButton.icon(
+                                  onPressed: _load,
+                                  icon: const Icon(Icons.refresh, size: 18),
+                                  label: const Text('Check again'),
                                 ),
                               ),
                             ],

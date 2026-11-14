@@ -27,9 +27,6 @@ import '../../widgets/seller/seller_alert_chip.dart';
 import '../../widgets/seller/seller_order_card.dart';
 import 'reservation_requests_screen.dart';
 import 'store_reviews_screen.dart';
-import '../../models/sales_trend_data.dart';
-import '../../widgets/seller/seller_revenue_columns_chart.dart';
-import '../../widgets/seller/seller_revenue_doughnut.dart';
 import 'manage_orders_screen.dart';
 import 'manage_products_screen.dart';
 import 'order_detail_screen.dart';
@@ -51,9 +48,6 @@ class _DashboardData {
   // POS-only breakdowns
   final List<double> posWeeklyChart;
   final List<double> posMonthlyChart;
-  // Trend data for comparison
-  final SalesTrendResult? weeklyTrend;
-  final SalesTrendResult? monthlyTrend;
   final List<Map<String, dynamic>> recentOrders;
   final Map<String, int> ordersByStatus;
   final Map<String, dynamic>? store;
@@ -81,8 +75,6 @@ class _DashboardData {
     required this.onlineMonthlyChart,
     required this.posWeeklyChart,
     required this.posMonthlyChart,
-    this.weeklyTrend,
-    this.monthlyTrend,
     required this.recentOrders,
     required this.ordersByStatus,
     this.store,
@@ -261,7 +253,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
   }
 
   /// Timed wrapper so the exported diag log carries the real cost of the
-  /// whole 12-way fetch. See [PerfTrace].
+  /// whole fetch. See [PerfTrace].
   Future<_DashboardData> _fetchDashboardData(
     AuthProvider auth,
     String storeId,
@@ -286,14 +278,6 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
       salesService.getPosWeeklyRevenue(storeId),
       salesService.getOnlineMonthlyRevenueTrend(storeId),
       salesService.getPosMonthlyRevenueTrend(storeId),
-      salesService.getWeeklyTrend(
-        storeId: storeId,
-        channel: SalesChannelFilter.all,
-      ),
-      salesService.getMonthlyTrend(
-        storeId: storeId,
-        channel: SalesChannelFilter.all,
-      ),
       // Load products & orders for low stock / pending customs / alerts
       context.read<ProductProvider>().loadSellerProducts(),
       context.read<OrderProvider>().loadOrders(),
@@ -358,7 +342,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     // Compute combined charts from online + POS parts
     // Future.wait indices: 0=todayRevenue, 1=recentOrders, 2=ordersByStatus,
     // 3=store, 4=onlineWeekly, 5=posWeekly, 6=onlineMonthly, 7=posMonthly,
-    // 8=weeklyTrend, 9=monthlyTrend, 10=loadProducts, 11=loadOrders
+    // 8=loadProducts, 9=loadOrders
     final onlineWeekly = results[4] as List<double>;
     final posWeekly = results[5] as List<double>;
     final weeklySalesChart = List.generate(
@@ -383,8 +367,6 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
       posWeeklyChart: posWeekly,
       onlineMonthlyChart: onlineMonthly,
       posMonthlyChart: posMonthly,
-      weeklyTrend: results[8] as SalesTrendResult?,
-      monthlyTrend: results[9] as SalesTrendResult?,
       lowStockCount: lowStockCount,
       pendingReservations: pendingReservations,
       activePickups: activePickups,
@@ -403,8 +385,6 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     posWeeklyChart: [0, 0, 0, 0, 0, 0, 0],
     onlineMonthlyChart: [0, 0, 0, 0, 0, 0],
     posMonthlyChart: [0, 0, 0, 0, 0, 0],
-    weeklyTrend: null,
-    monthlyTrend: null,
     recentOrders: [],
     ordersByStatus: {},
     lowStockCount: 0,
@@ -715,67 +695,6 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
             _buildOrdersHeader(),
             const SizedBox(height: 10),
             _buildRecentOrders(data),
-            const SizedBox(height: 20),
-
-            // Block 5 — Weekly Stacked Columns (Online + In-Store)
-            Container(
-              clipBehavior: Clip.antiAlias,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: SellerTheme.card,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: SellerTheme.cardBorder),
-                boxShadow: SellerTheme.cardShadow,
-              ),
-              child: SellerRevenueColumnsChart(
-                title: 'Revenue — This Week',
-                subtitle: _getWeekDateRange(),
-                points: data.weeklyTrend?.points ?? [],
-                trendResult: data.weeklyTrend,
-                isWeekly: true,
-                labels: const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // Block 6 — Monthly Stacked Columns
-            Container(
-              clipBehavior: Clip.antiAlias,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: SellerTheme.card,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: SellerTheme.cardBorder),
-                boxShadow: SellerTheme.cardShadow,
-              ),
-              child: SellerRevenueColumnsChart(
-                title: 'Revenue — Monthly Trend',
-                subtitle: SalesService.monthlyFullLabels().last,
-                points: data.monthlyTrend?.points ?? [],
-                trendResult: data.monthlyTrend,
-                isWeekly: false,
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // Block 7 — Revenue Breakdown Doughnut (online vs in-store)
-            Container(
-              clipBehavior: Clip.antiAlias,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: SellerTheme.card,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: SellerTheme.cardBorder),
-                boxShadow: SellerTheme.cardShadow,
-              ),
-              child: SellerRevenueDoughnutChart(
-                title: 'Revenue breakdown',
-                periodLabel: SalesService.monthlyFullLabels().last,
-                trendResult: data.monthlyTrend,
-              ),
-            ),
-            const SizedBox(height: 16),
-            _buildFullReportCta(),
 
             const SizedBox(height: 80),
           ],
@@ -927,12 +846,21 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Low Stock
+              // Low Stock — the dot and the words agree with the number:
+              // rust + "Needs restock" when something is low, sage +
+              // "All stocked up" when the shelf is healthy, so the state is
+              // never carried by colour alone.
               Expanded(
                 child: SellerMetricCard(
                   label: 'LOW STOCK',
                   value: '${data.lowStockCount}',
+                  subtitle: data.lowStockCount > 0
+                      ? 'Needs restock'
+                      : 'All stocked up',
                   valueColor: data.lowStockCount > 0
+                      ? SellerTheme.rust
+                      : SellerTheme.sage,
+                  dotColor: data.lowStockCount > 0
                       ? SellerTheme.rust
                       : SellerTheme.sage,
                   onTap: () {
@@ -947,12 +875,21 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
                 ),
               ),
               const SizedBox(width: 10),
-              // Bulk Reservations — reseller stock holds awaiting approval
+              // Bulk Reservations — reseller stock holds awaiting approval.
+              // Same state-agreement as Low Stock: amber + "Awaiting
+              // approval" when the queue needs eyes, sage + "Nothing
+              // pending" when it is clear.
               Expanded(
                 child: SellerMetricCard(
                   label: 'BULK RESERVATIONS',
                   value: '${data.pendingReservations}',
+                  subtitle: data.pendingReservations > 0
+                      ? 'Awaiting approval'
+                      : 'Nothing pending',
                   valueColor: data.pendingReservations > 0
+                      ? SellerTheme.amberDark
+                      : SellerTheme.sage,
+                  dotColor: data.pendingReservations > 0
                       ? SellerTheme.amberDark
                       : SellerTheme.sage,
                   onTap: () {
@@ -1207,73 +1144,6 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
           );
         }),
       ],
-    );
-  }
-
-  // ─── Block 8: Full Report CTA ───────────────────────────────────
-  Widget _buildFullReportCta() {
-    return Material(
-      color: AppConstants.primary.withValues(alpha: 0.06),
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () {
-          Navigator.of(
-            context,
-          ).push(MaterialPageRoute(builder: (_) => const ReportsScreen()));
-        },
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: AppConstants.primary.withValues(alpha: 0.25),
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: AppConstants.primary,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.bar_chart_rounded,
-                  color: Colors.white,
-                  size: 22,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'View Full Sales Report',
-                      style: AppConstants.bodyStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: AppConstants.secondary,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Daily revenue, top products & CSV export',
-                      style: AppConstants.bodyStyle(
-                        fontSize: 12,
-                        color: SellerTheme.textMuted,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(Icons.chevron_right, color: AppConstants.primary),
-            ],
-          ),
-        ),
-      ),
     );
   }
 

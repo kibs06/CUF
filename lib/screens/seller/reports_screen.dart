@@ -1,14 +1,18 @@
-import 'dart:io';
+import 'dart:convert';
+import 'dart:typed_data';
 
+import 'package:file_saver/file_saver.dart';
 import 'package:flutter/material.dart';
-import 'package:share_plus/share_plus.dart';
 import '../../constants/app_constants.dart';
 import '../../constants/seller_theme_constants.dart';
+import '../../models/sales_trend_data.dart';
 import '../../models/seller_report_data.dart';
 import '../../services/sales_service.dart';
 import '../../services/store_service.dart';
 import '../../widgets/error_retry_widget.dart';
 import '../../widgets/shimmer_box.dart';
+import '../../widgets/seller/seller_revenue_columns_chart.dart';
+import '../../widgets/seller/seller_revenue_doughnut.dart';
 import '../../widgets/seller/seller_weekly_bar.dart';
 
 class ReportsScreen extends StatefulWidget {
@@ -20,6 +24,8 @@ class ReportsScreen extends StatefulWidget {
 
 class _ReportsScreenState extends State<ReportsScreen> {
   late Future<SellerReportData> _reportFuture;
+  late Future<SalesTrendResult> _weeklyTrendFuture;
+  late Future<SalesTrendResult> _monthlyTrendFuture;
   String? _storeId;
   bool _isMonthly = false;
   bool _isExporting = false;
@@ -37,10 +43,33 @@ class _ReportsScreenState extends State<ReportsScreen> {
     final store = await StoreService.instance.getMyStore();
     if (store == null || !mounted) return;
     final id = store['id'] as String;
+    final service = SalesService();
     setState(() {
       _storeId = id;
       _reportFuture = _fetchReport(id);
+      // Revenue charts moved here from the dashboard — same queries the
+      // dashboard blocks used, so the numbers agree everywhere.
+      _weeklyTrendFuture = service.getWeeklyTrend(
+        storeId: id,
+        channel: SalesChannelFilter.all,
+      );
+      _monthlyTrendFuture = service.getMonthlyTrend(
+        storeId: id,
+        channel: SalesChannelFilter.all,
+      );
     });
+  }
+
+  void _loadTrends(String storeId) {
+    final service = SalesService();
+    _weeklyTrendFuture = service.getWeeklyTrend(
+      storeId: storeId,
+      channel: SalesChannelFilter.all,
+    );
+    _monthlyTrendFuture = service.getMonthlyTrend(
+      storeId: storeId,
+      channel: SalesChannelFilter.all,
+    );
   }
 
   Future<SellerReportData> _fetchReport(String storeId) async {
@@ -120,6 +149,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         onRetry: () {
                           setState(() {
                             _reportFuture = _fetchReport(_storeId!);
+                            _loadTrends(_storeId!);
                           });
                         },
                       ),
@@ -157,8 +187,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
       color: AppConstants.primary,
       onRefresh: () async {
         final future = _fetchReport(_storeId!);
-        setState(() => _reportFuture = future);
-        await future;
+        setState(() {
+          _reportFuture = future;
+          _loadTrends(_storeId!);
+        });
+        await Future.wait([future, _weeklyTrendFuture, _monthlyTrendFuture]);
       },
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -172,13 +205,21 @@ class _ReportsScreenState extends State<ReportsScreen> {
             _buildSalesOverview(data),
             const SizedBox(height: 20),
 
-            // Section 2: Top Products
+            // Section 2: Revenue — weekly + monthly charts and the
+            // online vs in-store breakdown, moved here from the dashboard
+            // so tapping a sale opens the charts behind it.
+            _buildSectionLabel('REVENUE'),
+            const SizedBox(height: 16),
+            _buildRevenueSection(data),
+            const SizedBox(height: 20),
+
+            // Section 3: Top Products
             _buildSectionLabel('TOP PRODUCTS'),
             const SizedBox(height: 12),
             _buildTopProducts(data.topProducts),
             const SizedBox(height: 20),
 
-            // Section 3: Export
+            // Section 4: Export
             _buildSectionLabel('EXPORT'),
             const SizedBox(height: 12),
             _buildExportButton(data),
@@ -304,6 +345,87 @@ class _ReportsScreenState extends State<ReportsScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Revenue charts moved here from the dashboard: the weekly stacked
+  /// columns, the monthly trend, and the online vs in-store doughnut.
+  /// Same cards, same queries — so tapping a sale opens the charts behind it.
+  Widget _buildRevenueSection(SellerReportData data) {
+    return Column(
+      children: [
+        _trendCard(
+          future: _weeklyTrendFuture,
+          child: (trend) => SellerRevenueColumnsChart(
+            title: 'Revenue — This Week',
+            subtitle: _weekLabel(data.weekStart, data.weekEnd),
+            points: trend.points,
+            trendResult: trend,
+            isWeekly: true,
+            labels: const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+          ),
+        ),
+        const SizedBox(height: 16),
+        _trendCard(
+          future: _monthlyTrendFuture,
+          child: (trend) => SellerRevenueColumnsChart(
+            title: 'Revenue — Monthly Trend',
+            subtitle: SalesService.monthlyFullLabels().last,
+            points: trend.points,
+            trendResult: trend,
+            isWeekly: false,
+          ),
+        ),
+        const SizedBox(height: 16),
+        _trendCard(
+          future: _monthlyTrendFuture,
+          child: (trend) => SellerRevenueDoughnutChart(
+            title: 'Revenue breakdown',
+            periodLabel: SalesService.monthlyFullLabels().last,
+            trendResult: trend,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Card chrome shared by the three revenue cards above, matching the
+  /// sales-overview card on this screen.
+  Widget _trendCard({
+    required Future<SalesTrendResult> future,
+    required Widget Function(SalesTrendResult trend) child,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppConstants.sellerCardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: SellerTheme.cardBorder),
+        boxShadow: AppConstants.sellerShadow,
+      ),
+      padding: const EdgeInsets.all(16),
+      child: FutureBuilder<SalesTrendResult>(
+        future: future,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const ShimmerBox(
+              width: double.infinity,
+              height: 220,
+              borderRadius: 12,
+            );
+          }
+          if (snapshot.hasError || !snapshot.hasData) {
+            return Center(
+              child: ErrorRetryWidget(
+                message: 'Failed to load revenue chart.',
+                onRetry: () {
+                  setState(() => _loadTrends(_storeId!));
+                },
+              ),
+            );
+          }
+          return child(snapshot.data!);
+        },
       ),
     );
   }
@@ -452,9 +574,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   /// Build a CSV of the loaded report (summary + daily revenue + top
-  /// products) and open the platform share sheet so the seller can save or
-  /// send the file. Same BOM/escaping/temp-file pattern as the admin
-  /// transactions export.
+  /// products) and save it straight into the shared Downloads folder —
+  /// no share sheet. Plain ASCII throughout (no BOM, no smart dashes)
+  /// so phone spreadsheet viewers render it cleanly.
   Future<void> _exportCsv(SellerReportData? data) async {
     if (data == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -468,10 +590,29 @@ class _ReportsScreenState extends State<ReportsScreen> {
     if (_isExporting) return;
     setState(() => _isExporting = true);
     try {
-      final periodLabel = _weekLabel(data.weekStart, data.weekEnd);
+      const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      const shortMonths = [
+        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      ];
+      String dayLabel(DateTime d) =>
+          '${weekdays[d.weekday - 1]}, ${shortMonths[d.month - 1]} ${d.day}';
+
+      var bestIdx = 0;
+      for (var i = 1; i < data.dailyRevenue.length; i++) {
+        if (data.dailyRevenue[i] > data.dailyRevenue[bestIdx]) bestIdx = i;
+      }
+      final bestDay = data.weeklyTotal > 0
+          ? '${dayLabel(data.weekStart.add(Duration(days: bestIdx)))} '
+              '(${data.dailyRevenue[bestIdx].toStringAsFixed(2)})'
+          : 'n/a';
+
       final rows = <List<Object?>>[
         ['Seller Sales Report'],
-        ['Period', periodLabel],
+        [
+          'Period',
+          '${_csvDate(data.weekStart)} to ${_csvDate(data.weekEnd)}',
+        ],
         ['Generated', _csvDate(DateTime.now())],
         [],
         ['Summary'],
@@ -486,17 +627,20 @@ class _ReportsScreenState extends State<ReportsScreen> {
               ? 'n/a'
               : data.percentChange!.toStringAsFixed(1),
         ],
+        ['Best Day', bestDay],
         [],
         ['Daily Revenue'],
-        ['Date', 'Revenue (PHP)'],
+        ['Day', 'Date', 'Revenue (PHP)'],
         for (int i = 0; i < data.dailyRevenue.length; i++)
           [
+            dayLabel(data.weekStart.add(Duration(days: i))),
             _csvDate(data.weekStart.add(Duration(days: i))),
             data.dailyRevenue[i].toStringAsFixed(2),
           ],
+        ['Total', '', data.weeklyTotal.toStringAsFixed(2)],
         [],
         ['Top Products'],
-        ['Rank', 'Product', 'Units Sold', 'Revenue (PHP)'],
+        ['Rank', 'Product', 'Units Sold', 'Revenue (PHP)', 'Share'],
         for (int i = 0; i < data.topProducts.length; i++)
           [
             i + 1,
@@ -504,19 +648,32 @@ class _ReportsScreenState extends State<ReportsScreen> {
             data.topProducts[i]['units'] ?? 0,
             ((data.topProducts[i]['revenue'] as num?)?.toDouble() ?? 0)
                 .toStringAsFixed(2),
+            data.weeklyTotal > 0
+                ? '${((((data.topProducts[i]['revenue'] as num?)?.toDouble() ?? 0) / data.weeklyTotal) * 100).toStringAsFixed(1)}%'
+                : 'n/a',
           ],
       ];
-      final csv =
-          '\uFEFF${rows.map((r) => r.map(_escCsv).join(',')).join('\n')}';
+      final csv = rows.map((r) => r.map(_escCsv).join(',')).join('\n');
 
-      final dir = await Directory.systemTemp.createTemp('sales-report');
-      final file =
-          File('${dir.path}/sales-report-${_csvDate(DateTime.now())}.csv');
-      await file.writeAsString(csv);
-      await SharePlus.instance.share(
-        ShareParams(
-          files: [XFile(file.path, mimeType: 'text/csv')],
-          subject: 'Sales report $periodLabel',
+      // System save picker (Storage Access Framework) — the seller picks
+      // the destination, defaulting to Downloads. The file is written
+      // there directly: downloaded, not sent through the share sheet.
+      final fileName = 'sales-report-${_csvDate(DateTime.now())}';
+      final savedPath = await FileSaver.instance.saveAs(
+        name: fileName,
+        bytes: Uint8List.fromList(utf8.encode(csv)),
+        fileExtension: 'csv',
+        mimeType: MimeType.csv,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            savedPath == null
+                ? 'Download cancelled — no file was saved.'
+                : 'Saved to $savedPath',
+          ),
+          backgroundColor: AppConstants.primary,
         ),
       );
     } catch (e) {
