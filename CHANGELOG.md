@@ -1,5 +1,11 @@
 # SoleVision — Changelog
 
+## Unreleased — the home feed goes lazy, and bulk reservations match the pickup queue
+
+- **The home sheet built every section and every product card on the first frame, firing every image fetch at once.** Everything below the first screen is now lazy: curated sections through a `SliverList.builder`, On Sale through a `SliverGrid.builder`, the catalog through a real `SliverMasonryGrid` — and the hero auto-scroll parks once the hero scrolls out of view. Order, gaps, gates and visuals unchanged.
+- **The seller dashboard led its metrics row with LOW STOCK, and Bulk Reservations wore a different UI from the pickup queue.** The dashboard card is now PICKUP RESERVATIONS (live hold count, amber/sage state language, opens the pickup queue; low-stock detail stays in the Needs attention strip), and the bulk screen adopts the pickup UI: pill ChoiceChip filters with counts, transparent app bar with refresh, noise overlay, centered empty states. Grouping, counts, actions and copy unchanged.
+- Tests: `flutter analyze` clean; full suite green (3,013 pass).
+
 ## Unreleased — the onboarding heroes go full clipart (flat brand SVG, zero downloads)
 
 - **The heroes were monochrome line art — one clay tint, no fills.** All three are now full-color flat illustrations in the brand palette: a tan-and-clay sandal with a cream welt stitch and brass buckle, a cream boutique with a striped awning and clay shoes on stands, a phone with a clay sneaker landing on a foot under a rust scan beam. Each sits on an opaque sand sticker disc with a clay edge, so the art reads identically on light and dark pages with no runtime theming, no asset files and no licensing questions. The tint filter and the glow are gone with the monochrome era; layout, copy and the handoff contract are untouched.
