@@ -550,7 +550,9 @@ void main() {
         reason: 'the feed must render the card',
       );
       expect(
-        RegExp(r'itemCount:\s*filteredProducts\.length \+ 1').hasMatch(home),
+        RegExp(
+          r'(?:itemCount|childCount):\s*filteredProducts\.length \+ 1',
+        ).hasMatch(home),
         isTrue,
         reason: 'the card is an extra cell, not an overlay',
       );
