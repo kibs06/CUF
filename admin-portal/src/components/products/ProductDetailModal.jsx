@@ -201,6 +201,7 @@ function ProductModelsSection({ productId, name, onView }) {
                   onClick={() =>
                     onView({
                       title: name ?? 'Product',
+                      productId,
                       storagePath: m.storage_path,
                       status: m.status,
                       version: m.version,

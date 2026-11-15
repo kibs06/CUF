@@ -52,9 +52,29 @@ class _SellerApprovalScreenState extends State<SellerApprovalScreen> {
             'Approve Seller?',
             style: AppConstants.headlineStyle(fontSize: 18),
           ),
-          content: Text(
-            'Authorize "$name" to upload products and execute register POS sales?',
-            style: AppConstants.bodyStyle(),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Authorize "$name" to upload products and execute register POS sales?',
+                style: AppConstants.bodyStyle(),
+              ),
+              const SizedBox(height: 10),
+              // Approving is also the business-requirements verdict: the DB
+              // trigger verify_seller_docs_on_approval verifies the
+              // applicant's DTI/BIR/permit documents in the same transaction.
+              Text(
+                'This also verifies their business documents (DTI, BIR COR, '
+                'permit) and gives them a Verified Seller badge. They are '
+                'notified in-app and by email.',
+                style: AppConstants.bodyStyle(
+                  fontSize: 12,
+                  color: AppConstants.secondary.withValues(alpha: 0.7),
+                  height: 1.4,
+                ),
+              ),
+            ],
           ),
           actions: [
             TextButton(
@@ -622,6 +642,14 @@ class _Tier1Review extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 4),
+            Text(
+              'Documents: ${_bizStatusLabel(bizDocs['verification_status']?.toString())}'
+              ' — approving this seller verifies them and grants the badge.',
+              style: AppConstants.bodyStyle(
+                fontSize: 11,
+                color: AppConstants.secondary.withValues(alpha: 0.6),
+              ),
+            ),
           ],
 
           // Storefront
@@ -695,6 +723,17 @@ class _Tier1Review extends StatelessWidget {
       ),
     );
   }
+
+  /// Short review-facing label for a business-docs verdict. The rejection
+  /// wording matters: approving does NOT overturn an explicit rejection
+  /// (`verify_seller_docs_on_approval` only promotes none/pending), so the
+  /// admin must not read "approve" as "verify anyway".
+  String _bizStatusLabel(String? status) => switch (status) {
+        'verified' => 'already verified',
+        'pending' => 'pending review',
+        'rejected' => 'rejected — approving will not re-verify them',
+        _ => 'not submitted',
+      };
 
   String _text(dynamic value) {
     final s = value?.toString() ?? '';

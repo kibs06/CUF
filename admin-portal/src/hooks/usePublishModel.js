@@ -124,12 +124,15 @@ async function rowsFor(productId) {
  * row and the reason.
  */
 async function judgeModel(modelId) {
+  // The HTTP status travels beside the verdict: a 402 (over plan quota) is not
+  // a judgement about the file, and the caller reports it as the quota refusal
+  // it is rather than as "not judged".
   try {
     const { data, error } = await supabase.functions.invoke(VALIDATE_MODEL_FUNCTION, {
       body: { model_id: modelId, activate: true },
     })
 
-    if (!error) return serverVerdict({ statusCode: 200, body: data })
+    if (!error) return { ...serverVerdict({ statusCode: 200, body: data }), httpStatus: 200 }
 
     const status = error?.context?.status ?? 0
     let body = null
@@ -141,15 +144,15 @@ async function judgeModel(modelId) {
       // function's own sentence below.
       body = null
     }
-    return serverVerdict({
-      statusCode: status,
-      body: body ?? { error: error?.message || 'could not reach the server' },
-    })
+    return {
+      ...serverVerdict({
+        statusCode: status,
+        body: body ?? { error: error?.message || 'could not reach the server' },
+      }),
+      httpStatus: status,
+    }
   } catch {
-    return serverVerdict({
-      statusCode: 0,
-      body: { error: 'could not reach the server' },
-    })
+    return { ...serverVerdict({ statusCode: 0, body: { error: 'could not reach the server' } }), httpStatus: 0 }
   }
 }
 
@@ -236,6 +239,20 @@ async function publishAndClose({ request, link, file, declaration, note }) {
   }
 
   const verdict = alreadyLive ? null : await judgeModel(modelId)
+
+  // Over-quota is a refusal of the *account*, not a judgement of the file: it
+  // must not read as "the server could not check it, retry", which loops a
+  // person through a door that stays locked until usage drops or the plan is
+  // upgraded. Thrown (rather than returned as a refusal) so the modal's catch
+  // renders the quota sentence; the row stays a hidden draft either way, and a
+  // later republish reuses the same bytes instead of versioning twice.
+  if (verdict && verdict.httpStatus === 402) {
+    const quota = new Error(
+      `Supabase refused the validation call with HTTP 402 (over plan quota)${verdict.detail ? `: ${verdict.detail}` : ''}.`,
+    )
+    quota.code = '402'
+    throw toPortalError(quota, 'The model could not be published.')
+  }
 
   return {
     modelId,

@@ -10,6 +10,7 @@ import '../../providers/message_provider.dart';
 import '../../providers/order_provider.dart';
 import '../../providers/product_provider.dart';
 import '../../providers/seller_notification_provider.dart';
+import '../../services/auth_service.dart';
 import '../../services/connectivity_service.dart';
 import '../../services/order_service.dart';
 import '../../services/pickup_reservation_service.dart';
@@ -245,6 +246,13 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     // Set up subscription first (init is idempotent for same storeId)
     final notifProv = context.read<SellerNotificationProvider>();
     notifProv.init(id);
+    // Permit-expiry reminder. This project has no pg_cron, so the seller's
+    // own launch is the trigger — the pickup/GCash sweep pattern. The RPC is
+    // idempotent (one bell notice per permit date) and a no-op for anyone
+    // who is not a verified seller, so every launch can call it.
+    AuthService.instance.remindPermitExpiry().then((daysLeft) {
+      if (daysLeft != null) notifProv.loadUnreadCount();
+    });
     // Initialize message provider for inbox badge
     // Set up subscription before load so it catches events if load fails
     final msgProv = context.read<MessageProvider>();

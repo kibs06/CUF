@@ -172,6 +172,23 @@ export function useApproveSeller() {
         .update({ role: 'seller', seller_status: 'approved' })
         .eq('id', userId)
       if (error) throw error
+      // Same mail as the applications queue: approving verifies the
+      // applicant's business documents server-side, so lead with the badge
+      // when the verdict came back verified. Fire-and-forget.
+      const { data: docs } = await supabase
+        .from('seller_business_docs')
+        .select('verification_status')
+        .eq('profile_id', userId)
+        .maybeSingle()
+      supabase.functions
+        .invoke('send-approval-email', {
+          body: {
+            userId,
+            outcome: 'approved',
+            ...(docs?.verification_status === 'verified' ? { verified: true } : {}),
+          },
+        })
+        .catch((err) => console.error('Approval email trigger failed:', err))
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['seller-applications'] })

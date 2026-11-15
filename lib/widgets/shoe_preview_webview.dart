@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:model_viewer_plus/model_viewer_plus.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 
 import '../constants/app_brightness.dart';
 import '../constants/app_constants.dart';
@@ -91,6 +92,7 @@ class ShoePreviewWebView extends StatefulWidget {
     this.onStatus,
     this.diagnostics = AppConstants.shoePreviewDiagnosticsEnabled,
     this.fit,
+    this.paintHex,
   });
 
   /// The verified local model — the same payload the native engine is handed.
@@ -118,6 +120,15 @@ class ShoePreviewWebView extends StatefulWidget {
   /// down the shoe, and the shoe is scaled to the measured foot length. See [ShoeFitView].
   final ShoeFitView? fit;
 
+  /// The tapped colour's `#RRGGBB` paint, or null for as-authored.
+  ///
+  /// Applied live through the page's own `applyPaint` (see [_paintJs]) — no
+  /// remount, no reload — so swiping colours retints the same mesh. A null
+  /// restores the exact factors the file shipped with (read back on the
+  /// first tint, never assumed), which is what keeps "no paint" truthful
+  /// rather than white.
+  final String? paintHex;
+
   @override
   State<ShoePreviewWebView> createState() => _ShoePreviewWebViewState();
 }
@@ -127,6 +138,101 @@ class _ShoePreviewWebViewState extends State<ShoePreviewWebView> {
   /// relay `fsync`s every line).
   bool _traced = false;
   bool _tracedMissing = false;
+
+  /// The page's live controller, captured the moment the package hands it
+  /// over ([ModelViewer.onWebViewCreated]) — the thing that makes paint
+  /// instant: a colour tap evaluates one line of JS instead of remounting
+  /// (and reloading) the whole page. Null until the WebView exists.
+  WebViewController? _webViewController;
+
+  @override
+  void didUpdateWidget(covariant ShoePreviewWebView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Paint rides the live page, not the key: same bytes, new colour, no
+    // reload. (The key still remounts on a model/brightness/lighting change,
+    // and the remount re-applies through [onWebViewCreated] below.)
+    if (oldWidget.paintHex != widget.paintHex) _applyPaint();
+  }
+
+  /// Sends the current [paintHex] to the page, converging from either side
+  /// of the load race: staged as `__pendingPaint` first (the load listener
+  /// in [_paintJs] picks it up if the model is not ready), then applied
+  /// directly for the page that already drew. Both paths are idempotent —
+  /// a duplicate is a second identical tint, not a second shoe.
+  void _applyPaint() {
+    final controller = _webViewController;
+    if (controller == null) return;
+    final hex = widget.paintHex;
+    final arg = hex == null ? 'null' : "'$hex'";
+    controller
+        .runJavaScript(
+          'window.__pendingPaint = $arg; try { applyPaint($arg); } catch (e) {}',
+        )
+        .then((_) {}, onError: (_) {});
+  }
+
+  /// The tint half of the page — appended to [_listeners], not folded into
+  /// it, because this half changes with the mission while that half is the
+  /// engine's fixed event bridge.
+  ///
+  /// `applyPaint(hex)` tints every material and `applyPaint(null)` restores
+  /// the exact factors the file shipped with, read back on the first tint
+  /// (`__paintOriginals`) rather than assumed white. A page that is not
+  /// loaded yet keeps the request in `__pendingPaint` for the load listener
+  /// (and for the `mv.loaded` re-check, which covers a model that finished
+  /// between the listener attaching and this script running).
+  static const String _paintJs = r'''
+window.__pendingPaint = null;
+window.__paintOriginals = null;
+function __paintFactors(hex) {
+  try {
+    if (typeof hex !== 'string') return null;
+    const m = /^#([0-9A-Fa-f]{6})$/.exec(hex);
+    if (!m) return null;
+    const v = parseInt(m[1], 16);
+    return [((v >> 16) & 255) / 255, ((v >> 8) & 255) / 255, (v & 255) / 255, 1];
+  } catch (e) { return null; }
+}
+function applyPaint(hex) {
+  try {
+    const mv = document.querySelector('model-viewer');
+    if (!mv || !mv.loaded || !mv.model || !mv.model.materials || !mv.model.materials.length) {
+      window.__pendingPaint = hex;
+      return;
+    }
+    if (!window.__paintOriginals) {
+      try {
+        window.__paintOriginals = mv.model.materials.map((mat) => {
+          try { return mat.pbrMetallicRoughness.baseColorFactor.slice(); }
+          catch (e) { return null; }
+        });
+      } catch (e) { window.__paintOriginals = []; }
+    }
+    const f = __paintFactors(hex);
+    mv.model.materials.forEach((mat, i) => {
+      try {
+        if (f) { mat.pbrMetallicRoughness.setBaseColorFactor(f); }
+        else if (window.__paintOriginals && window.__paintOriginals[i]) {
+          mat.pbrMetallicRoughness.setBaseColorFactor(window.__paintOriginals[i]);
+        }
+      } catch (e) {}
+    });
+    window.__pendingPaint = null;
+  } catch (e) { window.__pendingPaint = hex; }
+}
+customElements.whenDefined('model-viewer').then(() => {
+  try {
+    const mv = document.querySelector('model-viewer');
+    if (!mv) return;
+    mv.addEventListener('load', () => {
+      try { if (window.__pendingPaint) applyPaint(window.__pendingPaint); } catch (e) {}
+    });
+    if (mv.loaded && window.__pendingPaint) {
+      try { applyPaint(window.__pendingPaint); } catch (e) {}
+    }
+  } catch (e) {}
+});
+''';
 
   /// The visitor's lighting values.
   ///
@@ -375,8 +481,19 @@ customElements.whenDefined('model-viewer').then(() => {
       // `relatedCss` substitutes into the template's `/* other-css */`, which is
       // the only hook the package leaves for it.
       relatedCss: 'html { height: 100%; }',
-      relatedJs: _listeners,
+      // The tint half rides with the event bridge: one inline script, so the
+      // load listener that reports `loaded` and the one that applies a
+      // pending paint attach to the same element in the same pass.
+      relatedJs: '$_listeners $_paintJs',
       javascriptChannels: _channels,
+      // The live controller, captured the moment the package hands it over —
+      // the paint path's way in without a remount. Applying here as well as
+      // in `didUpdateWidget` covers the remount case: a fresh page starts
+      // with no paint, and the widget it was built from may already have one.
+      onWebViewCreated: (controller) {
+        _webViewController = controller;
+        _applyPaint();
+      },
     );
 
     // The lighting panel floats over the engine, the way the web portal's does:

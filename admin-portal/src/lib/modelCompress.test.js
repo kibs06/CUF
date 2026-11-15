@@ -210,6 +210,19 @@ test('a repairable file produces options the normalizer accepts', () => {
   })
 })
 
+test('a missing declared length plans fine and leaves the scale alone', () => {
+  const result = planCompression({
+    bytes: buildGlb(shoeJson({ triangles: 300, materials: [{ name: 'upper' }, { name: 'sole' }] })),
+    declaredLengthMm: null,
+    authoredSizeEu: 42,
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.plan.options.externalLengthMm, null)
+  assert.equal(result.plan.options.authoredSizeEu, 42)
+  assert.equal(result.plan.ratio, null)
+})
+
 test('a follow-up pass plans against the smaller target', () => {
   const result = planCompression({
     bytes: buildGlb(shoeJson({ triangles: 1500000, materials: [{ name: 'Material.001' }] })),

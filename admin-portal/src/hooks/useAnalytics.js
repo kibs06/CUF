@@ -73,6 +73,12 @@ export function useAnalytics(days = 30) {
         revenue: revenueByDay[k],
       }))
 
+      const salesOverTime = dayKeys.map((k) => ({
+        date: k.slice(5),
+        orders: ordersByDay[k],
+        revenue: revenueByDay[k],
+      }))
+
       const usersOverTime = dayKeys.map((k) => ({
         date: k.slice(5),
         users: usersByDay[k],
@@ -92,19 +98,32 @@ export function useAnalytics(days = 30) {
       const productCounts = {}
       const orderIds = orders.map((o) => o.id)
       if (orderIds.length) {
-        const { data: orderItems } = await supabase
+        const { data: orderItems, error: orderItemsError } = await supabase
           .from('order_items')
-          .select('product_id, quantity, products(name)')
+          .select('product_id, quantity, products(name, stores(name))')
           .in('order_id', orderIds)
 
+        if (orderItemsError) {
+          // RLS denial also lands here as empty data; the warn tells apart
+          // "blocked" from "no rows" in the console for the next debug.
+          console.warn('[Analytics] order_items read failed:', orderItemsError.message)
+        }
+
         for (const item of orderItems ?? []) {
-          const name = item.products?.name ?? 'Unknown'
-          productCounts[name] = (productCounts[name] ?? 0) + (item.quantity ?? 1)
+          // Key by product_id: two sellers can list the same product name.
+          const id = item.product_id ?? item.products?.name ?? 'unknown'
+          const entry = productCounts[id] ?? {
+            id,
+            name: item.products?.name ?? 'Unknown',
+            store: item.products?.stores?.name ?? null,
+            count: 0,
+          }
+          entry.count += item.quantity ?? 1
+          productCounts[id] = entry
         }
       }
 
-      const topProducts = Object.entries(productCounts)
-        .map(([name, count]) => ({ name, count }))
+      const topProducts = Object.values(productCounts)
         .sort((a, b) => b.count - a.count)
         .slice(0, 10)
 
@@ -128,6 +147,7 @@ export function useAnalytics(days = 30) {
       return {
         ordersOverTime,
         revenueOverTime,
+        salesOverTime,
         usersOverTime,
         ordersByStatus,
         topProducts,

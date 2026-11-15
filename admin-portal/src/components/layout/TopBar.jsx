@@ -57,7 +57,8 @@ export default function TopBar({ title, onMenuClick }) {
         <button
           type="button"
           aria-label="Notifications"
-          className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-white shadow-card transition-colors hover:border-primary/50"
+          title="Notifications"
+          className="relative flex h-[38px] w-[38px] items-center justify-center rounded-xl border border-border bg-white shadow-card transition-colors hover:border-primary/50 hover:bg-canvas"
         >
           <Bell size={16} className="text-muted" />
         </button>
@@ -69,7 +70,7 @@ export default function TopBar({ title, onMenuClick }) {
             aria-expanded={menuOpen}
             aria-haspopup="menu"
             aria-label="Your account"
-            className="flex items-center gap-1.5 rounded-xl border border-border bg-white py-1.5 pl-1.5 pr-2.5 shadow-card transition-colors hover:border-primary/50"
+            className="flex h-[38px] items-center gap-1.5 rounded-xl border border-border bg-white py-1.5 pl-1.5 pr-2.5 shadow-card transition-colors hover:border-primary/50 hover:bg-canvas"
           >
             <AvatarInitials name={profile?.full_name} email={profile?.email} size="sm" />
             <span className="hidden max-w-[140px] truncate text-[13px] font-semibold text-ink sm:inline">

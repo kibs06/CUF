@@ -62,7 +62,7 @@ export default function TrendPanel({
               />
               <Tooltip
                 contentStyle={{ fontFamily: 'DM Sans, sans-serif', borderRadius: '12px', border: '1px solid #D9D0C7', fontSize: 13 }}
-                labelFormatter={(v) => `Oct ${v}`}
+                labelFormatter={(v) => `${v}`}
                 formatter={tooltipFormatter}
               />
               {hasComparison && (

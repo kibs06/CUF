@@ -10,6 +10,9 @@ import '../../services/deepar_try_on.dart';
 import '../../services/snap_try_on_channel.dart';
 import '../../services/space_view_service.dart';
 import '../../services/try_on_prefetch.dart';
+import '../../utils/shoe_paint.dart';
+import '../../utils/variant_swatch_color.dart';
+import '../../widgets/color_thumbnail_swatch.dart';
 import '../../widgets/shoe_preview_3d.dart';
 import '../../widgets/sole_ar_pill.dart';
 
@@ -104,6 +107,10 @@ class ShoePreviewScreen extends StatefulWidget {
     this.storagePath,
     this.launchExternal,
     this.snapTryOn,
+    this.paintHex,
+    this.paints,
+    this.paintColors,
+    this.initialPaintColor,
   }) : productId = null;
 
   /// The seller door: nothing is resolved yet, so this screen resolves it.
@@ -124,6 +131,10 @@ class ShoePreviewScreen extends StatefulWidget {
     this.events,
     this.launchExternal,
     this.snapTryOn,
+    this.paintHex,
+    this.paints,
+    this.paintColors,
+    this.initialPaintColor,
   })  : model = null,
         modelAvailable = false,
         storagePath = null;
@@ -193,6 +204,33 @@ class ShoePreviewScreen extends StatefulWidget {
   /// no space entry — a button that opens nothing is worse than none.
   final String? storagePath;
 
+  /// The tapped colour's paint (`product_color_paint.paint_hex`), or null
+  /// for as-authored. Read once at open time by the page that knows the
+  /// active colour — the opening tint, and the whole tint when no paint map
+  /// rode along (the seller door, which has no shopper colours in hand).
+  /// When [paints] is present the chips below take over from here.
+  final String? paintHex;
+
+  /// The confirmed paints for the product's colours (`product_color_paint`:
+  /// colour name → `paint_hex`), or null when the caller has none to offer.
+  ///
+  /// Present means this screen offers the colour chips under the box — the
+  /// same preview the admin shelf got, so a shopper can check every colour
+  /// without leaving the viewer. The choice stays local: it re-tints the box
+  /// and nothing else, so the page behind (price, variant, sizes, buy bar)
+  /// keeps the colour the shopper actually tapped there.
+  final Map<String, String>? paints;
+
+  /// The colours to offer as chips, in the page's own order. Ignored without
+  /// [paints] — and filtered to painted names (see [_paintedColors]): chips
+  /// with no paint would be guesses, and a guess is not a look.
+  final List<String>? paintColors;
+
+  /// The page's active colour at open time — the same value [paintHex] was
+  /// read from — so the opened viewer agrees with the page behind it, when
+  /// that colour carries a paint. An unpainted opener lands on As-authored.
+  final String? initialPaintColor;
+
   @override
   State<ShoePreviewScreen> createState() => _ShoePreviewScreenState();
 }
@@ -246,10 +284,63 @@ class _ShoePreviewScreenState extends State<ShoePreviewScreen> {
   late final TryOnPrefetch _prefetch =
       widget.prefetch ?? TryOnPrefetch(enabled: true);
 
+  /// The chips on offer: the page's colour order, minus the colours with no
+  /// confirmed paint. The admin preview sets this rule (see
+  /// `ModelViewerDialog`): a guess is not a look, and a removed paint's chip
+  /// must go with it — an unpainted colour still opens as-authored from the
+  /// page, it just gets no chip in here.
+  List<String> get _paintedColors {
+    final paints = widget.paints;
+    if (paints == null) return const [];
+    return [
+      for (final name in widget.paintColors ?? [])
+        if (paints[name] != null) name,
+    ];
+  }
+
+  /// The chip this viewer is wearing: the page's colour at open (when it
+  /// carries a confirmed paint), then whichever chip the shopper taps.
+  /// Local state on purpose — the page behind keeps its own pick (see
+  /// [paints]). Null is As-authored: opening on an unpainted colour wears
+  /// the file itself, with the As-authored ring on.
+  String? _activeColor;
+
+  /// The tint on the box right now: the active chip's confirmed paint, or
+  /// as-authored when the chip has none — the same rule the admin preview
+  /// wears (see `ModelViewerDialog`: a null choice restores the file's own
+  /// factors). Null is the explicit As-authored choice, or no opening
+  /// colour at all. Without the paint map this is the opening [paintHex],
+  /// exactly as before chips existed.
+  String? get _activeHex {
+    final paints = widget.paints;
+    if (paints == null) return widget.paintHex;
+    if (_activeColor == null) return null;
+    return paints[_activeColor];
+  }
+
+  /// The chip dot: the confirmed paint when there is one, else the same
+  /// swatch guess the product page's own chips stand on.
+  Color _dotFor(String name) {
+    final rgb = parsePaintHex(widget.paints?[name]);
+    if (rgb != null) {
+      return Color.fromRGBO(
+        (rgb[0] * 255).round(),
+        (rgb[1] * 255).round(),
+        (rgb[2] * 255).round(),
+        1,
+      );
+    }
+    return variantSwatchColor(name);
+  }
+
   @override
   void initState() {
     super.initState();
     _model = widget.model;
+    _activeColor =
+        widget.paints?.containsKey(widget.initialPaintColor) ?? false
+            ? widget.initialPaintColor
+            : null;
     if (_model == null) _resolve();
     _checkUploadedArEffect();
     _checkConventionArEffect();
@@ -525,6 +616,7 @@ class _ShoePreviewScreenState extends State<ShoePreviewScreen> {
                         if (model != null)
                           ShoePreviewSection(
                             model: model,
+                            paintHex: _activeHex,
                             height: boxHeight,
                             // The page's width, and only the box's: see
                             // [ShoePreview3D.bleed] for what that moves and what
@@ -584,6 +676,59 @@ class _ShoePreviewScreenState extends State<ShoePreviewScreen> {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        // The confirmed paints as chips, pinned above the space
+                        // entry: on a tall stage the row under the box scrolls
+                        // out of sight (the owner's screenshot showed buttons
+                        // with no picker in view), while the foot never moves.
+                        // Tapping re-tints live; only painted colours get chips
+                        // (see [_paintedColors]) — the seller door and old
+                        // callers keep the chipless foot.
+                        if (model != null && _paintedColors.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Preview paint',
+                                  style: AppConstants.bodyStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  child: Row(
+                                    children: [
+                                      // The admin preview's way back: As-authored
+                                      // restores the file's own factors (see
+                                      // `ModelViewerDialog`). The colour chips
+                                      // stay the page's full variant list — a
+                                      // shopper still needs the unpainted
+                                      // colours, which render as-authored — so
+                                      // this is the reset those chips cannot be.
+                                      _AsAuthoredSwatch(
+                                        selected: _activeColor == null,
+                                        onTap: () => setState(() {
+                                          _activeColor = null;
+                                        }),
+                                      ),
+                                      for (final name in _paintedColors)
+                                        ColorThumbnailSwatch(
+                                          name: name,
+                                          fallbackColor: _dotFor(name),
+                                          selected: _activeColor == name,
+                                          onTap: () => setState(() {
+                                            _activeColor = name;
+                                          }),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         // The disclosure the 3D box owes the photos above it: the
                         // render comes from the compressed deliverable (≤60k
                         // triangles, ≤1024² textures — the authoring contract the
@@ -675,6 +820,72 @@ class _ShoePreviewScreenState extends State<ShoePreviewScreen> {
               ],
             );
           },
+        ),
+      ),
+    );
+  }
+}
+
+/// The admin preview's way back, drawn as a chip so it sits in the same
+/// row: a 48 px circle like its neighbours, wearing the off icon instead of
+/// a colour, with the same selection ring. Tapping it clears the active
+/// colour, and [_activeHex] turns that into the file's own factors.
+class _AsAuthoredSwatch extends StatelessWidget {
+  const _AsAuthoredSwatch({required this.selected, required this.onTap});
+
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(right: 10),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              padding: const EdgeInsets.all(1),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: selected ? AppConstants.primary : Colors.transparent,
+                  width: 2,
+                ),
+              ),
+              child: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: AppConstants.borderGray.withValues(alpha: 0.5),
+                    width: 1,
+                  ),
+                ),
+                child: ClipOval(
+                  child: Container(
+                    color: AppConstants.surfaceLight,
+                    child: Icon(
+                      Icons.invert_colors_off,
+                      size: 18,
+                      color: AppConstants.secondary,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'As-authored',
+              style: AppConstants.bodyStyle(
+                fontSize: 10,
+                fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                color: selected ? AppConstants.primary : AppConstants.secondary,
+              ),
+            ),
+          ],
         ),
       ),
     );

@@ -13,6 +13,7 @@ import '../services/diag_logger.dart';
 import '../services/shoe_preview_channel.dart';
 import '../services/shoe_preview_fallback_guard.dart';
 import '../utils/shoe_fit_view.dart';
+import '../utils/shoe_paint.dart';
 import 'shoe_preview_webview.dart';
 
 /// **The viewer page's horizontal gutter** — the 20 px the page insets its own
@@ -110,6 +111,7 @@ class ShoePreview3D extends StatefulWidget {
     this.useWebViewEngine = AppConstants.shoePreviewWebViewEnabled,
     this.onEngineStatus,
     this.footFit,
+    this.paintHex,
   });
 
   /// The verified local model, in the same payload the AR path hands over.
@@ -251,6 +253,15 @@ class ShoePreview3D extends StatefulWidget {
   /// The fit the customer captured in AR, handed to the WebView engine. Null keeps the default view.
   /// The native engine does not take it yet, so it stays on the default view.
   final ShoeFitView? footFit;
+
+  /// The tapped colour's `#RRGGBB` paint, or null for as-authored.
+  ///
+  /// Forwarded to the WebView page (live tint, no reload) and to the native
+  /// renderer (`setPreviewColor`, instant on already-loaded bytes). A null
+  /// after a paint reloads the bytes on the native engine — the only way to
+  /// get the authored factors back, since Filament exposes no read-back —
+  /// while the WebView page restores the factors it read on the first tint.
+  final String? paintHex;
 
   /// **How long the box may sit untouched before it demonstrates the gesture**
   /// ([ShoePreviewGestureHint]).
@@ -525,6 +536,55 @@ class _ShoePreview3DState extends State<ShoePreview3D> {
     // `setModel` swallows `MissingPluginException` and platform errors by
     // design, so there is nothing to await and nothing to report here.
     unawaited(_channel.setModel(widget.model));
+    // Fresh bytes are as-authored: whatever paint was on the old asset died
+    // with it, so the next [_handOverPaint] must re-decide rather than trust
+    // its record.
+    _paintKnown = false;
+    _wasPainted = false;
+  }
+
+  /// The last paint handed to the native renderer, and whether the record
+  /// is trustworthy. Null with trust means "as-authored was (re-)confirmed";
+  /// without trust (fresh bytes, first build) a null sends nothing.
+  String? _paintSent;
+  bool _paintKnown = false;
+
+  /// Whether a paint is currently on the native renderer's bytes — the
+  /// thing that decides if clearing needs a reload (factors are write-only
+  /// in Filament, so only fresh bytes restore them).
+  bool _wasPainted = false;
+
+  /// **Tells the native renderer which paint to wear** — the native half of
+  /// [paintHex].
+  ///
+  /// Called from `build` like [_handOverStage], because the paint arrives
+  /// with the page (a colour tap rebuilds ancestors, not this state) and
+  /// must reach a renderer that already exists. The guard keeps it to one
+  /// call per change; the channel swallows the rest like every other call.
+  /// The WebView engine does not come here — its page tints itself (see
+  /// `ShoePreviewWebView`), which is why this only runs native.
+  void _handOverPaint() {
+    if (widget.useWebViewEngine) return;
+    final paint = widget.paintHex;
+    if (_paintKnown && paint == _paintSent) return;
+    _paintKnown = true;
+    _paintSent = paint;
+    final rgb = parsePaintHex(paint);
+    if (rgb != null) {
+      _wasPainted = true;
+      unawaited(_channel.setColor({
+        'baseColorFactor': rgb,
+      }));
+      return;
+    }
+    // A null nobody painted is a no-op: the bytes were never touched.
+    if (!_wasPainted) return;
+    // Paint was on and now is off: the renderer's factors are ours, and
+    // nothing reads them back — so hand the bytes over again and let the
+    // fresh asset restore them. The [_paintKnown] reset this triggers is
+    // harmless: bytes are as-authored now, which is what null means.
+    _wasPainted = false;
+    _handOver();
   }
 
   @override
@@ -540,6 +600,11 @@ class _ShoePreview3DState extends State<ShoePreview3D> {
     // reach a renderer that already exists: see [_handOverStage] for why this is
     // not done in `initState`.
     _handOverStage();
+    // The paint arrives the same way — with the page, on a renderer that
+    // already exists — so it is handed over from here too, on the same
+    // once-per-change guard. The WebView engine ignores it (its page tints
+    // itself); the native engine wears it.
+    _handOverPaint();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -641,6 +706,7 @@ class _ShoePreview3DState extends State<ShoePreview3D> {
       if (standIn != null) return standIn(_onEngineLine);
       return ShoePreviewWebView(
         model: widget.model,
+        paintHex: widget.paintHex,
         diagnostics: widget.diagnostics,
         // The QA line goes to the section's readout, which is where the native
         // engine's `status` events land too — one surface, two engines. ⚠️ It goes
@@ -1222,6 +1288,7 @@ class ShoePreviewSection extends StatefulWidget {
     this.showDiagnostics = AppConstants.shoePreviewDiagnosticsEnabled,
     this.useWebViewEngine = AppConstants.shoePreviewWebViewEnabled,
     this.footFit,
+    this.paintHex,
   });
 
   final TryOnModelSpec model;
@@ -1274,6 +1341,10 @@ class ShoePreviewSection extends StatefulWidget {
 
   /// See [ShoePreview3D.footFit].
   final ShoeFitView? footFit;
+
+  /// See [ShoePreview3D.paintHex] — forwarded, never re-decided, so the
+  /// section and the box cannot disagree about which colour is on.
+  final String? paintHex;
 
   @override
   State<ShoePreviewSection> createState() => _ShoePreviewSectionState();
@@ -1709,6 +1780,7 @@ class _ShoePreviewSectionState extends State<ShoePreviewSection> {
           // the fallback a single `setState` rather than a second widget tree.
           useWebViewEngine: _webViewEngine,
           footFit: widget.footFit,
+          paintHex: widget.paintHex,
           // ⚠️ **The WebView engine's line arrives here rather than through
           // `_onEvent`**, which only ever carries what the *native* side sends. A
           // build running the WebView engine has no native renderer at all, so a

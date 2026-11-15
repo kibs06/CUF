@@ -1348,6 +1348,115 @@ void main() {
     });
   });
 
+  group('the tapped colour repaints the box, and nothing else', () {
+    test('the page fetches paint beside the photos it already fetches', () {
+      expect(
+        productScreen,
+        contains('product_color_paint(color_name, paint_hex)'),
+        reason: 'paint rides the three colour-carrying selects, like the thumbnails',
+      );
+      expect(productScreen, contains('_paintRows'));
+      expect(productScreen, contains('paintHexForColor'));
+      expect(productScreen, contains('paintHex: _activePaintHex'));
+      expect(
+        productScreen,
+        contains('paints: _paintsMap'),
+        reason: 'the viewer gets the whole map for its chips, not one hex',
+      );
+      expect(productScreen, contains('paintColors: _variantColorNames'));
+      expect(productScreen, contains('initialPaintColor: _effectiveColor'));
+    });
+
+    test('the viewer chain forwards the paint without re-deciding it', () {
+      expect(previewScreen, contains('paintHex'));
+      expect(
+        previewWidget,
+        contains('paintHex: widget.paintHex'),
+        reason: 'section and box forward; only the engines decide how to wear it',
+      );
+      expect(
+        previewScreen,
+        contains('paintHex: _activeHex'),
+        reason: 'the screen hands the section the active chip, never a stale open-time hex',
+      );
+      expect(
+        previewScreen,
+        contains('color_thumbnail_swatch'),
+        reason: 'the viewer chips are the page chips, not a second swatch language',
+      );
+      expect(
+        previewScreen,
+        contains('Preview paint'),
+        reason: 'chips draw under the box; no map means no chips, not a dead row',
+      );
+      expect(
+        previewScreen,
+        contains('As-authored'),
+        reason: 'the app wears the admin preview\'s way back to the file itself',
+      );
+    });
+
+    test('the viewer opens on fresh paints, and chips only painted colours', () {
+      // Confirms and removals land while shopper pages sit open: the viewer
+      // refetches on the way in (a removed paint keeps no chip and no tint),
+      // and the chips filter to painted names like the admin preview.
+      expect(
+        productScreen,
+        contains('_refreshPaintRows'),
+        reason: 'stale page rows must not outvote a fresh removal',
+      );
+      expect(
+        previewScreen,
+        contains('_paintedColors'),
+        reason: 'an unpainted colour gets no chip — a guess is not a look',
+      );
+    });
+
+    test('the colour-extras heal covers paint, not just photos', () {
+      // Grid payloads carry variants + photo rows but no paint embed, and the
+      // photo heal used to no-op on exactly those payloads — so tapped
+      // colours with confirmed paints still opened as-authored.
+      expect(
+        productScreen,
+        contains('hasPaint'),
+        reason: 'photos present but paint missing must still fetch',
+      );
+      expect(
+        productScreen,
+        contains('_colorExtrasAttempted'),
+        reason: 'one bounded select per open — unpainted products pay nothing extra',
+      );
+    });
+
+    test('the WebView page tints live and restores the authored factors', () {
+      final webView =
+          File('lib/widgets/shoe_preview_webview.dart').readAsStringSync();
+      expect(codeOf(webView), contains('function applyPaint(hex)'));
+      expect(
+        codeOf(webView),
+        contains('__paintOriginals'),
+        reason: 'restore reads back, never assumes white',
+      );
+      expect(codeOf(webView), contains('onWebViewCreated'));
+      final keyBlock = between(codeOf(webView), 'key: ValueKey<String>(', '),');
+      expect(
+        keyBlock,
+        isNot(contains('paintHex')),
+        reason: 'a colour tap must retint, not remount and reload',
+      );
+    });
+
+    test('the native engine wears paint and reloads to un-wear it', () {
+      expect(codeOf(previewWidget), contains('_handOverPaint'));
+      expect(codeOf(previewWidget), contains("'baseColorFactor'"));
+      expect(
+        previewChannel,
+        contains('setColor'),
+        reason: 'the channel already carries material overrides — no new method',
+      );
+    });
+  });
+
   group('the rule itself still matches what the page assumes', () {
     test('a product with no model shows neither half', () {
       final decision = resolveShoePreview(

@@ -32,6 +32,7 @@
 
 /** The situations this portal knows how to answer. */
 export const PORTAL_ERROR = {
+  QUOTA_EXCEEDED: 'quota_exceeded',
   NOT_ADMIN: 'not_admin',
   SESSION_EXPIRED: 'session_expired',
   DB_BEHIND_CODE: 'db_behind_code',
@@ -39,6 +40,13 @@ export const PORTAL_ERROR = {
   OFFLINE: 'offline',
   UNKNOWN: 'unknown',
 }
+
+// HTTP 402: the project is over its plan quota, so Supabase blocks uploads,
+// writes and function calls until usage drops or the plan is upgraded. It can
+// arrive as a numeric status (402), a storage `statusCode`, or as bare text
+// ("quota exceeded") with no code at all.
+const QUOTA_CODES = new Set(['402'])
+const QUOTA_TEXT = /quota|overage|payment required|over its .* quota|usage limit/i
 
 // `42501` insufficient_privilege: what the RPCs' admin guards raise, and what an
 // RLS policy reports when it refuses a write. For THIS portal it has one
@@ -69,6 +77,8 @@ const OFFLINE_TEXT = /failed to fetch|networkerror|load failed|fetch failed|netw
 /** What to do about each situation. `null` means "we have nothing better than
  *  the server's own words" — see `describeError`. */
 const SENTENCE = {
+  [PORTAL_ERROR.QUOTA_EXCEEDED]:
+    'Supabase refused this with HTTP 402: the project is over its plan quota, so uploads, database writes and function calls are blocked until usage drops or the plan is upgraded. Nothing was lost — compressing runs entirely in this tab, and anything already uploaded stays saved as a hidden draft, so publishing again later reuses the same bytes instead of duplicating them.',
   [PORTAL_ERROR.NOT_ADMIN]:
     'The server refused this: the session is not an admin’s. Sign out and back in — if it still says so, the admin role has been removed from the account.',
   [PORTAL_ERROR.SESSION_EXPIRED]:
@@ -90,9 +100,10 @@ function textOf(error) {
 }
 
 /** The code, as a string — `error.status` covers the auth service's numeric
- *  401, which is the same condition as PostgREST's PGRST301. */
+ *  401 (the same condition as PostgREST's PGRST301), and `error.statusCode`
+ *  covers storage-js, which reports HTTP status under that name. */
 function codeOf(error) {
-  const code = error?.code ?? error?.status
+  const code = error?.code ?? error?.status ?? error?.statusCode
   return code === undefined || code === null || code === '' ? null : String(code)
 }
 
@@ -107,6 +118,7 @@ export function classifyError(error) {
   const code = codeOf(error)
   const text = textOf(error)
 
+  if ((code && QUOTA_CODES.has(code)) || QUOTA_TEXT.test(text)) return PORTAL_ERROR.QUOTA_EXCEEDED
   if (code && NOT_ADMIN_CODES.has(code)) return PORTAL_ERROR.NOT_ADMIN
   if ((code && SESSION_EXPIRED_CODES.has(code)) || SESSION_EXPIRED_TEXT.test(text)) {
     return PORTAL_ERROR.SESSION_EXPIRED

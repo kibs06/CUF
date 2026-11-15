@@ -175,15 +175,39 @@ class SoleProductCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppConstants.bodyStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: AppConstants.secondary,
-                        ),
+                      // The name and, when the seller's business requirements
+                      // have been approved, a verified mark beside it. A mark
+                      // rather than a word: the card is ~150px wide in the
+                      // two-column grid, and "Verified Seller" next to a name
+                      // would ellipsise the name instead. The mark carries the
+                      // words for a screen reader.
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppConstants.bodyStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: AppConstants.secondary,
+                              ),
+                            ),
+                          ),
+                          if (product['seller_verified'] == true) ...[
+                            const SizedBox(width: 4),
+                            Tooltip(
+                              message: 'Verified Seller',
+                              child: Icon(
+                                Icons.verified_rounded,
+                                size: 14,
+                                color: AppConstants.success,
+                                semanticLabel: 'Verified Seller',
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                       const SizedBox(height: 4),
                       // Star rating (hide if no reviews)

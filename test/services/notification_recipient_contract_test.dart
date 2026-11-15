@@ -42,6 +42,40 @@ String stripSqlComments(String sql) {
   return out;
 }
 
+/// Whether the comment-stripped function [body] keeps [variable] out of a
+/// NULL-valued [insert].
+///
+/// Two legitimate shapes, and nothing else:
+///
+///   • a positive filter — `… AND v_store_id IS NOT NULL`;
+///   • an early bail-out above the insert — `IF v_store_id IS NULL THEN
+///     RETURN …` (or `RAISE …`) `END IF;`.
+///
+/// An `IS NULL` branch that neither returns nor raises is **not** a guard: it
+/// is the shape a copied block leaves behind, and execution continues into the
+/// insert. Neither is a bail-out written below the insert, where the row has
+/// already been written. Both are rejected here on purpose, and the fixtures
+/// at the bottom of this file pin that they stay rejected.
+bool guardedAgainstNull(String body, String insert, String variable) {
+  if (body.contains('$variable IS NOT NULL')) return true;
+
+  final bailOut = RegExp(
+    'IF\\s+${RegExp.escape(variable)}\\s+IS\\s+NULL\\s+THEN([\\s\\S]*?)'
+    'END\\s+IF\\s*;',
+    caseSensitive: false,
+  );
+  final insertAt = body.indexOf(insert);
+  for (final match in bailOut.allMatches(body)) {
+    // A guard below the insert runs too late to protect it.
+    if (insertAt != -1 && match.start > insertAt) continue;
+    if (RegExp(r'\b(RETURN|RAISE)\b', caseSensitive: false)
+        .hasMatch(match.group(1)!)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void main() {
   final dir = Directory('supabase/migrations');
   final files = dir
@@ -112,6 +146,45 @@ void main() {
     expect(start, greaterThan(-1), reason: 'no function $name in $fileName');
     final end = src.indexOf(r'$$;', start);
     return stripSqlComments(src.substring(start, end == -1 ? src.length : end));
+  }
+
+  /// Whether [table]'s `id` is declared a primary key (and so NOT NULL) in the
+  /// migrations, read from the DDL rather than assumed.
+  bool tableIdDeclaredNotNull(String table) {
+    final ddl = RegExp(
+      'create\\s+table\\s+(if\\s+not\\s+exists\\s+)?(public\\.)?'
+      '${RegExp.escape(table)}\\s*\\(([\\s\\S]*?)\\n\\);',
+      caseSensitive: false,
+    );
+    for (final f in files) {
+      final match = ddl.firstMatch(f.readAsStringSync());
+      if (match == null) continue;
+      final idLine = RegExp(r'\n\s*id\s+uuid\s+([^\n]*)', caseSensitive: false)
+          .firstMatch(match.group(3)!);
+      if (idLine == null) return false;
+      return RegExp(r'primary\s+key|not\s+null', caseSensitive: false)
+          .hasMatch(idLine.group(1)!);
+    }
+    return false;
+  }
+
+  /// Whether [insert] projects the store's PRIMARY KEY into `store_id`.
+  ///
+  /// `INSERT … SELECT s.id FROM public.stores s WHERE …` cannot insert a NULL
+  /// recipient even with no guard: `stores.id` is the primary key, and when no
+  /// store matches, the SELECT emits no row — the bell simply does not ring.
+  /// That is a different shape from `VALUES (v_store_id)`, where a NULL is a
+  /// 23502 and needs an explicit bail-out. The exemption is tied to the DDL
+  /// below: if `stores.id` ever stops being non-null, this stops accepting
+  /// the shape.
+  bool projectsStorePrimaryKey(String sql) {
+    final match = RegExp(
+      r'INSERT\s+INTO\s+public\.seller_notifications\s*\(\s*store_id\s*,'
+      r'[\s\S]*?\)\s*SELECT\s+(\w+)\.id\s*,'
+      r'[\s\S]*?\bFROM\s+public\.stores\s+\1\b',
+      caseSensitive: false,
+    ).firstMatch(sql);
+    return match != null && tableIdDeclaredNotNull('stores');
   }
 
   test('the scanner actually finds the inserts (a silent no-op guard is worse '
@@ -262,8 +335,9 @@ void main() {
 
       for (final e in storeInserts) {
         final body = enclosingFunctionBody(e.file, e.line);
-        if (body.contains('v_store_id IS NOT NULL') ||
-            e.text.contains('store_id IS NOT NULL')) {
+        if (guardedAgainstNull(body, e.text, 'v_store_id') ||
+            e.text.contains('store_id IS NOT NULL') ||
+            projectsStorePrimaryKey(e.text)) {
           continue;
         }
         expect(
@@ -284,6 +358,138 @@ void main() {
           reason: 'the exemption reads this column\'s nullability from its DDL');
       expect(storeIdDeclaredNotNull('orders'), isFalse,
           reason: 'orders.store_id is NULLABLE — that is why it needs a guard');
+    });
+  });
+
+  group('the store-id null guard detector accepts both real guard shapes — '
+      'and still rejects an unguarded insert', () {
+    // The shape 20261116000000_add_permit_expiry_reminders.sql uses: read the
+    // seller's store, bail out when there is none, only then notify.
+    const earlyReturn = r'''
+CREATE OR REPLACE FUNCTION public.remind_permit_expiry_fixture()
+RETURNS jsonb LANGUAGE plpgsql AS $$
+DECLARE
+    v_store_id uuid;
+BEGIN
+    SELECT s.id INTO v_store_id FROM public.stores s LIMIT 1;
+
+    IF v_store_id IS NULL THEN
+        RETURN jsonb_build_object('reminded', false, 'reason', 'no_store');
+    END IF;
+
+    INSERT INTO public.seller_notifications (store_id, type, title, body)
+    VALUES (v_store_id, 'permit_expiring', 't', 'b');
+
+    RETURN jsonb_build_object('reminded', true);
+END;
+$$;
+''';
+
+    String insertOf(String sql) {
+      final start = sql.indexOf('INSERT INTO public.seller_notifications');
+      final end = sql.indexOf(';', start);
+      return sql.substring(start, end + 1);
+    }
+
+    test('accepts IF … IS NULL THEN RETURN', () {
+      final body = stripSqlComments(earlyReturn);
+      expect(guardedAgainstNull(body, insertOf(body), 'v_store_id'), isTrue);
+    });
+
+    test('accepts IF … IS NULL THEN RAISE', () {
+      final sql = earlyReturn.replaceFirst(
+        "RETURN jsonb_build_object('reminded', false, 'reason', 'no_store');",
+        "RAISE EXCEPTION 'no store for this seller';",
+      );
+      final body = stripSqlComments(sql);
+      expect(guardedAgainstNull(body, insertOf(body), 'v_store_id'), isTrue);
+    });
+
+    test('accepts a positive IS NOT NULL filter', () {
+      const sql = r'''
+BEGIN
+    INSERT INTO public.seller_notifications (store_id, type, title, body)
+    SELECT s.id, 'permit_expiring', 't', 'b'
+      FROM public.stores s
+     WHERE v_store_id IS NOT NULL AND s.id = v_store_id;
+END;
+''';
+      expect(guardedAgainstNull(sql, insertOf(sql), 'v_store_id'), isTrue);
+    });
+
+    test('rejects the same insert with its guard removed (the mutation)', () {
+      final sql = earlyReturn.replaceFirst(
+        RegExp(r'\n    IF v_store_id IS NULL THEN[\s\S]*?END IF;'),
+        '',
+      );
+      final body = stripSqlComments(sql);
+      expect(body, isNot(contains('IF v_store_id IS NULL')),
+          reason: 'this fixture must really have lost the guard');
+      expect(guardedAgainstNull(body, insertOf(body), 'v_store_id'), isFalse,
+          reason: 'an unguarded insert must fail the check');
+    });
+
+    test('rejects an IS NULL branch that neither returns nor raises', () {
+      final sql = earlyReturn.replaceFirst(
+        "RETURN jsonb_build_object('reminded', false, 'reason', 'no_store');",
+        'NULL;',
+      );
+      final body = stripSqlComments(sql);
+      expect(guardedAgainstNull(body, insertOf(body), 'v_store_id'), isFalse);
+    });
+
+    test('accepts a recipient projected from stores.id (PK — absent store '
+        'writes no row)', () {
+      const sql = r'''
+CREATE OR REPLACE FUNCTION public.notify_on_seller_verified_fixture()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    INSERT INTO public.seller_notifications (store_id, type, title, body)
+    SELECT s.id, 'verified_seller', 't', 'b'
+      FROM public.stores s
+     WHERE s.owner_id = NEW.profile_id
+     ORDER BY s.created_at
+     LIMIT 1;
+    RETURN NEW;
+END;
+$$;
+''';
+      expect(projectsStorePrimaryKey(sql), isTrue);
+      expect(tableIdDeclaredNotNull('stores'), isTrue,
+          reason: 'the exemption must be reading a real PK from the DDL');
+    });
+
+    test('rejects a nullable column projected into store_id', () {
+      const sql = r'''
+INSERT INTO public.seller_notifications (store_id, type, title, body)
+SELECT s.owner_id, 'verified_seller', 't', 'b'
+  FROM public.stores s
+ WHERE s.owner_id = NEW.profile_id;
+''';
+      expect(projectsStorePrimaryKey(sql), isFalse,
+          reason: 'stores.owner_id is nullable — that shape needs a guard');
+    });
+
+    test('rejects a bail-out written after the insert', () {
+      const sql = r'''
+CREATE OR REPLACE FUNCTION public.remind_permit_expiry_late_fixture()
+RETURNS jsonb LANGUAGE plpgsql AS $$
+DECLARE
+    v_store_id uuid;
+BEGIN
+    INSERT INTO public.seller_notifications (store_id, type, title, body)
+    VALUES (v_store_id, 'permit_expiring', 't', 'b');
+
+    IF v_store_id IS NULL THEN
+        RETURN jsonb_build_object('reminded', false, 'reason', 'no_store');
+    END IF;
+
+    RETURN jsonb_build_object('reminded', true);
+END;
+$$;
+''';
+      final body = stripSqlComments(sql);
+      expect(guardedAgainstNull(body, insertOf(body), 'v_store_id'), isFalse);
     });
   });
 

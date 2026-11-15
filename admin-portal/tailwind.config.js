@@ -26,8 +26,8 @@ export default {
         pendingSoft: '#FFF4D6',
       },
       boxShadow: {
-        card: '0 1px 2px rgba(59, 35, 20, 0.06)',
-        pop: '0 8px 24px rgba(59, 35, 20, 0.12)',
+        card: '0 1px 2px rgba(59, 35, 20, 0.05), 0 4px 16px -8px rgba(59, 35, 20, 0.12)',
+        pop: '0 12px 32px -8px rgba(59, 35, 20, 0.22)',
       },
     },
   },

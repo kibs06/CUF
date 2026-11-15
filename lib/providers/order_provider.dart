@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../exceptions/stock_unavailable_exception.dart';
+import '../constants/app_constants.dart';
+import '../services/auth_service.dart';
 import '../services/order_service.dart';
 import '../services/supabase_service.dart';
 import '../utils/nav_perf.dart';
@@ -609,13 +611,56 @@ class OrderProvider extends ChangeNotifier {
     try {
       await _db.approveSellerApplication(userId);
       await loadProfiles();
+      // Approving IS the business-requirements verdict: the DB trigger
+      // `verify_seller_docs_on_approval` verifies the applicant's pending
+      // DTI/BIR/permit documents in the same transaction. Read the row back
+      // so the email can lead with the Verified Seller badge when it landed.
+      final verified = await _businessDocsVerified(userId);
       // Fire-and-forget: email the applicant the good news (the in-app
       // notification is written by the DB trigger). Failure to send must
       // never fail the approval itself.
-      _triggerApprovalEmail(userId, outcome: 'approved');
+      _triggerApprovalEmail(userId, outcome: 'approved', verified: verified);
+      if (verified) _triggerVerifiedPush(userId);
       return true;
     } catch (_) {
       return false;
+    }
+  }
+
+  /// True when [userId]'s business-docs row came back `verified` — decides
+  /// whether the email and push lead with the Verified Seller badge. Any
+  /// failure answers false (plain approval mail), so a read problem can never
+  /// fail or misreport an approval.
+  Future<bool> _businessDocsVerified(String userId) async {
+    try {
+      final row = await AuthService.instance.fetchBusinessVerification(userId);
+      return row?['verification_status']?.toString() ==
+          AppConstants.bizStatusVerified;
+    } catch (e) {
+      debugPrint('[OrderProvider] business docs read failed: $e');
+      return false;
+    }
+  }
+
+  /// Fire-and-forget: wake the seller's lock screen with the same notice the
+  /// DB trigger wrote to their bell when the approval auto-verified their
+  /// documents. A failed push must never fail the approval.
+  void _triggerVerifiedPush(String userId) {
+    try {
+      Supabase.instance.client.functions
+          .invoke('send-notification-push', body: {
+        'recipientUserId': userId,
+        'title': 'You\'re a verified seller ✅',
+        'body': 'Your business documents were approved. Your Verified Seller '
+            'badge is now showing on your profile and store page.',
+        'type': 'verified_seller',
+        'screen': 'seller_notifications',
+      }).catchError((e) {
+        debugPrint('[OrderProvider] Verified push trigger failed: $e');
+        return FunctionResponse(status: 500);
+      });
+    } catch (e) {
+      debugPrint('[OrderProvider] Verified push trigger failed: $e');
     }
   }
 
@@ -638,12 +683,14 @@ class OrderProvider extends ChangeNotifier {
     String userId, {
     required String outcome,
     String? reason,
+    bool verified = false,
   }) {
     try {
       Supabase.instance.client.functions
           .invoke('send-approval-email', body: {
         'userId': userId,
         'outcome': outcome,
+        if (verified) 'verified': true,
         if (reason != null && reason.isNotEmpty) 'rejectionReason': reason,
       }).catchError((e) {
         debugPrint('[OrderProvider] Approval email trigger failed: $e');

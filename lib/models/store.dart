@@ -7,10 +7,12 @@ class Store {
   final String id;
   final String name;
   final String? tagline;
+
   /// Longer "about the store" text (optional — sellers can add it after
   /// store creation; the application's Step 4 description was optional).
   final String? description;
   final String location;
+
   /// Store tag ids — same preset vocabulary as product tags (handmade,
   /// leather, eco-friendly…). Collected during the seller application and
   /// editable via Edit Store.
@@ -18,15 +20,23 @@ class Store {
   final String brandColor; // hex string, e.g. '#8B5A2B'
   final String? bannerUrl;
   final String? logoUrl;
+
   /// Aggregate of customer reviews (1–5). NULL until the store has its
   /// first review — maintained by the `refresh_store_rating()` DB trigger,
   /// never written from the app.
   final double? rating;
+
   /// Number of reviews behind [rating] (trigger-maintained).
   final int reviewCount;
   final bool isOpen;
   final bool isActive;
   final String? ownerId;
+
+  /// Whether the owner has been granted the Verified Seller badge by an
+  /// admin (`profiles.seller_verified_at`). Derived from the embedded profile
+  /// on customer store queries, never a `stores` column — default false so
+  /// any query without the embed (and every legacy caller) stays unbadged.
+  final bool sellerVerified;
   final DateTime createdAt;
   // Auto-schedule fields
   final bool autoScheduleEnabled;
@@ -49,6 +59,7 @@ class Store {
     this.isOpen = true,
     this.isActive = true,
     this.ownerId,
+    this.sellerVerified = false,
     required this.createdAt,
     this.autoScheduleEnabled = false,
     this.openTime,
@@ -147,7 +158,8 @@ class Store {
       tagline: map['tagline'],
       description: map['description'],
       location: map['location'] ?? '',
-      tags: (map['tags'] as List?)
+      tags:
+          (map['tags'] as List?)
               ?.map((e) => e?.toString() ?? '')
               .where((e) => e.isNotEmpty)
               .toList() ??
@@ -160,6 +172,7 @@ class Store {
       isOpen: map['is_open'] ?? true,
       isActive: map['is_active'] ?? true,
       ownerId: map['owner_id'],
+      sellerVerified: _embeddedSellerVerified(map['profiles']),
       autoScheduleEnabled: map['auto_schedule_enabled'] ?? false,
       openTime: map['open_time']?.toString(),
       closeTime: map['close_time']?.toString(),
@@ -169,6 +182,15 @@ class Store {
           : DateTime.tryParse(map['created_at']?.toString() ?? '') ??
                 DateTime.now(),
     );
+  }
+
+  /// The embedded `profiles!stores_owner_id_fkey` is a Map for a to-one
+  /// embed, but PostgREST has returned a List in older shapes; accept both and
+  /// never turn a parsing surprise into a false trust badge.
+  static bool _embeddedSellerVerified(dynamic profile) {
+    var row = profile;
+    if (row is List) row = row.isEmpty ? null : row.first;
+    return row is Map && row['seller_verified_at'] != null;
   }
 
   /// Convert to Map for Supabase upsert.

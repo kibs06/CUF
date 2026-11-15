@@ -20,6 +20,7 @@ import 'providers/cart_provider.dart';
 import 'providers/order_provider.dart';
 import 'providers/address_provider.dart';
 import 'providers/notification_provider.dart';
+import 'providers/admin_notification_provider.dart';
 import 'providers/seller_notification_provider.dart';
 import 'providers/message_provider.dart';
 import 'providers/chat_attachment_provider.dart';
@@ -282,6 +283,7 @@ class _CUFMAIAppState extends State<CUFMAIApp> with WidgetsBindingObserver {
         ChangeNotifierProvider(create: (_) => AddressProvider()),
         ChangeNotifierProvider(create: (_) => NotificationProvider()),
         ChangeNotifierProvider(create: (_) => SellerNotificationProvider()),
+        ChangeNotifierProvider(create: (_) => AdminNotificationProvider()),
         ChangeNotifierProvider(create: (_) => MessageProvider()),
         ChangeNotifierProvider(create: (_) => ChatAttachmentProvider()),
         ChangeNotifierProvider(create: (_) => FollowProvider(StoreService.instance)),

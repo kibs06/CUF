@@ -175,10 +175,9 @@ export default function Orders() {
               <thead className="bg-[#F5F0EB]">
                 <tr>
                   <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">Order ID</th>
-                  <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">Customer</th>
-                  <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">Store</th>
-                  <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">Items</th>
-                  <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">Total</th>
+                  <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">Customer</th>                      <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">Store</th>
+                      <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">Items</th>
+                      <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">Total</th>
                   <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">Status</th>
                   <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">Date</th>
                 </tr>

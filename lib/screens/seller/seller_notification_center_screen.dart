@@ -758,6 +758,11 @@ class _NotificationRowContent extends StatelessWidget {
         return Icons.assignment_return_outlined;
       case 'replacement_received':
         return Icons.verified_outlined;
+      case 'verified_seller':
+        return Icons.verified_rounded;
+      case 'permit_expiring':
+        // A calendar with a problem — "your permit date needs attention".
+        return Icons.event_busy_outlined;
       case kModelRequestSellerType:
         // The same icon the product action sheet's request row uses, so the
         // notice and the row it points at read as one thing.
@@ -790,7 +795,12 @@ class _NotificationRowContent extends StatelessWidget {
         // notice and the row it points at read as one thing.
         return SellerTheme.amberDark;
       case 'replacement_received':
+      case 'verified_seller':
         return AppConstants.success;
+      case 'permit_expiring':
+        // The same amber as a pending order: renewal is an ask, not a
+        // failure, even once the permit has lapsed.
+        return SellerTheme.amberDark;
       case kModelRequestSellerType:
         // Deep purple — "3D modelling news", the same reading as the customer
         // feed's `models` colour, so an ending looks the same on either side.

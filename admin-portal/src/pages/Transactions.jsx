@@ -17,7 +17,7 @@ import { Area, AreaChart, ResponsiveContainer } from 'recharts'
 import Badge from '../components/ui/Badge.jsx'
 import Modal from '../components/ui/Modal.jsx'
 import StatCard from '../components/ui/StatCard.jsx'
-import { StatCardSkeleton, TableSkeleton } from '../components/ui/Skeleton.jsx'
+import Skeleton, { TableSkeleton } from '../components/ui/Skeleton.jsx'
 import EmptyState from '../components/ui/EmptyState.jsx'
 import AvatarInitials from '../components/ui/AvatarInitials.jsx'
 import DateRangePicker from '../components/ui/DateRangePicker.jsx'
@@ -401,6 +401,7 @@ export default function Transactions() {
       total: filtered.length,
       totalPaid,
       fees: feeCount > 0 ? feeData : null,
+      feeCount,
       attention,
     }
   }, [filtered])
@@ -428,6 +429,7 @@ export default function Transactions() {
         tone: 'primary',
         Icon: Wallet,
         value: <AnimatedNumber value={stats.total} format={(v) => Math.round(v).toLocaleString()} />,
+        caption: 'in current filters',
       },
       {
         key: 'paid',
@@ -436,6 +438,7 @@ export default function Transactions() {
         Icon: Banknote,
         sparkline: <Sparkline data={sparkData} />,
         value: <AnimatedNumber value={stats.totalPaid} format={moneyFormat} />,
+        caption: 'succeeded payments',
       },
       {
         key: 'fees',
@@ -448,14 +451,15 @@ export default function Transactions() {
           ) : (
             '—'
           ),
+        caption: stats.feeCount > 0 ? `across ${stats.feeCount} payments` : 'fee tracking off',
       },
       {
         key: 'attention',
         label: 'Failed / expired',
         tone: 'error',
         Icon: AlertTriangle,
-        highlight: stats.attention > 0,
         value: <AnimatedNumber value={stats.attention} format={(v) => Math.round(v).toLocaleString()} />,
+        caption: stats.attention > 0 ? 'needs review' : 'all clear',
       },
     ],
     [stats, sparkData],
@@ -505,30 +509,30 @@ export default function Transactions() {
 
   return (
     <div className="space-y-6">
-      {/* Summary cards */}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {/* Summary strip — one card, hairline dividers, like the dashboard */}
+      <section aria-label="Transaction summaries" className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-border bg-border shadow-card xl:grid-cols-4">
         {isLoading ? (
           Array.from({ length: 4 }).map((_, i) => (
-            <motion.div
-              key={i}
-              initial={reduce ? false : { opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: i * 0.05 }}
-            >
-              <StatCardSkeleton />
-            </motion.div>
+            <div key={i} className="bg-white p-5">
+              <Skeleton className="mb-3 h-9 w-9 rounded-xl" />
+              <Skeleton className="mb-2 h-8 w-20" />
+              <Skeleton className="h-4 w-28" />
+            </div>
           ))
         ) : (
           cards.map((card, i) => (
             <motion.div
               key={card.key}
+              className="bg-white"
               initial={reduce ? false : { opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, delay: i * 0.06 }}
             >
               <StatCard
+                bare
                 label={card.label}
                 value={card.value}
+                caption={card.caption}
                 tone={card.tone}
                 Icon={card.Icon}
                 highlight={card.highlight}
@@ -537,13 +541,13 @@ export default function Transactions() {
             </motion.div>
           ))
         )}
-      </div>
+      </section>
 
       {/* Filter panel */}
-      <div className="rounded-2xl border border-[#D9D0C7] bg-white p-4 shadow-sm">
+      <div className="rounded-2xl border border-border bg-white p-4 shadow-card">
         <div className="flex flex-wrap items-center gap-3">
           {/* Status segmented control */}
-          <div className="flex items-center gap-1 rounded-full border border-[#D9D0C7] bg-[#F5F0EB] p-1">
+          <div className="flex flex-wrap items-center gap-1 rounded-full border border-border bg-canvas p-1">
             {STATUS_SEGMENTS.map((s) => {
               const active = statusFilter === s.value
               return (
@@ -551,10 +555,11 @@ export default function Transactions() {
                   key={s.value}
                   type="button"
                   onClick={() => setStatusFilter(s.value)}
+                  aria-pressed={active}
                   className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
                     active
                       ? 'bg-white text-secondary shadow-sm'
-                      : 'text-[#6B5C4E] hover:text-secondary'
+                      : 'text-muted hover:text-secondary'
                   }`}
                 >
                   <span className={`h-1.5 w-1.5 rounded-full ${s.dot} ${active ? '' : 'opacity-50'}`} />
@@ -568,7 +573,8 @@ export default function Transactions() {
             <select
               value={storeFilter}
               onChange={(e) => setStoreFilter(e.target.value)}
-              className="rounded-full border border-[#D9D0C7] bg-white px-4 py-2 text-sm font-medium text-[#3B2314] outline-none transition-colors focus:border-primary"
+              aria-label="Filter by store"
+              className="rounded-full border border-border bg-white px-4 py-2 text-sm font-medium text-ink outline-none transition-colors focus:border-primary"
             >
               <option value="all">All stores</option>
               {stores.map((s) => (
@@ -603,18 +609,34 @@ export default function Transactions() {
             placeholder="Search order, customer, store, ref…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-xl border border-[#D9D0C7] bg-[#FBF8F5] py-2.5 pl-10 pr-10 text-sm text-[#3B2314] placeholder-[#6B5C4E] outline-none transition-all focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/20"
+            className="w-full rounded-xl border border-border bg-canvas py-2.5 pl-10 pr-10 text-sm text-ink placeholder-muted outline-none transition-all focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/20"
           />
           {search && (
             <button
               type="button"
               onClick={() => setSearch('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-[#6B5C4E] transition-colors hover:bg-[#F5F0EB] hover:text-[#3B2314]"
+              aria-label="Clear search"
+              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted transition-colors hover:bg-canvas hover:text-ink"
             >
               <X size={14} />
             </button>
           )}
         </div>
+
+        {filtersActive && (
+          <div className="mt-3 flex items-center justify-between text-xs text-muted">
+            <span className="tnum">
+              {filtered.length} of {rows.length} match
+            </span>
+            <button
+              type="button"
+              onClick={clearAllFilters}
+              className="rounded-full px-2 py-1 font-semibold text-primary transition-colors hover:bg-canvas"
+            >
+              Reset filters
+            </button>
+          </div>
+        )}
       </div>
 
       {isLoading && (
@@ -634,18 +656,19 @@ export default function Transactions() {
 
       {!isLoading && !isError && (
         <>
-          <div className="overflow-x-auto rounded-2xl border border-[#D9D0C7] bg-white shadow-sm">
+          <div className="overflow-x-auto rounded-2xl border border-border bg-white shadow-card">
             <table className="min-w-full text-left text-sm">
-              <thead className="bg-[#FBF8F5]">
+              <caption className="sr-only">Payment transactions with date, customer, order, amount and status</caption>
+              <thead className="bg-canvas">
                 <tr>
-                  <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">Date</th>
-                  <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">Customer</th>
-                  <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">Order</th>
-                  <th className="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">Amount</th>
-                  <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">Status</th>
+                  <th scope="col" className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-muted">Date</th>
+                  <th scope="col" className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-muted">Customer</th>
+                  <th scope="col" className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-muted">Order</th>
+                  <th scope="col" className="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider text-muted">Amount</th>
+                  <th scope="col" className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-muted">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#F5F0EB]">
+              <tbody className="divide-y divide-canvas">
                 {pageRows.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="p-0">
@@ -682,7 +705,7 @@ export default function Transactions() {
                         key={row.id}
                         {...rowAnim(i)}
                         onClick={() => setSelected(row)}
-                        className={`group cursor-pointer transition-all hover:bg-[#FBF8F5] ${
+                        className={`group cursor-pointer transition-all hover:bg-canvas ${
                           ROW_HOVER_ACCENT[row.status] ?? 'hover:shadow-[inset_3px_0_0_#8B5A2B]'
                         }`}
                       >
@@ -701,15 +724,15 @@ export default function Transactions() {
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-4 align-middle font-mono text-xs text-[#6B5C4E]">
+                        <td className="tnum px-6 py-4 align-middle font-mono text-xs text-muted">
                           {shortId(row.order_id)}
                         </td>
                         <td className="px-6 py-4 text-right align-middle">
-                          <p className="font-mono text-base font-bold text-[#3B2314]">
+                          <p className="tnum font-mono text-base font-bold text-ink">
                             {formatCurrency(row.amount)}
                           </p>
                           {row.paymongo_fee_amount != null && (
-                            <p className="text-xs text-[#6B5C4E]">
+                            <p className="tnum text-xs text-muted">
                               net {formatCurrency(row.net_amount)}
                             </p>
                           )}
@@ -729,7 +752,7 @@ export default function Transactions() {
           </div>
 
           <div className="flex items-center justify-between text-sm">
-            <span className="text-[#6B5C4E]">
+            <span className="tnum text-muted">
               {filtered.length} transactions · Page {page} of {totalPages}
             </span>
             <div className="flex gap-2">
@@ -737,7 +760,7 @@ export default function Transactions() {
                 type="button"
                 disabled={page <= 1}
                 onClick={() => setPage((p) => p - 1)}
-                className="rounded-xl border border-[#D9D0C7] px-3 py-1 text-[#6B5C4E] transition-colors hover:bg-[#F5F0EB] disabled:opacity-40"
+                className="rounded-xl border border-border px-3 py-1 text-muted transition-colors hover:bg-canvas disabled:opacity-40"
               >
                 Previous
               </button>
@@ -745,7 +768,7 @@ export default function Transactions() {
                 type="button"
                 disabled={page >= totalPages}
                 onClick={() => setPage((p) => p + 1)}
-                className="rounded-xl border border-[#D9D0C7] px-3 py-1 text-[#6B5C4E] transition-colors hover:bg-[#F5F0EB] disabled:opacity-40"
+                className="rounded-xl border border-border px-3 py-1 text-muted transition-colors hover:bg-canvas disabled:opacity-40"
               >
                 Next
               </button>

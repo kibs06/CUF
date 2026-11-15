@@ -23,9 +23,7 @@ class StoreService {
         .select()
         .eq('owner_id', sellerId)
         .maybeSingle();
-    return data == null
-        ? null
-        : Map<String, dynamic>.from(data as Map);
+    return data == null ? null : Map<String, dynamic>.from(data as Map);
   }
 
   /// Create a new store with optional logo and banner uploads.
@@ -49,7 +47,8 @@ class StoreService {
     final existing = await getMyStore();
     if (existing != null) {
       throw Exception(
-          'You already have a store. Each seller can only manage one store.');
+        'You already have a store. Each seller can only manage one store.',
+      );
     }
 
     final store = await _client
@@ -103,8 +102,7 @@ class StoreService {
           .maybeSingle();
       final fallback = profile?['store_front_url']?.toString();
       if (fallback != null && fallback.isNotEmpty) {
-        updates['banner_url'] = _client
-            .storage
+        updates['banner_url'] = _client.storage
             .from('store-assets')
             .getPublicUrl(fallback);
       }
@@ -278,7 +276,11 @@ class StoreService {
   /// When auto-schedule is enabled:
   /// - Closing (isOpen=false) sets manual_override = true (seller closing against schedule)
   /// - Reopening (isOpen=true) clears manual_override = false (matches schedule)
-  Future<void> toggleStoreOpen(String storeId, bool isOpen, {bool autoScheduleEnabled = false}) async {
+  Future<void> toggleStoreOpen(
+    String storeId,
+    bool isOpen, {
+    bool autoScheduleEnabled = false,
+  }) async {
     final updates = <String, dynamic>{'is_open': isOpen};
     if (autoScheduleEnabled) {
       // Closing manually = override; reopening manually = clear override
@@ -291,7 +293,8 @@ class StoreService {
   Future<void> clearManualOverride(String storeId) async {
     await _client
         .from('stores')
-        .update({'manual_override': false}).eq('id', storeId);
+        .update({'manual_override': false})
+        .eq('id', storeId);
   }
 
   /// Update store auto-schedule settings.
@@ -312,8 +315,6 @@ class StoreService {
     }
     await _client.from('stores').update(updates).eq('id', storeId);
   }
-
-
 
   /// Best-effort removal of a stored object. Ignores errors so removing an
   /// already-gone object never fails the settings save.
@@ -336,7 +337,9 @@ class StoreService {
     String contentType = 'image/jpeg',
   }) async {
     final bytes = await file.readAsBytes();
-    await _client.storage.from(bucket).uploadBinary(
+    await _client.storage
+        .from(bucket)
+        .uploadBinary(
           path,
           bytes,
           fileOptions: FileOptions(contentType: contentType, upsert: true),
@@ -347,9 +350,11 @@ class StoreService {
   // ─── CUSTOMER-FACING STORE METHODS ───────────────────────────
 
   Future<List<Store>> fetchAllStores() async {
+    // The public list needs the owner's Verified Seller flag beside each
+    // store name. One embed avoids a profiles round-trip per focused store.
     final data = await _client
         .from('stores')
-        .select()
+        .select('*, profiles!stores_owner_id_fkey(seller_verified_at)')
         .eq('is_active', true)
         .order('created_at', ascending: false);
 
@@ -365,6 +370,53 @@ class StoreService {
         .eq('id', storeId)
         .maybeSingle();
     return data == null ? null : Store.fromMap(Map<String, dynamic>.from(data));
+  }
+
+  /// Whether a store's owner carries the admin-granted Verified Seller badge
+  /// (`profiles.seller_verified_at`).
+  ///
+  /// Public by design: the badge is a buyer-facing trust signal, and the
+  /// evidence behind it (`seller_business_docs`, with private document paths)
+  /// is owner/admin only — so `profiles` carries the stamp instead. A failed
+  /// or missing lookup reads as "not verified", never the other way round.
+  Future<bool> isSellerVerified(String? ownerId) async {
+    if (ownerId == null || ownerId.isEmpty) return false;
+    try {
+      final data = await _client
+          .from('profiles')
+          .select('seller_verified_at')
+          .eq('id', ownerId)
+          .maybeSingle();
+      return data?['seller_verified_at'] != null;
+    } catch (e) {
+      debugPrint('[StoreService] isSellerVerified failed: $e');
+      return false;
+    }
+  }
+
+  /// [isSellerVerified] resolved from a STORE id rather than an owner id —
+  /// for surfaces that hold only the product's `store_id` (the product page).
+  /// One embedded query; falls back to the owner lookup if the embed is
+  /// missing, and answers false on any failure.
+  Future<bool> isStoreVerified(String? storeId) async {
+    if (storeId == null || storeId.isEmpty) return false;
+    try {
+      final data = await _client
+          .from('stores')
+          .select('owner_id, profiles!stores_owner_id_fkey(seller_verified_at)')
+          .eq('id', storeId)
+          .maybeSingle();
+      if (data == null) return false;
+      var profile = data['profiles'];
+      if (profile is List) {
+        profile = profile.isEmpty ? null : profile.first;
+      }
+      if (profile is Map) return profile['seller_verified_at'] != null;
+      return isSellerVerified(data['owner_id']?.toString());
+    } catch (e) {
+      debugPrint('[StoreService] isStoreVerified failed: $e');
+      return false;
+    }
   }
 
   int getProductCountForStore(
@@ -424,10 +476,10 @@ class StoreService {
     try {
       // Upsert: idempotent — safe for rapid double-taps.
       // If the row already exists, this is a harmless no-op.
-      await _client.from('store_follows').upsert(
-        {'user_id': userId, 'store_id': storeId},
-        onConflict: 'user_id,store_id',
-      );
+      await _client.from('store_follows').upsert({
+        'user_id': userId,
+        'store_id': storeId,
+      }, onConflict: 'user_id,store_id');
       debugPrint('[Follow] Upsert succeeded');
     } catch (e, st) {
       debugPrint('[Follow] UPSERT FAILED: $e');
@@ -485,7 +537,9 @@ class StoreService {
       // Try the join query (requires FK from store_follows.store_id → stores.id)
       final data = await _client
           .from('store_follows')
-          .select('created_at, stores(id, name, logo_url, tagline, brand_color)')
+          .select(
+            'created_at, stores(id, name, logo_url, tagline, brand_color)',
+          )
           .eq('user_id', userId)
           .order('created_at', ascending: false);
 
@@ -497,8 +551,9 @@ class StoreService {
       }
 
       // Check if the join actually returned store data
-      final hasStoreData =
-          data.every((r) => r['stores'] != null && r['stores'] is Map);
+      final hasStoreData = data.every(
+        (r) => r['stores'] != null && r['stores'] is Map,
+      );
       debugPrint('[StoreService] hasStoreData=$hasStoreData');
 
       if (hasStoreData) {

@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Ban, Eye, KeyRound, Package, RotateCcw, Store } from 'lucide-react'
+import { Ban, Eye, KeyRound, Package, RotateCcw, ShieldCheck, Store, XCircle } from 'lucide-react'
 import Badge from '../ui/Badge.jsx'
 import Modal from '../ui/Modal.jsx'
 import { useToast } from '../ui/Toast.jsx'
 import { useUpdateUserRole, useUpdateUserStatus } from '../../hooks/useUsers.js'
 import { useSellerPortfolio, useUserOrders } from '../../hooks/useUserDetail.js'
 import { useUserDocuments } from '../../hooks/useUserDocuments.js'
+import { useBusinessDocsVerdict } from '../../hooks/useBusinessDocs.js'
 import { formatCurrency, formatDate } from '../../lib/constants'
 
 function getInitials(name) {
@@ -44,11 +45,14 @@ export default function UserDetailModal({ user, onClose }) {
   const [roleOpen, setRoleOpen] = useState(false)
   const [roleValue, setRoleValue] = useState('customer')
   const [busy, setBusy] = useState(false)
+  // true = verify, false = reject, null = no confirmation open.
+  const [bizVerdict, setBizVerdict] = useState(null)
 
   // Always call hooks (they self-disable when user is null).
   const ordersQ = useUserOrders(user?.id)
   const portfolioQ = useSellerPortfolio(user?.id)
   const documentsQ = useUserDocuments(user?.id)
+  const bizDocsVerdict = useBusinessDocsVerdict()
 
   useEffect(() => {
     setTab('account')
@@ -97,6 +101,32 @@ export default function UserDetailModal({ user, onClose }) {
       setRoleOpen(false)
     } catch (err) {
       showToast(err.message ?? 'Failed to update role', 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // The same verdict the Flutter Business Docs tab sends: the admin RPC owns
+  // the docs status, and the DB triggers grant/withdraw the public badge and
+  // write the in-app notice. The email is this mutation's only other job.
+  const handleBusinessVerdict = async () => {
+    const business = documentsQ.data?.business
+    if (!business?.id || bizVerdict == null) return
+    setBusy(true)
+    try {
+      await bizDocsVerdict.mutateAsync({
+        docId: business.id,
+        profileId: user.id,
+        verified: bizVerdict,
+      })
+      showToast(
+        bizVerdict
+          ? 'Business documents verified — Verified Seller badge granted'
+          : 'Business documents rejected — badge withdrawn',
+      )
+      setBizVerdict(null)
+    } catch (err) {
+      showToast(err.message ?? 'Failed to update business documents', 'error')
     } finally {
       setBusy(false)
     }
@@ -492,6 +522,34 @@ export default function UserDetailModal({ user, onClose }) {
                     )}
                   </p>
                 )}
+                {documentsQ.data.business.id &&
+                  ['pending', 'rejected'].includes(documentsQ.data.business.status) && (
+                    <div className="mt-4 rounded-xl border border-[#D9D0C7] bg-[#FDFAF7] p-3">
+                      <p className="text-xs leading-relaxed text-[#6B5C4E]">
+                        Verifying grants the Verified Seller badge on the seller's
+                        profile and public store page, and tells them in-app and by
+                        email. Rejecting withdraws the badge.
+                      </p>
+                      <div className="mt-2.5 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setBizVerdict(false)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-[#D64545] px-3 py-1.5 text-xs font-semibold text-[#D64545] transition-colors hover:bg-red-50"
+                        >
+                          <XCircle size={14} />
+                          Reject documents
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBizVerdict(true)}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-teal-700"
+                        >
+                          <ShieldCheck size={14} />
+                          Verify documents
+                        </button>
+                      </div>
+                    </div>
+                  )}
               </>
             ) : (
               <p className="text-sm text-[#6B5C4E]">No business documents submitted.</p>
@@ -644,6 +702,64 @@ export default function UserDetailModal({ user, onClose }) {
             </label>
           ))}
         </div>
+      </Modal>
+
+      {/* ── Business documents verdict confirmation ────────────── */}
+      <Modal
+        open={bizVerdict != null}
+        onClose={() => setBizVerdict(null)}
+        title={
+          bizVerdict ? 'Verify business documents?' : 'Reject business documents?'
+        }
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setBizVerdict(null)}
+              className="rounded-xl border border-[#D9D0C7] px-4 py-2 text-sm text-[#6B5C4E] hover:bg-[#F5F0EB]"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleBusinessVerdict}
+              disabled={busy}
+              className={`rounded-xl px-4 py-2 text-sm font-semibold text-white transition-colors disabled:opacity-50 ${
+                bizVerdict
+                  ? 'bg-teal-600 hover:bg-teal-700'
+                  : 'bg-[#D64545] hover:bg-red-700'
+              }`}
+            >
+              {busy
+                ? 'Working…'
+                : bizVerdict
+                  ? 'Verify documents'
+                  : 'Reject documents'}
+            </button>
+          </>
+        }
+      >
+        <p className="mb-2 text-sm text-[#6B5C4E]">
+          {bizVerdict ? (
+            <>
+              Verify <strong className="text-[#3B2314]">{user.full_name}</strong>'s
+              DTI, BIR COR and permit? This grants the Verified Seller badge on
+              their profile and public store page, and tells them in-app and by
+              email.
+            </>
+          ) : (
+            <>
+              Reject <strong className="text-[#3B2314]">{user.full_name}</strong>'s
+              business documents? The Verified Seller badge is withdrawn and they
+              are told in-app. They can correct the paperwork and resubmit.
+            </>
+          )}
+        </p>
+        <p className="text-xs text-[#6B5C4E]">
+          Approving a seller application already verifies their documents
+          automatically; this action is for a separate re-review or a legacy
+          seller.
+        </p>
       </Modal>
     </Modal>
   )

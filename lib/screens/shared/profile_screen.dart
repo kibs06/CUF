@@ -15,7 +15,8 @@ import '../../services/auth_service.dart';
 import '../../services/profile_service.dart';
 import '../../services/store_service.dart';
 import '../../providers/update_provider.dart';
-import '../../widgets/sole_badge.dart';
+import '../../widgets/seller/seller_header_badges.dart';
+import '../../utils/seller_verification.dart';
 import '../../widgets/sole_card.dart';
 import '../../widgets/sole_status_chip.dart';
 import '../../widgets/sole_switch.dart';
@@ -72,7 +73,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
   /// Refreshed on tab re-entry (TTL) and when returning from the Tier 2
   /// screen, so the pill never shows a stale pre-submit status.
   Future<String>? _businessVerificationFuture;
+
+  /// Last resolved Tier 2 status ('none' | 'pending' | 'verified' |
+  /// 'rejected'). Kept as state, not only inside the FutureBuilder, because
+  /// two places read it: the header's Verified Seller badge, and the settings
+  /// card, which hides the Business Verification row once verified.
+  String _bizStatus = AppConstants.bizStatusNone;
   DateTime? _businessFetchedAt;
+
+  /// The permit's last valid day, for the verified seller's reminder row.
+  /// Null means "not recorded" — the badge does not depend on it, but the
+  /// seller is asked for it because an unrecorded permit cannot be watched.
+  DateTime? _permitValidUntil;
 
   /// Tracks when the customer's orders were last requested so the
   /// "My Orders" panel and "Buy Again" strip refresh on tab re-entry
@@ -163,15 +175,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
       });
       // profileId is non-null here: if the profile were missing, the
       // `_loadedProfileId == profileId` guard above would have returned.
-      _businessVerificationFuture = AuthService.instance
-          .fetchBusinessVerification(profileId!)
-          .then((row) =>
-              row?['verification_status']?.toString() ?? AppConstants.bizStatusNone);
+      _businessVerificationFuture = _loadBusinessStatus(profileId!);
       _businessFetchedAt = DateTime.now();
     } else {
       _sellerStoreFuture = null;
       _businessVerificationFuture = null;
+      _bizStatus = AppConstants.bizStatusNone;
       _businessFetchedAt = null;
+      _permitValidUntil = null;
+    }
+  }
+
+  /// Fetches the seller's Tier 2 row and caches the status in [_bizStatus].
+  ///
+  /// On failure it keeps the previous status rather than inventing one: a
+  /// network blip must never hide the Business Verification row (which would
+  /// strand a rejected seller) or claim a badge the admin never granted.
+  Future<String> _loadBusinessStatus(String profileId) async {
+    try {
+      final row = await AuthService.instance.fetchBusinessVerification(profileId);
+      final status =
+          row?['verification_status']?.toString() ?? AppConstants.bizStatusNone;
+      final permitUntil =
+          DateTime.tryParse(row?['permit_valid_until']?.toString() ?? '');
+      if (mounted) {
+        setState(() {
+          _bizStatus = status;
+          _permitValidUntil = permitUntil;
+        });
+      } else {
+        _bizStatus = status;
+        _permitValidUntil = permitUntil;
+      }
+      return status;
+    } catch (e) {
+      debugPrint('[ProfileScreen] business status failed: $e');
+      return _bizStatus;
     }
   }
 
@@ -181,10 +220,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void _refreshBusinessStatus() {
     final profileId = context.read<AuthProvider>().profile?['id']?.toString();
     if (profileId == null) return;
-    _businessVerificationFuture = AuthService.instance
-        .fetchBusinessVerification(profileId)
-        .then((row) =>
-            row?['verification_status']?.toString() ?? AppConstants.bizStatusNone);
+    _businessVerificationFuture = _loadBusinessStatus(profileId);
     _businessFetchedAt = DateTime.now();
     if (mounted) setState(() {});
   }
@@ -333,9 +369,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     // (the screen lives in an IndexedStack, so re-entry re-runs build but
     // not _syncControllers).
     if (auth.userRole == AppConstants.roleSeller &&
-        _businessFetchedAt != null &&
-        DateTime.now().difference(_businessFetchedAt!) >
-            const Duration(seconds: 30)) {
+        sellerTrustIsStale(_businessFetchedAt, DateTime.now())) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _refreshBusinessStatus();
       });
@@ -594,10 +628,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ),
         const SizedBox(height: 10),
-        SoleBadge(
-          label: _roleLabel(auth.userRole),
-          backgroundColor: roleColor.withValues(alpha: 0.14),
-          textColor: roleColor,
+        SellerHeaderBadges(
+          role: auth.userRole,
+          roleLabel: _roleLabel(auth.userRole),
+          roleColor: roleColor,
+          businessStatus: _bizStatus,
         ),
         const SizedBox(height: 12),
         if (auth.userRole != AppConstants.roleSeller)
@@ -1064,22 +1099,47 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 );
               },
             ),
-            const Divider(height: 1, color: Color(0xFFE5E7EB)),
-            // Tier 2 — optional business verification (never gates selling).
-            _settingsRow(
-              icon: Icons.business_center_outlined,
-              title: 'Business Verification',
-              subtitle: 'Optional: DTI, BIR COR & permits',
-              trailing: _buildBusinessStatusChip(),
-              onTap: () async {
-                await Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const SellerBusinessVerificationScreen(),
-                  ),
-                );
-                if (mounted) _refreshBusinessStatus();
-              },
-            ),
+            // Tier 2 — business verification. Hidden once an admin has
+            // verified the documents: the Verified Seller badge in the header
+            // is the state, and there is nothing left to submit. `none`,
+            // `pending` and `rejected` keep the row so an unverified or
+            // rejected seller can still act on it.
+            if (showsBusinessVerificationRow(_bizStatus)) ...[
+              const Divider(height: 1, color: Color(0xFFE5E7EB)),
+              _settingsRow(
+                icon: Icons.business_center_outlined,
+                title: 'Business Verification',
+                subtitle: 'Optional: DTI, BIR COR & permits',
+                trailing: _buildBusinessStatusChip(),
+                onTap: () async {
+                  await Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const SellerBusinessVerificationScreen(),
+                    ),
+                  );
+                  if (mounted) _refreshBusinessStatus();
+                },
+              ),
+            ],
+            // A verified seller's badge depends on the permit behind it
+            // staying current, so the expiry lives here (the verification
+            // row above is hidden once verified) and its subtitle IS the
+            // reminder: amber inside 30 days, red once lapsed.
+            if (_bizStatus == AppConstants.bizStatusVerified) ...[
+              const Divider(height: 1, color: Color(0xFFE5E7EB)),
+              _settingsRow(
+                icon: Icons.event_available_outlined,
+                title: 'Business Permit',
+                subtitle: _permitSubtitle(),
+                subtitleColor: _permitSubtitleColor(),
+                trailing: Icon(
+                  Icons.edit_outlined,
+                  size: 18,
+                  color: AppConstants.borderGray,
+                ),
+                onTap: _editPermitExpiry,
+              ),
+            ],
           ],
         ],
       ),
@@ -1422,11 +1482,91 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return '${months[date.month - 1]} ${date.year}';
   }
 
+  // ── Business-permit expiry (verified sellers) ──────────────────
+
+  static const List<String> _monthsShort = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+
+  String _permitDateLabel(DateTime date) =>
+      '${date.day} ${_monthsShort[date.month - 1]} ${date.year}';
+
+  /// Whole days from today to [until], negative once it has passed.
+  int _daysUntil(DateTime until) {
+    final today = DateTime.now();
+    return DateTime(until.year, until.month, until.day)
+        .difference(DateTime(today.year, today.month, today.day))
+        .inDays;
+  }
+
+  /// The reminder in words. A missing date is an ask, not an error: the
+  /// badge is live either way, but a permit nobody dates cannot be watched.
+  String _permitSubtitle() {
+    final until = _permitValidUntil;
+    if (until == null) return "Not recorded — add the permit's expiry date";
+    final days = _daysUntil(until);
+    final label = _permitDateLabel(until);
+    if (days < 0) {
+      final lapsed = -days;
+      return 'Expired $label ($lapsed day${lapsed == 1 ? '' : 's'} ago) — renew it';
+    }
+    if (days == 0) return 'Expires today ($label) — renew it';
+    return 'Expires $label — in $days day${days == 1 ? '' : 's'}';
+  }
+
+  Color? _permitSubtitleColor() {
+    final until = _permitValidUntil;
+    if (until == null) return null;
+    final days = _daysUntil(until);
+    if (days < 0) return AppConstants.error;
+    if (days <= 30) return const Color(0xFFB45309); // amber-700
+    return null;
+  }
+
+  /// Records when the permit lapses. A date inside the window posts the
+  /// bell notice immediately rather than waiting for the next launch.
+  Future<void> _editPermitExpiry() async {
+    final today = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate:
+          _permitValidUntil ?? DateTime(today.year + 1, today.month, today.day),
+      firstDate: DateTime(today.year - 5),
+      lastDate: DateTime(today.year + 10, 12, 31),
+      helpText: 'Business permit valid until',
+    );
+    if (picked == null || !mounted) return;
+
+    try {
+      await AuthService.instance.setPermitValidUntil(picked);
+      if (!mounted) return;
+      setState(() => _permitValidUntil = picked);
+      await AuthService.instance.remindPermitExpiry();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Permit expiry set to ${_permitDateLabel(picked)}'),
+          backgroundColor: AppConstants.success,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not save the permit date: $e'),
+          backgroundColor: AppConstants.error,
+        ),
+      );
+    }
+  }
+
   Widget _settingsRow({
     required IconData icon,
     required String title,
     required VoidCallback onTap,
     String? subtitle,
+    Color? subtitleColor,
     bool showDotBadge = false,
     Widget? trailing,
   }) {
@@ -1460,7 +1600,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 subtitle,
                 style: AppConstants.bodyStyle(
                   fontSize: 12,
-                  color: AppConstants.secondary.withValues(alpha: 0.5),
+                  color: subtitleColor ??
+                      AppConstants.secondary.withValues(alpha: 0.5),
                 ),
               ),
         trailing:

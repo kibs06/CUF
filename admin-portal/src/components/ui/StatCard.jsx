@@ -1,3 +1,5 @@
+import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
+
 const TILE = {
   primary: 'bg-primary/10 text-primary',
   amber: 'bg-pendingSoft text-pending',
@@ -7,20 +9,33 @@ const TILE = {
   neutral: 'bg-faint text-muted',
 }
 
+const PILL = {
+  up: 'bg-accentSoft text-accent',
+  down: 'bg-errorSoft text-error',
+  flat: 'bg-faint text-muted',
+}
+
 function Delta({ delta, invert = false, formatDelta }) {
   if (delta == null) return null
   const up = delta > 0
+  const flat = delta === 0
   const good = invert ? !up : up
-  const color = delta === 0 ? 'text-muted' : good ? 'text-accent' : 'text-error'
+  const tone = flat ? 'flat' : good ? 'up' : 'down'
+  const Icon = flat ? Minus : up ? TrendingUp : TrendingDown
   const copy =
     typeof formatDelta === 'function'
       ? formatDelta(delta)
-      : delta === 0
-        ? 'No change from last week'
+      : flat
+        ? 'No change'
         : up
-          ? `Up ${delta} from last week`
-          : `Down ${Math.abs(delta)} from last week`
-  return <span className={`tnum text-xs font-semibold ${color}`}>{copy}</span>
+          ? `+${delta}`
+          : `${delta}`
+  return (
+    <span className={`tnum inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${PILL[tone]}`}>
+      <Icon size={12} strokeWidth={2.5} aria-hidden="true" />
+      {copy}
+    </span>
+  )
 }
 
 export default function StatCard({
@@ -36,6 +51,7 @@ export default function StatCard({
   active = false,
   invertDelta = false,
   formatDelta,
+  bare = false,
 }) {
   const tile = TILE[tone] ?? TILE.neutral
   const clickable = typeof onClick === 'function'
@@ -45,29 +61,30 @@ export default function StatCard({
     <Tag
       type={clickable ? 'button' : undefined}
       onClick={onClick}
-      className={`rounded-2xl border bg-white p-5 text-left shadow-card transition-colors ${
+      className={`group relative overflow-hidden text-left transition-all duration-200 ${bare ? 'bg-white p-5' : 'rounded-2xl border bg-white p-5 shadow-card'} ${
         highlight ? 'border-[#E8A020]/60 ring-1 ring-[#E8A020]/40' : 'border-border'
-      } ${clickable ? 'w-full cursor-pointer hover:border-primary/50 hover:shadow-pop' : ''} ${
+      } ${clickable ? 'w-full cursor-pointer hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-pop' : ''} ${
         active ? 'border-primary ring-1 ring-primary/40' : ''
       }`}
     >
+      {highlight && <span aria-hidden="true" className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#E8A020] to-[#E8C99A]" />}
       <div className="flex items-center justify-between gap-3">
-        <p className="text-[13px] font-medium text-muted">{label}</p>
+        <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted">{label}</p>
         {Icon ? (
-          <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${tile}`}>
-            <Icon size={15} strokeWidth={2} />
+          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${tile} transition-transform duration-200 group-hover:scale-105`}>
+            <Icon size={16} strokeWidth={2} aria-hidden="true" />
           </div>
         ) : null}
       </div>
 
-      <p className="tnum mt-2 font-mono text-[40px] font-semibold leading-none tracking-tight text-ink">{value}</p>
+      <p className="tnum mt-2 font-mono text-[30px] font-semibold leading-none tracking-tight text-ink">{value}</p>
       {(delta != null || caption) && (
-        <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted">
+        <p className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
           {delta != null && <Delta delta={delta} invert={invertDelta} formatDelta={formatDelta} />}
           {caption && <span className="truncate">{caption}</span>}
         </p>
       )}
-      {sparkline ? <div className="mt-3 h-10 w-full">{sparkline}</div> : null}
+      {sparkline ? <div className="mt-3 h-11 w-full" aria-hidden="true">{sparkline}</div> : <div className="mt-3 h-1.5 w-10 rounded-full bg-canvas" aria-hidden="true" />}
     </Tag>
   )
 }

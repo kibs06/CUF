@@ -220,6 +220,66 @@ export function declarationMessageFor(declaration, field) {
 }
 
 /**
+ * The scale the compress step runs with — the lenient sibling of
+ * `readDeclaration`.
+ *
+ * Publish needs the length (the server's scale check cannot run without it,
+ * so a size on its own is refused outright). Compress does not: the normalizer
+ * keeps the authored scale when the length is missing and records the fact in
+ * its change log, and shrinking a 25 MB export is useful even before the ruler
+ * figure is to hand. So a blank length is `null` here, never an error — only
+ * a mistyped length or size blocks the button.
+ */
+export function readCompressScale({ externalLengthMm, authoredSizeEu }) {
+  const lengthText = String(externalLengthMm ?? '').trim()
+  const sizeText = String(authoredSizeEu ?? '').trim()
+
+  if (lengthText === '' && sizeText === '') {
+    return { externalLengthMm: null, authoredSizeEu: null, error: null, errorField: null }
+  }
+
+  const size = parseEuSize(sizeText)
+  if (size.error) {
+    return {
+      externalLengthMm: null,
+      authoredSizeEu: null,
+      error: size.error,
+      errorField: DECLARATION_FIELD.AUTHORED_SIZE_EU,
+    }
+  }
+
+  if (lengthText === '') {
+    return {
+      externalLengthMm: null,
+      authoredSizeEu: size.value,
+      error: null,
+      errorField: null,
+    }
+  }
+
+  const length = parseMm(lengthText, {
+    what: 'the declared external length',
+    min: PLAUSIBLE_LENGTH_MIN_MM,
+    max: PLAUSIBLE_LENGTH_MAX_MM,
+  })
+  if (length.error) {
+    return {
+      externalLengthMm: null,
+      authoredSizeEu: null,
+      error: length.error,
+      errorField: DECLARATION_FIELD.EXTERNAL_LENGTH_MM,
+    }
+  }
+
+  return {
+    externalLengthMm: length.value,
+    authoredSizeEu: size.value,
+    error: null,
+    errorField: null,
+  }
+}
+
+/**
  * What the admin's form starts with, taken from the seller's ask — a port of
  * `shoeModelRequestModellingPrefill`.
  *

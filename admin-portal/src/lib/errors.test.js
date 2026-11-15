@@ -92,6 +92,24 @@ test('the fallback is only for an error that said nothing', () => {
   )
 })
 
+test('an over-quota refusal names the quota, not the file', () => {
+  // HTTP 402 from an over-quota project: retrying the same publish changes
+  // nothing, so the sentence must say what does (usage down or plan up) and
+  // that nothing was lost (draft row kept, bytes reusable).
+  for (const error of [
+    { code: '402', message: 'Quota exceeded' },
+    { status: 402, message: 'Payment Required' },
+    { statusCode: 402, message: 'storage quota exceeded' },
+    new Error('Project exceeded its cached egress quota'),
+  ]) {
+    assert.equal(classifyError(error), PORTAL_ERROR.QUOTA_EXCEEDED, String(error.message ?? error.code))
+  }
+  const described = describeError({ code: '402', message: 'Quota exceeded' })
+  assert.match(described.message, /over its plan quota/)
+  assert.match(described.message, /hidden draft/)
+  assert.notEqual(classifyError({ code: '42501' }), PORTAL_ERROR.QUOTA_EXCEEDED)
+})
+
 test('a network failure says nothing was sent', () => {
   assert.equal(classifyError(new TypeError('Failed to fetch')), PORTAL_ERROR.OFFLINE)
   assert.equal(classifyError('Load failed'), PORTAL_ERROR.OFFLINE)
@@ -135,7 +153,7 @@ test('the kinds do not share a sentence', () => {
   const kinds = Object.values(PORTAL_ERROR)
   const sentences = kinds.map(sentenceFor)
 
-  assert.equal(kinds.length, 6)
+  assert.equal(kinds.length, 7)
   assert.equal(new Set(sentences).size, sentences.length)
 
   for (const kind of kinds.filter((k) => k !== PORTAL_ERROR.UNKNOWN)) {

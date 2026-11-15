@@ -661,6 +661,114 @@ void main() {
       expect(find.text('Retry'), findsOneWidget);
     });
   });
+
+  group('the confirmed paints as chips', () {
+    const paints = {'blue': '#3F4A63', 'Gray': '#9E948A'};
+    const colors = ['blue', 'Gray', 'Navy'];
+
+    Widget paintHarness({String? initial}) => MaterialApp(
+          home: ShoePreviewScreen(
+            model: model,
+            product: product,
+            paints: paints,
+            paintColors: colors,
+            initialPaintColor: initial,
+            viewBuilder: () =>
+                const SizedBox(key: Key('fake-3d'), height: 240),
+          ),
+        );
+
+    String? sectionHex(WidgetTester tester) => tester
+        .widget<ShoePreviewSection>(find.byType(ShoePreviewSection))
+        .paintHex;
+
+    testWidgets('the box opens wearing the page\'s colour', (tester) async {
+      await tester.pumpWidget(paintHarness(initial: 'blue'));
+      await tester.pump();
+
+      expect(sectionHex(tester), '#3F4A63');
+      expect(find.text('Preview paint'), findsOneWidget);
+      expect(find.text('blue'), findsOneWidget);
+      expect(find.text('Gray'), findsOneWidget);
+      // Navy carries no confirmed paint: no chip, exactly like the admin
+      // preview — it still opens as-authored from the page, it just gets
+      // no seat in here.
+      expect(find.text('Navy'), findsNothing);
+    });
+
+    testWidgets('tapping a chip retints the box live', (tester) async {
+      await tester.pumpWidget(paintHarness(initial: 'blue'));
+      await tester.pump();
+      expect(sectionHex(tester), '#3F4A63');
+
+      await tester.ensureVisible(find.text('Gray'));
+      await tester.tap(find.text('Gray'));
+      await tester.pump();
+      expect(
+        sectionHex(tester),
+        '#9E948A',
+        reason: 'a chip tap re-tints without reopening the viewer',
+      );
+
+    });
+
+    testWidgets('a removed paint leaves no chip, and the box stays honest',
+        (tester) async {
+      // The Printed scenario: the colour still exists as a variant, but its
+      // paint row is gone — so no chip, and opening on it wears the file
+      // itself with the As-authored ring on.
+      await tester.pumpWidget(paintHarness(initial: 'Navy'));
+      await tester.pump();
+
+      expect(find.text('Navy'), findsNothing);
+      expect(sectionHex(tester), isNull);
+    });
+
+    testWidgets('As-authored restores the file after a painted chip',
+        (tester) async {
+      // The admin preview's way back, in the app: once a painted chip is
+      // wearing the box, As-authored clears it to the file's own factors.
+      await tester.pumpWidget(paintHarness(initial: 'blue'));
+      await tester.pump();
+      expect(sectionHex(tester), '#3F4A63');
+
+      await tester.ensureVisible(find.text('As-authored'));
+      await tester.tap(find.text('As-authored'));
+      await tester.pump();
+      expect(
+        sectionHex(tester),
+        isNull,
+        reason: 'As-authored is the file itself, not the opening colour',
+      );
+    });
+
+    testWidgets('the chips ride the foot, above the try-on entries',
+        (tester) async {
+      // The owner's screenshot showed buttons with no picker in view: on a
+      // tall stage the row under the box scrolls away, while the pinned
+      // foot never moves.
+      await tester.pumpWidget(paintHarness(initial: 'blue'));
+      await tester.pump();
+
+      final chips = tester.getTopLeft(find.text('Preview paint'));
+      final disclosure = tester.getTopLeft(
+        find.textContaining('Due to file compression'),
+      );
+      expect(
+        chips.dy,
+        lessThan(disclosure.dy),
+        reason: 'the picker sits above the foot\'s own words, not under the box',
+      );
+    });
+
+    testWidgets('no chips without the paint map', (tester) async {
+      await tester.pumpWidget(harness());
+      await tester.pump();
+
+      expect(find.text('Preview paint'), findsNothing);
+      expect(find.text('blue'), findsNothing);
+    });
+  });
 }
 
 class _MockShoeModelService extends Mock implements ShoeModelService {}

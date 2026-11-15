@@ -20,6 +20,7 @@ import UploadModelModal from '../components/model-requests/UploadModelModal.jsx'
 import UploadArEffectModal from '../components/model-requests/UploadArEffectModal.jsx'
 import ProductPhotosDialog, { orderedPhotos } from '../components/model-requests/ProductPhotosDialog.jsx'
 import ModelledProductMenu from '../components/model-requests/ModelledProductMenu.jsx'
+import ColorPaintSection from '../components/model-requests/ColorPaintSection.jsx'
 import { useArEffects } from '../hooks/useArEffects.js'
 import { supabase } from '../lib/supabase.js'
 import { MODEL_BUCKET } from '../lib/modelPublish.js'
@@ -162,6 +163,7 @@ export default function ModelRequests() {
   // needs the store for the object path and the entry only carries the
   // product, so the store is read once when the menu item is picked.
   const [replaceTarget, setReplaceTarget] = useState(null)
+  const [paintTarget, setPaintTarget] = useState(null)
   const [arTarget, setArTarget] = useState(null)
   const del = useDeleteProductModel()
   // One read for the whole shelf: which products carry a live uploaded
@@ -211,6 +213,9 @@ export default function ModelRequests() {
   const openViewerFor = (entry) =>
     setViewingModel({
       title: entry.name,
+      // The paint preview chips read through this: without it the dialog
+      // is the model viewer it always was, with no colours to preview.
+      productId: entry.productId,
       storagePath: entry.model.storage_path,
       status: entry.model.status,
       version: entry.model.version,
@@ -237,7 +242,7 @@ export default function ModelRequests() {
       a.remove()
       URL.revokeObjectURL(url)
       showToast(
-        'Downloaded — edit it in Blender, then re-upload the fixed file with “Replace live model…” from this card’s menu.',
+        'Downloaded — edit it in Blender, then re-upload the fixed file with “Replace live model” from this card’s menu.',
       )
     } catch (e) {
       showToast(describeError(e, 'That file could not be downloaded.').message, 'error')
@@ -294,6 +299,7 @@ export default function ModelRequests() {
     else if (action === 'copy') void copyPublicLink(entry)
     else if (action === 'upload-ar') setArTarget({ entry, current: ar })
     else if (action === 'replace') void startReplace(entry)
+    else if (action === 'paint') setPaintTarget({ productId: entry.productId, name: entry.name })
     else if (action === 'delete') setDeleteTarget(entry)
   }
 
@@ -890,6 +896,27 @@ export default function ModelRequests() {
         }}
       />
 
+      {/* ─── 3D paint per colour, with no upload ───────────────────
+          Repainting is not replacing: it writes hexes to
+          `product_color_paint`, touches no file, and creates no new
+          version — so it gets its own dialog, not the replace flow. */}
+      <Modal
+        open={!!paintTarget}
+        onClose={() => setPaintTarget(null)}
+        title={paintTarget ? `3D paint — ${paintTarget.name}` : '3D paint'}
+        footer={
+          <button
+            type="button"
+            onClick={() => setPaintTarget(null)}
+            className="rounded-xl bg-[#8B5A2B] px-4 py-2 text-sm font-semibold text-white hover:bg-[#6B4423]"
+          >
+            Done
+          </button>
+        }
+      >
+        {paintTarget && <ColorPaintSection productId={paintTarget.productId} />}
+      </Modal>
+
       {/* ─── Decline ─────────────────────────────────────────────── */}
       <Modal
         open={!!declineTarget}
@@ -1094,6 +1121,7 @@ function FulfilModal({ request, onClose, onConfirm, busy }) {
                     onClick={() =>
                       setViewing({
                         title: request?.products?.name ?? 'Product',
+                        productId: request?.product_id ?? null,
                         storagePath: m.storage_path,
                         status: m.status,
                         version: m.version,

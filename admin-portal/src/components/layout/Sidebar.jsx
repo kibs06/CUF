@@ -179,8 +179,8 @@ export default function Sidebar({ open, onClose }) {
                           expanded ? 'px-2.5' : 'px-2.5 lg:justify-center lg:px-2'
                         } ${
                           isActive
-                            ? 'bg-[#8B5A2B] font-semibold text-white'
-                            : 'text-[#C4A882]/90 hover:bg-white/6 hover:text-white'
+                            ? 'bg-[#8B5A2B] font-semibold text-white shadow-card ring-1 ring-white/10'
+                            : 'text-[#C4A882]/90 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E8C99A]/70'
                         }`
                       }
                     >
@@ -196,7 +196,8 @@ export default function Sidebar({ open, onClose }) {
                         ) : (
                           <span
                             aria-hidden="true"
-                            className={`absolute right-1.5 top-1.5 hidden h-2 w-2 rounded-full lg:block ${badge.tone}`}
+                            title={`${badge.value} waiting`}
+                            className={`absolute right-1.5 top-1.5 hidden h-2.5 w-2.5 rounded-full ring-2 ring-[#2E1C10] lg:block ${badge.tone}`}
                           />
                         ))}
                     </NavLink>

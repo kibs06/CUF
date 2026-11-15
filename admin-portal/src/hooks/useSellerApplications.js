@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
+import { triggerVerificationPush } from '../lib/verificationPush.js'
 
 export function useSellerApplications(status = 'pending') {
   const queryClient = useQueryClient()
@@ -63,10 +64,15 @@ export function useSellerApplications(status = 'pending') {
 // Fire-and-forget: email the applicant the admin's decision via the
 // send-approval-email edge function (Gmail SMTP). Runs after the DB update
 // succeeds; a failed email must never fail the approval/rejection itself.
-const triggerApprovalEmail = (userId, outcome, reason) => {
+export const triggerApprovalEmail = (userId, outcome, reason, verified = false) => {
   supabase.functions
     .invoke('send-approval-email', {
-      body: { userId, outcome, ...(reason?.trim() ? { rejectionReason: reason.trim() } : {}) },
+      body: {
+        userId,
+        outcome,
+        ...(verified ? { verified: true } : {}),
+        ...(reason?.trim() ? { rejectionReason: reason.trim() } : {}),
+      },
     })
     .catch((err) => console.error('Approval email trigger failed:', err))
 }
@@ -80,7 +86,16 @@ export function useApproveApplication() {
         .update({ role: 'seller', seller_status: 'approved' })
         .eq('id', userId)
       if (error) throw error
-      triggerApprovalEmail(userId, 'approved')
+      // Approving also verifies the applicant's business documents (the DB
+      // trigger verify_seller_docs_on_approval), so read the verdict back and
+      // let the email lead with the Verified Seller badge when it landed.
+      const { data: docs } = await supabase
+        .from('seller_business_docs')
+        .select('verification_status')
+        .eq('profile_id', userId)
+        .maybeSingle()
+      triggerApprovalEmail(userId, 'approved', undefined, docs?.verification_status === 'verified')
+      if (docs?.verification_status === 'verified') triggerVerificationPush(userId)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['seller-applications'] })

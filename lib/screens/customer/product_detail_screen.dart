@@ -16,6 +16,7 @@ import '../../utils/cart_helpers.dart';
 import '../../utils/product_audience.dart';
 import '../../utils/size_key.dart';
 import '../../utils/recently_viewed.dart';
+import '../../services/store_service.dart';
 import '../../services/supabase_service.dart';
 import '../../providers/try_on/try_on_mode.dart';
 import '../../services/ar_try_on_channel.dart';
@@ -23,6 +24,7 @@ import '../../services/try_on_prefetch.dart';
 import '../../services/try_on_placeholder_model.dart';
 import '../../utils/sale_price.dart';
 import '../../utils/shoe_preview_visibility.dart';
+import '../../utils/shoe_paint.dart';
 import '../../utils/variant_swatch_color.dart';
 import '../../widgets/sole_badge.dart';
 import '../../widgets/sole_review_card.dart';
@@ -546,10 +548,15 @@ class _MoreFromStoreSection extends StatefulWidget {
   final String storeName;
   final String currentProductId;
 
+  /// Whether this store has been verified — drawn as a mark beside the
+  /// section's store row so the trust signal travels with the shelf.
+  final bool sellerVerified;
+
   const _MoreFromStoreSection({
     required this.storeId,
     required this.storeName,
     required this.currentProductId,
+    this.sellerVerified = false,
   });
 
   @override
@@ -621,14 +628,26 @@ class _MoreFromStoreSectionState extends State<_MoreFromStoreSection> {
               child: Icon(Icons.storefront_outlined, size: 16, color: AppConstants.primary),
             ),
             const SizedBox(width: 10),
-            Text(
-              'More from $displayName',
-              style: AppConstants.bodyStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: AppConstants.secondary,
+            Flexible(
+              child: Text(
+                'More from $displayName',
+                overflow: TextOverflow.ellipsis,
+                style: AppConstants.bodyStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: AppConstants.secondary,
+                ),
               ),
             ),
+            if (widget.sellerVerified) ...[
+              const SizedBox(width: 6),
+              const Icon(
+                Icons.verified_rounded,
+                size: 16,
+                color: AppConstants.success,
+                semanticLabel: 'Verified Seller',
+              ),
+            ],
           ],
         ),
         const SizedBox(height: 12),
@@ -859,6 +878,34 @@ class _ProductDetailViewState extends State<_ProductDetailView>
           ? _selectedColor
           : null;
 
+  /// The `product_color_paint` rows riding on this page's product payload
+  /// (`{color_name, paint_hex}` maps), or empty when the payload predates
+  /// paint or the product has none. Missing paint is normal — the viewer
+  /// renders as-authored — so this never throws, it just answers [].
+  List<Map<String, dynamic>> get _paintRows {
+    final raw = widget.product['product_color_paint'];
+    if (raw is! List) return const [];
+    return raw.whereType<Map>().map(Map<String, dynamic>.from).toList();
+  }
+
+  /// The paint for the colour the shopper has tapped, or null when the tap
+  /// is on an unpainted colour (or on nothing — deselect renders the hero
+  /// colourway as-authored). Read at open time, so a paint row saved after
+  /// this page loaded applies on the next open, not mid-page.
+  String? get _activePaintHex => paintHexForColor(_paintRows, _effectiveColor);
+
+  /// The confirmed paints as a colour → hex map for the 3D viewer's chips.
+  /// Empty when the product has none — the viewer then draws no chips.
+  Map<String, String> get _paintsMap {
+    final map = <String, String>{};
+    for (final row in _paintRows) {
+      final name = row['color_name']?.toString().trim() ?? '';
+      final hex = row['paint_hex']?.toString().trim() ?? '';
+      if (name.isNotEmpty && hex.isNotEmpty) map[name] = hex;
+    }
+    return map;
+  }
+
   /// Get the first image URL for a color from product_color_images.
   /// Returns null if no color images exist for this color.
   ///
@@ -882,35 +929,50 @@ class _ProductDetailViewState extends State<_ProductDetailView>
     return matches.first['url']?.toString();
   }
 
-  /// Lazily loads `product_color_images` when the payload that opened this
-  /// page did not carry them.
+  /// Whether the colour extras (photo rows + paint rows) have been attempted
+  /// for this page. One bounded select per open at most: a product with no
+  /// paint rows must not pay a select on every open, and a failed attempt
+  /// must not loop. A paint confirmed mid-visit still lands on the next open,
+  /// like every other late catalogue row.
+  bool _colorExtrasAttempted = false;
+
+  /// Lazily loads `product_color_images` and `product_color_paint` when the
+  /// payload that opened this page did not carry them.
   ///
   /// Grid / search / rail payloads select only images + inventory, so a
   /// product WITH seller colour photos still arrives with `variants` (colour
   /// names → swatches render) but WITHOUT `product_color_images` (thumbnail
-  /// URLs → every swatch falls back to a flat dot). Neither [_fetchInventory]
-  /// nor [_fetchVariantColors] can heal that: the first only runs when sizes
-  /// are missing, the second only fetches variants. This fills the gap —
-  /// one bounded select, no loading skeleton, silent on failure.
+  /// URLs → every swatch falls back to a flat dot) — and, crucially, WITHOUT
+  /// `product_color_paint` (every 3D open renders as-authored, even tapped
+  /// colours with confirmed paints). Neither [_fetchInventory] nor
+  /// [_fetchVariantColors] can heal that: the first only runs when sizes are
+  /// missing, the second only when colours are. This fills the gap — one
+  /// bounded select, no loading skeleton, silent on failure.
   Future<void> _ensureColorImages() async {
+    if (_colorExtrasAttempted) return;
     final existing = widget.product['product_color_images'];
-    if (existing is List && existing.isNotEmpty) return;
+    final existingPaint = widget.product['product_color_paint'];
+    final hasImages = existing is List && existing.isNotEmpty;
+    final hasPaint = existingPaint is List && existingPaint.isNotEmpty;
+    if (hasImages && hasPaint) return;
     if (_variantColorNames.isEmpty) return;
+    _colorExtrasAttempted = true;
     try {
       final productId = widget.product['id']?.toString() ?? '';
       if (productId.isEmpty) return;
-      final data = await Supabase.instance.client
-          .from('products')
-          .select('product_color_images(url, color_name, display_order)')
-          .eq('id', productId)
-          .single();
+      final data = await Supabase.instance.client.from('products').select(
+        'product_color_images(url, color_name, display_order),'
+        'product_color_paint(color_name, paint_hex)',
+      ).eq('id', productId).single();
       if (!mounted) return;
       final fetched = data['product_color_images'];
-      if (fetched is List) {
-        setState(() {
+      final paint = data['product_color_paint'];
+      setState(() {
+        if (fetched is List) {
           widget.product['product_color_images'] = fetched;
-        });
-      }
+        }
+        if (paint is List) widget.product['product_color_paint'] = paint;
+      });
     } catch (_) {
       // Swatches keep their flat-dot fallback — never a crash.
     }
@@ -1068,9 +1130,16 @@ class _ProductDetailViewState extends State<_ProductDetailView>
     );
   }
 
+  /// Whether the store selling this product carries the admin-granted
+  /// Verified Seller badge. Seeded from the catalogue payload when it carries
+  /// the store embed, otherwise resolved once from the store id.
+  bool _sellerVerified = false;
+
   @override
   void initState() {
     super.initState();
+
+    _resolveSellerVerification();
 
     // Button press animation (scale down then back up)
     _buttonPressController = AnimationController(
@@ -1127,6 +1196,43 @@ class _ProductDetailViewState extends State<_ProductDetailView>
     _previewWaitTimer = Timer(const Duration(seconds: 12), () {
       if (mounted) setState(() => _previewWaitedTooLong = true);
     });
+  }
+
+  /// Reads the verified-seller flag for this product's store.
+  ///
+  /// The catalogue and detail payloads already embed
+  /// `stores(profiles(seller_verified_at))`, which `_mapProduct` flattens to
+  /// `seller_verified` — so the usual path is synchronous. A payload from
+  /// another source (an order row, a shared link) carries no embed, and then
+  /// the store is asked once rather than the badge being silently assumed
+  /// absent and a verified seller looking like everyone else.
+  Future<void> _resolveSellerVerification() async {
+    final product = widget.product;
+    final stores = product['stores'];
+    final embeddedProfile =
+        stores is Map && stores['profiles'] is Map ? stores['profiles'] : null;
+    if (product.containsKey('seller_verified') || embeddedProfile != null) {
+      final verified = product['seller_verified'] == true ||
+          (embeddedProfile?['seller_verified_at'] != null);
+      if (!mounted) {
+        _sellerVerified = verified;
+        return;
+      }
+      setState(() => _sellerVerified = verified);
+      return;
+    }
+    // The badge is decoration on top of the catalogue; it must never take the
+    // page down. A store the session cannot read, or a build whose Supabase
+    // client is not ready, means "not verified" — not an unhandled future.
+    bool verified = false;
+    try {
+      verified = await StoreService.instance
+          .isStoreVerified(product['store_id']?.toString());
+    } catch (_) {
+      verified = false;
+    }
+    if (!mounted) return;
+    setState(() => _sellerVerified = verified);
   }
 
   /// What the V2.6 prefetch found, kept because the try-on entry needs the
@@ -1328,17 +1434,58 @@ class _ProductDetailViewState extends State<_ProductDetailView>
   /// old inline box needed one: the box belongs to the pushed route, so the
   /// page underneath holds no engine to stop (`ShoePreviewScreen` owns the flag
   /// for its own push into AR).
+  /// The viewer's paints, refreshed at open time — not the payload's.
+  ///
+  /// Confirms and removals land in the portal while shopper pages sit open,
+  /// so the rows this page loaded on may predate both (a freshly removed
+  /// paint would otherwise keep its chip and its tint in the viewer, while
+  /// the admin's own preview already dropped it). One bounded select on
+  /// the way in; any failure keeps the cached rows, never a crash.
+  Future<void> _refreshPaintRows() async {
+    try {
+      final productId = widget.product['id']?.toString() ?? '';
+      if (productId.isEmpty) return;
+      final data = await Supabase.instance.client
+          .from('products')
+          .select('product_color_paint(color_name, paint_hex)')
+          .eq('id', productId)
+          .single()
+          .timeout(const Duration(seconds: 5));
+      if (!mounted) return;
+      final paint = data['product_color_paint'];
+      if (paint is List) {
+        setState(() {
+          widget.product['product_color_paint'] = paint;
+        });
+      }
+    } catch (_) {
+      // The cached rows stand — a viewer with yesterday's paints beats no
+      // viewer at all.
+    }
+  }
+
   Future<void> _openShoePreview() async {
     final model = _shoePreviewModel;
     if (model == null) return;
+    await _refreshPaintRows();
+    if (!mounted) return;
     await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => ShoePreviewScreen(
-          model: model,
-          product: widget.product,
-          modelAvailable: _tryOnModelAvailable,
-          storagePath: _tryOnPrefetchResult?.spec?.storagePath,
-        ),
+      MaterialPageRoute(          builder: (context) => ShoePreviewScreen(
+            model: model,
+            product: widget.product,
+            modelAvailable: _tryOnModelAvailable,
+            storagePath: _tryOnPrefetchResult?.spec?.storagePath,
+            // The tapped colour's paint, or null for as-authored — read off
+            // the rows refreshed above, so the viewer agrees with the
+            // catalogue, not with this page's age.
+            paintHex: _activePaintHex,
+            // The viewer's own chips: the map, the page's colour order, and
+            // the active colour, so the opened viewer agrees with this page
+            // and the shopper can preview every colour without leaving it.
+            paints: _paintsMap,
+            paintColors: _variantColorNames,
+            initialPaintColor: _effectiveColor,
+          ),
       ),
     );
   }
@@ -1420,7 +1567,7 @@ class _ProductDetailViewState extends State<_ProductDetailView>
       final data = await Supabase.instance.client
           .from('products')
           .select(
-            'inventory(*), product_variants(*), product_color_images(url, color_name, display_order)')
+            'inventory(*), product_variants(*), product_color_images(url, color_name, display_order),' 'product_color_paint(color_name, paint_hex)')
           .eq('id', productId)
           .single();
 
@@ -1431,6 +1578,9 @@ class _ProductDetailViewState extends State<_ProductDetailView>
         widget.product['product_variants'] = data['product_variants'];
         if (data['product_color_images'] is List) {
           widget.product['product_color_images'] = data['product_color_images'];
+        }
+        if (data['product_color_paint'] is List) {
+          widget.product['product_color_paint'] = data['product_color_paint'];
         }
         _isLoadingSizes = false;
       });
@@ -1462,7 +1612,7 @@ class _ProductDetailViewState extends State<_ProductDetailView>
       final data = await Supabase.instance.client
           .from('products')
           .select(
-            'product_variants(*), product_color_images(url, color_name, display_order)')
+            'product_variants(*), product_color_images(url, color_name, display_order),' 'product_color_paint(color_name, paint_hex)')
           .eq('id', productId)
           .single();
       if (!mounted) return;
@@ -1470,6 +1620,9 @@ class _ProductDetailViewState extends State<_ProductDetailView>
         widget.product['product_variants'] = data['product_variants'];
         if (data['product_color_images'] is List) {
           widget.product['product_color_images'] = data['product_color_images'];
+        }
+        if (data['product_color_paint'] is List) {
+          widget.product['product_color_paint'] = data['product_color_paint'];
         }
       });
     } catch (_) {
@@ -1880,6 +2033,44 @@ class _ProductDetailViewState extends State<_ProductDetailView>
             right: 12,
             bottom: 50,
             child: Sole3DIconButton(onPressed: _openShoePreview),
+          ),
+
+        // Verified Seller pill — one store row with the store button beside
+        // it (that button is 44px wide at left:12, so this starts at 64).
+        // Shown only for a store whose business requirements an admin has
+        // approved; a product with no store id never reaches here true.
+        if (_sellerVerified)
+          Positioned(
+            left: 64,
+            bottom: 50,
+            child: Container(
+              key: const Key('product-verified-seller-badge'),
+              height: 44,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: AppConstants.success,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.verified_rounded,
+                    size: 16,
+                    color: Colors.white,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Verified Seller',
+                    style: AppConstants.bodyStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
 
         // Store button — bottom-left of the gallery, styled exactly like
@@ -2813,6 +3004,7 @@ class _ProductDetailViewState extends State<_ProductDetailView>
                         storeId: widget.product['store_id']?.toString() ?? '',
                         storeName: widget.product['store_name']?.toString() ?? widget.product['stores']?['name']?.toString() ?? '',
                         currentProductId: widget.product['id'].toString(),
+                        sellerVerified: _sellerVerified,
                       ),
                     ],
                   ),

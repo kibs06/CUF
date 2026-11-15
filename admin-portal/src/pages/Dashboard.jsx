@@ -24,12 +24,12 @@ import { formatDate, formatCurrency, shortId } from '../lib/constants'
 import {
   ShoppingCart,
   Package,
+  PackageOpen,
   Store,
   Users,
   Wallet,
   ArrowRight,
   Clock,
-  Flame,
   Truck,
   CheckCheck,
 } from 'lucide-react'
@@ -37,18 +37,23 @@ import {
 const peso = String.fromCharCode(0x20B1)
 const pesoTick = (v) => (v >= 1000 ? `${peso}${Math.round(v / 100) / 10}k` : `${peso}${v}`)
 
-function MiniSpark({ data, color = '#8B5A2B' }) {
+function MiniSpark({ data, color = '#8B5A2B', id = 'miniSpark' }) {
   if (!data?.length) return null
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <AreaChart data={data} margin={{ top: 2, right: 0, bottom: 0, left: 0 }}>
+      <AreaChart data={data} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
+        <defs>
+          <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity={0.28} />
+            <stop offset="100%" stopColor={color} stopOpacity={0.03} />
+          </linearGradient>
+        </defs>
         <Area
           type="monotone"
           dataKey="count"
           stroke={color}
-          strokeWidth={1.75}
-          fill={color}
-          fillOpacity={0.12}
+          strokeWidth={2}
+          fill={`url(#${id})`}
           isAnimationActive={false}
           dot={false}
         />
@@ -102,20 +107,29 @@ export default function Dashboard() {
   const revenueTotal = spark?.totalRevenue ?? 0
 
   const pipe = [
-    { label: 'Needs action', value: pipeline?.needsAction ?? 0, Icon: Clock, to: '/orders?status=pending' },
-    { label: 'In preparation', value: pipeline?.inKitchen ?? 0, Icon: Flame, to: '/orders?status=preparing' },
-    { label: 'Shipped', value: pipeline?.onTheWay ?? 0, Icon: Truck, to: '/orders?status=shipped' },
-    { label: 'Delivered', value: pipeline?.done ?? 0, Icon: CheckCheck, to: '/orders?status=delivered' },
+    { label: 'Needs action', value: pipeline?.needsAction ?? 0, Icon: Clock, to: '/orders?status=pending', tile: 'bg-pendingSoft text-pending' },
+    { label: 'In preparation', value: pipeline?.inKitchen ?? 0, Icon: PackageOpen, to: '/orders?status=preparing', tile: 'bg-[#E4EBFF] text-[#2B4BCB]' },
+    { label: 'Shipped', value: pipeline?.onTheWay ?? 0, Icon: Truck, to: '/orders?status=shipped', tile: 'bg-[#E9E4FB] text-[#5B3DF0]' },
+    { label: 'Delivered', value: pipeline?.done ?? 0, Icon: CheckCheck, to: '/orders?status=delivered', tile: 'bg-accentSoft text-accent' },
   ]
 
+  const pipeTotal = pipe.reduce((s, p) => s + p.value, 0)
+
   return (
-    <div className="space-y-8">
+    <div className="dashboard-enter space-y-6" key="dashboard-v3">
       {/* Summary row: what happened + where to go */}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="max-w-xl">
+          <p className="mb-1.5 inline-flex items-center gap-1.5 rounded-full bg-accentSoft px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.08em] text-accent">
+            <span className="relative flex h-1.5 w-1.5" aria-hidden="true">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-60" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-accent" />
+            </span>
+            Live storefront
+          </p>
           <p className="text-sm text-muted">
             {chartTotal === 0
-              ? 'A quiet week on the shelf. Review sellers waiting below, then check the order queue.'
+              ? 'A quiet week. Check seller applications below, then review the order pipeline.'
               : `${chartTotal} orders in the last 7 days, worth ${formatCurrency(spark?.totalRevenue ?? stats?.revenue7d ?? 0)}.`}
           </p>
         </div>
@@ -135,35 +149,39 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* KPI row */}
-      <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+      {/* KPI strip: one unified card with hairline dividers */}
+      <section aria-label="Key metrics" className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-border bg-border shadow-card xl:grid-cols-4">
         {statsLoading ? (
           Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)
         ) : (
           <>
             <StatCard
+              bare
               tone="primary"
               Icon={ShoppingCart}
               label="Orders, last 7 days"
               value={stats?.orders7d ?? 0}
               delta={stats?.ordersDelta ?? null}
-              caption={`${stats?.totalOrders ?? 0} all time`}
-              sparkline={<MiniSpark data={spark?.current} color="#8B5A2B" />}
+              formatDelta={(n) => (n === 0 ? 'No change' : `${n > 0 ? '+' : ''}${n}`)}
+              caption={`${stats?.totalOrders ?? 0} all time · vs last week`}
+              sparkline={<MiniSpark data={spark?.current} color="#8B5A2B" id="miniOrders" />}
             />
             <StatCard
+              bare
               tone="teal"
               Icon={Wallet}
               label="Revenue, last 7 days"
               value={formatCurrency(stats?.revenue7d ?? 0)}
               delta={stats?.revenueDelta ?? null}
               formatDelta={(n) => {
-                if (n === 0) return 'No change from last week'
-                const arrow = n > 0 ? 'Up' : 'Down'
-                return `${arrow} ${formatCurrency(Math.abs(Math.round(n)))} from last week`
+                if (n === 0) return 'No change'
+                return `${n > 0 ? '+' : '−'}${formatCurrency(Math.abs(Math.round(n)))}`
               }}
-              caption="Paid + pending orders"
+              caption="Paid + pending · vs last week"
+              sparkline={<MiniSpark data={spark?.current?.map((d) => ({ ...d, count: d.revenue }))} color="#0E7C7B" id="miniRevenue" />}
             />
             <StatCard
+              bare
               tone="cocoa"
               Icon={Package}
               label="Live products"
@@ -171,47 +189,53 @@ export default function Dashboard() {
               caption="Across all stores"
             />
             <StatCard
+              bare
               tone={stats?.pendingApplications > 0 ? 'amber' : 'neutral'}
               Icon={Store}
-              label="Sellers waiting"
+              label="Seller applications"
               value={stats?.pendingApplications ?? 0}
               highlight={(stats?.pendingApplications ?? 0) > 0}
               caption={
                 (stats?.pendingApplications ?? 0) > 0
-                  ? 'Needs a decision'
+                  ? 'Waiting for review'
                   : 'Queue is clear'
               }
             />
           </>
         )}
-      </div>
+      </section>
 
-      {/* Operations strip: shelf to doorstep */}
-      <section className="rounded-2xl border border-border bg-white shadow-card">
+      {/* Operations strip: order pipeline */}
+      <section className="rounded-2xl border border-border bg-white shadow-card ring-1 ring-black/[0.02]">
         <div className="flex items-center justify-between px-5 pb-1 pt-4">
-          <h2 className="text-[15px] font-bold text-ink">From shelf to doorstep</h2>
-          <Link to="/orders" className="inline-flex items-center gap-1 text-[13px] font-semibold text-primary hover:underline">
-            Open order queue <ArrowRight size={14} />
+          <h2 className="text-[15px] font-bold text-ink">Order pipeline</h2>
+          <Link to="/orders" className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[13px] font-semibold text-primary hover:bg-canvas">
+            Open orders <ArrowRight size={14} />
           </Link>
         </div>
-        <div className="grid grid-cols-2 divide-border px-2 pb-2 sm:grid-cols-4 sm:divide-x">
-          {pipe.map((p) => (
+        <div className="grid grid-cols-2 gap-2 px-3 pb-3 sm:grid-cols-4">
+          {pipe.map((p) => {
+            const share = pipeTotal > 0 ? Math.round((p.value / pipeTotal) * 100) : 0
+            return (
             <Link
               key={p.label}
               to={p.to}
-              className="group flex items-center gap-3 rounded-xl px-4 py-3 transition-colors hover:bg-canvas"
+              aria-label={`${p.label}: ${p.value} orders`}
+              className="group rounded-xl border border-border/70 px-4 py-3 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-card"
             >
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-faint text-secondary">
-                <p.Icon size={17} strokeWidth={2} />
+              <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${p.tile ?? 'bg-faint text-secondary'}`}>
+                <p.Icon size={17} strokeWidth={2} aria-hidden="true" />
               </span>
-              <span>
-                <span className="tnum block font-mono text-xl font-semibold leading-none text-ink">
-                  {p.value}
-                </span>
-                <span className="mt-1 block text-[13px] text-muted group-hover:text-ink">{p.label}</span>
+              <span className="tnum mt-3 block font-mono text-2xl font-semibold leading-none text-ink">
+                {p.value}
+              </span>
+              <span className="mt-1 block text-[13px] font-medium text-muted group-hover:text-ink">{p.label}</span>
+              <span className="mt-2 block h-1 overflow-hidden rounded-full bg-canvas" aria-hidden="true">
+                <span className="block h-full rounded-full bg-current opacity-30" style={{ width: `${share}%` }} />
               </span>
             </Link>
-          ))}
+            )
+          })}
         </div>
       </section>
 
@@ -232,20 +256,23 @@ export default function Dashboard() {
                 <table className="w-full text-left text-sm">
                   <thead className="bg-canvas">
                     <tr>
-                      <th className="px-4 py-2.5 text-[13px] font-semibold text-muted">Order</th>
-                      <th className="px-4 py-2.5 text-[13px] font-semibold text-muted">Customer</th>
-                      <th className="px-4 py-2.5 text-right text-[13px] font-semibold text-muted">Total</th>
-                      <th className="px-4 py-2.5 text-[13px] font-semibold text-muted">Status</th>
+                      <th className="px-4 py-2.5 text-[11px] font-bold uppercase tracking-[0.08em] text-muted">Order</th>
+                      <th className="px-4 py-2.5 text-[11px] font-bold uppercase tracking-[0.08em] text-muted">Customer</th>
+                      <th className="px-4 py-2.5 text-right text-[11px] font-bold uppercase tracking-[0.08em] text-muted">Total</th>
+                      <th className="px-4 py-2.5 text-[11px] font-bold uppercase tracking-[0.08em] text-muted">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-canvas">
                     {recentOrders.map((order) => (
                       <tr key={order.id} className="transition-colors hover:bg-canvas/70">
-                        <td className="tnum px-4 py-3 font-mono text-xs text-muted">{shortId(order.id)}</td>
-                        <td className="max-w-[160px] truncate px-4 py-3 text-ink">
-                          {order.profiles?.full_name ?? 'Walk-in'}
-                          {order.stores?.name && (
-                            <span className="block truncate text-xs text-muted">{order.stores.name}</span>
+                        <td className="px-4 py-3">
+                          <span className="tnum block font-mono text-xs font-semibold text-ink">#{shortId(order.id)}</span>
+                          <span className="tnum block text-[11px] text-muted">{formatDate(order.created_at)}</span>
+                        </td>
+                        <td className="max-w-[180px] px-4 py-3">
+                          <span className="block truncate text-sm font-medium text-ink">{order.stores?.name ?? order.profiles?.full_name ?? 'Walk-in'}</span>
+                          {order.stores?.name && order.profiles?.full_name && (
+                            <span className="block truncate text-xs text-muted">{order.profiles.full_name}</span>
                           )}
                         </td>
                         <td className="tnum px-4 py-3 text-right font-mono text-[13px] text-ink">
@@ -266,13 +293,13 @@ export default function Dashboard() {
                 </span>
                 <p className="text-sm font-semibold text-ink">No orders yet</p>
                 <p className="mt-1 max-w-xs text-[13px] text-muted">
-                  Orders from the storefront land here. Share a product link to get the first sale.
+                  Orders from the storefront will appear here.
                 </p>
                 <Link
                   to="/products"
                   className="mt-4 rounded-lg bg-secondary px-3.5 py-2 text-[13px] font-semibold text-white hover:bg-primaryDeep"
                 >
-                  Check products
+                  View products
                 </Link>
               </div>
             )}
@@ -283,7 +310,7 @@ export default function Dashboard() {
         <section className="rounded-2xl border border-border bg-white shadow-card xl:col-span-2">
           <div className="flex items-center justify-between px-5 py-4">
             <h2 className="text-[15px] font-bold text-ink">
-              Needs a decision
+              Seller applications
               {(pendingApps?.length ?? 0) > 0 && (
                 <span className="ml-2 rounded-full bg-pendingSoft px-2 py-0.5 text-xs font-bold text-pending">
                   {pendingApps.length}
@@ -335,12 +362,12 @@ export default function Dashboard() {
               </ul>
             ) : (
               <div className="flex flex-col items-center rounded-xl bg-canvas px-6 py-12 text-center">
-                <span className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-[#E0F2F1] text-accent">
+                <span className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-faint text-secondary">
                   <Users size={20} strokeWidth={1.75} />
                 </span>
-                <p className="text-sm font-semibold text-ink">Queue is clear</p>
+                <p className="text-sm font-semibold text-ink">No pending applications</p>
                 <p className="mt-1 max-w-xs text-[13px] text-muted">
-                  New seller applications will appear here with approve and decline actions.
+                  New applications show up here. You can approve or decline without leaving this page.
                 </p>
               </div>
             )}
@@ -359,7 +386,7 @@ export default function Dashboard() {
           gradientId="ordersFill"
           isEmpty={chartTotal === 0}
           emptyTitle="Nothing to plot yet"
-          emptyBody="This chart fills in once storefront orders arrive. The pipeline above stays useful on quiet days."
+          emptyBody="This chart fills in once storefront orders arrive."
           integerAxis
         />
         <TrendPanel
@@ -370,7 +397,7 @@ export default function Dashboard() {
           gradientId="revenueFill"
           isEmpty={revenueTotal === 0}
           emptyTitle="No revenue yet"
-          emptyBody="Paid orders will draw the revenue curve here."
+          emptyBody="Paid orders will appear here."
           yAxisWidth={52}
           yTickFormatter={pesoTick}
           tooltipFormatter={(v) => [formatCurrency(v), 'Revenue']}

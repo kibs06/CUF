@@ -216,7 +216,7 @@ class SupabaseService {
           // `is_primary` keeps product_images shaped identically to
           // ProductService.getSellerProducts(), so the seller grid's
           // primary-image pick reads the same field on both paths.
-          '*, stores(name), product_images(image_url, display_order, is_primary), inventory(size, stock), product_variants(size, stock, color), product_color_images(url, color_name, display_order)',
+          '*, stores(name, profiles!stores_owner_id_fkey(seller_verified_at)), product_images(image_url, display_order, is_primary), inventory(size, stock), product_variants(size, stock, color), product_color_images(url, color_name, display_order)',
         );
 
     if (storeId != null) {
@@ -255,7 +255,7 @@ class SupabaseService {
           // `is_primary` keeps product_images shaped identically to
           // ProductService.getSellerProducts(), so the seller grid's
           // primary-image pick reads the same field on both paths.
-          '*, stores(name), product_images(image_url, display_order, is_primary), inventory(size, stock), product_variants(size, stock, color), product_color_images(url, color_name, display_order)',
+          '*, stores(name, profiles!stores_owner_id_fkey(seller_verified_at)), product_images(image_url, display_order, is_primary), inventory(size, stock), product_variants(size, stock, color), product_color_images(url, color_name, display_order)',
         )
         .eq('id', productId)
         .maybeSingle()
@@ -269,7 +269,7 @@ class SupabaseService {
   /// `stockByEuSize` require. Drops `product_variants` + `product_color_images`
   /// (seller/detail/AR paths run on full rows or their own refetches).
   static const String _gridPageSelect =
-      '*, stores(name), product_images(image_url, display_order, is_primary), inventory(size, stock)';
+      '*, stores(name, profiles!stores_owner_id_fkey(seller_verified_at)), product_images(image_url, display_order, is_primary), inventory(size, stock)';
 
   /// ONE customer-grid page (newest first) with a bounded payload: a single
   /// [pageSize] `.range()` slice in stable `created_at` + `id` order, so rows
@@ -1269,7 +1269,26 @@ class SupabaseService {
       'images': images.map((image) => image['image_url'].toString()).toList(),
       'sizes': sizes,
       'store_name': row['stores'] is Map ? row['stores']['name'] : null,
+      // Verified Seller badge, read from the store owner's public trust stamp
+      // on the embedded profile. Present on every catalogue/detail path (the
+      // selects embed `stores(profiles(seller_verified_at))`); a payload from
+      // another source simply has no key, and the card draws nothing rather
+      // than claiming a badge nobody granted.
+      'seller_verified': _storeOwnerVerified(row),
     };
+  }
+
+  /// True when the embedded store row carries a verified owner. Tolerant of
+  /// PostgREST returning the single embed as a Map or a one-element List.
+  bool _storeOwnerVerified(Map<String, dynamic> row) {
+    final stores = row['stores'];
+    if (stores is! Map) return false;
+    var profile = stores['profiles'];
+    if (profile is List) {
+      profile = profile.isEmpty ? null : profile.first;
+    }
+    if (profile is! Map) return false;
+    return profile['seller_verified_at'] != null;
   }
 
   Map<String, dynamic> _mapOrder(Map<String, dynamic> row) {

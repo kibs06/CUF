@@ -277,10 +277,11 @@ export function decimationRatio({ triangleCount, targetTriangles = TARGET_TRIANG
 /**
  * Everything the worker needs, or the reason there is nothing to do.
  *
- * `declaredLengthMm` is required and comes from the modal's own field — the
- * same number the server's ±5 mm scale check compares the mesh against. Without
- * it the normalizer re-axes and re-grounds but leaves the scale alone, and the
- * model is refused for a reason the admin could have fixed here.
+ * `declaredLengthMm` comes from the modal's own field — the same number the
+ * server's ±5 mm scale check compares the mesh against — but it is optional
+ * here. Without it the normalizer re-axes and re-grounds but leaves the scale
+ * alone (and says so in its change log); Publish still requires the length and
+ * rescales the mesh to it.
  */
 export function planCompression({
   bytes,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../constants/app_constants.dart';
+import '../../providers/admin_notification_provider.dart';
 import '../../providers/order_provider.dart';
 import '../../providers/product_provider.dart';
 import '../../widgets/sole_card.dart';
@@ -13,6 +14,9 @@ import 'admin_analytics_screen.dart';
 import 'admin_settings_screen.dart';
 import 'manage_deletion_requests_screen.dart';
 import 'manage_shoe_model_requests_screen.dart';
+import '../../services/auth_service.dart';
+import '../../widgets/admin/admin_notification_bell.dart';
+import 'seller_business_docs_review_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -22,14 +26,34 @@ class AdminDashboardScreen extends StatefulWidget {
 }
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
+  /// Business-document submissions waiting after a rejection.
+  ///
+  /// Read from the rows themselves: neither admin console has a
+  /// notification feed, so the durable signal is the resubmitted row the
+  /// queue already renders. It lasts until an admin rules again, which
+  /// means it cannot be missed by being offline at the wrong moment.
+  int _resubmissionCount = 0;
+
   @override
   void initState() {
     super.initState();
+    _loadResubmissionCount();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<OrderProvider>(context, listen: false).loadProfiles();
       Provider.of<OrderProvider>(context, listen: false).loadOrders();
       Provider.of<ProductProvider>(context, listen: false).loadProducts();
+      // The bell's number. The list itself is loaded when it is opened.
+      context.read<AdminNotificationProvider>().loadUnread();
     });
+  }
+
+  Future<void> _loadResubmissionCount() async {
+    try {
+      final count = await AuthService.instance.fetchBusinessResubmissionCount();
+      if (mounted) setState(() => _resubmissionCount = count);
+    } catch (e) {
+      debugPrint('[AdminDashboard] resubmission count failed: $e');
+    }
   }
 
   @override
@@ -53,6 +77,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         automaticallyImplyLeading: false,
+        actions: [
+          // The admin's feed. Its rows are written by the database (a seller
+          // resubmitting after a rejection), so the bell is a read of work
+          // that exists whether or not this screen is open. The callback is
+          // this screen's own queue count, which the feed does not own.
+          AdminNotificationBell(onFeedClosed: _loadResubmissionCount),
+        ],
       ),
       body: Stack(
         children: [
@@ -103,6 +134,76 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                             ),
                           ),
                           const Icon(Icons.chevron_right, color: Color(0xFFC47D00)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+
+                // Business-document retries: a seller this queue already
+                // rejected has sent new paperwork. Above the stats because
+                // the row is waiting on a person, not on the system.
+                if (_resubmissionCount > 0) ...[
+                  GestureDetector(
+                    onTap: () async {
+                      await Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              const SellerBusinessDocsReviewScreen(),
+                        ),
+                      );
+                      _loadResubmissionCount();
+                    },
+                    child: Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 20),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFC47D00).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: const Color(0xFFC47D00).withValues(alpha: 0.35),
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.fact_check_outlined,
+                            color: Color(0xFFC47D00),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Business documents resubmitted',
+                                  style: AppConstants.bodyStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: const Color(0xFFC47D00),
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  _resubmissionCount == 1
+                                      ? '1 seller sent new documents after a '
+                                          'rejection and is waiting for a verdict.'
+                                      : '$_resubmissionCount sellers sent new '
+                                          'documents after a rejection and are '
+                                          'waiting for a verdict.',
+                                  style: AppConstants.bodyStyle(
+                                    fontSize: 12,
+                                    color: const Color(0xFFC47D00),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(
+                            Icons.chevron_right,
+                            color: Color(0xFFC47D00),
+                          ),
                         ],
                       ),
                     ),

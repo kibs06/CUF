@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../constants/app_constants.dart';
 import '../../../models/store.dart';
+import '../../../widgets/sole_badge.dart';
 
 /// Info strip below the carousel showing focused store details.
 /// Animates content with fade+slide when the focused store changes.
@@ -39,14 +40,32 @@ class StoreFocusedInfo extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 16),
-            // Store name
-            Text(
-              store.name,
-              style: AppConstants.bodyStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: AppConstants.secondary,
-              ),
+            // Store name + the admin-granted trust flag. A Wrap keeps the
+            // badge beside the name on short names and lets it fall under a
+            // long one rather than squeezing the name.
+            Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                Text(
+                  store.name,
+                  style: AppConstants.bodyStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppConstants.secondary,
+                  ),
+                ),
+                if (store.sellerVerified)
+                  SoleBadge(
+                    label: 'Verified Seller',
+                    icon: Icons.verified_rounded,
+                    backgroundColor: AppConstants.success.withValues(
+                      alpha: 0.15,
+                    ),
+                    textColor: AppConstants.success,
+                  ),
+              ],
             ),
             const SizedBox(height: 4),
             // Location + open status

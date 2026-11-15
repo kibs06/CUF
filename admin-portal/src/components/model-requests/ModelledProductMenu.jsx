@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Eye, Image, Link2, Download, FileUp, Sparkles, Trash2 } from 'lucide-react'
+import { Eye, Image, Link2, Download, FileUp, Palette, Sparkles, Trash2 } from 'lucide-react'
 
 // ─── The 3D shelf's right-click menu ───────────────────────────────
 //
@@ -35,9 +35,15 @@ const items = [
   },
   {
     action: 'replace',
-    label: 'Replace live model…',
+    label: 'Replace live model',
     Icon: FileUp,
     hint: 'Publish the fixed file as a new version',
+  },
+  {
+    action: 'paint',
+    label: '3D paint per colour',
+    Icon: Palette,
+    hint: 'Recolour the live model — no upload, no new version',
   },
 ]
 
@@ -55,8 +61,13 @@ export default function ModelledProductMenu({ menu, onPick, onClose }) {
 
   if (!menu) return null
 
+  // Single-line rows: each option is ~40px, plus the delete row, the
+  // divider, and the container padding. The old estimate assumed taller
+  // two-line rows, so the menu could still run off the bottom of the
+  // viewport on lower cards — the options the admin actually wanted.
+  const MENU_HEIGHT = (items.length + 1) * 40 + 16
   const left = Math.max(8, Math.min(menu.x, window.innerWidth - MENU_WIDTH - 8))
-  const top = Math.max(8, Math.min(menu.y, window.innerHeight - items.length * 44 - 64))
+  const top = Math.max(8, Math.min(menu.y, window.innerHeight - MENU_HEIGHT - 8))
 
   const choose = (action) => {
     onPick?.(action, menu.entry)
@@ -88,10 +99,7 @@ export default function ModelledProductMenu({ menu, onPick, onClose }) {
               className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-[#F5F0EB]"
             >
               <Icon size={15} className="shrink-0 text-[#8B5A2B]" />
-              <span>
-                <span className="block text-sm font-medium text-[#3B2314]">{label}</span>
-                <span className="block text-[11px] text-[#6B5C4E]">{text}</span>
-              </span>
+              <span className="block text-sm font-medium text-[#3B2314]">{label}</span>
             </button>
           )
         })}
@@ -104,10 +112,7 @@ export default function ModelledProductMenu({ menu, onPick, onClose }) {
           className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-red-50"
         >
           <Trash2 size={15} className="shrink-0 text-[#D64545]" />
-          <span>
-            <span className="block text-sm font-semibold text-[#D64545]">Delete live model…</span>
-            <span className="block text-[11px] text-[#6B5C4E]">Version and file, with confirm</span>
-          </span>
+          <span className="block text-sm font-semibold text-[#D64545]">Delete live model…</span>
         </button>
       </div>
     </div>

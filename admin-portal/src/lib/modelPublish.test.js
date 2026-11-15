@@ -14,6 +14,7 @@ import {
   modellingPrefill,
   modellingResult,
   nextVersion,
+  readCompressScale,
   readDeclaration,
   reuseMatch,
   rowId,
@@ -84,6 +85,34 @@ test('two blank fields are not an error', () => {
   assert.equal(declaration.error, null)
   assert.equal(declaration.externalLengthMm, null)
   assert.equal(declaration.authoredSizeEu, null)
+})
+
+test('compressing does not need the length up front', () => {
+  // Publish refuses a size on its own; compress keeps the authored scale and
+  // lets Publish rescale later — so a 25 MB export can shrink before the ruler
+  // figure is to hand.
+  const sizeOnly = readCompressScale({ externalLengthMm: '', authoredSizeEu: '42' })
+  assert.equal(sizeOnly.error, null)
+  assert.equal(sizeOnly.externalLengthMm, null)
+  assert.equal(sizeOnly.authoredSizeEu, 42)
+
+  const blank = readCompressScale({ externalLengthMm: '', authoredSizeEu: '' })
+  assert.equal(blank.error, null)
+  assert.equal(blank.externalLengthMm, null)
+
+  const both = readCompressScale({ externalLengthMm: '270', authoredSizeEu: '42' })
+  assert.equal(both.error, null)
+  assert.equal(both.externalLengthMm, 270)
+  assert.equal(both.authoredSizeEu, 42)
+})
+
+test('compressing still refuses a mistyped figure rather than ignoring it', () => {
+  const badLength = readCompressScale({ externalLengthMm: '27', authoredSizeEu: '' })
+  assert.match(badLength.error, /millimetres, not centimetres/i)
+  assert.equal(badLength.errorField, DECLARATION_FIELD.EXTERNAL_LENGTH_MM)
+
+  const badSize = readCompressScale({ externalLengthMm: '', authoredSizeEu: '9.5' })
+  assert.equal(badSize.errorField, DECLARATION_FIELD.AUTHORED_SIZE_EU)
 })
 
 test('the prefill fills the length, unlike the seller-side form', () => {

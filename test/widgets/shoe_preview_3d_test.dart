@@ -88,6 +88,7 @@ void main() {
     bool useWebViewEngine = false,
     bool paused = false,
     bool bleed = false,
+    String? paintHex,
   }) {
     return MaterialApp(
       home: Scaffold(
@@ -96,6 +97,7 @@ void main() {
             child: child ??
                 ShoePreviewSection(
                   model: spec,
+                  paintHex: paintHex,
                   events: events,
                   showDiagnostics: showDiagnostics,
                   paused: paused,
@@ -1602,6 +1604,76 @@ void main() {
 
       expect(marker().existsSync(), isFalse);
       expect(ShoePreviewFallbackGuard.clears, 1);
+    });
+  });
+
+  group('paint', () {
+    List<MethodCall> colorCalls() =>
+        calls.where((call) => call.method == 'setPreviewColor').toList();
+
+    List<double> factorsOf(MethodCall call) {
+      final args = Map<String, Object?>.from(call.arguments as Map);
+      final overrides =
+          Map<String, Object?>.from(args['materialOverrides'] as Map);
+      return (overrides['baseColorFactor'] as List).cast<double>();
+    }
+
+    testWidgets('a paint reaches the native renderer as 0..1 factors',
+        (tester) async {
+      await tester.pumpWidget(harness(paintHex: '#5C3A21'));
+
+      expect(colorCalls(), hasLength(1));
+      final factors = factorsOf(colorCalls().single);
+      expect(factors[0], closeTo(0x5C / 255, 1e-9));
+      expect(factors[1], closeTo(0x3A / 255, 1e-9));
+      expect(factors[2], closeTo(0x21 / 255, 1e-9));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('no paint sends no color — the bytes stay as-authored',
+        (tester) async {
+      await tester.pumpWidget(harness());
+
+      expect(colorCalls(), isEmpty);
+      expect(modelCalls(), hasLength(1));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('an unparseable paint renders as-authored, not as a guess',
+        (tester) async {
+      await tester.pumpWidget(harness(paintHex: 'red'));
+
+      expect(colorCalls(), isEmpty);
+      expect(modelCalls(), hasLength(1));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets(
+        'clearing a paint reloads the bytes — the authored factors have no read-back',
+        (tester) async {
+      await tester.pumpWidget(harness(paintHex: '#5C3A21'));
+      expect(colorCalls(), hasLength(1));
+
+      // The same box, the colour deselected: Filament cannot restore what it
+      // cannot read, so fresh bytes do the restoring.
+      await tester.pumpWidget(harness());
+
+      expect(colorCalls(), hasLength(1));
+      expect(modelCalls(), hasLength(2));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets(
+        'the WebView engine never paints over the channel — its page tints itself',
+        (tester) async {
+      await tester.pumpWidget(harness(
+        useWebViewEngine: true,
+        webViewBuilder: (onStatus) => const SizedBox(),
+        paintHex: '#5C3A21',
+      ));
+
+      expect(colorCalls(), isEmpty);
+      expect(tester.takeException(), isNull);
     });
   });
 }

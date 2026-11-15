@@ -1,8 +1,9 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, Check, Cuboid, Loader2, Ruler, Sparkles, Upload } from 'lucide-react'
 import Modal from '../ui/Modal.jsx'
 import { usePublishModelRequest } from '../../hooks/usePublishModel.js'
 import { useCompressModel } from '../../hooks/useCompressModel.js'
+import ColorPaintSection from './ColorPaintSection.jsx'
 import { describeError } from '../../lib/errors.js'
 import {
   BUCKET_CAP_BYTES,
@@ -11,6 +12,7 @@ import {
   declaredLengthAgreement,
   formatSizeNumber,
   modellingPrefill,
+  readCompressScale,
   readDeclaration,
   MODELLING_ENDING,
 } from '../../lib/modelPublish.js'
@@ -145,6 +147,13 @@ export default function UploadModelModal({ request, replaceTarget, onClose, onDo
   // which one is in hand before pressing Publish.
   const [compressed, setCompressed] = useState(null)
   const compress = useCompressModel()
+  // A publish failure renders near the bottom of a scrollable dialog — without
+  // this, it lands off-screen and the button looks dead. Scroll it into view
+  // the moment it appears.
+  const errorRef = useRef(null)
+  useEffect(() => {
+    if (error) errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [error])
 
   const declaration = readDeclaration({ externalLengthMm: lengthMm, authoredSizeEu: sizeEu })
   const agreement = declaredLengthAgreement({
@@ -163,20 +172,30 @@ export default function UploadModelModal({ request, replaceTarget, onClose, onDo
     // Publishing mid-loop would upload an intermediate pass's bytes — a file
     // already known to be over budget — instead of the loop's answer.
     !compress.isRunning
-  // Compressing needs a file and a length, but never a publishable size —
-  // shrinking an over-cap file is the whole point of the button.
+  // Compressing needs a file and fields it can read, but never a declared
+  // length — shrinking a 25 MB export is useful before the ruler figure is to
+  // hand. The normalizer keeps the authored scale when the length is missing
+  // and records the fact in its change log; Publish still requires the length,
+  // so filling it in afterwards means running Compress again to rescale.
+  const compressScale = readCompressScale({ externalLengthMm: lengthMm, authoredSizeEu: sizeEu })
 
-  const compressReady =
-    Boolean(file) &&
-    !declaration.error &&
-    declaration.externalLengthMm !== null &&
-    !publish.isPending
+  const compressReady = Boolean(file) && !compressScale.error && !publish.isPending
 
   // ⚠️ The file that was compressed, tracked by identity rather than by name:
   // a second file with the same name from another folder is a different file,
   // and offering the previous run's bytes for it would be the worst kind of
   // quiet mistake. So the result is dropped whenever the picked file changes.
   const compressedMatchesFile = compressed !== null && compressed.forFile === file
+  // The scale the bytes in hand were built with. Filling in (or changing) the
+  // length or size after a run leaves bytes at the wrong scale: Publish would
+  // upload them with a declaration they were never scaled to and the server
+  // would refuse on scale. So a scale change retires the run and asks for
+  // another pass — the same as picking a different file does.
+  const compressStale =
+    compressedMatchesFile &&
+    ((compressed.declaredLengthMm ?? null) !== (compressScale.externalLengthMm ?? null) ||
+      (compressed.authoredSizeEu ?? null) !== (compressScale.authoredSizeEu ?? null))
+  const useCompressed = compressedMatchesFile && !compressStale
 
   // Offered for ANY picked file, not just an over-budget one: a small file can
   // still break export rows (names, textures, axes, origin, scale — the 60k
@@ -189,7 +208,7 @@ export default function UploadModelModal({ request, replaceTarget, onClose, onDo
   // The bytes Publish would upload, whatever the source: the compressed
   // result when it is about the picked file, else the picked file itself. A
   // link's size is unknown until it downloads, so it is never pre-judged.
-  const outgoingBytes = compressedMatchesFile
+  const outgoingBytes = useCompressed
     ? compressed.bytes.length
     : file
       ? file.size
@@ -209,12 +228,13 @@ export default function UploadModelModal({ request, replaceTarget, onClose, onDo
   // still be refused on the cap, so Publish stays off for it the same way. A
   // raw picked file's count is unknown without planning it, so only a result
   // in hand is judged — anything else and the server decides.
-  const overTris =
-    compressedMatchesFile && (compressed.after?.triangles ?? 0) > MAX_TRIANGLES
+  const overTris = useCompressed && (compressed.after?.triangles ?? 0) > MAX_TRIANGLES
   // Publish needs everything above, plus bytes the bucket will take and the
   // server will pass. A link's size is unknown, so a link-only publish stays
-  // enabled and the server judges it.
-  const ready = baseReady && !overCap && !outgoingOverBudget && !overTris
+  // enabled and the server judges it. A stale run blocks Publish even when the
+  // raw file would fit: uploading the raw file would throw away the
+  // normalization, and uploading the stale bytes would fail scale.
+  const ready = baseReady && !overCap && !outgoingOverBudget && !overTris && !compressStale
 
   const reset = () => {
     setLink('')
@@ -251,6 +271,11 @@ export default function UploadModelModal({ request, replaceTarget, onClose, onDo
     // pass's bytes.
     const myLoop = ++loopRef.current
     compress.clear()
+    // Snapshot: the fields may change mid-run, and the bytes must be tagged
+    // with the scale they were actually built with, not the one on screen
+    // when the last pass lands.
+    const runLengthMm = compressScale.externalLengthMm
+    const runSizeEu = compressScale.authoredSizeEu
 
     // A copy this component owns, because the hook transfers the buffer to the
     // worker rather than cloning 90 MB of it. `arrayBuffer()` already returns a
@@ -269,8 +294,8 @@ export default function UploadModelModal({ request, replaceTarget, onClose, onDo
           : Math.max(Math.round(TARGET_TRIANGLES / 2 ** extras), MIN_TARGET_TRIANGLES)
       const outcome = await compress.compress({
         bytes: sourceBytes,
-        declaredLengthMm: declaration.externalLengthMm,
-        authoredSizeEu: declaration.authoredSizeEu,
+        declaredLengthMm: compressScale.externalLengthMm,
+        authoredSizeEu: compressScale.authoredSizeEu,
         ...(targetTriangles === undefined ? {} : { targetTriangles }),
         simplifyError:
           SIMPLIFY_ERROR_LADDER[Math.min(extras, SIMPLIFY_ERROR_LADDER.length - 1)],
@@ -295,6 +320,8 @@ export default function UploadModelModal({ request, replaceTarget, onClose, onDo
 
       setCompressed({
         forFile: file,
+        declaredLengthMm: runLengthMm,
+        authoredSizeEu: runSizeEu,
         blob: new Blob([outcome.result.bytes], { type: 'model/gltf-binary' }),
         bytes: outcome.result.bytes,
         changes: outcome.result.changes,
@@ -330,7 +357,7 @@ export default function UploadModelModal({ request, replaceTarget, onClose, onDo
       // The compressed bytes go in as the file, under the picked file's name.
       // The upload pipeline reads them exactly as it reads a picked file, so
       // nothing downstream changes: the server still judges the stored bytes.
-      const source = compressedMatchesFile
+      const source = useCompressed
         ? new File([compressed.blob], file.name, { type: 'model/gltf-binary' })
         : file
 
@@ -493,7 +520,11 @@ export default function UploadModelModal({ request, replaceTarget, onClose, onDo
             </p>
           ) : (
             <p className="mt-1 text-xs text-[#6B5C4E]">
-              Prefilled from the seller&apos;s own measurement — the figure the mesh is scaled to.
+              {isReplace
+                ? 'From the live model’s own declaration — update it if the new export was authored at a different size.'
+                : request?.external_length_mm == null
+                  ? 'The seller gave no measurement for this pair — measure the outside length and write it in millimetres (e.g. 270, not 27). 270 is only an example.'
+                  : 'Prefilled from the seller’s own measurement — the figure the mesh is scaled to.'}
             </p>
           )}
         </div>
@@ -528,6 +559,11 @@ export default function UploadModelModal({ request, replaceTarget, onClose, onDo
           </Notice>
         </div>
       )}
+
+      {/* One model per product, painted by the app: the hexes confirmed here
+          are what the viewers tint the shared mesh with when the shopper taps
+          a colour. Jewellery, not a gate — paint never blocks Publish. */}
+      <ColorPaintSection productId={isReplace ? replaceTarget.productId : request?.product_id} />
 
       <div className="mt-4">
         <label className={labelClass} htmlFor="model-file">
@@ -578,20 +614,26 @@ export default function UploadModelModal({ request, replaceTarget, onClose, onDo
                   ? overBudget
                     ? 'This file is over the authoring budget'
                     : 'Normalize this file'
-                  : compressed.overBudgetAfter || compressed.overTrisAfter
-                    ? 'Compressed, but still over the contract'
-                    : 'Compressed and ready to upload'}
+                  : compressStale
+                    ? 'Length changed — run Compress again'
+                    : compressed.overBudgetAfter || compressed.overTrisAfter
+                      ? 'Compressed, but still over the contract'
+                      : 'Compressed and ready to upload'}
               </p>
               <p className="mt-1 text-xs leading-relaxed text-[#6B5C4E]">
                 {compressedMatchesFile
-                  ? 'The compressed bytes are in hand and are what Publish will upload — the ' +
-                    'picked file itself is left alone.'
+                  ? compressStale
+                    ? 'The bytes in hand were scaled to a different length than the one above — ' +
+                      'publishing them would fail the scale check. Run Compress again so the mesh ' +
+                      'is rescaled to the current figure; the picked file itself is left alone.'
+                    : 'The compressed bytes are in hand and are what Publish will upload — the ' +
+                      'picked file itself is left alone.'
                   : overBudget
                     ? `${formatBytes(file.size)} against a ${formatBytes(FILE_SIZE_BUDGET_BYTES)} ` +
                       'budget — the bucket takes it, but the server will refuse it. Compressing ' +
                       'decimates the mesh and re-bakes the textures to 1024², then runs the same ' +
                       'normalizer the CLI runs: re-aimed axes, grounded, scaled to the declared ' +
-                      'length, parts renamed. One press runs up to four passes on its own — each ' +
+                      'length when one is filled in, parts renamed. One press runs up to four passes on its own — each ' +
                       'failing result halves the triangle target and allows a little more shape ' +
                       'deviation for the next, until the bytes and the triangle count both fit — ' +
                       'a minute or so per pass for a file this size, and the tab stays usable ' +
@@ -599,7 +641,7 @@ export default function UploadModelModal({ request, replaceTarget, onClose, onDo
                     : `${formatBytes(file.size)} is inside the budget, but the export itself can ` +
                       'still break contract rows — names, textures, axes, origin, scale. Normalize ' +
                       'runs the same fixer the CLI runs (re-aimed axes, grounded, scaled to the ' +
-                      'declared length, textures re-baked to 1024², parts renamed) without ' +
+                      'declared length when one is filled in, textures re-baked to 1024², parts renamed) without ' +
                       'decimating a mesh that is already inside the cap. One press, a few seconds ' +
                       'for a file this size.'}
               </p>
@@ -609,7 +651,7 @@ export default function UploadModelModal({ request, replaceTarget, onClose, onDo
                 its footprint but loses its silhouette, so more passes would trade
                 the fitting for bytes. The weight then is in the textures, which
                 need a human and the guide, not a button. */}
-            {!compressedMatchesFile && !compress.isRunning && (
+            {(!compressedMatchesFile || compressStale) && !compress.isRunning && (
               <button
                 type="button"
                 onClick={handleCompress}
@@ -636,10 +678,14 @@ export default function UploadModelModal({ request, replaceTarget, onClose, onDo
             <p className="mt-2 text-xs text-[#8B5A2B]">{compress.stageSentence}</p>
           )}
 
-          {!compressReady && !compress.isRunning && (
+          {compressScale.error && !compress.isRunning && (
+            <p className="mt-2 text-xs text-[#D64545]">{compressScale.error}</p>
+          )}
+          {!compressScale.error && compressScale.externalLengthMm === null && !compress.isRunning && !compressedMatchesFile && (
             <p className="mt-2 text-xs text-[#6B5C4E]">
-              Fill in the declared length first — the mesh is scaled to it, so compressing
-              without one would leave the scale wrong.
+              No declared length yet — compressing still works. The mesh keeps its authored
+              scale for now; fill in the length and run Compress again so it is scaled to
+              the ruler figure before publishing.
             </p>
           )}
 
@@ -649,7 +695,7 @@ export default function UploadModelModal({ request, replaceTarget, onClose, onDo
             </div>
           )}
 
-          {compressedMatchesFile && !compress.isRunning && (
+          {useCompressed && !compress.isRunning && (
             <div className="mt-2">
               <p className="text-xs font-semibold text-[#3B2314]">
                 {compressed.summary}
@@ -764,7 +810,7 @@ export default function UploadModelModal({ request, replaceTarget, onClose, onDo
       )}
 
       {error && (
-        <div className="mt-3">
+        <div className="mt-3" ref={errorRef}>
           <Notice title="That did not publish">{error}</Notice>
         </div>
       )}
@@ -776,6 +822,20 @@ export default function UploadModelModal({ request, replaceTarget, onClose, onDo
       {error && !isReplace && (
         <div className="mt-2 rounded-xl border border-[#F5F0EB] bg-[#FBF8F5] px-3 py-2 text-[11px] leading-relaxed text-[#6B5C4E]">
           {deliverySentence(MODELLING_ENDING.NOT_LIVE)}
+        </div>
+      )}
+
+      {/* The one blocker that otherwise shows nowhere: an empty length field
+          looks filled (the placeholder is a plausible number), the compressed
+          bytes look ready, and the disabled button swallows the click without a
+          word. Name it next to the button it blocks. */}
+      {hasSource && declaration.externalLengthMm === null && !publish.isPending && !compress.isRunning && (
+        <div className="mt-3">
+          <Notice tone="warn" title="Publish needs the declared length">
+            The length field above is still empty — 270 is only an example. The mesh is scaled
+            to the typed figure, so Publish stays off until it is filled in. Type the outside
+            length in millimetres{useCompressed ? ', then run Compress again so the bytes in hand match it' : ''}.
+          </Notice>
         </div>
       )}
 

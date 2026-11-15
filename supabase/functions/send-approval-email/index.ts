@@ -192,6 +192,17 @@ interface ApprovalEmailPayload {
   userId: string;
   outcome: "approved" | "rejected";
   rejectionReason?: string;
+  /**
+   * Optional, additive: the seller's business documents (DTI / BIR COR /
+   * permit) were verified in the same action, so the mail leads with the
+   * Verified Seller badge instead of plain approval.
+   *
+   * Deliberately a flag rather than a third `outcome`: an already-deployed
+   * copy of this function treats any unknown outcome as a REJECTION, so a
+   * new outcome could mail a seller bad news from a stale deployment. A
+   * flag degrades to the approval copy instead.
+   */
+  verified?: boolean;
 }
 
 serve(async (req: Request) => {
@@ -259,11 +270,47 @@ serve(async (req: Request) => {
     const name = profile?.full_name ?? "there";
     const isApproved = payload.outcome === "approved";
 
-    const subject = isApproved
+    const isVerified = isApproved && payload.verified === true;
+
+    // Diagnostics: the template this payload selected, logged BEFORE any SMTP
+    // work so a failed send is still traceable — and so a caller sending the
+    // legacy payload (`outcome`, no `verified`) is visibly on the approval
+    // path rather than anywhere near the rejection copy.
+    console.log(
+      `[ApprovalEmail] kind=${
+        isVerified ? "verified" : isApproved ? "approved" : "rejected"
+      } user=${payload.userId}`
+    );
+
+    const subject = isVerified
+      ? "You're a verified seller ✅ — CUFMAI"
+      : isApproved
       ? "You're approved! Your CUFMAI seller application was accepted 🎉"
       : "Update on your CUFMAI seller application";
 
-    const html = isApproved
+    const html = isVerified
+      ? `<!doctype html>
+<html>
+<body style="margin:0;padding:0;background:#F5F0E6;font-family:Arial,Helvetica,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F5F0E6;padding:32px 16px;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#FFFFFF;border-radius:16px;overflow:hidden;border:1px solid #D9D0C7;">
+        <tr><td style="background:#2F6B4F;padding:28px 32px;">
+          <h1 style="margin:0;color:#FFFFFF;font-size:22px;">You're a verified seller ✅</h1>
+        </td></tr>
+        <tr><td style="padding:28px 32px;color:#3B2314;font-size:15px;line-height:1.6;">
+          <p>Hi ${name},</p>
+          <p>Your business documents — DTI certificate, BIR Certificate of Registration and mayor's/barangay permit — have been reviewed and <strong>approved</strong> by the CUFMAI team.</p>
+          <p>Your account now carries the <strong>Verified Seller</strong> badge. Customers see it on your store page, and it shows on your profile — it is how buyers know your business requirements have been checked.</p>
+          <p>Keep the documents behind that badge current. If a renewed submission is rejected later, the badge is removed until it is approved again.</p>
+          <p style="margin-top:24px;color:#6B5C4E;font-size:13px;">Questions? Reach out to the CUFMAI team through the app.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`
+      : isApproved
       ? `<!doctype html>
 <html>
 <body style="margin:0;padding:0;background:#F5F0E6;font-family:Arial,Helvetica,sans-serif;">

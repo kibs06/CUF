@@ -6,9 +6,6 @@ import {
   Area,
   BarChart,
   Bar,
-  PieChart,
-  Pie,
-  Cell,
   XAxis,
   YAxis,
   Tooltip,
@@ -16,6 +13,8 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { useAnalytics } from '../hooks/useAnalytics.js'
+import StatusPie3D from '../components/charts/StatusPie3D.jsx'
+import TopProducts3D from '../components/charts/TopProducts3D.jsx'
 import { ChartSkeleton } from '../components/ui/Skeleton.jsx'
 import { ShoppingCart, TrendingUp } from 'lucide-react'
 
@@ -72,103 +71,79 @@ export default function Analytics() {
       )}
 
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Orders Over Time — AreaChart with gradient */}
-        <ChartCard title="Orders Over Time">
-          {isLoading ? (
-            <ChartSkeleton />
-          ) : (data?.ordersOverTime ?? []).length === 0 ? (
-            <EmptyChart message="No orders in this period" />
-          ) : (
-            <ResponsiveContainer width="100%" height={260}>
-              <AreaChart data={data?.ordersOverTime ?? []}>
-                <defs>
-                  <linearGradient id="ordersAreaGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#8B5A2B" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#8B5A2B" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#6B5C4E' }} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#6B5C4E' }} />
-                <Tooltip contentStyle={{ fontFamily: 'DM Sans, sans-serif', borderRadius: '12px', border: '1px solid #D9D0C7' }} />
-                <Legend />
-                <Area type="monotone" dataKey="orders" name="Orders" stroke="#8B5A2B" strokeWidth={2} fill="url(#ordersAreaGradient)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          )}
-        </ChartCard>
+        {/* Sales Over Time — orders + revenue on one timeline, dual axis */}
+        <div className="lg:col-span-2">
+          <ChartCard title="Orders and Revenue">
+            {isLoading ? (
+              <ChartSkeleton />
+            ) : !(data?.salesOverTime ?? []).some((d) => d.orders > 0 || d.revenue > 0) ? (
+              <EmptyChart message="No sales in this period" />
+            ) : (
+              <ResponsiveContainer width="100%" height={280}>
+                <AreaChart data={data?.salesOverTime ?? []}>
+                  <defs>
+                    <linearGradient id="salesOrdersGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#8B5A2B" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#8B5A2B" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="salesRevenueGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#4ECDC4" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#4ECDC4" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#6B5C4E' }} />
+                  <YAxis yAxisId="orders" allowDecimals={false} tick={{ fontSize: 11, fill: '#6B5C4E' }} width={32} />
+                  <YAxis
+                    yAxisId="revenue"
+                    orientation="right"
+                    tickFormatter={(v) => (v >= 1000 ? `₱${Math.round(v / 100) / 10}k` : `₱${v}`)}
+                    tick={{ fontSize: 11, fill: '#6B5C4E' }}
+                    width={52}
+                  />
+                  <Tooltip
+                    contentStyle={{ fontFamily: 'DM Sans, sans-serif', borderRadius: '12px', border: '1px solid #D9D0C7' }}
+                    formatter={(value, name) =>
+                      name === 'Revenue' ? [`₱${Number(value).toLocaleString()}`, name] : [value, name]
+                    }
+                  />
+                  <Legend />
+                  <Area yAxisId="orders" type="monotone" dataKey="orders" name="Orders" stroke="#8B5A2B" strokeWidth={2} fill="url(#salesOrdersGradient)" />
+                  <Area yAxisId="revenue" type="monotone" dataKey="revenue" name="Revenue" stroke="#4ECDC4" strokeWidth={2} fill="url(#salesRevenueGradient)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
+          </ChartCard>
+        </div>
 
-        {/* Revenue Over Time — AreaChart with teal gradient */}
-        <ChartCard title="Revenue Over Time">
-          {isLoading ? (
-            <ChartSkeleton />
-          ) : (data?.revenueOverTime ?? []).length === 0 ? (
-            <EmptyChart message="No revenue in this period" />
-          ) : (
-            <ResponsiveContainer width="100%" height={260}>
-              <AreaChart data={data?.revenueOverTime ?? []}>
-                <defs>
-                  <linearGradient id="revenueAreaGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#4ECDC4" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#4ECDC4" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#6B5C4E' }} />
-                <YAxis tick={{ fontSize: 11, fill: '#6B5C4E' }} />
-                <Tooltip
-                  contentStyle={{ fontFamily: 'DM Sans, sans-serif', borderRadius: '12px', border: '1px solid #D9D0C7' }}
-                  formatter={(v) => [`₱${Number(v).toLocaleString()}`, 'Revenue']}
-                />
-                <Legend />
-                <Area type="monotone" dataKey="revenue" name="Revenue" stroke="#4ECDC4" strokeWidth={2} fill="url(#revenueAreaGradient)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          )}
-        </ChartCard>
-
-        {/* Orders by Status — PieChart */}
+        {/* Orders by Status — Highcharts 3D pie */}
         <ChartCard title="Orders by Status">
           {isLoading ? (
             <ChartSkeleton />
           ) : (data?.ordersByStatus ?? []).length === 0 ? (
             <EmptyChart message="No orders yet" />
           ) : (
-            <ResponsiveContainer width="100%" height={260}>
-              <PieChart>
-                <Pie
-                  data={data?.ordersByStatus ?? []}
-                  dataKey="value"
-                  nameKey="name"
-                  innerRadius={60}
-                  outerRadius={90}
-                  paddingAngle={2}
-                >
-                  {(data?.ordersByStatus ?? []).map((entry, i) => (
-                    <Cell key={entry.name} fill={STATUS_COLORS[entry.name] ?? CHART_COLORS[i % CHART_COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip contentStyle={{ fontFamily: 'DM Sans, sans-serif', borderRadius: '12px', border: '1px solid #D9D0C7' }} />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
+            <StatusPie3D
+              data={data.ordersByStatus}
+              colors={data.ordersByStatus.map(
+                (entry, i) => STATUS_COLORS[entry.name] ?? CHART_COLORS[i % CHART_COLORS.length],
+              )}
+            />
           )}
         </ChartCard>
 
-        {/* Top Products — horizontal BarChart */}
+        {/* Top Products — ranked leaderboard */}
         <ChartCard title="Top Products">
           {isLoading ? (
             <ChartSkeleton />
           ) : (data?.topProducts ?? []).length === 0 ? (
             <EmptyChart message="No product data yet" />
           ) : (
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={data?.topProducts ?? []} layout="vertical" margin={{ left: 80 }}>
-                <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: '#6B5C4E' }} />
-                <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: '#6B5C4E' }} width={75} />
-                <Tooltip contentStyle={{ fontFamily: 'DM Sans, sans-serif', borderRadius: '12px', border: '1px solid #D9D0C7' }} />
-                <Legend />
-                <Bar dataKey="count" name="Orders" fill="#4ECDC4" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            <>
+              <TopProducts3D items={data.topProducts} />
+              <p className="tnum mt-3 border-t border-border px-1 pt-3 text-xs text-muted">
+                {data.topProducts.reduce((s, i) => s + i.count, 0)} units across {data.topProducts.length} product{data.topProducts.length === 1 ? '' : 's'} · last {days} days
+              </p>
+            </>
           )}
         </ChartCard>
 

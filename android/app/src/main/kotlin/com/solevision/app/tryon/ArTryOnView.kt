@@ -1112,12 +1112,18 @@ class ArTryOnView(
         }
     }
 
+    private var lastColor: FloatArray? = null
+
     /**
      * Applies a colour's material overrides to every material instance in the loaded asset.
      *
      * The payload is opaque on purpose: seller colour names are free text, so the Dart side owns
      * the name→paint decision and sends `{baseColorFactor: [r,g,b(,a)]}`. Anything else is
      * ignored — a key this build has not heard of is a newer Dart build, not an error.
+     *
+     * The accepted factors are kept in [lastColor] so a fresh asset can wear them: a model
+     * swap (`setModel`) destroys every material instance, and a paint sent a frame earlier
+     * would otherwise land on the old asset and be lost. The load tail re-applies them.
      */
     fun setColor(overrides: Map<String, Any?>) {
         renderHandler.post {
@@ -1129,35 +1135,40 @@ class ArTryOnView(
             if (values.size != 3 && values.size != 4) return@post
             val rgba =
                 if (values.size == 3) floatArrayOf(values[0], values[1], values[2], 1f) else values
-            // `FilamentAsset` exposes no material-instance list on this gltfio version
-            // (checked against the AAR), so the instances are reached the way Filament itself
-            // exposes them: per renderable, per primitive.
-            val created = engine ?: return@post
-            val loaded = asset ?: return@post
-            val manager = created.renderableManager
-            val seen = linkedSetOf<MaterialInstance>()
-            var applied = 0
-            for (entity in loaded.renderableEntities) {
-                val instance = manager.getInstance(entity)
-                for (primitive in 0 until manager.getPrimitiveCount(instance)) {
-                    val material = manager.getMaterialInstanceAt(instance, primitive)
-                    if (!seen.add(material)) continue
-                    // `setParameter` is void, so success is "it did not throw": a material with no
-                    // `baseColorFactor` logs inside Filament and is simply not counted.
-                    val ok = runCatching {
-                        material.setParameter(
-                            "baseColorFactor",
-                            rgba[0],
-                            rgba[1],
-                            rgba[2],
-                            rgba[3],
-                        )
-                    }.isSuccess
-                    if (ok) applied++
-                }
-            }
-            Log.i(TAG, "setColor applied to $applied/${seen.size} distinct material instances")
+            lastColor = rgba
+            applyColorFactors(rgba)
         }
+    }
+
+    private fun applyColorFactors(rgba: FloatArray) {
+        // `FilamentAsset` exposes no material-instance list on this gltfio version
+        // (checked against the AAR), so the instances are reached the way Filament itself
+        // exposes them: per renderable, per primitive.
+        val created = engine ?: return
+        val loaded = asset ?: return
+        val manager = created.renderableManager
+        val seen = linkedSetOf<MaterialInstance>()
+        var applied = 0
+        for (entity in loaded.renderableEntities) {
+            val instance = manager.getInstance(entity)
+            for (primitive in 0 until manager.getPrimitiveCount(instance)) {
+                val material = manager.getMaterialInstanceAt(instance, primitive)
+                if (!seen.add(material)) continue
+                // `setParameter` is void, so success is "it did not throw": a material with no
+                // `baseColorFactor` logs inside Filament and is simply not counted.
+                val ok = runCatching {
+                    material.setParameter(
+                        "baseColorFactor",
+                        rgba[0],
+                        rgba[1],
+                        rgba[2],
+                        rgba[3],
+                    )
+                }.isSuccess
+                if (ok) applied++
+            }
+        }
+        Log.i(TAG, "setColor applied to $applied/${seen.size} distinct material instances")
     }
 
     /**
@@ -2985,6 +2996,13 @@ class ArTryOnView(
         everAnchored = false
         Matrix.setIdentityM(placement, 0)
         applyTransform()
+        // A swap destroys every material instance, so a paint sent for the old
+        // asset would be lost: the stored factors go straight back on the fresh
+        // one, before the first frame that carries it.
+        lastColor?.let {
+            applyColorFactors(it)
+            relay("load: re-applied stored paint")
+        }
 
         // ⚠️ **The one number that decides whether the preview can move at all.**
         // `applyPreviewCamera` returns before it writes a single camera transform — and before the

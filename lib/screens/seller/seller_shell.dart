@@ -139,6 +139,15 @@ class _SellerShellState extends State<SellerShell> {
             ),
           );
           break;
+        case 'seller_notifications':
+          // A verified-seller push lands on the bell that already shows the
+          // matching in-app notice written by the docs trigger.
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const SellerNotificationCenterScreen(),
+            ),
+          );
+          break;
         case 'seller_reservations':
           // Bulk reservation request / deposit-verification pushes land
           // on the seller's reservation queue.

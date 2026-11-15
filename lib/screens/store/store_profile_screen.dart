@@ -36,8 +36,14 @@ class StoreProfileScreen extends StatefulWidget {
   /// visible so the customer can clear it back to everything.
   final bool saleOnly;
 
+  /// Injectable for widget tests; defaults to the live singleton. The badge's
+  /// two reads (`fetchStoreById`, `isSellerVerified`) are the store page's own
+  /// data, so a test can answer them without Supabase.
+  final StoreService? storeService;
+
   const StoreProfileScreen({
     super.key,
+    this.storeService,
     required this.storeId,
     this.saleOnly = false,
   });
@@ -47,7 +53,8 @@ class StoreProfileScreen extends StatefulWidget {
 }
 
 class _StoreProfileScreenState extends State<StoreProfileScreen> {
-  final StoreService _storeService = StoreService.instance;
+  late final StoreService _storeService =
+      widget.storeService ?? StoreService.instance;
 
   Store? _store;
   List<Map<String, dynamic>> _storeProducts = [];
@@ -55,6 +62,10 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
   bool _isLoading = true;
   String _sortMode = 'Newest';
   int _followerCount = 0;
+
+  /// Whether this store's owner carries the admin-granted Verified Seller
+  /// badge (`profiles.seller_verified_at`). Buyer-facing trust signal.
+  bool _sellerVerified = false;
 
   /// Whether the store's shelf is filtered to its on-sale products. Seeded from
   /// [StoreProfileScreen.saleOnly] and owned by the filter chip after that.
@@ -150,6 +161,9 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
       listen: false,
     ).loadProducts(hideOutOfStock: true);
     final store = await _storeService.fetchStoreById(widget.storeId);
+    final sellerVerified = store == null
+        ? false
+        : await _storeService.isSellerVerified(store.ownerId);
     final stories = await _storeService.getStoryEntriesForStore(widget.storeId);
     // Fetch the DB-truth follower count
     final followerCount = await _storeService.getFollowerCount(widget.storeId);
@@ -167,6 +181,7 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
       _storeProducts = storeProducts;
       _storyEntries = stories;
       _followerCount = followerCount;
+      _sellerVerified = sellerVerified;
       _isLoading = false;
     });
 
@@ -276,6 +291,41 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          // Verified Seller — solid fill, not a translucent
+                          // tint: the hero sits on the store's own banner
+                          // photo, where a tinted pill loses all contrast.
+                          if (_sellerVerified) ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppConstants.success,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.verified_rounded,
+                                    size: 12,
+                                    color: Colors.white,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Verified Seller',
+                                    style: AppConstants.bodyStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                          ],
                           if (store.tagline != null &&
                               store.tagline!.trim().isNotEmpty)
                             Text(

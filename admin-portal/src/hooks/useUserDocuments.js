@@ -126,8 +126,11 @@ export function useUserDocuments(userId) {
             label: `Product ${idx + 1}`,
           })),
         },
-        // Business documents (Tier 2)
+        // Business documents (Tier 2). `id` is what the admin verdict RPC
+        // takes; without it the Documents tab can read a submission but not
+        // act on it.
         business: businessDocs ? {
+          id: businessDocs.id,
           dti: {
             url: dtiUrl,
             path: businessDocs.dti_cert_url,

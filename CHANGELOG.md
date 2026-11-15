@@ -1,5 +1,11 @@
 # SoleVision — Changelog
 
+## Unreleased — the Verified Seller badge reaches every buyer-facing surface
+
+- **The badge lived only on the seller profile and the public store page.** It now appears in the customer Stores tab's focused store strip too, resolved from the same `profiles.seller_verified_at` trust flag the other surfaces read, so a verified artisan is recognisable before the store page is opened.
+- **Verification remains admin-granted, not seller approval.** Admins verify or reject the DTI/BIR/permit documents in the Business Docs queue; a verified verdict stamps `profiles.seller_verified_at`, writes the seller's in-app notice, and sends the approval e-mail and push. Sellers can resubmit a rejected set, and the queue lifts those retries to the top.
+- Tests: `flutter test` 3,040 passing; `flutter analyze` clean; admin portal production build passes.
+
 ## Unreleased — the home feed goes lazy, and bulk reservations match the pickup queue
 
 - **The home sheet built every section and every product card on the first frame, firing every image fetch at once.** Everything below the first screen is now lazy: curated sections through a `SliverList.builder`, On Sale through a `SliverGrid.builder`, the catalog through a real `SliverMasonryGrid` — and the hero auto-scroll parks once the hero scrolls out of view. Order, gaps, gates and visuals unchanged.

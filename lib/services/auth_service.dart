@@ -715,6 +715,45 @@ class AuthService {
     return data == null ? null : Map<String, dynamic>.from(data);
   }
 
+  /// Records the signed-in seller's business-permit expiry — the permit's
+  /// last valid day. Owner-only by construction: the RPC takes no profile id
+  /// and writes the caller's own docs row. A CHANGED date re-arms the expiry
+  /// reminder server-side; re-saving the same date does not.
+  Future<DateTime?> setPermitValidUntil(DateTime? validUntil) async {
+    final dateOnly = validUntil == null
+        ? null
+        : DateTime(validUntil.year, validUntil.month, validUntil.day);
+    final data = await _client.rpc('set_permit_valid_until', params: {
+      'p_valid_until': dateOnly?.toIso8601String().split('T').first,
+    });
+    if (data is String && data.isNotEmpty) {
+      return DateTime.tryParse(data) ?? dateOnly;
+    }
+    return dateOnly;
+  }
+
+  /// Opportunistic permit-expiry reminder.
+  ///
+  /// This database has no pg_cron, so the seller app asks once per launch —
+  /// the same pattern as the pickup and GCash sweeps. The RPC is idempotent
+  /// (at most one bell notice per permit date) and a no-op for sellers who
+  /// are not verified, so calling it on every launch is cheap and safe.
+  /// Returns the days left when a notice was posted, else null.
+  Future<int?> remindPermitExpiry({int windowDays = 30}) async {
+    try {
+      final data = await _client.rpc('remind_permit_expiry', params: {
+        'p_window_days': windowDays,
+      });
+      if (data is Map && data['reminded'] == true) {
+        return (data['days_left'] as num?)?.toInt();
+      }
+      return null;
+    } catch (e) {
+      debugPrint('[AuthService] permit reminder failed: $e');
+      return null;
+    }
+  }
+
   /// Submits (or re-submits) Tier 2 business documents for verification.
   ///
   /// Upserts the single row per profile, keeps any previously uploaded
@@ -746,6 +785,19 @@ class AuthService {
         .select()
         .single();
     return Map<String, dynamic>.from(inserted);
+  }
+
+  /// Admin: how many business-document submissions are waiting AFTER a
+  /// rejection — the dashboard's resubmission alert. Counts the rows the
+  /// queue lifts to the top, so it needs no new table: the stamp on the row
+  /// is the state, and it lasts until an admin makes a new verdict.
+  Future<int> fetchBusinessResubmissionCount() async {
+    final data = await _client
+        .from('seller_business_docs')
+        .select('id')
+        .eq('verification_status', AppConstants.bizStatusPending)
+        .not('resubmitted_at', 'is', null);
+    return (data as List).length;
   }
 
   /// Admin: every Tier 2 submission (any status), newest first.
