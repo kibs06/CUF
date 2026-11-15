@@ -61,14 +61,16 @@ values
 select throws_ok(
   $$ insert into public.product_color_paint (product_id, color_name, paint_hex)
      values ('c1000000-0000-0000-0000-000000000021','Brown','red') $$,
-  '23514', 'product_color_paint_hex_format',
+  '23514',
+  'new row for relation "product_color_paint" violates check constraint "product_color_paint_hex_format"',
   '1: a colour name is not a paint value'
 );
 
 select throws_ok(
   $$ insert into public.product_color_paint (product_id, color_name, paint_hex)
      values ('c1000000-0000-0000-0000-000000000021','Brown','1A1A1A') $$,
-  '23514', 'product_color_paint_hex_format',
+  '23514',
+  'new row for relation "product_color_paint" violates check constraint "product_color_paint_hex_format"',
   '2: the # is required, not decorative'
 );
 
@@ -82,7 +84,8 @@ select lives_ok(
 select throws_ok(
   $$ insert into public.product_color_paint (product_id, color_name, paint_hex)
      values ('c1000000-0000-0000-0000-000000000021','Brown','#4E342E') $$,
-  '23505', 'product_color_paint_pkey',
+  '23505',
+  'duplicate key value violates unique constraint "product_color_paint_pkey"',
   '4: a second paint for the same colour is refused, not averaged'
 );
 
@@ -125,7 +128,8 @@ select lives_ok(
 select throws_ok(
   $$ insert into public.product_color_paint (product_id, color_name, paint_hex)
      values ('c1000000-0000-0000-0000-000000000022','Brown','#5C3A21') $$,
-  '42501', 'policy',
+  '42501',
+  'new row violates row-level security policy for table "product_color_paint"',
   '8: …but not another store''s product'
 );
 
