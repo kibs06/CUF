@@ -1,10 +1,12 @@
 {
-  "latest_version": "1.0.80",
-  "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.80/app-release-1.0.80.apk",
-  "released_at": "2026-11-14",
+  "latest_version": "1.0.81",
+  "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.81/app-release-1.0.81.apk",
+  "released_at": "2026-11-15",
   "notes": [
-    "Home feed lazy-loads everything below the first screen; hero auto-scroll parks offscreen",
-    "Seller dashboard swaps Low Stock for a Pickup Reservations card",
-    "Bulk Reservations adopts the pickup queue UI (pill filters, refresh, empty states)"
+    "Verified Seller badge on seller profiles, store pages, product cards and the Stores tab",
+    "Business documents can be verified or rejected in the admin portal or app, with seller e-mail, push and in-app notices",
+    "Rejected sellers can resubmit business documents, and admins see resubmission alerts in the new notification center",
+    "Product pages gain a 3D preview entry and colour-paint options",
+    "Admin analytics and model-request screens refreshed"
   ]
 }
