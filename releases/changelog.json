@@ -1,5 +1,15 @@
 [
   {
+    "latest_version": "1.0.82",
+    "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.82/app-release-1.0.82.apk",
+    "released_at": "2026-11-16",
+    "notes": [
+      "Sign in or create your account with Google — the button now opens the Google account picker",
+      "Cancelling and retrying Google sign-in works reliably",
+      "A failed Google sign-in now explains itself instead of showing a generic error"
+    ]
+  },
+  {
     "latest_version": "1.0.81",
     "apk_url": "https://github.com/kibs06/CUF/releases/download/v1.0.81/app-release-1.0.81.apk",
     "released_at": "2026-11-15",
