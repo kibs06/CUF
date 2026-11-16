@@ -69,42 +69,42 @@ export default function Settings() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
+    <div className="mx-auto max-w-2xl space-y-4">
       {/* Admin Profile section */}
-      <div className="overflow-hidden rounded-2xl border border-[#D9D0C7] bg-white shadow-sm">
-        <div className="flex items-center gap-2 border-b border-[#F5F0EB] px-6 py-4">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#F5F0EB]">
-            <User size={16} className="text-[#8B5A2B]" />
+      <div className="overflow-hidden rounded-xl border border-border bg-white">
+        <div className="flex items-center gap-2 border-b border-border px-6 py-4">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-canvas">
+            <User size={16} className="text-primary" />
           </div>
-          <h2 className="font-display text-lg font-semibold text-[#3B2314]">Admin Profile</h2>
+          <h2 className="text-[15px] font-bold text-ink">Admin Profile</h2>
         </div>
         <form onSubmit={handleProfileSave} className="p-6 space-y-4">
           <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">
+            <label className="mb-1.5 block text-[12px] font-medium text-muted">
               Full Name
             </label>
             <input
               type="text"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              className="w-full rounded-xl border border-[#D9D0C7] bg-[#F5F0EB] px-4 py-2.5 text-[#3B2314] outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
+              className="w-full rounded-xl border border-border bg-canvas px-4 py-2.5 text-ink outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">
+            <label className="mb-1.5 block text-[12px] font-medium text-muted">
               Email
             </label>
             <input
               type="email"
               value={profile?.email ?? ''}
               readOnly
-              className="w-full rounded-xl border border-[#D9D0C7] bg-[#F5F0EB] px-4 py-2.5 text-[#6B5C4E]"
+              className="w-full rounded-xl border border-border bg-canvas px-4 py-2.5 text-muted"
             />
           </div>
           <button
             type="submit"
             disabled={savingProfile}
-            className="rounded-xl bg-[#8B5A2B] px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#6B4520] disabled:opacity-50"
+            className="rounded-xl bg-secondary px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primaryDeep disabled:opacity-50"
           >
             Save Profile
           </button>
@@ -115,40 +115,40 @@ export default function Settings() {
       <MfaCard />
 
       {/* Change Password section */}
-      <div className="overflow-hidden rounded-2xl border border-[#D9D0C7] bg-white shadow-sm">
-        <div className="flex items-center gap-2 border-b border-[#F5F0EB] px-6 py-4">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#F5F0EB]">
-            <Lock size={16} className="text-[#8B5A2B]" />
+      <div className="overflow-hidden rounded-xl border border-border bg-white">
+        <div className="flex items-center gap-2 border-b border-border px-6 py-4">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-canvas">
+            <Lock size={16} className="text-primary" />
           </div>
-          <h2 className="font-display text-lg font-semibold text-[#3B2314]">Change Password</h2>
+          <h2 className="text-[15px] font-bold text-ink">Change Password</h2>
         </div>
         <form onSubmit={handlePasswordChange} className="p-6 space-y-4">
           <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">
+            <label className="mb-1.5 block text-[12px] font-medium text-muted">
               New Password
             </label>
             <input
               type="password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              className="w-full rounded-xl border border-[#D9D0C7] bg-[#F5F0EB] px-4 py-2.5 text-[#3B2314] outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
+              className="w-full rounded-xl border border-border bg-canvas px-4 py-2.5 text-ink outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">
+            <label className="mb-1.5 block text-[12px] font-medium text-muted">
               Confirm Password
             </label>
             <input
               type="password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full rounded-xl border border-[#D9D0C7] bg-[#F5F0EB] px-4 py-2.5 text-[#3B2314] outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
+              className="w-full rounded-xl border border-border bg-canvas px-4 py-2.5 text-ink outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
             />
           </div>
           <button
             type="submit"
             disabled={savingPassword}
-            className="rounded-xl bg-[#8B5A2B] px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#6B4520] disabled:opacity-50"
+            className="rounded-xl bg-secondary px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primaryDeep disabled:opacity-50"
           >
             Update Password
           </button>
@@ -156,10 +156,10 @@ export default function Settings() {
       </div>
 
       {/* Danger Zone */}
-      <div className="rounded-2xl border border-red-200 bg-red-50 p-6">
+      <div className="rounded-xl border border-red-200 bg-red-50 p-6">
         <div className="flex items-center gap-2 mb-2">
           <AlertTriangle size={16} className="text-red-600" />
-          <h2 className="font-display text-lg font-semibold text-red-700">Danger Zone</h2>
+          <h2 className="text-[15px] font-bold text-red-700">Danger Zone</h2>
         </div>
         <p className="mb-4 text-sm text-red-600">
           Sign out of all devices and sessions linked to this admin account.

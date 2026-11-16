@@ -16,6 +16,7 @@ function mapOrder(row) {
     ...row,
     customer_name: row.profiles?.full_name ?? 'Unknown',
     customer_email: row.profiles?.email ?? '',
+    customer_avatar_url: row.profiles?.avatar_url ?? '',
     store_name: row.stores?.name ?? '—',
     items_count: countItems(items),
     order_items: items.map((item) => ({
@@ -32,7 +33,7 @@ export function useOrders() {
       const { data, error } = await supabase
         .from('orders')
         .select(
-          '*, profiles!orders_customer_id_fkey(full_name, email), stores(name), order_items(*, products(name, product_images(image_url, display_order)))',
+          '*, profiles!orders_customer_id_fkey(full_name, email, avatar_url), stores(name), order_items(*, products(name, product_images(image_url, display_order)))',
         )
         .order('created_at', { ascending: false })
 

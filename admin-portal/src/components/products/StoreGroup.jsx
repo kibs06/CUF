@@ -17,7 +17,7 @@ export default function StoreGroup({
   const visibleProducts = showAll ? products : products.slice(0, 4)
 
   return (
-    <div className="mb-6 overflow-hidden rounded-2xl border border-[#D9D0C7] bg-white shadow-sm">
+    <div className="mb-6 overflow-hidden rounded-xl border border-border bg-white">
       {/* Store Header Banner — h-64 (256px) */}
       <div
         className="relative flex h-64 items-end p-6"
@@ -29,8 +29,8 @@ export default function StoreGroup({
       >
         {/* OPEN/CLOSED badge — top right */}
         <span
-          className={`absolute right-5 top-5 rounded-full px-3 py-1.5 text-xs font-bold tracking-widest uppercase shadow-md ${
-            store.is_open ? 'bg-green-500 text-white' : 'bg-gray-500 text-white'
+          className={`absolute right-5 top-5 rounded-full px-3 py-1.5 text-xs font-bold tracking-widest uppercase ${
+            store.is_open ? 'bg-accent text-white' : 'bg-muted text-white'
           }`}
         >
           {store.is_open ? '● Open' : '● Closed'}
@@ -59,10 +59,10 @@ export default function StoreGroup({
             <img
               src={store.logo_url}
               alt={store.name}
-              className="h-20 w-20 flex-shrink-0 rounded-2xl border-2 border-white object-cover shadow-xl"
+              className="h-20 w-20 flex-shrink-0 rounded-xl border-2 border-white object-cover shadow-xl"
             />
           ) : (
-            <div className="flex h-20 w-20 flex-shrink-0 items-center justify-center rounded-2xl border-2 border-white/50 bg-white/15 text-3xl font-bold text-white shadow-xl backdrop-blur-sm">
+            <div className="flex h-20 w-20 flex-shrink-0 items-center justify-center rounded-xl border-2 border-white/50 bg-white/15 text-3xl font-bold text-white shadow-xl backdrop-blur-sm">
               {store.name?.[0]?.toUpperCase() ?? 'S'}
             </div>
           )}
@@ -91,7 +91,7 @@ export default function StoreGroup({
       {expanded && (
         <div className="p-4">
           {products.length === 0 ? (
-            <div className="flex flex-col items-center py-10 text-[#6B5C4E]">
+            <div className="flex flex-col items-center py-10 text-muted">
               <Package size={32} className="mb-2 opacity-30" />
               <p className="text-sm">No products in this store yet</p>
             </div>
@@ -110,7 +110,7 @@ export default function StoreGroup({
                   ))}
                 </div>
               ) : (
-                <div className="divide-y divide-[#F5F0EB]">
+                <div className="divide-y divide-border">
                   {visibleProducts.map((product) => (
                     <ProductListRow
                       key={product.id}
@@ -128,7 +128,7 @@ export default function StoreGroup({
                 <button
                   type="button"
                   onClick={() => setShowAll(!showAll)}
-                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-[#D9D0C7] py-2.5 text-sm text-[#6B5C4E] transition-colors hover:bg-[#F5F0EB]"
+                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-border py-2.5 text-sm text-muted transition-colors hover:bg-canvas"
                 >
                   {showAll ? (
                     <>

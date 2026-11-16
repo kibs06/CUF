@@ -1,9 +1,9 @@
 import { Link, NavLink } from 'react-router-dom'
 import { SHOE_SOLE_SVG } from '../../lib/constants'
 import { useAuth } from '../../hooks/useAuth.jsx'
+import { useAdminNotifications } from '../../hooks/useAdminNotifications.js'
 import AvatarInitials from '../ui/AvatarInitials.jsx'
 import { useEffect, useRef, useState } from 'react'
-import { supabase } from '../../lib/supabase'
 import {
   LayoutDashboard,
   Users,
@@ -59,8 +59,9 @@ const GROUPS = [
 
 export default function Sidebar({ open, onClose }) {
   const { profile, signOut } = useAuth()
-  const [highPriorityCount, setHighPriorityCount] = useState(0)
-  const [waitingModelRequests, setWaitingModelRequests] = useState(0)
+  const { data: notificationCounts } = useAdminNotifications()
+  const highPriorityCount = notificationCounts?.reports ?? 0
+  const waitingModelRequests = notificationCounts?.modelRequests ?? 0
   const [hovered, setHovered] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef(null)
@@ -90,33 +91,6 @@ export default function Sidebar({ open, onClose }) {
     }
   }, [menuOpen])
 
-  useEffect(() => {
-    const fetchCount = async () => {
-      try {
-        const { count } = await supabase
-          .from('reports')
-          .select('*', { count: 'exact', head: true })
-          .eq('priority', 'high')
-          .in('status', ['pending', 'under_review'])
-        setHighPriorityCount(count ?? 0)
-      } catch (_) {
-        // silently fail — badge is optional
-      }
-
-      try {
-        const { count } = await supabase
-          .from('shoe_model_requests')
-          .select('*', { count: 'exact', head: true })
-          .in('status', ['requested', 'in_progress'])
-        setWaitingModelRequests(count ?? 0)
-      } catch (_) {
-        // silently fail — badge is optional
-      }
-    }
-    fetchCount()
-    const interval = setInterval(fetchCount, 60000)
-    return () => clearInterval(interval)
-  }, [])
 
   const badgeFor = (to) => {
     if (to === '/reports' && highPriorityCount > 0)
@@ -138,7 +112,7 @@ export default function Sidebar({ open, onClose }) {
       <aside
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
-        className={`sole-scroll fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-[#2E1C10] text-[#C4A882] transition-[transform,width] duration-200 ease-out motion-reduce:transition-none ${
+        className={`admin-3d-rail sole-scroll fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-[#2E1C10] text-[#C4A882] transition-[transform,width] duration-200 ease-out motion-reduce:transition-none ${
           open ? 'translate-x-0' : '-translate-x-full'
         } lg:translate-x-0 ${expanded ? '' : 'lg:w-[76px]'} ${
           expanded ? 'shadow-pop' : ''

@@ -95,27 +95,27 @@ export default function MfaCard() {
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-[#D9D0C7] bg-white shadow-sm">
-      <div className="flex items-center gap-2 border-b border-[#F5F0EB] px-6 py-4">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#F5F0EB]">
+    <div className="overflow-hidden rounded-xl border border-border bg-white">
+      <div className="flex items-center gap-2 border-b border-border px-6 py-4">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-canvas">
           {verified ? (
-            <Shield size={16} className="text-[#8B5A2B]" />
+            <Shield size={16} className="text-primary" />
           ) : (
-            <ShieldOff size={16} className="text-[#8B5A2B]" />
+            <ShieldOff size={16} className="text-primary" />
           )}
         </div>
-        <h2 className="font-display text-lg font-semibold text-[#3B2314]">
+        <h2 className="text-[15px] font-bold text-ink">
           Two-Factor Authentication
         </h2>
       </div>
 
       <div className="p-6">
         {factors === null ? (
-          <p className="text-sm text-[#6B5C4E]">Loading 2FA status…</p>
+          <p className="text-sm text-muted">Loading 2FA status…</p>
         ) : enrollment ? (
           /* ── Enrollment flow: QR + secret + confirm ── */
           <div className="space-y-4">
-            <p className="text-sm text-[#6B5C4E]">
+            <p className="text-sm text-muted">
               Scan this QR code with your authenticator app (Google
               Authenticator, Authy, 1Password…), then enter the 6-digit code
               it shows to confirm.
@@ -126,23 +126,23 @@ export default function MfaCard() {
                   enrollment.totp?.qr_code ?? '',
                 )}`}
                 alt="Authenticator QR code"
-                className="h-48 w-48 rounded-xl border border-[#F5F0EB] bg-white p-2"
+                className="h-48 w-48 rounded-xl border border-border bg-white p-2"
               />
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">
+              <label className="mb-1.5 block text-[12px] font-medium text-muted">
                 Or enter this code manually
               </label>
               <input
                 readOnly
                 value={enrollment.totp?.secret ?? ''}
                 onFocus={(e) => e.target.select()}
-                className="w-full rounded-xl border border-[#D9D0C7] bg-[#F5F0EB] px-4 py-2.5 font-mono text-sm text-[#3B2314]"
+                className="w-full rounded-xl border border-border bg-canvas px-4 py-2.5 font-mono text-sm text-ink"
               />
             </div>
             <form onSubmit={handleConfirm} className="space-y-3">
               <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">
+                <label className="mb-1.5 block text-[12px] font-medium text-muted">
                   6-digit code
                 </label>
                 <input
@@ -154,7 +154,7 @@ export default function MfaCard() {
                     setConfirmCode(e.target.value.replace(/\D/g, ''))
                   }
                   placeholder="123456"
-                  className="w-full rounded-xl border border-[#D9D0C7] bg-[#F5F0EB] px-4 py-2.5 text-center text-xl font-bold tracking-[0.4em] text-[#3B2314] outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
+                  className="w-full rounded-xl border border-border bg-canvas px-4 py-2.5 text-center text-xl font-bold tracking-[0.4em] text-ink outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
                 />
               </div>
               {confirmError && (
@@ -164,14 +164,14 @@ export default function MfaCard() {
                 <button
                   type="button"
                   onClick={abortEnrollment}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-[#D9D0C7] px-4 py-2.5 text-sm font-semibold text-[#6B5C4E] transition-colors hover:bg-[#F5F0EB]"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-border px-4 py-2.5 text-sm font-semibold text-muted transition-colors hover:bg-canvas"
                 >
                   <X size={16} /> Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={confirming || confirmCode.length !== 6}
-                  className="flex-1 rounded-xl bg-[#8B5A2B] px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#6B4520] disabled:opacity-50"
+                  className="flex-1 rounded-xl bg-secondary px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primaryDeep disabled:opacity-50"
                 >
                   {confirming ? 'Confirming…' : 'Confirm & Turn On'}
                 </button>
@@ -182,10 +182,10 @@ export default function MfaCard() {
           /* ── Enabled state ── */
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-[#3B2314]">
+              <p className="text-sm font-semibold text-ink">
                 2FA is on
               </p>
-              <p className="text-sm text-[#6B5C4E]">
+              <p className="text-sm text-muted">
                 Sign-ins require a code from your authenticator app.
               </p>
             </div>
@@ -201,10 +201,10 @@ export default function MfaCard() {
           /* ── Disabled state ── */
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-[#3B2314]">
+              <p className="text-sm font-semibold text-ink">
                 2FA is off
               </p>
-              <p className="text-sm text-[#6B5C4E]">
+              <p className="text-sm text-muted">
                 Add an extra layer of protection for this admin account.
               </p>
             </div>
@@ -212,7 +212,7 @@ export default function MfaCard() {
               type="button"
               onClick={handleEnable}
               disabled={enrolling}
-              className="rounded-xl bg-[#8B5A2B] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#6B4520] disabled:opacity-50"
+              className="rounded-xl bg-secondary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-primaryDeep disabled:opacity-50"
             >
               {enrolling ? 'Setting up…' : 'Enable 2FA'}
             </button>

@@ -15,11 +15,327 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* Shared hover treatment for admin list rows and cards. These rules stay
+   unlayered so priority/suspended tints keep their resting color but still
+   respond to the pointer. Table rows use the first cell for the inset rule
+   because box-shadow on a <tr> is unreliable across browsers. */
+.admin-list-item {
+  transition: background-color 160ms ease, box-shadow 160ms ease;
+}
+
+.admin-list-row > td:first-child {
+  transition: box-shadow 160ms ease;
+}
+
+@media (hover: hover) {
+  .admin-list-item:hover {
+    background-color: rgb(245 240 235 / 0.8);
+  }
+
+  .admin-list-row:hover > td:first-child,
+  .admin-list-card:hover {
+    box-shadow: inset 3px 0 0 #8b5a2b;
+  }
+}
+
+.admin-list-item:focus-within {
+  background-color: rgb(245 240 235 / 0.65);
+}
+
+.admin-list-row:focus-within > td:first-child,
+.admin-list-card:focus-within {
+  box-shadow: inset 3px 0 0 #8b5a2b;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-list-item,
+  .admin-list-row > td:first-child {
+    transition: none;
+  }
+}
+
 /* Quiet focus ring used by sidebar links, buttons and table rows */
 :where(a, button, [tabindex]):focus-visible {
   outline: 2px solid #0e7c7b;
   outline-offset: 2px;
   border-radius: 6px;
+}
+
+/* ── 3D shell ──────────────────────────────────────────────────────────
+   Warm layered light on the canvas, extruded card edges, raised controls
+   and a deeper navigation rail. No transforms on generic cards: several
+   contain fixed-position menus, which a transformed ancestor would trap. */
+.admin-3d-shell {
+  background-color: #f4ede4;
+  background-image:
+    radial-gradient(1100px 620px at 12% -8%, rgba(255, 255, 255, 0.95), transparent 62%),
+    radial-gradient(900px 620px at 100% 2%, rgba(224, 242, 241, 0.55), transparent 60%),
+    linear-gradient(135deg, rgba(139, 90, 43, 0.05), transparent 45%);
+  background-attachment: fixed;
+}
+
+.admin-3d-shell header h1 {
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.9), 0 3px 10px rgba(59, 35, 20, 0.08);
+}
+
+.admin-3d-rail {
+  background-image: linear-gradient(180deg, #3a2415 0%, #2e1c10 42%, #24150b 100%);
+  box-shadow:
+    inset -1px 0 0 rgba(255, 255, 255, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    16px 0 40px -30px rgba(15, 8, 3, 0.9);
+}
+
+.admin-3d-rail a[aria-current='page'] {
+  background-image: linear-gradient(145deg, #a56d37 0%, #8b5a2b 52%, #74451f 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    0 3px 0 #4a2b14,
+    0 10px 18px -12px rgba(0, 0, 0, 0.85);
+  transition: box-shadow 160ms ease, transform 100ms ease;
+}
+
+.admin-3d-rail button[aria-haspopup='menu'] {
+  background-image: linear-gradient(145deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.025));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 2px 0 rgba(0, 0, 0, 0.35);
+}
+
+.admin-3d-surface,
+.admin-3d-shell main :is(
+  section.rounded-xl.bg-white,
+  section.rounded-2xl.bg-white,
+  aside.rounded-xl.bg-white,
+  div.overflow-hidden.rounded-xl.border.border-border.bg-white:not(.shadow-pop),
+  div.rounded-xl.border.border-border.bg-white.p-3:not(.shadow-pop),
+  div.rounded-xl.border.border-border.bg-white.p-4:not(.admin-list-card):not(.shadow-pop),
+  div.rounded-xl.border.border-border.bg-white.p-5:not(.admin-list-card):not(.shadow-pop),
+  div.rounded-xl.border.border-border.bg-white.p-6:not(.shadow-pop),
+  div.rounded-xl.border.border-border.bg-white.p-8:not(.shadow-pop)
+) {
+  background-image: linear-gradient(155deg, #ffffff 0%, #fffdfa 58%, #f7f1e9 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.98),
+    inset 0 -1px 0 rgba(59, 35, 20, 0.07),
+    0 2px 0 #e5d8c9,
+    0 16px 32px -24px rgba(59, 35, 20, 0.55);
+  transition: box-shadow 180ms ease, border-color 180ms ease;
+}
+
+@media (hover: hover) {
+  .admin-3d-surface:hover,
+  .admin-3d-shell main :is(
+    section.rounded-xl.bg-white,
+    section.rounded-2xl.bg-white,
+    aside.rounded-xl.bg-white,
+    div.overflow-hidden.rounded-xl.border.border-border.bg-white:not(.shadow-pop),
+    div.rounded-xl.border.border-border.bg-white.p-3:not(.shadow-pop),
+    div.rounded-xl.border.border-border.bg-white.p-4:not(.admin-list-card):not(.shadow-pop),
+    div.rounded-xl.border.border-border.bg-white.p-5:not(.admin-list-card):not(.shadow-pop),
+    div.rounded-xl.border.border-border.bg-white.p-6:not(.shadow-pop),
+    div.rounded-xl.border.border-border.bg-white.p-8:not(.shadow-pop)
+  ):hover {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.98),
+      inset 0 -1px 0 rgba(59, 35, 20, 0.07),
+      0 2px 0 #e5d8c9,
+      0 22px 40px -24px rgba(59, 35, 20, 0.62);
+  }
+}
+
+.admin-3d-shell main thead {
+  background-image: linear-gradient(180deg, #fdfaf6 0%, #f2e9de 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -1px 0 #dfd2c2;
+}
+
+.admin-3d-shell main :is(
+  section[aria-label='Marketplace summary'],
+  section[aria-label='Transaction summaries'],
+  section[aria-label='Order pipeline']
+) {
+  border-color: #d4c7b8;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.75),
+    0 2px 0 #e3d6c7,
+    0 16px 30px -24px rgba(59, 35, 20, 0.55);
+}
+
+.admin-3d-shell main :is(
+  section[aria-label='Marketplace summary'],
+  section[aria-label='Transaction summaries']
+) > * {
+  background-image: linear-gradient(180deg, #ffffff 0%, #fbf7f1 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.admin-3d-shell main section[aria-label='Order pipeline'] > button {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.admin-3d-pressable {
+  box-shadow:
+    inset 0 1px 0 #ffffff,
+    0 2px 0 #e4d7c8,
+    0 10px 18px -16px rgba(59, 35, 20, 0.55);
+  transition: transform 110ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+
+@media (hover: hover) {
+  .admin-3d-pressable:hover {
+    box-shadow:
+      inset 0 1px 0 #ffffff,
+      0 3px 0 #e4d7c8,
+      0 14px 22px -16px rgba(59, 35, 20, 0.6);
+  }
+}
+
+.admin-3d-pressable:active {
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 1px 0 #ffffff,
+    0 1px 0 #e4d7c8,
+    0 5px 10px -8px rgba(59, 35, 20, 0.5);
+}
+
+.admin-3d-shell :is(button, a).bg-secondary,
+.admin-3d-shell :is(button, a).bg-primary,
+.admin-3d-shell :is(button, a).bg-accent,
+.admin-3d-shell :is(button, a).bg-error {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 2px 0 rgba(46, 28, 16, 0.35),
+    0 9px 16px -12px rgba(46, 28, 16, 0.55);
+  transition: transform 100ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+
+.admin-3d-shell button.bg-secondary,
+.admin-3d-shell a.bg-secondary {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 2px 0 #4a2c17,
+    0 9px 16px -12px rgba(59, 35, 20, 0.55);
+}
+
+.admin-3d-shell button.bg-primary,
+.admin-3d-shell a.bg-primary {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 2px 0 #6a411f,
+    0 9px 16px -12px rgba(59, 35, 20, 0.55);
+}
+
+.admin-3d-shell button.bg-accent,
+.admin-3d-shell a.bg-accent {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 2px 0 #095b5a,
+    0 9px 16px -12px rgba(14, 124, 123, 0.55);
+}
+
+.admin-3d-shell button.bg-error,
+.admin-3d-shell a.bg-error {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 2px 0 #7e1c16,
+    0 9px 16px -12px rgba(179, 38, 30, 0.5);
+}
+
+.admin-3d-shell :is(button, a).bg-secondary:active,
+.admin-3d-shell :is(button, a).bg-primary:active,
+.admin-3d-shell :is(button, a).bg-accent:active,
+.admin-3d-shell :is(button, a).bg-error:active {
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 1px 0 rgba(46, 28, 16, 0.35),
+    0 4px 8px -6px rgba(46, 28, 16, 0.45);
+}
+
+.admin-3d-shell :is(header, main, aside) .shadow-pop {
+  background-image: linear-gradient(155deg, #ffffff 0%, #fbf5ed 100%);
+  border-color: #d5c8b9;
+  box-shadow:
+    inset 0 1px 0 #ffffff,
+    0 3px 0 #e5d8c9,
+    0 22px 44px -20px rgba(59, 35, 20, 0.45);
+}
+
+.admin-3d-float {
+  background-image: linear-gradient(155deg, #fffdf9 0%, #f7f0e7 100%);
+  border-color: #d5c8b9;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 3px 0 #d9cbbb,
+    0 32px 60px -24px rgba(45, 25, 12, 0.55);
+}
+
+.admin-3d-listcard {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.98),
+    inset 0 -1px 0 rgba(59, 35, 20, 0.07),
+    0 2px 0 #e5d8c9,
+    0 16px 32px -24px rgba(59, 35, 20, 0.55);
+  transition: background-color 160ms ease, box-shadow 160ms ease;
+}
+
+@media (hover: hover) {
+  .admin-3d-listcard:hover {
+    box-shadow:
+      inset 3px 0 0 #8b5a2b,
+      inset 0 1px 0 rgba(255, 255, 255, 0.98),
+      inset 0 -1px 0 rgba(59, 35, 20, 0.07),
+      0 2px 0 #e5d8c9,
+      0 20px 36px -24px rgba(59, 35, 20, 0.58);
+  }
+}
+
+.admin-3d-listcard:focus-within {
+  box-shadow:
+    inset 3px 0 0 #8b5a2b,
+    inset 0 1px 0 rgba(255, 255, 255, 0.98),
+    inset 0 -1px 0 rgba(59, 35, 20, 0.07),
+    0 2px 0 #e5d8c9,
+    0 16px 32px -24px rgba(59, 35, 20, 0.55);
+}
+
+.admin-3d-product {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    0 2px 0 #ded1c3,
+    0 16px 30px -24px rgba(59, 35, 20, 0.55);
+  transition: box-shadow 180ms ease, transform 180ms ease, border-color 180ms ease;
+}
+
+@media (hover: hover) {
+  .admin-3d-product:hover {
+    transform: translateY(-3px);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.7),
+      0 3px 0 #ded1c3,
+      0 24px 42px -24px rgba(59, 35, 20, 0.62);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-3d-surface,
+  .admin-3d-pressable,
+  .admin-3d-listcard,
+  .admin-3d-product,
+  .admin-3d-rail a[aria-current='page'] {
+    transition: none;
+  }
+
+  .admin-3d-pressable:active,
+  .admin-3d-product:hover,
+  .admin-3d-shell :is(button, a).bg-secondary:active,
+  .admin-3d-shell :is(button, a).bg-primary:active,
+  .admin-3d-shell :is(button, a).bg-accent:active,
+  .admin-3d-shell :is(button, a).bg-error:active {
+    transform: none;
+  }
 }
 
 /* 3D shelf card entrance: a short rise-and-settle, staggered per card via
@@ -46,22 +362,6 @@ body {
     animation: none;
     opacity: 1;
   }
-}
-
-/* Dashboard entrance: subtle rise, staggered via nth-child. Respects reduced motion. */
-@keyframes dashboard-rise {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.dashboard-enter > * {
-  animation: dashboard-rise 0.45s cubic-bezier(0.22, 0.9, 0.3, 1) both;
-}
-.dashboard-enter > *:nth-child(2) { animation-delay: 0.05s; }
-.dashboard-enter > *:nth-child(3) { animation-delay: 0.1s; }
-.dashboard-enter > *:nth-child(4) { animation-delay: 0.15s; }
-.dashboard-enter > *:nth-child(5) { animation-delay: 0.2s; }
-@media (prefers-reduced-motion: reduce) {
-  .dashboard-enter > * { animation: none; }
 }
 
 /* Leaderboard bars: grow from the left with a stagger, static under reduced motion. */

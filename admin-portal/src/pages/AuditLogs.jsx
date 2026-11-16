@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
 import {
   Activity,
+  ChevronLeft,
+  ChevronRight,
   Download,
-  FileClock,
   Gavel,
   LogIn,
   Search,
@@ -13,10 +14,6 @@ import {
 } from 'lucide-react'
 import Badge from '../components/ui/Badge.jsx'
 import Modal from '../components/ui/Modal.jsx'
-import StatCard from '../components/ui/StatCard.jsx'
-import { StatCardSkeleton, TableSkeleton } from '../components/ui/Skeleton.jsx'
-import EmptyState from '../components/ui/EmptyState.jsx'
-import DateRangePicker from '../components/ui/DateRangePicker.jsx'
 import { useActivityAudit, usePaymentAudit, useSecurityAudit, useSellerAudit, useSessionAudit } from '../hooks/useAuditLogs.js'
 import {
   ACTIVITY_ACTIONS,
@@ -39,19 +36,34 @@ import { formatCurrency } from '../lib/constants'
 
 const ACTION_OPTIONS = { seller: SELLER_ACTIONS, payment: PAYMENT_DECISIONS, security: LOCKOUT_STATUSES, sessions: SESSION_EVENTS, activity: ACTIVITY_ACTIONS }
 const CSV_EXPORTERS = { seller: sellerAuditCsv, payment: paymentAuditCsv, security: securityAuditCsv, sessions: sessionAuditCsv, activity: activityAuditCsv }
+const TAB_ICONS = { seller: Gavel, payment: Wallet, security: ShieldAlert, sessions: LogIn, activity: Activity }
 
-function parseISODate(str) {
-  if (!str) return null
-  const [y, m, d] = str.split('-').map(Number)
-  return new Date(y, m - 1, d)
-}
-
-function toISODate(date) {
-  if (!date) return ''
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  const d = String(date.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
+const TRAIL_META = {
+  seller: {
+    actor: 'Admin',
+    subject: 'Applicant',
+    description: 'Database-written seller status decisions. Admins can read, never write.',
+  },
+  payment: {
+    actor: 'Seller',
+    subject: 'Order',
+    description: 'Database-written manual GCash confirmations and rejections.',
+  },
+  security: {
+    actor: 'Account',
+    subject: 'Attempts',
+    description: 'Database-written failed sign-ins and lockouts. Locations are approximate.',
+  },
+  sessions: {
+    actor: 'Account',
+    subject: 'Source',
+    description: 'Client-reported sign-ins and sign-outs. Treat them as claims, not proof.',
+  },
+  activity: {
+    actor: 'Seller',
+    subject: 'Item',
+    description: 'Database-written product, store, and order changes from sellers.',
+  },
 }
 
 function humanize(value) {
@@ -97,6 +109,7 @@ export default function AuditLogs() {
   const activityQuery = useActivityAudit({ ...filters, action: tab === 'activity' ? action : 'all' })
 
   const activeQuery = tab === 'seller' ? sellerQuery : tab === 'payment' ? paymentQuery : tab === 'security' ? securityQuery : tab === 'sessions' ? sessionQuery : activityQuery
+  const activeMeta = TRAIL_META[tab] ?? TRAIL_META.seller
   const { data, isLoading, isError, error } = activeQuery
   const rows = data?.rows ?? []
   const total = data?.total ?? 0
@@ -207,257 +220,384 @@ export default function AuditLogs() {
     const count = (predicate) => rows.filter(predicate).length
     if (tab === 'seller') {
       return [
-        { label: 'Matching events', value: total },
-        { label: 'Approved (page)', value: count((r) => r.action === 'approved') },
-        { label: 'Rejected (page)', value: count((r) => r.action === 'rejected') },
+        { label: 'Matching events', value: total, scope: 'All pages' },
+        { label: 'Approved', value: count((r) => r.action === 'approved'), scope: 'This page' },
+        { label: 'Rejected', value: count((r) => r.action === 'rejected'), scope: 'This page' },
       ]
     }
     if (tab === 'payment') {
       return [
-        { label: 'Matching events', value: total },
-        { label: 'Confirmed (page)', value: count((r) => r.action === 'confirmed') },
-        { label: 'Rejected (page)', value: count((r) => r.action === 'rejected') },
+        { label: 'Matching events', value: total, scope: 'All pages' },
+        { label: 'Confirmed', value: count((r) => r.action === 'confirmed'), scope: 'This page' },
+        { label: 'Rejected', value: count((r) => r.action === 'rejected'), scope: 'This page' },
       ]
     }
     if (tab === 'sessions') {
       return [
-        { label: 'Matching events', value: total },
-        { label: 'Sign-ins (page)', value: count((r) => r.action === 'sign_in') },
-        { label: 'Sign-outs (page)', value: count((r) => r.action === 'sign_out') },
+        { label: 'Matching events', value: total, scope: 'All pages' },
+        { label: 'Sign-ins', value: count((r) => r.action === 'sign_in'), scope: 'This page' },
+        { label: 'Sign-outs', value: count((r) => r.action === 'sign_out'), scope: 'This page' },
       ]
     }
     if (tab === 'activity') {
       return [
-        { label: 'Matching events', value: total },
-        { label: 'Products (page)', value: count((r) => String(r.action).startsWith('product_')) },
-        { label: 'Orders (page)', value: count((r) => r.action === 'order_status_changed') },
+        { label: 'Matching events', value: total, scope: 'All pages' },
+        { label: 'Products', value: count((r) => String(r.action).startsWith('product_')), scope: 'This page' },
+        { label: 'Orders', value: count((r) => r.action === 'order_status_changed'), scope: 'This page' },
       ]
     }
     return [
-      { label: 'Matching events', value: total },
-      { label: 'Locked (page)', value: count((r) => r.action === 'locked') },
-      { label: 'Active watch (page)', value: count((r) => r.action === 'active') },
+      { label: 'Matching events', value: total, scope: 'All pages' },
+      { label: 'Locked', value: count((r) => r.action === 'locked'), scope: 'This page' },
+      { label: 'Active watch', value: count((r) => r.action === 'active'), scope: 'This page' },
     ]
   }, [rows, total, tab])
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="font-display text-2xl font-bold text-[#3B2314]">Audit Logs</h1>
-          <p className="mt-1 max-w-2xl text-sm text-[#6B5C4E]">
-            Who did what, when — mostly from trails the database writes
-            itself, so no client can rewrite them. Seller sessions are the
-            exception: the apps report their own sign-ins. Newest first,
-            refreshed every minute.
-          </p>
-        </div>
+    <div className="space-y-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <nav
+          aria-label="Audit trails"
+          className="min-w-0 w-full max-w-full overflow-x-auto rounded-xl border border-border/80 bg-faint/40 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:w-fit"
+        >
+          <div className="flex min-w-max items-center gap-1">
+            {AUDIT_TABS.map((trail) => {
+              const Icon = TAB_ICONS[trail.id]
+              const active = tab === trail.id
+              return (
+                <button
+                  key={trail.id}
+                  type="button"
+                  onClick={() => switchTab(trail.id)}
+                  aria-pressed={active}
+                  className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-[12px] font-semibold transition-colors duration-200 ease-[cubic-bezier(0.32,0.72,0,1)] ${
+                    active
+                      ? 'bg-white text-ink ring-1 ring-border/80'
+                      : 'text-muted hover:bg-white/70 hover:text-ink'
+                  }`}
+                >
+                  <Icon size={14} strokeWidth={1.6} aria-hidden="true" />
+                  {trail.label}
+                </button>
+              )
+            })}
+          </div>
+        </nav>
         <button
           type="button"
           onClick={handleExport}
           disabled={!rows.length || exporting}
-          className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:bg-secondary hover:shadow-md disabled:opacity-40"
+          aria-label="Export filtered audit events as CSV"
+          className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 self-end rounded-lg bg-secondary px-3.5 text-[12px] font-semibold text-white transition-colors duration-200 ease-[cubic-bezier(0.32,0.72,0,1)] hover:bg-primaryDeep disabled:cursor-not-allowed disabled:opacity-40 sm:self-auto"
         >
-          <Download size={16} />
+          <Download size={14} strokeWidth={1.7} aria-hidden="true" />
           {exporting ? 'Exporting…' : 'Export CSV'}
         </button>
       </div>
 
-      {/* Tabs */}
-      <div className="flex flex-wrap gap-2">
-        {AUDIT_TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => switchTab(t.id)}
-            aria-pressed={tab === t.id}
-            className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-              tab === t.id ? 'bg-[#3B2314] text-white shadow-sm' : 'border border-[#D9D0C7] bg-white text-[#6B5C4E] hover:border-[#8B5A2B] hover:text-[#3B2314]'
-            }`}
-          >
-            {t.id === 'seller' && <Gavel size={15} />}
-            {t.id === 'payment' && <Wallet size={15} />}
-            {t.id === 'security' && <ShieldAlert size={15} />}
-            {t.id === 'sessions' && <LogIn size={15} />}
-            {t.id === 'activity' && <Activity size={15} />}
-            {t.label}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center justify-between gap-2 px-0.5">
+        <p className="max-w-3xl text-[12.5px] leading-relaxed text-muted">{activeMeta.description}</p>
+        <p className="text-[11.5px] text-muted/70">Refreshed every minute</p>
       </div>
 
-      {/* Stats */}
-      {isLoading ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton />
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          {stats.map((s) => (
-            <StatCard key={s.label} label={s.label} value={s.value} tone="neutral" Icon={FileClock} />
-          ))}
-        </div>
-      )}
+      <section
+        aria-label="Audit summary"
+        className="grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-border bg-border"
+      >
+        {isLoading
+          ? Array.from({ length: 3 }).map((_, index) => <AuditMetric key={index} loading />)
+          : stats.map((stat) => <AuditMetric key={stat.label} {...stat} />)}
+      </section>
 
-      {/* Filters */}
-      <div className="rounded-2xl border border-[#D9D0C7] bg-white p-4 shadow-sm">
-        <div className="flex flex-wrap items-center gap-3">
-          <select
-            value={action}
-            onChange={(e) => { setAction(e.target.value); setPage(0) }}
-            aria-label="Filter by action"
-            className="rounded-full border border-[#D9D0C7] bg-white px-4 py-2 text-sm font-medium text-[#3B2314] outline-none transition-colors focus:border-primary"
-          >
-            {ACTION_OPTIONS[tab].map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-          <DateRangePicker
-            from={parseISODate(dateFrom)}
-            to={parseISODate(dateTo)}
-            onChange={(from, to) => {
-              setDateFrom(toISODate(from))
-              setDateTo(toISODate(to))
-              setPage(0)
-            }}
-          />
+      <section aria-label="Filter audit events" className="rounded-xl border border-border bg-white p-3">
+        <div className="grid items-end gap-2.5 sm:grid-cols-2 xl:grid-cols-[minmax(240px,1fr)_170px_155px_155px_auto]">
+          <label className="block sm:col-span-2 xl:col-span-1">
+            <span className="mb-1 block text-[12px] font-medium text-muted">Search</span>
+            <span className="relative block">
+              <Search
+                size={14}
+                strokeWidth={1.6}
+                className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted"
+                aria-hidden="true"
+              />
+              <input
+                type="search"
+                placeholder={
+                  tab === 'seller'
+                    ? 'Search admin, applicant, note…'
+                    : tab === 'payment'
+                      ? 'Search seller, order, reference…'
+                      : tab === 'sessions'
+                        ? 'Search seller, source, device…'
+                        : tab === 'activity'
+                          ? 'Search seller, product, store…'
+                          : 'Search account, IP, device, place…'
+                }
+                value={search}
+                onChange={(event) => {
+                  setSearch(event.target.value)
+                  setPage(0)
+                }}
+                className="h-9 w-full rounded-lg border border-border bg-white pl-8 pr-9 text-[12.5px] text-ink outline-none transition-colors placeholder:text-muted/70 focus:border-primary focus:ring-2 focus:ring-primary/15"
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearch('')
+                    setPage(0)
+                  }}
+                  aria-label="Clear search"
+                  className="absolute right-1.5 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-muted transition-colors hover:bg-canvas hover:text-ink"
+                >
+                  <X size={13} />
+                </button>
+              )}
+            </span>
+          </label>
+
+          <label className="block">
+            <span className="mb-1 block text-[12px] font-medium text-muted">Action</span>
+            <select
+              value={action}
+              onChange={(event) => {
+                setAction(event.target.value)
+                setPage(0)
+              }}
+              className="h-9 w-full rounded-lg border border-border bg-white px-2.5 text-[12.5px] text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
+            >
+              {ACTION_OPTIONS[tab].map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="mb-1 block text-[12px] font-medium text-muted">From</span>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(event) => {
+                setDateFrom(event.target.value)
+                setPage(0)
+              }}
+              className="h-9 w-full rounded-lg border border-border bg-white px-2.5 text-[12px] text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
+            />
+          </label>
+
+          <label className="block">
+            <span className="mb-1 block text-[12px] font-medium text-muted">To</span>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(event) => {
+                setDateTo(event.target.value)
+                setPage(0)
+              }}
+              className="h-9 w-full rounded-lg border border-border bg-white px-2.5 text-[12px] text-ink outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
+            />
+          </label>
+
           {filtersActive && (
             <button
               type="button"
               onClick={clearFilters}
-              className="inline-flex items-center gap-1 rounded-full px-3 py-2 text-xs font-semibold text-[#6B5C4E] transition-colors hover:text-[#3B2314]"
+              className="inline-flex h-9 items-center justify-center gap-1 rounded-lg px-2.5 text-[12px] font-semibold text-muted transition-colors hover:bg-canvas hover:text-ink"
             >
-              <X size={14} /> Clear filters
+              <X size={13} aria-hidden="true" /> Clear filters
             </button>
           )}
         </div>
-        <div className="relative mt-3">
-          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#6B5C4E]" />
-          <input
-            type="search"
-            placeholder={tab === 'seller' ? 'Search admin, applicant, note…' : tab === 'payment' ? 'Search seller, order, reference…' : tab === 'sessions' ? 'Search seller, source, device…' : tab === 'activity' ? 'Search seller, product, store…' : 'Search account, IP, device, place…'}
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(0) }}
-            className="w-full rounded-xl border border-[#D9D0C7] bg-[#FBF8F5] py-2.5 pl-10 pr-10 text-sm text-[#3B2314] placeholder-[#6B5C4E] outline-none transition-all focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/20"
-          />
-          {search && (
-            <button
-              type="button"
-              onClick={() => setSearch('')}
-              aria-label="Clear search"
-              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-[#6B5C4E] transition-colors hover:bg-[#F5F0EB] hover:text-[#3B2314]"
-            >
-              <X size={14} />
-            </button>
-          )}
-        </div>
-      </div>
+      </section>
 
-      {/* Table */}
-      {isLoading && <TableSkeleton cols={4} rows={8} />}
+      {isLoading && <AuditSkeleton />}
       {isError && (
-        <div className="rounded-2xl border border-[#D9D0C7] bg-white p-8 text-center">
-          <p className="text-sm text-[#D64545]">{error?.message ?? 'Could not load audit logs.'}</p>
+        <div className="rounded-xl border border-error/20 bg-white px-6 py-10 text-center">
+          <p className="text-[14px] font-semibold text-ink">Could not load this trail</p>
+          <p className="mt-1 text-[12.5px] leading-relaxed text-muted">
+            {error?.message ?? 'Could not load audit logs.'}
+          </p>
         </div>
       )}
+
       {!isLoading && !isError && (
-        <div className="overflow-x-auto rounded-2xl border border-[#D9D0C7] bg-white shadow-sm">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-[#FBF8F5]">
-              <tr>
-                <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">When</th>
-                <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">Actor</th>
-                <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">{tab === 'security' ? 'Detail' : tab === 'payment' ? 'Order' : tab === 'sessions' ? 'Source' : tab === 'activity' ? 'Item' : 'Applicant'}</th>
-                <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">{tab === 'security' ? 'State' : tab === 'sessions' ? 'Event' : 'Action'}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#F5F0EB]">
-              {rows.length === 0 ? (
-                <tr>
-                  <td colSpan={4} className="p-0">
-                    <EmptyState
-                      Icon={SearchX}
-                      title="No matching events"
-                      description="No audit events match the current search and filters."
-                      action={filtersActive ? (
-                        <button
-                          type="button"
-                          onClick={clearFilters}
-                          className="mt-4 rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-secondary"
-                        >
-                          Clear filters
-                        </button>
-                      ) : undefined}
-                    />
-                  </td>
-                </tr>
-              ) : (
-                rows.map((row) => (
-                  <tr
-                    key={row.id}
-                    onClick={() => setSelected(row)}
-                    className="cursor-pointer transition-colors hover:bg-[#FBF8F5]"
-                  >
-                    <td className="whitespace-nowrap px-6 py-4 text-[#3B2314]">
-                      {formatAuditDateTime(row.at)}
-                    </td>
-                    <td className="px-6 py-4">
-                      <p className="font-medium text-[#3B2314]">{row.actor}</p>
-                      {row.actorEmail && <p className="text-xs text-[#6B5C4E]">{row.actorEmail}</p>}
-                    </td>
-                    <td className="px-6 py-4">
-                      <p className="font-medium text-[#3B2314]">{row.subject}</p>
-                      {row.subjectEmail && <p className="text-xs text-[#6B5C4E]">{row.subjectEmail}</p>}
-                      {tab === 'payment' && row.reference !== '—' && (
-                        <p className="text-xs text-[#6B5C4E]">Ref {row.reference}</p>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      <Badge label={humanize(row.action)} variant={toneFor(row.action, row)} dot />
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Pagination */}
-      {!isLoading && !isError && pageCount > 1 && (
-        <div className="flex items-center justify-between text-sm text-[#6B5C4E]">
-          <p>Page {page + 1} of {pageCount} · {total} events</p>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              disabled={page === 0}
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              className="rounded-full border border-[#D9D0C7] bg-white px-4 py-1.5 font-semibold transition-colors hover:border-[#8B5A2B] disabled:opacity-40"
-            >
-              Previous
-            </button>
-            <button
-              type="button"
-              disabled={page >= pageCount - 1}
-              onClick={() => setPage((p) => p + 1)}
-              className="rounded-full border border-[#D9D0C7] bg-white px-4 py-1.5 font-semibold transition-colors hover:border-[#8B5A2B] disabled:opacity-40"
-            >
-              Next
-            </button>
+        <section className="overflow-hidden rounded-xl border border-border bg-white">
+          <div className="px-4 py-3.5">
+            <h2 className="text-[15px] font-bold text-ink">Events</h2>
+            <p className="mt-0.5 text-[12px] text-muted">
+              {total.toLocaleString('en-PH')} event{total === 1 ? '' : 's'} in this trail · newest first
+            </p>
           </div>
-        </div>
+
+          {rows.length === 0 ? (
+            <div className="flex flex-col items-center border-t border-border px-6 py-16 text-center">
+              <SearchX size={22} strokeWidth={1.5} className="text-muted" aria-hidden="true" />
+              <p className="mt-2 text-[15px] font-semibold text-ink">
+                {filtersActive ? 'No events match these filters' : 'No events in this trail yet'}
+              </p>
+              <p className="mt-1 max-w-sm text-[12.5px] leading-relaxed text-muted">
+                {filtersActive
+                  ? 'Search and filters apply to the loaded page. Try a wider date range or clear the filters.'
+                  : 'New events will appear here as they are recorded.'}
+              </p>
+              {filtersActive && (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="mt-3 inline-flex h-9 items-center rounded-lg bg-secondary px-3.5 text-[12px] font-semibold text-white hover:bg-primaryDeep"
+                >
+                  Clear filters
+                </button>
+              )}
+            </div>
+          ) : (
+            <>
+              <div className="hidden overflow-x-auto lg:block">
+                <table className="w-full min-w-[760px] table-fixed text-left">
+                  <colgroup>
+                    <col className="w-[196px]" />
+                    <col className="w-[220px]" />
+                    <col />
+                    <col className="w-[200px]" />
+                    <col className="w-[44px]" />
+                  </colgroup>
+                  <thead className="border-y border-border bg-canvas/60">
+                    <tr>
+                      <th className="px-4 py-2 text-[12px] font-semibold text-muted">When</th>
+                      <th className="px-4 py-2 text-[12px] font-semibold text-muted">{activeMeta.actor}</th>
+                      <th className="px-4 py-2 text-[12px] font-semibold text-muted">{activeMeta.subject}</th>
+                      <th className="px-4 py-2 text-[12px] font-semibold text-muted">Action</th>
+                      <th className="w-10 px-3 py-2">
+                        <span className="sr-only">Open event</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {rows.map((row) => (
+                      <tr
+                        key={row.id}
+                        onClick={() => setSelected(row)}
+                        className="admin-list-item admin-list-row cursor-pointer"
+                      >
+                        <td className="whitespace-nowrap px-4 py-3 font-mono text-[11.5px] text-muted">
+                          {formatAuditDateTime(row.at)}
+                        </td>
+                        <td className="max-w-[220px] px-4 py-3">
+                          <p className="truncate text-[12.5px] font-semibold text-ink">{row.actor}</p>
+                          {row.actorEmail && (
+                            <p className="truncate text-[12px] text-muted">{row.actorEmail}</p>
+                          )}
+                        </td>
+                        <td className="max-w-[240px] px-4 py-3">
+                          <p className="truncate text-[12.5px] font-medium text-ink">{row.subject}</p>
+                          {row.subjectEmail && (
+                            <p className="truncate text-[12px] text-muted">{row.subjectEmail}</p>
+                          )}
+                          {tab === 'payment' && row.reference !== '—' && (
+                            <p className="mt-0.5 text-[11.5px] text-muted/80">Ref {row.reference}</p>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge label={humanize(row.action)} variant={toneFor(row.action, row)} dot />
+                        </td>
+                        <td className="px-3 py-3">
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              setSelected(row)
+                            }}
+                            aria-label={`Open event ${shortId(row.id)}`}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted/60 transition-colors hover:bg-canvas hover:text-ink"
+                          >
+                            <ChevronRight size={15} aria-hidden="true" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="divide-y divide-border border-t border-border lg:hidden">
+                {rows.map((row) => (
+                  <button
+                    key={row.id}
+                    type="button"
+                    onClick={() => setSelected(row)}
+                    className="admin-list-item admin-list-card block w-full px-4 py-3 text-left"
+                  >
+                    <span className="flex items-start justify-between gap-2">
+                      <Badge label={humanize(row.action)} variant={toneFor(row.action, row)} dot />
+                      <span className="shrink-0 text-right font-mono text-[11px] leading-relaxed text-muted">
+                        {formatAuditDateTime(row.at)}
+                      </span>
+                    </span>
+                    <span className="mt-2 block truncate text-[13px] font-semibold text-ink">
+                      {row.actor}
+                    </span>
+                    {row.actorEmail && (
+                      <span className="block truncate text-[12px] text-muted">{row.actorEmail}</span>
+                    )}
+                    <span className="mt-1 block truncate text-[12px] text-muted">
+                      {row.subject}
+                      {row.subjectEmail ? ` · ${row.subjectEmail}` : ''}
+                      {tab === 'payment' && row.reference !== '—' ? ` · Ref ${row.reference}` : ''}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              {total > 0 && (
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3">
+                  <p className="text-[12px] text-muted">
+                    <span className="font-semibold text-secondary">{rows.length}</span> row
+                    {rows.length === 1 ? '' : 's'} on this page · {total.toLocaleString('en-PH')} event
+                    {total === 1 ? '' : 's'} in trail
+                  </p>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      disabled={page === 0}
+                      onClick={() => setPage((current) => Math.max(0, current - 1))}
+                      aria-label="Previous page"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-white text-muted transition-colors hover:border-primary/40 hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
+                    >
+                      <ChevronLeft size={14} />
+                    </button>
+                    <span className="px-2 font-mono text-[11px] text-muted">
+                      {page + 1} / {pageCount}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={page >= pageCount - 1}
+                      onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))}
+                      aria-label="Next page"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-white text-muted transition-colors hover:border-primary/40 hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
+                    >
+                      <ChevronRight size={14} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </section>
       )}
 
-      {/* Coverage note — the gaps are stated, not hidden. */}
-      <p className="text-xs leading-relaxed text-[#6B5C4E]">
-        Covers seller-application decisions, manual GCash decisions, sign-in
-        security, seller sessions and seller activity. Sessions are
-        client-reported (a missing sign-out means it was never logged, e.g.
-        an older app version). Live GoTrue events sit behind the
-        per-account security diagnostics, and account suspensions leave no
-        history yet — both are follow-ups, not silent gaps.
-      </p>
+      <section aria-label="Audit coverage" className="rounded-xl border border-border bg-white px-4 py-3.5">
+        <p className="text-[12px] font-semibold text-ink">Coverage</p>
+        <p className="mt-1 max-w-[900px] text-[12px] leading-relaxed text-muted">
+          Covers seller application decisions, manual GCash decisions, sign-in security, seller
+          sessions, and seller activity. Four trails are written server-side and cannot be edited from
+          a client. Sessions are reported by the apps, so a missing sign-out means it was never
+          logged. Live GoTrue events sit in per-account security diagnostics; suspensions still have
+          no history.
+        </p>
+      </section>
 
-      {/* Detail */}
       <Modal open={!!selected} onClose={() => setSelected(null)} title="Event detail" size="md">
         {selected && <AuditDetail row={selected} tab={tab} />}
       </Modal>
@@ -465,25 +605,72 @@ export default function AuditLogs() {
   )
 }
 
+function AuditMetric({ label, value, scope, loading = false }) {
+  return (
+    <div className="bg-white px-3.5 py-3.5">
+      {loading ? (
+        <>
+          <div className="h-3 w-20 animate-pulse rounded bg-canvas" />
+          <div className="mt-2 h-6 w-14 animate-pulse rounded bg-canvas" />
+          <div className="mt-1.5 h-3 w-16 animate-pulse rounded bg-canvas" />
+        </>
+      ) : (
+        <>
+          <p className="text-[12px] font-medium text-muted">{label}</p>
+          <p className="mt-1.5 font-mono text-[24px] font-semibold leading-none tracking-tight text-ink tnum">
+            {Number(value ?? 0).toLocaleString('en-PH')}
+          </p>
+          <p className="mt-1.5 text-[11.5px] text-muted/80">{scope}</p>
+        </>
+      )}
+    </div>
+  )
+}
+
+function AuditSkeleton() {
+  return (
+    <div className="overflow-hidden rounded-xl border border-border bg-white">
+      <div className="px-4 py-3.5">
+        <div className="h-4 w-20 animate-pulse rounded bg-canvas" />
+        <div className="mt-1.5 h-3 w-40 animate-pulse rounded bg-canvas" />
+      </div>
+      <div className="border-y border-border bg-canvas/60 px-4 py-2.5">
+        <div className="h-3 w-full animate-pulse rounded bg-[#E8DDD5]" />
+      </div>
+      <div className="divide-y divide-border">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <div key={index} className="flex items-center gap-4 px-4 py-3">
+            <div className="h-3 w-28 animate-pulse rounded bg-canvas" />
+            <div className="h-3 flex-1 animate-pulse rounded bg-canvas" />
+            <div className="h-5 w-20 animate-pulse rounded-full bg-canvas" />
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function DetailRow({ label, value }) {
   if (value == null || value === '') return null
   return (
-    <div className="flex items-start justify-between gap-4 border-b border-[#F5F0EB] py-2.5 last:border-0">
-      <p className="text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">{label}</p>
-      <p className="text-right text-sm font-medium text-[#3B2314]">{value}</p>
+    <div className="grid grid-cols-[110px_1fr] gap-3 border-b border-border/70 py-2.5 last:border-0">
+      <p className="text-[12px] text-muted">{label}</p>
+      <p className="break-words text-right text-[13px] font-medium text-ink">{value}</p>
     </div>
   )
 }
 
 function AuditDetail({ row, tab }) {
+  const meta = TRAIL_META[tab] ?? TRAIL_META.seller
   return (
     <div className="text-sm">
-      <div className="mb-3 flex items-center gap-2">
+      <div className="mb-1 flex flex-wrap items-center gap-2 border-b border-border pb-3">
         <Badge label={humanize(row.action)} variant={toneFor(row.action, row)} dot />
-        <span className="text-xs text-[#6B5C4E]">{formatAuditDateTime(row.at)}</span>
+        <span className="font-mono text-[11px] text-muted">#{shortId(row.id)}</span>
+        <span className="text-[12px] text-muted">{formatAuditDateTime(row.at)}</span>
       </div>
-      <DetailRow label="Actor" value={row.actorEmail ? `${row.actor} (${row.actorEmail})` : row.actor} />
-      <DetailRow label={tab === 'payment' ? 'Order' : tab === 'security' ? 'Attempts' : tab === 'sessions' ? 'Source' : tab === 'activity' ? 'Item' : 'Applicant'} value={row.subjectEmail ? `${row.subject} (${row.subjectEmail})` : row.subject} />
+      <DetailRow label={meta.actor} value={row.actorEmail ? `${row.actor} (${row.actorEmail})` : row.actor} />
+      <DetailRow label={meta.subject} value={row.subjectEmail ? `${row.subject} (${row.subjectEmail})` : row.subject} />
       {tab === 'seller' && (
         <>
           <DetailRow label="From" value={row.previousStatus} />

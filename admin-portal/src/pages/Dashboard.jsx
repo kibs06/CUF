@@ -1,13 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import {
-  AreaChart,
-  Area,
-  ResponsiveContainer,
-} from 'recharts'
-import StatCard from '../components/ui/StatCard.jsx'
 import TrendPanel from '../components/ui/TrendPanel.jsx'
-import { StatCardSkeleton, TableSkeleton } from '../components/ui/Skeleton.jsx'
 import Badge from '../components/ui/Badge.jsx'
 import AvatarInitials from '../components/ui/AvatarInitials.jsx'
 import { useToast } from '../components/ui/Toast.jsx'
@@ -20,45 +13,92 @@ import {
   useApproveSeller,
   useRejectSeller,
 } from '../hooks/useDashboard.js'
-import { formatDate, formatCurrency, shortId } from '../lib/constants'
-import {
-  ShoppingCart,
-  Package,
-  PackageOpen,
-  Store,
-  Users,
-  Wallet,
-  ArrowRight,
-  Clock,
-  Truck,
-  CheckCheck,
-} from 'lucide-react'
+import { formatDate, formatCurrency, getInitials, shortId } from '../lib/constants'
+import { AlertTriangle, ArrowRight, Package, ShieldCheck } from 'lucide-react'
 
 const peso = String.fromCharCode(0x20B1)
 const pesoTick = (v) => (v >= 1000 ? `${peso}${Math.round(v / 100) / 10}k` : `${peso}${v}`)
 
-function MiniSpark({ data, color = '#8B5A2B', id = 'miniSpark' }) {
-  if (!data?.length) return null
+function signedNumber(value) {
+  if (value == null) return null
+  if (value === 0) return 'No change'
+  return `${value > 0 ? '+' : '\u2212'}${Math.abs(value)}`
+}
+
+function signedCurrency(value) {
+  if (value == null) return null
+  if (value === 0) return 'No change'
+  return `${value > 0 ? '+' : '\u2212'}${formatCurrency(Math.abs(Math.round(value)))}`
+}
+
+function Delta({ value, children }) {
+  if (value == null) return null
+  const tone = value === 0 ? 'text-muted' : value > 0 ? 'text-accent' : 'text-error'
+  return <span className={`font-semibold ${tone}`}>{children}</span>
+}
+
+function Metric({ label, value, footer, loading = false }) {
   return (
-    <ResponsiveContainer width="100%" height="100%">
-      <AreaChart data={data} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
-        <defs>
-          <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity={0.28} />
-            <stop offset="100%" stopColor={color} stopOpacity={0.03} />
-          </linearGradient>
-        </defs>
-        <Area
-          type="monotone"
-          dataKey="count"
-          stroke={color}
-          strokeWidth={2}
-          fill={`url(#${id})`}
-          isAnimationActive={false}
-          dot={false}
-        />
-      </AreaChart>
-    </ResponsiveContainer>
+    <div className="bg-white p-4">
+      <p className="text-[12px] font-medium text-muted">{label}</p>
+      {loading ? (
+        <div className="mt-2 h-6 w-20 animate-pulse rounded bg-canvas" />
+      ) : (
+        <p className="mt-1.5 font-mono text-[24px] font-semibold leading-none tracking-tight text-ink tnum">
+          {value}
+        </p>
+      )}
+      <div className="mt-2 min-h-[18px] text-[12px] leading-relaxed text-muted">
+        {loading ? <div className="h-3 w-32 animate-pulse rounded bg-canvas" /> : footer}
+      </div>
+    </div>
+  )
+}
+
+function CustomerAvatar({ name, email }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-canvas text-[10px] font-bold text-secondary ring-1 ring-border"
+    >
+      {getInitials(name, email)}
+    </span>
+  )
+}
+
+function OrdersSkeleton() {
+  return (
+    <div className="divide-y divide-border border-t border-border">
+      {Array.from({ length: 5 }).map((_, index) => (
+        <div key={index} className="flex items-center gap-3 px-4 py-3">
+          <div className="h-8 w-8 animate-pulse rounded-full bg-canvas" />
+          <div className="flex-1 space-y-1.5">
+            <div className="h-3 w-32 animate-pulse rounded bg-canvas" />
+            <div className="h-2.5 w-24 animate-pulse rounded bg-canvas" />
+          </div>
+          <div className="h-5 w-20 animate-pulse rounded bg-canvas" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function ApplicationsSkeleton() {
+  return (
+    <div className="space-y-4 px-4 pb-4">
+      {Array.from({ length: 2 }).map((_, index) => (
+        <div key={index} className="space-y-2">
+          <div className="flex items-center gap-2.5">
+            <div className="h-8 w-8 animate-pulse rounded-full bg-canvas" />
+            <div className="space-y-1.5">
+              <div className="h-3 w-28 animate-pulse rounded bg-canvas" />
+              <div className="h-2.5 w-36 animate-pulse rounded bg-canvas" />
+            </div>
+          </div>
+          <div className="h-8 animate-pulse rounded-lg bg-canvas" />
+        </div>
+      ))}
+    </div>
   )
 }
 
@@ -68,7 +108,7 @@ export default function Dashboard() {
   const { data: pendingApps, isLoading: pendingLoading } = useRecentPendingApplications(4)
   const { data: recentOrders, isLoading: ordersLoading } = useRecentOrders(6)
   const { data: spark } = useOrdersSparkline(14)
-  const { data: pipeline } = useOrderPipeline()
+  const { data: pipeline, isLoading: pipelineLoading } = useOrderPipeline()
   const approve = useApproveSeller()
   const reject = useRejectSeller()
   const [loadingId, setLoadingId] = useState(null)
@@ -100,287 +140,447 @@ export default function Dashboard() {
   const trend = (() => {
     const current = spark?.current ?? []
     const tail = (spark?.previous ?? []).slice(-current.length)
-    const series = (key) => current.map((c, i) => ({ date: c.date, value: c[key] ?? 0, previous: tail[i]?.[key] ?? null }))
+    const series = (key) =>
+      current.map((entry, index) => ({
+        date: entry.date,
+        value: entry[key] ?? 0,
+        previous: tail[index]?.[key] ?? null,
+      }))
     return { orders: series('count'), revenue: series('revenue') }
   })()
+
   const chartTotal = spark?.total ?? 0
   const revenueTotal = spark?.totalRevenue ?? 0
+  const orders7d = stats?.orders7d ?? chartTotal
+  const revenue7d = stats?.revenue7d ?? revenueTotal
+  const avgOrder = orders7d > 0 ? revenue7d / orders7d : 0
+  const pending = Math.max(stats?.pendingApplications ?? 0, pendingApps?.length ?? 0)
+  const needsAction = pipeline?.needsAction ?? 0
 
   const pipe = [
-    { label: 'Needs action', value: pipeline?.needsAction ?? 0, Icon: Clock, to: '/orders?status=pending', tile: 'bg-pendingSoft text-pending' },
-    { label: 'In preparation', value: pipeline?.inKitchen ?? 0, Icon: PackageOpen, to: '/orders?status=preparing', tile: 'bg-[#E4EBFF] text-[#2B4BCB]' },
-    { label: 'Shipped', value: pipeline?.onTheWay ?? 0, Icon: Truck, to: '/orders?status=shipped', tile: 'bg-[#E9E4FB] text-[#5B3DF0]' },
-    { label: 'Delivered', value: pipeline?.done ?? 0, Icon: CheckCheck, to: '/orders?status=delivered', tile: 'bg-accentSoft text-accent' },
+    {
+      key: 'needsAction',
+      label: 'Needs action',
+      value: pipeline?.needsAction ?? 0,
+      caption: 'Awaiting confirmation',
+      to: '/orders?status=pending',
+      hex: '#9A6B0A',
+      alert: true,
+    },
+    {
+      key: 'inKitchen',
+      label: 'In preparation',
+      value: pipeline?.inKitchen ?? 0,
+      caption: 'Packing or ready',
+      to: '/orders?status=preparing',
+      hex: '#8B5A2B',
+    },
+    {
+      key: 'onTheWay',
+      label: 'Shipped',
+      value: pipeline?.onTheWay ?? 0,
+      caption: 'On the way',
+      to: '/orders?status=shipped',
+      hex: '#4E6E8E',
+    },
+    {
+      key: 'done',
+      label: 'Delivered',
+      value: pipeline?.done ?? 0,
+      caption: 'Completed',
+      to: '/orders?status=delivered',
+      hex: '#0E7C7B',
+    },
   ]
+  const pipeTotal = pipe.reduce((sum, stage) => sum + stage.value, 0)
+  const openCount = pipe.slice(0, 3).reduce((sum, stage) => sum + stage.value, 0)
 
-  const pipeTotal = pipe.reduce((s, p) => s + p.value, 0)
+  const hasAttention = needsAction > 0 || pending > 0
+  const hasSellerQueue = pending > 0 || (pendingApps?.length ?? 0) > 0
+  const attentionTitle =
+    needsAction > 0
+      ? `${needsAction} order${needsAction === 1 ? '' : 's'} need confirmation`
+      : `${pending} seller application${pending === 1 ? '' : 's'} need review`
+  const attentionBody =
+    needsAction > 0 && pending > 0
+      ? `${pending} seller application${pending === 1 ? '' : 's'} also waiting for review.`
+      : needsAction > 0
+        ? 'Confirm or cancel them from the order queue.'
+        : 'Review the application before approving access.'
+  const attentionHref = needsAction > 0 ? '/orders?status=pending' : '/seller-applications'
+  const attentionLabel = needsAction > 0 ? 'Review orders' : 'Review applications'
+
+  const ordersFooter =
+    stats?.ordersDelta == null ? (
+      `${stats?.totalOrders ?? 0} all time`
+    ) : (
+      <>
+        <Delta value={stats.ordersDelta}>{signedNumber(stats.ordersDelta)}</Delta> vs prior ·{' '}
+        {stats?.totalOrders ?? 0} all time
+      </>
+    )
+
+  const revenueFooter =
+    stats?.revenueDelta == null ? (
+      `${orders7d} orders`
+    ) : (
+      <>
+        <Delta value={stats.revenueDelta}>{signedCurrency(stats.revenueDelta)}</Delta> vs prior ·{' '}
+        {formatCurrency(avgOrder)} avg.
+      </>
+    )
 
   return (
-    <div className="dashboard-enter space-y-6" key="dashboard-v3">
-      {/* Summary row: what happened + where to go */}
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="max-w-xl">
-          <p className="mb-1.5 inline-flex items-center gap-1.5 rounded-full bg-accentSoft px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.08em] text-accent">
-            <span className="relative flex h-1.5 w-1.5" aria-hidden="true">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-60" />
-              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-accent" />
+    <div className="space-y-4">
+      {hasAttention && (
+        <section
+          aria-label="Needs attention"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-pending/30 bg-pendingSoft/45 px-4 py-3"
+        >
+          <div className="flex min-w-0 items-start gap-2.5">
+            <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-pending/10 text-pending">
+              <AlertTriangle size={15} aria-hidden="true" />
             </span>
-            Live storefront
-          </p>
-          <p className="text-sm text-muted">
-            {chartTotal === 0
-              ? 'A quiet week. Check seller applications below, then review the order pipeline.'
-              : `${chartTotal} orders in the last 7 days, worth ${formatCurrency(spark?.totalRevenue ?? stats?.revenue7d ?? 0)}.`}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link
-            to="/seller-applications"
-            className="rounded-xl border border-border bg-white px-3.5 py-2 text-sm font-semibold text-secondary shadow-card transition-colors hover:border-primary/60"
-          >
-            Review applications{stats?.pendingApplications ? ` (${stats.pendingApplications})` : ''}
-          </Link>
-          <Link
-            to="/orders"
-            className="inline-flex items-center gap-1.5 rounded-xl bg-secondary px-3.5 py-2 text-sm font-semibold text-white transition-colors hover:bg-primaryDeep"
-          >
-            View orders <ArrowRight size={15} />
-          </Link>
-        </div>
-      </div>
-
-      {/* KPI strip: one unified card with hairline dividers */}
-      <section aria-label="Key metrics" className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-border bg-border shadow-card xl:grid-cols-4">
-        {statsLoading ? (
-          Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)
-        ) : (
-          <>
-            <StatCard
-              bare
-              tone="primary"
-              Icon={ShoppingCart}
-              label="Orders, last 7 days"
-              value={stats?.orders7d ?? 0}
-              delta={stats?.ordersDelta ?? null}
-              formatDelta={(n) => (n === 0 ? 'No change' : `${n > 0 ? '+' : ''}${n}`)}
-              caption={`${stats?.totalOrders ?? 0} all time · vs last week`}
-              sparkline={<MiniSpark data={spark?.current} color="#8B5A2B" id="miniOrders" />}
-            />
-            <StatCard
-              bare
-              tone="teal"
-              Icon={Wallet}
-              label="Revenue, last 7 days"
-              value={formatCurrency(stats?.revenue7d ?? 0)}
-              delta={stats?.revenueDelta ?? null}
-              formatDelta={(n) => {
-                if (n === 0) return 'No change'
-                return `${n > 0 ? '+' : '−'}${formatCurrency(Math.abs(Math.round(n)))}`
-              }}
-              caption="Paid + pending · vs last week"
-              sparkline={<MiniSpark data={spark?.current?.map((d) => ({ ...d, count: d.revenue }))} color="#0E7C7B" id="miniRevenue" />}
-            />
-            <StatCard
-              bare
-              tone="cocoa"
-              Icon={Package}
-              label="Live products"
-              value={stats?.totalProducts ?? 0}
-              caption="Across all stores"
-            />
-            <StatCard
-              bare
-              tone={stats?.pendingApplications > 0 ? 'amber' : 'neutral'}
-              Icon={Store}
-              label="Seller applications"
-              value={stats?.pendingApplications ?? 0}
-              highlight={(stats?.pendingApplications ?? 0) > 0}
-              caption={
-                (stats?.pendingApplications ?? 0) > 0
-                  ? 'Waiting for review'
-                  : 'Queue is clear'
-              }
-            />
-          </>
-        )}
-      </section>
-
-      {/* Operations strip: order pipeline */}
-      <section className="rounded-2xl border border-border bg-white shadow-card ring-1 ring-black/[0.02]">
-        <div className="flex items-center justify-between px-5 pb-1 pt-4">
-          <h2 className="text-[15px] font-bold text-ink">Order pipeline</h2>
-          <Link to="/orders" className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[13px] font-semibold text-primary hover:bg-canvas">
-            Open orders <ArrowRight size={14} />
-          </Link>
-        </div>
-        <div className="grid grid-cols-2 gap-2 px-3 pb-3 sm:grid-cols-4">
-          {pipe.map((p) => {
-            const share = pipeTotal > 0 ? Math.round((p.value / pipeTotal) * 100) : 0
-            return (
+            <div className="min-w-0">
+              <p className="text-[13px] font-semibold text-ink">{attentionTitle}</p>
+              <p className="mt-0.5 text-[12px] leading-relaxed text-muted">{attentionBody}</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            {needsAction > 0 && pending > 0 && (
+              <Link
+                to="/seller-applications"
+                className="text-[12px] font-semibold text-secondary hover:underline"
+              >
+                Seller applications
+              </Link>
+            )}
             <Link
-              key={p.label}
-              to={p.to}
-              aria-label={`${p.label}: ${p.value} orders`}
-              className="group rounded-xl border border-border/70 px-4 py-3 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-card"
+              to={attentionHref}
+              className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg bg-secondary px-3.5 text-[12px] font-semibold text-white transition-colors hover:bg-primaryDeep sm:w-auto"
             >
-              <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${p.tile ?? 'bg-faint text-secondary'}`}>
-                <p.Icon size={17} strokeWidth={2} aria-hidden="true" />
-              </span>
-              <span className="tnum mt-3 block font-mono text-2xl font-semibold leading-none text-ink">
-                {p.value}
-              </span>
-              <span className="mt-1 block text-[13px] font-medium text-muted group-hover:text-ink">{p.label}</span>
-              <span className="mt-2 block h-1 overflow-hidden rounded-full bg-canvas" aria-hidden="true">
-                <span className="block h-full rounded-full bg-current opacity-30" style={{ width: `${share}%` }} />
-              </span>
-            </Link>
-            )
-          })}
-        </div>
-      </section>
-
-      <div className="grid gap-6 xl:grid-cols-5">
-        {/* Recent orders: the wider column */}
-        <section className="rounded-2xl border border-border bg-white shadow-card xl:col-span-3">
-          <div className="flex items-center justify-between px-5 py-4">
-            <h2 className="text-[15px] font-bold text-ink">Latest orders</h2>
-            <Link to="/orders" className="inline-flex items-center gap-1 text-[13px] font-semibold text-primary hover:underline">
-              View all <ArrowRight size={14} />
+              {attentionLabel} <ArrowRight size={13} aria-hidden="true" />
             </Link>
           </div>
-          <div className="px-3 pb-3">
-            {ordersLoading ? (
-              <TableSkeleton cols={4} rows={5} />
-            ) : recentOrders?.length > 0 ? (
-              <div className="overflow-hidden rounded-xl border border-border">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-canvas">
+        </section>
+      )}
+
+      <section
+        aria-label="Marketplace summary"
+        className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border lg:grid-cols-4"
+      >
+        <Metric label="Orders, 7 days" value={orders7d} footer={ordersFooter} loading={statsLoading} />
+        <Metric
+          label="Revenue, 7 days"
+          value={formatCurrency(revenue7d)}
+          footer={revenueFooter}
+          loading={statsLoading}
+        />
+        <Metric
+          label="Open orders"
+          value={openCount}
+          loading={pipelineLoading}
+          footer={
+            needsAction > 0 ? (
+              <>
+                <span className="font-semibold text-pending">{needsAction}</span> awaiting confirmation
+              </>
+            ) : (
+              'Nothing awaiting confirmation'
+            )
+          }
+        />
+        <Metric
+          label="Live products"
+          value={stats?.totalProducts ?? 0}
+          loading={statsLoading}
+          footer="Across all stores"
+        />
+      </section>
+
+      <section className="overflow-hidden rounded-xl border border-border bg-white">
+        <div className="flex flex-wrap items-start justify-between gap-2 px-4 py-3.5">
+          <div>
+            <h2 className="text-[15px] font-bold text-ink">Order workflow</h2>
+            <p className="mt-0.5 text-[12px] text-muted">
+              {pipelineLoading
+                ? 'Loading the pipeline…'
+                : `${pipeTotal} orders · ${openCount} open · ${pipeline?.done ?? 0} delivered`}
+            </p>
+          </div>
+          <Link
+            to="/orders"
+            className="inline-flex h-9 items-center gap-1 text-[12px] font-semibold text-primary hover:underline"
+          >
+            Open orders <ArrowRight size={13} aria-hidden="true" />
+          </Link>
+        </div>
+
+        <div className="px-4">
+          <div className="flex h-1.5 overflow-hidden rounded-full bg-canvas" aria-hidden="true">
+            {!pipelineLoading &&
+              pipe.map((stage) => {
+                const share = pipeTotal > 0 ? (stage.value / pipeTotal) * 100 : 0
+                return share > 0 ? (
+                  <span
+                    key={stage.key}
+                    className="h-full first:rounded-l-full last:rounded-r-full"
+                    style={{ width: `${share}%`, backgroundColor: stage.hex }}
+                  />
+                ) : null
+              })}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-x-3 px-2 pb-2 pt-1 sm:grid-cols-4">
+          {pipe.map((stage) => (
+            <Link
+              key={stage.key}
+              to={stage.to}
+              aria-label={`${stage.label}: ${stage.value} orders`}
+              className="group flex min-h-11 items-start justify-between gap-2 rounded-lg px-2 py-2.5 transition-colors hover:bg-canvas"
+            >
+              <span className="min-w-0">
+                <span className="flex items-center gap-1.5 text-[12px] font-semibold text-secondary">
+                  <span
+                    className="h-1.5 w-1.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: stage.hex }}
+                    aria-hidden="true"
+                  />
+                  {stage.label}
+                </span>
+                <span className="mt-0.5 block text-[12px] text-muted">{stage.caption}</span>
+              </span>
+              <span
+                className={`shrink-0 font-mono text-[17px] font-semibold leading-none tnum ${
+                  stage.alert && stage.value > 0 ? 'text-pending' : 'text-ink'
+                }`}
+              >
+                {pipelineLoading ? (
+                  <span className="inline-block h-4 w-6 animate-pulse rounded bg-canvas" />
+                ) : (
+                  stage.value
+                )}
+              </span>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      <div
+        className={`grid gap-4 ${
+          hasSellerQueue ? 'xl:grid-cols-[minmax(0,1.65fr)_minmax(310px,1fr)]' : ''
+        }`}
+      >
+        <section className="overflow-hidden rounded-xl border border-border bg-white">
+          <div className="flex items-center justify-between gap-3 px-4 py-3.5">
+            <div>
+              <h2 className="text-[15px] font-bold text-ink">Latest orders</h2>
+              <p className="mt-0.5 text-[12px] text-muted">Newest first</p>
+            </div>
+            <Link
+              to="/orders"
+              className="inline-flex h-9 items-center gap-1 text-[12px] font-semibold text-primary hover:underline"
+            >
+              All orders <ArrowRight size={13} aria-hidden="true" />
+            </Link>
+          </div>
+
+          {ordersLoading ? (
+            <OrdersSkeleton />
+          ) : recentOrders?.length > 0 ? (
+            <>
+              <div className="hidden md:block">
+                <table className="w-full text-left">
+                  <thead className="border-y border-border bg-canvas/60">
                     <tr>
-                      <th className="px-4 py-2.5 text-[11px] font-bold uppercase tracking-[0.08em] text-muted">Order</th>
-                      <th className="px-4 py-2.5 text-[11px] font-bold uppercase tracking-[0.08em] text-muted">Customer</th>
-                      <th className="px-4 py-2.5 text-right text-[11px] font-bold uppercase tracking-[0.08em] text-muted">Total</th>
-                      <th className="px-4 py-2.5 text-[11px] font-bold uppercase tracking-[0.08em] text-muted">Status</th>
+                      <th className="px-4 py-2 text-[12px] font-semibold text-muted">Order</th>
+                      <th className="px-4 py-2 text-[12px] font-semibold text-muted">Customer</th>
+                      <th className="px-4 py-2 text-right text-[12px] font-semibold text-muted">
+                        Total
+                      </th>
+                      <th className="px-4 py-2 text-[12px] font-semibold text-muted">Status</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-canvas">
-                    {recentOrders.map((order) => (
-                      <tr key={order.id} className="transition-colors hover:bg-canvas/70">
-                        <td className="px-4 py-3">
-                          <span className="tnum block font-mono text-xs font-semibold text-ink">#{shortId(order.id)}</span>
-                          <span className="tnum block text-[11px] text-muted">{formatDate(order.created_at)}</span>
-                        </td>
-                        <td className="max-w-[180px] px-4 py-3">
-                          <span className="block truncate text-sm font-medium text-ink">{order.stores?.name ?? order.profiles?.full_name ?? 'Walk-in'}</span>
-                          {order.stores?.name && order.profiles?.full_name && (
-                            <span className="block truncate text-xs text-muted">{order.profiles.full_name}</span>
-                          )}
-                        </td>
-                        <td className="tnum px-4 py-3 text-right font-mono text-[13px] text-ink">
-                          {formatCurrency(order.total_amount)}
-                        </td>
-                        <td className="px-4 py-3">
-                          <Badge label={order.status} variant={order.status} dot />
-                        </td>
-                      </tr>
-                    ))}
+                  <tbody className="divide-y divide-border">
+                    {recentOrders.map((order) => {
+                      const customer = order.profiles?.full_name ?? 'Walk-in customer'
+                      return (
+                        <tr key={order.id} className="admin-list-item admin-list-row">
+                          <td className="px-4 py-3">
+                            <span className="tnum block font-mono text-[12px] font-semibold text-ink">
+                              #{shortId(order.id)}
+                            </span>
+                            <span className="tnum mt-0.5 block text-[12px] text-muted">
+                              {formatDate(order.created_at)}
+                            </span>
+                          </td>
+                          <td className="max-w-[240px] px-4 py-3">
+                            <div className="flex min-w-0 items-center gap-2.5">
+                              <CustomerAvatar
+                                name={order.profiles?.full_name}
+                                email={order.profiles?.email}
+                              />
+                              <div className="min-w-0">
+                                <p className="truncate text-[12.5px] font-semibold text-ink">
+                                  {customer}
+                                </p>
+                                <p className="truncate text-[12px] text-muted">
+                                  {order.stores?.name ?? 'Store unavailable'}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="tnum px-4 py-3 text-right font-mono text-[12.5px] text-ink">
+                            {formatCurrency(order.total_amount)}
+                          </td>
+                          <td className="px-4 py-3">
+                            <Badge label={order.status} variant={order.status} />
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
-            ) : (
-              <div className="flex flex-col items-center rounded-xl border border-dashed border-border bg-canvas px-6 py-12 text-center">
-                <span className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-faint text-secondary">
-                  <Package size={20} strokeWidth={1.75} />
-                </span>
-                <p className="text-sm font-semibold text-ink">No orders yet</p>
-                <p className="mt-1 max-w-xs text-[13px] text-muted">
-                  Orders from the storefront will appear here.
-                </p>
-                <Link
-                  to="/products"
-                  className="mt-4 rounded-lg bg-secondary px-3.5 py-2 text-[13px] font-semibold text-white hover:bg-primaryDeep"
-                >
-                  View products
-                </Link>
-              </div>
-            )}
-          </div>
-        </section>
 
-        {/* Attention queue */}
-        <section className="rounded-2xl border border-border bg-white shadow-card xl:col-span-2">
-          <div className="flex items-center justify-between px-5 py-4">
-            <h2 className="text-[15px] font-bold text-ink">
-              Seller applications
-              {(pendingApps?.length ?? 0) > 0 && (
-                <span className="ml-2 rounded-full bg-pendingSoft px-2 py-0.5 text-xs font-bold text-pending">
-                  {pendingApps.length}
-                </span>
-              )}
-            </h2>
-            <Link to="/seller-applications" className="inline-flex items-center gap-1 text-[13px] font-semibold text-primary hover:underline">
-              View all <ArrowRight size={14} />
-            </Link>
-          </div>
-          <div className="px-3 pb-3">
-            {pendingLoading ? (
-              <TableSkeleton cols={2} rows={3} />
-            ) : pendingApps?.length > 0 ? (
-              <ul className="space-y-2">
-                {pendingApps.map((app) => (
-                  <li
-                    key={app.id}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-border px-3.5 py-3 transition-colors hover:border-primary/40"
-                  >
-                    <div className="flex min-w-0 items-center gap-3">
-                      <AvatarInitials name={app.full_name} email={app.email} />
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-ink">{app.full_name}</p>
-                        <p className="truncate text-xs text-muted">{app.email}</p>
-                        <p className="mt-0.5 text-xs text-muted">Applied {formatDate(app.created_at)}</p>
+              <div className="divide-y divide-border border-t border-border md:hidden">
+                {recentOrders.map((order) => {
+                  const customer = order.profiles?.full_name ?? 'Walk-in customer'
+                  return (
+                    <div key={order.id} className="admin-list-item admin-list-card px-4 py-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          <CustomerAvatar
+                            name={order.profiles?.full_name}
+                            email={order.profiles?.email}
+                          />
+                          <div className="min-w-0">
+                            <p className="truncate text-[12.5px] font-semibold text-ink">
+                              {customer}
+                            </p>
+                            <p className="truncate text-[12px] text-muted">
+                              {order.stores?.name ?? 'Store unavailable'}
+                            </p>
+                          </div>
+                        </div>
+                        <p className="tnum shrink-0 font-mono text-[12.5px] text-ink">
+                          {formatCurrency(order.total_amount)}
+                        </p>
+                      </div>
+                      <div className="mt-2 flex items-center justify-between gap-2 text-[12px] text-muted">
+                        <span className="tnum font-mono">
+                          #{shortId(order.id)} · {formatDate(order.created_at)}
+                        </span>
+                        <Badge label={order.status} variant={order.status} />
                       </div>
                     </div>
-                    <div className="flex shrink-0 items-center gap-1.5">
-                      <button
-                        type="button"
-                        disabled={loadingId === app.id}
-                        onClick={() => handleApprove(app.id)}
-                        className="rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:brightness-110 disabled:opacity-50"
-                      >
-                        Approve
-                      </button>
-                      <button
-                        type="button"
-                        disabled={loadingId === app.id}
-                        onClick={() => handleReject(app.id)}
-                        className="rounded-lg border border-error/40 px-3 py-1.5 text-xs font-semibold text-error transition-colors hover:bg-errorSoft disabled:opacity-50"
-                      >
-                        Decline
-                      </button>
+                  )
+                })}
+              </div>
+            </>
+          ) : (
+            <div className="border-t border-border px-5 py-12 text-center">
+              <Package size={20} className="mx-auto text-muted" aria-hidden="true" />
+              <p className="mt-2 text-[13px] font-semibold text-ink">No orders yet</p>
+              <p className="mt-1 text-[12px] text-muted">
+                Orders from the storefront will appear here.
+              </p>
+              <Link
+                to="/products"
+                className="mt-3 inline-flex h-8 items-center rounded-lg bg-secondary px-3 text-[12px] font-semibold text-white hover:bg-primaryDeep"
+              >
+                View products
+              </Link>
+            </div>
+          )}
+        </section>
+
+        {hasSellerQueue && (
+          <aside className="overflow-hidden rounded-xl border border-border bg-white">
+            <div className="flex items-center justify-between gap-3 px-4 py-3.5">
+            <div>
+              <h2 className="flex items-center gap-1.5 text-[15px] font-bold text-ink">
+                Seller applications
+                {(pendingApps?.length ?? 0) > 0 && (
+                  <span className="font-mono text-[12px] font-semibold text-muted">
+                    {pendingApps.length}
+                  </span>
+                )}
+              </h2>
+              <p className="mt-0.5 text-[12px] text-muted">
+                {pendingLoading
+                  ? 'Loading applications…'
+                  : pendingApps?.length > 0
+                    ? 'Newest first'
+                    : 'Nothing waiting'}
+              </p>
+            </div>
+            <Link
+              to="/seller-applications"
+              className="inline-flex h-9 items-center gap-1 text-[12px] font-semibold text-primary hover:underline"
+            >
+              View all <ArrowRight size={13} aria-hidden="true" />
+            </Link>
+          </div>
+
+          {pendingLoading ? (
+            <ApplicationsSkeleton />
+          ) : pendingApps?.length > 0 ? (
+            <ul className="divide-y divide-border border-t border-border">
+              {pendingApps.slice(0, 3).map((app) => (
+                <li key={app.id} className="admin-list-item admin-list-card px-4 py-3">
+                  <div className="flex items-start gap-2.5">
+                    <AvatarInitials name={app.full_name} email={app.email} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[12.5px] font-semibold text-ink">
+                        {app.full_name}
+                      </p>
+                      <p className="truncate text-[12px] text-muted">{app.email}</p>
+                      <p className="mt-0.5 text-[12px] text-muted">
+                        Applied {formatDate(app.created_at)}
+                      </p>
                     </div>
-                  </li>
-                ))}
-              </ul>
+                  </div>
+                  <div className="mt-2.5 flex gap-2">
+                    <button
+                      type="button"
+                      disabled={loadingId === app.id}
+                      onClick={() => handleApprove(app.id)}
+                      className="h-8 flex-1 rounded-lg bg-accent px-3 text-[12px] font-semibold text-white transition-colors hover:brightness-110 disabled:opacity-50"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      type="button"
+                      disabled={loadingId === app.id}
+                      onClick={() => handleReject(app.id)}
+                      className="h-8 flex-1 rounded-lg border border-error/35 px-3 text-[12px] font-semibold text-error transition-colors hover:bg-errorSoft disabled:opacity-50"
+                    >
+                      Decline
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
             ) : (
-              <div className="flex flex-col items-center rounded-xl bg-canvas px-6 py-12 text-center">
-                <span className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-faint text-secondary">
-                  <Users size={20} strokeWidth={1.75} />
-                </span>
-                <p className="text-sm font-semibold text-ink">No pending applications</p>
-                <p className="mt-1 max-w-xs text-[13px] text-muted">
-                  New applications show up here. You can approve or decline without leaving this page.
+              <div className="border-t border-border px-5 py-8 text-center">
+                <ShieldCheck size={19} className="mx-auto text-muted" aria-hidden="true" />
+                <p className="mt-2 text-[13px] font-semibold text-ink">No pending applications</p>
+                <p className="mt-1 text-[12px] text-muted">
+                  New seller applications will appear here.
                 </p>
               </div>
             )}
-          </div>
-        </section>
+          </aside>
+        )}
       </div>
 
-      {/* Trend charts */}
-      <div className="grid gap-6 xl:grid-cols-2">
+      <div className="grid gap-4 xl:grid-cols-2">
         <TrendPanel
-          title="Orders, last 7 days"
-          lead={`${chartTotal} orders total`}
-          total={`${formatCurrency(spark?.totalRevenue ?? 0)} revenue`}
+          title="Orders"
+          lead="Daily order volume · last 7 days"
+          total={`${chartTotal} orders`}
           data={trend.orders}
           stroke="#8B5A2B"
           gradientId="ordersFill"
@@ -390,8 +590,9 @@ export default function Dashboard() {
           integerAxis
         />
         <TrendPanel
-          title="Revenue, last 7 days"
-          total={`${formatCurrency(revenueTotal)} total`}
+          title="Revenue"
+          lead="Captured order value · last 7 days"
+          total={formatCurrency(revenueTotal)}
           data={trend.revenue}
           stroke="#0E7C7B"
           gradientId="revenueFill"
@@ -400,7 +601,7 @@ export default function Dashboard() {
           emptyBody="Paid orders will appear here."
           yAxisWidth={52}
           yTickFormatter={pesoTick}
-          tooltipFormatter={(v) => [formatCurrency(v), 'Revenue']}
+          tooltipFormatter={(value) => [formatCurrency(value), 'Revenue']}
         />
       </div>
     </div>

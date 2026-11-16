@@ -90,7 +90,7 @@ function ShelfSummary({ modelled, arCount }) {
   return (
     <div className="relative mb-4 overflow-hidden rounded-3xl bg-[#3B2314] px-6 py-5 text-white shadow-[0_18px_40px_-24px_rgba(59,35,20,0.6)]">
       {/* Warm light leaks — depth without leaving the palette. */}
-      <div aria-hidden="true" className="pointer-events-none absolute -right-16 -top-24 h-56 w-56 rounded-full bg-[#8B5A2B]/40 blur-3xl" />
+      <div aria-hidden="true" className="pointer-events-none absolute -right-16 -top-24 h-56 w-56 rounded-full bg-secondary/40 blur-3xl" />
       <div aria-hidden="true" className="pointer-events-none absolute -bottom-28 left-1/3 h-48 w-48 rounded-full bg-[#E8A020]/20 blur-3xl" />
       <div className="relative flex flex-wrap items-center justify-between gap-4">
         <div className="min-w-0">
@@ -107,11 +107,11 @@ function ShelfSummary({ modelled, arCount }) {
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-2xl bg-white/10 px-3.5 py-2 text-xs font-semibold ring-1 ring-white/15 backdrop-blur">
+          <span className="inline-flex items-center gap-1.5 rounded-xl bg-white/10 px-3.5 py-2 text-xs font-semibold ring-1 ring-white/15 backdrop-blur">
             <Cuboid size={13} className="text-[#E8CFA8]" />
             <span className="tabular-nums">{total} live</span>
           </span>
-          <span className="inline-flex items-center gap-1.5 rounded-2xl bg-[#4ECDC4]/15 px-3.5 py-2 text-xs font-semibold ring-1 ring-[#4ECDC4]/30 backdrop-blur">
+          <span className="inline-flex items-center gap-1.5 rounded-xl bg-accent/15 px-3.5 py-2 text-xs font-semibold ring-1 ring-[#4ECDC4]/30 backdrop-blur">
             <Sparkles size={13} className="text-[#4ECDC4]" />
             <span className="tabular-nums">{withAr} AR fit</span>
           </span>
@@ -128,12 +128,12 @@ function ShelfSummary({ modelled, arCount }) {
 function Measurement({ label, value, icon: Icon }) {
   if (value == null) return null
   return (
-    <div className="rounded-xl border border-[#EFE7DF] bg-[#FBF8F5] px-4 py-3">
-      <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#6B5C4E]">
-        {Icon && <Icon size={12} className="text-[#8B5A2B]" />}
+    <div className="rounded-xl border border-[#EFE7DF] bg-canvas px-4 py-3">
+      <div className="flex items-center gap-1.5 text-[11.5px] font-medium text-muted">
+        {Icon && <Icon size={12} className="text-primary" />}
         {label}
       </div>
-      <p className="mt-1 font-display text-lg font-bold tabular-nums text-[#3B2314]">{value}</p>
+      <p className="mt-1 font-display text-lg font-bold tabular-nums text-ink">{value}</p>
     </div>
   )
 }
@@ -369,22 +369,22 @@ export default function ModelRequests() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="font-display text-2xl font-bold text-[#3B2314]">3D Fitting Requests</h1>
-          <p className="mt-1 max-w-2xl text-sm text-[#6B5C4E]">
+          <h1 className="font-display text-2xl font-bold text-ink">3D Fitting Requests</h1>
+          <p className="mt-1 max-w-2xl text-sm text-muted">
             Sellers who cannot produce a compliant <code>.glb</code> measure the pair with a ruler
-            instead, and the team models it. <strong className="text-[#3B2314]">Closing one as
+            instead, and the team models it. <strong className="text-ink">Closing one as
             done names a live model of that product</strong> — there is no way to close an ask by
             setting a status.
           </p>
         </div>
         {counts.waiting > 0 && (
           <div className="rounded-xl border border-[#E8A020]/40 bg-[#E8A020]/10 px-4 py-2.5">
-            <p className="text-xs uppercase tracking-wider text-[#6B5C4E]">Waiting</p>
-            <p className="font-display text-xl font-bold text-[#3B2314]">{counts.waiting}</p>
+            <p className="text-[12px] text-muted">Waiting</p>
+            <p className="font-display text-xl font-bold text-ink">{counts.waiting}</p>
           </div>
         )}
       </div>
@@ -393,7 +393,7 @@ export default function ModelRequests() {
       <div
         role="tablist"
         aria-label="Request queues"
-        className="inline-flex flex-wrap gap-1 rounded-2xl border border-[#D9D0C7] bg-white p-1"
+        className="inline-flex flex-wrap gap-1 rounded-xl border border-border bg-white p-1"
       >
         {[...TABS, MODELS_TAB].map((t) => {
           const selected = tab === t.key
@@ -406,14 +406,14 @@ export default function ModelRequests() {
               onClick={() => setTab(t.key)}
               className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-all ${
                 selected
-                  ? 'bg-[#8B5A2B] text-white shadow-sm'
-                  : 'text-[#6B5C4E] hover:bg-[#F5F0EB] hover:text-[#3B2314]'
+                  ? 'bg-secondary text-white'
+                  : 'text-muted hover:bg-canvas hover:text-ink'
               }`}
             >
               {t.label}
               <span
                 className={`min-w-[1.5rem] rounded-full px-1.5 py-0.5 text-center text-xs font-semibold tabular-nums ${
-                  selected ? 'bg-white/20 text-white' : 'bg-[#F5F0EB] text-[#6B5C4E]'
+                  selected ? 'bg-white/20 text-white' : 'bg-canvas text-muted'
                 }`}
               >
                 {counts[t.key]}
@@ -427,10 +427,10 @@ export default function ModelRequests() {
       {isLoading && (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="space-y-3 rounded-2xl border border-[#D9D0C7] bg-white p-5">
-              <div className="h-4 w-48 animate-pulse rounded bg-[#E8DDD5]" />
-              <div className="h-3 w-72 animate-pulse rounded bg-[#E8DDD5]" />
-              <div className="h-10 w-full animate-pulse rounded-xl bg-[#F5F0EB]" />
+            <div key={i} className="space-y-3 rounded-xl border border-border bg-white p-5">
+              <div className="h-4 w-48 animate-pulse rounded bg-faint" />
+              <div className="h-3 w-72 animate-pulse rounded bg-faint" />
+              <div className="h-10 w-full animate-pulse rounded-xl bg-canvas" />
             </div>
           ))}
         </div>
@@ -438,10 +438,10 @@ export default function ModelRequests() {
 
       {/* Error — the sentence first, the server's own words under it */}
       {isError && (
-        <div className="rounded-2xl border border-[#D9D0C7] bg-white p-8 text-center">
-          <p className="text-sm font-semibold text-[#D64545]">{queueError.message}</p>
+        <div className="rounded-xl border border-border bg-white p-8 text-center">
+          <p className="text-sm font-semibold text-error">{queueError.message}</p>
           {queueError.detail && queueError.detail !== queueError.message && (
-            <p className="mt-2 text-xs text-[#6B5C4E]">The server said: {queueError.detail}</p>
+            <p className="mt-2 text-xs text-muted">The server said: {queueError.detail}</p>
           )}
         </div>
       )}
@@ -484,7 +484,7 @@ export default function ModelRequests() {
             return (
               <div
                 key={row.id}
-                className={`rounded-2xl border border-[#D9D0C7] bg-white p-5 transition-shadow hover:shadow-md ${
+                className={`admin-3d-listcard admin-list-item admin-list-card rounded-xl border border-border bg-white p-5 ${
                   isOpen ? 'border-l-4 border-l-[#E8A020]' : ''
                 }`}
               >
@@ -496,7 +496,7 @@ export default function ModelRequests() {
                         onClick={() => setPhotoTarget(row)}
                         title="View all product photos"
                         aria-label={`View photos of ${row.products?.name ?? 'this product'}`}
-                        className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl bg-[#E8DDD5] transition-shadow hover:shadow-md hover:ring-2 hover:ring-[#8B5A2B]/40"
+                        className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl bg-faint transition-shadow hover:ring-2 hover:ring-[#8B5A2B]/40"
                       >
                         <img
                           src={productImage}
@@ -505,15 +505,15 @@ export default function ModelRequests() {
                         />
                       </button>
                     ) : (
-                      <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl bg-[#E8DDD5]">
+                      <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl bg-faint">
                         <div className="flex h-full w-full items-center justify-center">
-                          <Package size={20} className="text-[#8B5A2B]/30" />
+                          <Package size={20} className="text-primary/30" />
                         </div>
                       </div>
                     )}
                     <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-sm font-semibold text-[#3B2314]">
+                      <h3 className="text-sm font-semibold text-ink">
                         {row.products?.name ?? 'Product removed'}
                       </h3>
                       <Badge label={statusLabel(row.status)} variant={statusVariant(row.status)} />
@@ -524,7 +524,7 @@ export default function ModelRequests() {
                         </span>
                       )}
                     </div>
-                    <p className="mt-1 text-xs text-[#6B5C4E]">
+                    <p className="mt-1 text-xs text-muted">
                       {row.stores?.name ?? 'Unknown store'} · asked {formatDateTime(row.created_at)}
                     </p>
                     </div>
@@ -543,7 +543,7 @@ export default function ModelRequests() {
                           type="button"
                           disabled={busyId === row.id}
                           onClick={() => setUploadTarget(row)}
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-[#8B5A2B] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#6B4423] disabled:opacity-50"
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-secondary px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-primaryDeep disabled:opacity-50"
                         >
                           <Upload size={13} />
                           Upload a model
@@ -554,7 +554,7 @@ export default function ModelRequests() {
                           type="button"
                           disabled={busyId === row.id}
                           onClick={() => handleClaim(row)}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-[#8B5A2B] px-3 py-1.5 text-xs font-semibold text-[#8B5A2B] transition-colors hover:bg-[#8B5A2B]/10 disabled:opacity-50"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-[#8B5A2B] px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-secondary/10 disabled:opacity-50"
                         >
                           {busyId === row.id && claim.isPending ? (
                             <Loader2 size={13} className="animate-spin" />
@@ -568,7 +568,7 @@ export default function ModelRequests() {
                         type="button"
                         disabled={busyId === row.id}
                         onClick={() => setFulfilTarget(row)}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-[#4ECDC4] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-teal-600 disabled:opacity-50"
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-accent/90 disabled:opacity-50"
                       >
                         <Check size={13} />
                         Close as done
@@ -577,7 +577,7 @@ export default function ModelRequests() {
                         type="button"
                         disabled={busyId === row.id}
                         onClick={() => setDeclineTarget(row)}
-                        className="rounded-lg border border-[#D64545] px-3 py-1.5 text-xs font-semibold text-[#D64545] transition-colors hover:bg-red-50 disabled:opacity-50"
+                        className="rounded-lg border border-[#D64545] px-3 py-1.5 text-xs font-semibold text-error transition-colors hover:bg-red-50 disabled:opacity-50"
                       >
                         Decline
                       </button>
@@ -598,22 +598,22 @@ export default function ModelRequests() {
                 </div>
 
                 {row.note && (
-                  <p className="mt-3 rounded-xl bg-[#F5F0EB] px-3 py-2 text-xs text-[#6B5C4E]">
-                    <strong className="text-[#3B2314]">Seller&apos;s note:</strong> {row.note}
+                  <p className="mt-3 rounded-xl bg-canvas px-3 py-2 text-xs text-muted">
+                    <strong className="text-ink">Seller&apos;s note:</strong> {row.note}
                   </p>
                 )}
 
                 {/* The team's half, once there is one. */}
                 {row.admin_note && (
-                  <p className="mt-2 rounded-xl border border-[#D9D0C7] px-3 py-2 text-xs text-[#6B5C4E]">
-                    <strong className="text-[#3B2314]">
+                  <p className="mt-2 rounded-xl border border-border px-3 py-2 text-xs text-muted">
+                    <strong className="text-ink">
                       {row.status === REQUEST_STATUS.DECLINED ? 'Reason sent' : 'Note sent'}:
                     </strong>{' '}
                     {row.admin_note}
                   </p>
                 )}
                 {row.reviewed_at && (
-                  <p className="mt-2 text-[11px] text-[#6B5C4E]">
+                  <p className="mt-2 text-[11px] text-muted">
                     Closed {formatDateTime(row.reviewed_at)}
                   </p>
                 )}
@@ -632,22 +632,22 @@ export default function ModelRequests() {
           {[1, 2, 3].map((i) => (
             <div key={i} className="rounded-3xl border border-[#E5DACA] bg-white p-5">
               <div className="flex items-start gap-4">
-                <div className="h-20 w-20 animate-pulse rounded-2xl bg-[#EFE3D3]" />
+                <div className="h-20 w-20 animate-pulse rounded-xl bg-[#EFE3D3]" />
                 <div className="flex-1 space-y-2 pt-1">
                   <div className="h-4 w-24 animate-pulse rounded-full bg-[#EFE3D3]" />
                   <div className="h-4 w-40 animate-pulse rounded bg-[#EFE3D3]" />
-                  <div className="h-3 w-32 animate-pulse rounded bg-[#F5F0EB]" />
+                  <div className="h-3 w-32 animate-pulse rounded bg-canvas" />
                 </div>
               </div>
-              <div className="mt-4 h-9 animate-pulse rounded-xl bg-[#F5F0EB]" />
+              <div className="mt-4 h-9 animate-pulse rounded-xl bg-canvas" />
             </div>
           ))}
         </div>
       )}
 
       {isModelsTab && modelledQuery.isError && (
-        <div className="rounded-2xl border border-[#D9D0C7] bg-white p-8 text-center">
-          <p className="text-sm font-semibold text-[#D64545]">
+        <div className="rounded-xl border border-border bg-white p-8 text-center">
+          <p className="text-sm font-semibold text-error">
             {describeError(modelledQuery.error, 'Could not load the products with 3D models.')
               .message}
           </p>
@@ -699,7 +699,7 @@ export default function ModelRequests() {
                         }
                         title="View all product photos"
                         aria-label={`View photos of ${entry.name}`}
-                        className="h-20 w-20 flex-shrink-0 overflow-hidden rounded-2xl bg-gradient-to-br from-[#EFE3D3] to-[#E2D2BD] ring-1 ring-[#E5DACA] transition-all hover:shadow-lg hover:ring-2 hover:ring-[#8B5A2B]/50"
+                        className="h-20 w-20 flex-shrink-0 overflow-hidden rounded-xl bg-gradient-to-br from-[#EFE3D3] to-[#E2D2BD] ring-1 ring-[#E5DACA] transition-all hover:ring-2 hover:ring-[#8B5A2B]/50"
                       >
                         <img
                           src={image}
@@ -709,8 +709,8 @@ export default function ModelRequests() {
                         />
                       </button>
                     ) : (
-                      <div className="flex h-20 w-20 flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-[#EFE3D3] to-[#E2D2BD] ring-1 ring-[#E5DACA]">
-                        <Package size={24} className="text-[#8B5A2B]/30" />
+                      <div className="flex h-20 w-20 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-[#EFE3D3] to-[#E2D2BD] ring-1 ring-[#E5DACA]">
+                        <Package size={24} className="text-primary/30" />
                       </div>
                     )}
                     <div className="min-w-0 flex-1 pt-0.5">
@@ -720,20 +720,20 @@ export default function ModelRequests() {
                           Live
                         </span>
                         {hasAr && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-[#4ECDC4]/15 px-2 py-0.5 text-[10px] font-semibold text-teal-700 ring-1 ring-teal-600/20">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-semibold text-teal-700 ring-1 ring-teal-600/20">
                             <Sparkles size={10} />
                             AR fit
                           </span>
                         )}
                       </div>
-                      <h3 className="mt-1.5 font-display text-[15px] font-bold leading-snug text-[#3B2314]">{entry.name}</h3>
-                      <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs tabular-nums text-[#6B5C4E]">
-                        <span className="inline-flex items-center rounded-md bg-[#F5F0EB] px-1.5 py-0.5 font-semibold text-[#8B5A2B]">
+                      <h3 className="mt-1.5 font-display text-[15px] font-bold leading-snug text-ink">{entry.name}</h3>
+                      <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs tabular-nums text-muted">
+                        <span className="inline-flex items-center rounded-md bg-canvas px-1.5 py-0.5 font-semibold text-primary">
                           v{entry.model.version}
                         </span>
                         {entry.model.authored_length_mm != null && (
                           <span className="inline-flex items-center gap-1">
-                            <Ruler size={11} className="text-[#8B5A2B]/60" />
+                            <Ruler size={11} className="text-primary/60" />
                             {Number(entry.model.authored_length_mm).toFixed(1)} mm
                           </span>
                         )}
@@ -747,7 +747,7 @@ export default function ModelRequests() {
                     <button
                       type="button"
                       onClick={() => openViewerFor(entry)}
-                      className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-[#8B5A2B] px-3 py-2 text-xs font-bold text-white shadow-sm transition-all hover:bg-[#6B4423] hover:shadow-md active:scale-[0.99]"
+                      className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-secondary px-3 py-2 text-xs font-bold text-white transition-all hover:bg-primaryDeep active:scale-[0.99]"
                     >
                       <Cuboid size={14} />
                       View 3D
@@ -759,7 +759,7 @@ export default function ModelRequests() {
                       aria-label={`More actions for ${entry.name}`}
                       title="More actions"
                       onClick={(e) => setMenu({ entry, x: e.clientX, y: e.clientY, ar: arByProduct.get(entry.productId) ?? null })}
-                      className="shrink-0 rounded-xl border border-[#E5DACA] bg-[#FBF8F5] px-3 py-2 text-[#6B5C4E] transition-colors hover:border-[#8B5A2B]/50 hover:bg-[#F5F0EB] hover:text-[#3B2314]"
+                      className="shrink-0 rounded-xl border border-[#E5DACA] bg-canvas px-3 py-2 text-muted transition-colors hover:border-[#8B5A2B]/50 hover:bg-canvas hover:text-ink"
                     >
                       <MoreVertical size={15} />
                     </button>
@@ -800,7 +800,7 @@ export default function ModelRequests() {
                 type="button"
                 onClick={() => setDeleteTarget(null)}
                 disabled={del.isPending}
-                className="rounded-xl border border-[#D9D0C7] px-4 py-2 text-sm text-[#6B5C4E] hover:bg-[#F5F0EB] disabled:opacity-50"
+                className="rounded-xl border border-border px-4 py-2 text-sm text-muted hover:bg-canvas disabled:opacity-50"
               >
                 Keep it
               </button>
@@ -808,19 +808,19 @@ export default function ModelRequests() {
                 type="button"
                 onClick={handleDeleteConfirm}
                 disabled={del.isPending}
-                className="rounded-xl bg-[#D64545] px-5 py-2 text-sm font-semibold text-white shadow-md transition-colors hover:bg-[#B83535] disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-xl bg-[#D64545] px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#B83535] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {del.isPending ? 'Deleting…' : 'Delete file and row'}
               </button>
             </>
           }
         >
-          <p className="mb-3 text-sm text-[#6B5C4E]">
-            Version <strong className="text-[#3B2314]">{deleteTarget.model.version}</strong> of{' '}
-            <strong className="text-[#3B2314]">{deleteTarget.name}</strong> will be removed — the
+          <p className="mb-3 text-sm text-muted">
+            Version <strong className="text-ink">{deleteTarget.model.version}</strong> of{' '}
+            <strong className="text-ink">{deleteTarget.name}</strong> will be removed — the
             uploaded file and its database row, together.
           </p>
-          <p className="rounded-xl border border-[#D9CD9A] bg-[#FFF8E5] px-3 py-2 text-xs leading-relaxed text-[#6B5C4E]">
+          <p className="rounded-xl border border-[#D9CD9A] bg-[#FFF8E5] px-3 py-2 text-xs leading-relaxed text-muted">
             If this product has older live versions, the previous one becomes the current model on
             the shelf; otherwise the product leaves the 3D shelf. A closed request that names
             this version blocks the delete instead of dangling.
@@ -908,7 +908,7 @@ export default function ModelRequests() {
           <button
             type="button"
             onClick={() => setPaintTarget(null)}
-            className="rounded-xl bg-[#8B5A2B] px-4 py-2 text-sm font-semibold text-white hover:bg-[#6B4423]"
+            className="rounded-xl bg-secondary px-4 py-2 text-sm font-semibold text-white hover:bg-primaryDeep"
           >
             Done
           </button>
@@ -933,7 +933,7 @@ export default function ModelRequests() {
                 setDeclineTarget(null)
                 setDeclineReason('')
               }}
-              className="rounded-xl border border-[#D9D0C7] px-4 py-2 text-sm text-[#6B5C4E] hover:bg-[#F5F0EB]"
+              className="rounded-xl border border-border px-4 py-2 text-sm text-muted hover:bg-canvas"
             >
               Cancel
             </button>
@@ -944,33 +944,33 @@ export default function ModelRequests() {
               // sentence on their notification bell, so an empty one would tell
               // them nothing while closing the ask for good.
               disabled={!declineReason.trim() || busyId === declineTarget?.id}
-              className="rounded-xl border border-[#D64545] px-4 py-2 text-sm font-semibold text-[#D64545] transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-xl border border-[#D64545] px-4 py-2 text-sm font-semibold text-error transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {busyId === declineTarget?.id ? 'Declining…' : 'Send decline'}
             </button>
           </>
         }
       >
-        <p className="mb-4 text-sm text-[#6B5C4E]">
+        <p className="mb-4 text-sm text-muted">
           Tell the seller why{' '}
-          <strong className="text-[#3B2314]">{declineTarget?.products?.name}</strong> cannot be
+          <strong className="text-ink">{declineTarget?.products?.name}</strong> cannot be
           modelled. They can ask again afterwards, so this is not a dead end — but it is the only
           explanation they get.
         </p>
-        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">
+        <label className="mb-1.5 block text-[12px] font-medium text-muted">
           Reason (required)
         </label>
         <textarea
           value={declineReason}
           onChange={(e) => setDeclineReason(e.target.value)}
           rows={3}
-          className="w-full rounded-xl border border-[#D9D0C7] bg-[#F5F0EB] px-3 py-2 text-sm text-[#3B2314] outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
+          className="w-full rounded-xl border border-border bg-canvas px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
           placeholder="e.g. The photos did not show the shape of the toe clearly enough to model from."
         />
         {/* Live, and deliberately live: this is the sentence the seller's bell
             will hold, so an admin writing it can see what arrives. Blank fields
             get the honest version rather than an empty quote. */}
-        <p className="mt-2 rounded-xl border border-[#F5F0EB] bg-[#FBF8F5] px-3 py-2 text-[11px] leading-relaxed text-[#6B5C4E]">
+        <p className="mt-2 rounded-xl border border-border bg-canvas px-3 py-2 text-[11px] leading-relaxed text-muted">
           {declineDeliverySentence({ reason: declineReason })}
         </p>
       </Modal>
@@ -1016,7 +1016,7 @@ function FulfilModal({ request, onClose, onConfirm, busy }) {
           <button
             type="button"
             onClick={close}
-            className="rounded-xl border border-[#D9D0C7] px-4 py-2 text-sm text-[#6B5C4E] hover:bg-[#F5F0EB]"
+            className="rounded-xl border border-border px-4 py-2 text-sm text-muted hover:bg-canvas"
           >
             Cancel
           </button>
@@ -1028,16 +1028,16 @@ function FulfilModal({ request, onClose, onConfirm, busy }) {
               setSelected(null)
               setNote('')
             }}
-            className="rounded-xl bg-[#8B5A2B] px-5 py-2 text-sm font-semibold text-white shadow-md transition-colors hover:bg-[#6B4423] disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-xl bg-secondary px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-primaryDeep disabled:cursor-not-allowed disabled:opacity-50"
           >
             {busy ? 'Closing…' : 'Close request'}
           </button>
         </>
       }
     >
-      <p className="mb-4 text-sm text-[#6B5C4E]">
+      <p className="mb-4 text-sm text-muted">
         Close the request for{' '}
-        <strong className="text-[#3B2314]">{request?.products?.name}</strong> against the model that
+        <strong className="text-ink">{request?.products?.name}</strong> against the model that
         answers it. The seller is told in the same transaction, so the ask cannot read &ldquo;done&rdquo;
         while nobody has been notified.
       </p>
@@ -1045,14 +1045,14 @@ function FulfilModal({ request, onClose, onConfirm, busy }) {
       {isLoading && (
         <div className="space-y-2">
           {[1, 2].map((i) => (
-            <div key={i} className="h-14 animate-pulse rounded-xl bg-[#F5F0EB]" />
+            <div key={i} className="h-14 animate-pulse rounded-xl bg-canvas" />
           ))}
         </div>
       )}
 
       {isError && (
-        <div className="rounded-xl border border-[#D9CD9A] bg-[#FFF8E5] px-4 py-3 text-sm text-[#6B5C4E]">
-          <p className="flex items-center gap-2 font-semibold text-[#3B2314]">
+        <div className="rounded-xl border border-[#D9CD9A] bg-[#FFF8E5] px-4 py-3 text-sm text-muted">
+          <p className="flex items-center gap-2 font-semibold text-ink">
             <AlertTriangle size={14} />
             Could not read this product&apos;s models
           </p>
@@ -1064,8 +1064,8 @@ function FulfilModal({ request, onClose, onConfirm, busy }) {
       )}
 
       {!isLoading && !isError && active.length === 0 && (
-        <div className="rounded-xl border border-[#D9CD9A] bg-[#FFF8E5] px-4 py-3 text-sm text-[#6B5C4E]">
-          <p className="flex items-center gap-2 font-semibold text-[#3B2314]">
+        <div className="rounded-xl border border-[#D9CD9A] bg-[#FFF8E5] px-4 py-3 text-sm text-muted">
+          <p className="flex items-center gap-2 font-semibold text-ink">
             <AlertTriangle size={14} />
             This product has no live model yet
           </p>
@@ -1092,8 +1092,8 @@ function FulfilModal({ request, onClose, onConfirm, busy }) {
                 key={m.id}
                 className={`flex items-center gap-3 rounded-xl border px-4 py-3 transition-colors ${
                   chosen
-                    ? 'border-[#8B5A2B] bg-[#8B5A2B]/5'
-                    : 'border-[#D9D0C7] bg-white'
+                    ? 'border-[#8B5A2B] bg-secondary/5'
+                    : 'border-border bg-white'
                 }`}
               >
                 <button
@@ -1104,8 +1104,8 @@ function FulfilModal({ request, onClose, onConfirm, busy }) {
                   className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left disabled:cursor-not-allowed"
                 >
                   <div>
-                    <p className="text-sm font-semibold text-[#3B2314]">Version {m.version}</p>
-                    <p className="mt-0.5 text-xs text-[#6B5C4E]">
+                    <p className="text-sm font-semibold text-ink">Version {m.version}</p>
+                    <p className="mt-0.5 text-xs text-muted">
                       {m.authored_length_mm
                         ? `${Number(m.authored_length_mm).toFixed(1)} mm`
                         : 'No declared length'}
@@ -1127,7 +1127,7 @@ function FulfilModal({ request, onClose, onConfirm, busy }) {
                         version: m.version,
                       })
                     }
-                    className="shrink-0 rounded-lg border border-[#8B5A2B] px-3 py-1.5 text-xs font-semibold text-[#8B5A2B] transition-colors hover:bg-[#8B5A2B]/10"
+                    className="shrink-0 rounded-lg border border-[#8B5A2B] px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-secondary/10"
                   >
                     View 3D
                   </button>
@@ -1139,20 +1139,20 @@ function FulfilModal({ request, onClose, onConfirm, busy }) {
       )}
 
       <div className="mt-5">
-        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">
+        <label className="mb-1.5 block text-[12px] font-medium text-muted">
           Note to the seller (optional)
         </label>
         <textarea
           value={note}
           onChange={(e) => setNote(e.target.value)}
           rows={2}
-          className="w-full rounded-xl border border-[#D9D0C7] bg-[#F5F0EB] px-3 py-2 text-sm text-[#3B2314] outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
+          className="w-full rounded-xl border border-border bg-canvas px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
           placeholder="Anything they should know about the model…"
         />
-        <p className="mt-1.5 text-[11px] leading-relaxed text-[#6B5C4E]">{noteReachesSeller()}</p>
+        <p className="mt-1.5 text-[11px] leading-relaxed text-muted">{noteReachesSeller()}</p>
       </div>
 
-      <p className="mt-3 text-[11px] leading-relaxed text-[#6B5C4E]">
+      <p className="mt-3 text-[11px] leading-relaxed text-muted">
         {NOTICE_NOT_READABLE_SENTENCE}
       </p>
     </Modal>

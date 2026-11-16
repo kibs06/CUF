@@ -45,14 +45,6 @@ const STATUS_SEGMENTS = [
   { value: 'cancelled', label: 'Cancelled', dot: 'bg-gray-300' },
 ]
 
-const ROW_HOVER_ACCENT = {
-  succeeded: 'hover:shadow-[inset_3px_0_0_#4ECDC4]',
-  pending: 'hover:shadow-[inset_3px_0_0_#E8A020]',
-  failed: 'hover:shadow-[inset_3px_0_0_#D64545]',
-  expired: 'hover:shadow-[inset_3px_0_0_#9CA3AF]',
-  cancelled: 'hover:shadow-[inset_3px_0_0_#D64545]',
-}
-
 function humanize(value) {
   return String(value ?? '')
     .replace(/[._]/g, ' ')
@@ -204,11 +196,11 @@ function EventTimeline({ events }) {
   const [openPayload, setOpenPayload] = useState(null)
 
   if (!events?.length) {
-    return <p className="text-sm text-[#6B5C4E]">No webhook events recorded for this transaction.</p>
+    return <p className="text-sm text-muted">No webhook events recorded for this transaction.</p>
   }
 
   return (
-    <ol className="relative space-y-4 border-l border-[#D9D0C7] pl-5">
+    <ol className="relative space-y-4 border-l border-border pl-5">
       <AnimatePresence initial={false}>
         {events.map((e, i) => (
           <motion.li
@@ -217,12 +209,12 @@ function EventTimeline({ events }) {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.25, delay: i * 0.05 }}
           >
-            <span className="absolute -left-[5px] mt-1.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-[#8B5A2B]" />
+            <span className="absolute -left-[5px] mt-1.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-secondary" />
             <div className="flex flex-wrap items-center gap-2">
-              <p className="text-sm font-semibold text-[#3B2314]">{humanize(e.event_type)}</p>
+              <p className="text-sm font-semibold text-ink">{humanize(e.event_type)}</p>
               <Badge label={e.status} variant={EVENT_STATUS_VARIANTS[e.status] ?? e.status} />
             </div>
-            <p className="mt-0.5 text-xs text-[#6B5C4E]">
+            <p className="mt-0.5 text-xs text-muted">
               {formatDateTime(e.received_at)}
               {e.processed_at ? ` · processed ${formatDateTime(e.processed_at)}` : ''}
               {e.amount != null ? ` · ${formatCurrency(e.amount)}` : ''}
@@ -232,12 +224,12 @@ function EventTimeline({ events }) {
                 <button
                   type="button"
                   onClick={() => setOpenPayload(openPayload === e.id ? null : e.id)}
-                  className="mt-1 text-xs font-semibold text-[#8B5A2B] hover:underline"
+                  className="mt-1 text-xs font-semibold text-primary hover:underline"
                 >
                   {openPayload === e.id ? 'Hide raw event' : 'View raw event'}
                 </button>
                 {openPayload === e.id && (
-                  <pre className="mt-2 max-h-48 overflow-auto rounded-xl border border-[#D9D0C7] bg-[#F5F0EB] p-3 text-[11px] leading-relaxed text-[#6B5C4E]">
+                  <pre className="mt-2 max-h-48 overflow-auto rounded-xl border border-border bg-canvas p-3 text-[11px] leading-relaxed text-muted">
                     {JSON.stringify(e.redacted_payload, null, 2)}
                   </pre>
                 )}
@@ -256,28 +248,28 @@ function TransactionDetail({ transaction, feeColumnsAvailable, onClose }) {
   return (
     <Modal open={!!transaction} onClose={onClose} title={transaction ? `Transaction ${shortId(transaction.id)}` : ''} size="xl">
       {transaction && (
-        <div className="space-y-6 text-sm">
+        <div className="space-y-4 text-sm">
           {/* Amount summary */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="rounded-xl border border-[#D9D0C7] bg-white p-4">
-              <p className="text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">Amount charged</p>
-              <p className="mt-1 font-mono text-lg font-bold text-[#3B2314]">{formatCurrency(transaction.amount)}</p>
+            <div className="rounded-xl border border-border bg-white p-4">
+              <p className="text-[12px] font-medium text-muted">Amount charged</p>
+              <p className="mt-1 font-mono text-lg font-bold text-ink">{formatCurrency(transaction.amount)}</p>
             </div>
-            <div className="rounded-xl border border-[#D9D0C7] bg-white p-4">
-              <p className="text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">Model B fee</p>
-              <p className="mt-1 font-mono text-lg font-bold text-[#3B2314]">{formatCurrency(transaction.fee_amount)}</p>
+            <div className="rounded-xl border border-border bg-white p-4">
+              <p className="text-[12px] font-medium text-muted">Model B fee</p>
+              <p className="mt-1 font-mono text-lg font-bold text-ink">{formatCurrency(transaction.fee_amount)}</p>
             </div>
-            <div className="rounded-xl border border-[#D9D0C7] bg-white p-4">
-              <p className="text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">PayMongo fee</p>
-              <p className="mt-1 font-mono text-lg font-bold text-[#3B2314]">
+            <div className="rounded-xl border border-border bg-white p-4">
+              <p className="text-[12px] font-medium text-muted">PayMongo fee</p>
+              <p className="mt-1 font-mono text-lg font-bold text-ink">
                 {transaction.paymongo_fee_amount != null
                   ? formatCurrency(transaction.paymongo_fee_amount)
                   : '—'}
               </p>
             </div>
-            <div className="rounded-xl border border-[#D9D0C7] bg-white p-4">
-              <p className="text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">Net</p>
-              <p className="mt-1 font-mono text-lg font-bold text-[#3B2314]">
+            <div className="rounded-xl border border-border bg-white p-4">
+              <p className="text-[12px] font-medium text-muted">Net</p>
+              <p className="mt-1 font-mono text-lg font-bold text-ink">
                 {transaction.net_amount != null ? formatCurrency(transaction.net_amount) : '—'}
               </p>
             </div>
@@ -291,12 +283,12 @@ function TransactionDetail({ transaction, feeColumnsAvailable, onClose }) {
           )}
 
           {/* Order context */}
-          <div className="rounded-xl border border-[#D9D0C7] bg-white p-4">
+          <div className="rounded-xl border border-border bg-white p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <p className="font-semibold text-[#3B2314]">{transaction.customer_name}</p>
-                <p className="text-xs text-[#6B5C4E]">{transaction.customer_email}</p>
-                <p className="mt-1 text-xs text-[#6B5C4E]">
+                <p className="font-semibold text-ink">{transaction.customer_name}</p>
+                <p className="text-xs text-muted">{transaction.customer_email}</p>
+                <p className="mt-1 text-xs text-muted">
                   {transaction.store_name} · Order {shortId(transaction.order_id)} ·{' '}
                   {formatDateTime(transaction.created_at)}
                 </p>
@@ -309,30 +301,30 @@ function TransactionDetail({ transaction, feeColumnsAvailable, onClose }) {
                 />
               </div>
             </div>
-            <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1.5 border-t border-[#F5F0EB] pt-3 text-xs sm:grid-cols-3">
-              <div><span className="text-[#6B5C4E]">Order total </span><span className="font-mono text-[#3B2314]">{formatCurrency(transaction.order_total_amount)}</span></div>
-              <div><span className="text-[#6B5C4E]">Order GCash fee </span><span className="font-mono text-[#3B2314]">{formatCurrency(transaction.order_gcash_fee_amount)}</span></div>
-              <div><span className="text-[#6B5C4E]">Expires </span><span className="font-mono text-[#3B2314]">{formatDateTime(transaction.expires_at)}</span></div>
-              <div><span className="text-[#6B5C4E]">Paid at </span><span className="font-mono text-[#3B2314]">{transaction.paid_at ? formatDateTime(transaction.paid_at) : '—'}</span></div>
-              <div><span className="text-[#6B5C4E]">Verified at </span><span className="font-mono text-[#3B2314]">{transaction.payment_verified_at ? formatDateTime(transaction.payment_verified_at) : '—'}</span></div>
-              <div><span className="text-[#6B5C4E]">Livemode </span><span className="font-mono text-[#3B2314]">{transaction.livemode ? 'yes' : 'no'}</span></div>
+            <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1.5 border-t border-border pt-3 text-xs sm:grid-cols-3">
+              <div><span className="text-muted">Order total </span><span className="font-mono text-ink">{formatCurrency(transaction.order_total_amount)}</span></div>
+              <div><span className="text-muted">Order GCash fee </span><span className="font-mono text-ink">{formatCurrency(transaction.order_gcash_fee_amount)}</span></div>
+              <div><span className="text-muted">Expires </span><span className="font-mono text-ink">{formatDateTime(transaction.expires_at)}</span></div>
+              <div><span className="text-muted">Paid at </span><span className="font-mono text-ink">{transaction.paid_at ? formatDateTime(transaction.paid_at) : '—'}</span></div>
+              <div><span className="text-muted">Verified at </span><span className="font-mono text-ink">{transaction.payment_verified_at ? formatDateTime(transaction.payment_verified_at) : '—'}</span></div>
+              <div><span className="text-muted">Livemode </span><span className="font-mono text-ink">{transaction.livemode ? 'yes' : 'no'}</span></div>
             </div>
           </div>
 
           {/* References */}
-          <div className="rounded-xl border border-[#D9D0C7] bg-white p-4">
-            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">References</h3>
+          <div className="rounded-xl border border-border bg-white p-4">
+            <h3 className="mb-2 text-[12px] font-medium text-muted">References</h3>
             <div className="grid grid-cols-1 gap-1.5 text-xs sm:grid-cols-2">
-              <div className="flex justify-between gap-3"><span className="text-[#6B5C4E]">PayMongo payment</span><span className="font-mono text-[#3B2314]">{transaction.paymongo_payment_intent_id ?? '—'}</span></div>
-              <div className="flex justify-between gap-3"><span className="text-[#6B5C4E]">Checkout session</span><span className="font-mono text-[#3B2314]">{transaction.checkout_session_id ?? '—'}</span></div>
-              <div className="flex justify-between gap-3"><span className="text-[#6B5C4E]">GCash reference</span><span className="font-mono text-[#3B2314]">{transaction.gcash_reference_number ?? '—'}</span></div>
-              <div className="flex justify-between gap-3"><span className="text-[#6B5C4E]">GCash transaction id</span><span className="font-mono text-[#3B2314]">{transaction.gcash_transaction_id ?? '—'}</span></div>
+              <div className="flex justify-between gap-3"><span className="text-muted">PayMongo payment</span><span className="font-mono text-ink">{transaction.paymongo_payment_intent_id ?? '—'}</span></div>
+              <div className="flex justify-between gap-3"><span className="text-muted">Checkout session</span><span className="font-mono text-ink">{transaction.checkout_session_id ?? '—'}</span></div>
+              <div className="flex justify-between gap-3"><span className="text-muted">GCash reference</span><span className="font-mono text-ink">{transaction.gcash_reference_number ?? '—'}</span></div>
+              <div className="flex justify-between gap-3"><span className="text-muted">GCash transaction id</span><span className="font-mono text-ink">{transaction.gcash_transaction_id ?? '—'}</span></div>
             </div>
           </div>
 
           {/* Event timeline */}
-          <div className="rounded-xl border border-[#D9D0C7] bg-white p-4">
-            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">
+          <div className="rounded-xl border border-border bg-white p-4">
+            <h3 className="mb-3 text-[12px] font-medium text-muted">
               Webhook event timeline ({transaction.events_count})
             </h3>
             <EventTimeline events={transaction.events} />
@@ -508,9 +500,9 @@ export default function Transactions() {
   })
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Summary strip — one card, hairline dividers, like the dashboard */}
-      <section aria-label="Transaction summaries" className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-border bg-border shadow-card xl:grid-cols-4">
+      <section aria-label="Transaction summaries" className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border xl:grid-cols-4">
         {isLoading ? (
           Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="bg-white p-5">
@@ -544,7 +536,7 @@ export default function Transactions() {
       </section>
 
       {/* Filter panel */}
-      <div className="rounded-2xl border border-border bg-white p-4 shadow-card">
+      <div className="rounded-xl border border-border bg-white p-4">
         <div className="flex flex-wrap items-center gap-3">
           {/* Status segmented control */}
           <div className="flex flex-wrap items-center gap-1 rounded-full border border-border bg-canvas p-1">
@@ -558,7 +550,7 @@ export default function Transactions() {
                   aria-pressed={active}
                   className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
                     active
-                      ? 'bg-white text-secondary shadow-sm'
+                      ? 'bg-white text-secondary'
                       : 'text-muted hover:text-secondary'
                   }`}
                 >
@@ -593,7 +585,7 @@ export default function Transactions() {
               type="button"
               onClick={handleExport}
               disabled={!filtered.length}
-              className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:bg-secondary hover:shadow-md disabled:opacity-40"
+              className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-secondary disabled:opacity-40"
             >
               <Download size={16} />
               Export CSV
@@ -603,7 +595,7 @@ export default function Transactions() {
 
         {/* Search */}
         <div className="relative mt-3">
-          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#6B5C4E]" />
+          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" />
           <input
             type="search"
             placeholder="Search order, customer, store, ref…"
@@ -649,23 +641,23 @@ export default function Transactions() {
         </motion.div>
       )}
       {isError && (
-        <div className="rounded-2xl border border-[#D9D0C7] bg-white p-8 text-center">
-          <p className="text-sm text-[#D64545]">{error.message}</p>
+        <div className="rounded-xl border border-border bg-white p-8 text-center">
+          <p className="text-sm text-error">{error.message}</p>
         </div>
       )}
 
       {!isLoading && !isError && (
         <>
-          <div className="overflow-x-auto rounded-2xl border border-border bg-white shadow-card">
+          <div className="overflow-x-auto rounded-xl border border-border bg-white">
             <table className="min-w-full text-left text-sm">
               <caption className="sr-only">Payment transactions with date, customer, order, amount and status</caption>
               <thead className="bg-canvas">
                 <tr>
-                  <th scope="col" className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-muted">Date</th>
-                  <th scope="col" className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-muted">Customer</th>
-                  <th scope="col" className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-muted">Order</th>
-                  <th scope="col" className="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider text-muted">Amount</th>
-                  <th scope="col" className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-muted">Status</th>
+                  <th scope="col" className="px-6 py-4 text-[12px] font-medium text-muted">Date</th>
+                  <th scope="col" className="px-6 py-4 text-[12px] font-medium text-muted">Customer</th>
+                  <th scope="col" className="px-6 py-4 text-[12px] font-medium text-muted">Order</th>
+                  <th scope="col" className="px-6 py-4 text-right text-[12px] font-medium text-muted">Amount</th>
+                  <th scope="col" className="px-6 py-4 text-[12px] font-medium text-muted">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-canvas">
@@ -705,22 +697,24 @@ export default function Transactions() {
                         key={row.id}
                         {...rowAnim(i)}
                         onClick={() => setSelected(row)}
-                        className={`group cursor-pointer transition-all hover:bg-canvas ${
-                          ROW_HOVER_ACCENT[row.status] ?? 'hover:shadow-[inset_3px_0_0_#8B5A2B]'
-                        }`}
+                        className="admin-list-item admin-list-row group cursor-pointer"
                       >
                         <td className="px-6 py-4 align-middle">
-                          <p className="text-sm font-medium text-[#3B2314]">{timeAgo(row.created_at)}</p>
-                          <p className="text-xs text-[#6B5C4E]" title={formatDateTime(row.created_at)}>
+                          <p className="text-sm font-medium text-ink">{timeAgo(row.created_at)}</p>
+                          <p className="text-xs text-muted" title={formatDateTime(row.created_at)}>
                             {formatDateTime(row.created_at)}
                           </p>
                         </td>
                         <td className="px-6 py-4 align-middle">
                           <div className="flex items-center gap-3">
-                            <AvatarInitials name={row.customer_name} email={row.customer_email} />
+                            <AvatarInitials
+                              name={row.customer_name}
+                              email={row.customer_email}
+                              src={row.customer_avatar_url}
+                            />
                             <div>
-                              <p className="font-medium text-[#3B2314]">{row.customer_name}</p>
-                              <p className="text-xs text-[#6B5C4E]">{row.store_name}</p>
+                              <p className="font-medium text-ink">{row.customer_name}</p>
+                              <p className="text-xs text-muted">{row.store_name}</p>
                             </div>
                           </div>
                         </td>
@@ -740,7 +734,7 @@ export default function Transactions() {
                         <td className="px-6 py-4 align-middle">
                           <div className="flex items-center gap-1.5">
                             <StatusBadge rowId={row.id} status={row.status} />
-                            <ArrowUpRight size={14} className="text-[#6B5C4E] opacity-0 transition-opacity group-hover:opacity-100" />
+                            <ArrowUpRight size={14} className="text-muted opacity-0 transition-opacity group-hover:opacity-100" />
                           </div>
                         </td>
                       </motion.tr>

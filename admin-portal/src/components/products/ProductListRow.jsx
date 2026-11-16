@@ -8,7 +8,7 @@ export default function ProductListRow({ product, onView, onToggleActive, onDele
     product.thumbnail
 
   return (
-    <div className="group flex items-center gap-4 rounded-xl border border-transparent p-3 transition-colors hover:border-[#D9D0C7] hover:bg-[#F5F0EB]">
+    <div className="admin-list-item admin-list-card group flex items-center gap-4 rounded-xl border border-transparent p-3">
       {/* Thumbnail */}
       <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl bg-[#E8DDD5]">
         {primaryImage ? (

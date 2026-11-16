@@ -8,7 +8,7 @@ export default function ProductCard({ product, onView, onToggleActive, onDelete 
     product.thumbnail
 
   return (
-    <div className="group overflow-hidden rounded-xl border border-[#D9D0C7] bg-[#F5F0EB] transition-all hover:border-[#8B5A2B]/30 hover:shadow-md">
+    <div className="admin-3d-product group overflow-hidden rounded-xl border border-[#D9D0C7] bg-[#F5F0EB] transition-all hover:border-[#8B5A2B]/30 hover:shadow-md">
       {/* Image */}
       <div className="relative aspect-square overflow-hidden bg-[#E8DDD5]">
         {primaryImage ? (

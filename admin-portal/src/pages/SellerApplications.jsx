@@ -69,7 +69,7 @@ export default function SellerApplications() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Pill tabs */}
       <div className="flex gap-2">
         {TABS.map((t) => (
@@ -79,8 +79,8 @@ export default function SellerApplications() {
             onClick={() => setTab(t.key)}
             className={`rounded-xl px-4 py-2 text-sm font-medium transition-all ${
               tab === t.key
-                ? 'bg-[#8B5A2B] text-white shadow-sm'
-                : 'border border-[#D9D0C7] bg-white text-[#6B5C4E] hover:bg-[#F5F0EB]'
+                ? 'bg-secondary text-white'
+                : 'border border-border bg-white text-muted hover:bg-canvas'
             } ${t.key === 'pending' && pendingCount > 0 ? 'ring-2 ring-[#E8A020]/40' : ''}`}
           >
             {t.label}
@@ -96,8 +96,8 @@ export default function SellerApplications() {
       {isLoading && <TableSkeleton cols={5} rows={6} />}
 
       {isError && (
-        <div className="rounded-2xl border border-[#D9D0C7] bg-white p-8 text-center text-[#6B5C4E]">
-          <p className="text-sm text-[#D64545]">{error.message}</p>
+        <div className="rounded-xl border border-border bg-white p-8 text-center text-muted">
+          <p className="text-sm text-error">{error.message}</p>
         </div>
       )}
 
@@ -114,14 +114,14 @@ export default function SellerApplications() {
           {data.map((row) => (
             <div
               key={row.id}
-              className="flex items-center justify-between rounded-xl border border-[#D9D0C7] bg-white p-4 transition-shadow hover:shadow-sm"
+              className="admin-3d-listcard admin-list-item admin-list-card flex items-center justify-between rounded-xl border border-border bg-white p-4"
             >
               <div className="flex items-center gap-3">
                 <AvatarInitials name={row.full_name} email={row.email} />
                 <div>
-                  <p className="text-sm font-semibold text-[#3B2314]">{row.full_name}</p>
-                  <p className="text-xs text-[#6B5C4E]">{row.email}</p>
-                  <p className="text-xs text-[#6B5C4E] mt-0.5">
+                  <p className="text-sm font-semibold text-ink">{row.full_name}</p>
+                  <p className="text-xs text-muted">{row.email}</p>
+                  <p className="text-xs text-muted mt-0.5">
                     Applied {formatDate(row.created_at)}
                   </p>
                 </div>
@@ -133,7 +133,7 @@ export default function SellerApplications() {
                     <button
                       type="button"
                       onClick={() => setReviewTarget(row)}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-[#8B5A2B] px-3 py-1.5 text-xs font-semibold text-[#8B5A2B] transition-colors hover:bg-[#8B5A2B]/10"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-[#8B5A2B] px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-secondary/10"
                     >
                       <Eye size={13} />
                       Review
@@ -142,7 +142,7 @@ export default function SellerApplications() {
                       type="button"
                       disabled={loadingId === row.id}
                       onClick={() => handleApprove(row.id)}
-                      className="rounded-lg bg-[#4ECDC4] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-teal-600 disabled:opacity-50"
+                      className="rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-accent/90 disabled:opacity-50"
                     >
                       {loadingId === row.id && approve.isPending ? '…' : 'Approve'}
                     </button>
@@ -150,7 +150,7 @@ export default function SellerApplications() {
                       type="button"
                       disabled={loadingId === row.id}
                       onClick={() => setRejectTarget(row)}
-                      className="rounded-lg border border-[#D64545] px-3 py-1.5 text-xs font-semibold text-[#D64545] transition-colors hover:bg-red-50 disabled:opacity-50"
+                      className="rounded-lg border border-[#D64545] px-3 py-1.5 text-xs font-semibold text-error transition-colors hover:bg-red-50 disabled:opacity-50"
                     >
                       Reject
                     </button>
@@ -184,7 +184,7 @@ export default function SellerApplications() {
             <button
               type="button"
               onClick={() => setRejectTarget(null)}
-              className="rounded-xl border border-[#D9D0C7] px-4 py-2 text-sm text-[#6B5C4E] hover:bg-[#F5F0EB]"
+              className="rounded-xl border border-border px-4 py-2 text-sm text-muted hover:bg-canvas"
             >
               Cancel
             </button>
@@ -192,24 +192,24 @@ export default function SellerApplications() {
               type="button"
               onClick={handleReject}
               disabled={loadingId === rejectTarget?.id}
-              className="rounded-xl border border-[#D64545] px-4 py-2 text-sm font-semibold text-[#D64545] transition-colors hover:bg-red-50 disabled:opacity-50"
+              className="rounded-xl border border-[#D64545] px-4 py-2 text-sm font-semibold text-error transition-colors hover:bg-red-50 disabled:opacity-50"
             >
               Confirm Reject
             </button>
           </>
         }
       >
-        <p className="mb-4 text-sm text-[#6B5C4E]">
-          Reject seller application for <strong className="text-[#3B2314]">{rejectTarget?.full_name}</strong>?
+        <p className="mb-4 text-sm text-muted">
+          Reject seller application for <strong className="text-ink">{rejectTarget?.full_name}</strong>?
         </p>
-        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">
+        <label className="mb-1.5 block text-[12px] font-medium text-muted">
           Reason (optional)
         </label>
         <textarea
           value={rejectReason}
           onChange={(e) => setRejectReason(e.target.value)}
           rows={3}
-          className="w-full rounded-xl border border-[#D9D0C7] bg-[#F5F0EB] px-3 py-2 text-sm text-[#3B2314] outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
+          className="w-full rounded-xl border border-border bg-canvas px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
           placeholder="Optional note for internal records…"
         />
       </Modal>

@@ -121,63 +121,84 @@ export default function DateRangePicker({ from = null, to = null, onChange }) {
       <button
         type="button"
         onClick={openPicker}
-        className="flex items-center gap-2 rounded-full border border-[#D9D0C7] bg-white py-2 pl-3 pr-3 text-sm font-medium text-[#3B2314] transition-colors hover:border-primary/40 hover:bg-[#FBF8F5]"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        className="flex h-9 w-full items-center justify-between gap-2 rounded-lg border border-border bg-white px-3 text-[12.5px] font-medium text-ink outline-none transition-colors duration-200 ease-[cubic-bezier(0.32,0.72,0,1)] hover:border-primary/40 hover:bg-canvas focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/15"
       >
-        <CalendarDays size={15} className="text-primary" />
-        <span className="whitespace-nowrap">{formatRangeLabel(from, to)}</span>
-        <ChevronDown size={14} className={`text-[#6B5C4E] transition-transform ${open ? 'rotate-180' : ''}`} />
+        <CalendarDays size={14} strokeWidth={1.7} className="shrink-0 text-primary" aria-hidden="true" />
+        <span className="min-w-0 flex-1 truncate text-center">{formatRangeLabel(from, to)}</span>
+        <ChevronDown
+          size={14}
+          strokeWidth={1.7}
+          aria-hidden="true"
+          className={`shrink-0 text-muted transition-transform duration-200 ease-[cubic-bezier(0.32,0.72,0,1)] ${
+            open ? 'rotate-180' : ''
+          }`}
+        />
       </button>
 
       {open && (
-        <div className="absolute right-0 z-30 mt-2 w-72 rounded-2xl border border-[#D9D0C7] bg-white p-4 shadow-xl">
-          {/* Presets */}
+        <div
+          role="dialog"
+          aria-label="Choose a date range"
+          className="absolute right-0 z-30 mt-2 w-[336px] max-w-[calc(100vw-2rem)] rounded-2xl border border-border bg-white p-4 shadow-pop"
+        >
           <div className="mb-3 flex flex-wrap gap-1.5">
-            {PRESETS.map((p) => (
-              <button
-                key={p.label}
-                type="button"
-                onClick={() => pickPreset(p)}
-                className={`rounded-full px-2.5 py-1 text-xs font-semibold transition-colors ${
-                  (!from && !to && p.days === null) || (from && to && p.days !== null && daysAgo(p.days, from))
-                    ? 'bg-primary/10 text-primary'
-                    : 'bg-[#F5F0EB] text-[#6B5C4E] hover:bg-[#E9E0D6]'
-                }`}
-              >
-                {p.label}
-              </button>
-            ))}
+            {PRESETS.map((preset) => {
+              const active =
+                (!from && !to && preset.days === null) ||
+                (from && to && preset.days !== null && daysAgo(preset.days, from))
+              return (
+                <button
+                  key={preset.label}
+                  type="button"
+                  onClick={() => pickPreset(preset)}
+                  aria-pressed={active}
+                  className={`rounded-full px-3 py-1.5 text-[12px] font-semibold transition-colors ${
+                    active
+                      ? 'bg-[#E5D7C6] text-secondary'
+                      : 'bg-[#F4EEE7] text-muted hover:bg-[#EBE1D6] hover:text-secondary'
+                  }`}
+                >
+                  {preset.label}
+                </button>
+              )
+            })}
           </div>
 
-          {/* Month navigation */}
           <div className="mb-2 flex items-center justify-between">
             <button
               type="button"
               onClick={() => setView(new Date(view.getFullYear(), view.getMonth() - 1, 1))}
-              className="rounded-lg p-1.5 text-[#6B5C4E] transition-colors hover:bg-[#F5F0EB] hover:text-[#3B2314]"
+              aria-label="Previous month"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted transition-colors hover:bg-canvas hover:text-ink"
             >
-              <ChevronLeft size={16} />
+              <ChevronLeft size={16} strokeWidth={1.7} />
             </button>
-            <p className="text-sm font-semibold text-[#3B2314]">
+            <p className="text-sm font-semibold text-ink">
               {view.toLocaleDateString('en-PH', { month: 'long', year: 'numeric' })}
             </p>
             <button
               type="button"
               onClick={() => setView(new Date(view.getFullYear(), view.getMonth() + 1, 1))}
-              className="rounded-lg p-1.5 text-[#6B5C4E] transition-colors hover:bg-[#F5F0EB] hover:text-[#3B2314]"
+              aria-label="Next month"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted transition-colors hover:bg-canvas hover:text-ink"
             >
-              <ChevronRight size={16} />
+              <ChevronRight size={16} strokeWidth={1.7} />
             </button>
           </div>
 
-          {/* Calendar grid */}
           <div className="grid grid-cols-7 gap-0.5 text-center">
-            {DAYS.map((d) => (
-              <span key={d} className="py-1 text-[10px] font-semibold uppercase text-[#6B5C4E]">
-                {d}
+            {DAYS.map((day) => (
+              <span
+                key={day}
+                className="py-1 text-[10px] font-medium uppercase tracking-[0.08em] text-muted"
+              >
+                {day}
               </span>
             ))}
-            {getMonthGrid(view).map((day, i) => {
-              if (!day) return <span key={`empty-${i}`} />
+            {getMonthGrid(view).map((day, index) => {
+              if (!day) return <span key={`empty-${index}`} />
               const today = startOfDay(new Date()).getTime() === day.getTime()
               const selected = isEndpoint(day)
               const ranged = inRange(day)
@@ -186,29 +207,40 @@ export default function DateRangePicker({ from = null, to = null, onChange }) {
                   key={day.getTime()}
                   type="button"
                   onClick={() => handleDayClick(day)}
-                  className={`relative rounded-lg py-1.5 text-xs transition-colors ${
+                  aria-label={day.toLocaleDateString('en-PH', {
+                    weekday: 'long',
+                    month: 'long',
+                    day: 'numeric',
+                    year: 'numeric',
+                  })}
+                  aria-pressed={selected}
+                  className={`relative flex h-8 items-center justify-center rounded-lg text-[12px] transition-colors ${
                     selected
-                      ? 'bg-primary font-bold text-white'
+                      ? 'bg-primary font-semibold text-white'
                       : ranged
-                        ? 'bg-primary/10 text-primary'
-                        : 'text-[#3B2314] hover:bg-[#F5F0EB]'
+                        ? 'bg-[#F1E9E0] text-secondary'
+                        : 'text-ink hover:bg-canvas'
                   }`}
                 >
                   {day.getDate()}
                   {today && (
-                    <span className={`absolute inset-x-1.5 bottom-0.5 h-0.5 rounded-full ${selected ? 'bg-white' : 'bg-primary'}`} />
+                    <span
+                      aria-hidden="true"
+                      className={`absolute inset-x-2 bottom-0.5 h-[2px] rounded-full ${
+                        selected ? 'bg-white' : 'bg-primary'
+                      }`}
+                    />
                   )}
                 </button>
               )
             })}
           </div>
 
-          {/* Footer */}
-          <div className="mt-3 flex items-center justify-between border-t border-[#E9E0D6] pt-3">
+          <div className="mt-3 flex items-center justify-between border-t border-border/70 pt-3">
             <button
               type="button"
               onClick={clear}
-              className="text-xs font-semibold text-[#6B5C4E] transition-colors hover:text-error"
+              className="text-[12px] font-semibold text-muted transition-colors hover:text-error"
             >
               Clear
             </button>
@@ -216,7 +248,7 @@ export default function DateRangePicker({ from = null, to = null, onChange }) {
               type="button"
               onClick={apply}
               disabled={!draftFrom || !draftTo}
-              className="rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-full bg-primary px-4 py-1.5 text-[12px] font-semibold text-white transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-40"
             >
               Apply
             </button>

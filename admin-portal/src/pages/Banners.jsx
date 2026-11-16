@@ -192,30 +192,26 @@ export default function Banners() {
     const end = banner.ends_at ? new Date(banner.ends_at) : null
 
     if (start && start > now) return { text: `Starts ${formatDateTime(banner.starts_at)}`, color: 'text-blue-600' }
-    if (end && end < now) return { text: `Expired ${formatDateTime(banner.ends_at)}`, color: 'text-[#D64545]' }
-    if (start && end) return { text: `${formatDateTime(banner.starts_at)} — ${formatDateTime(banner.ends_at)}`, color: 'text-[#6B5C4E]' }
-    if (start) return { text: `Started ${formatDateTime(banner.starts_at)}`, color: 'text-[#6B5C4E]' }
-    if (end) return { text: `Ends ${formatDateTime(banner.ends_at)}`, color: 'text-[#6B5C4E]' }
+    if (end && end < now) return { text: `Expired ${formatDateTime(banner.ends_at)}`, color: 'text-error' }
+    if (start && end) return { text: `${formatDateTime(banner.starts_at)} — ${formatDateTime(banner.ends_at)}`, color: 'text-muted' }
+    if (start) return { text: `Started ${formatDateTime(banner.starts_at)}`, color: 'text-muted' }
+    if (end) return { text: `Ends ${formatDateTime(banner.ends_at)}`, color: 'text-muted' }
     return null
   }
 
   // ─── Render ──────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-display text-2xl font-bold text-[#3B2314]">Banners</h1>
-          <p className="text-sm text-[#6B5C4E]">Manage the home screen hero carousel</p>
-        </div>
+    <div className="space-y-4">
+      {/* Page action — the title and description live in the top bar. */}
+      <div className="flex justify-end">
         <button
           type="button"
           onClick={openCreate}
-          className="flex items-center gap-2 rounded-xl bg-[#8B5A2B] px-4 py-2.5 text-sm font-semibold text-white shadow-md transition-colors hover:bg-[#6B4423]"
+          className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-secondary px-3.5 text-[12px] font-semibold text-white transition-colors hover:bg-primaryDeep"
         >
-          <Plus size={16} />
-          Add Banner
+          <Plus size={14} />
+          Add banner
         </button>
       </div>
 
@@ -223,11 +219,11 @@ export default function Banners() {
       {isLoading && (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="flex items-center gap-4 rounded-2xl border border-[#D9D0C7] bg-white p-4">
-              <div className="h-20 w-32 animate-pulse rounded-xl bg-[#E8DDD5]" />
+            <div key={i} className="flex items-center gap-4 rounded-xl border border-border bg-white p-4">
+              <div className="h-20 w-32 animate-pulse rounded-xl bg-faint" />
               <div className="flex-1 space-y-2">
-                <div className="h-4 w-1/3 animate-pulse rounded bg-[#E8DDD5]" />
-                <div className="h-3 w-1/4 animate-pulse rounded bg-[#E8DDD5]" />
+                <div className="h-4 w-1/3 animate-pulse rounded bg-faint" />
+                <div className="h-3 w-1/4 animate-pulse rounded bg-faint" />
               </div>
             </div>
           ))}
@@ -236,8 +232,8 @@ export default function Banners() {
 
       {/* Error */}
       {isError && (
-        <div className="rounded-2xl border border-[#D9D0C7] bg-white p-8 text-center">
-          <p className="text-sm text-[#D64545]">{error.message}</p>
+        <div className="rounded-xl border border-border bg-white p-8 text-center">
+          <p className="text-sm text-error">{error.message}</p>
         </div>
       )}
 
@@ -258,8 +254,8 @@ export default function Banners() {
             return (
               <div
                 key={banner.id}
-                className={`flex items-center gap-4 rounded-2xl border bg-white p-4 transition-colors ${
-                  banner.is_active ? 'border-[#D9D0C7]' : 'border-[#D9D0C7] opacity-60'
+                className={`admin-3d-listcard admin-list-item admin-list-card flex items-center gap-4 rounded-xl border bg-white p-4 ${
+                  banner.is_active ? 'border-border' : 'border-border opacity-60'
                 }`}
               >
                 {/* Reorder controls */}
@@ -268,7 +264,7 @@ export default function Banners() {
                     type="button"
                     onClick={() => handleMoveUp(index)}
                     disabled={index === 0}
-                    className="rounded-lg p-1 text-[#6B5C4E] transition-colors hover:bg-[#F5F0EB] disabled:opacity-30"
+                    className="rounded-lg p-1 text-muted transition-colors hover:bg-canvas disabled:opacity-30"
                   >
                     <ChevronUp size={14} />
                   </button>
@@ -276,14 +272,14 @@ export default function Banners() {
                     type="button"
                     onClick={() => handleMoveDown(index)}
                     disabled={index === banners.length - 1}
-                    className="rounded-lg p-1 text-[#6B5C4E] transition-colors hover:bg-[#F5F0EB] disabled:opacity-30"
+                    className="rounded-lg p-1 text-muted transition-colors hover:bg-canvas disabled:opacity-30"
                   >
                     <ChevronDown size={14} />
                   </button>
                 </div>
 
                 {/* Thumbnail */}
-                <div className="h-20 w-32 flex-shrink-0 overflow-hidden rounded-xl bg-[#F5F0EB]">
+                <div className="h-20 w-32 flex-shrink-0 overflow-hidden rounded-xl bg-canvas">
                   {banner.image_url ? (
                     <img
                       src={banner.image_url}
@@ -300,9 +296,9 @@ export default function Banners() {
                 {/* Info */}
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <h3 className="truncate text-sm font-semibold text-[#3B2314]">{banner.title}</h3>
+                    <h3 className="truncate text-sm font-semibold text-ink">{banner.title}</h3>
                     {!banner.is_active && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-[#F5F0EB] px-2 py-0.5 text-[10px] font-medium text-[#6B5C4E]">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-canvas px-2 py-0.5 text-[10px] font-medium text-muted">
                         <EyeOff size={10} />
                         Inactive
                       </span>
@@ -315,7 +311,7 @@ export default function Banners() {
                     )}
                   </div>
                   {banner.eyebrow_text && (
-                    <p className="mt-0.5 text-xs text-[#6B5C4E]">{banner.eyebrow_text}</p>
+                    <p className="mt-0.5 text-xs text-muted">{banner.eyebrow_text}</p>
                   )}
                   {schedule && (
                     <p className={`mt-0.5 flex items-center gap-1 text-xs ${schedule.color}`}>
@@ -324,7 +320,7 @@ export default function Banners() {
                     </p>
                   )}
                   {banner.link_type !== 'none' && (
-                    <p className="mt-0.5 text-xs text-[#6B5C4E]">
+                    <p className="mt-0.5 text-xs text-muted">
                       Links to: {banner.link_type}
                       {banner.link_value ? ` → ${banner.link_value}` : ''}
                     </p>
@@ -336,14 +332,14 @@ export default function Banners() {
                   <button
                     type="button"
                     onClick={() => openEdit(banner)}
-                    className="rounded-xl border border-[#D9D0C7] p-2 text-[#6B5C4E] transition-colors hover:bg-[#F5F0EB]"
+                    className="rounded-xl border border-border p-2 text-muted transition-colors hover:bg-canvas"
                   >
                     <Pencil size={14} />
                   </button>
                   <button
                     type="button"
                     onClick={() => setDeleteTarget(banner)}
-                    className="rounded-xl border border-[#D9D0C7] p-2 text-[#D64545] transition-colors hover:bg-red-50"
+                    className="rounded-xl border border-border p-2 text-error transition-colors hover:bg-red-50"
                   >
                     <Trash2 size={14} />
                   </button>
@@ -365,7 +361,7 @@ export default function Banners() {
             <button
               type="button"
               onClick={() => { setShowForm(false); resetForm() }}
-              className="rounded-xl border border-[#D9D0C7] px-4 py-2 text-sm text-[#6B5C4E] hover:bg-[#F5F0EB]"
+              className="rounded-xl border border-border px-4 py-2 text-sm text-muted hover:bg-canvas"
             >
               Cancel
             </button>
@@ -373,7 +369,7 @@ export default function Banners() {
               type="button"
               onClick={handleSubmit}
               disabled={isSubmitting}
-              className="rounded-xl bg-[#8B5A2B] px-5 py-2 text-sm font-semibold text-white shadow-md transition-colors hover:bg-[#6B4423] disabled:opacity-50"
+              className="rounded-xl bg-secondary px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-primaryDeep disabled:opacity-50"
             >
               {isSubmitting ? 'Saving…' : editTarget ? 'Save Changes' : 'Create Banner'}
             </button>
@@ -383,29 +379,29 @@ export default function Banners() {
         <div className="space-y-5">
           {/* Validation error */}
           {validationError && (
-            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-[#D64545]">
+            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-error">
               {validationError}
             </div>
           )}
 
           {/* Image upload */}
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-[#3B2314]">
-              Banner Image {!editTarget && <span className="text-[#D64545]">*</span>}
+            <label className="mb-1.5 block text-sm font-medium text-ink">
+              Banner Image {!editTarget && <span className="text-error">*</span>}
             </label>
-            <p className="mb-2 text-xs text-[#6B5C4E]">
+            <p className="mb-2 text-xs text-muted">
               Recommended: 1200×630px (16:9 ratio). The image fills the hero background on mobile.
             </p>
             <div
               onClick={() => fileRef.current?.click()}
-              className="flex h-40 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#D9D0C7] bg-[#F5F0EB] transition-colors hover:border-[#8B5A2B]/40"
+              className="flex h-40 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-border bg-canvas transition-colors hover:border-[#8B5A2B]/40"
             >
               {imagePreview ? (
                 <img src={imagePreview} alt="Preview" className="h-full w-full rounded-xl object-cover" />
               ) : (
                 <>
                   <ImageIcon size={32} className="mb-2 text-[#D9D0C7]" />
-                  <p className="text-sm text-[#6B5C4E]">Click to upload</p>
+                  <p className="text-sm text-muted">Click to upload</p>
                   <p className="text-xs text-[#D9D0C7]">PNG, JPG, WebP</p>
                 </>
               )}
@@ -421,50 +417,50 @@ export default function Banners() {
 
           {/* Title */}
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-[#3B2314]">
-              Title <span className="text-[#D64545]">*</span>
+            <label className="mb-1.5 block text-sm font-medium text-ink">
+              Title <span className="text-error">*</span>
             </label>
             <input
               type="text"
               value={form.title}
               onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
               placeholder="e.g. CRAFTED FOR FALL"
-              className="w-full rounded-xl border border-[#D9D0C7] bg-white px-4 py-2.5 text-sm text-[#3B2314] placeholder-[#D9D0C7] outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
+              className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-sm text-ink placeholder-[#D9D0C7] outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
             />
           </div>
 
           {/* Eyebrow text */}
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-[#3B2314]">Eyebrow Text</label>
+            <label className="mb-1.5 block text-sm font-medium text-ink">Eyebrow Text</label>
             <input
               type="text"
               value={form.eyebrow_text}
               onChange={(e) => setForm((f) => ({ ...f, eyebrow_text: e.target.value }))}
               placeholder="e.g. NEW ARRIVALS"
-              className="w-full rounded-xl border border-[#D9D0C7] bg-white px-4 py-2.5 text-sm text-[#3B2314] placeholder-[#D9D0C7] outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
+              className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-sm text-ink placeholder-[#D9D0C7] outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
             />
           </div>
 
           {/* CTA label */}
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-[#3B2314]">CTA Label</label>
+            <label className="mb-1.5 block text-sm font-medium text-ink">CTA Label</label>
             <input
               type="text"
               value={form.cta_label}
               onChange={(e) => setForm((f) => ({ ...f, cta_label: e.target.value }))}
               placeholder="e.g. Shop Now"
-              className="w-full rounded-xl border border-[#D9D0C7] bg-white px-4 py-2.5 text-sm text-[#3B2314] placeholder-[#D9D0C7] outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
+              className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-sm text-ink placeholder-[#D9D0C7] outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
             />
           </div>
 
           {/* Link type + value */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-[#3B2314]">Link Type</label>
+              <label className="mb-1.5 block text-sm font-medium text-ink">Link Type</label>
               <select
                 value={form.link_type}
                 onChange={(e) => setForm((f) => ({ ...f, link_type: e.target.value, link_value: '' }))}
-                className="w-full rounded-xl border border-[#D9D0C7] bg-white px-4 py-2.5 text-sm text-[#3B2314] outline-none focus:border-[#8B5A2B]"
+                className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-sm text-ink outline-none focus:border-[#8B5A2B]"
               >
                 {LINK_TYPES.map((lt) => (
                   <option key={lt.value} value={lt.value}>{lt.label}</option>
@@ -474,13 +470,13 @@ export default function Banners() {
 
             {form.link_type === 'category' && (
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-[#3B2314]">
-                  Category <span className="text-[#D64545]">*</span>
+                <label className="mb-1.5 block text-sm font-medium text-ink">
+                  Category <span className="text-error">*</span>
                 </label>
                 <select
                   value={form.link_value}
                   onChange={(e) => setForm((f) => ({ ...f, link_value: e.target.value }))}
-                  className="w-full rounded-xl border border-[#D9D0C7] bg-white px-4 py-2.5 text-sm text-[#3B2314] outline-none focus:border-[#8B5A2B]"
+                  className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-sm text-ink outline-none focus:border-[#8B5A2B]"
                 >
                   <option value="">Select category</option>
                   {CATEGORIES.filter((c) => c !== 'All').map((c) => (
@@ -492,30 +488,30 @@ export default function Banners() {
 
             {form.link_type === 'product' && (
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-[#3B2314]">
-                  Product ID <span className="text-[#D64545]">*</span>
+                <label className="mb-1.5 block text-sm font-medium text-ink">
+                  Product ID <span className="text-error">*</span>
                 </label>
                 <input
                   type="text"
                   value={form.link_value}
                   onChange={(e) => setForm((f) => ({ ...f, link_value: e.target.value }))}
                   placeholder="Product UUID"
-                  className="w-full rounded-xl border border-[#D9D0C7] bg-white px-4 py-2.5 text-sm text-[#3B2314] placeholder-[#D9D0C7] outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
+                  className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-sm text-ink placeholder-[#D9D0C7] outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
                 />
               </div>
             )}
 
             {form.link_type === 'url' && (
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-[#3B2314]">
-                  URL <span className="text-[#D64545]">*</span>
+                <label className="mb-1.5 block text-sm font-medium text-ink">
+                  URL <span className="text-error">*</span>
                 </label>
                 <input
                   type="url"
                   value={form.link_value}
                   onChange={(e) => setForm((f) => ({ ...f, link_value: e.target.value }))}
                   placeholder="https://..."
-                  className="w-full rounded-xl border border-[#D9D0C7] bg-white px-4 py-2.5 text-sm text-[#3B2314] placeholder-[#D9D0C7] outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
+                  className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-sm text-ink placeholder-[#D9D0C7] outline-none transition-colors focus:border-[#8B5A2B] focus:ring-2 focus:ring-[#8B5A2B]/20"
                 />
               </div>
             )}
@@ -527,17 +523,17 @@ export default function Banners() {
               type="button"
               onClick={() => setForm((f) => ({ ...f, is_active: !f.is_active }))}
               className={`relative h-6 w-11 rounded-full transition-colors ${
-                form.is_active ? 'bg-[#8B5A2B]' : 'bg-[#D9D0C7]'
+                form.is_active ? 'bg-secondary' : 'bg-[#D9D0C7]'
               }`}
             >
               <span
-                className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
+                className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
                   form.is_active ? 'translate-x-5.5 left-0.5' : 'left-0.5'
                 }`}
                 style={{ transform: form.is_active ? 'translateX(22px)' : 'translateX(2px)' }}
               />
             </button>
-            <span className="text-sm text-[#3B2314]">
+            <span className="text-sm text-ink">
               {form.is_active ? 'Active' : 'Inactive'}
             </span>
           </div>
@@ -545,25 +541,25 @@ export default function Banners() {
           {/* Schedule */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-[#3B2314]">Start Date</label>
+              <label className="mb-1.5 block text-sm font-medium text-ink">Start Date</label>
               <input
                 type="datetime-local"
                 value={form.starts_at}
                 onChange={(e) => setForm((f) => ({ ...f, starts_at: e.target.value }))}
-                className="w-full rounded-xl border border-[#D9D0C7] bg-white px-4 py-2.5 text-sm text-[#3B2314] outline-none focus:border-[#8B5A2B]"
+                className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-sm text-ink outline-none focus:border-[#8B5A2B]"
               />
             </div>
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-[#3B2314]">End Date</label>
+              <label className="mb-1.5 block text-sm font-medium text-ink">End Date</label>
               <input
                 type="datetime-local"
                 value={form.ends_at}
                 onChange={(e) => setForm((f) => ({ ...f, ends_at: e.target.value }))}
-                className="w-full rounded-xl border border-[#D9D0C7] bg-white px-4 py-2.5 text-sm text-[#3B2314] outline-none focus:border-[#8B5A2B]"
+                className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-sm text-ink outline-none focus:border-[#8B5A2B]"
               />
             </div>
           </div>
-          <p className="text-xs text-[#6B5C4E]">
+          <p className="text-xs text-muted">
             Leave both empty for a banner that's always active (when toggled on). Set dates to schedule
             a time window.
           </p>
@@ -580,7 +576,7 @@ export default function Banners() {
             <button
               type="button"
               onClick={() => setDeleteTarget(null)}
-              className="rounded-xl border border-[#D9D0C7] px-4 py-2 text-sm text-[#6B5C4E] hover:bg-[#F5F0EB]"
+              className="rounded-xl border border-border px-4 py-2 text-sm text-muted hover:bg-canvas"
             >
               Cancel
             </button>
@@ -588,15 +584,15 @@ export default function Banners() {
               type="button"
               onClick={handleDelete}
               disabled={deleteBanner.isPending}
-              className="rounded-xl border border-[#D64545] px-4 py-2 text-sm font-semibold text-[#D64545] transition-colors hover:bg-red-50 disabled:opacity-50"
+              className="rounded-xl border border-[#D64545] px-4 py-2 text-sm font-semibold text-error transition-colors hover:bg-red-50 disabled:opacity-50"
             >
               {deleteBanner.isPending ? 'Deleting…' : 'Delete'}
             </button>
           </>
         }
       >
-        <p className="text-sm text-[#6B5C4E]">
-          Delete <strong className="text-[#3B2314]">{deleteTarget?.title}</strong>? This will remove
+        <p className="text-sm text-muted">
+          Delete <strong className="text-ink">{deleteTarget?.title}</strong>? This will remove
           the banner from the carousel and delete the uploaded image.
         </p>
       </Modal>

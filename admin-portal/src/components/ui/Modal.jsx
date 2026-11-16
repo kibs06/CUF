@@ -13,7 +13,7 @@ export default function Modal({ open, onClose, title, children, footer, size = '
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <motion.div
-            className={`absolute inset-0 ${scrim}`}
+            className={`absolute inset-0 backdrop-blur-[2px] ${scrim}`}
             initial={reduce ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={reduce ? undefined : { opacity: 0 }}
@@ -21,7 +21,10 @@ export default function Modal({ open, onClose, title, children, footer, size = '
             onClick={onClose}
           />
           <motion.div
-            className={`relative z-10 w-full ${SIZES[size]} max-h-[85vh] overflow-y-auto rounded-2xl border border-border bg-surface p-6 shadow-xl`}
+            role="dialog"
+            aria-modal="true"
+            aria-label={title}
+            className={`admin-3d-float relative z-10 w-full ${SIZES[size]} max-h-[85vh] overflow-y-auto rounded-2xl border border-border bg-surface p-6 shadow-xl`}
             initial={reduce ? false : { opacity: 0, scale: 0.96, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={reduce ? undefined : { opacity: 0, scale: 0.96, y: 10 }}
@@ -32,6 +35,7 @@ export default function Modal({ open, onClose, title, children, footer, size = '
               <button
                 type="button"
                 onClick={onClose}
+                aria-label="Close dialog"
                 className="rounded-lg px-2 py-1 text-secondary/60 hover:bg-border/40"
               >
                 ✕

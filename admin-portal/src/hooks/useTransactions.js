@@ -7,7 +7,7 @@ const INTENT_COLUMNS = [
   'status, currency, livemode, expires_at, paid_at, created_at, updated_at,',
   'orders!inner(id, status, payment_status, total_amount, gcash_fee_amount,',
   '  gcash_transaction_id, payment_verified_at, created_at, store_id,',
-  '  stores(name), profiles!orders_customer_id_fkey(full_name, email))',
+  '  stores(name), profiles!orders_customer_id_fkey(full_name, email, avatar_url))',
 ].join(' ')
 
 const EVENT_COLUMNS = [
@@ -21,7 +21,7 @@ const BASE_COLUMNS = [
   'created_at, updated_at,',
   'orders!inner(id, status, payment_status, total_amount, gcash_fee_amount,',
   '  gcash_transaction_id, payment_verified_at, created_at, store_id,',
-  '  stores(name), profiles!orders_customer_id_fkey(full_name, email))',
+  '  stores(name), profiles!orders_customer_id_fkey(full_name, email, avatar_url))',
 ].join(' ')
 
 function mapRow(row, feeColumnsAvailable) {
@@ -40,6 +40,7 @@ function mapRow(row, feeColumnsAvailable) {
     store_name: order?.stores?.name ?? '—',
     customer_name: order?.profiles?.full_name ?? 'Unknown',
     customer_email: order?.profiles?.email ?? '',
+    customer_avatar_url: order?.profiles?.avatar_url ?? '',
     paymongo_fee_amount: feeColumnsAvailable ? (row.paymongo_fee_amount ?? null) : null,
     net_amount: feeColumnsAvailable ? (row.net_amount ?? null) : null,
     gcash_reference_number: feeColumnsAvailable ? (row.gcash_reference_number ?? null) : null,

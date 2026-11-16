@@ -1,40 +1,20 @@
 import { useState } from 'react'
-import { Eye, Trash2 } from 'lucide-react'
+import { ChevronRight, Trash2 } from 'lucide-react'
 import Modal from '../ui/Modal.jsx'
 import { useToast } from '../ui/Toast.jsx'
 import { useDeleteUser } from '../../hooks/useUsers.js'
+import { formatDate } from '../../lib/constants'
+import { AccessStatus, RoleBadge, UserAvatar, relativeJoined } from './userMeta.jsx'
 
-const AVATAR_COLORS = [
-  'bg-[#8B5A2B]', 'bg-[#4ECDC4]', 'bg-[#E8A020]',
-  'bg-[#D64545]', 'bg-[#3B2314]',
-]
-
-function getInitials(name, email) {
-  const source = name || email || 'U'
-  return source
-    .split(' ')
-    .map((w) => w[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2)
-}
-
-function getAvatarColor(name) {
-  const charCode = name?.charCodeAt(0) ?? 0
-  return AVATAR_COLORS[charCode % AVATAR_COLORS.length] || AVATAR_COLORS[0]
-}
-
-export default function UserRow({ user, showSellerStatus, lockout, onView }) {
-  const initials = getInitials(user.full_name, user.email)
-  const avatarColor = getAvatarColor(user.full_name)
+export default function UserRow({ user, lockout, onView, isSelf = false }) {
   const suspended = !!user.suspended
-
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState('')
   const deleteUser = useDeleteUser()
   const { showToast } = useToast()
 
   const canConfirmDelete = deleteConfirm.trim().toUpperCase() === 'DELETE'
+  const name = user.full_name || 'Unnamed user'
 
   const handleDelete = async () => {
     try {
@@ -48,108 +28,79 @@ export default function UserRow({ user, showSellerStatus, lockout, onView }) {
     }
   }
 
-  const isLocked = lockout?.status === 'locked'
-  const attemptCount = lockout?.attemptCount ?? 0
-  const hasFailedAttempts = attemptCount > 0
-
   return (
     <>
-      <div className={`group flex items-center gap-4 px-5 py-4 transition-colors hover:bg-[#FDFAF7] ${suspended ? 'bg-red-50/40' : isLocked ? 'bg-red-50/30' : ''}`}>
-        {/* Avatar */}
-        <div className="flex-shrink-0">
-          {user.avatar_url ? (
-            <img
-              src={user.avatar_url}
-              alt=""
-              className="h-10 w-10 rounded-full border-2 border-[#D9D0C7] object-cover"
-            />
-          ) : (
-            <div
-              className={`flex h-10 w-10 items-center justify-center rounded-full border-2 border-white text-sm font-bold text-white shadow-sm ${avatarColor}`}
-            >
-              {initials}
-            </div>
-          )}
-        </div>
-
-        {/* Name + email */}
-        <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-2 truncate text-sm font-semibold text-[#3B2314]">
-            {user.full_name || 'Unnamed User'}
-            {isLocked && (
-              <span className="flex-shrink-0 rounded-full border border-red-300 bg-red-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-700">
-                🔒 Locked
-              </span>
-            )}
-            {!isLocked && suspended && (
-              <span className="flex-shrink-0 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-600">
-                Suspended
-              </span>
-            )}
-            {!isLocked && !suspended && hasFailedAttempts && (
-              <span className="flex-shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-600">
-                ⚠ {attemptCount} attempt{attemptCount === 1 ? '' : 's'}
-              </span>
-            )}
-          </p>
-          <p className="truncate text-xs text-[#6B5C4E]">{user.email}</p>
-        </div>
-
-        {/* Seller status badge (sellers only) */}
-        {showSellerStatus && user.seller_status && (
-          <span
-            className={`flex-shrink-0 rounded-full border px-2.5 py-1 text-xs font-bold ${
-              user.seller_status === 'approved'
-                ? 'border-teal-200 bg-teal-50 text-teal-700'
-                : user.seller_status === 'pending'
-                  ? 'border-amber-200 bg-amber-50 text-amber-700'
-                  : 'border-red-200 bg-red-50 text-red-600'
-            }`}
-          >
-            {user.seller_status.charAt(0).toUpperCase() + user.seller_status.slice(1)}
-          </span>
-        )}
-
-        {/* Joined date */}
-        <span className="hidden flex-shrink-0 font-mono text-xs text-[#6B5C4E] md:block">
-          {new Date(user.created_at).toLocaleDateString('en-PH', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric',
-          })}
-        </span>
-
-        {/* Actions — visible on hover */}
-        <div className="flex flex-shrink-0 items-center gap-1.5 opacity-0 transition-opacity group-hover:opacity-100">
+      <div
+        role="listitem"
+        className={`group admin-list-item admin-list-card ${
+          suspended ? 'bg-errorSoft/20' : ''
+        }`}
+      >
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 md:grid-cols-[minmax(0,1fr)_170px_112px_auto] md:gap-4 md:px-5">
+          {/* Identity — the primary action, so the whole name block is the button. */}
           <button
             type="button"
             onClick={() => onView?.(user)}
-            className="rounded-lg p-2 text-[#6B5C4E] transition-colors hover:bg-[#F5F0EB] hover:text-[#3B2314]"
-            title="View profile"
+            className="flex min-w-0 items-center gap-3 text-left"
           >
-            <Eye size={14} />
-          </button>
-        </div>
+            <UserAvatar user={user} />
+            <span className="min-w-0 flex-1">
+              <span className="flex items-center gap-1.5">
+                <span className="truncate text-[14px] font-semibold text-ink">{name}</span>
+                {isSelf && (
+                  <span className="shrink-0 rounded-full bg-canvas px-1.5 py-0.5 text-[10px] font-semibold text-muted ring-1 ring-border">
+                    You
+                  </span>
+                )}
+              </span>
+              <span className="block truncate text-[12px] text-muted">{user.email || 'No email'}</span>
 
-        {/* Permanent delete — suspended accounts only. Isolated at the far
-            right of the row so it can never be confused with the other
-            actions. Always guarded by a type-DELETE confirmation. */}
-        {suspended && (
-          <div className="ml-2 flex flex-shrink-0 border-l border-red-200 pl-2">
+              {/* Compact access summary for the mobile card layout. */}
+              <span className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 md:hidden">
+                <RoleBadge role={user.role} />
+                <AccessStatus user={user} lockout={lockout} />
+                <span className="text-[12px] text-muted">Joined {formatDate(user.created_at)}</span>
+              </span>
+            </span>
+          </button>
+
+          <div className="hidden md:block">
+            <RoleBadge role={user.role} />
+            <div className="mt-1">
+              <AccessStatus user={user} lockout={lockout} />
+            </div>
+          </div>
+
+          <div className="hidden md:block">
+            <p className="font-mono text-[12px] text-secondary">{formatDate(user.created_at)}</p>
+            <p className="mt-0.5 text-[12px] text-muted">{relativeJoined(user.created_at)}</p>
+          </div>
+
+          <div className="flex items-center gap-0.5">
             <button
               type="button"
-              onClick={() => setDeleteOpen(true)}
-              disabled={deleteUser.isPending}
-              className="rounded-lg p-2 text-[#D64545] transition-colors hover:bg-red-50 hover:text-red-700 disabled:opacity-50"
-              title="Delete permanently"
+              onClick={() => onView?.(user)}
+              aria-label={`View ${name}`}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted/60 transition-colors hover:bg-canvas hover:text-ink group-hover:text-muted"
             >
-              <Trash2 size={14} />
+              <ChevronRight size={16} />
             </button>
+            {suspended && (
+              <button
+                type="button"
+                onClick={() => setDeleteOpen(true)}
+                disabled={deleteUser.isPending}
+                aria-label={`Delete ${name} permanently`}
+                title="Delete permanently"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-error/70 transition-colors hover:bg-errorSoft hover:text-error disabled:opacity-50"
+              >
+                <Trash2 size={15} />
+              </button>
+            )}
           </div>
-        )}
+        </div>
       </div>
 
-      {/* Delete confirmation — type DELETE to enable */}
       <Modal
         open={deleteOpen}
         onClose={() => {
@@ -165,7 +116,7 @@ export default function UserRow({ user, showSellerStatus, lockout, onView }) {
                 setDeleteOpen(false)
                 setDeleteConfirm('')
               }}
-              className="rounded-xl border border-[#D9D0C7] px-4 py-2 text-sm text-[#6B5C4E] hover:bg-[#F5F0EB]"
+              className="rounded-xl border border-border px-4 py-2 text-sm text-muted hover:bg-canvas"
             >
               Cancel
             </button>
@@ -173,30 +124,28 @@ export default function UserRow({ user, showSellerStatus, lockout, onView }) {
               type="button"
               onClick={handleDelete}
               disabled={!canConfirmDelete || deleteUser.isPending}
-              className="rounded-xl bg-[#D64545] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-40"
+              className="rounded-xl bg-error px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-40"
             >
               {deleteUser.isPending ? 'Deleting…' : 'Delete forever'}
             </button>
           </>
         }
       >
-        <p className="mb-4 text-sm text-[#6B5C4E]">
-          This permanently deletes{' '}
-          <strong className="text-[#3B2314]">{user.full_name}</strong> — their
-          account, store, and data. This <strong className="text-[#D64545]">cannot be undone</strong>.
+        <p className="mb-4 text-sm text-muted">
+          This permanently deletes <strong className="text-secondary">{name}</strong> — their
+          account, store, and data. This <strong className="text-error">cannot be undone</strong>.
         </p>
-        <p className="mb-4 text-sm text-[#6B5C4E]">
-          Customer orders placed at their store will be kept but detached from
-          the store.
+        <p className="mb-4 text-sm text-muted">
+          Customer orders placed at their store will be kept but detached from the store.
         </p>
-        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[#6B5C4E]">
+        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted">
           Type DELETE to confirm
         </label>
         <input
           value={deleteConfirm}
-          onChange={(e) => setDeleteConfirm(e.target.value)}
+          onChange={(event) => setDeleteConfirm(event.target.value)}
           autoFocus
-          className="w-full rounded-xl border border-[#D9D0C7] bg-[#F5F0EB] px-3 py-2 text-sm text-[#3B2314] outline-none transition-colors focus:border-[#D64545] focus:ring-2 focus:ring-[#D64545]/20"
+          className="w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-secondary outline-none transition-colors focus:border-error focus:ring-2 focus:ring-error/20"
           placeholder="DELETE"
         />
       </Modal>
