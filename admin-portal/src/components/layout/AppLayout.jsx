@@ -37,7 +37,7 @@ export default function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { pathname } = useLocation()
   const title = TITLES[pathname] ?? 'Admin'
-  const subtitle = DESCRIPTIONS[pathname] ?? 'SoleVision admin workspace.'
+  const subtitle = DESCRIPTIONS[pathname] ?? 'CUFMAI admin workspace.'
 
   return (
     <div className="admin-3d-shell flex min-h-screen bg-canvas">

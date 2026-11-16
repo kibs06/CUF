@@ -1,6 +1,6 @@
-# SoleVision Admin Portal
+# CUFMAI Admin Portal
 
-Web-only admin dashboard for SoleVision. Connects to the same Supabase project as the Flutter mobile app.
+Web-only admin dashboard for CUFMAI. Connects to the same Supabase project as the Flutter mobile app.
 
 ## Setup
 

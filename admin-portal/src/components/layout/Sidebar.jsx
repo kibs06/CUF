@@ -1,5 +1,4 @@
 import { Link, NavLink } from 'react-router-dom'
-import { SHOE_SOLE_SVG } from '../../lib/constants'
 import { useAuth } from '../../hooks/useAuth.jsx'
 import { useAdminNotifications } from '../../hooks/useAdminNotifications.js'
 import AvatarInitials from '../ui/AvatarInitials.jsx'
@@ -121,12 +120,13 @@ export default function Sidebar({ open, onClose }) {
         {/* Brand */}
         <div className="border-b border-white/10 px-5 py-4">
           <div className={`flex items-center gap-3 ${expanded ? '' : 'lg:justify-center'}`}>
-            <div
-              className="h-9 w-9 shrink-0 rounded-lg bg-white/8 p-1.5 text-[#E8C99A]"
-              dangerouslySetInnerHTML={{ __html: SHOE_SOLE_SVG }}
+            <img
+              src="/logo.svg"
+              alt=""
+              className="h-9 w-9 shrink-0 rounded-lg"
             />
             <div className={`whitespace-nowrap ${expanded ? '' : 'lg:hidden'}`}>
-              <p className="font-display text-[17px] font-bold leading-tight text-white">SoleVision</p>
+              <p className="font-display text-[17px] font-bold leading-tight text-white">CUFMAI</p>
               <p className="text-xs text-[#C4A882]/70">Admin portal</p>
             </div>
           </div>

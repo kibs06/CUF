@@ -1,4 +1,4 @@
--- SoleVision Admin Portal — Supabase RLS policies
+-- CUFMAI Admin Portal — Supabase RLS policies
 -- Run in Supabase SQL Editor after creating an admin user in profiles.
 --
 -- ⚠️ 2026-08-09: these policies previously inlined

@@ -55,7 +55,7 @@ export async function listMfaFactors() {
 export async function enrollMfa({ friendlyName }) {
   const { data, error } = await supabase.auth.mfa.enroll({
     factorType: 'totp',
-    issuer: 'SoleVision',
+    issuer: 'CUFMAI',
     friendlyName: friendlyName ?? 'Authenticator app',
   })
   if (error) throw error

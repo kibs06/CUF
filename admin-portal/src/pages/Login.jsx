@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { Navigate } from 'react-router-dom'
-import { SHOE_SOLE_SVG } from '../lib/constants'
 import { useAuth } from '../hooks/useAuth.jsx'
 import { needsMfa } from '../lib/mfa'
 
@@ -36,9 +35,9 @@ export default function Login() {
   return (
     <div className="admin-3d-shell flex min-h-screen items-center justify-center bg-surface p-4">
       <div className="admin-3d-float w-full max-w-md rounded-2xl border border-border bg-surface p-8 shadow-sm">
-        <div className="mx-auto mb-4 h-16 w-16 text-primary" dangerouslySetInnerHTML={{ __html: SHOE_SOLE_SVG }} />
+        <img src="/logo.svg" alt="" className="mx-auto mb-4 h-16 w-16" />
         <h1 className="text-center font-display text-3xl font-bold text-secondary">Admin Portal</h1>
-        <p className="mb-8 text-center text-sm text-secondary/60">SoleVision · Crafted Ground</p>
+        <p className="mb-8 text-center text-sm text-secondary/60">CUFMAI · Carcar City, Cebu</p>
 
         {(error || accessDenied) && (
           <div className="mb-4 rounded-xl border border-error/30 bg-error/10 px-4 py-3 text-sm text-error">
@@ -55,7 +54,7 @@ export default function Login() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-secondary outline-none focus:border-primary"
-              placeholder="admin@solevision.ph"
+              placeholder="admin@cufmai.ph"
             />
           </div>
           <div>

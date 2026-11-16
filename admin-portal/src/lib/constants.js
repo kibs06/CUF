@@ -1,13 +1,3 @@
-export const SHOE_SOLE_SVG = `<svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M50,12 C62,12 68,26 64,40 C60,54 66,74 62,84 C58,89 42,89 38,84 C34,74 40,54 36,40 C32,26 38,12 50,12 Z" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
-  <line x1="43" y1="24" x2="57" y2="24" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
-  <line x1="41" y1="34" x2="59" y2="34" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
-  <line x1="42" y1="44" x2="58" y2="44" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
-  <line x1="43" y1="54" x2="57" y2="54" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
-  <line x1="45" y1="70" x2="55" y2="70" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
-  <line x1="46" y1="78" x2="54" y2="78" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
-</svg>`
-
 // ─── Can an admin publish a model from this portal? (roadmap P2, V2.11) ──
 //
 // The Flutter admin queue's own switch is `AppConstants.adminModelUploadAllowed`

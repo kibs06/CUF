@@ -1,6 +1,6 @@
-# SoleVision Admin Portal — Architecture
+# CUFMAI Admin Portal — Architecture
 
-Web-only admin dashboard for the SoleVision e-commerce platform. It shares the same Supabase backend as the Flutter mobile app but is a fully independent React frontend.
+Web-only admin dashboard for the CUFMAI marketplace. It shares the same Supabase backend as the Flutter mobile app but is a fully independent React frontend.
 
 ## High-Level Overview
 
@@ -63,7 +63,7 @@ admin-portal/
     ├── index.css               # Tailwind + base styles
     ├── lib/
     │   ├── supabase.js         # Single shared Supabase client
-    │   ├── constants.js        # Roles, statuses, formatters, SVG logo
+    │   ├── constants.js        # Roles, statuses, formatters
     │   ├── errors.js           # Refusal classification: code → sentence + detail (see “Failed requests”)
     │   ├── errors.test.js      # Tests for those rules; run by `npm test`
     │   ├── modelPublish.js     # The publish rules, ported from the Flutter upload sheet (see “Publishing a model”)
