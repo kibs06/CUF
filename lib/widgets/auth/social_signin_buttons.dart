@@ -138,9 +138,10 @@ class _SocialSigninButtonsState extends State<SocialSigninButtons> {
               onTap: () => _signIn(
                 'google',
                 () => auth.signInWithGoogle(
-                  serverClientId: AppConstants.googleServerClientId.isEmpty
-                      ? null
-                      : AppConstants.googleServerClientId,
+                  // The Web client ID is compiled in; a build that explicitly
+                  // overrides it with an empty define is caught by
+                  // `AuthService.signInWithGoogle`'s own guard.
+                  serverClientId: AppConstants.googleServerClientId,
                   requireExistingAccount: widget.requireExistingAccount,
                 ),
               ),

@@ -79,6 +79,29 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      # A tagged release must never ship with Google sign-in dead. v1.0.81 did:
+      # the Web client ID only ever came from the git-ignored dart_defines.json,
+      # which this job cannot see. The constant has a compiled default now, and
+      # this runs its regression test with the SAME defines the APK receives —
+      # so an explicitly empty `GOOGLE_SERVER_CLIENT_ID` fails here, before the
+      # expensive build and before anything is signed or uploaded.
+      - name: Verify the Google Web client ID is compiled in
+        shell: bash
+        env:
+          RELEASE_DART_DEFINES: ${{ vars.RELEASE_DART_DEFINES }}
+        run: |
+          set -euo pipefail
+
+          ARGS=()
+          if [[ -n "${RELEASE_DART_DEFINES:-}" ]]; then
+            read -ra DEFINES <<< "$RELEASE_DART_DEFINES"
+            for define in "${DEFINES[@]}"; do
+              ARGS+=("--dart-define=$define")
+            done
+          fi
+
+          flutter test --no-pub "${ARGS[@]}" test/constants/app_constants_test.dart
+
       - name: Configure release signing
         shell: bash
         env:
