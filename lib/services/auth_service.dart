@@ -43,9 +43,27 @@ class UnregisteredSocialAccountException implements Exception {
 }
 
 class AuthService {
-  AuthService._();
+  AuthService._({GoogleSignIn? googleSignIn})
+      : _googleSignIn = googleSignIn ?? GoogleSignIn.instance;
+
+  /// An instance wired to [googleSignIn] instead of the process singleton —
+  /// tests only, so the one-time initialisation is observable on a fresh
+  /// service without mutating [instance]. The app always uses [instance].
+  @visibleForTesting
+  factory AuthService.forTest(GoogleSignIn googleSignIn) =>
+      AuthService._(googleSignIn: googleSignIn);
 
   static final AuthService instance = AuthService._();
+
+  final GoogleSignIn _googleSignIn;
+
+  /// The one `GoogleSignIn.initialize` call this process may make.
+  ///
+  /// google_sign_in 7.x requires it to run exactly once ("calling this method
+  /// more than once will result in undefined behavior"). Holding the future
+  /// makes every later tap — a retry after a cancel, a second account — await
+  /// the first call instead of re-initialising the singleton.
+  Future<void>? _googleInit;
 
   SupabaseClient get _client => Supabase.instance.client;
 
@@ -163,6 +181,46 @@ class AuthService {
     };
   }
 
+  /// Opens the Google account picker, initialising the SDK on first use.
+  ///
+  /// Split out of [signInWithGoogle] so the one-time initialisation and the
+  /// failure copy are testable without a Supabase session or a device. The
+  /// picker's result is proved to Supabase by the caller (`signInWithIdToken`).
+  @visibleForTesting
+  Future<GoogleSignInAccount> authenticateWithGoogle({
+    required String serverClientId,
+  }) async {
+    await (_googleInit ??=
+        _googleSignIn.initialize(serverClientId: serverClientId));
+
+    try {
+      return await _googleSignIn.authenticate();
+    } on GoogleSignInException catch (e) {
+      // The SDK's code/description belong in the device log; the customer gets
+      // copy that names the provider (see [googleFailureMessage]).
+      debugPrint(
+        '[AuthService] Google authenticate failed: code=${e.code} '
+        'description=${e.description}',
+      );
+      throw Exception(googleFailureMessage(e));
+    }
+  }
+
+  /// User-safe copy for a [GoogleSignInException].
+  ///
+  /// Both sentences start with "Google sign-in" — the narrow pass-through in
+  /// `friendlyAuthErrorMessage` shows them verbatim, so a Google-console
+  /// misconfiguration (`[28444] Developer console is not set up correctly`)
+  /// cannot reach the customer as "Something went wrong". Matching the enum
+  /// rather than the description keeps a description containing "cancel" from
+  /// masquerading as a user cancellation.
+  @visibleForTesting
+  static String googleFailureMessage(GoogleSignInException e) =>
+      e.code == GoogleSignInExceptionCode.canceled
+          ? 'Google sign-in was cancelled.'
+          : 'Google sign-in is not available right now. Use your email and '
+              'password for now.';
+
   /// Signs in with the native Google account picker.
   ///
   /// [serverClientId] is the Google Web OAuth client ID (used as the
@@ -181,8 +239,11 @@ class AuthService {
   }) async {
     // `google-services.json` carries no `oauth_client` entry on this
     // project, and iOS has no GoogleService-Info.plist — so the explicit
-    // Web client ID is required. Empty means Phase-0 console setup has not
-    // landed: keep the dormant setup copy instead of failing inside the SDK.
+    // Web client ID is required, and it is compiled in by default
+    // (`AppConstants.googleServerClientId`). This guard now only fires when a
+    // build explicitly passes an EMPTY define: no build can silently ship
+    // without the ID again, which is exactly how v1.0.81 shipped with a dead
+    // Google button.
     final effectiveServerClientId =
         (serverClientId ?? AppConstants.googleServerClientId).trim();
     if (effectiveServerClientId.isEmpty) {
@@ -196,9 +257,9 @@ class AuthService {
       await _client.auth.signOut();
     }
 
-    final googleSignIn = GoogleSignIn.instance;
-    await googleSignIn.initialize(serverClientId: effectiveServerClientId);
-    final account = await googleSignIn.authenticate();
+    final account = await authenticateWithGoogle(
+      serverClientId: effectiveServerClientId,
+    );
     // Sign-in mode only: an unknown Gmail must NOT auto-provision a
     // customer — bounce to the create-account panel instead. Checked here,
     // before signInWithIdToken, so the attempt leaves no auth user behind.

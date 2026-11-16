@@ -35,11 +35,21 @@ Live before the public can use it).
 ## 2. Google Cloud
 
 - One **Web application** OAuth client (its ID doubles as `serverClientId`).
-  Pass it at build time — never commit it:
+  Its ID is the compiled default of `AppConstants.googleServerClientId`
+  (`lib/constants/app_constants.dart`), so no build can be missing it: it is
+  a public identifier that ships inside every APK anyway, while the client
+  **secret** stays in Supabase. For another environment (or a rotated
+  client) override it per build instead of editing the constant:
   `flutter run --dart-define=GOOGLE_SERVER_CLIENT_ID=<web-client-id>`.
-  Until it is supplied the app keeps the dormant *"not switched on yet"*
-  copy (guard in `AuthService.signInWithGoogle`). `google-services.json`
-  carries no `oauth_client` entry, so the explicit ID is required.
+  Only an explicitly EMPTY define trips the *"not switched on yet"* guard in
+  `AuthService.signInWithGoogle`. `google-services.json` carries no
+  `oauth_client` entry, so the explicit ID is still required.
+
+  ⚠️ It used to be build-time-only, and that shipped a broken release:
+  `dart_defines.json` is git-ignored and the tagged-release job only reads
+  `RELEASE_DART_DEFINES`, so v1.0.81 compiled the ID as `''` and every tap on
+  Google dead-ended in the guard. The constant's default is the fix — do not
+  move it back behind a define.
 - Android: **3 clients**, all package `com.solevision.app`, one SHA-1 each:
   - debug: `B2:CC:A2:B2:84:74:E6:67:C4:41:BC:78:88:C8:50:70:C3:5F:14:6E`
   - release: extract locally with

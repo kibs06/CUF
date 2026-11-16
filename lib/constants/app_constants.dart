@@ -15,17 +15,30 @@ class AppConstants {
   //
   // The Web OAuth client ID (…apps.googleusercontent.com). It is the
   // audience for the native ID token, so Supabase accepts it. Public by
-  // design — the secret stays in Supabase Dashboard → Providers → Google.
+  // design — it ships inside every APK and is sent to Google in every OAuth
+  // request; the client SECRET stays in Supabase Dashboard → Providers →
+  // Google and is never in this repo. Same stance as the Supabase URL and
+  // publishable key above.
   //
-  // Supplied at build time so the repo never pins the project's real ID:
+  // ⚠️ This is a COMPILED DEFAULT, not a build-time requirement, and that is
+  // the fix for a shipped bug rather than a preference: `dart_defines.json`
+  // is git-ignored, so the tagged-release job only ever receives
+  // `RELEASE_DART_DEFINES` (feature switches) — v1.0.81 was built with this
+  // value empty, and every tap on the Google button dead-ended in the
+  // "not switched on yet" guard instead of opening the account picker. The
+  // guard in `AuthService.signInWithGoogle` now only fires when a build
+  // explicitly passes an empty define.
+  //
+  // Override for another environment (or a rotated client) without editing
+  // this file:
   //   flutter run --dart-define=GOOGLE_SERVER_CLIENT_ID=<web-client-id>
-  // Until it is supplied this is empty and the Google button keeps the
-  // dormant setup copy (AuthService guard) instead of failing in the SDK.
   // `android/app/google-services.json` carries no `oauth_client` entry, so
-  // passing null is NOT enough on this project — the explicit ID is required.
+  // the SDK cannot resolve this from platform configuration — it has to be
+  // passed to `GoogleSignIn.initialize(serverClientId: …)` explicitly.
   static const String googleServerClientId = String.fromEnvironment(
     'GOOGLE_SERVER_CLIENT_ID',
-    defaultValue: '',
+    defaultValue:
+        '341957182481-kupl7d79meujngkt8omjm523lid7stnj.apps.googleusercontent.com',
   );
 
   // --- CUSTOMER PORTAL (the web build of the customer flows) ---
