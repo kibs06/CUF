@@ -27,16 +27,21 @@ import 'package:flutter_test/flutter_test.dart';
 /// why the sections below that assert *its* internals are unchanged, while the
 /// ones that assert where it is mounted moved to the viewer's file.
 void main() {
-  final productScreen =
-      File('lib/screens/customer/product_detail_screen.dart').readAsStringSync();
+  final productScreen = File(
+    'lib/screens/customer/product_detail_screen.dart',
+  ).readAsStringSync();
   final constants = File('lib/constants/app_constants.dart').readAsStringSync();
-  final previewWidget = File('lib/widgets/shoe_preview_3d.dart').readAsStringSync();
-  final previewChannel =
-      File('lib/services/shoe_preview_channel.dart').readAsStringSync();
+  final previewWidget = File(
+    'lib/widgets/shoe_preview_3d.dart',
+  ).readAsStringSync();
+  final previewChannel = File(
+    'lib/services/shoe_preview_channel.dart',
+  ).readAsStringSync();
   // The viewer lives in `screens/shared/` since 2026-10-01: the product photo's
   // icon opens it, and so does the seller's "3D fitting ready" row.
-  final previewScreen =
-      File('lib/screens/shared/shoe_preview_screen.dart').readAsStringSync();
+  final previewScreen = File(
+    'lib/screens/shared/shoe_preview_screen.dart',
+  ).readAsStringSync();
 
   /// Source with whole-line comments removed.
   ///
@@ -53,7 +58,11 @@ void main() {
   /// site rather than about the file containing a string somewhere.
   String between(String source, String start, String end) {
     final from = source.indexOf(start);
-    expect(from, isNonNegative, reason: '"$start" is gone — repoint this guard');
+    expect(
+      from,
+      isNonNegative,
+      reason: '"$start" is gone — repoint this guard',
+    );
     final to = source.indexOf(end, from);
     expect(to, isNonNegative, reason: '"$end" is gone after "$start"');
     return source.substring(from, to);
@@ -64,7 +73,8 @@ void main() {
       expect(
         constants,
         contains("bool.fromEnvironment('SHOE_PREVIEW', defaultValue: true)"),
-        reason: 'the renderer has drawn on hardware (Redmi FEATURE_LEVEL_2, '
+        reason:
+            'the renderer has drawn on hardware (Redmi FEATURE_LEVEL_2, '
             '2026-10-01), so a local debug install shows the icon with no '
             'dart-define; rollback is an explicit SHOE_PREVIEW=false',
       );
@@ -78,7 +88,8 @@ void main() {
       expect(
         productScreen,
         contains('Sole3DIconButton(onPressed: _openShoePreview)'),
-        reason: 'the icon is the entry the switch gates; without it the page has '
+        reason:
+            'the icon is the entry the switch gates; without it the page has '
             'no 3D surface at all, which is the honest answer for a build where '
             'nobody has seen a render on hardware',
       );
@@ -87,65 +98,107 @@ void main() {
 
   group('the page is wired to the gate', () {
     test('it asks the rule, with every input the rule needs', () {
-      final gate = between(productScreen, 'ShoePreviewDecision get _shoePreview', '}');
+      final gate = between(
+        productScreen,
+        'ShoePreviewDecision get _shoePreview',
+        '}',
+      );
 
       expect(gate, contains('resolveShoePreview('));
       expect(gate, contains('enabled: AppConstants.shoePreviewEnabled'));
       expect(
         gate,
         contains('isAndroid: defaultTargetPlatform == TargetPlatform.android'),
-        reason: 'iOS has no renderer at all, so the box must not be mounted there',
+        reason:
+            'iOS has no renderer at all, so the box must not be mounted there',
       );
       expect(gate, contains('hasModel: _tryOnPrefetchResult?.spec != null'));
       expect(
         gate,
         contains('hasLocalModel: _tryOnPrefetchResult?.path != null'),
-        reason: '"the product has a row" is not the question — the native side is '
+        reason:
+            '"the product has a row" is not the question — the native side is '
             'handed a local path and never does HTTP',
       );
     });
 
     test('the box is built from verified bytes, not from a row', () {
-      final model = between(productScreen, 'TryOnModelSpec? get _shoePreviewModel', '}');
+      final model = between(
+        productScreen,
+        'TryOnModelSpec? get _shoePreviewModel',
+        '}',
+      );
 
       expect(model, contains('if (spec == null || path == null) return null;'));
       expect(
         model,
         contains('TryOnModelSpec.fromModel(spec, path: path)'),
-        reason: 'the payload must be the shared factory — the AR session sends '
+        reason:
+            'the payload must be the shared factory — the AR session sends '
             'the same shape to the same renderer',
       );
     });
 
-    test('the icon is gated on the model as well as the rule', () {
+    test('the icon is gated on a live catalogue model, not a warm cache', () {
+      final live = between(productScreen, 'bool get _hasLivePreviewModel', ';');
       final icon = between(productScreen, 'bool get _showPreviewIcon', ';');
 
-      expect(icon, contains('_shoePreview.shown'));
+      expect(live, contains('_tryOnPrefetchResult?.spec != null'));
+      expect(
+        live,
+        contains('_productHasLiveModelRow == true'),
+        reason:
+            'the icon answers whether the product has a live model; a '
+            'prefetch that is slow, failed or never started must not erase the '
+            'only 3D entry from the gallery',
+      );
+      expect(icon, contains('AppConstants.shoePreviewEnabled'));
       expect(
         icon,
-        contains('_shoePreviewModel != null'),
-        reason: 'the rule answers the build switch, the platform and the '
-            'catalogue — but the icon opens a viewer, and a viewer with no bytes '
-            'on disk can only apologise',
+        contains('defaultTargetPlatform == TargetPlatform.android'),
+        reason: 'iOS has no renderer, so the icon must not lead there',
+      );
+      expect(icon, contains('_hasLivePreviewModel'));
+      expect(
+        icon,
+        isNot(contains('_shoePreviewModel != null')),
+        reason:
+            'requiring verified bytes here hides the icon whenever the '
+            'prefetch has not landed; the viewer resolves those bytes instead',
       );
     });
 
     test('the icon opens the viewer, with the model and the page\'s own row', () {
-      final open = between(productScreen, 'Future<void> _openShoePreview()', '\n  }');
+      final open = between(
+        productScreen,
+        'Future<void> _openShoePreview()',
+        '\n  }',
+      );
 
       expect(open, contains('ShoePreviewScreen('));
       expect(open, contains('model: model'));
       expect(
         open,
         contains('product: widget.product'),
-        reason: 'the AR escalation inside the viewer needs the whole row, the same '
+        reason:
+            'the AR escalation inside the viewer needs the whole row, the same '
             'way the page used to hand it over',
       );
       expect(open, contains('modelAvailable: _tryOnModelAvailable'));
       expect(
         open,
-        contains('if (model == null) return;'),
-        reason: 'the viewer cannot be opened without bytes to draw',
+        contains('ShoePreviewScreen.forProduct('),
+        reason:
+            'the icon can open before the prefetch lands, so the viewer must '
+            'be able to resolve the live row and download its bytes itself',
+      );
+      expect(open, contains('productId: productId'));
+      expect(
+        open,
+        contains('showTryOn: true'),
+        reason:
+            'the customer door keeps the try-on step; only the seller door '
+            'turns it off',
       );
     });
 
@@ -153,47 +206,58 @@ void main() {
       expect(
         productScreen,
         contains('_shoePreviewNotice(),'),
-        reason: 'a gate nobody calls is a feature that is not built — the notice '
+        reason:
+            'a gate nobody calls is a feature that is not built — the notice '
             'is what is left on the page',
       );
       expect(previewScreen, contains('ShoePreviewSection('));
       expect(previewScreen, contains('height: boxHeight'));
-      // The customer door hands the resolved model over. The *other* door
-      // (`forProduct`) is the seller's, and it is the one that resolves.
+      // The customer door hands the resolved model over when the prefetch has
+      // landed. The resolving door (`forProduct`) is the fallback the page must
+      // keep for the state that used to hide the icon: a live model whose bytes
+      // are not cached yet.
       expect(previewScreen, contains('ShoePreviewScreen.forProduct({'));
       expect(
         productScreen,
-        isNot(contains('ShoePreviewScreen.forProduct(')),
-        reason: 'the page always has the model in hand — its own prefetch ran '
-            'while the customer was reading, and a viewer that re-resolved would '
-            'be a second read for an answer already on screen',
+        contains('ShoePreviewScreen.forProduct('),
+        reason:
+            'the icon can open before the prefetch lands, so the page must be '
+            'able to hand the viewer the product id and let it resolve',
       );
     });
 
     test('the notice renders nothing when the rule says so', () {
-      final helper = between(productScreen, 'Widget _shoePreviewNotice()', '\n  /// Fetch inventory');
+      final helper = between(
+        productScreen,
+        'Widget _shoePreviewNotice()',
+        '\n  /// Fetch inventory',
+      );
       expect(
         helper,
         contains('final decision = _shoePreview;'),
-        reason: 'the condition is read once here, so the box cannot be gated by '
+        reason:
+            'the condition is read once here, so the box cannot be gated by '
             'one answer and built from another',
       );
       expect(
         helper,
         contains('if (!decision.shown || model == null) {'),
-        reason: 'a product with no model gets no box **and** no AR button, and '
+        reason:
+            'a product with no model gets no box **and** no AR button, and '
             'no gap where they would have been',
       );
       expect(
         codeOf(previewScreen),
         isNot(contains('_arTryOnOpen')),
-        reason: 'no in-app AR screen is pushed any more — the try-ons open in '
+        reason:
+            'no in-app AR screen is pushed any more — the try-ons open in '
             'the phone browser, so there is no pause flag to own',
       );
       expect(
         helper,
         contains('_logPreviewReason(decision.reason)'),
-        reason: 'the helper is the one place that knows the answer, so it is the '
+        reason:
+            'the helper is the one place that knows the answer, so it is the '
             'only place that can report it',
       );
     });
@@ -214,7 +278,11 @@ void main() {
       // fact (`_productHasLiveModelRow`, asked from the table directly) rather
       // than on the prefetch's own outcome: with a live row, every hidden state
       // either has words or had a failure.
-      final helper = between(productScreen, 'Widget _shoePreviewNotice()', '\n  /// Fetch inventory');
+      final helper = between(
+        productScreen,
+        'Widget _shoePreviewNotice()',
+        '\n  /// Fetch inventory',
+      );
       expect(helper, contains('TryOnPrefetchOutcome.failed'));
       expect(helper, contains('ShoePreviewHint('));
       expect(helper, contains("'Retry'"));
@@ -222,13 +290,15 @@ void main() {
       expect(
         helper,
         contains('_productHasLiveModelRow == true'),
-        reason: 'the silence rule must key on the catalogue, not on prefetch luck — '
+        reason:
+            'the silence rule must key on the catalogue, not on prefetch luck — '
             'a resolve failure computes reason noModel and used to hide behind it',
       );
       expect(
         helper,
         contains('_previewWaitedTooLong'),
-        reason: 'a prefetch that never completed (result still null) gets words too, '
+        reason:
+            'a prefetch that never completed (result still null) gets words too, '
             'after the grace period — modelNotReady was presumed transient and hid '
             'the never-ran case',
       );
@@ -238,16 +308,31 @@ void main() {
       // _productHasLiveModelRow reads the table directly (one indexed read), so
       // "this product has a model" cannot be corrupted by the very prefetch the
       // hint diagnoses. And a failed read leaves null — silence, never a wolf.
-      final fact = between(productScreen, 'bool? _productHasLiveModelRow;', 'Future<void> _checkLiveModelRow');
+      final fact = between(
+        productScreen,
+        'bool? _productHasLiveModelRow;',
+        'Future<void> _checkLiveModelRow',
+      );
       expect(fact, contains('bool? _productHasLiveModelRow;'));
-      final check = between(productScreen, 'Future<void> _checkLiveModelRow()', '/// The prefetch, rebuilt');
+      final check = between(
+        productScreen,
+        'Future<void> _checkLiveModelRow()',
+        '/// The prefetch, rebuilt',
+      );
       expect(check, contains(".eq('status', 'active')"));
       expect(check, contains('catch (_)'));
     });
 
     test('the grace-period timer exists, and is cancelled in dispose', () {
-      expect(productScreen, contains('_previewWaitTimer = Timer(const Duration(seconds: 12)'));
-      final dispose = between(productScreen, 'void dispose()', 'void _openFullScreenViewer');
+      expect(
+        productScreen,
+        contains('_previewWaitTimer = Timer(const Duration(seconds: 12)'),
+      );
+      final dispose = between(
+        productScreen,
+        'void dispose()',
+        'void _openFullScreenViewer',
+      );
       expect(dispose, contains('_previewWaitTimer?.cancel();'));
     });
 
@@ -256,11 +341,16 @@ void main() {
       // while no size is selected, and a payload without inventory only gets a
       // size after _fetchInventory — so the model was never fetched at all and
       // the box never appeared. The fetch must re-enter the prefetch.
-      final fetch = between(productScreen, 'Future<void> _fetchInventory()', '\n  /// Fetch full variant rows');
+      final fetch = between(
+        productScreen,
+        'Future<void> _fetchInventory()',
+        '\n  /// Fetch full variant rows',
+      );
       expect(
         fetch,
         contains('if (_selectedSize != null) _prefetchTryOnModel();'),
-        reason: 'without the re-entry the prefetch is a silent no-op on any page '
+        reason:
+            'without the re-entry the prefetch is a silent no-op on any page '
             'whose sizes arrive over the network',
       );
     });
@@ -286,7 +376,8 @@ void main() {
       expect(
         codeOf(log),
         isNot(contains('kDebugMode')),
-        reason: 'guarding it with kDebugMode would print nothing in the only '
+        reason:
+            'guarding it with kDebugMode would print nothing in the only '
             'build where the box can be seen',
       );
     });
@@ -315,7 +406,8 @@ void main() {
       expect(
         previewWidget,
         contains('borderRadius: BorderRadius.circular(widget.bleed ? 0 : 16)'),
-        reason: 'a stage that is the page surface has no corners to round; inset, '
+        reason:
+            'a stage that is the page surface has no corners to round; inset, '
             'it stays the card its other callers draw',
       );
       // And the section forwards the flag rather than re-deciding it, the way it
@@ -337,10 +429,14 @@ void main() {
       expect(
         previewScreen,
         contains('static const double _notTheStage = 160;'),
-        reason: 'the reserve is the pill (~80) plus the header and padding (~50), '
+        reason:
+            'the reserve is the pill (~80) plus the header and padding (~50), '
             'plus slack for a larger text scale',
       );
-      expect(previewScreen, contains('static const double _stageCeiling = 900;'));
+      expect(
+        previewScreen,
+        contains('static const double _stageCeiling = 900;'),
+      );
     });
   });
 
@@ -365,25 +461,29 @@ void main() {
       expect(
         previewScreen,
         contains('if (_showDeepAr)'),
-        reason: 'DeepAR is the bundled-effect-products-only entry, never the '
+        reason:
+            'DeepAR is the bundled-effect-products-only entry, never the '
             'seller\'s or an uneffected shoe\'s',
       );
       expect(
         codeOf(previewScreen),
         isNot(contains('_openArTryOn')),
-        reason: 'the legacy pill and its push are removed, not just unbuilt — '
+        reason:
+            'the legacy pill and its push are removed, not just unbuilt — '
             'a simulated fitting flow must not be one revert away',
       );
       expect(
         previewScreen,
         isNot(contains("label: 'Capture to fit'")),
-        reason: 'capture-to-fit entry hidden for now; _captureFit stays for re-enable',
+        reason:
+            'capture-to-fit entry hidden for now; _captureFit stays for re-enable',
       );
       expect(previewScreen, contains("label: 'Try on Snap'"));
       expect(
         previewScreen,
         contains('if (_showSnapLens)'),
-        reason: 'Snap is the lensed-products-only entry, never the seller\'s '
+        reason:
+            'Snap is the lensed-products-only entry, never the seller\'s '
             'or an unlensed shoe\'s',
       );
       // Drawn after the scroll body — the bottom bar is the page's own slot, not
@@ -392,7 +492,8 @@ void main() {
       expect(
         previewScreen.indexOf('SoleARPill('),
         greaterThan(previewScreen.indexOf('SingleChildScrollView(')),
-        reason: 'a pill in the flow under the box is the layout this moved to fix',
+        reason:
+            'a pill in the flow under the box is the layout this moved to fix',
       );
       expect(
         previewScreen,
@@ -433,22 +534,25 @@ void main() {
       );
     });
 
-    test('the product page itself mounts none of them — the icon is the only entry',
-        () {
-      // The pinned pill came off the page on 2026-10-01. AR is now one tap
-      // deeper, inside the viewer, which is the escalation rather than a second,
-      // competing button on the page.
-      expect(
-        productScreen,
-        isNot(contains('SoleARPill(')),
-        reason: 'the page is the 3D icon plus the recovery notice, nothing else',
-      );
-      expect(
-        'Sole3DIconButton('.allMatches(productScreen).length,
-        1,
-        reason: 'two icon buttons would be two entries into the same viewer',
-      );
-    });
+    test(
+      'the product page itself mounts none of them — the icon is the only entry',
+      () {
+        // The pinned pill came off the page on 2026-10-01. AR is now one tap
+        // deeper, inside the viewer, which is the escalation rather than a second,
+        // competing button on the page.
+        expect(
+          productScreen,
+          isNot(contains('SoleARPill(')),
+          reason:
+              'the page is the 3D icon plus the recovery notice, nothing else',
+        );
+        expect(
+          'Sole3DIconButton('.allMatches(productScreen).length,
+          1,
+          reason: 'two icon buttons would be two entries into the same viewer',
+        );
+      },
+    );
   });
 
   group('nothing is pushed on top of the box any more', () {
@@ -473,7 +577,8 @@ void main() {
       expect(
         codeOf(previewWidget),
         isNot(contains('ModalRoute.of(context)')),
-        reason: 'that check does not fire on a plain push — see the class header',
+        reason:
+            'that check does not fire on a plain push — see the class header',
       );
     });
   });
@@ -512,7 +617,8 @@ void main() {
       expect(
         plugin,
         contains('"setPreviewDiagnostics"'),
-        reason: 'the QA readout seam the Dart side calls — SHOE_PREVIEW_DIAGNOSTICS '
+        reason:
+            'the QA readout seam the Dart side calls — SHOE_PREVIEW_DIAGNOSTICS '
             'is a Dart define, so the native side cannot read it and this call is '
             'the switch\'s other half',
       );
@@ -544,25 +650,29 @@ void main() {
       expect(
         codeOf(previewWidget),
         contains("type == 'status'"),
-        reason: 'and the Dart side has to actually handle it — an event nobody '
+        reason:
+            'and the Dart side has to actually handle it — an event nobody '
             'reads is the same silent log this seam exists to replace',
       );
       expect(
         view,
         contains('STATUS_FILE_NAME'),
-        reason: 'the heartbeat goes to a file too, or it dies with the process it '
+        reason:
+            'the heartbeat goes to a file too, or it dies with the process it '
             'was describing and explains nothing',
       );
       expect(
         view,
         contains('preview_frame_failed'),
-        reason: 'an exception in the frame callback is process death on Android: it '
+        reason:
+            'an exception in the frame callback is process death on Android: it '
             'has to be caught and reported',
       );
       expect(
         view,
         contains('pendingTeardown'),
-        reason: 'the second-open crash is a teardown racing the next create, and the '
+        reason:
+            'the second-open crash is a teardown racing the next create, and the '
             'fix is the ordering this latch holds',
       );
     });
@@ -585,7 +695,8 @@ void main() {
       expect(
         codeOf(view),
         contains('if (!modelLoadingSupported)'),
-        reason: 'without the refusal the loader is called on a renderer that aborts',
+        reason:
+            'without the refusal the loader is called on a renderer that aborts',
       );
 
       // The refusal has to come *before* the parse, not after it: `createAsset` is
@@ -612,7 +723,8 @@ void main() {
       expect(
         previewChannel,
         contains('on MissingPluginException'),
-        reason: 'a build with no plugin is the expected answer, not a page error',
+        reason:
+            'a build with no plugin is the expected answer, not a page error',
       );
     });
   });
@@ -637,7 +749,8 @@ void main() {
         expect(
           constants,
           isNot(contains("bool.fromEnvironment('$name', defaultValue: true)")),
-          reason: '$name must ship off: one is not customer copy, one is a load '
+          reason:
+              '$name must ship off: one is not customer copy, one is a load '
               'that can abort the process, and one lowers the renderer on purpose',
         );
       }
@@ -657,21 +770,19 @@ void main() {
       // product while `product_models` holds 0 rows — and the "Try on DeepAR"
       // pill lives inside the viewer that gate hides. Pinned at the call
       // site, where the page builds its prefetch.
-      final construction = between(
-        productScreen,
-        'TryOnPrefetch(',
-        ');',
-      );
+      final construction = between(productScreen, 'TryOnPrefetch(', ');');
       expect(
         construction,
         contains('AppConstants.tryOnPlaceholderModelEnabled'),
-        reason: 'the bundled-bytes boundary must reach the page gate too, or '
+        reason:
+            'the bundled-bytes boundary must reach the page gate too, or '
             'the entry the session is run through cannot appear',
       );
       expect(
         construction,
         contains('placeholderModelService()'),
-        reason: 'the same production service pointed at the bundled asset the '
+        reason:
+            'the same production service pointed at the bundled asset the '
             'try-on screen uses',
       );
     });
@@ -685,39 +796,49 @@ void main() {
       expect(handover, contains("'setPreviewModel'"));
       expect(
         handover,
-        contains("'allowUnsupportedRenderer': AppConstants.shoePreviewAllowLevel1"),
-        reason: 'the switch has to reach the native side on the handover, or the '
+        contains(
+          "'allowUnsupportedRenderer': AppConstants.shoePreviewAllowLevel1",
+        ),
+        reason:
+            'the switch has to reach the native side on the handover, or the '
             'guard it relaxes never hears about it',
       );
       expect(
         handover,
-        contains("'lowerEngineToLevel1': AppConstants.shoePreviewLowerEngineToLevel1"),
-        reason: 'the engine-level switch travels on the same handover — the '
+        contains(
+          "'lowerEngineToLevel1': AppConstants.shoePreviewLowerEngineToLevel1",
+        ),
+        reason:
+            'the engine-level switch travels on the same handover — the '
             'renderer has to be told before it is built, and the handover is the '
             'only thing that arrives before it',
       );
       expect(
         File('lib/services/ar_try_on_channel.dart').readAsStringSync(),
         isNot(contains('allowUnsupportedRenderer')),
-        reason: 'the AR session sends the same payload shape and must not be able '
+        reason:
+            'the AR session sends the same payload shape and must not be able '
             'to ask a crashing load into existence',
       );
       expect(
         File('lib/services/ar_try_on_channel.dart').readAsStringSync(),
         isNot(contains('lowerEngineToLevel1')),
-        reason: 'and it must not be able to ask for a permanently worse renderer '
+        reason:
+            'and it must not be able to ask for a permanently worse renderer '
             'either',
       );
       expect(
         previewWidget,
-        contains('showDiagnostics = AppConstants.shoePreviewDiagnosticsEnabled'),
-        reason: 'the readout is gated by the switch rather than by the mere fact '
+        contains(
+          'showDiagnostics = AppConstants.shoePreviewDiagnosticsEnabled',
+        ),
+        reason:
+            'the readout is gated by the switch rather than by the mere fact '
             'that something failed',
       );
     });
 
-    test('the native refusal keeps its guard, and the override is debuggable-only',
-        () {
+    test('the native refusal keeps its guard, and the override is debuggable-only', () {
       // The guard *and* the override on one condition: the crash F22 measured is
       // skipped by asking, never by accident.
       // The first `if (!modelLoadingSupported)` in the file is the log-only block
@@ -728,7 +849,9 @@ void main() {
       // name, which the declaration line would match first.
       final guardLine = codeOf(view)
           .split('\n')
-          .firstWhere((line) => line.contains('allowsUnsupportedRenderer(pendingModel)'));
+          .firstWhere(
+            (line) => line.contains('allowsUnsupportedRenderer(pendingModel)'),
+          );
       expect(guardLine, contains('if (!modelLoadingSupported &&'));
 
       // The window starts at the function, so the KDoc above it (which names these
@@ -742,7 +865,8 @@ void main() {
       expect(
         override,
         contains('debuggableBuild()'),
-        reason: 'lock 2: a published release APK is not debuggable, so a customer '
+        reason:
+            'lock 2: a published release APK is not debuggable, so a customer '
             'build ignores the request even if the define leaks into one. The '
             'check itself is spelled once and asserted in the engine-level test '
             'below, so the two switches cannot drift apart',
@@ -757,7 +881,8 @@ void main() {
       expect(
         refusal,
         contains('\$rendererDiagnostic'),
-        reason: 'a refusal with no measured facts is a bug report the page cannot '
+        reason:
+            'a refusal with no measured facts is a bug report the page cannot '
             'answer',
       );
       expect(codeOf(view), contains('describeRenderer(created)'));
@@ -774,14 +899,19 @@ void main() {
       expect(
         lock,
         contains('debuggableBuild()'),
-        reason: 'lock 2: the same check the load override uses — a lowered '
+        reason:
+            'lock 2: the same check the load override uses — a lowered '
             'renderer on a shopper\'s phone is not a crash, it is a worse product',
       );
 
       // ...and the check itself is written once, so the two locks cannot drift
       // apart. (The override test above asserts its own lock 1; this asserts the
       // half both switches share.)
-      final debuggable = between(codeOf(view), 'private fun debuggableBuild(', '/**');
+      final debuggable = between(
+        codeOf(view),
+        'private fun debuggableBuild(',
+        '/**',
+      );
       expect(debuggable, contains('ApplicationInfo.FLAG_DEBUGGABLE'));
 
       // Both application points, because the engine may or may not exist when the
@@ -790,8 +920,11 @@ void main() {
       // time would read as a failed experiment rather than as a race.
       expect(
         codeOf(view),
-        contains('engineBuilder.featureLevel(Engine.FeatureLevel.FEATURE_LEVEL_1)'),
-        reason: 'the builder is the only route that exists before the first frame',
+        contains(
+          'engineBuilder.featureLevel(Engine.FeatureLevel.FEATURE_LEVEL_1)',
+        ),
+        reason:
+            'the builder is the only route that exists before the first frame',
       );
       final runtime = between(
         codeOf(view),
@@ -805,13 +938,18 @@ void main() {
       expect(
         runtime,
         contains('rendererDiagnostic = describeRenderer(created)'),
-        reason: 'a lowered engine that still reports the level it started at is a '
+        reason:
+            'a lowered engine that still reports the level it started at is a '
             'screenshot nobody can trust',
       );
 
       // Applied *before* the load the guard would refuse, or the run would measure
       // a level-2 engine and look like the experiment had failed.
-      final handover = between(codeOf(view), 'fun setModel(spec: ModelSpec)', '}');
+      final handover = between(
+        codeOf(view),
+        'fun setModel(spec: ModelSpec)',
+        '}',
+      );
       expect(
         handover.indexOf('applyEngineLevelRequest(spec)'),
         lessThan(handover.indexOf('applyPendingModel()')),
@@ -846,7 +984,8 @@ void main() {
         contains(
           'engineBuilder.featureLevel(Engine.FeatureLevel.FEATURE_LEVEL_2)',
         ),
-        reason: 'the builder default is level 1 on every device, so not asking '
+        reason:
+            'the builder default is level 1 on every device, so not asking '
             'is the same as refusing; a level-1 device is unaffected because the '
             'clamp is the driver\'s',
       );
@@ -859,39 +998,43 @@ void main() {
       );
     });
 
-    test('the load stops at the first success, and nothing creates a second asset', () {
-      // ⚠️ A crash guard, and it cost a real process abort: `repeat`'s lambda
-      // return is a `continue`, so `if (loaded != null) return@repeat` kept
-      // loading — up to LOAD_ATTEMPTS whole assets, each holding material
-      // instances that nothing destroyed. Teardown's `destroyMaterials()` then
-      // aborted in native code, uncatchably, on a phone whose render was fine:
-      //
-      //     utils::PreconditionPanic: reason: destroying material
-      //     "base_lit_opaque" but 4 instances still alive.
-      //
-      // That is the crash on *leaving* the box — the one the owner's phone could
-      // never report, because it has no logcat.
-      final loader = between(
-        codeOf(view),
-        'for (attempt in 0 until LOAD_ATTEMPTS)',
-        'val createdAsset = loaded',
-      );
-      expect(loader, contains('if (loaded != null) break'));
-      expect(
-        loader,
-        isNot(contains('return@repeat')),
-        reason: 'a lambda return continues the loop, and every extra createAsset '
-            'is an asset nobody destroys',
-      );
+    test(
+      'the load stops at the first success, and nothing creates a second asset',
+      () {
+        // ⚠️ A crash guard, and it cost a real process abort: `repeat`'s lambda
+        // return is a `continue`, so `if (loaded != null) return@repeat` kept
+        // loading — up to LOAD_ATTEMPTS whole assets, each holding material
+        // instances that nothing destroyed. Teardown's `destroyMaterials()` then
+        // aborted in native code, uncatchably, on a phone whose render was fine:
+        //
+        //     utils::PreconditionPanic: reason: destroying material
+        //     "base_lit_opaque" but 4 instances still alive.
+        //
+        // That is the crash on *leaving* the box — the one the owner's phone could
+        // never report, because it has no logcat.
+        final loader = between(
+          codeOf(view),
+          'for (attempt in 0 until LOAD_ATTEMPTS)',
+          'val createdAsset = loaded',
+        );
+        expect(loader, contains('if (loaded != null) break'));
+        expect(
+          loader,
+          isNot(contains('return@repeat')),
+          reason:
+              'a lambda return continues the loop, and every extra createAsset '
+              'is an asset nobody destroys',
+        );
 
-      // The staging loader is freed as well: `AssetLoader`'s own javadoc is
-      // `loadResources` … `resourceLoader.destroy()`.
-      expect(
-        codeOf(view),
-        contains('resources.destroy()'),
-        reason: 'the resource loader holds native staging buffers per open',
-      );
-    });
+        // The staging loader is freed as well: `AssetLoader`'s own javadoc is
+        // `loadResources` … `resourceLoader.destroy()`.
+        expect(
+          codeOf(view),
+          contains('resources.destroy()'),
+          reason: 'the resource loader holds native staging buffers per open',
+        );
+      },
+    );
   });
 
   group('the WebView engine is additive, and cannot ship by accident', () {
@@ -901,41 +1044,54 @@ void main() {
     // Chromium's process, where a stall blanks the box instead of killing the app.
     // The guards below are about it staying a *second* engine: additive, off by
     // default, and unable to smuggle the two QA locks in with it.
-    final webView = File('lib/widgets/shoe_preview_webview.dart').readAsStringSync();
+    final webView = File(
+      'lib/widgets/shoe_preview_webview.dart',
+    ).readAsStringSync();
 
-    test('it is an environment switch, and it now defaults to the engine with a device behind it', () {
-      // ⚠️ **The default flipped on measurement, and the measurement is the reason.**
-      // On a vivo V2022 the native engine killed the app on **2 of 3** attempts to open
-      // the 3D box (`SIGSEGV` in `TransformManager_nSetTransform+64`), while the WebView
-      // engine ran five opens in one process with zero crashes. This assertion pins the
-      // decision so it cannot be reverted by accident — and pins that it is still an
-      // environment switch, so `SHOE_PREVIEW_WEBVIEW=false` restores the native path
-      // from a shipped build with no code change.
-      expect(
-        constants,
-        contains(
-            "bool.fromEnvironment('SHOE_PREVIEW_WEBVIEW', defaultValue: true)"),
-        reason: 'the native engine is what crashes the app; the WebView engine is what '
-            'was measured working',
-      );
-    });
+    test(
+      'it is an environment switch, and it now defaults to the engine with a device behind it',
+      () {
+        // ⚠️ **The default flipped on measurement, and the measurement is the reason.**
+        // On a vivo V2022 the native engine killed the app on **2 of 3** attempts to open
+        // the 3D box (`SIGSEGV` in `TransformManager_nSetTransform+64`), while the WebView
+        // engine ran five opens in one process with zero crashes. This assertion pins the
+        // decision so it cannot be reverted by accident — and pins that it is still an
+        // environment switch, so `SHOE_PREVIEW_WEBVIEW=false` restores the native path
+        // from a shipped build with no code change.
+        expect(
+          constants,
+          contains(
+            "bool.fromEnvironment('SHOE_PREVIEW_WEBVIEW', defaultValue: true)",
+          ),
+          reason:
+              'the native engine is what crashes the app; the WebView engine is what '
+              'was measured working',
+        );
+      },
+    );
 
-    test('the QA workflow passes the define either way, so `false` really builds native', () {
-      // ⚠️ **This is a direct consequence of the default flipping, and it would fail
-      // silently without the assertion.** While the code default was `false`, the
-      // workflow could pass the define only when it wanted the WebView engine. With
-      // the default now `true`, omitting it for `webview_engine=false` builds a
-      // WebView APK while the input, the artifact name and the report all say native
-      // — a QA run measuring the wrong engine and filing the result as evidence.
-      final workflow = File('.github/workflows/qa-apk.yml').readAsStringSync();
-      expect(workflow, contains('--dart-define=SHOE_PREVIEW_WEBVIEW=true'));
-      expect(
-        workflow,
-        contains('--dart-define=SHOE_PREVIEW_WEBVIEW=false'),
-        reason: 'omitting the define now selects WebView by default, which is the '
-            'opposite of what `webview_engine=false` promises',
-      );
-    });
+    test(
+      'the QA workflow passes the define either way, so `false` really builds native',
+      () {
+        // ⚠️ **This is a direct consequence of the default flipping, and it would fail
+        // silently without the assertion.** While the code default was `false`, the
+        // workflow could pass the define only when it wanted the WebView engine. With
+        // the default now `true`, omitting it for `webview_engine=false` builds a
+        // WebView APK while the input, the artifact name and the report all say native
+        // — a QA run measuring the wrong engine and filing the result as evidence.
+        final workflow = File(
+          '.github/workflows/qa-apk.yml',
+        ).readAsStringSync();
+        expect(workflow, contains('--dart-define=SHOE_PREVIEW_WEBVIEW=true'));
+        expect(
+          workflow,
+          contains('--dart-define=SHOE_PREVIEW_WEBVIEW=false'),
+          reason:
+              'omitting the define now selects WebView by default, which is the '
+              'opposite of what `webview_engine=false` promises',
+        );
+      },
+    );
 
     test('the native renderer is not deleted — both engines stay compiled in', () {
       // The whole point of a switch rather than a rewrite: the rollback from a
@@ -964,7 +1120,8 @@ void main() {
       expect(
         codeOf(webView),
         isNot(contains('http://')),
-        reason: 'a model URL in the widget would mean the box fetches from a host',
+        reason:
+            'a model URL in the widget would mean the box fetches from a host',
       );
     });
 
@@ -1002,25 +1159,31 @@ void main() {
       expect(webView, contains('html { height: 100%; }'));
     });
 
-    test('reporting a line never rebuilds the box, because rebuilding it reloads it', () {
-      // ⚠️ **The measured cause of the first blank box, and the least obvious one.**
-      // `ModelViewer` creates its loopback server and its `WebViewController` in
-      // `initState`, so re-inflating the element discards the load in flight and
-      // starts a second one. A build that drew its own QA line by switching its
-      // root between `ModelViewer` and a `Stack` therefore reloaded the model every
-      // time a status line appeared — logged on the vivo V2022 as
-      // `error — :loadfailure` followed by a full re-fetch. The parent draws the
-      // line; this widget must not rebuild itself to say anything.
-      final reportStart = webView.indexOf('void _report(');
-      expect(reportStart, greaterThan(-1));
-      final reportBody =
-          webView.substring(reportStart, webView.indexOf('\n  }', reportStart));
-      expect(
-        reportBody,
-        isNot(contains('setState')),
-        reason: 'a setState here re-inflates ModelViewer and restarts the load',
-      );
-    });
+    test(
+      'reporting a line never rebuilds the box, because rebuilding it reloads it',
+      () {
+        // ⚠️ **The measured cause of the first blank box, and the least obvious one.**
+        // `ModelViewer` creates its loopback server and its `WebViewController` in
+        // `initState`, so re-inflating the element discards the load in flight and
+        // starts a second one. A build that drew its own QA line by switching its
+        // root between `ModelViewer` and a `Stack` therefore reloaded the model every
+        // time a status line appeared — logged on the vivo V2022 as
+        // `error — :loadfailure` followed by a full re-fetch. The parent draws the
+        // line; this widget must not rebuild itself to say anything.
+        final reportStart = webView.indexOf('void _report(');
+        expect(reportStart, greaterThan(-1));
+        final reportBody = webView.substring(
+          reportStart,
+          webView.indexOf('\n  }', reportStart),
+        );
+        expect(
+          reportBody,
+          isNot(contains('setState')),
+          reason:
+              'a setState here re-inflates ModelViewer and restarts the load',
+        );
+      },
+    );
 
     test('a load that fails says so on the page rather than staying blank', () {
       // The native path reports through its channel; this engine has no native
@@ -1038,13 +1201,19 @@ void main() {
       // `android:usesCleartextTraffic="true"` would permit it to *every* host — a
       // real regression for an app carrying a Supabase client, payment redirects
       // and an OTA updater.
-      final manifest =
-          File('android/app/src/main/AndroidManifest.xml').readAsStringSync();
+      final manifest = File(
+        'android/app/src/main/AndroidManifest.xml',
+      ).readAsStringSync();
       final config = File(
         'android/app/src/main/res/xml/network_security_config.xml',
       ).readAsStringSync();
 
-      expect(manifest, contains('android:networkSecurityConfig="@xml/network_security_config"'));
+      expect(
+        manifest,
+        contains(
+          'android:networkSecurityConfig="@xml/network_security_config"',
+        ),
+      );
       expect(
         manifest,
         isNot(contains('usesCleartextTraffic="true"')),
@@ -1073,10 +1242,12 @@ void main() {
     // under `flutter test`, so the page's half of the ladder is pinned as source
     // here, while the section's half (the move itself, the deadline, the latch) is
     // covered behaviourally in `shoe_preview_3d_test.dart`.
-    final webView =
-        File('lib/widgets/shoe_preview_webview.dart').readAsStringSync();
-    final guard =
-        File('lib/services/shoe_preview_fallback_guard.dart').readAsStringSync();
+    final webView = File(
+      'lib/widgets/shoe_preview_webview.dart',
+    ).readAsStringSync();
+    final guard = File(
+      'lib/services/shoe_preview_fallback_guard.dart',
+    ).readAsStringSync();
 
     test('the page\'s verdict reaches the box instead of only the log', () {
       // ⚠️ For one build the probe was logged and dropped here, on the reading that
@@ -1087,69 +1258,86 @@ void main() {
       expect(webView, contains("post('gl:'"));
     });
 
-    test('the verdict is classified before the QA gate, or the switch decides for customers',
-        () {
-      // ⚠️ `showDiagnostics` is off in every customer build, and it used to be the
-      // first statement in the classifier. A verdict taken after it would mean a QA
-      // switch, not the phone, decided whether a customer's box falls back to the
-      // engine that can draw — and the builds it would have decided against are the
-      // only builds most customers ever run.
-      // `codeOf` first, and it is not tidiness: the body's own comment names the
-      // very expression this guard is about (it explains the ordering), so a raw
-      // read would find the explanation and pass for the wrong reason.
-      final body = codeOf(between(
-        previewWidget,
-        'void _recordEngineLine(String line)',
-        '\n  /// **The verdict arrives',
-      ));
-      final classified = body.indexOf('shoePreviewWebViewCannotDrawReason');
-      final gated = body.indexOf('showDiagnostics');
-      expect(classified, isNonNegative, reason: 'the ladder reads the page lines');
-      expect(gated, isNonNegative, reason: 'the readout still has its own gate');
-      expect(
-        classified,
-        lessThan(gated),
-        reason: 'classify first, then gate the readout',
-      );
-    });
+    test(
+      'the verdict is classified before the QA gate, or the switch decides for customers',
+      () {
+        // ⚠️ `showDiagnostics` is off in every customer build, and it used to be the
+        // first statement in the classifier. A verdict taken after it would mean a QA
+        // switch, not the phone, decided whether a customer's box falls back to the
+        // engine that can draw — and the builds it would have decided against are the
+        // only builds most customers ever run.
+        // `codeOf` first, and it is not tidiness: the body's own comment names the
+        // very expression this guard is about (it explains the ordering), so a raw
+        // read would find the explanation and pass for the wrong reason.
+        final body = codeOf(
+          between(
+            previewWidget,
+            'void _recordEngineLine(String line)',
+            '\n  /// **The verdict arrives',
+          ),
+        );
+        final classified = body.indexOf('shoePreviewWebViewCannotDrawReason');
+        final gated = body.indexOf('showDiagnostics');
+        expect(
+          classified,
+          isNonNegative,
+          reason: 'the ladder reads the page lines',
+        );
+        expect(
+          gated,
+          isNonNegative,
+          reason: 'the readout still has its own gate',
+        );
+        expect(
+          classified,
+          lessThan(gated),
+          reason: 'classify first, then gate the readout',
+        );
+      },
+    );
 
-    test('the native attempt is announced synchronously, before the view is mounted',
-        () {
-      // ⚠️ **The ordering is the safety property, not an implementation detail.**
-      // The death this records happens about a second after the mount and takes the
-      // process with it, so an announcement made *after* the mount — or written
-      // asynchronously — is not on disk when the next launch reads it, and the
-      // ladder becomes the crash loop this latch exists to prevent.
-      final body = between(
-        previewWidget,
-        'Future<void> _failOver(',
-        '\n  void _recordStatus(',
-      );
-      expect(body, contains('markAttempt()'));
-      expect(body, contains('_webViewEngine = false'));
-      expect(
-        body.indexOf('markAttempt()'),
-        lessThan(body.indexOf('_webViewEngine = false')),
-        reason: 'the marker has to exist before the native renderer is mounted',
-      );
-      expect(guard, contains('writeAsStringSync('));
-      expect(guard, contains('existsSync()'));
-      expect(guard, contains('deleteSync()'));
-    });
+    test(
+      'the native attempt is announced synchronously, before the view is mounted',
+      () {
+        // ⚠️ **The ordering is the safety property, not an implementation detail.**
+        // The death this records happens about a second after the mount and takes the
+        // process with it, so an announcement made *after* the mount — or written
+        // asynchronously — is not on disk when the next launch reads it, and the
+        // ladder becomes the crash loop this latch exists to prevent.
+        final body = between(
+          previewWidget,
+          'Future<void> _failOver(',
+          '\n  void _recordStatus(',
+        );
+        expect(body, contains('markAttempt()'));
+        expect(body, contains('_webViewEngine = false'));
+        expect(
+          body.indexOf('markAttempt()'),
+          lessThan(body.indexOf('_webViewEngine = false')),
+          reason:
+              'the marker has to exist before the native renderer is mounted',
+        );
+        expect(guard, contains('writeAsStringSync('));
+        expect(guard, contains('existsSync()'));
+        expect(guard, contains('deleteSync()'));
+      },
+    );
 
-    test('the latch is released by the native engine\'s own load, not by the heartbeat',
-        () {
-      // `modelLoaded` is raised in every build; the `status` heartbeat beside it is
-      // diagnostics-only. Hanging the latch on the heartbeat would leave every
-      // customer's phone latched off after one unlucky start — a bug in the
-      // direction that costs a picture.
-      final body = between(
-        previewWidget,
-        "if (type == 'modelLoaded')",
-        "if (type == 'status')",
-      );
-      expect(body, contains('clearAttempt()'));
-    });
+    test(
+      'the latch is released by the native engine\'s own load, not by the heartbeat',
+      () {
+        // `modelLoaded` is raised in every build; the `status` heartbeat beside it is
+        // diagnostics-only. Hanging the latch on the heartbeat would leave every
+        // customer's phone latched off after one unlucky start — a bug in the
+        // direction that costs a picture.
+        final body = between(
+          previewWidget,
+          "if (type == 'modelLoaded')",
+          "if (type == 'status')",
+        );
+        expect(body, contains('clearAttempt()'));
+      },
+    );
 
     test('the ladder moves one way, and only on evidence', () {
       final code = codeOf(previewWidget);
@@ -1157,7 +1345,8 @@ void main() {
       expect(
         code,
         isNot(contains('_webViewEngine = true')),
-        reason: 'a phone\'s WebView does not learn to hand out a WebGL2 context: a '
+        reason:
+            'a phone\'s WebView does not learn to hand out a WebGL2 context: a '
             'ladder that moved back would put the blank box in front of a customer '
             'again on the next product',
       );
@@ -1174,8 +1363,9 @@ void main() {
     // (`AppConstants.stage`) and the guards below are about it staying one: every
     // face of the box reads it, neither engine pins a hex, and the tone reaches a
     // renderer that is *already running* when the customer flips the theme.
-    final webView =
-        File('lib/widgets/shoe_preview_webview.dart').readAsStringSync();
+    final webView = File(
+      'lib/widgets/shoe_preview_webview.dart',
+    ).readAsStringSync();
     final view = File(
       'android/app/src/main/kotlin/com/solevision/app/tryon/ArTryOnView.kt',
     ).readAsStringSync();
@@ -1188,12 +1378,16 @@ void main() {
       // is *exactly* the value this feature has cleared to since V3.2 — the one
       // thing that must not move, because it is the tone the owner's device work
       // was all measured against.
-      expect(AppPalette.light.stage.computeLuminance(), greaterThan(0.8),
-          reason: 'a light-mode box has to be a light surface, not a black slab');
+      expect(
+        AppPalette.light.stage.computeLuminance(),
+        greaterThan(0.8),
+        reason: 'a light-mode box has to be a light surface, not a black slab',
+      );
       expect(
         AppPalette.dark.stage,
         const Color(0xFF0E0F12),
-        reason: 'dark mode keeps the renderer tone, so nothing about the shipped '
+        reason:
+            'dark mode keeps the renderer tone, so nothing about the shipped '
             'dark presentation moves',
       );
       expect(
@@ -1206,7 +1400,8 @@ void main() {
         expect(
           codeOf(source),
           isNot(contains('0xFF0E0F12')),
-          reason: 'a pinned tone in either Dart face is the black rectangle in '
+          reason:
+              'a pinned tone in either Dart face is the black rectangle in '
               'light mode this change removed',
         );
       }
@@ -1222,7 +1417,8 @@ void main() {
       expect(
         webView,
         contains('AppBrightness.current.name'),
-        reason: 'the ModelViewer key has to carry the brightness, or a theme flip '
+        reason:
+            'the ModelViewer key has to carry the brightness, or a theme flip '
             'leaves the old page running',
       );
     });
@@ -1235,7 +1431,8 @@ void main() {
       expect(
         previewWidget,
         contains('_handOverStage();'),
-        reason: 'the box has to send it — from `build`, because a brightness change '
+        reason:
+            'the box has to send it — from `build`, because a brightness change '
             'repaints these elements without re-creating or updating them',
       );
       expect(previewWidget, contains('AppBrightness.current'));
@@ -1250,7 +1447,8 @@ void main() {
       expect(
         codeOf(view),
         contains('stageColor ?: DEFAULT_CLEAR_COLOR'),
-        reason: 'a colour that has not arrived must leave the shipped tone in place',
+        reason:
+            'a colour that has not arrived must leave the shipped tone in place',
       );
       expect(
         between(view, 'private fun applyClearColor(', '/**'),
@@ -1260,11 +1458,14 @@ void main() {
       expect(
         between(view, 'createLights(created)', 'Log.i('),
         contains('applyClearColor()'),
-        reason: 'engine creation is where a colour that arrived first is applied',
+        reason:
+            'engine creation is where a colour that arrived first is applied',
       );
       expect(
         view,
-        contains('val DEFAULT_CLEAR_COLOR = doubleArrayOf(0.055, 0.06, 0.07, 1.0)'),
+        contains(
+          'val DEFAULT_CLEAR_COLOR = doubleArrayOf(0.055, 0.06, 0.07, 1.0)',
+        ),
         reason: 'the dark tone the feature shipped with, spelled once',
       );
 
@@ -1275,7 +1476,8 @@ void main() {
       expect(
         File('lib/services/ar_try_on_channel.dart').readAsStringSync(),
         isNot(contains('setBackground')),
-        reason: 'a stage colour on the AR channel would turn a camera surface into '
+        reason:
+            'a stage colour on the AR channel would turn a camera surface into '
             'a light-mode page',
       );
     });
@@ -1290,8 +1492,9 @@ void main() {
     // the three properties that make it safe: it never competes for the gesture, it
     // is silent to a screen reader that cannot turn the model anyway, and it does
     // not leak a timer into every test or every visit.
-    final webView =
-        File('lib/widgets/shoe_preview_webview.dart').readAsStringSync();
+    final webView = File(
+      'lib/widgets/shoe_preview_webview.dart',
+    ).readAsStringSync();
 
     test('it observes the touch without competing for it', () {
       // Both engines hand the gesture arena to their platform view, so a
@@ -1302,7 +1505,8 @@ void main() {
       expect(
         previewWidget,
         contains('if (_hintVisible && _engineDraws)'),
-        reason: 'the pill is only ever drawn over a box that has something to draw',
+        reason:
+            'the pill is only ever drawn over a box that has something to draw',
       );
 
       // And the pill itself lets the finger through: a tutorial that eats the
@@ -1316,7 +1520,8 @@ void main() {
       expect(
         hint,
         contains('ExcludeSemantics'),
-        reason: 'the header already carries the instruction as text, and the box '
+        reason:
+            'the header already carries the instruction as text, and the box '
             'under the pill is a platform view a screen reader cannot turn',
       );
     });
@@ -1326,13 +1531,15 @@ void main() {
       expect(
         previewWidget,
         contains('Timer(ShoePreview3D.hintAfterIdle'),
-        reason: 'a literal here would be a second number for the widget test to '
+        reason:
+            'a literal here would be a second number for the widget test to '
             'guess at',
       );
       expect(
         between(previewWidget, 'void dispose()', 'super.dispose();'),
         contains('_idleTimer?.cancel();'),
-        reason: 'a pending timer fails every test that mounts the box (and would '
+        reason:
+            'a pending timer fails every test that mounts the box (and would '
             'fire a hand over a box that is gone)',
       );
     });
@@ -1343,7 +1550,10 @@ void main() {
       // turned off for (the header said the same thing): two prompts in one box, in
       // two visual languages — and the package's would cover the WebView engine
       // only, which is how the two engines start looking like two products.
-      expect(codeOf(webView), contains('interactionPrompt: InteractionPrompt.none'));
+      expect(
+        codeOf(webView),
+        contains('interactionPrompt: InteractionPrompt.none'),
+      );
       expect(previewWidget, contains('class ShoePreviewGestureHint'));
     });
   });
@@ -1353,7 +1563,8 @@ void main() {
       expect(
         productScreen,
         contains('product_color_paint(color_name, paint_hex)'),
-        reason: 'paint rides the three colour-carrying selects, like the thumbnails',
+        reason:
+            'paint rides the three colour-carrying selects, like the thumbnails',
       );
       expect(productScreen, contains('_paintRows'));
       expect(productScreen, contains('paintHexForColor'));
@@ -1372,45 +1583,53 @@ void main() {
       expect(
         previewWidget,
         contains('paintHex: widget.paintHex'),
-        reason: 'section and box forward; only the engines decide how to wear it',
+        reason:
+            'section and box forward; only the engines decide how to wear it',
       );
       expect(
         previewScreen,
         contains('paintHex: _activeHex'),
-        reason: 'the screen hands the section the active chip, never a stale open-time hex',
+        reason:
+            'the screen hands the section the active chip, never a stale open-time hex',
       );
       expect(
         previewScreen,
         contains('color_thumbnail_swatch'),
-        reason: 'the viewer chips are the page chips, not a second swatch language',
+        reason:
+            'the viewer chips are the page chips, not a second swatch language',
       );
       expect(
         previewScreen,
         contains('Preview paint'),
-        reason: 'chips draw under the box; no map means no chips, not a dead row',
+        reason:
+            'chips draw under the box; no map means no chips, not a dead row',
       );
       expect(
         previewScreen,
         contains('As-authored'),
-        reason: 'the app wears the admin preview\'s way back to the file itself',
+        reason:
+            'the app wears the admin preview\'s way back to the file itself',
       );
     });
 
-    test('the viewer opens on fresh paints, and chips only painted colours', () {
-      // Confirms and removals land while shopper pages sit open: the viewer
-      // refetches on the way in (a removed paint keeps no chip and no tint),
-      // and the chips filter to painted names like the admin preview.
-      expect(
-        productScreen,
-        contains('_refreshPaintRows'),
-        reason: 'stale page rows must not outvote a fresh removal',
-      );
-      expect(
-        previewScreen,
-        contains('_paintedColors'),
-        reason: 'an unpainted colour gets no chip — a guess is not a look',
-      );
-    });
+    test(
+      'the viewer opens on fresh paints, and chips only painted colours',
+      () {
+        // Confirms and removals land while shopper pages sit open: the viewer
+        // refetches on the way in (a removed paint keeps no chip and no tint),
+        // and the chips filter to painted names like the admin preview.
+        expect(
+          productScreen,
+          contains('_refreshPaintRows'),
+          reason: 'stale page rows must not outvote a fresh removal',
+        );
+        expect(
+          previewScreen,
+          contains('_paintedColors'),
+          reason: 'an unpainted colour gets no chip — a guess is not a look',
+        );
+      },
+    );
 
     test('the colour-extras heal covers paint, not just photos', () {
       // Grid payloads carry variants + photo rows but no paint embed, and the
@@ -1424,13 +1643,15 @@ void main() {
       expect(
         productScreen,
         contains('_colorExtrasAttempted'),
-        reason: 'one bounded select per open — unpainted products pay nothing extra',
+        reason:
+            'one bounded select per open — unpainted products pay nothing extra',
       );
     });
 
     test('the WebView page tints live and restores the authored factors', () {
-      final webView =
-          File('lib/widgets/shoe_preview_webview.dart').readAsStringSync();
+      final webView = File(
+        'lib/widgets/shoe_preview_webview.dart',
+      ).readAsStringSync();
       expect(codeOf(webView), contains('function applyPaint(hex)'));
       expect(
         codeOf(webView),
@@ -1452,7 +1673,8 @@ void main() {
       expect(
         previewChannel,
         contains('setColor'),
-        reason: 'the channel already carries material overrides — no new method',
+        reason:
+            'the channel already carries material overrides — no new method',
       );
     });
   });

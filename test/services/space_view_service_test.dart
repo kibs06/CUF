@@ -1,4 +1,5 @@
 import 'package:app/services/space_view_service.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -43,23 +44,26 @@ void main() {
       expect(launched, isFalse);
     });
 
-    test('hands the bucket public URL to the OS, not the storage path', () async {
-      Uri? seen;
-      final ok = await launchSpaceView(
-        'store-1/p1/abc.glb',
-        launch: (uri) async {
-          seen = uri;
-          return true;
-        },
-        publicUrlFor: (path) => 'https://example.test/public/$path',
-      );
+    test(
+      'hands the bucket public URL to the ARCore intent, not the storage path',
+      () async {
+        Uri? seen;
+        final ok = await launchSpaceView(
+          'store-1/p1/abc.glb',
+          launch: (uri) async {
+            seen = uri;
+            return true;
+          },
+          publicUrlFor: (path) => 'https://example.test/public/$path',
+        );
 
-      expect(ok, isTrue);
-      expect(
-        seen?.queryParameters['file'],
-        'https://example.test/public/store-1/p1/abc.glb',
-      );
-    });
+        expect(ok, isTrue);
+        expect(
+          seen?.queryParameters['file'],
+          'https://example.test/public/store-1/p1/abc.glb',
+        );
+      },
+    );
 
     test('a refused launch answers false rather than throwing', () async {
       final ok = await launchSpaceView(
@@ -76,6 +80,40 @@ void main() {
         'store-1/p1/abc.glb',
         launch: (_) => throw Exception('no handler'),
         publicUrlFor: (_) => 'https://example.test/a.glb',
+      );
+
+      expect(ok, isFalse);
+    });
+  });
+
+  group('SpaceViewChannel', () {
+    test('sends the Scene Viewer URL to the native ARCore intent', () async {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      const channel = MethodChannel(kSpaceViewMethodChannel);
+      final calls = <MethodCall>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            calls.add(call);
+            return true;
+          });
+      addTearDown(() {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, null);
+      });
+
+      final url = Uri.parse(
+        'https://arvr.google.com/scene-viewer/1.0?file=https%3A%2F%2Fexample.test%2Fa.glb&mode=ar_only',
+      );
+      final ok = await const SpaceViewChannel().launch(url);
+
+      expect(ok, isTrue);
+      expect(calls.single.method, 'launchSceneViewer');
+      expect(calls.single.arguments, <String, Object?>{'url': url.toString()});
+    });
+
+    test('a missing native side answers false rather than throwing', () async {
+      final ok = await const SpaceViewChannel().launch(
+        Uri.parse('https://arvr.google.com/scene-viewer/1.0'),
       );
 
       expect(ok, isFalse);

@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -537,6 +539,7 @@ class _ShoePreviewScreenState extends State<ShoePreviewScreen> {
   /// a customer decides; the foot is where they fit. A refused launch is a
   /// sentence, never a throw (see `space_view_service.dart` rule 2).
   Future<void> _openSpaceView() async {
+    if (defaultTargetPlatform != TargetPlatform.android) return;
     final ok = await launchSpaceView(_spaceViewPath);
     if (!mounted || ok) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -752,10 +755,12 @@ class _ShoePreviewScreenState extends State<ShoePreviewScreen> {
                         // Space view first: the portal's door — the same public
                         // file on the customer's floor through Scene Viewer —
                         // kept alongside the foot fit below rather than in
-                        // place of it. Hidden until a bucket path exists, so
-                        // an unsupported phone or a missing file draws no
-                        // button that opens nothing.
-                        if (hasSpaceView(_spaceViewPath))
+                        // place of it. Hidden until a bucket path exists, and
+                        // on iOS, where the native ARCore intent does not
+                        // exist: an unsupported phone draws no button that
+                        // opens nothing.
+                        if (defaultTargetPlatform == TargetPlatform.android &&
+                            hasSpaceView(_spaceViewPath))
                           Padding(
                             padding: const EdgeInsets.only(bottom: 12),
                             child: SizedBox(

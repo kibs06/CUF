@@ -12,34 +12,34 @@
  *
  * Two rules:
  *
- *  1. **Android first.** The `.glb` the workshop already published is all
- *     Scene Viewer / WebXR needs, so `webxr scene-viewer` is always offered.
- *     `quick-look` is appended only when an `ios-src` (`.usdz`) URL exists —
- *     Quick Look cannot read `.glb`, and advertising it without a `.usdz`
- *     shows a button that opens nothing on iPhones.
+ *  1. **Every platform's mode is offered.** The `.glb` the workshop already
+ *     published is all Scene Viewer / WebXR needs. Quick Look is offered too,
+ *     even without an `ios-src`: `<model-viewer>` v4 generates the `.usdz`
+ *     from the `.glb` on demand when `ios-src` is absent. Suppressing
+ *     Quick Look unless a `.usdz` existed hid AR on every iPhone.
  *  2. **Unsupported browsers see nothing new.** Desktops and browsers without
- *     WebXR / Scene Viewer must render exactly the viewer they have today:
- *     the caller hides the space button unless `<model-viewer>` fires
- *     `ar-status: session-started` support (see `Product3DViewer`).
+ *     AR must render exactly the viewer they have today: the caller shows the
+ *     space button only after `canActivateAR` proves a mode is available (see
+ *     `Product3DViewer`).
  */
 
 /** The modes `<model-viewer>` is allowed to use, in preference order. */
-export const AR_MODES_ANDROID = 'webxr scene-viewer'
-export const AR_MODES_ALL = 'webxr scene-viewer quick-look'
+export const AR_MODES = 'webxr scene-viewer quick-look'
 
 /**
- * The `ar-modes` attribute value for a model with (or without) an iOS source.
- * Pure so it can be tested without a browser.
+ * The `ar-modes` attribute value. Kept as a function so call sites do not
+ * hand-write the order, and so the list has one tested definition.
  */
-export function spaceArModes(hasIosSrc) {
-  return hasIosSrc ? AR_MODES_ALL : AR_MODES_ANDROID
+export function spaceArModes() {
+  return AR_MODES
 }
 
 /**
- * Whether the "View in your space" button should be shown, from the latest
- * `ar-status` event detail (`session-started` support) or a `canActivateAR`
- * probe. Unknown / failed states hide the button rather than showing one
- * that opens nothing.
+ * Whether an `ar-status` event proves the session actually started. This is
+ * **not** the availability probe — `ar-status` stays `not-presenting` until a
+ * session begins, even on a phone where AR is ready. `Product3DViewer` uses
+ * `canActivateAR` for availability and this only to keep the entry visible
+ * once a session has started.
  */
 export function shouldOfferSpaceView(status) {
   return status === 'session-started' || status === 'object-placed'

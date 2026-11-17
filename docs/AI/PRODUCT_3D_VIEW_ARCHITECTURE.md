@@ -170,9 +170,16 @@ source, so a drifted string fails here rather than as a blank box),
    (the prefetch is running or failed). A spinner over a box the customer can
    already see is a worse lie than a beat of no box.
 
-…otherwise `shown`. The page adds one fact of its own before drawing the icon — the
-bytes are verified on disk — and logs the decision, which is the first thing to read
-when the icon is missing:
+…otherwise `shown`. The page logs the decision, which is the first thing to read
+when the local model is missing:
+
+⚠️ **The icon is not gated on `modelNotReady` since 2026-11-17.** It draws when
+the page knows the product has a live row (the prefetch's spec or its own
+`product_models` read), even if the bytes are not cached yet; a tap opens
+`ShoePreviewScreen.forProduct`, which resolves the row and downloads the file.
+`resolveShoePreview` remains the local-renderer/recovery-notice rule — requiring
+verified bytes before drawing the *icon* was what hid the only 3D entry while a
+download was in flight or after a failed prefetch.
 
 ```
 adb logcat -d | grep shoe-preview        # [shoe-preview] hidden: featureOff — JBC Crown Leather Sandals

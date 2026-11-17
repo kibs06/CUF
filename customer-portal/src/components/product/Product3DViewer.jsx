@@ -40,9 +40,9 @@ import { useTransitionTiming } from '../motion/transitions'
  *  3. **`interaction-prompt="none"` and `ar` for space view.** The app switches
  *     off the library's own three-second prompt for the same reason (it has a
  *     hand-drawn tutorial instead) — and `ar` is present so the same verified
- *     `.glb` opens in the platform viewer (Scene Viewer / WebXR on Android;
- *     Quick Look only when an `iosSrc` `.usdz` is passed). This is the
- *     reference demo's web half without the foot lock: the shoe is placed on
+ *     `.glb` opens in the platform viewer (Scene Viewer / WebXR on Android,
+ *     Quick Look on iPhone with the `.usdz` generated from the `.glb`). This
+ *     is the reference demo's web half without the foot lock: the shoe is placed on
  *     the floor, not stuck to the foot — foot try-on stays in the app. The
  *     opening **orbit is the app's opening pose** (its
  *     `INITIAL_YAW_DEG = 60`, `INITIAL_PITCH_DEG = 18`): the library's own default
@@ -161,32 +161,55 @@ export default function Product3DViewer({ open, url, name, onClose, iosSrc = nul
   // Shared with every other dialog — see `useScrollLock`.
   useScrollLock(open)
 
-  // `<model-viewer>` reports AR support through `ar-status` and the
-  // `canActivateAR` probe once the element is upgraded. Desktops and browsers
-  // without WebXR / Scene Viewer keep exactly the viewer they have today: the
-  // space button stays hidden rather than opening nothing.
+  // `<model-viewer>` chooses its AR mode asynchronously: it probes WebXR and
+  // then falls through Scene Viewer / Quick Look, so `canActivateAR` is false
+  // for a beat after the element mounts. Reading it once here was the bug — the
+  // footer's space button never appeared on a phone whose AR mode landed a
+  // moment later. Re-check on `load` and for a short bounded window while the
+  // mode settles; `ar-status` is a session signal, not an availability one.
   useEffect(() => {
-    if (!ready) return undefined
+    if (!ready || !open) return undefined
     const el = viewerRef.current
     if (!el) return undefined
 
-    const onArStatus = (event) => {
-      if (shouldOfferSpaceView(event?.detail?.status)) setSpaceAr(true)
-    }
-    el.addEventListener('ar-status', onArStatus)
-    // The probe is async on some builds — a sync `true` still counts.
-    try {
-      const probe = el.canActivateAR
-      if (probe === true) setSpaceAr(true)
-      else if (probe?.then) probe.then((ok) => ok && setSpaceAr(true)).catch(() => {})
-    } catch {
-      // No probe on this build — the `ar-status` event remains the signal.
+    let cancelled = false
+    let retry
+    let attempts = 0
+
+    const syncSpaceAr = () => {
+      if (cancelled) return
+      if (el.canActivateAR) {
+        setSpaceAr(true)
+        return
+      }
+      // Eight seconds is comfortably longer than the WebXR probe, while a
+      // desktop still stops polling instead of running a timer for the visit.
+      if (attempts >= 32) return
+      attempts += 1
+      retry = window.setTimeout(syncSpaceAr, 250)
     }
 
+    const onLoad = () => {
+      attempts = 0
+      syncSpaceAr()
+    }
+    const onArStatus = (event) => {
+      const status = event?.detail?.status
+      if (status === 'failed') setSpaceAr(false)
+      else if (shouldOfferSpaceView(status)) setSpaceAr(true)
+    }
+
+    el.addEventListener('load', onLoad)
+    el.addEventListener('ar-status', onArStatus)
+    syncSpaceAr()
+
     return () => {
+      cancelled = true
+      window.clearTimeout(retry)
+      el.removeEventListener('load', onLoad)
       el.removeEventListener('ar-status', onArStatus)
     }
-  }, [ready, url])
+  }, [ready, open, url])
 
   if (!open || !url) return null
 
@@ -239,7 +262,7 @@ export default function Product3DViewer({ open, url, name, onClose, iosSrc = nul
                   exposure={exposure}
                   shadow-intensity={shadow}
                   ar=""
-                  ar-modes={spaceArModes(iosSrc)}
+                  ar-modes={spaceArModes()}
                   ar-placement="floor"
                   ar-scale="auto"
                   xr-environment=""
@@ -376,8 +399,8 @@ export default function Product3DViewer({ open, url, name, onClose, iosSrc = nul
             {/*
               The box's foot: space view first (same `.glb`, platform viewer),
               foot try-on second (the app, where the foot tracker lives). Space
-              view is rendered only after `<model-viewer>` proves AR support,
-              so desktops see exactly the viewer they had before.
+              view is rendered only after `canActivateAR` proves a mode is
+              available, so desktops see exactly the viewer they had before.
             */}
             <div className="flex flex-col gap-3 border-t border-hairline-soft px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
               <p className="text-xs leading-relaxed text-muted">

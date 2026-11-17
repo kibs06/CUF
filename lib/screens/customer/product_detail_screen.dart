@@ -220,7 +220,10 @@ class _ReviewsSectionState extends State<_ReviewsSection> {
           children: [
             Text(
               'Reviews',
-              style: AppConstants.bodyStyle(fontWeight: FontWeight.bold, fontSize: 15),
+              style: AppConstants.bodyStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 15,
+              ),
             ),
             const Spacer(),
             if (provider.canReview)
@@ -330,9 +333,7 @@ class _ReviewsSectionState extends State<_ReviewsSection> {
                 ),
               ),
             ],
-            if (_expanded &&
-                _starFilter == null &&
-                _hiddenCount(provider) == 0)
+            if (_expanded && _starFilter == null && _hiddenCount(provider) == 0)
               Center(
                 child: TextButton.icon(
                   onPressed: () => setState(() => _expanded = false),
@@ -383,15 +384,17 @@ class _ReviewsSectionState extends State<_ReviewsSection> {
     final breakdown = provider.breakdown;
     final total = provider.reviewCount;
 
-    Widget chip({required String label, required bool selected, required VoidCallback onTap}) {
+    Widget chip({
+      required String label,
+      required bool selected,
+      required VoidCallback onTap,
+    }) {
       return GestureDetector(
         onTap: onTap,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
           decoration: BoxDecoration(
-            color: selected
-                ? AppConstants.primary
-                : AppConstants.surfaceLight,
+            color: selected ? AppConstants.primary : AppConstants.surfaceLight,
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
               color: selected
@@ -470,10 +473,7 @@ class _ReviewsSectionState extends State<_ReviewsSection> {
                 ),
               ),
               const SizedBox(height: 2),
-              SoleStarRating(
-                rating: provider.avgRating,
-                size: 16,
-              ),
+              SoleStarRating(rating: provider.avgRating, size: 16),
               const SizedBox(height: 2),
               Text(
                 '$total ${total == 1 ? "review" : "reviews"}',
@@ -504,15 +504,23 @@ class _ReviewsSectionState extends State<_ReviewsSection> {
                         ),
                       ),
                       const SizedBox(width: 4),
-                      Icon(Icons.star_rounded, size: 12, color: AppConstants.accent),
+                      Icon(
+                        Icons.star_rounded,
+                        size: 12,
+                        color: AppConstants.accent,
+                      ),
                       const SizedBox(width: 6),
                       Expanded(
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(2),
                           child: LinearProgressIndicator(
                             value: fraction,
-                            backgroundColor: AppConstants.borderGray.withValues(alpha: 0.3),
-                            valueColor: const AlwaysStoppedAnimation(AppConstants.accent),
+                            backgroundColor: AppConstants.borderGray.withValues(
+                              alpha: 0.3,
+                            ),
+                            valueColor: const AlwaysStoppedAnimation(
+                              AppConstants.accent,
+                            ),
                             minHeight: 6,
                           ),
                         ),
@@ -524,7 +532,9 @@ class _ReviewsSectionState extends State<_ReviewsSection> {
                           '$count',
                           style: AppConstants.monoStyle(
                             fontSize: 10,
-                            color: AppConstants.secondary.withValues(alpha: 0.5),
+                            color: AppConstants.secondary.withValues(
+                              alpha: 0.5,
+                            ),
                           ),
                           textAlign: TextAlign.right,
                         ),
@@ -579,7 +589,9 @@ class _MoreFromStoreSectionState extends State<_MoreFromStoreSection> {
       return;
     }
     try {
-      final all = await SupabaseService.instance.fetchProducts(storeId: widget.storeId);
+      final all = await SupabaseService.instance.fetchProducts(
+        storeId: widget.storeId,
+      );
       // Exclude the current product
       final others = all
           .where((p) => p['id']?.toString() != widget.currentProductId)
@@ -604,14 +616,19 @@ class _MoreFromStoreSectionState extends State<_MoreFromStoreSection> {
           child: SizedBox(
             width: 20,
             height: 20,
-            child: CircularProgressIndicator(strokeWidth: 2, color: AppConstants.primary),
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: AppConstants.primary,
+            ),
           ),
         ),
       );
     }
     if (_products.isEmpty) return const SizedBox.shrink();
 
-    final displayName = widget.storeName.isNotEmpty ? widget.storeName : 'this store';
+    final displayName = widget.storeName.isNotEmpty
+        ? widget.storeName
+        : 'this store';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -625,7 +642,11 @@ class _MoreFromStoreSectionState extends State<_MoreFromStoreSection> {
                 color: AppConstants.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Icon(Icons.storefront_outlined, size: 16, color: AppConstants.primary),
+              child: Icon(
+                Icons.storefront_outlined,
+                size: 16,
+                color: AppConstants.primary,
+              ),
             ),
             const SizedBox(width: 10),
             Flexible(
@@ -680,8 +701,11 @@ class _StoreProductCard extends StatelessWidget {
     String? imageUrl;
     if (images.isNotEmpty && images.first is Map) {
       final sorted = List<Map<String, dynamic>>.from(images);
-      sorted.sort((a, b) =>
-          (a['display_order'] as int? ?? 0).compareTo(b['display_order'] as int? ?? 0));
+      sorted.sort(
+        (a, b) => (a['display_order'] as int? ?? 0).compareTo(
+          b['display_order'] as int? ?? 0,
+        ),
+      );
       imageUrl = sorted.first['image_url']?.toString();
     } else {
       final flat = product['images'] as List? ?? [];
@@ -719,12 +743,20 @@ class _StoreProductCard extends StatelessWidget {
                         ),
                         errorWidget: (_, _, _) => Container(
                           color: AppConstants.borderGray.withValues(alpha: 0.3),
-                          child: Icon(Icons.image, color: AppConstants.borderGray, size: 20),
+                          child: Icon(
+                            Icons.image,
+                            color: AppConstants.borderGray,
+                            size: 20,
+                          ),
                         ),
                       )
                     : Container(
                         color: AppConstants.borderGray.withValues(alpha: 0.3),
-                        child: Icon(Icons.image_outlined, color: AppConstants.borderGray, size: 20),
+                        child: Icon(
+                          Icons.image_outlined,
+                          color: AppConstants.borderGray,
+                          size: 20,
+                        ),
                       ),
               ),
             ),
@@ -736,7 +768,10 @@ class _StoreProductCard extends StatelessWidget {
                 product['name'] ?? '',
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: AppConstants.bodyStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                style: AppConstants.bodyStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
             const SizedBox(height: 2),
@@ -875,8 +910,8 @@ class _ProductDetailViewState extends State<_ProductDetailView>
   /// not keep the gallery pointed at photos nothing can resolve.
   String? get _selectedColourOrNull =>
       _selectedColor != null && _variantColorNames.contains(_selectedColor)
-          ? _selectedColor
-          : null;
+      ? _selectedColor
+      : null;
 
   /// The `product_color_paint` rows riding on this page's product payload
   /// (`{color_name, paint_hex}` maps), or empty when the payload predates
@@ -914,7 +949,8 @@ class _ProductDetailViewState extends State<_ProductDetailView>
   /// `display_order`, mirroring the gallery sort in [_sortedImageUrls].
   String? _colorThumbnailUrl(String colorName) {
     final want = colorName.trim();
-    final colorImagesRaw = widget.product['product_color_images'] as List? ?? [];
+    final colorImagesRaw =
+        widget.product['product_color_images'] as List? ?? [];
     final matches = <Map<String, dynamic>>[];
     for (final img in colorImagesRaw) {
       if (img is! Map) continue;
@@ -924,8 +960,11 @@ class _ProductDetailViewState extends State<_ProductDetailView>
       matches.add(Map<String, dynamic>.from(img));
     }
     if (matches.isEmpty) return null;
-    matches.sort((a, b) =>
-        (a['display_order'] as int? ?? 0).compareTo(b['display_order'] as int? ?? 0));
+    matches.sort(
+      (a, b) => (a['display_order'] as int? ?? 0).compareTo(
+        b['display_order'] as int? ?? 0,
+      ),
+    );
     return matches.first['url']?.toString();
   }
 
@@ -960,10 +999,14 @@ class _ProductDetailViewState extends State<_ProductDetailView>
     try {
       final productId = widget.product['id']?.toString() ?? '';
       if (productId.isEmpty) return;
-      final data = await Supabase.instance.client.from('products').select(
-        'product_color_images(url, color_name, display_order),'
-        'product_color_paint(color_name, paint_hex)',
-      ).eq('id', productId).single();
+      final data = await Supabase.instance.client
+          .from('products')
+          .select(
+            'product_color_images(url, color_name, display_order),'
+            'product_color_paint(color_name, paint_hex)',
+          )
+          .eq('id', productId)
+          .single();
       if (!mounted) return;
       final fetched = data['product_color_images'];
       final paint = data['product_color_paint'];
@@ -1033,8 +1076,9 @@ class _ProductDetailViewState extends State<_ProductDetailView>
 
     final variants = widget.product['product_variants'] as List<dynamic>? ?? [];
     for (final row in variants) {
-      final color =
-          colors.isEmpty ? '' : (row['color']?.toString().trim() ?? '');
+      final color = colors.isEmpty
+          ? ''
+          : (row['color']?.toString().trim() ?? '');
       if (colors.isNotEmpty && (color.isEmpty || !colors.contains(color))) {
         continue;
       }
@@ -1059,10 +1103,12 @@ class _ProductDetailViewState extends State<_ProductDetailView>
     final result = <String, Map<String, int>>{};
     for (final entry in canonical.entries) {
       final color = entry.key;
-      final byRaw = <String, int>{for (final size in entry.value.entries)
-        size.value: inventoryStock[color]?.containsKey(size.key) == true
-            ? inventoryStock[color]![size.key]!
-            : (variantStock[color]?[size.key] ?? 0)};
+      final byRaw = <String, int>{
+        for (final size in entry.value.entries)
+          size.value: inventoryStock[color]?.containsKey(size.key) == true
+              ? inventoryStock[color]![size.key]!
+              : (variantStock[color]?[size.key] ?? 0),
+      };
       // Sizes sorted numerically inside each colour, like the size picker.
       final sorted = byRaw.entries.toList()
         ..sort((a, b) => compareSizes(a.key, b.key));
@@ -1102,7 +1148,8 @@ class _ProductDetailViewState extends State<_ProductDetailView>
       final key = sizeKey(raw);
       if (key.isEmpty) continue;
       canonical[key] ??= raw;
-      variantStock[key] = (variantStock[key] ?? 0) + (row['stock'] as int? ?? 0);
+      variantStock[key] =
+          (variantStock[key] ?? 0) + (row['stock'] as int? ?? 0);
     }
 
     // Inventory is not colour-aware, so it only joins a colourless product.
@@ -1209,10 +1256,12 @@ class _ProductDetailViewState extends State<_ProductDetailView>
   Future<void> _resolveSellerVerification() async {
     final product = widget.product;
     final stores = product['stores'];
-    final embeddedProfile =
-        stores is Map && stores['profiles'] is Map ? stores['profiles'] : null;
+    final embeddedProfile = stores is Map && stores['profiles'] is Map
+        ? stores['profiles']
+        : null;
     if (product.containsKey('seller_verified') || embeddedProfile != null) {
-      final verified = product['seller_verified'] == true ||
+      final verified =
+          product['seller_verified'] == true ||
           (embeddedProfile?['seller_verified_at'] != null);
       if (!mounted) {
         _sellerVerified = verified;
@@ -1226,8 +1275,9 @@ class _ProductDetailViewState extends State<_ProductDetailView>
     // client is not ready, means "not verified" — not an unhandled future.
     bool verified = false;
     try {
-      verified = await StoreService.instance
-          .isStoreVerified(product['store_id']?.toString());
+      verified = await StoreService.instance.isStoreVerified(
+        product['store_id']?.toString(),
+      );
     } catch (_) {
       verified = false;
     }
@@ -1273,7 +1323,9 @@ class _ProductDetailViewState extends State<_ProductDetailView>
     if (productId.isEmpty) return;
 
     final size = _selectedSize;
-    if (size == null) return; // _fetchInventory re-enters here once one is picked
+    if (size == null) {
+      return; // _fetchInventory re-enters here once one is picked
+    }
 
     final variants = widget.product['product_variants'] as List<dynamic>? ?? [];
     final variantId = resolveVariant(
@@ -1282,7 +1334,8 @@ class _ProductDetailViewState extends State<_ProductDetailView>
       color: _effectiveColor,
     ).variantId;
 
-    final prefetch = _shoePrefetch ??= widget.tryOnPrefetch ??
+    final prefetch = _shoePrefetch ??=
+        widget.tryOnPrefetch ??
         TryOnPrefetch(
           enabled: AppConstants.tryOnPrefetchEnabled,
           // V4.9's reachability half, and the reason the device session can be
@@ -1403,13 +1456,12 @@ class _ProductDetailViewState extends State<_ProductDetailView>
   /// never does HTTP). A box needs both — a row with no bytes draws nothing, and
   /// a box that appears once the download finishes is a beat of no box, which is
   /// the honest answer rather than a spinner over an empty rectangle.
-  ShoePreviewDecision get _shoePreview =>
-      resolveShoePreview(
-        enabled: AppConstants.shoePreviewEnabled,
-        isAndroid: defaultTargetPlatform == TargetPlatform.android,
-        hasModel: _tryOnPrefetchResult?.spec != null,
-        hasLocalModel: _tryOnPrefetchResult?.path != null,
-      );
+  ShoePreviewDecision get _shoePreview => resolveShoePreview(
+    enabled: AppConstants.shoePreviewEnabled,
+    isAndroid: defaultTargetPlatform == TargetPlatform.android,
+    hasModel: _tryOnPrefetchResult?.spec != null,
+    hasLocalModel: _tryOnPrefetchResult?.path != null,
+  );
 
   /// The whole-point product of this section: the mesh to draw, in the same
   /// payload the AR session sends.
@@ -1423,12 +1475,24 @@ class _ProductDetailViewState extends State<_ProductDetailView>
 
   /// Whether the hero shows the 3D icon — the page's only way into the viewer.
   ///
-  /// Two facts, and both are needed: `shown` is the build switch, the platform
-  /// and the catalogue's honesty about having a model at all, and the model is
-  /// **these bytes, verified on disk** (the native side is handed a local path
-  /// and never does HTTP). An icon on a product with no model would open a
-  /// viewer whose entire content is an apology.
-  bool get _showPreviewIcon => _shoePreview.shown && _shoePreviewModel != null;
+  /// The icon answers a **catalogue** question: does this product have a live
+  /// model? It used to require the prefetch's verified local file as well, so a
+  /// slow, failed, or not-yet-started download erased the 3D entry from the
+  /// gallery even on a product whose model row was live. That is the regression
+  /// this rebuild closes. The icon appears as soon as either the prefetch has a
+  /// spec or the page's own catalogue read finds a live row; the viewer resolves
+  /// the bytes itself when the prefetch has not landed yet
+  /// ([_openShoePreview]'s `forProduct` door).
+  ///
+  /// A product with no live model still gets no icon, so the viewer is never an
+  /// apology with nothing to show.
+  bool get _hasLivePreviewModel =>
+      _tryOnPrefetchResult?.spec != null || _productHasLiveModelRow == true;
+
+  bool get _showPreviewIcon =>
+      AppConstants.shoePreviewEnabled &&
+      defaultTargetPlatform == TargetPlatform.android &&
+      _hasLivePreviewModel;
 
   /// Open the full-screen 3D viewer. No pause flag is needed here the way the
   /// old inline box needed one: the box belongs to the pushed route, so the
@@ -1465,29 +1529,52 @@ class _ProductDetailViewState extends State<_ProductDetailView>
   }
 
   Future<void> _openShoePreview() async {
+    final productId = widget.product['id']?.toString() ?? '';
+    if (productId.isEmpty) return;
+
     final model = _shoePreviewModel;
-    if (model == null) return;
     await _refreshPaintRows();
     if (!mounted) return;
-    await Navigator.of(context).push(
-      MaterialPageRoute(          builder: (context) => ShoePreviewScreen(
-            model: model,
-            product: widget.product,
-            modelAvailable: _tryOnModelAvailable,
-            storagePath: _tryOnPrefetchResult?.spec?.storagePath,
-            // The tapped colour's paint, or null for as-authored — read off
-            // the rows refreshed above, so the viewer agrees with the
-            // catalogue, not with this page's age.
-            paintHex: _activePaintHex,
-            // The viewer's own chips: the map, the page's colour order, and
-            // the active colour, so the opened viewer agrees with this page
-            // and the shopper can preview every colour without leaving it.
-            paints: _paintsMap,
-            paintColors: _variantColorNames,
-            initialPaintColor: _effectiveColor,
-          ),
-      ),
-    );
+
+    // The prefetch is the fast door: its verified bytes are already on disk, so
+    // the box is up on the first frame. When it has not landed — or failed — the
+    // icon still opened, and this door resolves the same row and downloads the
+    // file before drawing it. That is the difference between "no 3D model" and
+    // "the cache was not warm yet".
+    final Widget viewer;
+    if (model != null) {
+      viewer = ShoePreviewScreen(
+        model: model,
+        product: widget.product,
+        modelAvailable: _tryOnModelAvailable,
+        storagePath: _tryOnPrefetchResult?.spec?.storagePath,
+        // The tapped colour's paint, or null for as-authored — read off
+        // the rows refreshed above, so the viewer agrees with the
+        // catalogue, not with this page's age.
+        paintHex: _activePaintHex,
+        // The viewer's own chips: the map, the page's colour order, and
+        // the active colour, so the opened viewer agrees with this page
+        // and the shopper can preview every colour without leaving it.
+        paints: _paintsMap,
+        paintColors: _variantColorNames,
+        initialPaintColor: _effectiveColor,
+      );
+    } else {
+      viewer = ShoePreviewScreen.forProduct(
+        productId: productId,
+        product: widget.product,
+        // The customer's door, unlike the seller's: the look is followed by a
+        // try-on. `showTryOn: false` is the viewer's own seller default.
+        showTryOn: true,
+        prefetch: _shoePrefetch,
+        paintHex: _activePaintHex,
+        paints: _paintsMap,
+        paintColors: _variantColorNames,
+        initialPaintColor: _effectiveColor,
+      );
+    }
+
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => viewer));
   }
 
   /// The reason last written to the log, so a rebuild storm does not become a log
@@ -1528,12 +1615,14 @@ class _ProductDetailViewState extends State<_ProductDetailView>
     final decision = _shoePreview;
     _logPreviewReason(decision.reason);
     if (!decision.shown || model == null) {
-      // Words for every hidden state on a product that HAS a live model — the      // v1.0.35 rule was too tight twice over: a resolve-phase failure computed      // reason `noModel` and was excluded by the no-model-should-be-quiet rule;      // a prefetch that never completed (result null) was silent because      // "modelNotReady" was presumed transient. Both hid a fault the customer      // could have recovered from with one tap.
+      // Words for every hidden state on a product that HAS a live model — the // v1.0.35 rule was too tight twice over: a resolve-phase failure computed // reason `noModel` and was excluded by the no-model-should-be-quiet rule; // a prefetch that never completed (result null) was silent because // "modelNotReady" was presumed transient. Both hid a fault the customer // could have recovered from with one tap.
       //
-      // The one state that must stay silent is a product with genuinely no      // model AND no prefetch failure — the catalogue being honest. Everything      // else on such a product is a fault with words: a resolve or download      // failure gets Retry immediately, and a still-null result (prefetch never      // ran — no size yet, or it is hung) gets Retry after the grace period.
+      // The one state that must stay silent is a product with genuinely no // model AND no prefetch failure — the catalogue being honest. Everything // else on such a product is a fault with words: a resolve or download // failure gets Retry immediately, and a still-null result (prefetch never // ran — no size yet, or it is hung) gets Retry after the grace period.
       final hasLiveModel = _tryOnPrefetchResult?.spec != null;
-      final failed = _tryOnPrefetchResult?.outcome == TryOnPrefetchOutcome.failed;
-      final stuck = AppConstants.shoePreviewEnabled &&
+      final failed =
+          _tryOnPrefetchResult?.outcome == TryOnPrefetchOutcome.failed;
+      final stuck =
+          AppConstants.shoePreviewEnabled &&
           !hasLiveModel &&
           !failed &&
           _previewWaitedTooLong &&
@@ -1567,7 +1656,9 @@ class _ProductDetailViewState extends State<_ProductDetailView>
       final data = await Supabase.instance.client
           .from('products')
           .select(
-            'inventory(*), product_variants(*), product_color_images(url, color_name, display_order),' 'product_color_paint(color_name, paint_hex)')
+            'inventory(*), product_variants(*), product_color_images(url, color_name, display_order),'
+            'product_color_paint(color_name, paint_hex)',
+          )
           .eq('id', productId)
           .single();
 
@@ -1612,7 +1703,9 @@ class _ProductDetailViewState extends State<_ProductDetailView>
       final data = await Supabase.instance.client
           .from('products')
           .select(
-            'product_variants(*), product_color_images(url, color_name, display_order),' 'product_color_paint(color_name, paint_hex)')
+            'product_variants(*), product_color_images(url, color_name, display_order),'
+            'product_color_paint(color_name, paint_hex)',
+          )
           .eq('id', productId)
           .single();
       if (!mounted) return;
@@ -1699,8 +1792,6 @@ class _ProductDetailViewState extends State<_ProductDetailView>
       imageUrl: imageUrl,
     );
 
-
-
     // Revert button to normal "Add to Cart" label after the box-pack
     // animation finishes (~1800 ms) so rapid taps can't stack flights.
     Future.delayed(const Duration(milliseconds: 1900), () {
@@ -1740,7 +1831,8 @@ class _ProductDetailViewState extends State<_ProductDetailView>
     final double price = effectivePrice(widget.product);
     final directItems = [
       {
-        'id': 'buynow-${widget.product['id']}-${_selectedSize!}-${_effectiveColor ?? 'none'}',
+        'id':
+            'buynow-${widget.product['id']}-${_selectedSize!}-${_effectiveColor ?? 'none'}',
         'server_id': null,
         'product_id': widget.product['id'].toString(),
         'product_name': widget.product['name'],
@@ -1751,7 +1843,8 @@ class _ProductDetailViewState extends State<_ProductDetailView>
         'color': _effectiveColor ?? 'none',
         'quantity': _quantity,
         'store_id': widget.product['store_id']?.toString() ?? 'unknown',
-        'store_name': widget.product['store_name']?.toString() ?? 'Unknown Store',
+        'store_name':
+            widget.product['store_name']?.toString() ?? 'Unknown Store',
         'variant_id': variantId,
         'customizations': null,
       },
@@ -1776,18 +1869,14 @@ class _ProductDetailViewState extends State<_ProductDetailView>
     final price = effectivePrice(widget.product);
     final priceStr = '₱${price.toStringAsFixed(2)}';
     final storeName = widget.product['store_name'] ?? 'CUFMAI';
-    final shareUrl =
-        AppConstants.productShareUrl(widget.product['id'].toString());
+    final shareUrl = AppConstants.productShareUrl(
+      widget.product['id'].toString(),
+    );
 
     final text = 'Check out $name — only $priceStr at $storeName!\n$shareUrl';
 
     try {
-      await SharePlus.instance.share(
-        ShareParams(
-          text: text,
-          subject: name,
-        ),
-      );
+      await SharePlus.instance.share(ShareParams(text: text, subject: name));
     } catch (e) {
       debugPrint('[Share] Failed to share product: $e');
     }
@@ -1815,8 +1904,7 @@ class _ProductDetailViewState extends State<_ProductDetailView>
   /// [_effectiveColor], which falls back to the first colour name and is what
   /// made the page open on a colour it had chosen for itself.
   /// Store badge on the gallery: the store selling this product.
-  String get _storeIdForBadge =>
-      widget.product['store_id']?.toString() ?? '';
+  String get _storeIdForBadge => widget.product['store_id']?.toString() ?? '';
 
   String get _storeNameForBadge {
     final direct = widget.product['store_name']?.toString().trim() ?? '';
@@ -1831,16 +1919,24 @@ class _ProductDetailViewState extends State<_ProductDetailView>
     // A colour the shopper actually tapped, and only that, swaps the gallery.
     final color = _selectedColourOrNull;
     if (color != null) {
-      final colorImagesRaw = widget.product['product_color_images'] as List? ?? [];
+      final colorImagesRaw =
+          widget.product['product_color_images'] as List? ?? [];
       final colorImages = colorImagesRaw
-          .where((img) =>
-              img is Map &&
-              (img['color_name']?.toString() ?? '').trim() == color.trim())
+          .where(
+            (img) =>
+                img is Map &&
+                (img['color_name']?.toString() ?? '').trim() == color.trim(),
+          )
           .toList();
       if (colorImages.isNotEmpty) {
-        final images = List<Map<String, dynamic>>.from(colorImages.map((e) => Map<String, dynamic>.from(e as Map)));
-        images.sort((a, b) =>
-            (a['display_order'] as int? ?? 0).compareTo(b['display_order'] as int? ?? 0));
+        final images = List<Map<String, dynamic>>.from(
+          colorImages.map((e) => Map<String, dynamic>.from(e as Map)),
+        );
+        images.sort(
+          (a, b) => (a['display_order'] as int? ?? 0).compareTo(
+            b['display_order'] as int? ?? 0,
+          ),
+        );
         return images.map((e) => e['url'].toString()).toList();
       }
     }
@@ -1849,8 +1945,11 @@ class _ProductDetailViewState extends State<_ProductDetailView>
     final raw = widget.product['product_images'] as List? ?? [];
     if (raw.isNotEmpty && raw.first is Map) {
       final images = List<Map<String, dynamic>>.from(raw);
-      images.sort((a, b) =>
-          (a['display_order'] as int? ?? 0).compareTo(b['display_order'] as int? ?? 0));
+      images.sort(
+        (a, b) => (a['display_order'] as int? ?? 0).compareTo(
+          b['display_order'] as int? ?? 0,
+        ),
+      );
       return images.map((e) => e['image_url'].toString()).toList();
     }
 
@@ -1885,9 +1984,8 @@ class _ProductDetailViewState extends State<_ProductDetailView>
               child: CachedNetworkImage(
                 imageUrl: imageUrl,
                 fit: BoxFit.contain,
-                placeholder: (context, url) => const CircularProgressIndicator(
-                  color: Colors.white,
-                ),
+                placeholder: (context, url) =>
+                    const CircularProgressIndicator(color: Colors.white),
                 errorWidget: (context, url, error) => const Icon(
                   Icons.broken_image,
                   color: Colors.white54,
@@ -1903,8 +2001,9 @@ class _ProductDetailViewState extends State<_ProductDetailView>
 
   Widget _buildImageCarousel(DateTime now) {
     final imageUrls = _sortedImageUrls;
-    final DateTime? heroEnd =
-        DateTime.tryParse(widget.product['sale_ends_at']?.toString() ?? '');
+    final DateTime? heroEnd = DateTime.tryParse(
+      widget.product['sale_ends_at']?.toString() ?? '',
+    );
 
     if (imageUrls.isEmpty) {
       return KeyedSubtree(
@@ -1916,217 +2015,221 @@ class _ProductDetailViewState extends State<_ProductDetailView>
     return KeyedSubtree(
       key: _productImageKey,
       child: Stack(
-      // The hanging tag pokes ~7px past the left edge — don't clip it.
-      clipBehavior: Clip.none,
-      children: [
-        // Main swipeable image area — fills the whole hero edge-to-edge.
-        // (Previously wrapped in AspectRatio(1.0), which couldn't fill the
-        // flexible space when the hero height (380) didn't match the screen
-        // width — the SliverAppBar's brown background showed through as a
-        // gap on the right of wider phones.) Images use BoxFit.cover, so
-        // they always cover the full area.
-        SizedBox.expand(
-          child: PageView.builder(
-            controller: _imagePageController,
-            itemCount: imageUrls.length,
-            onPageChanged: (index) {
-              setState(() => _currentImageIndex = index);
-            },
-            itemBuilder: (context, index) {
-              final url = imageUrls[index];
-              return GestureDetector(
-                onTap: () => _openFullScreenViewer(url),
-                child: CachedNetworkImage(
-                  imageUrl: url,
-                  fit: BoxFit.cover,
-                  placeholder: (context, url) => _buildShimmerPlaceholder(),
-                  errorWidget: (context, url, error) => _buildImagePlaceholder(),
-                ),
-              );
-            },
-          ),
-        ),
-
-        // Image counter badge — top right
-        if (imageUrls.length > 1)
-          Positioned(
-            top: 12,
-            right: 12,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.55),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                '${_currentImageIndex + 1} / ${imageUrls.length}',
-                style: AppConstants.monoStyle().copyWith(
-                  color: Colors.white,
-                  fontSize: 12,
-                ),
-              ),
-            ),
-          ),
-
-        // Hanging sale tag — the same per-user/per-product object shown on
-        // the catalog cards: tap to reveal the discount, stays revealed
-        // everywhere for this product. Hangs off the left edge, below the
-        // back button, away from the image counter (top-right).
-        if (isOnSale(widget.product, now: now))
-          Positioned(
-            top: 52,
-            left: -7,
-            child: HangingSaleTag(
-              productId: widget.product['id']?.toString() ?? '',
-              salePercent: salePercent(widget.product, now: now),
-            ),
-          ),
-
-        // Sale countdown — the same full-width yellow band as the catalog
-        // cards, pinned edge-to-edge across the hero's bottom (no side gaps).
-        // Only for sales with an end date; open-ended sales (NULL
-        // sale_ends_at) show no countdown at all.
-        if (isOnSale(widget.product, now: now) && heroEnd != null)
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: SaleCountdownOverlay(saleEndsAt: heroEnd),
-          ),
-
-        // Dot indicators — bottom center, raised above the countdown band.
-        if (imageUrls.length > 1)
-          Positioned(
-            bottom: 34,
-            left: 0,
-            right: 0,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(imageUrls.length, (index) {
-                final isActive = index == _currentImageIndex;
-                return AnimatedContainer(
-                  duration: const Duration(milliseconds: 250),
-                  curve: Curves.easeInOut,
-                  margin: const EdgeInsets.symmetric(horizontal: 3),
-                  width: isActive ? 20 : 7,
-                  height: 7,
-                  decoration: BoxDecoration(
-                    color: isActive
-                        ? AppConstants.primary
-                        : AppConstants.borderGray,
-                    borderRadius: BorderRadius.circular(4),
+        // The hanging tag pokes ~7px past the left edge — don't clip it.
+        clipBehavior: Clip.none,
+        children: [
+          // Main swipeable image area — fills the whole hero edge-to-edge.
+          // (Previously wrapped in AspectRatio(1.0), which couldn't fill the
+          // flexible space when the hero height (380) didn't match the screen
+          // width — the SliverAppBar's brown background showed through as a
+          // gap on the right of wider phones.) Images use BoxFit.cover, so
+          // they always cover the full area.
+          SizedBox.expand(
+            child: PageView.builder(
+              controller: _imagePageController,
+              itemCount: imageUrls.length,
+              onPageChanged: (index) {
+                setState(() => _currentImageIndex = index);
+              },
+              itemBuilder: (context, index) {
+                final url = imageUrls[index];
+                return GestureDetector(
+                  onTap: () => _openFullScreenViewer(url),
+                  child: CachedNetworkImage(
+                    imageUrl: url,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => _buildShimmerPlaceholder(),
+                    errorWidget: (context, url, error) =>
+                        _buildImagePlaceholder(),
                   ),
                 );
-              }),
+              },
             ),
           ),
 
-        // The 3D icon — the page's whole entry into the 3D viewer since the
-        // pinned "Try On in AR" pill came off it (2026-10-01). It rides on the
-        // photograph, above the dot indicators and the sale band, and only on a
-        // product whose model is verified on disk: a product with nothing to
-        // turn shows no icon rather than a viewer that can only apologise
-        // (`_showPreviewIcon`). A tap is a *look*, and the camera behind it stays
-        // one tap deeper — the AR pill lives inside the viewer's section.
-        if (_showPreviewIcon)
-          Positioned(
-            right: 12,
-            bottom: 50,
-            child: Sole3DIconButton(onPressed: _openShoePreview),
-          ),
-
-        // Verified Seller pill — one store row with the store button beside
-        // it (that button is 44px wide at left:12, so this starts at 64).
-        // Shown only for a store whose business requirements an admin has
-        // approved; a product with no store id never reaches here true.
-        if (_sellerVerified)
-          Positioned(
-            left: 64,
-            bottom: 50,
-            child: Container(
-              key: const Key('product-verified-seller-badge'),
-              height: 44,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: AppConstants.success,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.verified_rounded,
-                    size: 16,
+          // Image counter badge — top right
+          if (imageUrls.length > 1)
+            Positioned(
+              top: 12,
+              right: 12,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.55),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '${_currentImageIndex + 1} / ${imageUrls.length}',
+                  style: AppConstants.monoStyle().copyWith(
                     color: Colors.white,
+                    fontSize: 12,
                   ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Verified Seller',
-                    style: AppConstants.bodyStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
-          ),
 
-        // Store button — bottom-left of the gallery, styled exactly like
-        // the 3D-view button on the right (dark rounded square, white
-        // glyph). Tapping it takes the customer to the store selling this
-        // product. Always shown so the entry to the store is never
-        // missing; without a store_id the tap explains rather than
-        // navigating.
-        Positioned(
-          left: 12,
-          bottom: 50,
-          child: Tooltip(
-            message: _storeNameForBadge,
-            excludeFromSemantics: true,
-            child: Semantics(
-              button: true,
-              label: 'Visit $_storeNameForBadge',
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  key: const Key('product-store-badge'),
-                  onTap: () {
-                    final storeId = _storeIdForBadge;
-                    if (storeId.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content:
-                              Text('Store not available for this product'),
+          // Hanging sale tag — the same per-user/per-product object shown on
+          // the catalog cards: tap to reveal the discount, stays revealed
+          // everywhere for this product. Hangs off the left edge, below the
+          // back button, away from the image counter (top-right).
+          if (isOnSale(widget.product, now: now))
+            Positioned(
+              top: 52,
+              left: -7,
+              child: HangingSaleTag(
+                productId: widget.product['id']?.toString() ?? '',
+                salePercent: salePercent(widget.product, now: now),
+              ),
+            ),
+
+          // Sale countdown — the same full-width yellow band as the catalog
+          // cards, pinned edge-to-edge across the hero's bottom (no side gaps).
+          // Only for sales with an end date; open-ended sales (NULL
+          // sale_ends_at) show no countdown at all.
+          if (isOnSale(widget.product, now: now) && heroEnd != null)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: SaleCountdownOverlay(saleEndsAt: heroEnd),
+            ),
+
+          // Dot indicators — bottom center, raised above the countdown band.
+          if (imageUrls.length > 1)
+            Positioned(
+              bottom: 34,
+              left: 0,
+              right: 0,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(imageUrls.length, (index) {
+                  final isActive = index == _currentImageIndex;
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeInOut,
+                    margin: const EdgeInsets.symmetric(horizontal: 3),
+                    width: isActive ? 20 : 7,
+                    height: 7,
+                    decoration: BoxDecoration(
+                      color: isActive
+                          ? AppConstants.primary
+                          : AppConstants.borderGray,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  );
+                }),
+              ),
+            ),
+
+          // The 3D icon — the page's whole entry into the 3D viewer since the
+          // pinned "Try On in AR" pill came off it (2026-10-01). It rides on the
+          // photograph, above the dot indicators and the sale band, and only on a
+          // product whose catalogue says it has a live model: a product with
+          // nothing to turn shows no icon rather than a viewer that can only
+          // apologise (`_showPreviewIcon`). It does not wait for the local file;
+          // the viewer resolves that when the prefetch has not landed. A tap is a
+          // *look*, and the camera behind it stays one tap deeper — the try-on
+          // pills live inside the viewer.
+          if (_showPreviewIcon)
+            Positioned(
+              right: 12,
+              bottom: 50,
+              child: Sole3DIconButton(onPressed: _openShoePreview),
+            ),
+
+          // Store button — bottom-left of the gallery, styled exactly like
+          // the 3D-view button on the right (dark rounded square, white
+          // glyph). Tapping it takes the customer to the store selling this
+          // product. Always shown so the entry to the store is never
+          // missing; without a store_id the tap explains rather than
+          // navigating.
+          Positioned(
+            left: 12,
+            bottom: 50,
+            child: Tooltip(
+              message: _storeNameForBadge,
+              excludeFromSemantics: true,
+              child: Semantics(
+                button: true,
+                // One announcement, not a nested "Verified Seller" node: the
+                // check is a property of this shop, so it belongs in the
+                // button's own label.
+                label: _sellerVerified
+                    ? 'Visit $_storeNameForBadge, verified seller'
+                    : 'Visit $_storeNameForBadge',
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    key: const Key('product-store-badge'),
+                    onTap: () {
+                      final storeId = _storeIdForBadge;
+                      if (storeId.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Store not available for this product',
+                            ),
+                          ),
+                        );
+                        return;
+                      }
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => StoreProfileScreen(storeId: storeId),
                         ),
                       );
-                      return;
-                    }
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => StoreProfileScreen(storeId: storeId),
+                    },
+                    borderRadius: BorderRadius.circular(14),
+                    child: Ink(
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.45),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.35),
+                          width: 1,
+                        ),
                       ),
-                    );
-                  },
-                  borderRadius: BorderRadius.circular(14),
-                  child: Ink(
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.45),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.35),
-                        width: 1,
-                      ),
-                    ),
-                    child: const SizedBox(
-                      width: 44,
-                      height: 44,
-                      child: Center(
-                        child: Icon(
-                          Icons.storefront_outlined,
-                          color: Colors.white,
-                          size: 22,
+                      child: SizedBox(
+                        width: 44,
+                        height: 44,
+                        child: Stack(
+                          children: [
+                            const Center(
+                              child: Icon(
+                                Icons.storefront_outlined,
+                                color: Colors.white,
+                                size: 22,
+                              ),
+                            ),
+                            // Verified is a property of the SHOP, so its check
+                            // rides on the shop button rather than taking a
+                            // second slot beside it.
+                            if (_sellerVerified)
+                              Positioned(
+                                top: 3,
+                                right: 3,
+                                child: Container(
+                                  width: 16,
+                                  height: 16,
+                                  decoration: BoxDecoration(
+                                    color: AppConstants.success,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: Colors.white,
+                                      width: 1.5,
+                                    ),
+                                  ),
+                                  child: const Icon(
+                                    Icons.check_rounded,
+                                    size: 10,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                       ),
                     ),
@@ -2135,8 +2238,7 @@ class _ProductDetailViewState extends State<_ProductDetailView>
               ),
             ),
           ),
-        ),
-      ],
+        ],
       ),
     );
   }
@@ -2172,7 +2274,10 @@ class _ProductDetailViewState extends State<_ProductDetailView>
       children: [
         Text(
           'Quantity',
-          style: AppConstants.bodyStyle(fontWeight: FontWeight.bold, fontSize: 13),
+          style: AppConstants.bodyStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 13,
+          ),
         ),
         Container(
           decoration: BoxDecoration(
@@ -2253,8 +2358,18 @@ class _ProductDetailViewState extends State<_ProductDetailView>
   /// — same manual month-name approach used elsewhere in the app).
   String _formatSaleEnd(DateTime d) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${months[d.month - 1]} ${d.day}';
   }
@@ -2290,12 +2405,14 @@ class _ProductDetailViewState extends State<_ProductDetailView>
     // the grid actually renders in. The customer's preferred unit is kept in
     // `_sizeUnit` so switching scale back to Men's/Women's restores it.
     final sizeUnits = sizeUnitsForCategory(sizeChart);
-    final sizeUnit =
-        sizeUnits.contains(_sizeUnit) ? _sizeUnit : sizeUnits.first;
+    final sizeUnit = sizeUnits.contains(_sizeUnit)
+        ? _sizeUnit
+        : sizeUnits.first;
     final double price = (widget.product['price'] is int)
         ? (widget.product['price'] as int).toDouble()
         : (widget.product['price'] ?? 0.0);
-    final String description = widget.product['description'] ?? 'No description available.';
+    final String description =
+        widget.product['description'] ?? 'No description available.';
 
     // Sale-aware display values (single source of truth: sale_price.dart).
     // `now` comes from SaleEndWatcher — the sale expires the moment the
@@ -2303,11 +2420,12 @@ class _ProductDetailViewState extends State<_ProductDetailView>
     final bool onSale = isOnSale(widget.product, now: now);
     final double displayPrice = effectivePrice(widget.product, now: now);
     final double saveAmount = price - displayPrice;
-    final DateTime? saleEndRaw =
-        DateTime.tryParse(widget.product['sale_ends_at']?.toString() ?? '');
+    final DateTime? saleEndRaw = DateTime.tryParse(
+      widget.product['sale_ends_at']?.toString() ?? '',
+    );
     final String saleEndLabel = onSale
         ? 'You save ₱${saveAmount.toStringAsFixed(2)}'
-            '${saleEndRaw != null ? ' · Ends ${_formatSaleEnd(saleEndRaw.toLocal())}' : ''}'
+              '${saleEndRaw != null ? ' · Ends ${_formatSaleEnd(saleEndRaw.toLocal())}' : ''}'
         : '';
 
     return Scaffold(
@@ -2330,7 +2448,11 @@ class _ProductDetailViewState extends State<_ProductDetailView>
                     shape: BoxShape.circle,
                   ),
                   child: IconButton(
-                    icon: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
+                    icon: const Icon(
+                      Icons.arrow_back,
+                      color: Colors.white,
+                      size: 20,
+                    ),
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                 ),
@@ -2342,7 +2464,10 @@ class _ProductDetailViewState extends State<_ProductDetailView>
                     Center(
                       child: Container(
                         margin: const EdgeInsets.only(right: 4),
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.black.withValues(alpha: 0.3),
                           borderRadius: BorderRadius.circular(12),
@@ -2373,7 +2498,10 @@ class _ProductDetailViewState extends State<_ProductDetailView>
                     ),
                     onPressed: () => _shareProduct(),
                     padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                    constraints: const BoxConstraints(
+                      minWidth: 40,
+                      minHeight: 40,
+                    ),
                   ),
                   const SizedBox(width: 4),
                   CartIconButton(iconKey: _cartIconKey),
@@ -2386,7 +2514,12 @@ class _ProductDetailViewState extends State<_ProductDetailView>
               // Detail content
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 160), // High bottom padding for floating pill
+                  padding: const EdgeInsets.fromLTRB(
+                    20,
+                    12,
+                    20,
+                    160,
+                  ), // High bottom padding for floating pill
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -2404,7 +2537,9 @@ class _ProductDetailViewState extends State<_ProductDetailView>
                           const SizedBox(width: 8),
                           SoleBadge(
                             label: widget.product['category'] ?? 'Artisan',
-                            backgroundColor: AppConstants.primary.withValues(alpha: 0.15),
+                            backgroundColor: AppConstants.primary.withValues(
+                              alpha: 0.15,
+                            ),
                             textColor: AppConstants.primary,
                           ),
                         ],
@@ -2421,15 +2556,18 @@ class _ProductDetailViewState extends State<_ProductDetailView>
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             SalePriceTape(
-                              productId:
-                                  widget.product['id']?.toString() ?? '',
+                              productId: widget.product['id']?.toString() ?? '',
                               // This row is bottom-aligned with the original
                               // price beside it — the padding slack goes ABOVE
                               // the price so its bottom stays flush with the
                               // strikethrough price, while still reserving a
                               // ≥40px hit target.
-                              hitPadding:
-                                  const EdgeInsets.fromLTRB(10, 22, 10, 0),
+                              hitPadding: const EdgeInsets.fromLTRB(
+                                10,
+                                22,
+                                10,
+                                0,
+                              ),
                               child: Text(
                                 '₱${displayPrice.toStringAsFixed(2)}',
                                 style: AppConstants.monoStyle(
@@ -2442,19 +2580,24 @@ class _ProductDetailViewState extends State<_ProductDetailView>
                             const SizedBox(width: 8),
                             Text(
                               '₱${price.toStringAsFixed(2)}',
-                              style: AppConstants.monoStyle(
-                                fontSize: 14,
-                                color:
-                                    AppConstants.secondary.withValues(alpha: 0.5),
-                              ).copyWith(
-                                  decoration: TextDecoration.lineThrough),
+                              style:
+                                  AppConstants.monoStyle(
+                                    fontSize: 14,
+                                    color: AppConstants.secondary.withValues(
+                                      alpha: 0.5,
+                                    ),
+                                  ).copyWith(
+                                    decoration: TextDecoration.lineThrough,
+                                  ),
                             ),
                           ],
                         ),
                         const SizedBox(height: 6),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
                             color: AppConstants.error.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(8),
@@ -2468,7 +2611,7 @@ class _ProductDetailViewState extends State<_ProductDetailView>
                             ),
                           ),
                         ),
-                      ]                      else
+                      ] else
                         Text(
                           '₱${price.toStringAsFixed(2)}',
                           style: AppConstants.monoStyle(
@@ -2486,13 +2629,18 @@ class _ProductDetailViewState extends State<_ProductDetailView>
                           final pid = widget.product['id']?.toString() ?? '';
                           return (
                             p.unitsSoldFor(pid),
-                            (widget.product['avg_rating'] as num?)?.toDouble() ?? 0,
-                            (widget.product['review_count'] as num?)?.toInt() ?? 0,
+                            (widget.product['avg_rating'] as num?)
+                                    ?.toDouble() ??
+                                0,
+                            (widget.product['review_count'] as num?)?.toInt() ??
+                                0,
                           );
                         },
                         builder: (context, data, _) {
                           final (sold, avgRating, reviewCount) = data;
-                          if (sold <= 0 && reviewCount <= 0) return const SizedBox.shrink();
+                          if (sold <= 0 && reviewCount <= 0) {
+                            return const SizedBox.shrink();
+                          }
                           return Padding(
                             padding: const EdgeInsets.only(top: 6),
                             child: Row(
@@ -2503,18 +2651,23 @@ class _ProductDetailViewState extends State<_ProductDetailView>
                                     style: AppConstants.bodyStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.bold,
-                                      color: AppConstants.secondary.withValues(alpha: 0.6),
+                                      color: AppConstants.secondary.withValues(
+                                        alpha: 0.6,
+                                      ),
                                     ),
                                   ),
                                 ],
                                 if (sold > 0 && reviewCount > 0)
                                   Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                    ),
                                     child: Text(
                                       '·',
                                       style: AppConstants.bodyStyle(
                                         fontSize: 12,
-                                        color: AppConstants.secondary.withValues(alpha: 0.3),
+                                        color: AppConstants.secondary
+                                            .withValues(alpha: 0.3),
                                       ),
                                     ),
                                   ),
@@ -2529,7 +2682,9 @@ class _ProductDetailViewState extends State<_ProductDetailView>
                                     '${avgRating.toStringAsFixed(1)} ($reviewCount)',
                                     style: AppConstants.bodyStyle(
                                       fontSize: 12,
-                                      color: AppConstants.secondary.withValues(alpha: 0.6),
+                                      color: AppConstants.secondary.withValues(
+                                        alpha: 0.6,
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -2553,7 +2708,8 @@ class _ProductDetailViewState extends State<_ProductDetailView>
                                     onTap: () {
                                       Navigator.of(context).push(
                                         MaterialPageRoute(
-                                          builder: (_) => TagProductsScreen(tagId: tag),
+                                          builder: (_) =>
+                                              TagProductsScreen(tagId: tag),
                                         ),
                                       );
                                     },
@@ -2589,7 +2745,10 @@ class _ProductDetailViewState extends State<_ProductDetailView>
                       if (_variantColorNames.isNotEmpty) ...[
                         Text(
                           'Select Color / Leather',
-                          style: AppConstants.bodyStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                          style: AppConstants.bodyStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
                         ),
                         const SizedBox(height: 10),
                         SingleChildScrollView(
@@ -2616,8 +2775,8 @@ class _ProductDetailViewState extends State<_ProductDetailView>
                                     // colour, exactly as before any tap.
                                     _selectedColor =
                                         _selectedColourOrNull == colorName
-                                            ? null
-                                            : colorName;
+                                        ? null
+                                        : colorName;
                                     // Reset image carousel when color changes
                                     _currentImageIndex = 0;
                                     _imagePageController.jumpToPage(0);
@@ -2635,7 +2794,10 @@ class _ProductDetailViewState extends State<_ProductDetailView>
                         children: [
                           Text(
                             'Select Size',
-                            style: AppConstants.bodyStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                            style: AppConstants.bodyStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                            ),
                           ),
                           const SizedBox(width: 10),
                           if (sizeUnits.length > 1)
@@ -2658,9 +2820,14 @@ class _ProductDetailViewState extends State<_ProductDetailView>
                         _buildSizeSkeleton()
                       else if (sizesMap.isEmpty)
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
                           decoration: BoxDecoration(
-                            color: AppConstants.borderGray.withValues(alpha: 0.15),
+                            color: AppConstants.borderGray.withValues(
+                              alpha: 0.15,
+                            ),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Row(
@@ -2668,14 +2835,18 @@ class _ProductDetailViewState extends State<_ProductDetailView>
                               Icon(
                                 Icons.info_outline,
                                 size: 16,
-                                color: AppConstants.secondary.withValues(alpha: 0.5),
+                                color: AppConstants.secondary.withValues(
+                                  alpha: 0.5,
+                                ),
                               ),
                               const SizedBox(width: 8),
                               Text(
                                 'No sizes available for this product.',
                                 style: AppConstants.bodyStyle(
                                   fontSize: 13,
-                                  color: AppConstants.secondary.withValues(alpha: 0.5),
+                                  color: AppConstants.secondary.withValues(
+                                    alpha: 0.5,
+                                  ),
                                 ),
                               ),
                             ],
@@ -2685,266 +2856,304 @@ class _ProductDetailViewState extends State<_ProductDetailView>
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                        // Pull the size grid up so it tucks under the label.
-                        // (Transform, not a negative margin — Container
-                        // asserts margins must be non-negative.)
-                        Transform.translate(
-                          offset: const Offset(0, -6),
-                          child: GridView.count(
-                          crossAxisCount: 4,
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          mainAxisSpacing: 6,
-                          crossAxisSpacing: 6,
-                          // Cells are narrower with 4 columns — ease the
-                          // ratio so buttons keep a comfortable height.
-                          childAspectRatio: 2.6,
-                          // Let the corner badge poke past the button edge.
-                          clipBehavior: Clip.none,
-                          children: sizesMap.entries.map((entry) {
-                            final size = entry.key;
-                            final stock = entry.value;
-                            final isAvailable = stock > 0;
-                            final isSelected = _selectedSize == size;
-
-                            final isLowStock = isAvailable && stock <= 5;
-                            // Label respects the active unit and the chart the
-                            // product is sold on; the canonical string stays
-                            // untouched so variant lookup and cart keys keep
-                            // matching the DB rows.
-                            final label = displaySizeInUnit(size, sizeUnit,
-                                category: sizeChart);
-
-                            return GestureDetector(
-                              onTap: isAvailable
-                                  ? () {
-                                      setState(() {
-                                        // Map the tapped label back to the
-                                        // canonical size for this product
-                                        // (bijective conversion, so this
-                                        // always resolves to the same size).
-                                        _selectedSize = sizesMap.keys.firstWhere(
-                                          (s) =>
-                                              displaySizeInUnit(s, sizeUnit,
-                                                  category: sizeChart) ==
-                                              label,
-                                          orElse: () => size,
-                                        );
-                                      });
-                                    }
-                                  : null,
-                              child: Stack(
+                            // Pull the size grid up so it tucks under the label.
+                            // (Transform, not a negative margin — Container
+                            // asserts margins must be non-negative.)
+                            Transform.translate(
+                              offset: const Offset(0, -6),
+                              child: GridView.count(
+                                crossAxisCount: 4,
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                mainAxisSpacing: 6,
+                                crossAxisSpacing: 6,
+                                // Cells are narrower with 4 columns — ease the
+                                // ratio so buttons keep a comfortable height.
+                                childAspectRatio: 2.6,
+                                // Let the corner badge poke past the button edge.
                                 clipBehavior: Clip.none,
-                                children: [
-                                  // Inset the button inside its grid cell so
-                                  // the width stays a bit tighter than the
-                                  // cell while the gap between buttons stays
-                                  // small.
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 4,
-                                    ),
-                                    child: Container(
-                                    height: double.infinity,
-                                    decoration: BoxDecoration(
-                                      color: isSelected
-                                          ? AppConstants.primary
-                                          : (isAvailable
-                                              ? AppConstants.sellerCardBg
-                                              : AppConstants.borderGray.withValues(alpha: 0.2)),
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(
-                                        color: isSelected
-                                            ? AppConstants.primary
-                                            : AppConstants.borderGray.withValues(alpha: 0.4),
-                                        width: 1,
-                                      ),
-                                    ),
-                                    child: Center(
-                                      child: Stack(
-                                        alignment: Alignment.center,
-                                        children: [
-                                          Text(
-                                            label,
-                                            style: AppConstants.monoStyle(
-                                              fontSize: 11,
-                                              color: isSelected
-                                                  ? AppConstants.surfaceLight
-                                                  : (isAvailable
-                                                      ? AppConstants.secondary
-                                                      : AppConstants.secondary.withValues(alpha: 0.3)),
-                                            ),
+                                children: sizesMap.entries.map((entry) {
+                                  final size = entry.key;
+                                  final stock = entry.value;
+                                  final isAvailable = stock > 0;
+                                  final isSelected = _selectedSize == size;
+
+                                  final isLowStock = isAvailable && stock <= 5;
+                                  // Label respects the active unit and the chart the
+                                  // product is sold on; the canonical string stays
+                                  // untouched so variant lookup and cart keys keep
+                                  // matching the DB rows.
+                                  final label = displaySizeInUnit(
+                                    size,
+                                    sizeUnit,
+                                    category: sizeChart,
+                                  );
+
+                                  return GestureDetector(
+                                    onTap: isAvailable
+                                        ? () {
+                                            setState(() {
+                                              // Map the tapped label back to the
+                                              // canonical size for this product
+                                              // (bijective conversion, so this
+                                              // always resolves to the same size).
+                                              _selectedSize = sizesMap.keys
+                                                  .firstWhere(
+                                                    (s) =>
+                                                        displaySizeInUnit(
+                                                          s,
+                                                          sizeUnit,
+                                                          category: sizeChart,
+                                                        ) ==
+                                                        label,
+                                                    orElse: () => size,
+                                                  );
+                                            });
+                                          }
+                                        : null,
+                                    child: Stack(
+                                      clipBehavior: Clip.none,
+                                      children: [
+                                        // Inset the button inside its grid cell so
+                                        // the width stays a bit tighter than the
+                                        // cell while the gap between buttons stays
+                                        // small.
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 4,
                                           ),
-                                          if (!isAvailable)
-                                            // Strikethrough for unavailable sizes
-                                            Transform.rotate(
-                                              angle: -0.5,
-                                              child: Container(
-                                                width: 32,
-                                                height: 2,
-                                                color: AppConstants.error.withValues(alpha: 0.5),
+                                          child: Container(
+                                            height: double.infinity,
+                                            decoration: BoxDecoration(
+                                              color: isSelected
+                                                  ? AppConstants.primary
+                                                  : (isAvailable
+                                                        ? AppConstants
+                                                              .sellerCardBg
+                                                        : AppConstants
+                                                              .borderGray
+                                                              .withValues(
+                                                                alpha: 0.2,
+                                                              )),
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              border: Border.all(
+                                                color: isSelected
+                                                    ? AppConstants.primary
+                                                    : AppConstants.borderGray
+                                                          .withValues(
+                                                            alpha: 0.4,
+                                                          ),
+                                                width: 1,
                                               ),
                                             ),
+                                            child: Center(
+                                              child: Stack(
+                                                alignment: Alignment.center,
+                                                children: [
+                                                  Text(
+                                                    label,
+                                                    style: AppConstants.monoStyle(
+                                                      fontSize: 11,
+                                                      color: isSelected
+                                                          ? AppConstants
+                                                                .surfaceLight
+                                                          : (isAvailable
+                                                                ? AppConstants
+                                                                      .secondary
+                                                                : AppConstants
+                                                                      .secondary
+                                                                      .withValues(
+                                                                        alpha:
+                                                                            0.3,
+                                                                      )),
+                                                    ),
+                                                  ),
+                                                  if (!isAvailable)
+                                                    // Strikethrough for unavailable sizes
+                                                    Transform.rotate(
+                                                      angle: -0.5,
+                                                      child: Container(
+                                                        width: 32,
+                                                        height: 2,
+                                                        color: AppConstants
+                                                            .error
+                                                            .withValues(
+                                                              alpha: 0.5,
+                                                            ),
+                                                      ),
+                                                    ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        // Low-stock orange corner badge (like the
+                                        // reference): '2 left' overlapping the
+                                        // top-right corner of the button.
+                                        if (isLowStock)
+                                          Positioned(
+                                            top: -6,
+                                            right: -6,
+                                            child: Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 5,
+                                                    vertical: 2,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: AppConstants
+                                                    .statusPendingColor,
+                                                borderRadius:
+                                                    BorderRadius.circular(3),
+                                              ),
+                                              child: Text(
+                                                '$stock left',
+                                                style: AppConstants.bodyStyle(
+                                                  fontSize: 8,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Colors.white,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            // ── Fit verdict (V1 of the virtual-fitting roadmap) ──
+                            // Sits under the grid it is about and above the buy
+                            // controls, because it answers the question the size
+                            // buttons just asked. Renders nothing — and leaves no
+                            // gap — when the feature is off, the product carries
+                            // no last spec, or the customer has no scan to grade
+                            // against; the widget owns all of that.
+                            FitVerdictCard(
+                              product: widget.product,
+                              selectedSize: _selectedSize,
+                            ),
+                            // ── 3D preview notice (V3.10 of the fitting roadmap) ──
+                            // The shoe itself is no longer a row here: the 3D icon
+                            // on the product photograph opens the full-screen viewer
+                            // (`_openShoePreview`). What is left in the flow is the
+                            // one state the icon cannot explain — a prefetch that
+                            // failed or never finished on a product that has a model
+                            // — and it keeps its sentence and its Retry. Renders
+                            // nothing, and leaves no gap, in every other case.
+                            _shoePreviewNotice(),
+                            _buildQuantityStepper(),
+                            // Pickup hold — FREE, 1-2 pairs of one size, held 24h.
+                            // A different flow from the bulk (reseller) hold
+                            // below: this one holds stock immediately and takes
+                            // no deposit.
+                            if (_totalStock() > 0)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(6),
+                                    onTap: () async {
+                                      final reserved =
+                                          await showPickupReservationSheet(
+                                            context,
+                                            product: widget.product,
+                                            stockByColor: _buildStockByColor(),
+                                            initialColor: _effectiveColor,
+                                            initialSize: _selectedSize,
+                                          );
+                                      // Stock moved out of inventory — refresh the
+                                      // size map so the page stops offering it.
+                                      if (reserved == true && mounted) {
+                                        setState(() {});
+                                      }
+                                    },
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 4,
+                                        vertical: 4,
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.storefront_outlined,
+                                            size: 15,
+                                            color: AppConstants.secondary
+                                                .withValues(alpha: 0.7),
+                                          ),
+                                          const SizedBox(width: 5),
+                                          Text(
+                                            'Reserve for pickup — free, held 24 hours',
+                                            style:
+                                                AppConstants.bodyStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: AppConstants.secondary
+                                                      .withValues(alpha: 0.7),
+                                                ).copyWith(
+                                                  decoration:
+                                                      TextDecoration.underline,
+                                                ),
+                                          ),
                                         ],
                                       ),
                                     ),
-                                    ),
                                   ),
-                                  // Low-stock orange corner badge (like the
-                                  // reference): '2 left' overlapping the
-                                  // top-right corner of the button.
-                                  if (isLowStock)
-                                    Positioned(
-                                      top: -6,
-                                      right: -6,
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 5,
-                                          vertical: 2,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: AppConstants.statusPendingColor,
-                                          borderRadius: BorderRadius.circular(3),
-                                        ),
-                                        child: Text(
-                                          '$stock left',
-                                          style: AppConstants.bodyStyle(
-                                            fontSize: 8,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.white,
+                                ),
+                              ),
+                            // Reseller entry point — request a bulk hold from
+                            // the seller (shown only when the product has stock).
+                            if (_totalStock() > 0)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(6),
+                                    onTap: () => showBulkReservationSheet(
+                                      context,
+                                      product: widget.product,
+                                      stockByColor: _buildStockByColor(),
+                                      initialColor: _effectiveColor,
+                                    ),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 4,
+                                        vertical: 4,
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.inventory_2_outlined,
+                                            size: 15,
+                                            color: AppConstants.secondary
+                                                .withValues(alpha: 0.7),
                                           ),
-                                        ),
+                                          const SizedBox(width: 5),
+                                          Text(
+                                            'Buying to resell? Request a bulk hold',
+                                            style:
+                                                AppConstants.bodyStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: AppConstants.secondary
+                                                      .withValues(alpha: 0.7),
+                                                ).copyWith(
+                                                  decoration:
+                                                      TextDecoration.underline,
+                                                ),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                ],
-                              ),
-                            );
-                          }).toList(),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        // ── Fit verdict (V1 of the virtual-fitting roadmap) ──
-                        // Sits under the grid it is about and above the buy
-                        // controls, because it answers the question the size
-                        // buttons just asked. Renders nothing — and leaves no
-                        // gap — when the feature is off, the product carries
-                        // no last spec, or the customer has no scan to grade
-                        // against; the widget owns all of that.
-                        FitVerdictCard(
-                          product: widget.product,
-                          selectedSize: _selectedSize,
-                        ),
-                        // ── 3D preview notice (V3.10 of the fitting roadmap) ──
-                        // The shoe itself is no longer a row here: the 3D icon
-                        // on the product photograph opens the full-screen viewer
-                        // (`_openShoePreview`). What is left in the flow is the
-                        // one state the icon cannot explain — a prefetch that
-                        // failed or never finished on a product that has a model
-                        // — and it keeps its sentence and its Retry. Renders
-                        // nothing, and leaves no gap, in every other case.
-                        _shoePreviewNotice(),
-                        _buildQuantityStepper(),
-                        // Pickup hold — FREE, 1-2 pairs of one size, held 24h.
-                        // A different flow from the bulk (reseller) hold
-                        // below: this one holds stock immediately and takes
-                        // no deposit.
-                        if (_totalStock() > 0)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: Align(
-                              alignment: Alignment.centerLeft,
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(6),
-                                onTap: () async {
-                                  final reserved =
-                                      await showPickupReservationSheet(
-                                    context,
-                                    product: widget.product,
-                                    stockByColor: _buildStockByColor(),
-                                    initialColor: _effectiveColor,
-                                    initialSize: _selectedSize,
-                                  );
-                                  // Stock moved out of inventory — refresh the
-                                  // size map so the page stops offering it.
-                                  if (reserved == true && mounted) {
-                                    setState(() {});
-                                  }
-                                },
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 4, vertical: 4),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.storefront_outlined,
-                                        size: 15,
-                                        color: AppConstants.secondary
-                                            .withValues(alpha: 0.7),
-                                      ),
-                                      const SizedBox(width: 5),
-                                      Text(
-                                        'Reserve for pickup — free, held 24 hours',
-                                        style: AppConstants.bodyStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
-                                          color: AppConstants.secondary
-                                              .withValues(alpha: 0.7),
-                                        ).copyWith(
-                                            decoration:
-                                                TextDecoration.underline),
-                                      ),
-                                    ],
                                   ),
                                 ),
                               ),
-                            ),
-                          ),
-                        // Reseller entry point — request a bulk hold from
-                        // the seller (shown only when the product has stock).
-                        if (_totalStock() > 0)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: Align(
-                              alignment: Alignment.centerLeft,
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(6),
-                                onTap: () => showBulkReservationSheet(
-                                  context,
-                                  product: widget.product,
-                                  stockByColor: _buildStockByColor(),
-                                  initialColor: _effectiveColor,
-                                ),
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 4, vertical: 4),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.inventory_2_outlined,
-                                        size: 15,
-                                        color: AppConstants.secondary
-                                            .withValues(alpha: 0.7),
-                                      ),
-                                      const SizedBox(width: 5),
-                                      Text(
-                                        'Buying to resell? Request a bulk hold',
-                                        style: AppConstants.bodyStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
-                                          color: AppConstants.secondary
-                                              .withValues(alpha: 0.7),
-                                        ).copyWith(
-                                            decoration:
-                                                TextDecoration.underline),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
                           ],
                         ),
                       const SizedBox(height: 12),
@@ -2952,7 +3161,10 @@ class _ProductDetailViewState extends State<_ProductDetailView>
                       // Description section
                       Text(
                         'The Craftsmanship',
-                        style: AppConstants.bodyStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                        style: AppConstants.bodyStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
                       ),
                       const SizedBox(height: 8),
                       GestureDetector(
@@ -2967,7 +3179,9 @@ class _ProductDetailViewState extends State<_ProductDetailView>
                           overflow: TextOverflow.ellipsis,
                           style: AppConstants.bodyStyle(
                             fontSize: 14,
-                            color: AppConstants.secondary.withValues(alpha: 0.8),
+                            color: AppConstants.secondary.withValues(
+                              alpha: 0.8,
+                            ),
                             height: 1.4,
                           ),
                         ),
@@ -3002,14 +3216,17 @@ class _ProductDetailViewState extends State<_ProductDetailView>
                       // ── More from Store ─────────────────────
                       _MoreFromStoreSection(
                         storeId: widget.product['store_id']?.toString() ?? '',
-                        storeName: widget.product['store_name']?.toString() ?? widget.product['stores']?['name']?.toString() ?? '',
+                        storeName:
+                            widget.product['store_name']?.toString() ??
+                            widget.product['stores']?['name']?.toString() ??
+                            '',
                         currentProductId: widget.product['id'].toString(),
                         sellerVerified: _sellerVerified,
                       ),
                     ],
                   ),
                 ),
-              )
+              ),
             ],
           ),
 
@@ -3044,7 +3261,8 @@ class _ProductDetailViewState extends State<_ProductDetailView>
                             width: 1.5,
                           ),
                           shape: RoundedRectangleBorder(
-                              borderRadius: AppConstants.buttonRadius),
+                            borderRadius: AppConstants.buttonRadius,
+                          ),
                           padding: const EdgeInsets.symmetric(vertical: 14),
                         ),
                         child: AnimatedSwitcher(
@@ -3075,7 +3293,9 @@ class _ProductDetailViewState extends State<_ProductDetailView>
                       onPressed: _buyNow,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppConstants.primary,
-                        shape: RoundedRectangleBorder(borderRadius: AppConstants.buttonRadius),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: AppConstants.buttonRadius,
+                        ),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         elevation: 0,
                       ),
@@ -3168,8 +3388,9 @@ class _UnitSwitcher extends StatelessWidget {
                   unit,
                   style: AppConstants.bodyStyle(
                     fontSize: 13,
-                    fontWeight:
-                        unit == current ? FontWeight.bold : FontWeight.normal,
+                    fontWeight: unit == current
+                        ? FontWeight.bold
+                        : FontWeight.normal,
                     color: unit == current
                         ? AppConstants.primary
                         : AppConstants.secondary,

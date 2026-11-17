@@ -9,6 +9,7 @@ import com.solevision.app.arfoot.DiagRelay
 import com.solevision.app.artryon.ArTryOnSpikePlugin
 import com.solevision.app.tryon.ArTryOnPlugin
 import com.solevision.app.snaptryon.SnapTryOnPlugin
+import com.solevision.app.spaceview.SpaceViewPlugin
 import com.solevision.app.footdetector.OnnxFootDetectorPlugin
 
 class MainActivity : FlutterActivity() {
@@ -35,6 +36,10 @@ class MainActivity : FlutterActivity() {
     // the scan/try-on Dart detectors can prefer it with an ML Kit fallback.
     private var onnxFootDetectorPlugin: OnnxFootDetectorPlugin? = null
 
+    // "View in your space": an explicit Scene Viewer intent to ARCore. The
+    // app's public GLB and button state stay in Dart — see SpaceViewPlugin.
+    private var spaceViewPlugin: SpaceViewPlugin? = null
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
@@ -51,6 +56,8 @@ class MainActivity : FlutterActivity() {
         snapTryOnPlugin!!.registerWith(flutterEngine)
         onnxFootDetectorPlugin = OnnxFootDetectorPlugin(this)
         onnxFootDetectorPlugin!!.registerWith(flutterEngine)
+        spaceViewPlugin = SpaceViewPlugin(this)
+        spaceViewPlugin!!.registerWith(flutterEngine)
         // TEMPORARY (Phase 1b diagnostics) — remove with DiagRelay.kt.
         DiagRelay.log("activity", "configureFlutterEngine")
     }
@@ -68,6 +75,8 @@ class MainActivity : FlutterActivity() {
         snapTryOnPlugin = null
         onnxFootDetectorPlugin?.unregister()
         onnxFootDetectorPlugin = null
+        spaceViewPlugin?.unregister()
+        spaceViewPlugin = null
         super.cleanUpFlutterEngine(flutterEngine)
     }
 

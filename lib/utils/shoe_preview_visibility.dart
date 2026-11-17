@@ -1,20 +1,27 @@
-/// Whether the product page shows the **3D icon on the product photograph** —
-/// and with it the viewer behind it, whose own section carries the
-/// "Try On in AR" button.
+/// Whether the product page has a **verified local model** for its 3D viewer —
+/// and, when it does not, why. The page's recovery notice reads this answer; the
+/// **icon** no longer waits for it (2026-11-17), because a live catalogue row
+/// whose bytes are still downloading is not a product without a model, and
+/// hiding the only 3D entry was the bug that rebuild closed. The icon appears
+/// when the page knows there is a live row, and the viewer resolves the bytes
+/// itself when the cache is cold.
 ///
-/// A pure file with no Flutter and no Supabase import, the same shape as
-/// `try_on_mode.dart` and `fit_verdict_state.dart`, for the same reason: the
-/// answer is a table, and a page that shows a 3D box for a product with nothing
-/// to render is a bug nobody can see from the code that decides it.
+/// This gate still answers the local-renderer question: it is what lets the page
+/// say *why* a product with a live model has nothing on disk, and it is the rule
+/// the viewer's own section trusts once it has bytes. A pure file with no Flutter
+/// and no Supabase import, the same shape as `try_on_mode.dart` and
+/// `fit_verdict_state.dart`, for the same reason: the answer is a table, and a
+/// page that shows a 3D box for a product with nothing to render is a bug nobody
+/// can see from the code that decides it.
 ///
-/// **The rule is deliberately all-or-nothing.** The icon and the AR button come
-/// and go together, because the button is *part of* the section the icon opens
-/// rather than a separate entry: a product with no model shows neither. That is a
-/// product decision with a cost — the AR entry point used to be on every product
-/// page, and until 2026-10-01 it was a pinned pill that showed on every product
-/// regardless — and it is the reason `AppConstants.shoePreviewEnabled` exists as
-/// a switch rather than as a rewrite: with it off, the page has no 3D entry at
-/// all.
+/// **The local rule is deliberately all-or-nothing.** A box and the try-on pills
+/// inside the viewer come and go together: a product with no renderable local
+/// model draws no box, and the viewer's section then owns the honest sentence.
+/// That is a product decision with a cost — the AR entry point used to be on
+/// every product page, and until 2026-10-01 it was a pinned pill that showed on
+/// every product regardless — and it is the reason
+/// `AppConstants.shoePreviewEnabled` exists as a switch rather than as a rewrite:
+/// with it off, the page has no 3D entry at all.
 ///
 /// **The four questions, in the order they are asked.** Each one is a different
 /// kind of fact, and the first that fails is the honest reason to report:
@@ -65,8 +72,10 @@ class ShoePreviewDecision {
   const ShoePreviewDecision({required this.shown, required this.reason});
 
   /// The one answer that needs no explanation.
-  static const ShoePreviewDecision shownBox =
-      ShoePreviewDecision(shown: true, reason: ShoePreviewReason.none);
+  static const ShoePreviewDecision shownBox = ShoePreviewDecision(
+    shown: true,
+    reason: ShoePreviewReason.none,
+  );
 
   bool get hidden => !shown;
 
